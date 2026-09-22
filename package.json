@@ -1,0 +1,28 @@
+{
+  "name": "glxee",
+  "version": "1.0.0",
+  "description": "GLXEE - Game Boy Style Space Shooter",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 3000",
+    "dev": "python -m http.server 3000",
+    "serve": "python -m http.server 3000",
+    "comfy": "bash tools/comfyui/start.sh",
+    "comfy:stop": "bash tools/comfyui/stop.sh",
+    "asset-gen": "bash tools/asset-gen/start.sh",
+    "assets": "bash tools/asset-gen/start-all.sh",
+    "icons:preview": "python3 tools/render-icon-sprites.py",
+    "icons:preview:menu": "python3 tools/render-icon-sprites.py menuAssets menuSettings menuCredits menuProfiles --scale 16 --tint FF6A00"
+  },
+  "keywords": [
+    "game",
+    "space-shooter",
+    "gameboy",
+    "retro",
+    "javascript"
+  ],
+  "author": "Lance Meier <https://github.com/meierdesigns>",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {}
+}

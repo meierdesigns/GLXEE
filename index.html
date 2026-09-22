@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLXEE - Gameboy Style</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/optimized-variables.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-left-cluster" id="gameLeftCluster">
+            <!-- Compact Game Info Panel -->
+            <div id="gameInfoPanel" class="game-info-panel">
+                <header class="gi-head">
+                    <div class="game-info-planet" id="levelPlanet" aria-hidden="true"></div>
+                    <div class="gi-head-text">
+                        <h3 id="levelName">MARS</h3>
+                        <div class="level-difficulty gi-diff" id="levelDifficulty">EASY</div>
+                    </div>
+                </header>
+                <div id="giBody" class="gi-body"></div>
+            </div>
+            <div class="weapon-selection">
+                <div class="weapon-display">
+                    <span>WEAPON: </span>
+                    <canvas id="weaponIcon" width="32" height="32"></canvas>
+                    <span id="currentWeapon">LASER</span>
+                </div>
+                <div class="weapon-info">
+                    <span id="weaponInfo">Press SPACE to switch weapons</span>
+                </div>
+            </div>
+            <aside class="player-vitals-side" aria-label="Health, energy and shield">
+                <div class="health-bar player-health">
+                    <canvas class="health-ship-icon ui-icon-tip" id="playerShipIcon" width="32" height="32" aria-hidden="true" data-ui-tip="HEALTH"></canvas>
+                    <div class="health-fill" id="playerHealthBar"></div>
+                </div>
+                <div class="health-bar player-energy">
+                    <canvas class="health-stat-icon ui-icon-tip" id="playerEnergyIcon" width="32" height="32" aria-hidden="true" data-ui-tip="ENERGY"></canvas>
+                    <div class="health-fill" id="playerEnergyBar"></div>
+                </div>
+                <div class="health-bar player-shield">
+                    <canvas class="health-stat-icon ui-icon-tip" id="playerShieldIcon" width="32" height="32" aria-hidden="true" data-ui-tip="SHIELD"></canvas>
+                    <div class="health-fill" id="playerShieldBar"></div>
+                </div>
+            </aside>
+        </div>
+        
+        <div class="game-canvas-container">
+            <div class="game-header">
+                <h1>GLXEE</h1>
+            </div>
+            <div class="game-stage">
+                <canvas id="gameCanvas" width="240" height="300"></canvas>
+            </div>
+            <div class="controls ui-controls-hint">
+                <div class="shot-type-display">
+                    <span>SHOT: <span id="shotType">NORMAL</span></span>
+                </div>
+                <div class="controls-info">
+                    <span>ARROW KEYS: Move | SPACE: Shoot | SHIFT: Boost | P: Pause</span>
+                </div>
+                <button type="button" class="ui-controls-hide-btn" id="hideGameControls" title="Hide controls (Shift+H)" aria-label="Hide controls">HIDE</button>
+            </div>
+            <button type="button" class="ui-controls-show-btn" id="showGameControls" title="Show controls (Shift+H)" aria-label="Show controls">?</button>
+        </div>
+        <div class="game-right-cluster" id="gameRightCluster">
+            <aside class="enemy-vitals-side" id="enemyHealthBars" aria-label="Enemy health and faction"></aside>
+        </div>
+        <div id="gameOver" class="game-over hidden">
+            <div class="game-over-content">
+                <h2>GAME OVER</h2>
+                <p>Mission Failed</p>
+                <div class="game-over-buttons">
+                    <button onclick="game.restart()" class="game-over-button" data-index="0">PLAY AGAIN</button>
+                    <button onclick="game.showLevelSelection()" class="game-over-button" data-index="1">PLANET SELECT</button>
+                </div>
+            </div>
+        </div>
+        <div id="pauseOverlay" class="pause-overlay hidden">
+            <h2>PAUSED</h2>
+            <div class="pause-menu">
+                <button onclick="game.resumeGame()" class="pause-button">RESUME</button>
+                <button onclick="game.showSettings()" class="pause-button">SETTINGS</button>
+                <button onclick="game.showLevelSelection()" class="pause-button">QUIT</button>
+            </div>
+        </div>
+        <div id="settingsOverlay" class="settings-overlay hidden">
+            <h2>SETTINGS</h2>
+            <div class="settings-content">
+                <div class="volume-controls">
+                    <div class="volume-control">
+                        <label for="masterVolume">MASTER:</label>
+                        <input type="range" id="masterVolume" min="0" max="100" value="10" class="volume-slider" data-volume="master">
+                        <span id="masterVolumeValue" data-volume-value="master">10%</span>
+                    </div>
+                    <div class="volume-control">
+                        <label for="soundVolume">SOUNDS:</label>
+                        <input type="range" id="soundVolume" min="0" max="100" value="5" class="volume-slider" data-volume="sound">
+                        <span id="soundVolumeValue" data-volume-value="sound">5%</span>
+                    </div>
+                    <div class="volume-control">
+                        <label for="musicVolume">MUSIC:</label>
+                        <input type="range" id="musicVolume" min="0" max="100" value="20" class="volume-slider" data-volume="music">
+                        <span id="musicVolumeValue" data-volume-value="music">20%</span>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <label>Sound Effects:</label>
+                    <button onclick="game.toggleSound()" id="soundToggle" class="toggle-button">ON</button>
+                </div>
+                <div class="setting-item">
+                    <label>Music:</label>
+                    <button onclick="game.toggleMusic()" id="musicToggle" class="toggle-button">ON</button>
+                </div>
+                <div class="setting-item">
+                    <label>Difficulty:</label>
+                    <button onclick="game.changeDifficulty()" id="difficultyButton" class="toggle-button">NORMAL</button>
+                </div>
+                <div class="setting-item">
+                    <label>Combat Tuning:</label>
+                    <button onclick="difficultyEditorUI.show()" class="toggle-button">OPEN MENU ›</button>
+                </div>
+                <div class="setting-item">
+                    <label>App Theme:</label>
+                    <button onclick="game.changeColor()" id="colorButton" class="toggle-button">GRAYSCALE</button>
+                </div>
+                <div class="setting-item">
+                    <label>Color Appearance:</label>
+                    <button type="button" class="toggle-button" onclick="settingsManager.openColorAppearance()">OPEN MENU ›</button>
+                </div>
+                <div class="settings-visual-controls">
+                    <div class="volume-control">
+                        <label for="visualBrightness">BRIGHTNESS:</label>
+                        <input type="range" id="visualBrightness" min="0" max="200" value="50" class="volume-slider" oninput="settingsManager.setVisualSetting('brightness', this.value)">
+                        <span id="visualBrightnessValue">50%</span>
+                    </div>
+                    <div class="volume-control">
+                        <label for="visualContrast">CONTRAST:</label>
+                        <input type="range" id="visualContrast" min="0" max="200" value="68" class="volume-slider" oninput="settingsManager.setVisualSetting('contrast', this.value)">
+                        <span id="visualContrastValue">68%</span>
+                    </div>
+                    <div class="volume-control">
+                        <label for="visualSaturation">SATURATION:</label>
+                        <input type="range" id="visualSaturation" min="0" max="200" value="100" class="volume-slider" oninput="settingsManager.setVisualSetting('saturation', this.value)">
+                        <span id="visualSaturationValue">100%</span>
+                    </div>
+                </div>
+                <div class="setting-item setting-item-assets">
+                    <label>Assets:</label>
+                    <button type="button" id="assetGenButton" class="toggle-button" onclick="(typeof assetGenUI!=='undefined'&&assetGenUI.show())">GENERATOR ›</button>
+                </div>
+            </div>
+            <div class="settings-menu">
+                <button onclick="game.hideSettings()" class="pause-button">BACK</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Color Overlay for HTML Elements -->
+    <div id="colorOverlay" class="color-overlay"></div>
+    
+    <!-- Start Screen -->
+    <div id="startScreen" class="start-screen">
+        <!-- StartScreenManager will create the UI dynamically -->
+    </div>
+    
+    <!-- Core Game Engine -->
+    <!-- Core modules -->
+    <script src="js/core/game-state-manager.js"></script>
+    <script src="js/core/menu-state.js"></script>
+    <script src="js/core/economy-config.js"></script>
+    <script src="js/core/difficulty-config.js"></script>
+    <script src="js/core/planet-config.js"></script>
+    <script src="js/core/profile-manager.js"></script>
+    <script src="js/core/faction-manager.js"></script>
+    <script src="js/core/weapon-config.js"></script>
+    <script src="js/core/ability-config.js"></script>
+    <script src="js/core/combat-event-config.js"></script>
+    <script src="js/core/explosion-config.js"></script>
+    <script src="js/core/enemy-config.js"></script>
+    <script src="js/core/ship-config.js"></script>
+    <script src="js/core/ship-loadout.js"></script>
+    <script src="js/core/objective-manager.js"></script>
+    <script src="js/core/daily-tracker.js"></script>
+    <script src="js/core/level-manager.js"></script>
+    <script src="js/core/system-manager.js"></script>
+    <script src="js/core/game-control-system.js"></script>
+    <script src="js/core/game-loop.js"></script>
+    <script src="js/core/menu-nav.js"></script>
+    <script src="js/core/input-handler.js"></script>
+    <script src="js/core/ui-manager.js"></script>
+    <script src="js/core/cheat-system.js"></script>
+    <script src="js/core/settings-manager.js"></script>
+    <script src="js/core/render-manager.js"></script>
+    <script src="js/core/viewport-fit.js"></script>
+    <script src="js/core/core.js"></script>
+    
+    <!-- Game Logic -->
+    <script src="js/game/sounds.js"></script>
+    <script src="js/game/youtube-soundtrack.js"></script>
+    <script src="js/game/beat-sync.js"></script>
+    <script src="js/game/charge-system.js"></script>
+    <script src="js/game/player.js"></script>
+    <script src="js/game/bullets.js"></script>
+    <script src="js/game/enemies.js"></script>
+    <script src="js/game/obstacles.js"></script>
+    <script src="js/game/pickups.js"></script>
+    <script src="js/game/collisions.js"></script>
+    
+    <!-- Graphics & Rendering -->
+    <script src="js/graphics/particle-system.js"></script>
+    <script src="js/graphics/explosion-system.js"></script>
+    <script src="js/graphics/icon-sprites.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/module-sprites.js"></script>
+    <script src="js/graphics/icon-renderer.js?v=icon-crisp-2"></script>
+    <script src="js/ui/ui-tooltip.js?v=2"></script>
+    <script src="js/ui/color-picker-overlay.js"></script>
+    <script src="js/graphics/faction-ship-styles.js"></script>
+    <script src="js/graphics/asset-gen-registry.js"></script>
+    <script src="js/graphics/asset-gen-client.js"></script>
+    <script src="js/graphics/sprite-meta.js"></script>
+    <script src="js/graphics/sprite-factory.js"></script>
+    <script src="js/graphics/color-palette.js"></script>
+    <script src="js/graphics/lighting-system.js"></script>
+    <script src="js/graphics/graphics-manager.js"></script>
+    <script src="js/graphics/graphics.js"></script>
+    <script src="js/graphics/color-palette-system.js"></script>
+    <script src="js/graphics/performance-optimizer.js"></script>
+    <script src="js/graphics/theme-context.js"></script>
+    <script src="js/graphics/ui-appearance.js"></script>
+    <script src="js/ui/enhanced-palette-ui.js"></script>
+    <script src="js/graphics/color-manager.js"></script>
+    <script src="js/graphics/ship-models.js"></script>
+    <script src="js/ui/theme-editor.js"></script>
+    <script src="js/ui/asset-gen-ui.js"></script>
+    <script src="js/ui/component-editor.js"></script>
+    <script src="js/ui/difficulty-editor.js"></script>
+    <script src="js/ui/faction-command.js"></script>
+    
+    <!-- Ship Assets -->
+    <script src="assets/sprite-loader.js"></script>
+    <script type="module" src="assets/ships/ship-asset-loader.js"></script>
+    <script type="module" src="assets/ships/player-starfighter-model.js"></script>
+    <script type="module" src="assets/ships/player-interceptor-model.js"></script>
+    <script type="module" src="assets/ships/player-heavy-fighter-model.js"></script>
+    <script type="module" src="assets/ships/player-assault-model.js"></script>
+    <script type="module" src="assets/ships/scout-model.js"></script>
+    <script type="module" src="assets/ships/fighter-model.js"></script>
+    <script type="module" src="assets/ships/interceptor-model.js"></script>
+    <script type="module" src="assets/ships/cruiser-model.js"></script>
+    <script type="module" src="assets/ships/battleship-model.js"></script>
+    
+    <!-- Ability System -->
+    <script type="module" src="js/abilities/ability-manager.js"></script>
+    
+    <script src="js/ui/render.js"></script>
+    <script src="js/ui/parallax.js"></script>
+    <script src="js/ui/bg-mouse-parallax.js"></script>
+    <script src="js/ui/panel-resize.js"></script>
+    <script src="js/ui/dev-profile-toggles.js"></script>
+    <script src="js/ui/planet-viewer.js"></script>
+    <script src="js/ui/enemy-viewer.js"></script>
+    <script src="js/ui/ship-viewer.js"></script>
+    <script src="js/ui/ability-viewer.js"></script>
+    <script src="js/ui/weapon-viewer.js"></script>
+    <script src="js/ui/defense-viewer.js"></script>
+    <script src="js/ui/explosion-viewer.js"></script>
+    <script src="js/ui/faction-viewer.js"></script>
+    <script src="js/ui/event-viewer.js"></script>
+    <script src="js/ui/planet-editor.js"></script>
+    <script src="js/ui/enemy-editor.js"></script>
+    <script src="js/ui/ship-editor.js"></script>
+    <script src="js/ui/ability-editor.js"></script>
+    <script src="js/ui/level-info-manager.js"></script>
+    <script src="js/ui/mission-start.js"></script>
+    
+    <!-- Level System -->
+    <script src="js/levels/mars.js"></script>
+    <script src="js/levels/jupiter.js"></script>
+    <script src="js/levels/saturn.js"></script>
+    <script src="js/levels/neptune.js"></script>
+    <script src="js/levels/pluto.js"></script>
+    <script src="js/levels/level-manager.js"></script>
+    
+    <!-- UI & Menus -->
+    <script src="js/ui/ship-renderer.js"></script>
+    <script src="js/ui/combined-selection.js"></script>
+    <script src="js/ui/galaxy-selection.js"></script>
+    <script src="js/ui/galaxy-map.js"></script>
+    <script src="js/ui/profile-selection.js"></script>
+    <script src="js/ui/onboarding.js"></script>
+    <script src="js/ui/hangar-test-arena.js"></script>
+    <script src="js/ui/home-station.js?v=faction-icons-1"></script>
+    <script src="js/ui/player-selection.js"></script>
+    <script src="js/ui/planet-selection.js"></script>
+    
+    <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
+    
+    <script src="js/ui/start-screen.js"></script>
+    <script src="js/ui/volume-controls.js"></script>
+    <script src="js/graphics/planet-svgs.js"></script>
+    
+    <!-- Game Initialization -->
+    <script>
+        // Initialize game when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Create global game instance
+            game = new GameCore();
+            
+            // Initialize the game
+            game.init();
+
+            function refreshViewportAfterControls() {
+                if (window.viewportFit && typeof window.viewportFit.scheduleUpdate === 'function') {
+                    window.viewportFit.scheduleUpdate();
+                }
+            }
+
+            const hideCtrl = document.getElementById('hideGameControls');
+            const showCtrl = document.getElementById('showGameControls');
+            if (hideCtrl) {
+                hideCtrl.addEventListener('click', function () {
+                    if (typeof uiAppearanceManager !== 'undefined') {
+                        uiAppearanceManager.setControlsHints('OFF');
+                        refreshViewportAfterControls();
+                    }
+                });
+            }
+            if (showCtrl) {
+                showCtrl.addEventListener('click', function () {
+                    if (typeof uiAppearanceManager !== 'undefined') {
+                        uiAppearanceManager.setControlsHints('ON');
+                        refreshViewportAfterControls();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

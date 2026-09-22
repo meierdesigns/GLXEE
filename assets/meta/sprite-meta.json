@@ -1,0 +1,14 @@
+{
+  "mount_laser": {
+    "displayScale": 0.25,
+    "outSize": 8,
+    "lengthScale": 1,
+    "symmetric": true
+  },
+  "mount_player_control": {
+    "displayScale": 0.45,
+    "outSize": 8,
+    "lengthScale": 1,
+    "symmetric": true
+  }
+}

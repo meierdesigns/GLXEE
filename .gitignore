@@ -1,0 +1,38 @@
+# Debug tools (local only)
+tools/debug/
+
+# ComfyUI generated assets (keep folder structure via .gitkeep)
+assets/_generated/**
+!assets/_generated/**/.gitkeep
+tools/comfyui/comfyui.pid
+tools/comfyui/comfyui.log
+tools/comfyui/local.env
+tools/comfyui/comfyui-start.out
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Node / local
+node_modules/
+.npm/
+*.log
+
+# IDE / local tooling
+.vscode/
+.cursor/
+.cursed/
+*.local
+.env
+.env.*
+
+# Asset-gen bridge runtime
+tools/asset-gen/bridge.out
+tools/asset-gen/bridge.pid

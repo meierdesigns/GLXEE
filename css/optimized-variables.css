@@ -1,0 +1,196 @@
+/* ========================================
+   GLXEE — Optimized CSS Variable System
+   Fully rebuilt from scratch
+   ======================================== */
+
+:root {
+  /* ========================================
+     CORE COLOR SYSTEM
+     ======================================== */
+  
+  /* Primary Colors */
+  --color-primary: #808080;           /* Primary color */
+  --color-secondary: #606060;         /* Secondary color */
+  --color-accent: #808080;            /* Accent color */
+  
+  /* Background Colors */
+  --color-background: #0a0a0a;        /* Main background */
+  --color-background-light: #1a1a1a;  /* Light background */
+  --color-surface: #2a2a2a;           /* Surfaces */
+  
+  /* Border & Outline */
+  --color-border: #404040;            /* Border */
+  --color-outline: #606060;           /* Outline */
+  
+  /* Text Colors */
+  --color-text: #e0e0e0;              /* Primary text */
+  --color-text-secondary: #a0a0a0;    /* Secondary text */
+  --color-text-muted: #808080;        /* Muted text */
+  --color-text-disabled: #666666;     /* Disabled text */
+  
+  /* Interactive States */
+  --color-hover: #404040;             /* Hover state */
+  --color-active: #606060;            /* Active state */
+  --color-focus: #808080;             /* Focus state */
+  --color-selected: #808080;          /* Selected */
+  --color-disabled: #333333;          /* Disabled */
+  
+  /* ========================================
+     GAME ELEMENT COLORS
+     ======================================== */
+  
+  --color-player: #e0e0e0;            /* Player */
+  --color-enemy: #a0a0a0;             /* Enemy */
+  --color-bullet: #808080;            /* Projectiles */
+  --color-powerup: #808080;           /* Power-ups */
+  --color-obstacle: #404040;          /* Obstacles */
+  
+  /* ========================================
+     STATUS COLORS
+     ======================================== */
+  
+  --color-success: #808080;           /* Success */
+  --color-warning: #606060;           /* Warning */
+  --color-error: #404040;             /* Error */
+  --color-info: #a0a0a0;              /* Info */
+  
+  /* ========================================
+     EFFECT COLORS
+     ======================================== */
+  
+  --color-explosion: #808080;         /* Explosions */
+  --color-particle: #606060;          /* Particles */
+  --color-glow: #404040;              /* Glow */
+  --color-shadow: #202020;            /* Shadow */
+  --color-highlight: #a0a0a0;         /* Highlight */
+  
+  /* ========================================
+     OVERLAY SYSTEM
+     ======================================== */
+  
+  --overlay-color: #808080;           /* Overlay color */
+  --overlay-opacity: 0.3;             /* Overlay opacity */
+  
+  /* ========================================
+     GRADIENT SYSTEM
+     ======================================== */
+  
+  --gradient-primary: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  --gradient-background: linear-gradient(180deg, var(--color-background), var(--color-background-light));
+  --gradient-surface: linear-gradient(180deg, var(--color-surface), var(--color-background));
+  
+  /* ========================================
+     SPACING SYSTEM
+     ======================================== */
+  
+  --spacing-xs: 4px;                  /* Extra small */
+  --spacing-sm: 8px;                  /* Small */
+  --spacing-md: 16px;                 /* Medium */
+  --spacing-lg: 24px;                 /* Large */
+  --spacing-xl: 32px;                 /* Extra large */
+  --spacing-xxl: 48px;                /* Extra extra large */
+  
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+  
+  --radius-sm: 4px;                   /* Smalle Rundung */
+  --radius-md: 8px;                   /* Medium radius */
+  --radius-lg: 12px;                  /* Largee Rundung */
+  --radius-xl: 16px;                  /* Extra largee Rundung */
+  
+  /* ========================================
+     SHADOWS (Shadow)
+     ======================================== */
+  
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.25);
+  
+  /* ========================================
+     TRANSITIONS
+     ======================================== */
+  
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+  
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-xxl: 24px;
+  --font-size-title: 32px;
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.8;
+  
+  /* ========================================
+     Z-INDEX SYSTEM (Layer order)
+     ======================================== */
+  
+  --z-background: -1;
+  --z-default: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
+
+  /* ========================================
+     LEGACY COMPATIBILITY (must stay inside :root)
+     ======================================== */
+  --current-primary: var(--color-primary);
+  --current-secondary: var(--color-secondary);
+  --current-accent: var(--color-accent);
+  --current-background: var(--color-background);
+  --current-background-light: var(--color-background-light);
+  --current-surface: var(--color-surface);
+  --current-border: var(--color-border);
+  --current-text: var(--color-text);
+  --current-text-secondary: var(--color-text-secondary);
+  --current-text-dim: var(--color-text-muted);
+  --current-active: var(--color-active);
+  --current-hover: var(--color-hover);
+
+  --ui-background: var(--color-background);
+  --ui-surface: var(--color-surface);
+  --ui-border: var(--color-border);
+  --ui-text-primary: var(--color-text);
+  --ui-text-secondary: var(--color-text-secondary);
+  --ui-text-disabled: var(--color-text-disabled);
+  --ui-hover: var(--color-hover);
+  --ui-active: var(--color-active);
+
+  --player-color: var(--color-player);
+  --enemy-color: var(--color-enemy);
+  --bullet-color: var(--color-bullet);
+  --powerup-color: var(--color-powerup);
+  --obstacle-color: var(--color-obstacle);
+
+  --status-success: var(--color-success);
+  --status-warning: var(--color-warning);
+  --status-error: var(--color-error);
+  --status-info: var(--color-info);
+
+  --explosion-color: var(--color-explosion);
+  --particle-color: var(--color-particle);
+  --glow-color: var(--color-glow);
+  --shadow-color: var(--color-shadow);
+
+  --overlay-intensity: var(--overlay-opacity);
+}

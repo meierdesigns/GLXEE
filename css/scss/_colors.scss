@@ -1,0 +1,278 @@
+// Global Color Library - GLXEE
+// High contrast grayscale and color palette
+
+// ===== GRAYSCALE PALETTE =====
+// High contrast grayscale with better visibility
+$gray-100: #ffffff;  // Pure white
+$gray-200: #f8f8f8;  // Very light gray
+$gray-300: #e8e8e8;  // Light gray
+$gray-400: #d0d0d0;  // Medium light gray
+$gray-500: #b0b0b0;  // Medium gray
+$gray-600: #888888;  // Medium dark gray
+$gray-700: #606060;  // Dark gray
+$gray-800: #404040;  // Very dark gray
+$gray-900: #202020;  // Almost black
+$gray-1000: #000000; // Pure black
+
+// ===== GAME-SPECIFIC GRAYS =====
+// Optimized for game visibility
+$game-bg-light: $gray-200;     // Light background
+$game-bg-medium: $gray-400;    // Medium background
+$game-bg-dark: $gray-800;      // Dark background
+$game-text-light: $gray-100;   // Light text
+$game-text-dark: $gray-900;    // Dark text
+$game-border-light: $gray-300; // Light borders
+$game-border-dark: $gray-700;  // Dark borders
+
+// ===== UI ELEMENT COLORS =====
+// Specific colors for UI components
+$ui-background: $gray-100;     // Main UI background
+$ui-surface: $gray-200;        // Card/surface background
+$ui-border: $gray-400;         // UI borders
+$ui-text-primary: $gray-900;   // Primary text
+$ui-text-secondary: $gray-600; // Secondary text
+$ui-text-disabled: $gray-500;  // Disabled text
+$ui-hover: $gray-300;          // Hover states
+$ui-active: $gray-500;         // Active states
+
+// ===== GAME ELEMENT COLORS =====
+// Colors for game-specific elements
+$ship-color: $gray-800;        // Ship color
+$bullet-color: $gray-100;      // Bullet color
+$enemy-color: $gray-700;       // Enemy color
+$obstacle-color: $gray-600;    // Obstacle color
+$particle-color: $gray-500;    // Particle color
+$explosion-color: $gray-400;   // Explosion color
+
+// ===== STATUS COLORS =====
+// High contrast status indicators
+$status-success: #00ff00;      // Bright green
+$status-warning: #ffff00;      // Bright yellow
+$status-error: #ff0000;        // Bright red
+$status-info: #00ffff;         // Bright cyan
+
+// ===== THEME COLORS =====
+// Color profiles for different themes
+$theme-teal: (
+  primary: #00ffcc,
+  secondary: #00cc99,
+  accent: #009966,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-green: (
+  primary: #00ff00,
+  secondary: #00cc00,
+  accent: #009900,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-blue: (
+  primary: #0088ff,
+  secondary: #0066cc,
+  accent: #004499,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-red: (
+  primary: #ff4444,
+  secondary: #cc3333,
+  accent: #992222,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-purple: (
+  primary: #cc44ff,
+  secondary: #9933cc,
+  accent: #662299,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-orange: (
+  primary: #ff8844,
+  secondary: #cc6633,
+  accent: #994422,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-pink: (
+  primary: #ff44cc,
+  secondary: #cc3399,
+  accent: #992266,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+$theme-yellow: (
+  primary: #ffff44,
+  secondary: #cccc33,
+  accent: #999922,
+  background: $gray-900,
+  surface: $gray-800,
+  text: $gray-100
+);
+
+// ===== UTILITY FUNCTIONS =====
+// Helper functions for color manipulation
+
+// Get theme color
+@function theme-color($theme, $key) {
+  @return map-get($theme, $key);
+}
+
+// Get grayscale color
+@function gray($level) {
+  @return var(--gray-#{$level});
+}
+
+// Create high contrast color pair
+@function contrast-pair($background) {
+  @if lightness($background) > 50% {
+    @return $gray-900; // Dark text on light background
+  } @else {
+    @return $gray-100; // Light text on dark background
+  }
+}
+
+// ===== CSS CUSTOM PROPERTIES =====
+// CSS variables for dynamic theming
+:root {
+  // Grayscale variables
+  --gray-100: #{$gray-100};
+  --gray-200: #{$gray-200};
+  --gray-300: #{$gray-300};
+  --gray-400: #{$gray-400};
+  --gray-500: #{$gray-500};
+  --gray-600: #{$gray-600};
+  --gray-700: #{$gray-700};
+  --gray-800: #{$gray-800};
+  --gray-900: #{$gray-900};
+  --gray-1000: #{$gray-1000};
+  
+  // Game-specific variables
+  --game-bg-light: #{$game-bg-light};
+  --game-bg-medium: #{$game-bg-medium};
+  --game-bg-dark: #{$game-bg-dark};
+  --game-text-light: #{$game-text-light};
+  --game-text-dark: #{$game-text-dark};
+  --game-border-light: #{$game-border-light};
+  --game-border-dark: #{$game-border-dark};
+  
+  // UI variables
+  --ui-background: #{$ui-background};
+  --ui-surface: #{$ui-surface};
+  --ui-border: #{$ui-border};
+  --ui-text-primary: #{$ui-text-primary};
+  --ui-text-secondary: #{$ui-text-secondary};
+  --ui-text-disabled: #{$ui-text-disabled};
+  --ui-hover: #{$ui-hover};
+  --ui-active: #{$ui-active};
+  
+  // Game element variables
+  --ship-color: #{$ship-color};
+  --bullet-color: #{$bullet-color};
+  --enemy-color: #{$enemy-color};
+  --obstacle-color: #{$obstacle-color};
+  --particle-color: #{$particle-color};
+  --explosion-color: #{$explosion-color};
+  
+  // Status variables
+  --status-success: #{$status-success};
+  --status-warning: #{$status-warning};
+  --status-error: #{$status-error};
+  --status-info: #{$status-info};
+  
+  // Theme variables (default: teal)
+  --theme-primary: #{theme-color($theme-teal, primary)};
+  --theme-secondary: #{theme-color($theme-teal, secondary)};
+  --theme-accent: #{theme-color($theme-teal, accent)};
+  --theme-background: #{theme-color($theme-teal, background)};
+  --theme-surface: #{theme-color($theme-teal, surface)};
+  --theme-text: #{theme-color($theme-teal, text)};
+}
+
+// ===== THEME CLASSES =====
+// CSS classes for different color themes
+.theme-teal {
+  --theme-primary: #{theme-color($theme-teal, primary)};
+  --theme-secondary: #{theme-color($theme-teal, secondary)};
+  --theme-accent: #{theme-color($theme-teal, accent)};
+}
+
+.theme-green {
+  --theme-primary: #{theme-color($theme-green, primary)};
+  --theme-secondary: #{theme-color($theme-green, secondary)};
+  --theme-accent: #{theme-color($theme-green, accent)};
+}
+
+.theme-blue {
+  --theme-primary: #{theme-color($theme-blue, primary)};
+  --theme-secondary: #{theme-color($theme-blue, secondary)};
+  --theme-accent: #{theme-color($theme-blue, accent)};
+}
+
+.theme-red {
+  --theme-primary: #{theme-color($theme-red, primary)};
+  --theme-secondary: #{theme-color($theme-red, secondary)};
+  --theme-accent: #{theme-color($theme-red, accent)};
+}
+
+.theme-purple {
+  --theme-primary: #{theme-color($theme-purple, primary)};
+  --theme-secondary: #{theme-color($theme-purple, secondary)};
+  --theme-accent: #{theme-color($theme-purple, accent)};
+}
+
+.theme-orange {
+  --theme-primary: #{theme-color($theme-orange, primary)};
+  --theme-secondary: #{theme-color($theme-orange, secondary)};
+  --theme-accent: #{theme-color($theme-orange, accent)};
+}
+
+.theme-pink {
+  --theme-primary: #{theme-color($theme-pink, primary)};
+  --theme-secondary: #{theme-color($theme-pink, secondary)};
+  --theme-accent: #{theme-color($theme-pink, accent)};
+}
+
+.theme-yellow {
+  --theme-primary: #{theme-color($theme-yellow, primary)};
+  --theme-secondary: #{theme-color($theme-yellow, secondary)};
+  --theme-accent: #{theme-color($theme-yellow, accent)};
+}
+
+// ===== UTILITY CLASSES =====
+// Utility classes for common color applications
+.text-primary { color: var(--ui-text-primary); }
+.text-secondary { color: var(--ui-text-secondary); }
+.text-disabled { color: var(--ui-text-disabled); }
+.text-theme { color: var(--theme-primary); }
+
+.bg-primary { background-color: var(--ui-background); }
+.bg-surface { background-color: var(--ui-surface); }
+.bg-theme { background-color: var(--theme-background); }
+
+.border-primary { border-color: var(--ui-border); }
+.border-theme { border-color: var(--theme-primary); }
+
+// High contrast text combinations
+.text-on-light { color: var(--game-text-dark); }
+.text-on-dark { color: var(--game-text-light); }
+
+// Game-specific utilities
+.game-bg { background-color: var(--game-bg-dark); }
+.game-text { color: var(--game-text-light); }
+.game-border { border-color: var(--game-border-dark); }

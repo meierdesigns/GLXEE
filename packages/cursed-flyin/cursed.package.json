@@ -1,0 +1,43 @@
+{
+  "schema": "cursed.package/v1",
+  "id": "cursed-flyin",
+  "name": "cursed-flyin",
+  "title": "Cursed Fly-in Card",
+  "description": "Rechts einfahrende Cursed-Card für Host-Apps: Element-Pipette, CSS/Tags-Analyse, Screenshots, Prompts und Package-Anlage.",
+  "tags": ["scripts", "styles", "ui", "ai", "core"],
+  "files": [
+    "assets/js/cursed-element-inspect.js",
+    "assets/js/cursed-flyin.js",
+    "assets/css/cursed-flyin.css"
+  ],
+  "dependencies": ["cursed-bridge"],
+  "sourceProject": "/mnt/quicky2/Cursor/Cursed",
+  "source": "core",
+  "exports": [
+    {
+      "id": "cursed-flyin",
+      "kind": "script",
+      "path": "assets/js/cursed-flyin.js",
+      "label": "CursedFlyin"
+    },
+    {
+      "id": "cursed-element-inspect",
+      "kind": "script",
+      "path": "assets/js/cursed-element-inspect.js",
+      "label": "CursedElementInspect"
+    },
+    {
+      "id": "cursed-flyin-css",
+      "kind": "style",
+      "path": "assets/css/cursed-flyin.css",
+      "label": "CursedFlyin CSS"
+    }
+  ],
+  "links": [],
+  "embed": {
+    "script": "assets/js/cursed-flyin.js",
+    "css": "assets/css/cursed-flyin.css",
+    "global": "CursedFlyin",
+    "example": "CursedFlyin.autoMount({ baseUrl: 'http://127.0.0.1:6190', targetProject: '/path/to/project' });"
+  }
+}

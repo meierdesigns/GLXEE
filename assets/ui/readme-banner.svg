@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="300" viewBox="0 0 960 300" role="img" aria-labelledby="title desc">
+  <title id="title">GLXEE</title>
+  <desc id="desc">UGDF Archive — Intergalactic Combat Simulator · Game Boy shell</desc>
+  <defs>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="2" fill="#0a0a0a"/>
+      <rect y="2" width="4" height="2" fill="#000000"/>
+    </pattern>
+    <linearGradient id="veil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.2"/>
+      <stop offset="50%" stop-color="#000" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3A6EA5" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#3A6EA5" stop-opacity="0.85"/>
+      <stop offset="40%" stop-color="#C44B2F" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#5B2C8A" stop-opacity="0.85"/>
+      <stop offset="80%" stop-color="#8B6914" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#2F8F6B" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="960" height="300" fill="#000000"/>
+  <rect x="6" y="6" width="948" height="288" fill="none" stroke="#707070" stroke-width="2"/>
+  <rect x="12" y="12" width="936" height="276" fill="none" stroke="#3a3a3a" stroke-width="1"/>
+  <rect x="16" y="16" width="928" height="268" fill="#0c0c0c"/>
+  <rect x="16" y="16" width="928" height="268" fill="url(#scan)" opacity="0.4"/>
+  <rect x="16" y="16" width="928" height="268" fill="url(#veil)"/>
+
+  <!-- corner brackets -->
+  <path d="M16 42 H36 M16 16 V36" stroke="#e8e8e8" stroke-width="2" fill="none"/>
+  <path d="M944 42 H924 M944 16 V36" stroke="#e8e8e8" stroke-width="2" fill="none"/>
+  <path d="M16 258 H36 M16 284 V264" stroke="#e8e8e8" stroke-width="2" fill="none"/>
+  <path d="M944 258 H924 M944 284 V264" stroke="#e8e8e8" stroke-width="2" fill="none"/>
+
+  <!-- top status -->
+  <text x="44" y="44" fill="#6a6a6a" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="3">UGDF ARCHIVE  ·  CHANNEL VOLTEX  ·  BAND RETRO  ·  LOCK OPEN</text>
+  <text x="916" y="44" text-anchor="end" fill="#3A6EA5" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="2">WAVE 9–24</text>
+
+  <!-- title block -->
+  <rect x="200" y="72" width="560" height="2" fill="url(#beam)"/>
+  <text x="480" y="128" text-anchor="middle" fill="#ffffff" font-family="Courier New, Courier, monospace" font-size="76" font-weight="700" letter-spacing="16">GLXEE</text>
+  <text x="480" y="158" text-anchor="middle" fill="#c8c8c8" font-family="Courier New, Courier, monospace" font-size="15" letter-spacing="5">INTERGALACTIC COMBAT SIMULATOR</text>
+  <text x="480" y="182" text-anchor="middle" fill="#7a7a7a" font-family="Courier New, Courier, monospace" font-size="12" letter-spacing="3">GAME-BOY SHELL  ·  PIXEL HULLS  ·  HOME STATION  ·  COMBAT EVENTS</text>
+  <rect x="200" y="196" width="560" height="2" fill="url(#beam)"/>
+
+  <!-- faction strip -->
+  <g transform="translate(230, 220)">
+    <rect x="0" y="0" width="26" height="10" fill="#3A6EA5"/>
+    <rect x="32" y="0" width="26" height="10" fill="#C44B2F"/>
+    <rect x="64" y="0" width="26" height="10" fill="#5B2C8A"/>
+    <rect x="96" y="0" width="26" height="10" fill="#8B6914"/>
+    <rect x="128" y="0" width="26" height="10" fill="#2F8F6B"/>
+    <text x="172" y="9" fill="#707070" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="2">TERRAN · KRONAX · VOIDBORN · PIRATE · MACHINE</text>
+  </g>
+
+  <!-- footer -->
+  <text x="44" y="268" fill="#555555" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="2">CREATOR  LANCE MEIER / MEIERDESIGNS</text>
+  <text x="480" y="268" text-anchor="middle" fill="#555555" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="2">FEATUREWAVES · BRANCH CLEAR</text>
+  <text x="916" y="268" text-anchor="end" fill="#555555" font-family="Courier New, Courier, monospace" font-size="11" letter-spacing="2">MIT</text>
+</svg>

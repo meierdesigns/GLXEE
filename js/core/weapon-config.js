@@ -205,6 +205,44 @@ class WeaponConfigManager {
                 lightIntensity: 0.95,
                 bulletType: 'burst_shot',
                 faction: 'kronax'
+            }),
+            laser_twin: this.makeWeapon({
+                id: 'laser_twin',
+                name: 'Twin Laser',
+                description: 'Compact twin-linked hardpoint. Lower damage per bolt, faster fire rate.',
+                iconKey: 'shotLaser',
+                damage: 6,
+                speed: 13,
+                cooldown: 170,
+                width: 2,
+                height: 7,
+                bulletCount: 2,
+                bulletSpacing: 4,
+                lightRadius: 16,
+                lightIntensity: 0.8,
+                bulletType: 'laser_beam',
+                faction: null,
+                visual: 'hardpoint_twin'
+            }),
+            railgun: this.makeWeapon({
+                id: 'railgun',
+                name: 'Railgun',
+                description: 'Heavy single-shot rail cannon. Slow but devastating, needs a reinforced mount.',
+                iconKey: 'shotPierce',
+                damage: 32,
+                speed: 18,
+                cooldown: 1200,
+                width: 2,
+                height: 16,
+                pierce: true,
+                lightRadius: 24,
+                lightIntensity: 1.2,
+                bulletType: 'pierce_beam',
+                faction: null,
+                visual: 'hardpoint_heavy',
+                slotMode: 'expand',
+                slotZone: 'front',
+                slotSize: 3
             })
         };
     }
@@ -238,7 +276,15 @@ class WeaponConfigManager {
             lightColor: data.lightColor || '#808080',
             bulletType: data.bulletType || (id + '_beam'),
             soundEffect: data.soundEffect || 'laser-shoot',
-            faction: data.faction ? String(data.faction).toLowerCase() : null
+            faction: data.faction ? String(data.faction).toLowerCase() : null,
+            // Optional per-id visual/slot overrides — when set, these take
+            // priority over the generic role-based lookups in
+            // ship-asset-loader.js (visual) and ship-loadout.js (slotMode),
+            // so a weapon id can have its own distinct icon and hull footprint.
+            visual: data.visual || null,
+            slotMode: data.slotMode || null,
+            slotZone: data.slotZone || null,
+            slotSize: data.slotSize != null ? Number(data.slotSize) : null
         };
     }
 

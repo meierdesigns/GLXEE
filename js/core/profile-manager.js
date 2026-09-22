@@ -969,7 +969,10 @@ class ProfileManager {
             }
             const parsed = JSON.parse(raw);
             this.profiles = Array.isArray(parsed.profiles) ? parsed.profiles : [];
-            this.profiles.forEach((p) => this.ensureEconomyDefaults(p));
+            this.profiles.forEach((p) => {
+                this.ensureEconomyDefaults(p);
+                if (!p.faction) p.faction = this.normalizeFactionId(null);
+            });
             this.activeProfileId = parsed.activeProfileId || null;
             if (this.activeProfileId && !this.getProfile(this.activeProfileId)) {
                 this.activeProfileId = this.profiles[0] ? this.profiles[0].id : null;
@@ -1009,13 +1012,23 @@ class ProfileManager {
         return !!this.getActiveProfile();
     }
 
-    create(name) {
+    normalizeFactionId(factionId) {
+        const id = String(factionId || '').toLowerCase();
+        const ids = (typeof factionManager !== 'undefined' && factionManager.getFactionIds)
+            ? factionManager.getFactionIds()
+            : ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+        return ids.indexOf(id) !== -1 ? id : ids[0];
+    }
+
+    create(name, factionId) {
         const trimmed = String(name || '').trim().toUpperCase().slice(0, 16);
         if (!trimmed) return null;
         const starter = this.getStarterShipId();
+        const faction = this.normalizeFactionId(factionId);
         const profile = {
             id: this.createId(),
             name: trimmed,
+            faction: faction,
             createdAt: Date.now(),
             progress: this.emptyProgress(),
             ownedShipIds: [starter],
@@ -1046,6 +1059,9 @@ class ProfileManager {
         this.activeProfileId = profile.id;
         this.discoverShipContents(starter);
         this.save();
+        if (typeof factionManager !== 'undefined' && factionManager.join) {
+            factionManager.join(faction);
+        }
         return profile;
     }
 
@@ -1078,6 +1094,23 @@ class ProfileManager {
         if (!profile) return this.getStarterShipId();
         this.ensureEconomyDefaults(profile);
         return profile.activeShipId;
+    }
+
+    /** Manual override for which hull-part shape variant set a given owned ship uses. */
+    getHullShapeSeed(shipId) {
+        const profile = this.getActiveProfile();
+        if (!profile || !profile.hullShapeSeeds) return null;
+        const seed = profile.hullShapeSeeds[String(shipId || '')];
+        return seed != null ? seed : null;
+    }
+
+    setHullShapeSeed(shipId, seed) {
+        const profile = this.getActiveProfile();
+        if (!profile) return false;
+        if (!profile.hullShapeSeeds) profile.hullShapeSeeds = {};
+        profile.hullShapeSeeds[String(shipId || '')] = String(seed);
+        this.save();
+        return true;
     }
 
     addOwnedShip(shipId) {
@@ -1660,6 +1693,11 @@ class ProfileManager {
         this.activeProfileId = profile.id;
         this.save();
         return true;
+    }
+
+    logout() {
+        this.activeProfileId = null;
+        this.save();
     }
 
     getGalaxyProgress(galaxyId) {

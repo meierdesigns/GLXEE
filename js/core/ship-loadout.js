@@ -138,17 +138,25 @@ class ShipLoadoutManager {
             });
             return out;
         };
+        // Weapon slots are positional, not a set — the same weapon id can be
+        // installed in more than one slot at once (e.g. twin lasers), so this
+        // only drops empty entries and must NOT dedupe like uniq() does.
+        const compact = (arr) => (Array.isArray(arr) ? arr : [])
+            .map((id) => String(id || ''))
+            .filter((s) => !!s);
         const abilities = uniq(src.abilities).filter((id) => !this.isEnergyId(id));
         const energyFromSrc = uniq(src.energy).filter((id) => this.isEnergyId(id));
         const energyFromAbilities = uniq(src.abilities).filter((id) => this.isEnergyId(id));
         const energy = uniq(energyFromSrc.concat(energyFromAbilities));
         return {
-            weapons: uniq(src.weapons),
+            weapons: compact(src.weapons),
             defenses: uniq(src.defenses).filter((id) => !this.isEnergyId(id)),
             abilities: abilities,
             energy: energy,
             moduleOffsets: this.normalizeModuleOffsets(src.moduleOffsets),
+            slotAnchors: this.normalizeSlotAnchors(src.slotAnchors),
             moduleScales: this.normalizeModuleScales(src.moduleScales),
+            moduleSkins: this.normalizeModuleSkins(src.moduleSkins),
             // Both wings share the same vertical shift and mirror their
             // horizontal distance from the centerline.
             wingOffsetY: Math.max(-0.35, Math.min(0.35, Number(src.wingOffsetY) || 0)),
@@ -175,6 +183,108 @@ class ShipLoadoutManager {
             });
         });
         return out;
+    }
+
+    /**
+     * Custom anchor for an EMPTY hangar slot (no module id to key an offset
+     * to). Keyed by kind + slot index, absolute normalized position within
+     * the layout bbox — lets the player pre-position a slot before equipping
+     * anything, so it doesn't snap back to the generic defaultAnchor().
+     */
+    normalizeSlotAnchors(raw) {
+        const src = raw && typeof raw === 'object' ? raw : {};
+        const out = {};
+        ['weapon', 'defense', 'ability', 'energy'].forEach((kind) => {
+            out[kind] = {};
+            const values = src[kind] && typeof src[kind] === 'object' ? src[kind] : {};
+            Object.keys(values).forEach((idx) => {
+                const value = values[idx] && typeof values[idx] === 'object' ? values[idx] : {};
+                const nx = Number(value.nx);
+                const ny = Number(value.ny);
+                if (!isFinite(nx) || !isFinite(ny)) return;
+                out[kind][idx] = {
+                    nx: Math.max(0.04, Math.min(0.96, nx)),
+                    ny: Math.max(0.06, Math.min(0.94, ny))
+                };
+            });
+        });
+        return out;
+    }
+
+    /** Store/clear a custom anchor for an empty slot (see normalizeSlotAnchors). */
+    setEmptySlotAnchor(shipId, kind, index, nx, ny) {
+        const loadout = this.getLoadout(shipId);
+        const anchors = this.normalizeSlotAnchors(loadout.slotAnchors);
+        anchors[kind] = anchors[kind] || {};
+        const idx = String(Math.max(0, Math.round(Number(index) || 0)));
+        if (nx == null || ny == null) {
+            delete anchors[kind][idx];
+        } else {
+            anchors[kind][idx] = {
+                nx: Math.max(0.04, Math.min(0.96, Number(nx) || 0.5)),
+                ny: Math.max(0.06, Math.min(0.94, Number(ny) || 0.5))
+            };
+        }
+        loadout.slotAnchors = anchors;
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    /** Per-slot cosmetic skin choice, independent of the module's own stats. */
+    normalizeModuleSkins(raw) {
+        const src = raw && typeof raw === 'object' ? raw : {};
+        const out = {};
+        ['weapon', 'defense', 'ability', 'energy'].forEach((kind) => {
+            out[kind] = {};
+            const values = src[kind] && typeof src[kind] === 'object' ? src[kind] : {};
+            Object.keys(values).forEach((key) => {
+                if (values[key]) out[kind][key] = String(values[key]);
+            });
+        });
+        return out;
+    }
+
+    /** Skins available for a given module kind, independent of any specific id's stats. */
+    getAvailableSkins(kind) {
+        const common = [{ id: 'default', label: 'DEFAULT' }];
+        if (kind === 'weapon') {
+            return common.concat([
+                { id: 'hardpoint_twin', label: 'TWIN' },
+                { id: 'hardpoint_heavy', label: 'HEAVY' }
+            ]);
+        }
+        return common.concat([
+            { id: 'plating_capacitor', label: 'CAPACITOR' }
+        ]);
+    }
+
+    setModuleSkin(shipId, kind, moduleId, face, skinId) {
+        const id = String(moduleId || '');
+        const key = this.kindToLoadoutKey(kind);
+        if (!id || !key) return { ok: false, reason: 'INVALID' };
+        const loadout = this.getLoadout(shipId);
+        if (!Array.isArray(loadout[key]) || loadout[key].indexOf(id) === -1) {
+            return { ok: false, reason: 'NOT_EQUIPPED' };
+        }
+        const skins = this.normalizeModuleSkins(loadout.moduleSkins);
+        skins[kind] = skins[kind] || {};
+        const offsetKey = this.moduleOffsetKey(id, face);
+        if (!skinId || skinId === 'default') {
+            delete skins[kind][offsetKey];
+        } else {
+            skins[kind][offsetKey] = String(skinId);
+        }
+        loadout.moduleSkins = skins;
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    getModuleSkin(shipId, kind, moduleId, face) {
+        const loadout = this.getLoadout(shipId);
+        const skins = loadout.moduleSkins && loadout.moduleSkins[kind];
+        if (!skins) return 'default';
+        const offsetKey = this.moduleOffsetKey(moduleId, face);
+        return skins[offsetKey] || 'default';
     }
 
     normalizeModuleScales(raw) {
@@ -315,6 +425,19 @@ class ShipLoadoutManager {
         return 'pod';
     }
 
+    /** Looks up the weapon/ability config entry backing a module id, if any. */
+    getModuleConfigEntry(kind, id) {
+        const k = String(kind || '');
+        if (k === 'weapon' && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon) {
+            return weaponConfigManager.getWeapon(id);
+        }
+        if ((k === 'ability' || k === 'defense' || k === 'energy')
+            && typeof abilityConfigManager !== 'undefined' && abilityConfigManager.getAbility) {
+            return abilityConfigManager.getAbility(id);
+        }
+        return null;
+    }
+
     /**
      * How a module integrates into hull segments.
      * mode: attach | replace | insert | expand
@@ -323,6 +446,22 @@ class ShipLoadoutManager {
     getModuleIntegration(kind, id) {
         const k = String(kind || '');
         const sid = String(id || '').toLowerCase();
+        // A module id can declare its own slot footprint (slotMode/slotSize/
+        // slotZone on its weapon/ability config entry) instead of relying on
+        // the hardcoded id-name whitelists below — this is what lets a new
+        // purchasable variant of an existing module type occupy a different
+        // hull footprint than the default of its kind.
+        const cfg = this.getModuleConfigEntry(k, id);
+        if (cfg && cfg.slotMode) {
+            const defaultZone = k === 'weapon' ? 'front' : (k === 'ability' ? 'back' : 'center');
+            const defaultDir = k === 'weapon' ? 'forward' : (k === 'ability' ? 'aft' : 'side');
+            return {
+                mode: cfg.slotMode,
+                zone: cfg.slotZone || defaultZone,
+                expandDir: cfg.slotMode === 'expand' ? defaultDir : undefined,
+                expandSize: cfg.slotSize != null ? cfg.slotSize : 2
+            };
+        }
         if (k === 'weapon') {
             if (this.heavyWeaponIds[sid]) {
                 return { mode: 'expand', zone: 'front', expandDir: 'forward', expandSize: 2 };
@@ -1003,15 +1142,30 @@ class ShipLoadoutManager {
                 part.x = segment.x + Math.floor((segment.width - part.width) / 2);
             }
         });
+        // Full-hull bounding box (all segments combined) — a dragged module's
+        // travel range is not limited to its own small mount plate, so the
+        // player can pull a wing-mounted weapon back onto the front/center
+        // hull (or anywhere else) to line it up with the drawn art.
+        const hullBBox = segments.reduce((box, seg) => ({
+            x: Math.min(box.x, seg.x),
+            y: Math.min(box.y, seg.y),
+            right: Math.max(box.right, seg.x + seg.width),
+            bottom: Math.max(box.bottom, seg.y + seg.height)
+        }), { x: 0, y: 0, right: coreWidth, bottom: totalCoreH });
+
         // Module offsets are local to their owning component, so moving or
         // scaling a component keeps its installed hardware attached to it.
         parts.forEach((part) => {
+            const skins = L.moduleSkins && L.moduleSkins[part.kind];
+            const skin = skins ? skins[this.moduleOffsetKey(part.id, part.face)] : null;
+            if (skin) part.skin = skin;
             const segmentId = part.mountSegment === 'wing'
                 ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
                 : part.mountSegment;
             const segment = segments.find((seg) => seg.id === segmentId);
             const stored = L.moduleOffsets && L.moduleOffsets[part.kind]
-                ? L.moduleOffsets[part.kind][part.id]
+                ? (L.moduleOffsets[part.kind][this.moduleOffsetKey(part.id, part.face)]
+                    || L.moduleOffsets[part.kind][part.id])
                 : null;
             if (!segment || !stored) {
                 if (segment && (part.kind === 'defense' || part.face === 'center')) {
@@ -1019,19 +1173,21 @@ class ShipLoadoutManager {
                 }
                 return;
             }
-            const maxX = Math.max(0, segment.width - part.width);
-            const maxY = Math.max(0, segment.height - part.height);
             const baseX = segment.x + (segment.width - part.width) / 2;
             const baseY = segment.y + (segment.height - part.height) / 2;
+            const minX = hullBBox.x;
+            const minY = hullBBox.y;
+            const maxX = Math.max(minX, hullBBox.right - part.width);
+            const maxY = Math.max(minY, hullBBox.bottom - part.height);
             if (part.kind === 'defense' || part.face === 'center') {
                 // Defense stays horizontally centered; only vertical nudge is kept.
                 part.x = baseX;
-                part.y = Math.max(segment.y, Math.min(segment.y + maxY,
+                part.y = Math.max(minY, Math.min(maxY,
                     baseY + Number(stored.y || 0) * segment.height));
             } else {
-                part.x = Math.max(segment.x, Math.min(segment.x + maxX,
+                part.x = Math.max(minX, Math.min(maxX,
                     baseX + Number(stored.x || 0) * segment.width));
-                part.y = Math.max(segment.y, Math.min(segment.y + maxY,
+                part.y = Math.max(minY, Math.min(maxY,
                     baseY + Number(stored.y || 0) * segment.height));
             }
         });
@@ -1126,7 +1282,8 @@ class ShipLoadoutManager {
             integrate: p.integrate || 'attach',
             zone: p.zone || null,
             moduleOffsetKey: String(p.kind || 'module') + ':' + String(p.id || ''),
-            mountSegment: p.mountSegment || null
+            mountSegment: p.mountSegment || null,
+            skin: p.skin || null
         }));
 
         const appearance = {
@@ -1780,7 +1937,19 @@ class ShipLoadoutManager {
         return { ok: true, loadout: saved };
     }
 
-    setModuleOffset(shipId, kind, moduleId, offsetX, offsetY) {
+    /**
+     * Two equipped modules of the same kind can share the same id (e.g. the
+     * same weapon installed in both weapon slots) — mount position must be
+     * per-slot, not per-id, or dragging one moves both. `face` (up/left/
+     * right/down, already assigned per module by buildLayout) disambiguates
+     * the common cases; modules sharing both id and face fall back to a
+     * single shared offset, same as before this fix.
+     */
+    moduleOffsetKey(id, face) {
+        return String(id || '') + '@' + String(face || 'up');
+    }
+
+    setModuleOffset(shipId, kind, moduleId, offsetX, offsetY, face) {
         const id = String(moduleId || '');
         const key = this.kindToLoadoutKey(kind);
         if (!id || !key) return { ok: false, reason: 'INVALID' };
@@ -1790,7 +1959,7 @@ class ShipLoadoutManager {
         }
         const offsets = this.normalizeModuleOffsets(loadout.moduleOffsets);
         offsets[kind] = offsets[kind] || {};
-        offsets[kind][id] = {
+        offsets[kind][this.moduleOffsetKey(id, face)] = {
             x: Math.max(-0.45, Math.min(0.45, Number(offsetX) || 0)),
             y: Math.max(-0.45, Math.min(0.45, Number(offsetY) || 0))
         };
@@ -1908,16 +2077,24 @@ class ShipLoadoutManager {
                     if (nx < 0.32) side = 'left';
                     else if (nx > 0.68) side = 'right';
                 } else {
+                    const customAnchor = loadout.slotAnchors
+                        && loadout.slotAnchors[kind]
+                        && loadout.slotAnchors[kind][String(i)];
                     const a = defaultAnchor(kind, i, cap);
-                    nx = a.nx;
-                    ny = a.ny;
+                    nx = customAnchor ? customAnchor.nx : a.nx;
+                    ny = customAnchor ? customAnchor.ny : a.ny;
                     side = a.side;
+                    if (customAnchor) {
+                        if (nx < 0.32) side = 'left';
+                        else if (nx > 0.68) side = 'right';
+                    }
                 }
                 slots.push({
                     kind: kind,
                     key: key,
                     index: i,
                     id: id,
+                    face: mod ? mod.face : null,
                     label: this.categoryLabel(kind) + ' ' + (i + 1),
                     nx: Math.max(0.04, Math.min(0.96, nx)),
                     ny: Math.max(0.06, Math.min(0.94, ny)),

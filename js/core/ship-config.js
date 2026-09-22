@@ -379,6 +379,7 @@ class ShipConfigManager {
         merged.name = cfg.name || baseModel.name;
         merged.description = cfg.description || baseModel.description;
         merged.modelClass = cfg.modelClass || baseModel.modelClass;
+        merged.faction = cfg.faction != null ? cfg.faction : (baseModel.faction || null);
         merged.speed = cfg.speed;
         merged.maxHealth = cfg.maxHealth;
         merged.armor = cfg.armor;
@@ -397,12 +398,31 @@ class ShipConfigManager {
         merged.tier = cfg.tier;
         merged.cost = cfg.cost;
         merged.type = 'player';
-        // Keep sprite aspect; shrink a bit so modular ships aren't oversized.
-        const hullShrink = 0.75;
-        const bw = Math.max(8, Math.round(Number(baseModel.width) || 20));
-        const bh = Math.max(8, Math.round(Number(baseModel.height) || 16));
-        merged.nativeWidth = Math.max(8, Math.round(bw * hullShrink));
-        merged.nativeHeight = Math.max(8, Math.round(bh * hullShrink));
+        // Hull core size comes from the modelClass, not the raw sprite pixel
+        // size — source ship art isn't drawn to a shared scale, so deriving
+        // size straight from sprite width/height made e.g. the base
+        // Starfighter render larger on screen than the Heavy Fighter.
+        // shipLoadoutManager.coreSizes already encodes the intended
+        // interceptor < starfighter < assault < heavy_fighter progression.
+        const classCoreSizes = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.coreSizes)
+            ? shipLoadoutManager.coreSizes
+            : null;
+        const classCore = classCoreSizes && classCoreSizes[merged.modelClass];
+        if (classCore) {
+            // shipLoadoutManager.coreSizes is tuned for the hangar/editor preview,
+            // which upscales the hull with an integer pixel-art zoom factor.
+            // Gameplay renders at ~1:1, so scale the same proportions up —
+            // too small and the procedural hull segments degenerate into a blob.
+            const gameplayCoreScale = 1.7;
+            merged.nativeWidth = Math.max(8, Math.round(classCore.width * gameplayCoreScale));
+            merged.nativeHeight = Math.max(8, Math.round(classCore.height * gameplayCoreScale));
+        } else {
+            const hullShrink = 0.75;
+            const bw = Math.max(8, Math.round(Number(baseModel.width) || 20));
+            const bh = Math.max(8, Math.round(Number(baseModel.height) || 16));
+            merged.nativeWidth = Math.max(8, Math.round(bw * hullShrink));
+            merged.nativeHeight = Math.max(8, Math.round(bh * hullShrink));
+        }
 
         const weaponKey = cfg.defaultWeapon || 'laser';
         const weaponEntry = {
@@ -502,6 +522,7 @@ class ShipConfigManager {
                 name: cfg.name,
                 type: 'player',
                 modelClass: cfg.modelClass,
+                faction: cfg.faction || null,
                 speed: cfg.speed,
                 maxHealth: cfg.maxHealth,
                 armor: cfg.armor,

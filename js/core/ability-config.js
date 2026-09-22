@@ -167,6 +167,21 @@ class AbilityConfigManager {
                 uiDescription: 'Strong energy shield',
                 faction: 'terran'
             }),
+            capacitor_shield_regen: this.makeAbility({
+                id: 'capacitor_shield_regen',
+                name: 'Capacitor Shield',
+                description: 'Bulkier shield capacitor bank. Higher capacity and steady regen, needs a larger core mount.',
+                icon: 'ability_energy_shield',
+                cluster: 'defense',
+                type: 'passive',
+                tier: 3,
+                uiDescription: 'Large-capacity shield with built-in regen',
+                faction: null,
+                visual: 'plating_capacitor',
+                slotMode: 'insert',
+                slotZone: 'center',
+                slotSize: 3
+            }),
             adaptive_shield: this.makeAbility({
                 id: 'adaptive_shield',
                 name: 'Adaptive Shield',
@@ -324,7 +339,13 @@ class AbilityConfigManager {
             tier: data.tier != null ? Math.round(Number(data.tier)) : 1,
             uiDescription: data.uiDescription || data.description || '',
             custom: !!data.custom,
-            faction: data.faction ? String(data.faction).toLowerCase() : null
+            faction: data.faction ? String(data.faction).toLowerCase() : null,
+            // Optional per-id visual/slot overrides — see weapon-config.js's
+            // makeWeapon() for the matching mechanism.
+            visual: data.visual || null,
+            slotMode: data.slotMode || null,
+            slotZone: data.slotZone || null,
+            slotSize: data.slotSize != null ? Number(data.slotSize) : null
         };
     }
 

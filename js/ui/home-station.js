@@ -1201,6 +1201,14 @@ class HomeStationUI {
         } else {
             body = `
                 <div class="hs-station-grid">
+                    <div class="hs-station-cover" aria-label="Home station">
+                        <div class="hs-station-cover-image"></div>
+                        <div class="hs-station-cover-scanline"></div>
+                        <div class="hs-station-cover-caption">
+                            <span class="hs-station-cover-kicker">HOME STATION // DOCK 01</span>
+                            <strong>WELCOME ABOARD</strong>
+                        </div>
+                    </div>
                     <div class="hs-panel hs-panel-stores">
                         ${this.panelTitle('hsStores', 'STATION STORES')}
                         <div class="hs-row hs-res-grid">${walletHtml}</div>
@@ -1252,7 +1260,7 @@ class HomeStationUI {
         const isComp = this.tab === 'components';
         const hideHeaderCredits = isPlay || isMenu || this.tab === 'shop';
         this.setOverlayHtml(`
-            <div class="profile-selection-content home-station-content hs-nav-tabs${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}">
+            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}">
                 <div class="hs-header">
                     <div class="hs-topbar">
                         <div class="hs-tabs">

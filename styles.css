@@ -3183,6 +3183,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
 }
 
 .ship-stats {
@@ -8594,7 +8595,7 @@ button.hs-logout-btn.nav-focused {
 }
 .hs-res-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
 }
 .hs-chip {
@@ -9307,6 +9308,11 @@ button.hs-tab.active.nav-focused {
     filter: saturate(0.45) brightness(0.85);
     border-color: color-mix(in srgb, var(--color-border) 35%, transparent);
 }
+.home-station-content.hs-mode-station.hs-nav-tabs .hs-body {
+    opacity: 1;
+    filter: none;
+    border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
 .home-station-content.hs-nav-sub .hs-topbar {
     opacity: 0.38;
     filter: saturate(0.45) brightness(0.85);
@@ -9477,9 +9483,78 @@ button.hs-tab.active.nav-focused {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     align-content: stretch;
-    grid-auto-rows: minmax(0, 1fr);
+    grid-template-areas:
+        "cover cover"
+        "stores stores"
+        "cargo cargo"
+        "blueprints ships";
+    grid-template-rows: minmax(110px, 0.8fr) auto auto minmax(0, 1fr);
     height: 100%;
     min-height: 0;
+}
+.hs-station-cover {
+    position: relative;
+    grid-area: cover;
+    min-height: 110px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 70%, var(--color-border));
+    background: #020306;
+    box-shadow:
+        inset 0 0 24px color-mix(in srgb, var(--color-primary) 20%, transparent),
+        0 0 12px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+.hs-station-cover-image {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.04) 55%, rgba(0, 0, 0, 0.36)),
+        linear-gradient(0deg, rgba(0, 0, 0, 0.32), transparent 55%),
+        url('assets/ui/hs-bg-station.png') center 48% / cover no-repeat;
+    image-rendering: pixelated;
+    filter: brightness(1.65) saturate(1.25) contrast(1.12);
+    transform: scale(1.02);
+}
+.hs-station-cover-scanline {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 3px,
+        color-mix(in srgb, var(--color-primary) 8%, transparent) 4px
+    );
+    opacity: 0.7;
+}
+.hs-station-cover-caption {
+    position: absolute;
+    inset: auto 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--color-text);
+    text-shadow: 0 0 8px #000, 0 0 12px var(--color-primary);
+    letter-spacing: 2px;
+}
+.hs-station-cover-kicker {
+    color: var(--color-primary);
+    font-size: var(--font-text);
+}
+.hs-station-cover-caption strong {
+    font-size: clamp(1rem, 2.2vw, 1.5rem);
+    letter-spacing: 4px;
+}
+.hs-panel-stores {
+    grid-area: stores;
+}
+.hs-panel-cargo {
+    grid-area: cargo;
+}
+.hs-panel-bp {
+    grid-area: blueprints;
+}
+.hs-panel-stack {
+    grid-area: ships;
 }
 .hs-panel-stack {
     display: flex;
@@ -9491,6 +9566,10 @@ button.hs-tab.active.nav-focused {
 .hs-panel-stack > .hs-panel {
     flex: 1 1 0;
     min-height: 0;
+}
+.hs-row.hs-res-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .hs-explore-grid {
     display: grid;
@@ -9938,7 +10017,22 @@ button.hs-shop-cat.active.nav-focused {
     height: 100%;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    image-rendering: -moz-crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
     pointer-events: none;
+}
+.hs-hangar-preview-canvas,
+.hs-comp-list-thumb canvas,
+.hs-comp-canvas-wrap canvas,
+.hs-comp-thumb canvas,
+.ship-belt-canvas,
+.level-belt-canvas,
+.level-large-canvas,
+.ship-large-canvas {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
 }
 .hs-hangar-bay-canvas {
     pointer-events: auto;
@@ -11447,7 +11541,8 @@ button.hs-upg-node.nav-focused {
     .hs-hangar-preview-viewport {
         min-height: 160px;
     }
-    .hs-res-grid {
+    .hs-res-grid,
+    .hs-row.hs-res-grid {
         grid-template-columns: 1fr 1fr;
     }
     .hs-tab {

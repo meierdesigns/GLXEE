@@ -427,6 +427,9 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  ▸ multi-ship / weapon / ability loadouts · visual module mounts            │
 │  ▸ five theaters + procedural foreign-galaxy sectors                        │
 │  ▸ Home Station loop — loot → shop/craft → upgrade → travel                 │
+│  ▸ Home Station station deck cover · stores/cargo resource rows              │
+│  ▸ faction-specific component silhouettes and pixel-perfect ship scaling    │
+│  ▸ mirrored wing docking with symmetric horizontal component scaling         │
 │  ▸ difficulty curves · explosion FX · mission start briefs                  │
 │  ▸ embedded hub menus · parallax crossfade handoffs                         │
 │  ▸ global look recipe · 8 palettes · UI editors · hangar arena              │

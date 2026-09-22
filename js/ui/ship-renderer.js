@@ -47,6 +47,9 @@ class ShipRenderer {
         // Ensure canvas background is transparent
         canvas.style.backgroundColor = 'transparent';
         ctx.imageSmoothingEnabled = false;
+        if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+        if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+        if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
         
         // Get color overlay for non-transparent areas only
         let colorOverlay = null;

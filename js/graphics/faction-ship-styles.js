@@ -47,7 +47,7 @@ class FactionShipStyles {
                 accent: '#7ec8ff',
                 engine: this.sharedEngine,
                 silhouette: 'modular',
-                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette'
+                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails'
             },
             kronax: {
                 id: 'kronax',
@@ -56,7 +56,7 @@ class FactionShipStyles {
                 accent: '#ff7a4a',
                 engine: this.sharedEngine,
                 silhouette: 'spikes',
-                prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette'
+                prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating'
             },
             voidborn: {
                 id: 'voidborn',
@@ -65,7 +65,7 @@ class FactionShipStyles {
                 accent: '#c090ff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
-                prompt: 'broken ring arcs, hollow center gap, incomplete crescent silhouette'
+                prompt: 'broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor'
             },
             pirate: {
                 id: 'pirate',
@@ -74,7 +74,7 @@ class FactionShipStyles {
                 accent: '#d4a84a',
                 engine: this.sharedEngine,
                 silhouette: 'scrap',
-                prompt: 'asymmetric L-block salvage, offset junk plates, uneven scrap silhouette'
+                prompt: 'asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery'
             },
             machine: {
                 id: 'machine',
@@ -83,7 +83,7 @@ class FactionShipStyles {
                 accent: '#50e0a8',
                 engine: this.sharedEngine,
                 silhouette: 'circuit',
-                prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette'
+                prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels'
             }
         };
     }

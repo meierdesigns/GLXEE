@@ -113,6 +113,10 @@ class ShipAssetLoader {
     // Render ship sprite to canvas with color overlay support
     renderShip(ctx, shipModel, x, y, scale = 1, colorOverlay = null, overlayIntensity = 0, renderOptions = null) {
         if (!shipModel) return;
+        ctx.imageSmoothingEnabled = false;
+        if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+        if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+        if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
 
         if (shipModel.weakenOverlay && overlayIntensity > 0) {
             overlayIntensity = overlayIntensity * 0.2;
@@ -337,6 +341,7 @@ class ShipAssetLoader {
         const coreY = y + core.y * scale;
         const coreW = core.width * scale;
         const coreH = core.height * scale;
+        const moduleFactionStyle = this.resolveModuleFactionStyle(shipModel);
 
         if (layout.segments && layout.segments.length) {
             this.renderHullSegments(
@@ -347,7 +352,8 @@ class ShipAssetLoader {
                 scale,
                 colorOverlay,
                 overlayIntensity,
-                renderOptions
+                renderOptions,
+                moduleFactionStyle
             );
         } else {
             this.renderModularWingPanels(
@@ -391,7 +397,8 @@ class ShipAssetLoader {
                 mh,
                 colorOverlay,
                 overlayIntensity,
-                renderOptions
+                renderOptions,
+                moduleFactionStyle
             );
         });
 
@@ -449,6 +456,31 @@ class ShipAssetLoader {
         // every time a segment's size or position changes.
         const factionStyle = this.resolvePlayerFactionStyle(shipModel);
         const shapeSeed = this.resolveHullShapeSeed(shipModel);
+        const centerSeg = segs.find((seg) => seg.id === 'center');
+        if (centerSeg) {
+            const wingPalette = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
+            ctx.fillStyle = wingPalette[2];
+            segs.filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight').forEach((wing) => {
+                const isLeft = wing.id === 'wingLeft';
+                const centerEdge = x + (isLeft
+                    ? centerSeg.x
+                    : centerSeg.x + centerSeg.width) * scale;
+                const wingEdge = x + (isLeft
+                    ? wing.x + wing.width
+                    : wing.x) * scale;
+                const centerY = y + (centerSeg.y + centerSeg.height * 0.5) * scale;
+                const wingY = y + (wing.y + wing.height * 0.5) * scale;
+                const centerHalf = Math.max(2, centerSeg.height * scale * 0.16);
+                const wingHalf = Math.max(2, wing.height * scale * 0.22);
+                ctx.beginPath();
+                ctx.moveTo(centerEdge, centerY - centerHalf);
+                ctx.lineTo(wingEdge, wingY - wingHalf);
+                ctx.lineTo(wingEdge, wingY + wingHalf);
+                ctx.lineTo(centerEdge, centerY + centerHalf);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
 
         const hasDedicatedSegments = !factionStyle && segs.some((seg) => {
             const key = this.resolveSegmentSpriteKey(shipModel, seg.id);
@@ -516,7 +548,8 @@ class ShipAssetLoader {
                     Math.round(sh),
                     colorOverlay,
                     overlayIntensity,
-                    renderOptions
+                    renderOptions,
+                    factionStyle
                 );
                 if (showGuides) {
                     this.drawSegmentSeam(ctx, seg.id, sx, sy, sw, sh, colorOverlay, overlayIntensity);
@@ -618,7 +651,8 @@ class ShipAssetLoader {
                     Math.round(sh),
                     colorOverlay,
                     overlayIntensity,
-                    renderOptions
+                    renderOptions,
+                    factionStyle
                 );
                 return;
             }
@@ -935,7 +969,11 @@ class ShipAssetLoader {
      */
     renderProceduralWing(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed) {
         const { resW, resH } = this.hullPartResolution(w, h);
-        const shapeVariant = this.hullShapeVariantIndex(shapeSeed, seg.id, this.wingShapeVariants.length);
+        const shapeVariant = this.hullShapeVariantIndex(
+            shapeSeed,
+            seg.id === 'wingRight' ? 'wingLeft' : seg.id,
+            this.wingShapeVariants.length
+        );
         const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
         this.drawPixelGridHull(ctx, grid, colors, x, y, w, h);
@@ -964,7 +1002,6 @@ class ShipAssetLoader {
             reach *= 1.3;
             spread *= 0.5;
         } else if (silhouette === 'scrap') {
-            center += left ? -0.12 : 0.12;
             spread *= 1.35;
         }
         // Root spar (fuselage-facing strip) tapers out to `reach` at the tip band.
@@ -1093,9 +1130,11 @@ class ShipAssetLoader {
     renderModularWingPanels(ctx, shipModel, x, y, scale, colorOverlay, overlayIntensity) {
         const panels = shipModel.layout && shipModel.layout.wingPanels;
         if (!panels || !panels.length) return;
-        const dark = this.applyHullOverlayHex('#252925', colorOverlay, overlayIntensity, 0);
         const mid = this.applyHullOverlayHex('#666c5e', colorOverlay, overlayIntensity, 0);
-        const light = this.applyHullOverlayHex('#9da390', colorOverlay, overlayIntensity, 8);
+        const core = shipModel.layout.core;
+        const coreLeft = x + core.x * scale;
+        const coreRight = coreLeft + core.width * scale;
+        const coreCenterY = y + (core.y + core.height * 0.5) * scale;
         panels.forEach((panel) => {
             const px = x + panel.x * scale;
             const py = y + panel.y * scale;
@@ -1104,8 +1143,17 @@ class ShipAssetLoader {
             const left = panel.side === 'left';
             const tipX = left ? px : px + pw;
             const rootX = left ? px + pw : px;
-            ctx.fillStyle = dark;
-            ctx.fillRect(px, py, pw, ph);
+            const bridgeX = left ? coreLeft : coreRight;
+            const bridgeY = py + ph * 0.5;
+            const bridgeHalf = Math.max(2, Math.min(ph, core.height * scale) * 0.16);
+            ctx.fillStyle = mid;
+            ctx.beginPath();
+            ctx.moveTo(bridgeX, coreCenterY - bridgeHalf);
+            ctx.lineTo(rootX, bridgeY - Math.max(2, ph * 0.18));
+            ctx.lineTo(rootX, bridgeY + Math.max(2, ph * 0.18));
+            ctx.lineTo(bridgeX, coreCenterY + bridgeHalf);
+            ctx.closePath();
+            ctx.fill();
             ctx.fillStyle = mid;
             ctx.beginPath();
             ctx.moveTo(rootX, py + ph * 0.16);
@@ -1114,13 +1162,6 @@ class ShipAssetLoader {
             ctx.lineTo(rootX, py + ph * 0.84);
             ctx.closePath();
             ctx.fill();
-            ctx.fillStyle = light;
-            ctx.fillRect(
-                left ? px + pw * 0.2 : px + pw * 0.8,
-                py + Math.max(1, ph * 0.2),
-                Math.max(1, pw * 0.12),
-                Math.max(1, ph * 0.6)
-            );
         });
     }
 
@@ -1251,6 +1292,19 @@ class ShipAssetLoader {
         return factionShipStyles.getFactionStyle(faction);
     }
 
+    resolveModuleFactionStyle(shipModel) {
+        if (typeof factionShipStyles === 'undefined' || !factionShipStyles.getFactionStyle) return null;
+        let faction = shipModel && shipModel.faction;
+        if (!faction && typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
+            const profile = profileManager.getActiveProfile();
+            faction = profile && profile.faction;
+        }
+        if (!faction && typeof factionManager !== 'undefined' && factionManager.getAllegiance) {
+            faction = factionManager.getAllegiance();
+        }
+        return factionShipStyles.getFactionStyle(faction || 'terran');
+    }
+
     /**
      * Per-ship seed driving which shape variant each hull part uses. Defaults
      * to a value derived from the ship's own id (stable, but differs between
@@ -1285,6 +1339,39 @@ class ShipAssetLoader {
             '#d0d0d0', '#dedede', '#e8e8e8', '#f0f0f0', '#f8f8f8'
         ];
         return shades[index] || null;
+    }
+
+    getFactionModuleShade(index, style) {
+        if (!style) return null;
+        if (index <= 3) return style.edge || null;
+        if (index >= 13) return style.accent || null;
+        return style.hull || null;
+    }
+
+    isFactionModuleCell(col, row, width, height, style) {
+        if (!style || width < 5 || height < 5) return true;
+        const u = ((col + 0.5) / width) * 2 - 1;
+        const v = ((row + 0.5) / height) * 2 - 1;
+        const silhouette = style.silhouette || 'modular';
+        if (silhouette === 'rings') {
+            return Math.abs(u) > 0.28 || Math.abs(v) > 0.28;
+        }
+        if (silhouette === 'spikes') {
+            const taper = 0.48 + Math.abs(v) * 0.42;
+            return Math.abs(u) < taper;
+        }
+        if (silhouette === 'scrap') {
+            const au = Math.abs(u);
+            const av = Math.abs(v);
+            return !(au > 0.35 && av < 0.25) && !(au > 0.72 && av > 0.5);
+        }
+        if (silhouette === 'circuit') {
+            return !(Math.abs(u) > 0.72 && Math.abs(v) > 0.72);
+        }
+        if (silhouette === 'modular') {
+            return !(Math.abs(u) > 0.62 && Math.abs(v) > 0.62);
+        }
+        return true;
     }
 
     /** Per-role brightness bias so weapons / armor / cores / thrusters read apart. */
@@ -1449,7 +1536,8 @@ class ShipAssetLoader {
         height,
         colorOverlay,
         overlayIntensity = 0,
-        renderOptions = null
+        renderOptions = null,
+        factionStyle = null
     ) {
         const intensity = Number.isFinite(Number(overlayIntensity)) ? Number(overlayIntensity) : 0;
         const role = mod.role || mod.kind;
@@ -1477,7 +1565,8 @@ class ShipAssetLoader {
                 mod.kind,
                 colorOverlay,
                 intensity,
-                visualId
+                visualId,
+                factionStyle
             );
         });
     }
@@ -1593,7 +1682,7 @@ class ShipAssetLoader {
         ];
     }
 
-    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId) {
+    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId, factionStyle) {
         const w = Math.max(1, Math.round(width));
         const h = Math.max(1, Math.round(height));
         const template = this.getProceduralModuleTemplate(role, kind, visualId);
@@ -1604,10 +1693,12 @@ class ShipAssetLoader {
         for (let row = 0; row < h; row++) {
             const sy = Math.min(rows - 1, Math.floor((row * rows) / h));
             for (let col = 0; col < w; col++) {
+                if (!this.isFactionModuleCell(col, row, w, h, factionStyle)) continue;
                 const sx = Math.min(cols - 1, Math.floor((col * cols) / w));
                 const idx = template[sy][sx];
                 if (!idx) continue;
-                let color = this.getHullMountShade(idx);
+                let color = this.getFactionModuleShade(idx, factionStyle)
+                    || this.getHullMountShade(idx);
                 if (!color) continue;
                 color = this.applyHullOverlayHex(color, colorOverlay, intensity, shadeBias);
                 ctx.fillStyle = color;

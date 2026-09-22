@@ -50,30 +50,61 @@ class AssetGenRegistry {
         switch (type) {
             case "mount":
                 return (
-                    "tiny top-down ship hardpoint module, " + name
-                    + ", compact metal component, chunky 8x8 pixel silhouette, "
-                    + "fills frame, high contrast grayscale only, solid simple shape"
+                    "tiny top-down hard-surface sci-fi spacecraft subsystem, " + name
+                    + ", compact armored mechanical module with vents, panel seams, "
+                    + "cabling and a clear functional silhouette, engineered to dock flush "
+                    + "to a spaceship hull, chunky 8x8 pixel silhouette, fills frame, "
+                    + "high contrast grayscale only, solid simple shape, no text, no fantasy ornament"
                 );
             case "icon":
-                return "game UI icon, " + name + ", simple glyph, 16x16 pixel feel, grayscale only";
+                return (
+                    "retro sci-fi spacecraft UI icon, " + name
+                    + ", industrial technical glyph, hard-surface geometry, "
+                    + "16x16 pixel feel, grayscale only, no text"
+                );
             case "ability":
-                return "ability icon, " + name + ", game UI icon, 16x16 pixel feel, grayscale only";
+                return (
+                    "retro sci-fi ship-system icon, " + name
+                    + ", tactical holographic circuitry, reactor or control-system motif, "
+                    + "16x16 pixel feel, grayscale only, no text"
+                );
             case "ship":
-                return "top-down player spaceship, " + name + ", crisp silhouette, grayscale only";
+                return (
+                    "top-down retro sci-fi player spacecraft, " + name
+                    + ", hard-surface plated hull, engine vents, modular panel geometry, "
+                    + "crisp pixel silhouette, grayscale only, no text"
+                );
             case "enemy":
-                return "top-down enemy spaceship, " + name + ", hostile silhouette, grayscale only";
+                return (
+                    "top-down hostile retro sci-fi spacecraft, " + name
+                    + ", armored industrial hull, weapon hardpoints, mechanical panel seams, "
+                    + "hostile silhouette, grayscale only, no text"
+                );
             case "shipSegment":
                 return this.segmentPrompt(id);
             case "faction":
                 return "faction emblem icon, " + name + ", simple glyph, 16x16 pixel feel, game UI icon, grayscale only";
             case "factionShip":
-                return "top-down enemy spaceship, " + name + ", hostile silhouette, crisp pixels, grayscale only";
+                return (
+                    "top-down faction-specific retro sci-fi spacecraft, " + name
+                    + ", unmistakable faction engineering language, readable hard-surface "
+                    + "panel hierarchy, weapon hardpoints and engine architecture, "
+                    + "hostile silhouette, crisp pixels, grayscale only, no text"
+                );
             case "weapon":
-                return "weapon projectile sprite, " + name + ", vertical energy shot, pure grayscale luminance only, no color";
+                return (
+                    "retro sci-fi spacecraft weapon module, " + name
+                    + ", compact industrial emitter with barrel, coils, vents and energy core, "
+                    + "vertical top-down sprite, pure grayscale luminance only, no color, no text"
+                );
             case "planet":
                 return "planet surface / scene tile, " + name + ", game background sprite, grayscale only";
             case "obstacle":
-                return "space obstacle sprite, " + name + ", single object, grayscale only";
+                return (
+                    "retro sci-fi space obstacle, " + name
+                    + ", industrial wreckage or engineered structure, "
+                    + "mechanical layered silhouette, grayscale only, no text"
+                );
             default:
                 return name + " game sprite, grayscale only";
         }

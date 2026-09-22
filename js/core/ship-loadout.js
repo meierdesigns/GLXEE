@@ -886,29 +886,33 @@ class ShipLoadoutManager {
             ids.forEach((id, i) => {
                 (i % 2 === 0 ? left : right).push(id);
             });
-            const placeSide = (sideIds, face) => {
+            const leftDims = left.map((id) => resolveDim(id, kind, base));
+            const rightDims = right.map((id) => resolveDim(id, kind, base));
+            const leftH = leftDims.reduce((sum, d) => sum + d.h, 0)
+                + Math.max(0, leftDims.length - 1) * gap;
+            const rightH = rightDims.reduce((sum, d) => sum + d.h, 0)
+                + Math.max(0, rightDims.length - 1) * gap;
+            const pairedH = Math.max(leftH, rightH);
+            const pairedStartY = preferTop
+                ? Math.max(0, Math.min(startY, totalCoreH - pairedH))
+                : Math.max(0, Math.min(
+                    startY != null ? startY : Math.floor((totalCoreH - pairedH) / 2),
+                    totalCoreH - pairedH
+                ));
+            const placeSide = (sideIds, sideDims, face) => {
                 if (!sideIds.length) return;
-                const dims = sideIds.map((id) => resolveDim(id, kind, base));
-                const colH0 = dims.reduce((sum, d) => sum + d.h, 0)
-                    + Math.max(0, dims.length - 1) * gap;
-                const maxW = dims.reduce((m, d) => Math.max(m, d.scaleW), base);
-                // Grow wing plate so every docked module stays inside the frame.
+                const maxW = sideDims.reduce((m, d) => Math.max(m, d.scaleW), base);
                 wingSpan = Math.max(wingSpan, maxW);
-                wingH = Math.max(wingH, colH0, dims.reduce((m, d) => Math.max(m, d.scaleH), 0));
-                let slotY;
-                if (preferTop) {
-                    slotY = Math.max(0, Math.min(startY, totalCoreH - colH0));
-                } else {
-                    slotY = Math.max(0, Math.min(
-                        startY != null ? startY : Math.floor((totalCoreH - colH0) / 2),
-                        totalCoreH - colH0
-                    ));
-                }
+                wingH = Math.max(wingH, pairedH, sideDims.reduce((m, d) => Math.max(m, d.scaleH), 0));
                 const wingX = face === 'left'
                     ? -wingSpan - wingGap - wingShiftX
                     : coreWidth + wingGap + wingShiftX;
+                let slotY = pairedStartY;
+                if (sideDims.length < 2) {
+                    slotY += Math.floor((pairedH - sideDims[0].h) / 2);
+                }
                 sideIds.forEach((id, i) => {
-                    const d = dims[i];
+                    const d = sideDims[i];
                     // Dock at the hull root of the wing plate.
                     const x = face === 'left'
                         ? wingX + wingSpan - d.w
@@ -921,8 +925,8 @@ class ShipLoadoutManager {
                     slotY += d.h + gap;
                 });
             };
-            placeSide(left, 'left');
-            placeSide(right, 'right');
+            placeSide(left, leftDims, 'left');
+            placeSide(right, rightDims, 'right');
         };
 
         // Weapons: 1 → front tip; 2 → wings; 3+ → nose + wings
@@ -1199,12 +1203,20 @@ class ShipLoadoutManager {
             delete part.scaleW;
             delete part.scaleH;
             if (sw === part.width && sh === part.height) return;
+            const oldX = part.x;
+            const oldY = part.y;
+            const oldRight = part.x + part.width;
+            const oldBottom = part.y + part.height;
             const cx = part.x + part.width / 2;
             const cy = part.y + part.height / 2;
             part.width = sw;
             part.height = sh;
-            part.x = Math.round(cx - sw / 2);
-            part.y = Math.round(cy - sh / 2);
+            part.x = part.face === 'left'
+                ? Math.round(oldRight - sw)
+                : (part.face === 'right' ? Math.round(oldX) : Math.round(cx - sw / 2));
+            part.y = part.face === 'up'
+                ? Math.round(oldBottom - sh)
+                : (part.face === 'down' ? Math.round(oldY) : Math.round(cy - sh / 2));
             const segmentId = part.mountSegment === 'wing'
                 ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
                 : part.mountSegment;

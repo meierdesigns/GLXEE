@@ -156,6 +156,21 @@ class HomeStationUI {
         return '<span class="hs-menu-glyph" aria-hidden="true">≡</span>';
     }
 
+    renderMenuTabs() {
+        if (typeof startScreenManager === 'undefined') return '';
+        const isMenu = this.tab === 'menu';
+        const activeTab = isMenu ? startScreenManager.embeddedMenuTab : null;
+        return startScreenManager.embeddedMenuTabs.map((tab) => {
+            const active = activeTab === tab.id;
+            const icon = tab.icon ? this.iconHtml(tab.icon, 24, 'hs-pixel') : '';
+            return `
+            <button type="button" class="hs-menu-tab-btn${active ? ' active' : ''}" data-menu-tab="${tab.id}" title="${tab.label}" data-nav-item>
+                <span class="hs-menu-tab-icon">${icon}</span>
+                ${active ? `<span class="hs-menu-tab-label">${tab.label}</span>` : ''}
+            </button>`;
+        }).join('');
+    }
+
     tabIconHtml(iconKey) {
         return this.iconHtml(iconKey, 32, 'hs-tab-pixel');
     }
@@ -380,6 +395,15 @@ class HomeStationUI {
         this.hide();
     }
 
+    logout() {
+        this.closeMenuTab(true);
+        this.hide();
+        if (typeof profileManager !== 'undefined') profileManager.logout();
+        if (typeof startScreenManager !== 'undefined') {
+            startScreenManager.show({ forceMenu: true });
+        }
+    }
+
     openMainMenuOverlay(opts) {
         const o = opts || {};
         if (typeof startScreenManager === 'undefined') return;
@@ -402,8 +426,12 @@ class HomeStationUI {
         }
 
         // With profile: menu is a tab inside the station modal (no separate overlay BG).
-        if (this.tab === 'menu' && !o.force && !o.showSettings && !o.showCredits) {
+        if (this.tab === 'menu' && !o.force && !o.showSettings && !o.showCredits && !o.tab) {
             this.closeMenuTab();
+            return;
+        }
+        if (this.tab === 'menu' && !o.force && o.tab && typeof startScreenManager !== 'undefined') {
+            startScreenManager.setEmbeddedMenuTab(o.tab);
             return;
         }
         if (this.tab !== 'menu') {
@@ -411,9 +439,10 @@ class HomeStationUI {
         }
         this.tab = 'menu';
         this._menuOpts = {
+            tab: o.tab || null,
             showSettings: !!o.showSettings,
             showCredits: !!o.showCredits,
-            resetPanels: !(o.showSettings || o.showCredits),
+            resetPanels: !(o.showSettings || o.showCredits || o.tab),
             skipPersist: !!o.skipPersist
         };
         this.statusMsg = '';
@@ -440,9 +469,10 @@ class HomeStationUI {
         const o = opts || this._menuOpts || {};
         startScreenManager.showEmbedded({
             host: host,
+            tab: o.tab || null,
             showSettings: !!o.showSettings,
             showCredits: !!o.showCredits,
-            resetPanels: o.resetPanels !== false && !(o.showSettings || o.showCredits),
+            resetPanels: o.resetPanels !== false && !(o.showSettings || o.showCredits || o.tab),
             skipPersist: !!o.skipPersist
         });
     }
@@ -1234,7 +1264,11 @@ class HomeStationUI {
                         </div>
                         <p class="hs-profile"><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
                         <div class="hs-topbar-actions">
-                            <button type="button" class="hs-menu-btn${isMenu ? ' active' : ''}" id="hsMenu" aria-label="Menu" title="Menu" data-nav-item>${this.menuButtonHtml()}</button>
+                            ${this.renderMenuTabs()}
+                            <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" title="Logout" data-nav-item>
+                                <span class="hs-logout-icon" aria-hidden="true">&#9211;</span>
+                                <span class="hs-logout-label">LOGOUT</span>
+                            </button>
                         </div>
                     </div>
                     ${hideHeaderCredits ? '' : creditsBar}
@@ -2971,6 +3005,26 @@ class HomeStationUI {
         return String(id || 'EMPTY').replace(/_/g, ' ').toUpperCase();
     }
 
+    /**
+     * A second, independent dropdown per slot for choosing the module's
+     * visual skin — deliberately separate from the weapon/module select
+     * above, so re-skinning a component never changes its stats.
+     */
+    renderHangarSlotSkinDropdown(slot, kind, current) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getAvailableSkins) return '';
+        const skins = shipLoadoutManager.getAvailableSkins(kind);
+        if (!skins || skins.length <= 1) return '';
+        const activeSkin = shipLoadoutManager.getModuleSkin
+            ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, current, slot.face)
+            : 'default';
+        return `<label class="hs-hangar-slot-select-wrap hs-hangar-slot-skin-wrap">` +
+            `<span class="hs-hangar-slot-skin-label">SKIN</span>` +
+            `<select class="hs-hangar-slot-select hs-hangar-slot-skin-select" data-hangar-slot-skin="${kind}" data-slot-index="${slot.index}" data-mod-face="${slot.face || ''}" aria-label="Skin">` +
+            skins.map((s) => `<option value="${s.id}" ${s.id === activeSkin ? 'selected' : ''}>${s.label}</option>`).join('') +
+            `</select>` +
+            `</label>`;
+    }
+
     renderHangarSlotDropdown(slot, inventory, equippedByKind) {
         const kind = slot.kind;
         const poolKey = kind === 'weapon' ? 'weapons'
@@ -3011,7 +3065,7 @@ class HomeStationUI {
         const railN = Math.max(1, slot.railCount != null ? slot.railCount : 1);
         const side = slot.side === 'left' ? 'left' : 'right';
         return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}" data-slot-kind="${kind}" data-slot-index="${slot.index}" data-slot-side="${side}" style="--pin-x:${pinX};--pin-y:${pinY};--rail-i:${railI};--rail-n:${railN};">` +
-            `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" title="${slot.label}">` +
+            `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label}">` +
             `<span class="hs-hangar-slot-dot"></span>` +
             `</button>` +
             `<div class="hs-hangar-slot-card">` +
@@ -3029,6 +3083,7 @@ class HomeStationUI {
             options.join('') +
             `</select>` +
             `</label>` +
+            (current ? this.renderHangarSlotSkinDropdown(slot, kind, current) : '') +
             `<div class="hs-hangar-slot-options">` +
             `<button type="button" class="hs-hangar-slot-option${current ? '' : ' is-active'}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="">` +
             `<span class="hs-hangar-slot-mark">○</span><span>EMPTY</span></button>` +
@@ -3352,6 +3407,14 @@ class HomeStationUI {
         const sh = mh * scale;
         const ox = Math.floor((w - sw) / 2);
         const oy = Math.floor((h - sh) / 2);
+        // Cache the current ship-bbox geometry so the HTML slot-pin buttons
+        // (which sit on top of the canvas and intercept its pointer events)
+        // can convert their own drag deltas into the same layout-unit space
+        // the canvas drag code uses, without recomputing the model/layout.
+        this._hangarLastOx = ox;
+        this._hangarLastOy = oy;
+        this._hangarLastScale = scale;
+        this._hangarLastModel = model;
 
         // Soft pedestal
         ctx.fillStyle = accent;
@@ -3467,7 +3530,7 @@ class HomeStationUI {
         const hoverState = this._hangarSegmentHover;
         const selectedModule = this._hangarSelectedModule;
         if (!canvas || !model || (!hoverState && !selectedModule)) return;
-        const hover = hoverState || { segment: null, alt: false };
+        const hover = hoverState || { segment: null, edge: null };
         const ctx = canvas.getContext('2d');
         if (!ctx || !model.layout) return;
         const segments = model.layout.segments || [];
@@ -3513,6 +3576,23 @@ class HomeStationUI {
             ctx.lineTo(right, bottom);
             ctx.lineTo(right, bottom - corner);
             ctx.stroke();
+            // Corner drag zones get their own filled hover marker — distinct
+            // from a plain edge hover — so the diagonal resize handle is
+            // clearly discoverable, not just implied by the cursor shape.
+            if (hover.edge && hover.edge.indexOf('-') !== -1) {
+                const cx = hover.edge.indexOf('right') !== -1 ? right : left;
+                const cy = hover.edge.indexOf('bottom') !== -1 ? bottom : top;
+                const r = Math.max(3, Math.min(7, corner * 0.5));
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         });
         if (selectedModule && model.layout.modules) {
             const mod = model.layout.modules.find((item) =>
@@ -3533,11 +3613,18 @@ class HomeStationUI {
             ctx.fillStyle = accent;
             ctx.shadowColor = '#000';
             ctx.shadowBlur = 4;
-            const label = hover.alt
-                ? 'ALT SCALE · ' + hover.segment.toUpperCase() + ' · WIDTH ↔ HEIGHT ↕'
+            const axisLabel = (edge) => {
+                const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
+                const hasY = edge.indexOf('top') !== -1 || edge.indexOf('bottom') !== -1;
+                if (hasX && hasY) return 'WIDTH ↔ HEIGHT ↕';
+                return hasX ? 'WIDTH ↔' : 'HEIGHT ↕';
+            };
+            const label = hover.edge
+                ? 'DRAG ' + (hover.edge.indexOf('-') !== -1 ? 'CORNER' : 'EDGE') + ' · '
+                    + hover.segment.toUpperCase() + ' · ' + axisLabel(hover.edge)
                 : (hover.segment === 'center'
-                    ? 'DRAG · MOVE CENTER · FRONT ↕ BACK'
-                    : 'DRAG · MOVE ' + hover.segment.toUpperCase());
+                    ? 'DRAG CENTER · MOVE · FRONT ↕ BACK'
+                    : 'DRAG CENTER · MOVE ' + hover.segment.toUpperCase());
             const first = selected[0];
             const lx = ox + first.x * scale;
             const ly = Math.max(14, oy + first.y * scale - 7);
@@ -3582,6 +3669,9 @@ class HomeStationUI {
             }
             return null;
         };
+        // Edge zone width as a fraction of the segment's own size: dragging
+        // inside this band resizes that axis; the middle band moves instead.
+        const EDGE_FRAC = 0.3;
         const wingHit = (e) => {
             const pt = layoutPoint(e);
             const segments = (model.layout.segments || []).filter((seg) =>
@@ -3594,22 +3684,57 @@ class HomeStationUI {
                 && pt.ly >= seg.y && pt.ly <= seg.y + seg.height
             );
             if (!hit) return null;
+            const marginX = Math.max(1.5, hit.width * EDGE_FRAC);
+            const marginY = Math.max(1.5, hit.height * EDGE_FRAC);
+            const distLeft = pt.lx - hit.x;
+            const distRight = (hit.x + hit.width) - pt.lx;
+            const distTop = pt.ly - hit.y;
+            const distBottom = (hit.y + hit.height) - pt.ly;
+            // Resolve each axis independently first, then combine — a point
+            // inside both an X edge band and a Y edge band is a corner (both
+            // axes resize together), not just whichever axis is closest.
+            let xEdge = null;
+            if (distLeft <= marginX && distRight <= marginX) xEdge = distLeft <= distRight ? 'left' : 'right';
+            else if (distLeft <= marginX) xEdge = 'left';
+            else if (distRight <= marginX) xEdge = 'right';
+            let yEdge = null;
+            if (distTop <= marginY && distBottom <= marginY) yEdge = distTop <= distBottom ? 'top' : 'bottom';
+            else if (distTop <= marginY) yEdge = 'top';
+            else if (distBottom <= marginY) yEdge = 'bottom';
+            const edge = (xEdge && yEdge) ? (yEdge + '-' + xEdge) : (xEdge || yEdge || null);
             return {
                 segment: hit.id === 'wingLeft' || hit.id === 'wingRight' ? 'wing' : hit.id,
                 left: hit.id === 'wingLeft',
                 right: hit.id === 'wingRight',
                 width: hit.width,
-                height: hit.height
+                height: hit.height,
+                edge: edge
             };
+        };
+        const cursorForHit = (hit) => {
+            if (!hit) return 'grab';
+            switch (hit.edge) {
+                case 'left':
+                case 'right':
+                    return 'ew-resize';
+                case 'top':
+                case 'bottom':
+                    return 'ns-resize';
+                case 'top-left':
+                case 'bottom-right':
+                    return 'nwse-resize';
+                case 'top-right':
+                case 'bottom-left':
+                    return 'nesw-resize';
+                default:
+                    return 'move';
+            }
         };
         let lastPointerEvent = null;
         const updateHover = (e) => {
-            lastPointerEvent = {
-                clientX: e.clientX,
-                clientY: e.clientY,
-                altKey: !!e.altKey
-            };
+            lastPointerEvent = { clientX: e.clientX, clientY: e.clientY };
             if (moduleHit(e)) {
+                canvas.style.cursor = 'move';
                 if (this._hangarSegmentHover) {
                     this._hangarSegmentHover = null;
                     this.drawHangarBay();
@@ -3617,11 +3742,10 @@ class HomeStationUI {
                 return;
             }
             const hit = wingHit(e);
-            const next = hit
-                ? { segment: hit.segment, alt: !!e.altKey }
-                : null;
+            canvas.style.cursor = cursorForHit(hit);
+            const next = hit ? { segment: hit.segment, edge: hit.edge } : null;
             const prev = this._hangarSegmentHover;
-            if ((prev && next && prev.segment === next.segment && prev.alt === next.alt)
+            if ((prev && next && prev.segment === next.segment && prev.edge === next.edge)
                 || (!prev && !next)) {
                 return;
             }
@@ -3632,17 +3756,16 @@ class HomeStationUI {
             if (e.button !== 0) return;
             const module = moduleHit(e);
             if (module && shipLoadoutManager.setModuleOffset) {
-                const selected = this._hangarSelectedModule;
-                if (!selected || selected.kind !== module.kind || selected.id !== module.id) {
-                    this._hangarSelectedModule = { kind: module.kind, id: module.id };
-                    this._hangarSegmentHover = null;
-                    this.drawHangarBay();
-                    e.preventDefault();
-                    return;
-                }
+                // A single drag both selects and moves the module now — a
+                // release without real movement still counts as "select" so
+                // clicking to highlight a module still works.
+                const moduleOffsetKey = shipLoadoutManager.moduleOffsetKey
+                    ? shipLoadoutManager.moduleOffsetKey(module.id, module.face)
+                    : module.id;
                 const stored = loadout.moduleOffsets
                     && loadout.moduleOffsets[module.kind]
-                    && loadout.moduleOffsets[module.kind][module.id];
+                    && (loadout.moduleOffsets[module.kind][moduleOffsetKey]
+                        || loadout.moduleOffsets[module.kind][module.id]);
                 const segmentId = module.mountSegment === 'wing'
                     ? (module.face === 'left' ? 'wingLeft' : 'wingRight')
                     : module.mountSegment;
@@ -3650,12 +3773,15 @@ class HomeStationUI {
                 drag = {
                     startX: e.clientX,
                     startY: e.clientY,
+                    moved: false,
                     startModuleOffsetX: stored ? Number(stored.x) || 0 : 0,
                     startModuleOffsetY: stored ? Number(stored.y) || 0 : 0,
                     module: module,
                     segmentWidth: Math.max(1, segment ? segment.width : module.width || 1),
                     segmentHeight: Math.max(1, segment ? segment.height : module.height || 1)
                 };
+                this._hangarSelectedModule = { kind: module.kind, id: module.id };
+                this._hangarSegmentHover = null;
                 this._hangarWingDragState = drag;
                 canvas.classList.add('is-module-dragging');
                 canvas.setPointerCapture(e.pointerId);
@@ -3685,14 +3811,15 @@ class HomeStationUI {
                 startScaleX: Number(segmentScale.x) || 1,
                 startScaleY: Number(segmentScale.y) || 1,
                 segment: segmentId,
-                alt: !!e.altKey,
+                edge: hit.edge,
                 side: hit.left ? 'left' : 'right',
                 frameWidth: Math.max(1, hit.width || core.width || 1),
                 frameHeight: Math.max(1, hit.height || core.height || 1)
             };
             this._hangarSelectedModule = null;
             this._hangarWingDragState = drag;
-            canvas.classList.add('is-wing-dragging');
+            canvas.classList.add(hit.edge ? 'is-wing-scaling' : 'is-wing-dragging');
+            canvas.style.cursor = cursorForHit(hit);
             canvas.setPointerCapture(e.pointerId);
             e.preventDefault();
         };
@@ -3704,23 +3831,31 @@ class HomeStationUI {
             const dx = (e.clientX - drag.startX) * sx / Math.max(1, scale);
             const dy = (e.clientY - drag.startY) * sy / Math.max(1, scale);
             if (drag.module) {
+                if (!drag.moved && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
+                    drag.moved = true;
+                }
                 shipLoadoutManager.setModuleOffset(
                     this.hangarShipId,
                     drag.module.kind,
                     drag.module.id,
                     drag.startModuleOffsetX + dx / Math.max(1, drag.segmentWidth),
-                    drag.startModuleOffsetY + dy / Math.max(1, drag.segmentHeight)
+                    drag.startModuleOffsetY + dy / Math.max(1, drag.segmentHeight),
+                    drag.module.face
                 );
             } else if (drag.segment === 'wing') {
                 const outward = drag.side === 'left' ? -dx : dx;
-                if (drag.alt) {
-                    // Scale relative to the wing frame itself so ALT-drag
-                    // matches the visible component bounds.
+                const edge = drag.edge;
+                if (edge) {
+                    // Corner edges (e.g. "top-left") contain both an X and a Y
+                    // token, so both axes resize together from one drag.
+                    const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
+                    const hasY = edge.indexOf('top') !== -1 || edge.indexOf('bottom') !== -1;
+                    const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
                     shipLoadoutManager.setSegmentScale(
                         this.hangarShipId,
                         'wing',
-                        drag.startScaleX + outward / Math.max(1, drag.frameWidth),
-                        drag.startScaleY + dy / Math.max(1, drag.frameHeight)
+                        drag.startScaleX + (hasX ? outward : 0) / Math.max(1, drag.frameWidth),
+                        drag.startScaleY + (hasY ? heightSign * dy : 0) / Math.max(1, drag.frameHeight)
                     );
                 } else {
                     shipLoadoutManager.setWingOffset(
@@ -3729,12 +3864,15 @@ class HomeStationUI {
                         drag.startOffsetY + dy / Math.max(1, core.height)
                     );
                 }
-            } else if (drag.alt) {
+            } else if (drag.edge) {
+                const edge = drag.edge;
+                const widthSign = edge.indexOf('right') !== -1 ? 1 : (edge.indexOf('left') !== -1 ? -1 : 0);
+                const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
                 shipLoadoutManager.setSegmentScale(
                     this.hangarShipId,
                     drag.segment,
-                    drag.startScaleX + dx / Math.max(1, drag.frameWidth || core.width),
-                    drag.startScaleY + dy / Math.max(1, drag.frameHeight || core.height)
+                    drag.startScaleX + (widthSign * dx) / Math.max(1, drag.frameWidth || core.width),
+                    drag.startScaleY + (heightSign * dy) / Math.max(1, drag.frameHeight || core.height)
                 );
             } else {
                 shipLoadoutManager.setSegmentOffset(
@@ -3770,6 +3908,7 @@ class HomeStationUI {
                 this._hangarLiveDrawRaf = 0;
             }
             canvas.classList.remove('is-wing-dragging');
+            canvas.classList.remove('is-wing-scaling');
             canvas.classList.remove('is-module-dragging');
             if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
             // Keep the side dropdown open while an individual module moves.
@@ -3781,42 +3920,23 @@ class HomeStationUI {
             drag = null;
             this._hangarWingDragState = null;
             canvas.classList.remove('is-wing-dragging');
+            canvas.classList.remove('is-wing-scaling');
             canvas.classList.remove('is-module-dragging');
         };
         canvas.addEventListener('pointerdown', down);
         canvas.addEventListener('pointermove', move);
         canvas.addEventListener('pointerup', up);
         canvas.addEventListener('pointercancel', cancel);
-        const keyDown = (e) => {
-            if (e.key === 'Alt' && lastPointerEvent) {
-                updateHover({
-                    clientX: lastPointerEvent.clientX,
-                    clientY: lastPointerEvent.clientY,
-                    altKey: true
-                });
-            }
-        };
-        const keyUp = (e) => {
-            if (e.key === 'Alt' && lastPointerEvent) {
-                updateHover({
-                    clientX: lastPointerEvent.clientX,
-                    clientY: lastPointerEvent.clientY,
-                    altKey: false
-                });
-            }
-        };
-        window.addEventListener('keydown', keyDown);
-        window.addEventListener('keyup', keyUp);
-        canvas.title = 'Flügel ziehen · ALT + ziehen: Front/Mitte/Heck skalieren';
+        canvas.title = 'Mitte ziehen: verschieben · Rand ziehen: in Zugrichtung skalieren';
         canvas.style.cursor = 'grab';
         this._hangarWingDragCleanup = () => {
             canvas.removeEventListener('pointerdown', down);
             canvas.removeEventListener('pointermove', move);
             canvas.removeEventListener('pointerup', up);
             canvas.removeEventListener('pointercancel', cancel);
-            window.removeEventListener('keydown', keyDown);
-            window.removeEventListener('keyup', keyUp);
             canvas.classList.remove('is-wing-dragging');
+            canvas.classList.remove('is-wing-scaling');
+            canvas.classList.remove('is-module-dragging');
             this._hangarWingDragCleanup = null;
         };
     }
@@ -3856,9 +3976,16 @@ class HomeStationUI {
     bindHangarSlotEvents() {
         if (!this.overlay) return;
         this.bindHangarModuleScale();
+        this.bindHangarSlotPinDrag();
 
         this.overlay.querySelectorAll('[data-hangar-slot-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
+                if (btn._hsJustDragged) {
+                    btn._hsJustDragged = false;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 const kind = btn.getAttribute('data-hangar-slot-toggle');
@@ -3896,6 +4023,21 @@ class HomeStationUI {
             sel.addEventListener('click', (e) => e.stopPropagation());
         });
 
+        this.overlay.querySelectorAll('[data-hangar-slot-skin]').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setModuleSkin) return;
+                const kind = sel.getAttribute('data-hangar-slot-skin');
+                const face = sel.getAttribute('data-mod-face') || '';
+                const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
+                const key = shipLoadoutManager.kindToLoadoutKey(kind);
+                const modId = (loadout[key] || [])[Number(sel.getAttribute('data-slot-index') || 0)];
+                if (!modId) return;
+                shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, sel.value || 'default');
+                this.drawHangarBay();
+            });
+            sel.addEventListener('click', (e) => e.stopPropagation());
+        });
+
         if (!this._hangarSlotOutsideBound) {
             this._hangarSlotOutsideBound = (e) => {
                 if (!this.isVisible || this.tab !== 'hangar' || !this._hangarOpenSlot) return;
@@ -3925,6 +4067,156 @@ class HomeStationUI {
         requestAnimationFrame(() => {
             this.drawHangarBay();
             requestAnimationFrame(() => this.drawHangarBay());
+        });
+    }
+
+    /**
+     * The .hs-hangar-slot-pin buttons sit on top of the hangar-bay canvas
+     * (pointer-events: auto, so they can be clicked to open the loadout
+     * dropdown) and therefore intercept every pointerdown on a module icon
+     * before the canvas's own moduleHit/drag code ever sees it — dragging a
+     * module was effectively impossible. This gives each pin its own
+     * pointer-drag: a plain click still opens the dropdown, but a real drag
+     * moves the module, using the same ox/oy/scale/model cached by
+     * drawHangarBay() so both systems agree on where the module actually is.
+     */
+    bindHangarSlotPinDrag() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('.hs-hangar-slot-pin').forEach((pin) => {
+            if (pin.dataset.dragBound === '1') return;
+            pin.dataset.dragBound = '1';
+            let drag = null;
+            pin.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                const kind = pin.getAttribute('data-hangar-slot-toggle');
+                const modId = pin.getAttribute('data-mod-id') || '';
+                const modFace = pin.getAttribute('data-mod-face') || '';
+                if (!kind || typeof shipLoadoutManager === 'undefined') return;
+                const model = this._hangarLastModel;
+                if (!model || !model.layout) return;
+                if (!modId) {
+                    // Empty slot — nothing to look up in layout.modules, so
+                    // drag a standalone per-slot anchor instead of a module
+                    // offset (see setEmptySlotAnchor / slotAnchors).
+                    if (!shipLoadoutManager.setEmptySlotAnchor) return;
+                    const container = pin.closest('.hs-hangar-slot');
+                    const index = Number(pin.getAttribute('data-slot-index') || 0);
+                    const startNx = container
+                        ? parseFloat(container.style.getPropertyValue('--pin-x')) || 0.5
+                        : 0.5;
+                    const startNy = container
+                        ? parseFloat(container.style.getPropertyValue('--pin-y')) || 0.5
+                        : 0.5;
+                    drag = {
+                        emptySlot: true,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        moved: false,
+                        kind: kind,
+                        index: index,
+                        startNx: startNx,
+                        startNy: startNy,
+                        mw: Math.max(8, model.width || 20),
+                        mh: Math.max(8, model.height || 16)
+                    };
+                    pin.setPointerCapture(e.pointerId);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                if (!shipLoadoutManager.setModuleOffset) return;
+                // Two equipped modules can share the same id (e.g. the same
+                // weapon in both weapon slots) — match by face too, or
+                // dragging slot 2 would grab slot 1's module instead.
+                const modules = model.layout.modules || [];
+                const mod = modules.find((m) => m.kind === kind && m.id === modId && m.face === modFace)
+                    || modules.find((m) => m.kind === kind && m.id === modId);
+                if (!mod) return;
+                const segmentId = mod.mountSegment === 'wing'
+                    ? (mod.face === 'left' ? 'wingLeft' : 'wingRight')
+                    : mod.mountSegment;
+                const segment = (model.layout.segments || []).find((seg) => seg.id === segmentId);
+                const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
+                const offsetKey = shipLoadoutManager.moduleOffsetKey
+                    ? shipLoadoutManager.moduleOffsetKey(modId, mod.face)
+                    : modId;
+                const stored = loadout.moduleOffsets
+                    && loadout.moduleOffsets[kind]
+                    && (loadout.moduleOffsets[kind][offsetKey] || loadout.moduleOffsets[kind][modId]);
+                drag = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    moved: false,
+                    kind: kind,
+                    modId: modId,
+                    modFace: mod.face,
+                    startOffsetX: stored ? Number(stored.x) || 0 : 0,
+                    startOffsetY: stored ? Number(stored.y) || 0 : 0,
+                    segmentWidth: Math.max(1, segment ? segment.width : mod.width || 1),
+                    segmentHeight: Math.max(1, segment ? segment.height : mod.height || 1)
+                };
+                this._hangarSelectedModule = { kind: kind, id: modId };
+                pin.setPointerCapture(e.pointerId);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            pin.addEventListener('pointermove', (e) => {
+                if (!drag) return;
+                const canvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+                const scale = this._hangarLastScale || 1;
+                let sx = 1;
+                let sy = 1;
+                if (canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    sx = canvas.width / Math.max(1, rect.width);
+                    sy = canvas.height / Math.max(1, rect.height);
+                }
+                if (!drag.moved && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
+                    drag.moved = true;
+                    pin._hsJustDragged = true;
+                }
+                if (drag.emptySlot) {
+                    const dxCanvas = (e.clientX - drag.startX) * sx;
+                    const dyCanvas = (e.clientY - drag.startY) * sy;
+                    const sw = Math.max(1, drag.mw * scale);
+                    const sh = Math.max(1, drag.mh * scale);
+                    shipLoadoutManager.setEmptySlotAnchor(
+                        this.hangarShipId,
+                        drag.kind,
+                        drag.index,
+                        drag.startNx + dxCanvas / sw,
+                        drag.startNy + dyCanvas / sh
+                    );
+                } else {
+                    const dx = (e.clientX - drag.startX) * sx / Math.max(1, scale);
+                    const dy = (e.clientY - drag.startY) * sy / Math.max(1, scale);
+                    shipLoadoutManager.setModuleOffset(
+                        this.hangarShipId,
+                        drag.kind,
+                        drag.modId,
+                        drag.startOffsetX + dx / Math.max(1, drag.segmentWidth),
+                        drag.startOffsetY + dy / Math.max(1, drag.segmentHeight),
+                        drag.modFace
+                    );
+                }
+                if (!this._hangarLiveDrawRaf) {
+                    this._hangarLiveDrawRaf = requestAnimationFrame(() => {
+                        this._hangarLiveDrawRaf = 0;
+                        if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                    });
+                }
+                e.preventDefault();
+            });
+            const end = (e) => {
+                if (!drag) return;
+                drag = null;
+                if (pin.hasPointerCapture && pin.hasPointerCapture(e.pointerId)) {
+                    pin.releasePointerCapture(e.pointerId);
+                }
+                this.drawHangarBay();
+            };
+            pin.addEventListener('pointerup', end);
+            pin.addEventListener('pointercancel', end);
         });
     }
 
@@ -4656,6 +4948,13 @@ class HomeStationUI {
     bindEvents() {
         const menu = this.overlay.querySelector('#hsMenu');
         if (menu) menu.addEventListener('click', () => this.openMainMenuOverlay());
+        this.overlay.querySelectorAll('[data-menu-tab]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.openMainMenuOverlay({ tab: btn.getAttribute('data-menu-tab') });
+            });
+        });
+        const logout = this.overlay.querySelector('#hsLogout');
+        if (logout) logout.addEventListener('click', () => this.logout());
         const root = this.overlay.querySelector('.home-station-content');
         if (root) {
             const activatePointerMode = () => {

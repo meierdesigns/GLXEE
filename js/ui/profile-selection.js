@@ -11,6 +11,33 @@ class ProfileSelectionManager {
         this._keyHandler = null;
         this.onClose = null;
         this.mode = 'list'; // list | create | rename
+        this.pendingFaction = this.getFactionIds()[0];
+    }
+
+    getFactionIds() {
+        if (typeof factionManager !== 'undefined' && factionManager.getFactionIds) {
+            return factionManager.getFactionIds();
+        }
+        return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+    }
+
+    getFactionLabel(id) {
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta) {
+            const meta = planetConfigManager.getFactionMeta(id);
+            if (meta && meta.label) return meta.label;
+        }
+        return String(id || '').toUpperCase();
+    }
+
+    getFactionColor(id) {
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor) {
+            return factionShipStyles.getFactionColor(id);
+        }
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionPlanetTheme) {
+            const theme = planetConfigManager.getFactionPlanetTheme(id);
+            if (theme && theme.baseColor) return theme.baseColor;
+        }
+        return '#888888';
     }
 
     show(options) {
@@ -74,10 +101,26 @@ class ProfileSelectionManager {
 
         if (this.mode === 'create' || this.mode === 'rename') {
             const title = this.mode === 'create' ? 'NEW PROFILE' : 'RENAME PROFILE';
+            const factionPickerHtml = this.mode === 'create' ? `
+                <div class="profile-faction-picker">
+                    <div class="profile-faction-picker-label">FACTION</div>
+                    <div class="profile-faction-swatches">
+                        ${this.getFactionIds().map((id) => `
+                            <button type="button" class="profile-faction-swatch${id === this.pendingFaction ? ' selected' : ''}"
+                                data-faction="${id}" title="${this.getFactionLabel(id)}"
+                                style="--faction-color: ${this.getFactionColor(id)}">
+                                <span class="profile-faction-swatch-dot"></span>
+                                <span class="profile-faction-swatch-label">${this.getFactionLabel(id)}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '';
             setHtml(`
                 <div class="profile-selection-content profile-selection-floating profile-selection-name-mode">
                     <h2 class="profile-selection-title">${title}</h2>
                     <input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>
+                    ${factionPickerHtml}
                     <div class="profile-selection-actions">
                         <button class="action-button" id="psSave">SAVE</button>
                         <button class="action-button secondary" id="psCancelMode">CANCEL</button>
@@ -94,6 +137,14 @@ class ProfileSelectionManager {
                 input.value = profiles[this.selectedIndex].name;
             }
             input.focus();
+            this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    this.pendingFaction = btn.dataset.faction;
+                    this.overlay.querySelectorAll('.profile-faction-swatch').forEach((el) => {
+                        el.classList.toggle('selected', el.dataset.faction === this.pendingFaction);
+                    });
+                });
+            });
             this.overlay.querySelector('#psSave').addEventListener('click', () => this.saveName());
             this.overlay.querySelector('#psCancelMode').addEventListener('click', () => {
                 this.mode = 'list';
@@ -301,6 +352,7 @@ class ProfileSelectionManager {
         bind('psSelect', () => this.activateSelected());
         bind('psCreate', () => {
             this.mode = 'create';
+            this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
         });
         bind('psRename', () => {
@@ -380,7 +432,7 @@ class ProfileSelectionManager {
         const name = input ? input.value : '';
         if (typeof profileManager === 'undefined') return;
         if (this.mode === 'create') {
-            const p = profileManager.create(name);
+            const p = profileManager.create(name, this.pendingFaction);
             if (!p) return;
             profileManager.setActive(p.id);
             profileManager.ensureEconomyDefaults(p);
@@ -413,6 +465,7 @@ class ProfileSelectionManager {
         const profiles = this.getProfiles();
         if (!profiles.length) {
             this.mode = 'create';
+            this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
             return;
         }

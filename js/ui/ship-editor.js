@@ -13,6 +13,9 @@ class ShipEditorUI {
         this.previewCanvas = null;
         this.previewCtx = null;
         this.previewAnimId = null;
+        this.previewBaseWidth = 200;
+        this.previewBaseHeight = 300;
+        this.previewBackingScale = 1;
         this.previewZoom = 1;
         this.previewFullscreen = false;
         this.previewPanX = 0;
@@ -76,6 +79,7 @@ class ShipEditorUI {
                             <button type="button" class="pe-btn pe-preview-btn" id="seZoomIn" title="Zoom in">+</button>
                             <button type="button" class="pe-btn pe-preview-btn" id="seZoomReset" title="Reset zoom">1:1</button>
                             <button type="button" class="pe-btn pe-preview-btn" id="sePreviewFullscreen" title="Fullscreen">FULL</button>
+                            <button type="button" class="pe-btn pe-preview-btn" id="seRerollShape" title="Generate new part shapes">REROLL SHAPE</button>
                         </div>
                         <div class="pe-preview-viewport" id="sePreviewViewport">
                             <canvas id="sePreview" width="200" height="300"></canvas>
@@ -115,6 +119,7 @@ class ShipEditorUI {
         overlay.querySelector('#sePreviewFullscreen').addEventListener('click', () => {
             this.setPreviewFullscreen(!this.previewFullscreen);
         });
+        overlay.querySelector('#seRerollShape').addEventListener('click', () => this.rerollHullShape());
 
         const viewport = overlay.querySelector('#sePreviewViewport');
         viewport.addEventListener('wheel', (e) => {
@@ -186,6 +191,16 @@ class ShipEditorUI {
         requestAnimationFrame(() => this.applyPreviewView());
     }
 
+    /** Picks a new random per-part shape combination for the ship being edited. */
+    rerollHullShape() {
+        if (typeof profileManager === 'undefined' || !profileManager.setHullShapeSeed) return;
+        const shipId = this.selectedType;
+        if (!shipId) return;
+        const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        profileManager.setHullShapeSeed(shipId, seed);
+        // Animation loop repaints every frame; no forced redraw needed.
+    }
+
     applyPreviewView() {
         const wrap = document.getElementById('sePreviewWrap');
         const label = document.getElementById('seZoomLabel');
@@ -198,16 +213,28 @@ class ShipEditorUI {
             const pad = 8;
             const availW = Math.max(140, viewport.clientWidth - pad);
             const availH = Math.max(200, viewport.clientHeight - pad);
-            const aspect = this.previewCanvas.width / this.previewCanvas.height;
+            const aspect = this.previewBaseWidth / this.previewBaseHeight;
             let fitW = availW;
             let fitH = fitW / aspect;
             if (fitH > availH) {
                 fitH = availH;
                 fitW = fitH * aspect;
             }
-            this.previewCanvas.style.width = `${Math.round(fitW)}px`;
-            this.previewCanvas.style.height = `${Math.round(fitH)}px`;
-            this.previewCanvas.style.transform = `translate(${this.previewPanX}px, ${this.previewPanY}px) scale(${this.previewZoom})`;
+            const cssW = fitW * this.previewZoom;
+            const cssH = fitH * this.previewZoom;
+            const dpr = window.devicePixelRatio || 1;
+            // Bake zoom into the canvas backing store so pixel art is regenerated
+            // crisp at the target resolution instead of CSS-stretching a fixed bitmap.
+            this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
+            const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
+            if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {
+                this.previewCanvas.width = backingW;
+                this.previewCanvas.height = backingH;
+            }
+            this.previewCanvas.style.width = `${Math.round(cssW)}px`;
+            this.previewCanvas.style.height = `${Math.round(cssH)}px`;
+            this.previewCanvas.style.transform = `translate(${this.previewPanX}px, ${this.previewPanY}px)`;
         }
     }
 
@@ -677,6 +704,7 @@ class ShipEditorUI {
             modelClass: 'starfighter',
             sprite: null
         }, {
+            id: this.selectedType,
             name: this.draft && this.draft.name,
             speed: this.draft && this.draft.speed,
             maxHealth: this.draft && this.draft.maxHealth,
@@ -752,8 +780,12 @@ class ShipEditorUI {
         const canvas = this.previewCanvas;
         const sim = this.previewSim;
         if (!ctx || !canvas || !sim) return;
-        const w = canvas.width;
-        const h = canvas.height;
+        const w = this.previewBaseWidth;
+        const h = this.previewBaseHeight;
+        const backingScale = this.previewBackingScale || 1;
+        ctx.imageSmoothingEnabled = false;
+        ctx.save();
+        ctx.scale(backingScale, backingScale);
         ctx.fillStyle = '#0a0a0c';
         ctx.fillRect(0, 0, w, h);
 
@@ -777,8 +809,11 @@ class ShipEditorUI {
         if (typeof shipRenderer !== 'undefined') {
             if (shipRenderer.init) shipRenderer.init();
             const tmp = document.createElement('canvas');
-            tmp.width = p.width;
-            tmp.height = p.height;
+            // Size the offscreen ship canvas to the actual backing-store density
+            // (not the fixed logical p.width/height) so the hull/module pixels
+            // regenerate crisp at the current zoom instead of being upscaled.
+            tmp.width = Math.max(1, Math.round(p.width * backingScale));
+            tmp.height = Math.max(1, Math.round(p.height * backingScale));
             shipRenderer.renderShipPreview(tmp, model, 1);
             ctx.drawImage(tmp, p.x, p.y, p.width, p.height);
         } else if (model.sprite) {
@@ -801,6 +836,7 @@ class ShipEditorUI {
         ctx.fillText((this.draft && this.draft.name) || 'SHIP', 8, 14);
         ctx.fillText(`SPD ${this.draft ? this.draft.speed : 0}`, 8, 28);
         ctx.fillText(`HP ${this.draft ? this.draft.maxHealth : 0}`, 8, 42);
+        ctx.restore();
     }
 }
 

@@ -3986,6 +3986,43 @@ html[data-vf-arcade="on"] .settings-row-value {
     font-family: var(--ui-font-family);
 }
 
+.settings-modal-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.settings-modal-header .settings-modal-title {
+    margin: 0 0 clamp(2px, 0.6vh, 8px);
+}
+
+.settings-modal-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.settings-modal-close:hover {
+    border-color: #ff5a5a;
+    color: #ff8a8a;
+}
+
 .start-screen-subtitle {
     color: var(--color-text-secondary);
     font-size: var(--font-h2);
@@ -7562,16 +7599,39 @@ body.pe-resizing * {
     min-width: 0;
 }
 .galaxy-map-panel-select {
-    display: grid;
-    grid-template-columns: minmax(88px, 0.9fr) 1.2fr;
-    gap: 10px;
+    display: flex;
     align-items: stretch;
+    gap: 12px;
+    min-height: 180px;
 }
-.gm-select-sector {
+.gm-sector-planet-col {
     display: flex;
     flex-direction: column;
+    flex: 0 0 auto;
+    width: 40%;
+    min-width: 120px;
+}
+.gm-sector-planet-bg {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    min-width: 0;
+    min-height: 0;
+}
+.gm-sector-planet-bg .gm-planet-icon,
+.gm-sector-planet-bg svg {
+    width: auto;
+    height: 100%;
+    aspect-ratio: 1 / 1;
+}
+.gm-sector-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.gm-sector-heading .gm-panel-label {
+    margin-bottom: 0;
 }
 .galaxy-map-panel-ship .gm-ship-panel-body {
     display: flex;
@@ -7686,12 +7746,57 @@ body.pe-resizing * {
     outline: none;
     box-shadow: 0 0 0 2px var(--color-primary);
 }
+.profile-faction-picker {
+    width: min(420px, 92%);
+    margin: 0 auto 20px;
+}
+.profile-faction-picker-label {
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 2px;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
+    text-align: center;
+    margin-bottom: 8px;
+}
+.profile-faction-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+.profile-faction-swatch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--ui-surface);
+    border: var(--ui-border-width) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.profile-faction-swatch-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--faction-color, #888);
+    flex-shrink: 0;
+}
+.profile-faction-swatch:hover {
+    border-color: var(--faction-color, var(--color-primary));
+    color: var(--color-text);
+}
+.profile-faction-swatch.selected {
+    color: var(--color-text);
+    border-color: var(--faction-color, var(--color-primary));
+    box-shadow: inset 0 0 10px color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent);
+}
 
 @media (max-width: 640px) {
     .galaxy-map-panels {
-        grid-template-columns: 1fr;
-    }
-    .galaxy-map-panel-select {
         grid-template-columns: 1fr;
     }
 }
@@ -7983,6 +8088,99 @@ button.hs-menu-btn.nav-focused {
     border-color: var(--color-primary);
     background: color-mix(in srgb, var(--color-primary) 28%, var(--color-surface));
     box-shadow: inset 0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-menu-tab-btn {
+    flex: 0 0 auto;
+    padding: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, padding 0.15s ease;
+}
+.hs-menu-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+.hs-menu-tab-label {
+    white-space: nowrap;
+}
+.hs-menu-tab-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+}
+button.hs-menu-tab-btn.nav-focused {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: 3px;
+}
+.hs-menu-tab-btn.active {
+    padding: 8px 12px;
+    color: var(--color-text);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 28%, var(--color-surface));
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-logout-btn {
+    flex: 0 0 auto;
+    padding: 8px;
+    margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, padding 0.15s ease;
+}
+.hs-logout-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 18px;
+    transform: rotate(90deg);
+}
+.hs-logout-label {
+    display: none;
+    white-space: nowrap;
+}
+.hs-logout-btn:hover,
+.hs-logout-btn:focus-visible,
+.hs-logout-btn.nav-focused {
+    padding: 8px 12px;
+    border-color: #ff5a5a;
+    color: #ff8a8a;
+}
+.hs-logout-btn:hover .hs-logout-label,
+.hs-logout-btn:focus-visible .hs-logout-label,
+.hs-logout-btn.nav-focused .hs-logout-label {
+    display: inline;
+}
+button.hs-logout-btn.nav-focused {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: 3px;
 }
 .hs-body-menu {
     display: flex;
@@ -9036,13 +9234,13 @@ button.hs-tab.active.nav-focused {
     opacity: 0.9;
 }
 .galaxy-map-panel-ship .gm-ship-mini-canvas {
-    width: 96px;
-    height: 72px;
+    width: 84px;
+    height: 120px;
     flex: 0 0 auto;
+    align-self: center;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
     box-sizing: border-box;
 }
 .galaxy-map-embedded .galaxy-map-instructions {
@@ -9749,6 +9947,9 @@ button.hs-shop-cat.active.nav-focused {
 .hs-hangar-bay-canvas.is-wing-dragging {
     cursor: grabbing;
 }
+.hs-hangar-bay-canvas.is-wing-scaling {
+    cursor: ew-resize;
+}
 .hs-hangar-bay-canvas.is-module-dragging {
     cursor: grabbing;
 }
@@ -9930,6 +10131,21 @@ button.hs-shop-cat.active.nav-focused {
     flex-direction: column;
     gap: 2px;
     padding: 4px;
+}
+.hs-hangar-slot-skin-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 6px;
+}
+.hs-hangar-slot-skin-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+.hs-hangar-slot-skin-select {
+    flex: 1;
 }
 .hs-hangar-slot-option {
     display: flex;

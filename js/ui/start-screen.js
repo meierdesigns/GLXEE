@@ -22,7 +22,7 @@ class StartScreenManager {
                 id: 'main',
                 label: '',
                 items: [
-                    { id: 'STATION', icon: 'hsStation', primary: true },
+                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true },
                     { id: 'PROFILES', icon: 'menuProfiles' },
                     { id: 'SETTINGS', icon: 'menuSettings' },
                     { id: 'ASSETS', icon: 'menuAssets' },
@@ -547,7 +547,8 @@ class StartScreenManager {
         this.embeddedHost = opts.host || null;
         if (!this.embeddedHost) return;
 
-        if (opts.showSettings) this.embeddedMenuTab = 'settings';
+        if (opts.tab && this.embeddedMenuTabs.some((t) => t.id === opts.tab)) this.embeddedMenuTab = opts.tab;
+        else if (opts.showSettings) this.embeddedMenuTab = 'settings';
         else if (opts.showCredits) this.embeddedMenuTab = 'credits';
         else if (opts.resetPanels || !this.embeddedMenuTab) this.embeddedMenuTab = 'settings';
         this.syncEmbeddedFlags();
@@ -666,6 +667,18 @@ class StartScreenManager {
             return;
         }
 
+        if (!this._settingsOutsideClickBound) {
+            this._settingsOutsideClickBound = true;
+            const startScreen = document.getElementById('startScreen');
+            if (startScreen) {
+                startScreen.addEventListener('click', (e) => {
+                    if (e.target === startScreen && this.showSettings && !this.overlayMode && !this.embeddedMode) {
+                        this.handleEscape();
+                    }
+                });
+            }
+        }
+
         if (this.overlayMode || this.embeddedMode) {
             host.innerHTML = '';
         } else {
@@ -775,7 +788,7 @@ class StartScreenManager {
 
                 const label = document.createElement('span');
                 label.className = 'menu-item-label';
-                label.textContent = itemId;
+                label.textContent = entry.label || itemId;
 
                 menuItem.appendChild(iconWrap);
                 menuItem.appendChild(label);
@@ -1143,10 +1156,24 @@ class StartScreenManager {
         }
 
         if (!bare) {
+            const header = document.createElement('div');
+            header.className = 'settings-modal-header';
+
             const title = document.createElement('h2');
             title.textContent = 'SETTINGS';
-            title.className = 'start-screen-title';
-            content.appendChild(title);
+            title.className = 'start-screen-title settings-modal-title';
+            header.appendChild(title);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'settings-modal-close';
+            closeBtn.setAttribute('aria-label', 'Close');
+            closeBtn.title = 'Close';
+            closeBtn.textContent = '✕';
+            closeBtn.addEventListener('click', () => this.handleEscape());
+            header.appendChild(closeBtn);
+
+            content.appendChild(header);
         }
 
         const panel = document.createElement('div');
@@ -2605,19 +2632,19 @@ class StartScreenManager {
                     this.hideOverlay();
                     break;
                 }
+                if (typeof profileSelectionManager !== 'undefined') {
+                    profileSelectionManager.show({
+                        onClose: () => this.returnToHub()
+                    });
+                    this.hide();
+                    break;
+                }
                 if (typeof profileManager !== 'undefined' && !profileManager.hasActiveProfile()) {
                     if (typeof onboardingManager !== 'undefined') {
                         onboardingManager.show({
                             onComplete: () => {
                                 this.returnToHub();
                             }
-                        });
-                        this.hide();
-                        break;
-                    }
-                    if (typeof profileSelectionManager !== 'undefined') {
-                        profileSelectionManager.show({
-                            onClose: () => this.returnToHub()
                         });
                         this.hide();
                         break;

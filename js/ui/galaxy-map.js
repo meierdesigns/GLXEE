@@ -340,15 +340,18 @@ class GalaxyMapManager {
         return { id: shipId, name: shipId, type: shipId };
     }
 
-    iconHtml(iconKey, size) {
+    iconHtml(iconKey, size, tint) {
         if (typeof iconRenderer !== 'undefined' && iconKey) {
-            return iconRenderer.imgHtml(iconKey, size || 32, 'gm-stat-icon');
+            return iconRenderer.imgHtml(iconKey, size || 32, 'gm-stat-icon', tint);
         }
         return '';
     }
 
-    statChipHtml(iconKey, value) {
-        return `<span class="gm-stat-chip">${this.iconHtml(iconKey, 32)}<span>${value}</span></span>`;
+    statChipHtml(iconKey, value, kind) {
+        const tint = (kind && typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor)
+            ? iconRenderer.getModuleKindColor(kind)
+            : undefined;
+        return `<span class="gm-stat-chip">${this.iconHtml(iconKey, 32, tint)}<span>${value}</span></span>`;
     }
 
     frameHtml(ship) {
@@ -357,9 +360,9 @@ class GalaxyMapManager {
 
     loadoutHtml(ship) {
         return [
-            this.statChipHtml('statWeapon', ship.weaponsLabel),
-            this.statChipHtml('statArmor', ship.defensesLabel),
-            this.statChipHtml('statAbilities', ship.abilitiesLabel)
+            this.statChipHtml('statWeapon', ship.weaponsLabel, 'weapon'),
+            this.statChipHtml('statArmor', ship.defensesLabel, 'defense'),
+            this.statChipHtml('statAbilities', ship.abilitiesLabel, 'ability')
         ].join('<span class="gm-stat-sep" aria-hidden="true">·</span>');
     }
 
@@ -411,9 +414,12 @@ class GalaxyMapManager {
         return `
             <div class="galaxy-map-panels">
                 <div class="galaxy-map-panel galaxy-map-panel-select">
-                    <div class="gm-select-sector">
-                        <div class="gm-panel-label">SECTOR</div>
-                        <div class="gm-panel-value" id="gmSectorName">${info.name || '—'}</div>
+                    <div class="gm-sector-planet-col">
+                        <div class="gm-sector-heading">
+                            <span class="gm-panel-label">SECTOR</span>
+                            <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
+                        </div>
+                        <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}</div>
                     </div>
                     <div class="gm-detail">
                         <div class="stat-row"><span class="stat-label">Difficulty</span><span class="stat-value" id="gmDiff">${diff}</span></div>
@@ -425,7 +431,7 @@ class GalaxyMapManager {
                 <div class="galaxy-map-panel galaxy-map-panel-ship">
                     <div class="gm-panel-label">SHIP</div>
                     <div class="gm-ship-panel-body">
-                        <canvas class="gm-ship-mini-canvas" id="gmShipCanvas" width="96" height="72" aria-label="Selected ship"></canvas>
+                        <canvas class="gm-ship-mini-canvas" id="gmShipCanvas" width="84" height="120" aria-label="Selected ship"></canvas>
                         <div class="gm-ship-panel-info">
                             <div class="gm-panel-value" id="gmShipName">${String(ship.name).toUpperCase()}</div>
                             <div class="gm-detail gm-ship-detail">
@@ -827,6 +833,8 @@ class GalaxyMapManager {
             if (el) el.textContent = text;
         };
         set('gmSectorName', info.name || '—');
+        const planetBg = this.overlay.querySelector('.gm-sector-planet-bg');
+        if (planetBg) planetBg.innerHTML = this.planetIconHtml(info.id, 240);
         set('gmDiff', info.unlocked ? (info.difficulty || '—') : '???');
         set('gmStages', info.unlocked
             ? (info.cleared

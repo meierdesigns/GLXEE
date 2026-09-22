@@ -33,7 +33,12 @@ class ShipRenderer {
     }
 
     // Render ship preview to canvas
-    renderShipPreview(canvas, ship, scale = 3) {
+    // fillBoost: >1 zooms the fit-to-canvas scale in past pure "contain" so
+    // small decorative previews (e.g. the galaxy map mini canvas) can sit
+    // closer to the edges instead of leaving a big margin; wingtips/aft may
+    // clip slightly off-canvas at higher values, so it defaults to 1 (no
+    // clipping) for editor/full previews that need the whole hull visible.
+    renderShipPreview(canvas, ship, scale = 3, fillBoost = 1) {
         const ctx = canvas.getContext('2d');
         
         // Clear canvas with transparent background
@@ -59,7 +64,7 @@ class ShipRenderer {
             if (loader && loader.renderShip) {
                 const shipW = ship.width || 16;
                 const shipH = ship.height || 12;
-                const fit = Math.min(canvas.width / shipW, canvas.height / shipH);
+                const fit = Math.min(canvas.width / shipW, canvas.height / shipH) * Math.max(1, fillBoost);
                 const rw = shipW * fit;
                 const rh = shipH * fit;
                 const ox = (canvas.width - rw) / 2;

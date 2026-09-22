@@ -188,6 +188,9 @@ class BulletManager {
         if (shipModel && shipModel.defaultWeapon) {
             this.currentWeapon = shipModel.defaultWeapon;
         }
+        // Per-slot cooldowns (keyed by mount, not weapon id — two equipped
+        // weapons of the same type still fire on independent clocks).
+        this.weaponCooldowns = {};
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.syncFromShipModel(shipModel);
             this.fireMode = chargeSystem.getFireMode();
@@ -201,14 +204,40 @@ class BulletManager {
             this.fireMode = shipLoadoutManager.getFireMode(shipModel.id);
         }
         this.resetCharge();
-        // Initialize weapon cooldowns
-        if (shipModel && shipModel.weaponConfig) {
-            Object.keys(shipModel.weaponConfig).forEach(weapon => {
-                this.weaponCooldowns[weapon] = 0;
-            });
-        }
         // Update weapon display
         this.updateWeaponDisplay();
+    }
+
+    /**
+     * Every equipped weapon module's fire origin, in playerPosition's
+     * screen space — one entry per physical mount, so two of the same
+     * weapon type in different slots still fire from their own spot.
+     * Falls back to the ship's bounding-box center when there's no
+     * modular layout (legacy/non-modular ship models).
+     */
+    getWeaponFirePositions(playerPosition) {
+        const model = this.currentShipModel;
+        const layout = model && model.layout;
+        const weaponModules = layout && Array.isArray(layout.modules)
+            ? layout.modules.filter((m) => m && m.kind === 'weapon')
+            : [];
+        if (!weaponModules.length) {
+            return [{ id: this.currentWeapon, key: this.currentWeapon, position: playerPosition }];
+        }
+        const lw = Math.max(1, layout.width || playerPosition.width);
+        const lh = Math.max(1, layout.height || playerPosition.height);
+        const scaleX = playerPosition.width / lw;
+        const scaleY = playerPosition.height / lh;
+        return weaponModules.map((m) => ({
+            id: m.id,
+            key: String(m.id || '') + '@' + String(m.face || 'up'),
+            position: {
+                x: playerPosition.x + m.x * scaleX,
+                y: playerPosition.y + m.y * scaleY,
+                width: Math.max(1, (m.width || 0) * scaleX),
+                height: Math.max(1, (m.height || 0) * scaleY)
+            }
+        }));
     }
 
     switchWeapon() {
@@ -370,50 +399,50 @@ class BulletManager {
 
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
-        const weaponConfig = this.currentShipModel.weaponConfig[this.currentWeapon];
-        if (!weaponConfig) return false;
-        
-        // Check cooldown
-        let cooldown = weaponConfig.cooldown;
-        if (typeof enemyManager !== 'undefined' && enemyManager.getJammerCooldownMul) {
-            cooldown *= enemyManager.getJammerCooldownMul();
-        }
-        if (opts.cooldownMul && opts.cooldownMul > 0 && opts.cooldownMul < 1) {
-            cooldown *= opts.cooldownMul;
-        }
-        if (currentTime - this.lastShotTime < cooldown) {
-            return false;
-        }
-        
         let maxBullets = 6; // Increased for multi-weapon systems
-        
-        // Check for infinite ammo cheat
         if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
-        
-        // Check if we can shoot based on current bullet count
-        if (this.bullets.length >= maxBullets) {
-            return false;
-        }
-        
-        this.lastShotTime = currentTime;
-        
-        const cfg = Object.assign({}, weaponConfig);
-        if (opts.chargeMult && opts.chargeMult > 1) {
-            const cm = Math.min(1.75, opts.chargeMult);
-            cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
-            cfg.speed = (cfg.speed || 6) * (1 + (cm - 1) * 0.15);
-            cfg.width = Math.max(cfg.width || 2, Math.round(2 * cm));
-            cfg.height = Math.max(cfg.height || 8, Math.round(8 * (1 + (cm - 1) * 0.25)));
-            cfg._charged = true;
-            cfg._chargeMult = opts.chargeMult;
-        }
-        if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
-            weaponConfigManager.clampWeaponShot(cfg);
-        }
-        this.fireWeaponByType(this.currentWeapon, playerPosition, cfg, false);
-        return true;
+
+        const jammerMul = (typeof enemyManager !== 'undefined' && enemyManager.getJammerCooldownMul)
+            ? enemyManager.getJammerCooldownMul()
+            : 1;
+
+        // Every equipped weapon fires simultaneously from its own mount,
+        // each gated by its own cooldown clock — a twin-cannon loadout
+        // fires both guns independently rather than cycling one at a time.
+        let firedAny = false;
+        this.getWeaponFirePositions(playerPosition).forEach((slot) => {
+            const weaponConfig = this.currentShipModel.weaponConfig[slot.id];
+            if (!weaponConfig) return;
+            let cooldown = weaponConfig.cooldown * jammerMul;
+            if (opts.cooldownMul && opts.cooldownMul > 0 && opts.cooldownMul < 1) {
+                cooldown *= opts.cooldownMul;
+            }
+            const lastFired = this.weaponCooldowns[slot.key] || 0;
+            if (currentTime - lastFired < cooldown) return;
+            if (this.bullets.length >= maxBullets) return;
+
+            this.weaponCooldowns[slot.key] = currentTime;
+            this.lastShotTime = currentTime;
+
+            const cfg = Object.assign({}, weaponConfig);
+            if (opts.chargeMult && opts.chargeMult > 1) {
+                const cm = Math.min(1.75, opts.chargeMult);
+                cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
+                cfg.speed = (cfg.speed || 6) * (1 + (cm - 1) * 0.15);
+                cfg.width = Math.max(cfg.width || 2, Math.round(2 * cm));
+                cfg.height = Math.max(cfg.height || 8, Math.round(8 * (1 + (cm - 1) * 0.25)));
+                cfg._charged = true;
+                cfg._chargeMult = opts.chargeMult;
+            }
+            if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
+                weaponConfigManager.clampWeaponShot(cfg);
+            }
+            this.fireWeaponByType(slot.id, slot.position, cfg, false);
+            firedAny = true;
+        });
+        return firedAny;
     }
 
     fireWeaponByType(weaponId, position, config, isEnemy) {

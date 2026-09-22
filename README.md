@@ -549,7 +549,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 ║                   LICENSE  MIT                                           ║
 ║                   BRANCH   main                                           ║
 ║                   REPO     github.com/meierdesigns/GLXEE                 ║
-║                   CONTRIBUTORS  meierdesigns only                        ║
+║                   CONTRIBUTORS  meierdesigns                             ║
 ║                                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```

@@ -178,16 +178,16 @@ class FactionShipStyles {
     displaySizeForClass(enemyClass) {
         switch (this.normalizeClass(enemyClass)) {
             case 'scout':
-                return { width: 10, height: 8 };
+                return { width: 18, height: 14 };
             case 'assault':
-                return { width: 14, height: 11 };
+                return { width: 24, height: 19 };
             case 'heavy':
-                return { width: 17, height: 13 };
+                return { width: 30, height: 23 };
             case 'elite':
-                return { width: 19, height: 15 };
+                return { width: 33, height: 26 };
             case 'capital':
             default:
-                return { width: 22, height: 17 };
+                return { width: 39, height: 30 };
         }
     }
 

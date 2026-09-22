@@ -269,6 +269,22 @@ class IconRenderer {
         return out;
     }
 
+    /**
+     * Global category color code — weapon/defense/ability/energy icons use a
+     * consistent hue everywhere they appear (loadout chips, hangar, ship
+     * editor, ...) instead of all sharing the same neutral theme tint, so a
+     * category reads at a glance regardless of which screen shows it.
+     */
+    getModuleKindColor(kind) {
+        const colors = {
+            weapon: '#ff6a4a',
+            defense: '#4ac8ff',
+            ability: '#c08cff',
+            energy: '#ffd24a'
+        };
+        return colors[String(kind || '').toLowerCase()] || null;
+    }
+
     getThemeTint() {
         try {
             if (typeof colorManager !== 'undefined' && colorManager.getCurrentOverlayColor) {

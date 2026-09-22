@@ -299,32 +299,6 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
   MISSION      js/ui/mission-start.js  ·  brief → launch
 ```
 
-<div align="center">
-
-```
-┌──────────────────────── STATION DECK VISUALS ───────────────────────────────┐
-```
-
-| `STATION` | `HANGAR` |
-|:---:|:---:|
-| <img src="assets/ui/hs-bg-station.png" alt="Home Station deck" width="440" /> | <img src="assets/ui/hs-bg-hangar.png" alt="Hangar mainframe" width="440" /> |
-| `UPGRADE` | `SHOP` |
-| <img src="assets/ui/hs-bg-upgrade.png" alt="Upgrade tree" width="440" /> | <img src="assets/ui/hs-bg-shop.png" alt="Ship shop" width="440" /> |
-| `CRAFT` | `TRAVEL` |
-| <img src="assets/ui/hs-bg-craft.png" alt="Craft bay" width="440" /> | <img src="assets/ui/hs-bg-travel.png" alt="Galaxy travel" width="440" /> |
-| `EXPLORATIONS` | `PROFILES` |
-| <img src="assets/ui/hs-bg-explorations.png" alt="Explorations archive" width="440" /> | <img src="assets/ui/profiles-bg.png" alt="Pilot profiles" width="440" /> |
-
-<br/>
-
-<img src="assets/ui/menu-hangar-bg.png" alt="Menu hangar shell" width="720" />
-
-```
-  hangar shell · station decks · travel · explorations archive
-```
-
-</div>
-
 <br/>
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
@@ -435,16 +409,6 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  FX         explosion-config / explosion-system · pickups · beat-sync       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-<div align="center">
-
-<img src="assets/ui/hs-bg-ingame.png" alt="GLXEE in-game combat plate" width="720" />
-
-```
-  ▸ COMBAT PLATE  ·  LEFT VITALS / WEAPON  ·  RIGHT ENEMY FACTION BARS
-```
-
-</div>
 
 <br/>
 

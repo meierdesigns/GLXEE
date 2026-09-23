@@ -159,7 +159,7 @@ class ShipLoadoutManager {
             moduleSkins: this.normalizeModuleSkins(src.moduleSkins),
             // Both wings share the same vertical shift and mirror their
             // horizontal distance from the centerline.
-            wingOffsetY: Math.max(-0.35, Math.min(0.35, Number(src.wingOffsetY) || 0)),
+            wingOffsetY: Math.max(-1.5, Math.min(1.5, Number(src.wingOffsetY) || 0)),
             wingOffsetX: Math.max(-2, Math.min(2, Number(src.wingOffsetX) || 0)),
             segmentScale: this.normalizeSegmentScale(src.segmentScale),
             segmentOffset: this.normalizeSegmentOffset(src.segmentOffset),
@@ -846,11 +846,16 @@ class ShipLoadoutManager {
         const frontY = 0;
         const centerY = frontH + segGap;
         const backY = frontH + segGap + centerH + segGap;
-        const wingShiftY = Math.round(centerH * L.wingOffsetY);
+        // Shift scales with the whole hull height (not just the center band)
+        // and the wing's resting position is clamped across the full hull —
+        // front to back — so it can actually be dragged up to the nose or
+        // down to the engines instead of being trapped inside the center
+        // segment's own band.
+        const wingShiftY = Math.round(totalCoreH * L.wingOffsetY);
         const wingY = Math.max(
-            centerY,
+            frontY,
             Math.min(
-                centerY + Math.max(0, centerH - wingH),
+                Math.max(frontY, totalCoreH - wingH),
                 Math.floor(centerY + (centerH - wingH) / 2 + wingShiftY)
             )
         );
@@ -1912,7 +1917,7 @@ class ShipLoadoutManager {
     setWingOffset(shipId, offsetX, offsetY) {
         const loadout = this.getLoadout(shipId);
         loadout.wingOffsetX = Math.max(-2, Math.min(2, Number(offsetX) || 0));
-        loadout.wingOffsetY = Math.max(-0.35, Math.min(0.35, Number(offsetY) || 0));
+        loadout.wingOffsetY = Math.max(-1.5, Math.min(1.5, Number(offsetY) || 0));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     }

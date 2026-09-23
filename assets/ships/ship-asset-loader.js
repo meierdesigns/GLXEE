@@ -438,6 +438,19 @@ class ShipAssetLoader {
     }
 
     /**
+     * Resolve segment shape variant override from profile.
+     * Returns null if no override is set for this segment.
+     */
+    resolveSegmentVariantOverride(shipModel, segmentId) {
+        if (!shipModel || !segmentId || typeof profileManager === 'undefined') {
+            return null;
+        }
+        const shipId = shipModel.id;
+        if (!shipId) return null;
+        return profileManager.getSegmentShapeVariant(shipId, segmentId);
+    }
+
+    /**
      * Draw segmented hull: back → wings → center → front.
      * Prefer dedicated segment PNGs; else distinct procedural blocks
      * (full-sprite UV crop only as last soft fallback — it looks fused).
@@ -528,6 +541,9 @@ class ShipAssetLoader {
 
             // Module replace: draw mount art stretched into the segment box
             if (seg.replace && seg.replace.id) {
+                const replaceModule = (layout.modules || []).find(
+                    (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
+                );
                 const mod = {
                     id: seg.replace.id,
                     kind: seg.replace.kind,
@@ -537,7 +553,8 @@ class ShipAssetLoader {
                         : seg.replace.kind,
                     face: seg.id === 'wingRight' ? 'right'
                         : (seg.id === 'wingLeft' ? 'left'
-                            : (seg.id === 'back' ? 'down' : 'up'))
+                            : (seg.id === 'back' ? 'down' : 'up')),
+                    skin: replaceModule ? replaceModule.skin : null
                 };
                 this.renderShipModule(
                     ctx,
@@ -592,13 +609,14 @@ class ShipAssetLoader {
                 return;
             }
 
+            const variantOverride = this.resolveSegmentVariantOverride(shipModel, seg.id);
             if (seg.id === 'wingLeft' || seg.id === 'wingRight') {
                 this.renderProceduralWing(
-                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed
+                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride
                 );
             } else {
                 this.renderProceduralBodyBand(
-                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed
+                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride
                 );
             }
             if (showGuides) {
@@ -631,6 +649,9 @@ class ShipAssetLoader {
             const sw = Math.max(1, seg.width * scale);
             const sh = Math.max(1, seg.height * scale);
             if (seg.replace && seg.replace.id) {
+                const replaceModule = ((shipModel.layout && shipModel.layout.modules) || []).find(
+                    (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
+                );
                 const mod = {
                     id: seg.replace.id,
                     kind: seg.replace.kind,
@@ -640,7 +661,8 @@ class ShipAssetLoader {
                         : seg.replace.kind,
                     face: seg.id === 'wingRight' ? 'right'
                         : (seg.id === 'wingLeft' ? 'left'
-                            : (seg.id === 'back' ? 'down' : 'up'))
+                            : (seg.id === 'back' ? 'down' : 'up')),
+                    skin: replaceModule ? replaceModule.skin : null
                 };
                 this.renderShipModule(
                     ctx,
@@ -668,10 +690,11 @@ class ShipAssetLoader {
                 overlayIntensity
             );
             if (!drawn) {
+                const variantOverride = this.resolveSegmentVariantOverride(shipModel, seg.id);
                 if (seg.id === 'wingLeft' || seg.id === 'wingRight') {
-                    this.renderProceduralWing(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed);
+                    this.renderProceduralWing(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride);
                 } else {
-                    this.renderProceduralBodyBand(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed);
+                    this.renderProceduralBodyBand(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride);
                 }
             }
             if (showGuides) {
@@ -967,13 +990,18 @@ class ShipAssetLoader {
      * never a vector path or an image-scaled bitmap, so it's never blurred
      * or anti-aliased — a real pixel-art sprite, not a stretched drawing.
      */
-    renderProceduralWing(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed) {
+    renderProceduralWing(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride = null) {
         const { resW, resH } = this.hullPartResolution(w, h);
-        const shapeVariant = this.hullShapeVariantIndex(
-            shapeSeed,
-            seg.id === 'wingRight' ? 'wingLeft' : seg.id,
-            this.wingShapeVariants.length
-        );
+        let shapeVariant;
+        if (variantOverride != null) {
+            shapeVariant = variantOverride;
+        } else {
+            shapeVariant = this.hullShapeVariantIndex(
+                shapeSeed,
+                seg.id === 'wingRight' ? 'wingLeft' : seg.id,
+                this.wingShapeVariants.length
+            );
+        }
         const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
         this.drawPixelGridHull(ctx, grid, colors, x, y, w, h);
@@ -988,6 +1016,44 @@ class ShipAssetLoader {
             { reach: 1.05, center: 0.72, spread: 0.16 }, // swept — tip pulled toward the back
             { reach: 0.55, center: 0.5, spread: 0.3 }    // stub — short, blunt wing
         ];
+    }
+
+    /**
+     * Per-row silhouette bend applied on top of a part's base taper so each
+     * faction's hull reads as a distinct shape family, not just a recolor:
+     * `t` runs 0..1 along the part's length, `seedIndex` offsets the pattern
+     * per part (nose/wing/aft) so their notches don't all land on the same
+     * row. Returns a width multiplier and a sideways center offset.
+     */
+    factionRowProfile(silhouette, t, seedIndex) {
+        const tt = Math.max(0, Math.min(1, t));
+        if (silhouette === 'modular') {
+            // Stair-stepped terraces — blocky, disciplined panel steps.
+            const steps = 5;
+            const q = Math.round(tt * steps) / steps;
+            return { widthMul: 0.8 + q * 0.24, offsetMul: 0 };
+        }
+        if (silhouette === 'spikes') {
+            // Serrated blade edge — a tight sawtooth riding the taper.
+            const saw = Math.abs(((tt * 6 + seedIndex * 0.37) % 1) - 0.5) * 2;
+            return { widthMul: 0.86 + saw * 0.16, offsetMul: 0 };
+        }
+        if (silhouette === 'rings') {
+            // Smooth bulbous curve — convex belly instead of a linear taper.
+            return { widthMul: 0.68 + 0.36 * Math.sin(tt * Math.PI), offsetMul: 0 };
+        }
+        if (silhouette === 'scrap') {
+            // Uneven welded-on jitter, shifted off-center — lopsided salvage.
+            const jitter = Math.sin((tt * 9 + seedIndex * 1.7) * 6.1) * 0.5 + 0.5;
+            return { widthMul: 0.74 + jitter * 0.4, offsetMul: (jitter - 0.5) * 0.42 };
+        }
+        if (silhouette === 'circuit') {
+            // Fine notched teeth — tight periodic steps, denser than modular.
+            const steps = 9;
+            const q = Math.round(tt * steps) / steps;
+            return { widthMul: 0.84 + q * 0.2, offsetMul: 0 };
+        }
+        return { widthMul: 1, offsetMul: 0 };
     }
 
     buildWingGrid(seg, cols, rows, factionStyle, shapeVariant) {
@@ -1009,7 +1075,9 @@ class ShipAssetLoader {
             const t = rows <= 1 ? 0.5 : r / (rows - 1);
             const dist = Math.abs(t - center) / Math.max(0.08, spread);
             const taper = Math.max(0, 1 - dist);
-            const widthFrac = Math.min(1, 0.22 + taper * Math.max(0, reach - 0.22));
+            let widthFrac = Math.min(1, 0.22 + taper * Math.max(0, reach - 0.22));
+            const prof = this.factionRowProfile(silhouette, t, left ? 1 : 2);
+            widthFrac = Math.min(1, widthFrac * prof.widthMul);
             const width = Math.max(1, Math.round(cols * widthFrac));
             if (left) this.gridFillRect(g, cols - width, r, width, 1, 2);
             else this.gridFillRect(g, 0, r, width, 1, 2);
@@ -1038,9 +1106,14 @@ class ShipAssetLoader {
         return 2;
     }
 
-    renderProceduralBodyBand(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed) {
+    renderProceduralBodyBand(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride = null) {
         const { resW, resH } = this.hullPartResolution(w, h);
-        const shapeVariant = this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id));
+        let shapeVariant;
+        if (variantOverride != null) {
+            shapeVariant = variantOverride;
+        } else {
+            shapeVariant = this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id));
+        }
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
         let grid;
         if (seg.id === 'front') grid = this.buildNoseGrid(resW, resH, factionStyle, shapeVariant);
@@ -1064,9 +1137,11 @@ class ShipAssetLoader {
             } else {
                 widthFrac = 0.1 + t * 0.9; // pointed
             }
-            if (silhouette === 'spikes') widthFrac *= 0.88;
+            const prof = this.factionRowProfile(silhouette, t, 0);
+            widthFrac *= prof.widthMul;
             const width = Math.max(1, Math.round(cols * Math.min(1, widthFrac)));
-            const c0 = Math.round((cols - width) / 2);
+            let c0 = Math.round((cols - width) / 2 + prof.offsetMul * cols);
+            c0 = Math.max(0, Math.min(cols - width, c0));
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
@@ -1086,8 +1161,19 @@ class ShipAssetLoader {
 
     buildAftGrid(cols, rows, factionStyle, shapeVariant) {
         const g = this.blankGrid(cols, rows);
+        const silhouette = factionStyle ? factionStyle.silhouette : 'modular';
         const variant = shapeVariant || 0;
-        this.gridFillRect(g, 0, 0, cols, rows, 2);
+        // Taper the tail per faction instead of a plain rectangle — row 0
+        // joins the core at full width, row (rows-1) is the open tail edge.
+        for (let r = 0; r < rows; r++) {
+            const t = rows <= 1 ? 0 : r / (rows - 1);
+            const prof = this.factionRowProfile(silhouette, t, 3);
+            const widthFrac = Math.min(1, prof.widthMul);
+            const width = Math.max(1, Math.round(cols * widthFrac));
+            let c0 = Math.round((cols - width) / 2 + prof.offsetMul * cols);
+            c0 = Math.max(0, Math.min(cols - width, c0));
+            this.gridFillRect(g, c0, r, width, 1, 2);
+        }
         this.outlineGridEdges(g);
         const nozzleCount = variant === 2 ? 3 : (variant === 1 ? 1 : 2);
         const nozzleR0 = Math.round(rows * 0.4);
@@ -1115,8 +1201,35 @@ class ShipAssetLoader {
         this.gridFillRect(g, 0, 0, cols, rows, 2);
         this.outlineGridEdges(g);
         if (silhouette === 'rings') {
-            const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.24));
-            this.gridFillRect(g, cols / 2 - holeR / 2, rows * 0.4 - holeR / 2, holeR, holeR, 3);
+            // Twin hollow ring apertures — the voidborn's hallmark void gap.
+            const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.22));
+            this.gridFillRect(g, cols / 2 - holeR / 2, rows * 0.38 - holeR / 2, holeR, holeR, 3);
+            const holeR2 = Math.max(1, Math.round(holeR * 0.6));
+            this.gridFillRect(g, cols * 0.72 - holeR2 / 2, rows * 0.68 - holeR2 / 2, holeR2, holeR2, 0);
+        } else if (silhouette === 'spikes') {
+            // Diagonal chevron brand — an angled raider V etched into the hull.
+            const armW = Math.max(1, Math.round(cols * 0.12));
+            const half = Math.max(1, Math.round(rows * 0.5));
+            for (let r = 0; r < half; r++) {
+                const c = Math.round(cols * 0.5 - (r / half) * cols * 0.3);
+                this.gridFillRect(g, c, r, armW, 1, 3);
+                this.gridFillRect(g, cols - c - armW, r, armW, 1, 3);
+            }
+        } else if (silhouette === 'scrap') {
+            // Off-center welded patches — irregular, not centered or mirrored.
+            this.gridFillRect(g, cols * 0.08, rows * 0.5, cols * 0.34, Math.max(1, rows * 0.3), 3);
+            this.gridFillRect(g, cols * 0.62, rows * 0.12, cols * 0.28, Math.max(1, rows * 0.18), 3);
+        } else if (silhouette === 'circuit') {
+            // Chip node grid — a regular array of small square contacts.
+            const nodeW = Math.max(1, Math.round(cols * 0.1));
+            const nodeH = Math.max(1, Math.round(rows * 0.12));
+            for (let cx = 0; cx < 3; cx++) {
+                for (let cy = 0; cy < 2; cy++) {
+                    const px = cols * (0.22 + cx * 0.28);
+                    const py = rows * (0.28 + cy * 0.34);
+                    this.gridFillRect(g, px, py, nodeW, nodeH, 3);
+                }
+            }
         } else if (variant === 1) {
             this.gridFillRect(g, cols * 0.22, rows * 0.24, cols * 0.56, Math.max(1, rows * 0.24), 3);
             this.gridFillRect(g, 1, rows * 0.62, Math.max(1, cols * 0.1), Math.max(1, rows * 0.15), 3);
@@ -1232,6 +1345,36 @@ class ShipAssetLoader {
         this.drawPixelGridHull(ctx, shipModel.sprite, shipModel.colors, x, y, width, height);
     }
 
+    /** Current ship rendering style — 'FLAT' (default) or 'VOXEL', set via Settings. */
+    getShipRenderStyle() {
+        return (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.shipRenderStyle) || 'FLAT';
+    }
+
+    /** Shift each RGB channel of a #rrggbb hex color by `amount`, clamped to 0-255. */
+    shadeHex(hex, amount) {
+        if (!hex || hex.charAt(0) !== '#' || hex.length < 7) return hex;
+        const n = parseInt(hex.slice(1, 7), 16);
+        const clamp = (v) => Math.max(0, Math.min(255, v));
+        const r = clamp(((n >> 16) & 255) + amount);
+        const g = clamp(((n >> 8) & 255) + amount);
+        const b = clamp((n & 255) + amount);
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    /** Fill one hull "voxel" cell with a light top/left + dark bottom/right bevel for a raised 2D-voxel look. */
+    fillVoxelCell(ctx, x, y, w, h, baseColor) {
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x, y, w, h);
+        if (baseColor.charAt(0) !== '#') return;
+        const bevel = Math.max(1, Math.round(Math.min(w, h) * 0.28));
+        ctx.fillStyle = this.shadeHex(baseColor, 38);
+        ctx.fillRect(x, y, w, bevel);
+        ctx.fillRect(x, y, bevel, h);
+        ctx.fillStyle = this.shadeHex(baseColor, -38);
+        ctx.fillRect(x, y + h - bevel, w, bevel);
+        ctx.fillRect(x + w - bevel, y, bevel, h);
+    }
+
     /** Scale an indexed pixel grid (sprite[row][col] -> colors[index]) into any target rect, regenerating cell sizes each call. */
     drawPixelGridHull(ctx, sprite, colors, x, y, width, height) {
         if (!sprite || !sprite.length) {
@@ -1244,6 +1387,7 @@ class ShipAssetLoader {
         const px = width / cols;
         const py = height / rows;
         const palette = colors || {};
+        const voxel = this.getShipRenderStyle() === 'VOXEL';
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;
             if (typeof color === 'string' && color.indexOf('var(') === 0) {
@@ -1260,12 +1404,17 @@ class ShipAssetLoader {
             for (let col = 0; col < cols; col++) {
                 const pixel = sprite[row][col];
                 if (!pixel) continue;
-                ctx.fillStyle = resolve(palette[pixel] || '#888888');
+                const color = resolve(palette[pixel] || '#888888');
                 const left = Math.floor(x + col * px);
                 const top = Math.floor(y + row * py);
                 const right = Math.ceil(x + (col + 1) * px);
                 const bottom = Math.ceil(y + (row + 1) * py);
-                ctx.fillRect(left, top, right - left, bottom - top);
+                if (voxel) {
+                    this.fillVoxelCell(ctx, left, top, right - left, bottom - top, color);
+                } else {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(left, top, right - left, bottom - top);
+                }
             }
         }
     }
@@ -1354,22 +1503,34 @@ class ShipAssetLoader {
         const v = ((row + 0.5) / height) * 2 - 1;
         const silhouette = style.silhouette || 'modular';
         if (silhouette === 'rings') {
-            return Math.abs(u) > 0.28 || Math.abs(v) > 0.28;
+            // True circular aperture (distance from center) instead of a
+            // square notch — reads as a round void, not a blocky cutout.
+            const r = Math.sqrt(u * u + v * v);
+            return r > 0.32;
         }
         if (silhouette === 'spikes') {
-            const taper = 0.48 + Math.abs(v) * 0.42;
+            // Sharper, more aggressive blade taper — narrow spine at the tip
+            // that flares hard toward the base instead of a gentle wedge.
+            const taper = 0.3 + Math.pow(Math.abs(v), 1.7) * 0.75;
             return Math.abs(u) < taper;
         }
         if (silhouette === 'scrap') {
-            const au = Math.abs(u);
-            const av = Math.abs(v);
-            return !(au > 0.35 && av < 0.25) && !(au > 0.72 && av > 0.5);
+            // Single diagonal bite out of one corner — asymmetric welded-on
+            // salvage notch rather than two mirrored rectangular slots.
+            return !((u - v) > 0.75 && u > 0.15);
         }
         if (silhouette === 'circuit') {
-            return !(Math.abs(u) > 0.72 && Math.abs(v) > 0.72);
+            // Chamfered corners on all four sides — a beveled circuit-board
+            // notch instead of one hard right-angle cut.
+            const au = Math.abs(u);
+            const av = Math.abs(v);
+            return (au + av) < 1.55 && !(au > 0.74 && av > 0.74);
         }
         if (silhouette === 'modular') {
-            return !(Math.abs(u) > 0.62 && Math.abs(v) > 0.62);
+            // Softly chamfered panel corners instead of a sharp square cut.
+            const au = Math.abs(u);
+            const av = Math.abs(v);
+            return (au + av) < 1.55 && !(au > 0.68 && av > 0.68);
         }
         return true;
     }
@@ -1622,63 +1783,71 @@ class ShipAssetLoader {
         if (named) return named;
         const visual = role || kind || 'ability';
         if (visual === 'hardpoint' || kind === 'weapon') {
+            // Twin-barrel cannon: narrow muzzle glow tapering into a wide
+            // housing seated flush against the hull (dark edge at the base).
             return [
-                [4, 6, 12, 15, 15, 12, 6, 4],
-                [6, 12, 15, 15, 15, 15, 12, 6],
-                [6, 12, 14, 10, 10, 14, 12, 6],
-                [4, 10, 12, 15, 15, 12, 10, 4],
-                [4, 10, 12, 15, 15, 12, 10, 4],
-                [6, 12, 14, 10, 10, 14, 12, 6],
-                [6, 12, 15, 12, 12, 15, 12, 6],
-                [4, 6, 8, 8, 8, 8, 6, 4]
+                [0, 0, 3, 9, 9, 3, 0, 0],
+                [0, 0, 3, 14, 14, 3, 0, 0],
+                [0, 3, 9, 14, 14, 9, 3, 0],
+                [0, 3, 8, 10, 10, 8, 3, 0],
+                [3, 8, 10, 12, 12, 10, 8, 3],
+                [3, 9, 12, 15, 15, 12, 9, 3],
+                [2, 7, 10, 11, 11, 10, 7, 2],
+                [1, 2, 4, 6, 6, 4, 2, 1]
             ];
         }
         if (visual === 'plating' || kind === 'defense') {
+            // Riveted bulkhead plate: dark framed border, flat mid-tone
+            // panel, four bright rivets pinning it to the hull.
             return [
-                [3, 8, 12, 14, 14, 12, 8, 3],
-                [8, 14, 15, 12, 12, 15, 14, 8],
-                [12, 15, 12, 8, 8, 12, 15, 12],
-                [14, 12, 8, 15, 15, 8, 12, 14],
-                [14, 12, 8, 15, 15, 8, 12, 14],
-                [12, 15, 12, 8, 8, 12, 15, 12],
-                [8, 14, 15, 12, 12, 15, 14, 8],
-                [3, 8, 12, 14, 14, 12, 8, 3]
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 9, 9, 9, 9, 9, 9, 2],
+                [2, 9, 13, 9, 9, 13, 9, 2],
+                [2, 9, 9, 9, 9, 9, 9, 2],
+                [2, 9, 9, 9, 9, 9, 9, 2],
+                [2, 9, 13, 9, 9, 13, 9, 2],
+                [2, 9, 9, 9, 9, 9, 9, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2]
             ];
         }
         if (visual === 'core' || kind === 'energy') {
+            // Octagonal reactor cell: bright glowing core fading to a dark
+            // containment ring at the edges.
             return [
-                [4, 8, 12, 14, 14, 12, 8, 4],
-                [8, 12, 15, 15, 15, 15, 12, 8],
-                [12, 15, 10, 8, 8, 10, 15, 12],
-                [14, 15, 8, 15, 15, 8, 15, 14],
-                [14, 15, 8, 15, 15, 8, 15, 14],
-                [12, 15, 10, 8, 8, 10, 15, 12],
-                [8, 12, 15, 15, 15, 15, 12, 8],
-                [4, 8, 12, 14, 14, 12, 8, 4]
+                [0, 3, 8, 8, 8, 8, 3, 0],
+                [3, 8, 12, 13, 13, 12, 8, 3],
+                [8, 12, 14, 15, 15, 14, 12, 8],
+                [8, 13, 15, 15, 15, 15, 13, 8],
+                [8, 13, 15, 15, 15, 15, 13, 8],
+                [8, 12, 14, 15, 15, 14, 12, 8],
+                [3, 8, 12, 13, 13, 12, 8, 3],
+                [0, 3, 8, 8, 8, 8, 3, 0]
             ];
         }
         if (visual === 'thruster') {
+            // Bell nozzle: widening cone with a bright exhaust glow at
+            // the open end.
             return [
-                [4, 8, 10, 12, 12, 10, 8, 4],
-                [8, 12, 15, 14, 14, 15, 12, 8],
-                [10, 15, 12, 8, 8, 12, 15, 10],
-                [12, 14, 8, 6, 6, 8, 14, 12],
-                [12, 14, 10, 8, 8, 10, 14, 12],
-                [10, 15, 14, 12, 12, 14, 15, 10],
-                [8, 12, 15, 15, 15, 15, 12, 8],
-                [4, 8, 12, 14, 14, 12, 8, 4]
+                [2, 4, 6, 8, 8, 6, 4, 2],
+                [3, 6, 9, 11, 11, 9, 6, 3],
+                [4, 8, 11, 13, 13, 11, 8, 4],
+                [3, 7, 10, 12, 12, 10, 7, 3],
+                [3, 7, 9, 11, 11, 9, 7, 3],
+                [2, 6, 9, 14, 14, 9, 6, 2],
+                [1, 4, 8, 15, 15, 8, 4, 1],
+                [0, 2, 5, 15, 15, 5, 2, 0]
             ];
         }
-        // ability / pod default
+        // ability / pod default — domed sensor pod tapering to a mount base.
         return [
-            [4, 8, 12, 14, 14, 12, 8, 4],
-            [8, 14, 15, 12, 12, 15, 14, 8],
-            [12, 15, 10, 8, 8, 10, 15, 12],
-            [14, 12, 8, 15, 15, 8, 12, 14],
-            [14, 12, 8, 15, 15, 8, 12, 14],
-            [12, 15, 10, 8, 8, 10, 15, 12],
-            [8, 14, 15, 12, 12, 15, 14, 8],
-            [4, 8, 12, 14, 14, 12, 8, 4]
+            [0, 0, 3, 8, 8, 3, 0, 0],
+            [0, 3, 9, 12, 12, 9, 3, 0],
+            [3, 9, 13, 14, 14, 13, 9, 3],
+            [3, 9, 14, 15, 15, 14, 9, 3],
+            [2, 8, 12, 13, 13, 12, 8, 2],
+            [2, 7, 9, 10, 10, 9, 7, 2],
+            [1, 4, 6, 7, 7, 6, 4, 1],
+            [0, 1, 2, 3, 3, 2, 1, 0]
         ];
     }
 

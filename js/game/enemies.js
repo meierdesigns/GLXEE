@@ -529,6 +529,10 @@ class EnemyManager {
             };
         }
         const levelMul = 1 + 0.1 * ((entry.level || 1) - 1);
+        const sideFlightProfile = (typeof flightProfiles !== 'undefined')
+            ? flightProfiles.resolve(entry.faction || 'pirate', entry.enemyClass || 'assault')
+            : null;
+        const sideSpeedMul = sideFlightProfile ? sideFlightProfile.speedMul : 1;
         const side = {
             x: canvasWidth + 20,
             y: 40 + Math.random() * Math.max(40, canvasHeight - 80),
@@ -536,8 +540,10 @@ class EnemyManager {
             height: 10,
             speed: isEscort
                 ? 0
-                : (-0.35 - Math.random() * 0.25) * levelMul,
-            verticalSpeed: isEscort ? 0 : (Math.random() - 0.5) * 0.25,
+                : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul,
+            verticalSpeed: isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul,
+            flightProfile: sideFlightProfile,
+            wobblePhase: Math.random() * Math.PI * 2,
             health: Math.round(baseHp * scale),
             maxHealth: Math.round(baseHp * scale),
             armor: 0,
@@ -758,19 +764,23 @@ class EnemyManager {
                     e.verticalSpeed = 0;
                 }
             } else if (e.isEscort && (teamWithMain || teamPending)) {
+                const formationTightness = e.flightProfile ? e.flightProfile.formationTightness : 1;
+                const formationPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
+                    ? beatSyncManager.getFormationPulseMul()
+                    : 1;
                 if (mainAlive) {
                     const tx = this.enemy.x + this.enemy.width * 0.5
                         + (e.formOffsetX || 0) - e.width * 0.5;
                     const ty = Math.max(8, Math.min(canvasHeight - e.height - 8,
                         this.enemy.y + this.enemy.height * 0.5
                         + (e.formOffsetY || 0) - e.height * 0.5));
-                    const follow = Math.min(1, 0.08 * speedMul);
+                    const follow = Math.min(1, 0.08 * speedMul * formationTightness * formationPulse);
                     e.x += (tx - e.x) * follow;
                     e.y += (ty - e.y) * follow;
                 } else {
                     const tx = canvasWidth * 0.55 + (e.formOffsetX || 0) - e.width * 0.5;
                     const ty = 40 + (e.formOffsetY || 0);
-                    const follow = Math.min(1, 0.04 * speedMul);
+                    const follow = Math.min(1, 0.04 * speedMul * formationTightness * formationPulse);
                     e.x += (tx - e.x) * follow;
                     e.y += (ty - e.y) * follow;
                 }
@@ -785,6 +795,13 @@ class EnemyManager {
                 }
                 e.x += e.speed * speedMul;
                 e.y += e.verticalSpeed * speedMul;
+                if (e.flightProfile && e.flightProfile.wobbleAmp > 0) {
+                    e.wobblePhase = (e.wobblePhase || 0) + e.flightProfile.wobbleFreq * ((deltaTime || 16.67) / 1000);
+                    const wobbleBoost = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
+                        ? beatSyncManager.getWobbleAmpMul()
+                        : 1;
+                    e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
+                }
                 if (bobY) e.y += bobY * 0.12;
                 if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
                 if (e.x > canvasWidth - 8 && e.speed > 0) e.speed = -Math.abs(e.speed);
@@ -1184,7 +1201,18 @@ class EnemyManager {
         }
         this.enemy.x += this.enemy.speed * speedMultiplier;
         this.enemy.y += this.enemy.verticalSpeed * speedMultiplier;
-        
+
+        // Faction/class flight wobble, amplified on downbeats
+        const enemyFlightProfile = this.enemy.flightProfile;
+        if (enemyFlightProfile && enemyFlightProfile.wobbleAmp > 0) {
+            this.enemy.wobblePhase = (this.enemy.wobblePhase || 0) + enemyFlightProfile.wobbleFreq * (effectiveDeltaTime / 1000);
+            let wobbleBoost = 1;
+            if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
+                wobbleBoost = beatSyncManager.getWobbleAmpMul();
+            }
+            this.enemy.x += Math.sin(this.enemy.wobblePhase) * enemyFlightProfile.wobbleAmp * wobbleBoost * speedMultiplier;
+        }
+
         // Get current canvas dimensions with multiple fallbacks
         const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
         const canvasHeight = game?.internalHeight || game?.baseHeight || game?.height || 300;
@@ -1339,6 +1367,21 @@ class EnemyManager {
         shipWidth = Math.max(6, Math.round(shipWidth * contentScale));
         shipHeight = Math.max(6, Math.round(shipHeight * contentScale));
 
+        const champFlightProfile = (typeof flightProfiles !== 'undefined')
+            ? flightProfiles.resolve(champFaction, champClass)
+            : null;
+        if (champFlightProfile) {
+            enemySpeed *= champFlightProfile.speedMul;
+            enemyVerticalSpeed *= champFlightProfile.speedMul;
+        }
+        // Randomize initial horizontal direction so enemies don't always
+        // appear to head right first (they still bounce both ways after).
+        if (Math.random() < 0.5) {
+            enemySpeed = -Math.abs(enemySpeed);
+        } else {
+            enemySpeed = Math.abs(enemySpeed);
+        }
+
         this.enemy = {
             x: canvasWidth / 2 - shipWidth / 2,
             y: 25,
@@ -1351,6 +1394,8 @@ class EnemyManager {
             faction: champFaction,
             enemyClass: champClass,
             tier: champTier,
+            flightProfile: champFlightProfile,
+            wobblePhase: Math.random() * Math.PI * 2,
             cluster: (scheduleEntry && scheduleEntry.cluster) || 'alpha',
             entryId: scheduleEntry && scheduleEntry.id,
             level: champLevel,
@@ -1578,7 +1623,11 @@ class EnemyManager {
                 const distance = Math.sqrt((bulletCenterX - enemyCenterX) ** 2 + (bulletCenterY - enemyCenterY) ** 2);
                 
                 // If bullet is close, start evading (increased detection range)
-                if (distance < 100 && Math.random() <= this.evasionChance) {
+                const evasionFreqMul = this.enemy.flightProfile ? this.enemy.flightProfile.evasionFreqMul : 1;
+                const evasionBeatPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
+                    ? beatSyncManager.getEvasionFreqPulse()
+                    : 1;
+                if (distance < 100 && Math.random() <= this.evasionChance * evasionFreqMul * evasionBeatPulse) {
                     this.startEvasion();
                     break;
                 }

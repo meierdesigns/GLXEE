@@ -3344,6 +3344,7 @@ class HomeStationUI {
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
                             <div class="hs-component-info"></div>
+                            <div class="hs-component-settings" id="hsComponentSettings"></div>
                         </div>
                     </aside>
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
@@ -3703,6 +3704,7 @@ class HomeStationUI {
         const hangarList = this.overlay.querySelector('.hs-hangar-list');
         const titleEl = detailsPanel?.querySelector('.hs-component-title');
         const infoEl = detailsPanel?.querySelector('.hs-component-info');
+        const settingsEl = detailsPanel?.querySelector('.hs-component-settings');
         
         if (same || !kind) {
             // Hide details, show ships
@@ -3721,12 +3723,54 @@ class HomeStationUI {
             // Show details panel and hide ships
             if (hangarList) hangarList.classList.add('hs-component-selected');
             if (infoEl) infoEl.textContent = '';
+            if (settingsEl) settingsEl.innerHTML = '';
             return;
         }
 
         const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
         const key = shipLoadoutManager.kindToLoadoutKey(kind);
         const modId = (loadout[key] || [])[index];
+        
+        // Update settings (skins)
+        if (settingsEl) {
+            if (!modId) {
+                settingsEl.innerHTML = '';
+            } else {
+                const skins = shipLoadoutManager.getAvailableSkins ? shipLoadoutManager.getAvailableSkins(kind) : [];
+                if (skins && skins.length > 1) {
+                    const activeSkin = shipLoadoutManager.getModuleSkin
+                        ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, modId, index)
+                        : 'default';
+                    const skinHtml = `
+                        <div class="hs-component-skins">
+                            <label class="hs-component-skins-label">SKIN</label>
+                            <div class="hs-component-skins-options">
+                                ${skins.map((s) => `<button type="button" class="hs-component-skin-btn${s.id === activeSkin ? ' is-active' : ''}" data-skin-kind="${kind}" data-slot-index="${index}" data-skin-id="${s.id}">${s.label}</button>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                    settingsEl.innerHTML = skinHtml;
+                    
+                    // Bind skin button events
+                    settingsEl.querySelectorAll('[data-skin-kind]').forEach((btn) => {
+                        btn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const skinKind = btn.getAttribute('data-skin-kind');
+                            const slotIdx = Number(btn.getAttribute('data-slot-index'));
+                            const skinId = btn.getAttribute('data-skin-id');
+                            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.setModuleSkin) {
+                                shipLoadoutManager.setModuleSkin(this.hangarShipId, skinKind, modId, slotIdx, skinId);
+                                this.updateComponentDetails(kind, index, false);
+                                this.drawHangarBay();
+                            }
+                        });
+                    });
+                } else {
+                    settingsEl.innerHTML = '';
+                }
+            }
+        }
         
         if (!modId) {
             // Show details panel and hide ships (even if slot is empty)

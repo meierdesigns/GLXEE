@@ -1397,6 +1397,8 @@ class HomeStationUI {
             this.setupHangarPanelResize();
             this.startHangarPreview();
             this.drawHangarBay();
+            this.renderComponentTree();
+            this.bindComponentTreeEvents();
             this.bindHangarSlotEvents();
         } else {
             this.destroyHangarPanelResize();
@@ -3373,6 +3375,13 @@ class HomeStationUI {
                             </div>
                         </div>
                         <div class="hs-hangar-bay hs-panel">
+                            <div class="hs-component-tree-container">
+                                <div class="hs-component-tree-header">
+                                    <label for="hsComponentTreeDepth" class="hs-tree-label">EXPAND</label>
+                                    <input type="range" id="hsComponentTreeDepth" class="hs-tree-depth-slider" min="0" max="3" value="1" aria-label="Expand tree depth">
+                                </div>
+                                <div class="hs-component-tree" id="hsComponentTree"></div>
+                            </div>
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
@@ -4048,13 +4057,16 @@ class HomeStationUI {
         };
         const down = (e) => {
             if (e.button !== 0) return;
+            console.log('down() called');
             // Ignore clicks on hangar slot buttons - check if click coordinates hit a slot element
             const elementAtClick = document.elementFromPoint(e.clientX, e.clientY);
             const slotElement = elementAtClick?.closest('.hs-hangar-slot, [data-hangar-slot-toggle]');
             if (slotElement) {
+                console.log('down() ignoring slot element');
                 return;
             }
             const module = moduleHit(e);
+            console.log('down() moduleHit:', module?.id);
             if (module && shipLoadoutManager.setModuleOffset) {
                 // A single drag both selects and moves the module now — a
                 // release without real movement still counts as "select" so
@@ -4229,6 +4241,7 @@ class HomeStationUI {
             const wasPanning = !!drag.pan;
             const movingModule = !!drag.module;
             const clickedModule = movingModule && !drag.moved ? drag.module : null;
+            console.log('up() - movingModule:', movingModule, 'drag.moved:', drag.moved, 'clickedModule:', clickedModule);
             applyDrag(e);
             drag = null;
             this._hangarWingDragState = null;
@@ -4252,9 +4265,11 @@ class HomeStationUI {
             // dropdown — the only place the per-module skin selector lives —
             // so a component can be reskinned by clicking it directly instead
             // of having to find the matching card by its label first.
+            let moduleToSelect = null;
             if (clickedModule) {
                 const slotIndex = this.findHangarSlotIndexForModule(clickedModule);
                 if (slotIndex != null) {
+                    moduleToSelect = { kind: clickedModule.kind, index: slotIndex };
                     this._hangarOpenSlot = { kind: clickedModule.kind, index: slotIndex };
                     // createUI() below replaces the canvas with a fresh
                     // element; the browser still fires a native 'click'
@@ -4271,6 +4286,11 @@ class HomeStationUI {
             // Still refresh canvas + pink pins without rebuilding the hangar DOM.
             if (movingModule && !clickedModule) this.drawHangarBay();
             else this.createUI();
+            
+            // Show component details in sidebar AFTER createUI()
+            if (moduleToSelect) {
+                this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);
+            }
         };
         const cancel = () => {
             drag = null;
@@ -5926,7 +5946,62 @@ class HomeStationUI {
 
         this.bindKeyNav();
     }
-}
+
+    renderComponentTree() {
+        if (!this.overlay) return;
+        const treeContainer = this.overlay.querySelector('#hsComponentTree');
+        if (!treeContainer) return;
+
+        const shipId = this.hangarShipId || 'player_scrap';
+        const modelClass = this.shipModelClass(
+            shipId,
+            typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null
+        ) || 'starfighter';
+        const merged = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+            ? shipConfigManager.getMergedModel(shipId)
+            : null;
+        const loadout = (typeof shipLoadoutManager !== 'undefined')
+            ? shipLoadoutManager.getLoadout(shipId)
+            : { weapons: [], defenses: [], abilities: [], energy: [] };
+        const inventory = (typeof shipLoadoutManager !== 'undefined')
+            ? shipLoadoutManager.getInventory(shipId)
+            : loadout;
+        const hangarSlots = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.buildHangarSlots)
+            ? shipLoadoutManager.buildHangarSlots(shipId, modelClass, merged)
+            : { slots: [] };
+
+        if (typeof window.componentTree !== 'undefined') {
+            treeContainer.innerHTML = window.componentTree.render(hangarSlots, loadout, inventory);
+        }
+    }
+
+    bindComponentTreeEvents() {
+        if (!this.overlay) return;
+        const depthSlider = this.overlay.querySelector('#hsComponentTreeDepth');
+        if (depthSlider && typeof window.componentTree !== 'undefined') {
+            depthSlider.addEventListener('input', (e) => {
+                window.componentTree.setExpandDepth(e.target.value);
+            });
+        }
+
+        // Handle slot dropdown changes
+        this.overlay.querySelectorAll('.hs-tree-slot-select').forEach((select) => {
+            select.addEventListener('change', (e) => {
+                const kind = select.getAttribute('data-slot-kind');
+                const slotIndex = Number(select.getAttribute('data-slot-index'));
+                const selectedId = e.target.value;
+
+                if (typeof shipLoadoutManager === 'undefined') return;
+                if (!selectedId) {
+                    shipLoadoutManager.unequipModule(this.hangarShipId, kind, slotIndex);
+                } else {
+                    shipLoadoutManager.equipModule(this.hangarShipId, kind, slotIndex, selectedId);
+                }
+                this.renderComponentTree();
+                this.drawHangarBay();
+            });
+        });
+    }
 
 const homeStationUI = new HomeStationUI();
 window.homeStationUI = homeStationUI;

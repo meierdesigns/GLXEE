@@ -4052,6 +4052,17 @@ html[data-vf-arcade="on"] .settings-row-value {
     min-width: 0;
 }
 
+.menu-cluster + .menu-cluster {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: var(--ui-border-width-thin, 1px) solid var(--ui-border, var(--color-primary));
+}
+
+.menu-cluster + .menu-cluster:has(.menu-cluster-title) {
+    border-top: none;
+    padding-top: 4px;
+}
+
 .menu-cluster-title {
     font-size: var(--font-text);
     letter-spacing: 0.16em;
@@ -6438,6 +6449,49 @@ body.pe-resizing * {
 .settings-cycle-btn:hover {
     background: var(--color-primary);
     color: var(--color-background);
+}
+
+.theme-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 6px 8px;
+    border: var(--ui-border-width-thin) solid var(--color-border, var(--color-primary));
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: left;
+    box-sizing: border-box;
+}
+.theme-dropdown-toggle:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+.settings-row-theme.is-open .theme-dropdown-toggle {
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+.theme-dropdown-caret {
+    flex: 0 0 auto;
+    opacity: 0.7;
+    transition: transform 0.15s ease;
+}
+.settings-row-theme.is-open .theme-dropdown-caret {
+    transform: rotate(180deg);
+}
+.theme-dropdown-panel {
+    display: none;
+    width: 100%;
+    margin-top: 4px;
+}
+.settings-row-theme.is-open .theme-dropdown-panel {
+    display: block;
 }
 
 .theme-list {
@@ -9141,6 +9195,14 @@ button.hs-tab.active.nav-focused {
     background: color-mix(in srgb, var(--color-primary) 36%, var(--color-surface));
     box-shadow: 0 0 14px color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
+.hs-tab-divider {
+    display: inline-block;
+    align-self: stretch;
+    width: 1px;
+    margin: 4px 4px;
+    background: color-mix(in srgb, var(--color-border) 70%, transparent);
+    flex: 0 0 auto;
+}
 .home-station-content.hs-mode-play {
     gap: 0;
 }
@@ -9308,7 +9370,13 @@ button.hs-tab.active.nav-focused {
     filter: saturate(0.45) brightness(0.85);
     border-color: color-mix(in srgb, var(--color-border) 35%, transparent);
 }
-.home-station-content.hs-mode-station.hs-nav-tabs .hs-body {
+.home-station-content.hs-mode-station.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-hangar.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-shop.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-upgrade.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-craft.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-travel.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-explorations.hs-nav-tabs .hs-body {
     opacity: 1;
     filter: none;
     border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
@@ -9497,11 +9565,11 @@ button.hs-tab.active.nav-focused {
     grid-area: cover;
     min-height: 110px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 70%, var(--color-border));
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, var(--color-border));
     background: #020306;
     box-shadow:
-        inset 0 0 24px color-mix(in srgb, var(--color-primary) 20%, transparent),
-        0 0 12px color-mix(in srgb, var(--color-primary) 15%, transparent);
+        inset 0 0 24px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent),
+        0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 15%, transparent);
 }
 .hs-station-cover-image {
     position: absolute;
@@ -9514,6 +9582,81 @@ button.hs-tab.active.nav-focused {
     filter: brightness(1.65) saturate(1.25) contrast(1.12);
     transform: scale(1.02);
 }
+/* Faction identity layer — recolors the station photo toward the player's
+   faction hull tone and lays a faction-shaped structural pattern over it,
+   so the station itself reads Terran / Kronax / Voidborn / Pirate / Machine
+   instead of one neutral backdrop for every faction. */
+.hs-station-cover-faction {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-color: color-mix(in srgb, var(--faction-hull, transparent) 48%, transparent);
+    mix-blend-mode: color;
+    opacity: 0.9;
+}
+.hs-station-cover-faction::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.75;
+    mix-blend-mode: screen;
+}
+/* Faction silhouette frame — the cover's own outline bends per faction so
+   the station reads distinct at a glance, not just by its texture/tint. */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover {
+    clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
+}
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover {
+    clip-path: polygon(0 0, calc(100% - 56px) 0, 100% 56px, 100% 100%, 56px 100%, 0 calc(100% - 56px));
+}
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover {
+    border-radius: 52px 14px 52px 14px;
+}
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover {
+    clip-path: polygon(0 32px, 34px 0, calc(100% - 64px) 0, 100% 48px, 100% 100%, 46px 100%, 46px calc(100% - 18px), 0 calc(100% - 18px));
+}
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover {
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% 22%, calc(100% - 16px) 22%, calc(100% - 16px) 33%, 100% 33%,
+        100% 67%, calc(100% - 16px) 67%, calc(100% - 16px) 78%, 100% 78%,
+        100% 100%, 0 100%
+    );
+}
+/* Terran — disciplined orthogonal service grid */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(0deg, transparent 0 14px, color-mix(in srgb, var(--faction-accent) 36%, transparent) 14px 15px),
+        repeating-linear-gradient(90deg, transparent 0 22px, color-mix(in srgb, var(--faction-accent) 28%, transparent) 22px 23px);
+}
+/* Kronax — aggressive diagonal chevron blades */
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover-faction::after {
+    background: repeating-linear-gradient(
+        58deg,
+        transparent 0 18px,
+        color-mix(in srgb, var(--faction-accent) 46%, transparent) 18px 22px,
+        transparent 22px 40px
+    );
+}
+/* Voidborn — hollow concentric ring arcs */
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover-faction::after {
+    background:
+        radial-gradient(circle at 16% 45%, transparent 0 22px, color-mix(in srgb, var(--faction-accent) 42%, transparent) 23px 27px, transparent 29px),
+        radial-gradient(circle at 42% 30%, transparent 0 34px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 35px 39px, transparent 42px),
+        radial-gradient(circle at 82% 60%, transparent 0 44px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 45px 49px, transparent 52px);
+}
+/* Pirate — uneven welded scrap patchwork */
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(12deg, transparent 0 26px, color-mix(in srgb, var(--faction-accent) 38%, transparent) 26px 29px, transparent 29px 52px),
+        repeating-linear-gradient(-31deg, transparent 0 34px, color-mix(in srgb, var(--faction-accent) 30%, transparent) 34px 37px, transparent 37px 64px);
+}
+/* Machine — precise circuit trace grid */
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(0deg, transparent 0 9px, color-mix(in srgb, var(--faction-accent) 40%, transparent) 9px 10px, transparent 10px 20px),
+        repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in srgb, var(--faction-accent) 40%, transparent) 9px 10px, transparent 10px 20px);
+}
 .hs-station-cover-scanline {
     position: absolute;
     inset: 0;
@@ -9522,7 +9665,7 @@ button.hs-tab.active.nav-focused {
         0deg,
         transparent 0,
         transparent 3px,
-        color-mix(in srgb, var(--color-primary) 8%, transparent) 4px
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent) 4px
     );
     opacity: 0.7;
 }
@@ -9533,11 +9676,11 @@ button.hs-tab.active.nav-focused {
     flex-direction: column;
     gap: 4px;
     color: var(--color-text);
-    text-shadow: 0 0 8px #000, 0 0 12px var(--color-primary);
+    text-shadow: 0 0 8px #000, 0 0 12px var(--faction-accent, var(--color-primary));
     letter-spacing: 2px;
 }
 .hs-station-cover-kicker {
-    color: var(--color-primary);
+    color: var(--faction-accent, var(--color-primary));
     font-size: var(--font-text);
 }
 .hs-station-cover-caption strong {
@@ -9973,6 +10116,72 @@ button.hs-shop-cat.active.nav-focused {
     overflow-y: auto;
     margin: 0;
     gap: 6px;
+    display: flex;
+    flex-direction: column;
+}
+.hs-hangar-list.hs-component-selected .hs-hangar-ships {
+    display: none;
+}
+.hs-component-details {
+    display: none;
+    flex-direction: column;
+    flex: 1 1 auto;
+    padding: 16px;
+    gap: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    min-height: 250px;
+    max-height: none;
+    overflow-y: auto;
+}
+.hs-hangar-list.hs-component-selected .hs-component-details {
+    display: flex;
+}
+.hs-component-details .hs-component-close {
+    align-self: flex-end;
+    padding: 4px 8px;
+    font-size: 1.2em;
+    background: transparent;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+}
+.hs-component-details .hs-component-close:hover {
+    color: var(--color-accent);
+}
+.hs-component-details .hs-component-title {
+    margin: 0;
+    padding: 0;
+    font-size: 1.3em;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    color: var(--color-primary);
+    text-transform: uppercase;
+}
+.hs-component-details .hs-component-info {
+    font-size: 0.85em;
+    line-height: 1.6;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    flex: 1;
+}
+/* Expand sidebar when component is selected */
+.hs-hangar-split.hs-component-selected {
+    --hs-hangar-left-w: 300px;
+}
+.hs-component-details[style*="display: block"] {
+    animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
 }
 .hs-hangar-detail {
     display: flex;
@@ -10035,7 +10244,7 @@ button.hs-shop-cat.active.nav-focused {
     -ms-interpolation-mode: nearest-neighbor;
 }
 .hs-hangar-bay-canvas {
-    pointer-events: auto;
+    pointer-events: none;
     cursor: grab;
 }
 .hs-hangar-bay-canvas.is-wing-dragging {
@@ -10053,7 +10262,7 @@ button.hs-shop-cat.active.nav-focused {
 .hs-hangar-slot-layer {
     position: absolute;
     inset: 0;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 3;
     --bay-ship-left: 20%;
     --bay-ship-top: 18%;
@@ -10077,9 +10286,9 @@ button.hs-shop-cat.active.nav-focused {
     position: absolute;
     left: calc(var(--bay-ship-left) + (var(--bay-ship-w) * var(--pin-x)));
     top: calc(var(--bay-ship-top) + (var(--bay-ship-h) * var(--pin-y)));
-    width: 24px;
-    height: 24px;
-    margin: -12px 0 0 -12px;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
     padding: 0;
     border: 2px solid var(--color-primary);
     background: color-mix(in srgb, var(--color-background) 72%, transparent);
@@ -10088,28 +10297,41 @@ button.hs-shop-cat.active.nav-focused {
     border-radius: 0;
     box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary) 55%, transparent);
     pointer-events: auto;
+    opacity: 0.5;
     z-index: 4;
+    transition: opacity 0.12s ease, box-shadow 0.12s ease;
+}
+.hs-hangar-slot.is-open .hs-hangar-slot-pin {
+    opacity: 1;
+    pointer-events: auto;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--color-primary) 100%, transparent),
+                0 0 10px color-mix(in srgb, var(--color-primary) 75%, transparent),
+                inset 0 0 8px color-mix(in srgb, var(--color-primary) 50%, transparent) !important;
 }
 .hs-hangar-slot-dot {
     display: block;
-    width: 8px;
-    height: 8px;
-    margin: 6px auto 0;
+    width: 5px;
+    height: 5px;
+    margin: 2.5px auto 0;
     background: var(--color-primary);
 }
 .hs-hangar-slot.is-empty .hs-hangar-slot-pin {
     border-style: dashed;
-    opacity: 0.9;
 }
 .hs-hangar-slot-card {
     position: absolute;
     width: min(168px, 34%);
-    z-index: 5;
-    pointer-events: auto;
+    z-index: -1;
+    pointer-events: none !important;
     top: calc(8px + (((100% - 24px) / max(var(--rail-n), 1)) * var(--rail-i)));
+    display: none !important;
+    opacity: 0 !important;
 }
 .hs-hangar-slot.is-open .hs-hangar-slot-card {
-    z-index: 20;
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 20 !important;
 }
 .hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card {
     left: 8px;
@@ -10119,21 +10341,59 @@ button.hs-shop-cat.active.nav-focused {
     right: 8px;
     left: auto;
 }
-.hs-hangar-slot-card::before {
-    content: "";
+/*
+ * The connector between a dropdown card and its on-ship mount is a real SVG
+ * path (see hs-hangar-link-svg below) rather than a CSS-only stub, because
+ * the card's anchor point and the pin's mount point rarely sit on the same
+ * row — a single horizontal segment (the original approach) stopped short of
+ * the mount and never actually looked like it connected to it. It's drawn as
+ * a straight diagonal from the card edge to the pin's exact center (the
+ * component's own center), so it always points precisely at the part it
+ * controls instead of just its column/row. JS (updateHangarSlotLinks) reads
+ * both elements' live rects and rebuilds the <path> whenever geometry or
+ * hover state changes, so the route stays exact regardless of zoom or panel
+ * size.
+ */
+.hs-hangar-link-svg {
     position: absolute;
-    top: 14px;
-    height: 1px;
-    background: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+    display: none !important;
 }
-.hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card::before {
-    left: 100%;
-    width: max(12px, calc(var(--bay-ship-left) + (var(--bay-ship-w) * var(--pin-x)) - 176px));
+.hs-hangar-slot.is-open .hs-hangar-link-svg {
+    display: block !important;
 }
-.hs-hangar-slot[data-slot-side="right"] .hs-hangar-slot-card::before {
-    right: 100%;
-    width: max(12px, calc(100% - 8px - 168px - (var(--bay-ship-left) + (var(--bay-ship-w) * var(--pin-x)))));
+.hs-hangar-link {
+    fill: none;
+    stroke: color-mix(in srgb, var(--color-primary) 45%, transparent);
+    stroke-width: 1.5;
+    transition: stroke 0.12s ease, stroke-width 0.12s ease, filter 0.12s ease;
+}
+.hs-hangar-link.is-active {
+    stroke: var(--faction-accent, var(--color-primary));
+    stroke-width: 2.5;
+    filter:
+        drop-shadow(0 0 3px var(--faction-accent, var(--color-primary)))
+        drop-shadow(0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent));
+}
+.hs-hangar-slot:hover .hs-hangar-slot-btn,
+.hs-hangar-slot.is-hover-linked .hs-hangar-slot-btn {
+    border-color: var(--faction-accent, var(--color-primary));
+    border-width: 2px;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent);
+}
+.hs-hangar-slot:hover .hs-hangar-slot-pin,
+.hs-hangar-slot.is-hover-linked .hs-hangar-slot-pin {
+    opacity: 1;
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, var(--color-background));
+    box-shadow:
+        0 0 6px var(--faction-accent, var(--color-primary)),
+        0 0 18px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent);
 }
 .hs-hangar-slot-btn {
     display: flex;
@@ -10221,25 +10481,51 @@ button.hs-shop-cat.active.nav-focused {
     letter-spacing: 1px;
 }
 .hs-hangar-slot-options {
-    display: flex;
+    display: none;
     flex-direction: column;
     gap: 2px;
     padding: 4px;
 }
+.hs-hangar-slot.is-open .hs-hangar-slot-options {
+    display: flex;
+}
 .hs-hangar-slot-skin-wrap {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 4px 6px;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 4px 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .hs-hangar-slot-skin-label {
     font-size: 10px;
     letter-spacing: 1px;
     opacity: 0.65;
-    flex-shrink: 0;
 }
-.hs-hangar-slot-skin-select {
-    flex: 1;
+.hs-hangar-slot-skin-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.hs-hangar-slot-skin-option {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    text-align: center;
+    cursor: pointer;
+}
+.hs-hangar-slot-skin-option:hover {
+    border-color: var(--color-primary);
+}
+.hs-hangar-slot-skin-option.is-active {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 30%, var(--color-surface));
+    box-shadow: inset 0 0 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    font-weight: bold;
 }
 .hs-hangar-slot-option {
     display: flex;
@@ -11757,6 +12043,12 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     min-height: 0;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 1000;
+}
+.hs-components-host select,
+.hs-components-host input[type="select"] {
+    pointer-events: auto !important;
 }
 .hs-comp-layout {
     display: grid;
@@ -11768,6 +12060,8 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     padding: 4px 0 8px;
     box-sizing: border-box;
     transition: grid-template-columns 0.15s ease;
+    position: relative;
+    z-index: 1000;
 }
 .hs-comp-layout.left-collapsed {
     grid-template-columns: 32px minmax(200px, 1fr) minmax(240px, 300px);
@@ -12250,6 +12544,33 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     min-height: 1.2em;
     word-break: break-word;
 }
+.hs-comp-component-props {
+    margin: 12px 0;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+.hs-comp-component-props .hs-comp-section-title {
+    margin-bottom: 8px;
+}
+.hs-comp-component-props .hs-comp-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hs-comp-component-props select {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.3);
+    color: inherit;
+    font-size: 11px;
+}
+.hs-comp-component-props select[multiple] {
+    min-height: 80px;
+}
 .component-editor-overlay .hs-comp-overlay-panel {
     width: min(1200px, 98vw);
     height: min(90vh, 860px);
@@ -12275,6 +12596,27 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
         overflow: auto;
     }
 }
+
+/* Hide hangar/home-station dropdowns when component editor is open */
+.hs-components-host ~ * select,
+.hs-components-host ~ * input[type="select"],
+.hs-components-host + * select,
+.hs-components-host + * input[type="select"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+ 
+/* Hide ship preview overlays/dropdowns */
+.home-station-overlay select {
+    z-index: auto;
+    pointer-events: none;
+}
+ 
+.hs-components-host ~ .home-station-overlay select {
+    display: none !important;
+}
+
 
 .difficulty-editor-overlay {
     position: fixed;

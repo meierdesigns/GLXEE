@@ -61,8 +61,10 @@ class UIAppearanceManager {
                 MAX: 2.5
             }
         };
+        this.shipRenderStyles = ['FLAT', 'VOXEL'];
         this.borderWeight = 'NORMAL';
         this.indicatorWeight = '2';
+        this.shipRenderStyle = 'FLAT';
         this.font = 'COURIER';
         this.fontSizes = {
             h1: '28',
@@ -89,6 +91,10 @@ class UIAppearanceManager {
 
     getIndicatorWeightOptions() {
         return Object.keys(this.indicatorWeights);
+    }
+
+    getShipRenderStyleOptions() {
+        return this.shipRenderStyles.slice();
     }
 
     getFontOptions() {
@@ -120,6 +126,9 @@ class UIAppearanceManager {
             if (data.indicatorWeight != null) {
                 const iw = String(data.indicatorWeight);
                 if (this.indicatorWeights[iw]) this.indicatorWeight = iw;
+            }
+            if (data.shipRenderStyle && this.shipRenderStyles.indexOf(data.shipRenderStyle) !== -1) {
+                this.shipRenderStyle = data.shipRenderStyle;
             }
             if (data.font && this.fonts[data.font]) {
                 this.font = data.font;
@@ -154,6 +163,7 @@ class UIAppearanceManager {
             localStorage.setItem(this.storageKey, JSON.stringify({
                 borderWeight: this.borderWeight,
                 indicatorWeight: this.indicatorWeight,
+                shipRenderStyle: this.shipRenderStyle,
                 font: this.font,
                 fontSizes: this.fontSizes,
                 controlsHints: this.controlsHints,
@@ -181,6 +191,13 @@ class UIAppearanceManager {
         this.indicatorWeight = key;
         this.persist();
         this.apply();
+    }
+
+    setShipRenderStyle(style) {
+        const val = String(style || '').toUpperCase();
+        if (this.shipRenderStyles.indexOf(val) === -1) return;
+        this.shipRenderStyle = val;
+        this.persist();
     }
 
     setFont(fontId) {

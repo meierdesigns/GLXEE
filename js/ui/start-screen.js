@@ -19,12 +19,24 @@ class StartScreenManager {
         this.subtitle = "Game Boy Edition";
         this.menuClusters = [
             {
-                id: 'main',
+                id: 'play',
                 label: '',
                 items: [
-                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true },
+                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true }
+                ]
+            },
+            {
+                id: 'account',
+                label: 'ACCOUNT',
+                items: [
                     { id: 'PROFILES', icon: 'menuProfiles' },
-                    { id: 'SETTINGS', icon: 'menuSettings' },
+                    { id: 'SETTINGS', icon: 'menuSettings' }
+                ]
+            },
+            {
+                id: 'info',
+                label: 'INFO',
+                items: [
                     { id: 'ASSETS', icon: 'menuAssets' },
                     { id: 'CREDITS', icon: 'menuCredits' }
                 ]
@@ -50,6 +62,7 @@ class StartScreenManager {
         this.settingsIndex = 0;
         this.fontMenuIndex = 0;
         this.levelIndex = 0;
+        this.themeDropdownOpen = false;
         this.settingsItems = [
             { name: 'App Theme', value: 'grayscale', type: 'palette' },
             {
@@ -115,6 +128,14 @@ class StartScreenManager {
                 name: 'Font',
                 value: '›',
                 type: 'fontMenu'
+            },
+            {
+                name: 'Ship Render',
+                value: (typeof uiAppearanceManager !== 'undefined') ? uiAppearanceManager.shipRenderStyle : 'FLAT',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShipRenderStyleOptions()
+                    : ['FLAT', 'VOXEL'],
+                type: 'shipRenderStyle'
             },
             {
                 name: 'BG Parallax',
@@ -1223,7 +1244,8 @@ class StartScreenManager {
             item.type === 'indicatorWeight' ||
             item.type === 'fontMenu' ||
             item.type === 'bgParallax' ||
-            item.type === 'controlsHints'
+            item.type === 'controlsHints' ||
+            item.type === 'shipRenderStyle'
         );
         addSection(left, 'fx', 'RETRO FX', (item) => item.type === 'uiFx');
         addSection(right, 'sound', 'SOUND', (item) =>
@@ -1507,6 +1529,31 @@ class StartScreenManager {
         });
     }
 
+    buildThemeSwatchEl(palette) {
+        const swatch = document.createElement('span');
+        swatch.className = 'theme-list-swatch';
+        const baseHex = (palette && (palette.baseColor || palette.primary)) || '#888888';
+        const secondHex = (palette && palette.secondBaseColor)
+            || (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.defaultSecondBaseColor)
+            || '#FFFFFF';
+        swatch.style.background = `linear-gradient(135deg, ${baseHex} 50%, ${secondHex} 50%)`;
+        swatch.title = `Base ${baseHex} · 2nd ${secondHex}`;
+        return swatch;
+    }
+
+    bindThemeDropdownOutsideClick() {
+        if (this._themeDropdownOutsideBound) return;
+        this._themeDropdownOutsideBound = (e) => {
+            if (!this.themeDropdownOpen) return;
+            if (e.target && e.target.closest && e.target.closest('.settings-row-theme')) return;
+            this.themeDropdownOpen = false;
+            const host = this.getUIHost();
+            const row = host && host.querySelector('.settings-row-theme');
+            if (row) row.classList.remove('is-open');
+        };
+        document.addEventListener('click', this._themeDropdownOutsideBound);
+    }
+
     buildThemeStrip(menuItem, item, index) {
         const head = document.createElement('div');
         head.className = 'settings-theme-head';
@@ -1522,13 +1569,39 @@ class StartScreenManager {
         head.appendChild(hint);
         menuItem.appendChild(head);
 
-        const list = document.createElement('div');
-        list.className = 'theme-list';
-        list.dataset.themeStrip = '1';
-
         const palettes = (typeof themeContextManager !== 'undefined')
             ? themeContextManager.getPresetOptions(false)
             : (colorManager ? colorManager.getPalettes() : []);
+        const current = palettes.find((p) => p.id === item.value) || palettes[0] || null;
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'theme-dropdown-toggle';
+        toggle.dataset.themeToggle = '1';
+        toggle.appendChild(this.buildThemeSwatchEl(current));
+        const toggleName = document.createElement('span');
+        toggleName.className = 'theme-list-name';
+        toggleName.textContent = current ? current.name : '—';
+        toggle.appendChild(toggleName);
+        const caret = document.createElement('span');
+        caret.className = 'theme-dropdown-caret';
+        caret.textContent = '▾';
+        toggle.appendChild(caret);
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.settingsIndex = index;
+            this.themeDropdownOpen = !this.themeDropdownOpen;
+            menuItem.classList.toggle('is-open', this.themeDropdownOpen);
+            this.updateMenuSelection();
+        });
+        menuItem.appendChild(toggle);
+
+        const panel = document.createElement('div');
+        panel.className = 'theme-dropdown-panel';
+
+        const list = document.createElement('div');
+        list.className = 'theme-list';
+        list.dataset.themeStrip = '1';
 
         palettes.forEach((palette) => {
             const paletteButton = document.createElement('button');
@@ -1536,21 +1609,11 @@ class StartScreenManager {
             paletteButton.className = 'theme-list-item' + (palette.id === item.value ? ' active' : '');
             paletteButton.dataset.paletteId = palette.id;
             paletteButton.title = palette.name;
-
-            const swatch = document.createElement('span');
-            swatch.className = 'theme-list-swatch';
-            const baseHex = palette.baseColor || palette.primary;
-            const secondHex = palette.secondBaseColor
-                || (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.defaultSecondBaseColor)
-                || '#FFFFFF';
-            swatch.style.background = `linear-gradient(135deg, ${baseHex} 50%, ${secondHex} 50%)`;
-            swatch.title = `Base ${baseHex} · 2nd ${secondHex}`;
+            paletteButton.appendChild(this.buildThemeSwatchEl(palette));
 
             const name = document.createElement('span');
             name.className = 'theme-list-name';
             name.textContent = palette.name;
-
-            paletteButton.appendChild(swatch);
             paletteButton.appendChild(name);
 
             paletteButton.addEventListener('click', (e) => {
@@ -1559,13 +1622,17 @@ class StartScreenManager {
                 item.value = palette.id;
                 this.applyPaletteChange();
                 this.syncThemeStripActive(list, palette.id, false);
+                toggleName.textContent = palette.name;
+                toggle.replaceChild(this.buildThemeSwatchEl(palette), toggle.firstChild);
+                this.themeDropdownOpen = false;
+                menuItem.classList.remove('is-open');
                 this.updateMenuSelection();
             });
 
             list.appendChild(paletteButton);
         });
 
-        menuItem.appendChild(list);
+        panel.appendChild(list);
 
         requestAnimationFrame(() => {
             this.syncThemeStripActive(list, item.value, true);
@@ -1579,7 +1646,12 @@ class StartScreenManager {
             e.stopPropagation();
             this.openThemeEditor(item.value);
         });
-        menuItem.appendChild(editBtn);
+        panel.appendChild(editBtn);
+
+        menuItem.appendChild(panel);
+        menuItem.classList.toggle('is-open', !!this.themeDropdownOpen);
+
+        this.bindThemeDropdownOutsideClick();
     }
 
     syncSecondBaseSettingValue() {
@@ -1715,6 +1787,20 @@ class StartScreenManager {
         if (item.type === 'palette') {
             const list = startScreen.querySelector('.theme-list[data-theme-strip="1"], .theme-strip[data-theme-strip="1"]');
             this.syncThemeStripActive(list, item.value, true);
+            const row = startScreen.querySelector('.settings-row-theme');
+            const toggle = row && row.querySelector('[data-theme-toggle]');
+            if (toggle) {
+                const palettes = (typeof themeContextManager !== 'undefined')
+                    ? themeContextManager.getPresetOptions(false)
+                    : (colorManager ? colorManager.getPalettes() : []);
+                const current = palettes.find((p) => p.id === item.value);
+                if (current) {
+                    const nameEl = toggle.querySelector('.theme-list-name');
+                    if (nameEl) nameEl.textContent = current.name;
+                    const swatchEl = toggle.querySelector('.theme-list-swatch');
+                    if (swatchEl) swatchEl.replaceWith(this.buildThemeSwatchEl(current));
+                }
+            }
             this.syncSecondBaseSettingValue();
             const secondIdx = this.settingsItems.findIndex((s) => s.type === 'secondBase');
             if (secondIdx >= 0) this.refreshSettingsRow(secondIdx);
@@ -2132,6 +2218,7 @@ class StartScreenManager {
         
         const handlers = {
             'Escape': () => this.handleEscape(),
+            'Backspace': () => this.handleEscape(),
             'ArrowUp': () => this.handleArrowUp(),
             'ArrowDown': () => this.handleArrowDown(),
             'ArrowLeft': () => this.handleArrowLeft(),
@@ -2166,6 +2253,7 @@ class StartScreenManager {
             this.showLevels = false;
             this.showSettings = false;
             this.showFontMenu = false;
+            this.themeDropdownOpen = false;
             this.createStartScreenUI();
             if (typeof menuStateManager !== 'undefined') {
                 menuStateManager.setScreen('start');
@@ -2768,6 +2856,11 @@ class StartScreenManager {
         const indicatorSetting = this.settingsItems.find(item => item.type === 'indicatorWeight');
         if (indicatorSetting && typeof uiAppearanceManager !== 'undefined') {
             uiAppearanceManager.setIndicatorWeight(indicatorSetting.value);
+        }
+
+        const shipRenderSetting = this.settingsItems.find(item => item.type === 'shipRenderStyle');
+        if (shipRenderSetting && typeof uiAppearanceManager !== 'undefined') {
+            uiAppearanceManager.setShipRenderStyle(shipRenderSetting.value);
         }
 
         const parallaxSetting = this.settingsItems.find(item => item.type === 'bgParallax');

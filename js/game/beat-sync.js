@@ -26,12 +26,15 @@ class BeatSyncManager {
         this.powerDamageMul = 1.85;
         this.powerCooldownMul = 0.72;
 
+        // Curated to match the tempo/feel of the procedural ambient drone in
+        // sounds.js (planetAmbient lfo/filter/base) used when no YouTube
+        // soundtrack link is configured, rather than an arbitrary guess.
         this.defaultBpm = {
-            mars: 110,
-            jupiter: 92,
-            saturn: 104,
-            neptune: 128,
-            pluto: 140
+            mars: 92,
+            jupiter: 84,
+            saturn: 100,
+            neptune: 96,
+            pluto: 118
         };
     }
 
@@ -135,6 +138,20 @@ class BeatSyncManager {
     getEnemyBobOffset() {
         if (!this.active) return 0;
         return Math.sin(this.barPhase * Math.PI * 2) * (1.2 + 1.8 * this.pulse);
+    }
+
+    getWobbleAmpMul() {
+        if (!this.active) return 1;
+        return this.justDownbeat ? 1.6 : (1 + 0.25 * this.pulse);
+    }
+
+    getFormationPulseMul() {
+        if (!this.active) return 1;
+        return this.justDownbeat ? 1.3 : 1;
+    }
+
+    getEvasionFreqPulse() {
+        return (this.active && this.justDownbeat) ? 1.25 : 1;
     }
 
     getPlayerDamageMul() {

@@ -1113,6 +1113,31 @@ class ProfileManager {
         return true;
     }
 
+    /**
+     * Per-segment shape variant override — lets a single hull part (nose,
+     * center, aft, or the mirrored wing pair) be cycled through its own
+     * shape options independently, instead of only being able to reroll
+     * every part on the ship at once via the shape seed above.
+     */
+    getSegmentShapeVariant(shipId, segId) {
+        const profile = this.getActiveProfile();
+        const byShip = profile && profile.segmentShapeVariants && profile.segmentShapeVariants[String(shipId || '')];
+        if (!byShip) return null;
+        const v = byShip[String(segId || '')];
+        return v != null ? Number(v) : null;
+    }
+
+    setSegmentShapeVariant(shipId, segId, variantIndex) {
+        const profile = this.getActiveProfile();
+        if (!profile) return false;
+        if (!profile.segmentShapeVariants) profile.segmentShapeVariants = {};
+        const key = String(shipId || '');
+        if (!profile.segmentShapeVariants[key]) profile.segmentShapeVariants[key] = {};
+        profile.segmentShapeVariants[key][String(segId || '')] = Number(variantIndex) || 0;
+        this.save();
+        return true;
+    }
+
     addOwnedShip(shipId) {
         const profile = this.getActiveProfile();
         if (!profile) return false;

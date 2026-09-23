@@ -221,6 +221,7 @@ class ComponentEditorUI {
       <div class="hs-comp-ship-preview" id="ceShipPreview">
         <canvas id="ceShipCanvas" width="160" height="200"></canvas>
       </div>
+      <div id="ceComponentProps" class="hs-comp-component-props" style="display: none;"></div>
       <div class="hs-comp-section-title">GRAPHICS</div>
       <div class="hs-comp-gen-row">
         <div class="hs-comp-thumb" id="ceCurrentThumb" title="Current"></div>
@@ -345,6 +346,8 @@ class ComponentEditorUI {
             this.root.innerHTML = this.buildShellHtml();
         }
         this.bindRoot();
+        this.hideBackgroundUI();
+        this.startDropdownObserver();
         document.addEventListener("keydown", this._keyHandler, true);
         this.ensureMeta().then(() => {
             this.refreshAll();
@@ -407,15 +410,110 @@ class ComponentEditorUI {
             this._canvasResizeObs.disconnect();
             this._canvasResizeObs = null;
         }
+        if (this._dropdownObs) {
+            this._dropdownObs.disconnect();
+            this._dropdownObs = null;
+        }
         this.leavePreviewFullscreen();
         this.stopShipPreview();
         this.visible = false;
+        this.showBackgroundUI();
         document.removeEventListener("keydown", this._keyHandler, true);
         if (this.overlay) this.overlay.classList.add("hidden");
         if (this.embedded) this.unmount();
         const cb = this.onClose;
         this.onClose = null;
         if (typeof cb === "function") cb();
+    }
+
+    hideBackgroundUI() {
+        // Store original styles for restoration
+        if (!this._originalStyles) this._originalStyles = new Map();
+        
+        // Hide ONLY hangar slot select dropdowns, NOT component editor selects
+        const slotSelects = document.querySelectorAll(".hs-hangar-slot-select");
+        slotSelects.forEach(s => {
+            if (!this._originalStyles.has(s)) {
+                this._originalStyles.set(s, s.style.display);
+            }
+            s.style.display = "none";
+        });
+        
+        // Hide weapon/defense/ability/energy dropdowns in home-station (NOT in component-editor)
+        const homeOverlay = document.querySelector(".home-station-overlay");
+        if (homeOverlay) {
+            const selects = homeOverlay.querySelectorAll("select");
+            selects.forEach(s => {
+                // SKIP if this select is inside the component editor
+                if (s.closest("#ceComponentProps")) {
+                    return;
+                }
+                // SKIP if this is a component properties select
+                if (s.id && (s.id.startsWith("ceComponent") || s.id.startsWith("ce"))) {
+                    return;
+                }
+                if (!this._originalStyles.has(s)) {
+                    this._originalStyles.set(s, s.style.display);
+                }
+                s.style.display = "none";
+            });
+        }
+        
+        // Lower z-index of home-station but don't disable pointer events
+        const hs = document.querySelector(".home-station-overlay");
+        if (hs) {
+            if (!this._originalStyles.has(hs)) {
+                this._originalStyles.set(hs, hs.style.zIndex);
+            }
+            hs.style.zIndex = "10";
+        }
+    }
+
+    showBackgroundUI() {
+        if (!this._originalStyles) return;
+        
+        // Restore all styles
+        this._originalStyles.forEach((originalStyle, el) => {
+            if (el.style) {
+                el.style.display = originalStyle;
+                el.style.zIndex = originalStyle;
+            }
+        });
+        this._originalStyles.clear();
+    }
+
+    startDropdownObserver() {
+        if (this._dropdownObs) return;
+        
+        // Watch for new dropdowns being added and hide them
+        this._dropdownObs = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList') {
+                    // Hide new hangar slot selects
+                    const newSlotSelects = mutation.target.querySelectorAll(".hs-hangar-slot-select");
+                    newSlotSelects.forEach(s => {
+                        s.style.display = "none";
+                    });
+                    
+                    // Hide new regular selects in home-station-overlay
+                    const newSelects = mutation.target.querySelectorAll("select, input[type='select']");
+                    newSelects.forEach(s => {
+                        if (s.closest(".home-station-overlay") && !s.closest(".hs-comp-layout")) {
+                            s.style.display = "none";
+                        }
+                    });
+                }
+            });
+        });
+        
+        // Start observing for changes in the home-station-overlay
+        const hs = document.querySelector(".home-station-overlay");
+        if (hs) {
+            this._dropdownObs.observe(hs, {
+                childList: true,
+                subtree: true
+            });
+        }
     }
 
     handleKeyDown(e) {
@@ -872,6 +970,7 @@ class ComponentEditorUI {
         this.drawCurrentThumb();
         this.drawGenThumb();
         this.setStatus(this.statusText || "");
+        this.renderComponentProperties();
         this.drawShipPreview();
     }
 
@@ -1929,7 +2028,205 @@ class ComponentEditorUI {
             returnToSettings: false
         });
     }
+
+    renderComponentProperties() {
+        const r = this.root;
+        const propsPanel = r && r.querySelector("#ceComponentProps");
+        if (!propsPanel) return;
+
+        // Only show if we have selected typeId and selectedId
+        const hasSelection = !!this.typeId && !!this.selectedId;
+        if (!hasSelection) {
+            propsPanel.style.display = "none";
+            return;
+        }
+
+        const entry = this.currentEntry();
+        if (!entry) {
+            propsPanel.style.display = "none";
+            return;
+        }
+
+        // Only show for weapon or mount types
+        const isWeapon = entry.type === "weapon";
+        const isMount = entry.type === "mount";
+
+        if (!isWeapon && !isMount) {
+            propsPanel.style.display = "none";
+            return;
+        }
+
+        // Show panel only for this specific component
+        propsPanel.style.display = "block";
+
+        // Build component-specific properties HTML
+        let propsHtml = `<div class="hs-comp-section-title">${entry.label} PROPERTIES</div>`;
+        propsHtml += '<div class="hs-comp-fields">';
+
+        if (isWeapon) {
+            propsHtml += `<label>WEAPON
+              <select id="ceComponentWeapon" data-property="weapon">
+                ${this.buildWeaponOptions()}
+              </select>
+            </label>
+            <label>STYLE
+              <select id="ceComponentStyle" data-property="style">
+                ${this.buildStyleOptions()}
+              </select>
+            </label>
+            <label>WEAPON STYLE
+              <select id="ceComponentWeaponStyle" data-property="weaponStyle">
+                ${this.buildWeaponStyleOptions()}
+              </select>
+            </label>`;
+        } else if (isMount) {
+            propsHtml += `<label>MODULE
+              <select id="ceComponentModule" data-property="module">
+                ${this.buildModuleOptions()}
+              </select>
+            </label>
+            <label>STYLE
+              <select id="ceComponentStyle" data-property="style">
+                ${this.buildStyleOptions()}
+              </select>
+            </label>`;
+        }
+
+        propsHtml += '</div>';
+
+        // Update panel content
+        propsPanel.innerHTML = propsHtml;
+
+        // Set values
+        const weaponSel = propsPanel.querySelector("#ceComponentWeapon");
+        if (weaponSel) {
+            weaponSel.value = entry.id || "";
+        }
+
+        const styleSel = propsPanel.querySelector("#ceComponentStyle");
+        if (styleSel) {
+            styleSel.value = entry.style || "";
+        }
+
+        const weaponStyleSel = propsPanel.querySelector("#ceComponentWeaponStyle");
+        if (weaponStyleSel) {
+            weaponStyleSel.value = entry.weaponStyle || "";
+        }
+
+        const moduleSel = propsPanel.querySelector("#ceComponentModule");
+        if (moduleSel) {
+            moduleSel.value = entry.modId || entry.id || "";
+        }
+
+        // Remove any old event listeners
+        if (this._propsListenerHandler) {
+            propsPanel.removeEventListener("change", this._propsListenerHandler);
+        }
+
+        // Attach a single delegated event listener
+        this._propsListenerHandler = (e) => {
+            if (e.target && e.target.tagName === "SELECT") {
+                const property = e.target.getAttribute("data-property");
+                const value = e.target.value;
+                if (property) {
+                    this.onComponentPropertyChange(property, value);
+                }
+            }
+        };
+
+        propsPanel.addEventListener("change", this._propsListenerHandler);
+    }
+
+    buildWeaponOptions() {
+        const weapons = this.getAvailableWeapons();
+        return "<option value=\"\">— Select Weapon —</option>" +
+            weapons.map(w => `<option value="${w.id}">${w.label}</option>`).join("");
+    }
+
+    buildStyleOptions() {
+        const styles = this.getAvailableStyles();
+        return "<option value=\"\">— Default Style —</option>" +
+            styles.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
+    }
+
+    buildWeaponStyleOptions() {
+        const weaponStyles = this.getAvailableWeaponStyles();
+        return "<option value=\"\">— Default Weapon Style —</option>" +
+            weaponStyles.map(ws => `<option value="${ws.id}">${ws.label}</option>`).join("");
+    }
+
+    buildModuleOptions() {
+        const modules = this.getAvailableModules();
+        return modules.map(m => `<option value="${m.id}">${m.label}</option>`).join("");
+    }
+
+    getAvailableWeapons() {
+        if (typeof weaponConfigManager !== "undefined" && weaponConfigManager.getAllWeapons) {
+            return weaponConfigManager.getAllWeapons();
+        }
+        return [];
+    }
+
+    getAvailableStyles() {
+        if (typeof shipStyleManager !== "undefined" && shipStyleManager.getAvailableStyles) {
+            return shipStyleManager.getAvailableStyles();
+        }
+        return [
+            { id: "default", label: "Default" },
+            { id: "faction1", label: "Faction 1" },
+            { id: "faction2", label: "Faction 2" }
+        ];
+    }
+
+    getAvailableWeaponStyles() {
+        if (typeof weaponStyleManager !== "undefined" && weaponStyleManager.getAvailableStyles) {
+            return weaponStyleManager.getAvailableStyles();
+        }
+        return [
+            { id: "standard", label: "Standard" },
+            { id: "overcharge", label: "Overcharge" },
+            { id: "precision", label: "Precision" }
+        ];
+    }
+
+    getAvailableModules() {
+        if (typeof moduleConfigManager !== "undefined" && moduleConfigManager.getAllModules) {
+            return moduleConfigManager.getAllModules();
+        }
+        return [];
+    }
+
+    onComponentPropertyChange(property, value) {
+        const entry = this.currentEntry();
+        if (!entry) return;
+
+        console.log(`Component property changed: ${property} = ${value}`, entry);
+
+        // Update the entry with the new value
+        if (property === "weapon") {
+            entry.weaponId = value;
+            entry.id = value;  // Also update id
+        } else if (property === "style") {
+            entry.style = value;
+        } else if (property === "weaponStyle") {
+            entry.weaponStyle = value;
+        } else if (property === "module") {
+            entry.modId = value;
+            entry.id = value;  // Also update id
+        }
+
+        console.log("After update:", entry);
+
+        // Persist the changes
+        if (typeof assetGenRegistry !== "undefined" && assetGenRegistry.update) {
+            assetGenRegistry.update(this.typeId, entry.id, entry);
+        }
+
+        // Refresh the preview
+        this.drawShipPreview();
+    }
 }
+
 
 const componentEditorUI = new ComponentEditorUI();
 window.ComponentEditorUI = ComponentEditorUI;

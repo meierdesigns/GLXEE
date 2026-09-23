@@ -48,7 +48,12 @@ class HomeStationUI {
                 this._hangarRightCollapsed = prefs.right === true;
             }
         } catch (e) { /* ignore */ }
-        this._tabs = ['station', 'play', 'upgrade', 'hangar', 'components', 'shop', 'craft', 'travel', 'explorations'];
+        this._tabs = ['station', 'play', 'travel', 'explorations', 'upgrade', 'hangar', 'components', 'craft', 'shop'];
+        this._tabClusterOf = {
+            play: 'mission', travel: 'mission', explorations: 'mission',
+            upgrade: 'build', hangar: 'build', components: 'build', craft: 'build',
+            shop: 'trade'
+        };
         this._upgradeSubTabs = ['station', 'ships', 'modules'];
         this.selectedUpgradeNode = null;
         this._upgTipHost = null;
@@ -104,6 +109,10 @@ class HomeStationUI {
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },
             play: { label: 'PLAY', icon: 'menuStart' }
         };
+        // Initialize HangarUI module — DISABLED TEMPORARILY for debugging
+        // if (typeof HangarUI !== 'undefined') {
+        //     this.hangarUI = new HangarUI(this);
+        // }
         this._exploreClusters = [
             {
                 id: 'archive',
@@ -130,26 +139,72 @@ class HomeStationUI {
         ];
     }
 
-    iconHtml(iconKey, size, className, tipLabel) {
+    iconHtml(iconKey, size, className, tipLabel, tintOverride) {
         if (typeof iconRenderer !== 'undefined' && iconKey) {
-            let tint = null;
-            const resId = (typeof economyConfig !== 'undefined' && economyConfig.resourceIdFromIconKey)
-                ? economyConfig.resourceIdFromIconKey(iconKey)
-                : null;
-            if (resId && typeof economyConfig !== 'undefined' && economyConfig.getResourceColor) {
-                tint = economyConfig.getResourceColor(resId);
-            } else if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getSecondBaseColor) {
-                tint = colorPaletteSystem.getSecondBaseColor();
-            } else {
-                try {
-                    const v = getComputedStyle(document.documentElement)
-                        .getPropertyValue('--color-second-basecolor').trim();
-                    if (v && v.charAt(0) === '#') tint = v;
-                } catch (e) { /* ignore */ }
+            let tint = tintOverride || null;
+            if (!tint) {
+                const resId = (typeof economyConfig !== 'undefined' && economyConfig.resourceIdFromIconKey)
+                    ? economyConfig.resourceIdFromIconKey(iconKey)
+                    : null;
+                if (resId && typeof economyConfig !== 'undefined' && economyConfig.getResourceColor) {
+                    tint = economyConfig.getResourceColor(resId);
+                } else if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getSecondBaseColor) {
+                    tint = colorPaletteSystem.getSecondBaseColor();
+                } else {
+                    try {
+                        const v = getComputedStyle(document.documentElement)
+                            .getPropertyValue('--color-second-basecolor').trim();
+                        if (v && v.charAt(0) === '#') tint = v;
+                    } catch (e) { /* ignore */ }
+                }
             }
             return iconRenderer.imgHtml(iconKey, size || 32, className || 'hs-pixel', tint, tipLabel);
         }
         return '';
+    }
+
+    /**
+     * Full faction visual style (hull/edge/accent/silhouette) for the
+     * current profile — drives both hangar loadout icon tinting and the
+     * station screen's faction identity so the whole station reads in the
+     * player's faction palette, not just the ship preview.
+     */
+    currentFactionStyle() {
+        try {
+            const profile = (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile
+                && profileManager.hasActiveProfile()) ? profileManager.getActiveProfile() : null;
+            const factionId = (profile && profile.faction) || 'terran';
+            if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+                return factionShipStyles.getFactionStyle(factionId);
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
+    /**
+     * Accent color of the current profile's faction — used to tint the
+     * hangar loadout icons so equipped components read in the same palette
+     * as the ship's own hull instead of one flat neutral theme color.
+     */
+    hangarFactionAccent() {
+        const style = this.currentFactionStyle();
+        return (style && style.accent) || null;
+    }
+
+    /** Stamp the overlay root with the active faction's id + colors so CSS
+     * can reskin station chrome (cover art tint, panel accents, patterns)
+     * without touching the player's own UI theme palette. */
+    applyFactionTheme() {
+        if (!this.overlay) return;
+        const style = this.currentFactionStyle();
+        if (!style) {
+            delete this.overlay.dataset.hsFaction;
+            return;
+        }
+        this.overlay.dataset.hsFaction = style.id || 'terran';
+        this.overlay.style.setProperty('--faction-hull', style.hull || '#7a8490');
+        this.overlay.style.setProperty('--faction-edge', style.edge || '#2a3038');
+        this.overlay.style.setProperty('--faction-accent', style.accent || '#c8d0d8');
     }
 
     menuButtonHtml() {
@@ -195,11 +250,18 @@ class HomeStationUI {
     }
 
     renderTabs() {
+        let prevCluster = null;
         return this._tabs.filter((id) => id !== 'station').map((id) => {
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             const active = this.tab === id;
             const playClass = id === 'play' ? ' hs-tab-play' : '';
-            return `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-nav-item title="${meta.label}">` +
+            const cluster = this._tabClusterOf[id] || null;
+            const divider = (prevCluster !== null && cluster !== prevCluster)
+                ? '<span class="hs-tab-divider" aria-hidden="true"></span>'
+                : '';
+            prevCluster = cluster;
+            return divider +
+                `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-nav-item title="${meta.label}">` +
                 `<span class="hs-tab-icon">${this.tabIconHtml(meta.icon)}</span>` +
                 `<span class="hs-tab-label">${meta.label}</span>` +
                 `</button>`;
@@ -342,6 +404,10 @@ class HomeStationUI {
         this.closeMainMenuOverlay();
         this.destroyHangarPanelResize();
         this.stopHangarPreview();
+        // Cleanup HangarUI
+        if (this.hangarUI) {
+            this.hangarUI.destroy();
+        }
         this.unmountPlayTab();
         if (typeof hangarTestArena !== 'undefined' && hangarTestArena.isVisible) {
             hangarTestArena.hide();
@@ -1136,6 +1202,7 @@ class HomeStationUI {
             this.overlay.className = 'profile-selection-overlay home-station-overlay';
         }
         this.overlay.dataset.hsTab = this.tab || 'station';
+        this.applyFactionTheme();
 
         if (!profile) {
             this.overlay.dataset.hsTab = 'station';
@@ -1187,7 +1254,21 @@ class HomeStationUI {
         } else if (this.tab === 'craft') {
             body = this.renderCraftTab(profile);
         } else if (this.tab === 'hangar') {
-            body = this.renderHangarTab(profile);
+            // Use new HangarUI module — DISABLED TEMPORARILY
+            // if (this.hangarUI) {
+            //     const owned = profile.ownedShipIds || [];
+            //     if (!owned.length) {
+            //         body = `<div class="hs-section"><h3>HANGAR</h3><p class="hs-muted">No ships owned.</p></div>`;
+            //     } else {
+            //         if (!this.hangarShipId || owned.indexOf(this.hangarShipId) === -1) {
+            //             this.hangarShipId = profile.activeShipId || owned[0];
+            //         }
+            //         this.hangarUI.setShip(this.hangarShipId);
+            //         body = this.hangarUI.render();
+            //     }
+            // } else {
+                body = this.renderHangarTab(profile);
+            // }
         } else if (this.tab === 'components') {
             body = this.renderComponentsTab(profile);
         } else if (this.tab === 'upgrade') {
@@ -1203,6 +1284,7 @@ class HomeStationUI {
                 <div class="hs-station-grid">
                     <div class="hs-station-cover" aria-label="Home station">
                         <div class="hs-station-cover-image"></div>
+                        <div class="hs-station-cover-faction" aria-hidden="true"></div>
                         <div class="hs-station-cover-scanline"></div>
                         <div class="hs-station-cover-caption">
                             <span class="hs-station-cover-kicker">HOME STATION // DOCK 01</span>
@@ -1259,8 +1341,13 @@ class HomeStationUI {
         this.unmountComponentsTab();
         const isComp = this.tab === 'components';
         const hideHeaderCredits = isPlay || isMenu || this.tab === 'shop';
+        // Tabs with no separate "tabs vs content" browsing step land directly on
+        // interactive content (mouse clicks work regardless of nav level), so they
+        // must never sit dimmed at the default .hs-nav-tabs opacity like station.
+        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'craft', 'travel', 'explorations'];
+        const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
-            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}">
+            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header">
                     <div class="hs-topbar">
                         <div class="hs-tabs">
@@ -1305,6 +1392,8 @@ class HomeStationUI {
         this.restoreScrollState(scrollState);
         this.applyPendingFlash();
         if (this.tab === 'hangar') {
+            // Bind new HangarUI events — DISABLED TEMPORARILY
+            // this._bindHangarEvents();
             this.setupHangarPanelResize();
             this.startHangarPreview();
             this.drawHangarBay();
@@ -1658,18 +1747,18 @@ class HomeStationUI {
         const level = this.getNavLevel();
         if (this.tab === 'play') {
             if (this.isPlayMapActive()) {
-                hint.textContent = '[MAP] ARROWS Planets | ENTER Start Mission | ESC Back to Tabs';
+                hint.textContent = '[MAP] ARROWS Planets | ENTER Start Mission | ESC/BACKSPACE Back to Tabs';
             } else {
-                hint.textContent = '[TABS] ←→ Switch | ENTER Enter Map | ESC Menu';
+                hint.textContent = '[TABS] ←→ Switch | ENTER Enter Map | ESC/BACKSPACE Menu';
             }
             return;
         }
         if (level === 'sub') {
-            hint.textContent = '[SECTION] ←→ Switch | ENTER Enter Content | ESC Back to Tabs';
+            hint.textContent = '[SECTION] ←→ Switch | ENTER Enter Content | ESC/BACKSPACE Back to Tabs';
             return;
         }
         if (level === 'content') {
-            const back = this.hasSubTabs() ? 'ESC Back to Section' : 'ESC Back to Tabs';
+            const back = this.hasSubTabs() ? 'ESC/BACKSPACE Back to Section' : 'ESC/BACKSPACE Back to Tabs';
             if (this.tab === 'components') {
                 hint.textContent = `[CONTENT] ↑↓←→ Navigate | GENERATE / ACCEPT | ${back}`;
             } else {
@@ -1677,8 +1766,8 @@ class HomeStationUI {
             }
             return;
         }
-        const enterLabel = this.hasSubTabs() ? 'ENTER Sections' : 'ENTER Enter Tab';
-        hint.textContent = `[TABS] ←→ Switch | ${enterLabel} | ESC Menu`;
+        const enterLabel = this.hasSubTabs() ? 'ENTER Sections | SHIFT+ENTER Content' : 'ENTER Enter Tab';
+        hint.textContent = `[TABS] ←→ Switch | ${enterLabel} | ESC/BACKSPACE Menu`;
     }
 
     syncNavZone() {
@@ -3005,7 +3094,7 @@ class HomeStationUI {
             const wid = String(id || 'laser');
             return 'shot' + wid.charAt(0).toUpperCase() + wid.slice(1);
         }
-        if (kind === 'energy') return 'ability_energy_shield';
+        if (kind === 'energy') return 'statEnergy';
         return 'ability_' + String(id || '');
     }
 
@@ -3025,12 +3114,12 @@ class HomeStationUI {
         const activeSkin = shipLoadoutManager.getModuleSkin
             ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, current, slot.face)
             : 'default';
-        return `<label class="hs-hangar-slot-select-wrap hs-hangar-slot-skin-wrap">` +
+        return `<div class="hs-hangar-slot-skin-wrap">` +
             `<span class="hs-hangar-slot-skin-label">SKIN</span>` +
-            `<select class="hs-hangar-slot-select hs-hangar-slot-skin-select" data-hangar-slot-skin="${kind}" data-slot-index="${slot.index}" data-mod-face="${slot.face || ''}" aria-label="Skin">` +
-            skins.map((s) => `<option value="${s.id}" ${s.id === activeSkin ? 'selected' : ''}>${s.label}</option>`).join('') +
-            `</select>` +
-            `</label>`;
+            `<div class="hs-hangar-slot-skin-options">` +
+            skins.map((s) => `<button type="button" class="hs-hangar-slot-skin-option${s.id === activeSkin ? ' is-active' : ''}" data-hangar-slot-skin-set="${kind}" data-slot-index="${slot.index}" data-mod-face="${slot.face || ''}" data-skin-id="${s.id}">${s.label}</button>`).join('') +
+            `</div>` +
+            `</div>`;
     }
 
     renderHangarSlotDropdown(slot, inventory, equippedByKind) {
@@ -3061,7 +3150,7 @@ class HomeStationUI {
             ? this.hangarModuleIconKey(kind, current)
             : (kind === 'weapon' ? 'statWeapon'
                 : (kind === 'defense' ? 'statArmor'
-                    : (kind === 'energy' ? 'ability_energy_shield' : 'statAbilities')));
+                    : (kind === 'energy' ? 'statEnergy' : 'statAbilities')));
         const mark = current ? '●' : '+';
         const name = current ? this.hangarModuleLabel(current) : 'EMPTY';
         const open = (this._hangarOpenSlot
@@ -3072,16 +3161,17 @@ class HomeStationUI {
         const railI = slot.railIndex != null ? slot.railIndex : 0;
         const railN = Math.max(1, slot.railCount != null ? slot.railCount : 1);
         const side = slot.side === 'left' ? 'left' : 'right';
+        const factionAccent = this.hangarFactionAccent();
         return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}" data-slot-kind="${kind}" data-slot-index="${slot.index}" data-slot-side="${side}" style="--pin-x:${pinX};--pin-y:${pinY};--rail-i:${railI};--rail-n:${railN};">` +
             `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label}">` +
             `<span class="hs-hangar-slot-dot"></span>` +
             `</button>` +
             `<div class="hs-hangar-slot-card">` +
             `<button type="button" class="hs-hangar-slot-btn" data-nav-item data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}">` +
-            `<span class="hs-btn-icon">${this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20')}</span>` +
+            `<span class="hs-btn-icon">${this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20', null, factionAccent)}</span>` +
             `<span class="hs-hangar-slot-meta">` +
             `<span class="hs-hangar-slot-kind">${slot.label}</span>` +
-            `<span class="hs-hangar-slot-name"><span class="hs-hangar-slot-mark">${mark}</span> ${name}</span>` +
+            `<span class="hs-hangar-slot-name" title="${name}"><span class="hs-hangar-slot-mark">${mark}</span> ${name}</span>` +
             `</span>` +
             `<span class="hs-hangar-slot-caret">▾</span>` +
             `</button>` +
@@ -3102,7 +3192,7 @@ class HomeStationUI {
                 const disabled = blocked ? ' disabled' : '';
                 const blockedCls = blocked ? ' is-blocked' : '';
                 return `<button type="button" class="hs-hangar-slot-option${on ? ' is-active' : ''}${usedElsewhere ? ' is-used' : ''}${blockedCls}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="${id}"${disabled}>` +
-                    `<span class="hs-btn-icon">${this.iconHtml(this.hangarModuleIconKey(kind, id), 18, 'hs-pixel hs-pixel-18')}</span>` +
+                    `<span class="hs-btn-icon">${this.iconHtml(this.hangarModuleIconKey(kind, id), 18, 'hs-pixel hs-pixel-18', null, factionAccent)}</span>` +
                     `<span>${this.hangarModuleLabel(id)}${blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CS' : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CD' : '')}</span>` +
                     `<span class="hs-hangar-slot-mark">${on ? '●' : (blocked ? '✕' : (usedElsewhere ? '◇' : '○'))}</span>` +
                     `</button>`;
@@ -3249,7 +3339,12 @@ class HomeStationUI {
                                 aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
                                 aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
                         </h3>
-                        <div class="hs-actions-col hs-hangar-ships">${shipButtons}</div>
+                        <div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>
+                        <div class="hs-component-details" id="hsComponentDetails">
+                            <button type="button" class="hs-component-close" data-close-component>✕</button>
+                            <h4 class="hs-component-title"></h4>
+                            <div class="hs-component-info"></div>
+                        </div>
                     </aside>
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
@@ -3280,6 +3375,7 @@ class HomeStationUI {
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
+                                    <svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>
                                     ${slotHtml}
                                 </div>
                             </div>
@@ -3352,7 +3448,7 @@ class HomeStationUI {
         };
     }
 
-    drawHangarBay() {
+    drawHangarBay(deferSlotSync) {
         if (!this.overlay) return;
         const canvas = this.overlay.querySelector('#hsHangarBayCanvas');
         if (!canvas) return;
@@ -3406,15 +3502,22 @@ class HomeStationUI {
         // Leave side gutters for slot cards; ship stays centered and clickable
         const padX = Math.max(150, Math.floor(w * 0.28));
         const padY = Math.max(28, Math.floor(h * 0.1));
-        const scale = Math.max(2, Math.min(
+        const baseScale = Math.max(2, Math.min(
             Math.floor((w - padX * 2) / mw),
             Math.floor((h - padY * 2) / mh),
             10
         ));
+        // Scroll-wheel zoom (bindHangarWingDrag) multiplies the auto-fit
+        // scale; drag-to-pan on empty canvas space offsets the centered
+        // origin on top of that. Both persist per ship until reset.
+        const zoom = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
+        const scale = Math.max(1, baseScale * zoom);
         const sw = mw * scale;
         const sh = mh * scale;
-        const ox = Math.floor((w - sw) / 2);
-        const oy = Math.floor((h - sh) / 2);
+        const panX = this._hangarBayPanX || 0;
+        const panY = this._hangarBayPanY || 0;
+        const ox = Math.floor((w - sw) / 2) + panX;
+        const oy = Math.floor((h - sh) / 2) + panY;
         // Cache the current ship-bbox geometry so the HTML slot-pin buttons
         // (which sit on top of the canvas and intercept its pointer events)
         // can convert their own drag deltas into the same layout-unit space
@@ -3464,7 +3567,13 @@ class HomeStationUI {
             layer.style.setProperty('--bay-ship-w', sw + 'px');
             layer.style.setProperty('--bay-ship-h', sh + 'px');
         }
-        this.updateHangarSlotPins(model);
+        // While actively zooming/panning, skip the (relatively heavy) slot
+        // rebuild — the on-ship pins stay visually attached via the
+        // --bay-ship-* vars above regardless, and the dropdown cards/links
+        // resync once the gesture actually ends (see bindHangarWingDrag).
+        if (!deferSlotSync) {
+            this.updateHangarSlotPins(model);
+        }
         this.syncHangarModuleScaleUi();
         this.drawHangarSegmentHover(canvas, model, ox, oy, scale);
         this.bindHangarWingDrag(canvas, model, ox, oy, scale);
@@ -3532,6 +3641,120 @@ class HomeStationUI {
                 el.setAttribute('data-slot-side', slot.side);
             }
         });
+        this.updateHangarSlotLinks();
+    }
+
+    /**
+     * Draws the actual connector path from each dropdown card to its on-ship
+     * mount point. A single CSS line couldn't do this: the card's anchor and
+     * the pin sit at different heights (nose vs. mid vs. aft mounts), so a
+     * horizontal-only stub stopped short of the mount instead of visibly
+     * reaching it. This reads both real DOM rects (card + pin, both already
+     * positioned correctly by CSS) and draws a straight diagonal line from
+     * the card's edge directly to the pin's exact center — the center of the
+     * mounted component — so it's always geometrically exact regardless of
+     * zoom, panel resize, or how many slots share a rail.
+     */
+    updateHangarSlotLinks() {
+        if (!this.overlay) return;
+        const layer = this.overlay.querySelector('#hsHangarSlotLayer');
+        const svg = this.overlay.querySelector('#hsHangarLinkSvg');
+        if (!layer || !svg) return;
+        const layerRect = layer.getBoundingClientRect();
+        if (!layerRect.width || !layerRect.height) return;
+        const seen = new Set();
+        layer.querySelectorAll('.hs-hangar-slot').forEach((slotEl) => {
+            const kind = slotEl.getAttribute('data-slot-kind');
+            const index = slotEl.getAttribute('data-slot-index');
+            const card = slotEl.querySelector('.hs-hangar-slot-card');
+            const pin = slotEl.querySelector('.hs-hangar-slot-pin');
+            if (!card || !pin || !kind || index == null) return;
+            const cardRect = card.getBoundingClientRect();
+            const pinRect = pin.getBoundingClientRect();
+            const side = slotEl.getAttribute('data-slot-side') === 'left' ? 'left' : 'right';
+            const startX = (side === 'left' ? cardRect.right : cardRect.left) - layerRect.left;
+            const startY = (cardRect.top + cardRect.height / 2) - layerRect.top;
+            const endX = (pinRect.left + pinRect.width / 2) - layerRect.left;
+            const endY = (pinRect.top + pinRect.height / 2) - layerRect.top;
+            const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
+            const key = kind + ':' + index;
+            seen.add(key);
+            let path = svg.querySelector(`path[data-slot-kind="${kind}"][data-slot-index="${index}"]`);
+            if (!path) {
+                path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('class', 'hs-hangar-link');
+                path.setAttribute('data-slot-kind', kind);
+                path.setAttribute('data-slot-index', index);
+                svg.appendChild(path);
+            }
+            path.setAttribute('d', d);
+            const active = slotEl.classList.contains('is-open') || slotEl.classList.contains('is-hover-linked');
+            path.classList.toggle('is-active', active);
+        });
+        svg.querySelectorAll('path[data-slot-kind]').forEach((path) => {
+            const key = path.getAttribute('data-slot-kind') + ':' + path.getAttribute('data-slot-index');
+            if (!seen.has(key)) path.remove();
+        });
+    }
+
+    updateComponentDetails(kind, index, same) {
+        if (!this.overlay) return;
+        const detailsPanel = this.overlay.querySelector('#hsComponentDetails');
+        const hangarList = this.overlay.querySelector('.hs-hangar-list');
+        const titleEl = detailsPanel?.querySelector('.hs-component-title');
+        const infoEl = detailsPanel?.querySelector('.hs-component-info');
+        
+        if (same || !kind) {
+            // Hide details, show ships
+            if (hangarList) hangarList.classList.remove('hs-component-selected');
+            return;
+        }
+
+        // Always show the title with component name
+        if (titleEl) {
+            const typeLabel = kind.toUpperCase();
+            titleEl.textContent = `${typeLabel} ${index + 1}`;
+        }
+
+        // Get component info
+        if (typeof shipLoadoutManager === 'undefined') {
+            // Show details panel and hide ships
+            if (hangarList) hangarList.classList.add('hs-component-selected');
+            if (infoEl) infoEl.textContent = '';
+            return;
+        }
+
+        const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
+        const key = shipLoadoutManager.kindToLoadoutKey(kind);
+        const modId = (loadout[key] || [])[index];
+        
+        if (!modId) {
+            // Show details panel and hide ships (even if slot is empty)
+            if (hangarList) hangarList.classList.add('hs-component-selected');
+            if (infoEl) infoEl.textContent = '(Empty slot)';
+            return;
+        }
+
+        // Get module info from library
+        const lib = typeof moduleLibrary !== 'undefined' ? moduleLibrary : null;
+        const mod = lib ? lib.getModule(kind, modId) : null;
+        
+        if (infoEl) {
+            let info = `${mod?.label || modId}`;
+            if (mod?.description) {
+                info += `\n\n${mod.description}`;
+            }
+            if (mod?.stats) {
+                info += '\n\n--- STATS ---';
+                for (const [key, val] of Object.entries(mod.stats)) {
+                    info += `\n${key}: ${val}`;
+                }
+            }
+            infoEl.textContent = info;
+        }
+        
+        // Show details panel and hide ships
+        if (hangarList) hangarList.classList.add('hs-component-selected');
     }
 
     drawHangarSegmentHover(canvas, model, ox, oy, scale) {
@@ -3639,6 +3862,25 @@ class HomeStationUI {
             ctx.fillText(label, Math.max(4, lx), ly);
         }
         ctx.restore();
+    }
+
+    /** Maps a layout module (kind/id/face) back to its hangar dropdown slot
+     * index, so clicking a component directly on the ship can open the same
+     * dropdown card that a click on its label would. */
+    findHangarSlotIndexForModule(module) {
+        if (!module || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.buildHangarSlots) return null;
+        const model = this._hangarLastModel;
+        const hangarSlots = shipLoadoutManager.buildHangarSlots(
+            this.hangarShipId,
+            model && model.modelClass,
+            model
+        );
+        const slots = (hangarSlots && hangarSlots.slots) || [];
+        const exact = slots.find((s) =>
+            s.kind === module.kind && s.id === module.id && s.face === module.face);
+        if (exact) return exact.index;
+        const fallback = slots.find((s) => s.kind === module.kind && s.id === module.id);
+        return fallback ? fallback.index : null;
     }
 
     bindHangarWingDrag(canvas, model, ox, oy, scale) {
@@ -3762,6 +4004,12 @@ class HomeStationUI {
         };
         const down = (e) => {
             if (e.button !== 0) return;
+            // Ignore clicks on hangar slot buttons - check if click coordinates hit a slot element
+            const elementAtClick = document.elementFromPoint(e.clientX, e.clientY);
+            const slotElement = elementAtClick?.closest('.hs-hangar-slot, [data-hangar-slot-toggle]');
+            if (slotElement) {
+                return;
+            }
             const module = moduleHit(e);
             if (module && shipLoadoutManager.setModuleOffset) {
                 // A single drag both selects and moves the module now — a
@@ -3802,6 +4050,19 @@ class HomeStationUI {
                     this._hangarSelectedModule = null;
                     this.drawHangarBay();
                 }
+                // Empty canvas space pans the view instead of doing nothing.
+                drag = {
+                    pan: true,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startPanX: this._hangarBayPanX || 0,
+                    startPanY: this._hangarBayPanY || 0
+                };
+                this._hangarWingDragState = drag;
+                canvas.classList.add('is-panning');
+                canvas.style.cursor = 'grabbing';
+                canvas.setPointerCapture(e.pointerId);
+                e.preventDefault();
                 return;
             }
             const segmentId = hit.segment === 'wing' ? 'wing' : hit.segment;
@@ -3838,10 +4099,24 @@ class HomeStationUI {
             const sy = canvas.height / Math.max(1, rect.height);
             const dx = (e.clientX - drag.startX) * sx / Math.max(1, scale);
             const dy = (e.clientY - drag.startY) * sy / Math.max(1, scale);
+            if (drag.pan) {
+                // Raw canvas-pixel delta (not divided by scale) — pan offset
+                // is added directly to ox/oy in canvas-pixel space.
+                this._hangarBayPanX = drag.startPanX + (e.clientX - drag.startX) * sx;
+                this._hangarBayPanY = drag.startPanY + (e.clientY - drag.startY) * sy;
+                this.drawHangarBay(true);
+                return;
+            }
             if (drag.module) {
-                if (!drag.moved && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
+                // A generous click-vs-drag threshold: a real mouse click
+                // almost always jitters a couple of pixels between down and
+                // up, so a tight 3px cutoff was flagging most clicks as
+                // drags and silently skipping the "open this slot" behavior
+                // below in up().
+                if (!drag.moved && (Math.abs(e.clientX - drag.startX) > 6 || Math.abs(e.clientY - drag.startY) > 6)) {
                     drag.moved = true;
                 }
+                if (!drag.moved) return;
                 shipLoadoutManager.setModuleOffset(
                     this.hangarShipId,
                     drag.module.kind,
@@ -3907,7 +4182,9 @@ class HomeStationUI {
         };
         const up = (e) => {
             if (!drag) return;
+            const wasPanning = !!drag.pan;
             const movingModule = !!drag.module;
+            const clickedModule = movingModule && !drag.moved ? drag.module : null;
             applyDrag(e);
             drag = null;
             this._hangarWingDragState = null;
@@ -3918,10 +4195,37 @@ class HomeStationUI {
             canvas.classList.remove('is-wing-dragging');
             canvas.classList.remove('is-wing-scaling');
             canvas.classList.remove('is-module-dragging');
+            canvas.classList.remove('is-panning');
             if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+            if (wasPanning) {
+                // Panning ended — resync the dropdown cards/pins/links now,
+                // rather than on every frame while dragging.
+                canvas.style.cursor = 'grab';
+                this.drawHangarBay();
+                return;
+            }
+            // A plain click (no drag) on an on-ship component opens its
+            // dropdown — the only place the per-module skin selector lives —
+            // so a component can be reskinned by clicking it directly instead
+            // of having to find the matching card by its label first.
+            if (clickedModule) {
+                const slotIndex = this.findHangarSlotIndexForModule(clickedModule);
+                if (slotIndex != null) {
+                    this._hangarOpenSlot = { kind: clickedModule.kind, index: slotIndex };
+                    // createUI() below replaces the canvas with a fresh
+                    // element; the browser still fires a native 'click'
+                    // right after this pointerup, targeting the now-detached
+                    // old canvas. The document-level outside-click watcher
+                    // (bindHangarSlotEvents) can't recognize that stale,
+                    // parentless target as "inside" the hangar bay, so
+                    // without this guard it closed the slot we just opened
+                    // in the same gesture.
+                    this._hangarSuppressNextOutsideClick = true;
+                }
+            }
             // Keep the side dropdown open while an individual module moves.
             // Still refresh canvas + pink pins without rebuilding the hangar DOM.
-            if (movingModule) this.drawHangarBay();
+            if (movingModule && !clickedModule) this.drawHangarBay();
             else this.createUI();
         };
         const cancel = () => {
@@ -3930,21 +4234,41 @@ class HomeStationUI {
             canvas.classList.remove('is-wing-dragging');
             canvas.classList.remove('is-wing-scaling');
             canvas.classList.remove('is-module-dragging');
+            canvas.classList.remove('is-panning');
+        };
+        // Scroll-wheel zoom, centered on the ship. The dropdown cards/pins
+        // resync only after scrolling stops (debounced), same reasoning as
+        // the pan-end resync above — repositioning that DOM every wheel tick
+        // would fight the in-progress gesture instead of following it.
+        const onWheel = (e) => {
+            e.preventDefault();
+            const prevZoom = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
+            const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+            this._hangarBayZoom = Math.max(0.4, Math.min(4, prevZoom * factor));
+            this.drawHangarBay(true);
+            if (this._hangarZoomEndTimer) clearTimeout(this._hangarZoomEndTimer);
+            this._hangarZoomEndTimer = setTimeout(() => {
+                this._hangarZoomEndTimer = null;
+                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+            }, 160);
         };
         canvas.addEventListener('pointerdown', down);
         canvas.addEventListener('pointermove', move);
         canvas.addEventListener('pointerup', up);
         canvas.addEventListener('pointercancel', cancel);
-        canvas.title = 'Mitte ziehen: verschieben · Rand ziehen: in Zugrichtung skalieren';
+        canvas.addEventListener('wheel', onWheel, { passive: false });
+        canvas.title = 'Mitte ziehen: verschieben · Rand ziehen: skalieren · Leere Fläche: schwenken · Scrollen: zoomen';
         canvas.style.cursor = 'grab';
         this._hangarWingDragCleanup = () => {
             canvas.removeEventListener('pointerdown', down);
             canvas.removeEventListener('pointermove', move);
             canvas.removeEventListener('pointerup', up);
             canvas.removeEventListener('pointercancel', cancel);
+            canvas.removeEventListener('wheel', onWheel);
             canvas.classList.remove('is-wing-dragging');
             canvas.classList.remove('is-wing-scaling');
             canvas.classList.remove('is-module-dragging');
+            canvas.classList.remove('is-panning');
             this._hangarWingDragCleanup = null;
         };
     }
@@ -3985,6 +4309,20 @@ class HomeStationUI {
         if (!this.overlay) return;
         this.bindHangarModuleScale();
         this.bindHangarSlotPinDrag();
+        this.bindHangarSlotHoverLink();
+
+        // Close button for component details
+        const closeBtn = this.overlay.querySelector('[data-close-component]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._hangarOpenSlot = null;
+                this.overlay.querySelectorAll('.hs-hangar-slot.is-open').forEach((el) => el.classList.remove('is-open'));
+                this.updateHangarSlotLinks();
+                this.updateComponentDetails(null, 0, true);
+            });
+        }
 
         this.overlay.querySelectorAll('[data-hangar-slot-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
@@ -4008,6 +4346,8 @@ class HomeStationUI {
                         && !same;
                     el.classList.toggle('is-open', open);
                 });
+                this.updateHangarSlotLinks();
+                this.updateComponentDetails(kind, index, same);
             });
         });
 
@@ -4031,25 +4371,38 @@ class HomeStationUI {
             sel.addEventListener('click', (e) => e.stopPropagation());
         });
 
-        this.overlay.querySelectorAll('[data-hangar-slot-skin]').forEach((sel) => {
-            sel.addEventListener('change', () => {
+        this.overlay.querySelectorAll('[data-hangar-slot-skin-set]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setModuleSkin) return;
-                const kind = sel.getAttribute('data-hangar-slot-skin');
-                const face = sel.getAttribute('data-mod-face') || '';
+                const kind = btn.getAttribute('data-hangar-slot-skin-set');
+                const face = btn.getAttribute('data-mod-face') || '';
+                const skinId = btn.getAttribute('data-skin-id') || 'default';
                 const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
                 const key = shipLoadoutManager.kindToLoadoutKey(kind);
-                const modId = (loadout[key] || [])[Number(sel.getAttribute('data-slot-index') || 0)];
+                const modId = (loadout[key] || [])[Number(btn.getAttribute('data-slot-index') || 0)];
                 if (!modId) return;
-                shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, sel.value || 'default');
+                shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, skinId);
+                const group = btn.closest('.hs-hangar-slot-skin-options');
+                if (group) {
+                    group.querySelectorAll('.hs-hangar-slot-skin-option').forEach((b) => {
+                        b.classList.toggle('is-active', b === btn);
+                    });
+                }
                 this.drawHangarBay();
             });
-            sel.addEventListener('click', (e) => e.stopPropagation());
         });
 
         if (!this._hangarSlotOutsideBound) {
             this._hangarSlotOutsideBound = (e) => {
+                if (this._hangarSuppressNextOutsideClick) {
+                    this._hangarSuppressNextOutsideClick = false;
+                    return;
+                }
                 if (!this.isVisible || this.tab !== 'hangar' || !this._hangarOpenSlot) return;
                 if (e.target && e.target.closest && e.target.closest('.hs-hangar-slot')) return;
+                if (e.target && e.target.closest && e.target.closest('#hsHangarBayStage')) return;
                 this._hangarOpenSlot = null;
                 if (this.overlay) {
                     this.overlay.querySelectorAll('.hs-hangar-slot.is-open')
@@ -4075,6 +4428,58 @@ class HomeStationUI {
         requestAnimationFrame(() => {
             this.drawHangarBay();
             requestAnimationFrame(() => this.drawHangarBay());
+        });
+    }
+
+    /**
+     * Drives the .is-hover-linked class from both ends of a connector:
+     * hovering the dropdown card (a real mouseenter/leave — CSS :hover alone
+     * isn't enough since the sibling <svg> path can't be reached by a plain
+     * :hover selector), and hovering the on-ship component. The pin marking
+     * that component stays pointer-events:none until its slot is open (so it
+     * never steals a click/drag meant for the canvas underneath), so it has
+     * no native :hover either — that direction is approximated by finding
+     * the pin geometrically nearest the cursor on every pointer move (via
+     * getBoundingClientRect, which works even while pointer-events is none).
+     * Either path ends by refreshing updateHangarSlotLinks() so the SVG
+     * connector's highlight follows immediately.
+     */
+    bindHangarSlotHoverLink() {
+        if (!this.overlay) return;
+        const stage = this.overlay.querySelector('#hsHangarBayStage');
+        if (!stage || stage.dataset.hoverLinkBound === '1') return;
+        stage.dataset.hoverLinkBound = '1';
+        const setLinked = (targetSlot) => {
+            this.overlay.querySelectorAll('.hs-hangar-slot.is-hover-linked').forEach((el) => {
+                if (el !== targetSlot) el.classList.remove('is-hover-linked');
+            });
+            if (targetSlot) targetSlot.classList.add('is-hover-linked');
+            this.updateHangarSlotLinks();
+        };
+        const HOVER_RADIUS_PX = 22;
+        stage.addEventListener('pointermove', (e) => {
+            if (e.target && e.target.closest && e.target.closest('.hs-hangar-slot-card')) return;
+            let closestSlot = null;
+            let closestDist = HOVER_RADIUS_PX;
+            this.overlay.querySelectorAll('.hs-hangar-slot-pin').forEach((pin) => {
+                const rect = pin.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestSlot = pin.closest('.hs-hangar-slot');
+                }
+            });
+            setLinked(closestSlot);
+        });
+        stage.addEventListener('pointerleave', () => setLinked(null));
+        this.overlay.querySelectorAll('.hs-hangar-slot-card').forEach((card) => {
+            if (card.dataset.hoverLinkBound === '1') return;
+            card.dataset.hoverLinkBound = '1';
+            const slot = card.closest('.hs-hangar-slot');
+            card.addEventListener('mouseenter', () => setLinked(slot));
+            card.addEventListener('mouseleave', () => setLinked(null));
         });
     }
 
@@ -4446,6 +4851,45 @@ class HomeStationUI {
         this._hangarPreviewCanvas = null;
         this._hangarPreviewCtx = null;
         this._hangarPreviewShipId = null;
+    }
+
+    _bindHangarEvents() {
+        // Bind events for the new HangarUI module
+        if (!this.hangarUI || !this.overlay) return;
+        
+        // Slot selection
+        this.overlay.addEventListener('click', (e) => {
+            const slotItem = e.target.closest('.hs-slot-item');
+            if (slotItem) {
+                const idx = parseInt(slotItem.dataset.slotIdx);
+                this.hangarUI.onSlotSelected(idx);
+            }
+        });
+        
+        // Collapse/Expand sidebars
+        this.overlay.addEventListener('click', (e) => {
+            const collapseBtn = e.target.closest('.hs-hangar-collapse-btn');
+            if (collapseBtn) {
+                const side = collapseBtn.dataset.side;
+                if (side === 'left') {
+                    this.hangarUI.leftCollapsed = !this.hangarUI.leftCollapsed;
+                } else if (side === 'right') {
+                    this.hangarUI.rightCollapsed = !this.hangarUI.rightCollapsed;
+                }
+                this.hangarUI.savePrefs();
+                this.createUI();
+            }
+        });
+        
+        // Equipment selection
+        this.overlay.addEventListener('change', (e) => {
+            const select = e.target.closest('.hs-hangar-slot-select');
+            if (select) {
+                const idx = parseInt(select.dataset.slotIdx);
+                const newId = select.value;
+                this.hangarUI.onSlotEquipmentChange(idx, newId);
+            }
+        });
     }
 
     updateHangarPreviewSim(dtMs) {
@@ -4831,7 +5275,7 @@ class HomeStationUI {
                 return;
             }
             if (playMapActive) {
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
                     this.exitPlayMap();
@@ -4861,7 +5305,7 @@ class HomeStationUI {
                 }
                 return;
             }
-            if (e.key === 'Escape') {
+            if (e.key === 'Escape' || e.key === 'Backspace') {
                 if (this._resBuyModal) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -4885,6 +5329,15 @@ class HomeStationUI {
                 // On tab bar: open menu tab
                 e.preventDefault();
                 this.openMainMenuOverlay();
+                return;
+            }
+            // Shift+Enter skips the section level and jumps straight into content.
+            if (e.shiftKey && (e.key === 'Enter' || e.key === ' ') &&
+                !this._resBuyModal && this.tab !== 'play' && this.tab !== 'menu' &&
+                this.getNavLevel() !== 'content') {
+                e.preventDefault();
+                this._navLevel = 'sub';
+                this.enterTabContent();
                 return;
             }
             // Shift+←/→ always cycle main tabs (except resource-buy modal).

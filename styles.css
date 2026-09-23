@@ -10166,6 +10166,53 @@ button.hs-shop-cat.active.nav-focused {
     word-break: break-word;
     flex: 1;
 }
+.hs-component-settings {
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+    padding-top: 12px;
+    margin-top: 12px;
+}
+.hs-component-skins {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.hs-component-skins-label {
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--color-primary);
+    opacity: 0.9;
+}
+.hs-component-skins-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.hs-component-skin-btn {
+    padding: 10px 12px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.15s ease-out;
+    text-align: center;
+}
+.hs-component-skin-btn:hover {
+    background: color-mix(in srgb, var(--color-primary) 15%, var(--color-surface));
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+.hs-component-skin-btn.is-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-surface);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
 /* Expand sidebar when component is selected */
 .hs-hangar-split.hs-component-selected {
     --hs-hangar-left-w: 300px;

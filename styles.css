@@ -1610,6 +1610,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     gap: 6px;
     width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
     padding: clamp(8px, 1.4vh, 14px) 8px;
     border: var(--ui-border-width) solid var(--color-primary);
     background:
@@ -1639,10 +1640,12 @@ html[data-vf-arcade="on"] .settings-row-value {
     flex-wrap: wrap;
     gap: 4px;
     min-width: 0;
+    max-width: 100%;
 }
 
 .game-left-cluster .weapon-display #currentWeapon {
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1669,6 +1672,8 @@ html[data-vf-arcade="on"] .settings-row-value {
     align-items: baseline;
     gap: 2px 0;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .game-left-cluster .weapon-info .wi-part {
@@ -9525,6 +9530,27 @@ button.hs-tab.active.nav-focused {
 .home-station-content.hs-pointer-mode .hs-topbar::after {
     content: none;
 }
+
+/* Keep navigation and content at full brightness; only disabled controls dim. */
+.home-station-content.hs-nav-tabs .hs-topbar,
+.home-station-content.hs-nav-tabs .hs-body,
+.home-station-content.hs-nav-sub .hs-topbar,
+.home-station-content.hs-nav-sub .hs-body,
+.home-station-content.hs-nav-content .hs-topbar,
+.home-station-content.hs-nav-content .hs-body,
+.home-station-content.hs-nav-content .hs-shop-cats,
+.home-station-content.hs-nav-sub .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-nav-sub .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 1;
+    filter: none;
+}
+
+.home-station-content.hs-nav-content .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-nav-content .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 1;
+    filter: none;
+}
+
 .hs-body::-webkit-scrollbar {
     width: 8px;
 }
@@ -10111,13 +10137,52 @@ button.hs-shop-cat.active.nav-focused {
     padding-bottom: 4px;
 }
 .hs-hangar-list .hs-hangar-ships {
-    flex: 0 1 auto;
-    max-height: 35%;
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    max-height: none;
     overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     margin: 0;
     gap: 6px;
     display: flex;
     flex-direction: column;
+}
+.hs-hangar-ship-tree {
+    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+}
+.hs-hangar-ship-tree > summary {
+    list-style: none;
+}
+.hs-hangar-ship-tree > summary::-webkit-details-marker {
+    display: none;
+}
+.hs-hangar-ship-tree > summary::before {
+    content: '▶';
+    display: inline-block;
+    width: 14px;
+    color: var(--color-primary);
+    font-size: 0.7em;
+}
+.hs-hangar-ship-tree[open] > summary::before {
+    transform: rotate(90deg);
+}
+.hs-hangar-ship-tree > .hs-component-tree-container {
+    flex: 0 1 auto;
+    min-height: 0;
+    min-width: 0;
+    max-height: 420px;
+    padding: 6px;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-hangar-ship-tree .hs-component-tree-header {
+    display: none;
+}
+.hs-hangar-ship-tree .hs-component-tree {
+    gap: 4px;
 }
 .hs-hangar-list.hs-component-selected .hs-hangar-ships {
     display: none;
@@ -10267,6 +10332,118 @@ button.hs-shop-cat.active.nav-focused {
         #050508;
     border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
 }
+
+.hs-floating-area-style {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 35;
+    width: min(230px, calc(100% - 20px));
+    padding: 10px;
+    border: 2px solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 94%, transparent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.hs-floating-area-style strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--color-primary);
+    letter-spacing: 1px;
+}
+
+.hs-floating-wing-preview {
+    display: block;
+    width: 100%;
+    height: 84px;
+    margin: 0 0 8px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: #09090d;
+    image-rendering: pixelated;
+}
+
+.hs-floating-style-select-label {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    align-items: center;
+    gap: 5px;
+    margin: 4px 0 6px;
+    color: var(--color-primary);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.hs-floating-style-select {
+    width: 100%;
+    min-width: 0;
+    padding: 3px 5px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+}
+
+.hs-floating-style-select-label input[type="range"] {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--color-primary);
+}
+
+.hs-floating-area-crop {
+    display: grid;
+    gap: 2px;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--color-primary);
+}
+
+.hs-floating-area-crop label {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    align-items: center;
+    gap: 3px;
+}
+
+.hs-floating-area-crop input {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--color-primary);
+}
+
+.hs-floating-connection-label {
+    display: block;
+    margin-top: 3px;
+    color: var(--color-primary);
+}
+
+.hs-floating-connection-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.hs-floating-connection-options button {
+    flex: 1 1 45%;
+    padding: 3px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+}
+
+.hs-floating-connection-options button.is-active,
+.hs-floating-connection-options button:hover {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 25%, var(--color-surface));
+}
+
 .hs-hangar-bay-canvas {
     display: block;
     width: 100%;
@@ -10368,18 +10545,32 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-slot-card {
     position: absolute;
-    width: min(168px, 34%);
+    width: min(168px, calc(34% - 8px));
+    max-width: calc(100% - 16px);
+    box-sizing: border-box;
+    transform: translate(var(--card-drag-x, 0px), var(--card-drag-y, 0px));
+    cursor: grab;
     z-index: -1;
     pointer-events: none !important;
     top: calc(8px + (((100% - 24px) / max(var(--rail-n), 1)) * var(--rail-i)));
     display: none !important;
     opacity: 0 !important;
 }
+.hs-hangar-slot-card.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
 .hs-hangar-slot.is-open .hs-hangar-slot-card {
     display: block !important;
     opacity: 1 !important;
     pointer-events: auto !important;
     z-index: 20 !important;
+}
+/* The open left sidebar is the settings surface; avoid a duplicate floating card. */
+.hs-hangar-split:not(.hs-hangar-left-collapsed) .hs-hangar-slot-card {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 .hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card {
     left: 8px;
@@ -10388,6 +10579,23 @@ button.hs-shop-cat.active.nav-focused {
 .hs-hangar-slot[data-slot-side="right"] .hs-hangar-slot-card {
     right: 8px;
     left: auto;
+}
+/* With the ship-list sidebar closed, keep the floating menu inside the bay. */
+.hs-hangar-split.hs-hangar-left-collapsed .hs-hangar-slot-card {
+    top: 8px;
+    width: min(240px, calc(50% - 12px));
+    max-height: none;
+    overflow: visible;
+}
+.hs-hangar-split.hs-hangar-left-collapsed
+.hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card {
+    left: auto;
+    right: 8px;
+}
+.hs-hangar-split.hs-hangar-left-collapsed
+.hs-hangar-slot[data-slot-side="right"] .hs-hangar-slot-card {
+    left: 8px;
+    right: auto;
 }
 /*
  * The connector between a dropdown card and its on-ship mount is a real SVG
@@ -10492,9 +10700,9 @@ button.hs-shop-cat.active.nav-focused {
 .hs-hangar-slot-menu {
     display: none;
     margin-top: 4px;
-    max-height: 180px;
+    max-height: none;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: visible;
     overscroll-behavior: contain;
     background: color-mix(in srgb, var(--color-background) 96%, transparent);
     border: 1px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
@@ -10568,6 +10776,10 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-slot-skin-option:hover {
     border-color: var(--color-primary);
+}
+.hs-hangar-slot-skin-option:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 .hs-hangar-slot-skin-option.is-active {
     border-color: var(--color-primary);
@@ -11313,7 +11525,8 @@ button.hs-shop-cat.active.nav-focused {
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 .hs-upgrade-root .hs-upg-dock {
     flex: 0 0 auto;
@@ -11349,7 +11562,8 @@ button.hs-shop-cat.active.nav-focused {
     padding: 6px 10px;
 }
 .hs-upg-tree-scroll {
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     max-width: 100%;
     padding: 16px 8px 20px;
     min-height: 120px;
@@ -11373,6 +11587,8 @@ button.hs-shop-cat.active.nav-focused {
 .hs-upg-tree {
     position: relative;
     margin: 0 auto;
+    min-width: 0;
+    max-width: 100%;
 }
 .hs-upg-links {
     position: absolute;
@@ -12663,10 +12879,17 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .home-station-overlay .hs-components-host select {
     pointer-events: auto !important;
 }
+.home-station-overlay .hs-tree-slot-select {
+    pointer-events: auto !important;
+}
 .home-station-overlay .hs-hangar-slot-select {
     pointer-events: auto !important;
 }
  
+.home-station-overlay .hs-floating-style-select {
+    pointer-events: auto !important;
+}
+
 .hs-components-host ~ .home-station-overlay select {
     display: none !important;
 }
@@ -13072,17 +13295,42 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-slot-select {
     width: 100%;
+    min-height: 28px;
     padding: 4px 6px;
     font-size: 0.75rem;
-    background: var(--gray-900, #0a0e14);
-    color: var(--current-text, #d8fff5);
-    border: 1px solid var(--current-primary, #00ffcc);
+    font-family: var(--ui-font-family, 'Courier New', Courier, monospace);
+    letter-spacing: 0.04em;
+    background-color: var(--color-surface, var(--gray-900, #0a0e14));
+    color: var(--color-text, var(--current-text, #d8fff5));
+    border: 1px solid var(--color-border, var(--current-primary, #00ffcc));
     border-radius: 2px;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--color-primary, var(--current-primary, #00ffcc)) 50%),
+        linear-gradient(135deg, var(--color-primary, var(--current-primary, #00ffcc)) 50%, transparent 50%);
+    background-position:
+        calc(100% - 13px) 50%,
+        calc(100% - 8px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 24px;
+    outline: none;
+}
+
+.hs-tree-slot-select:focus {
+    border-color: var(--color-primary, var(--current-primary, #00ffcc));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, #00ffcc) 35%, transparent);
+}
+
+.hs-tree-slot-select option {
+    background: var(--color-surface, #0a0e14);
+    color: var(--color-text, #d8fff5);
 }
 
 .hs-tree-slot-select:hover {
-    background: rgba(0, 255, 204, 0.12);
+    background-color: color-mix(in srgb, var(--color-primary, #00ffcc) 10%, var(--color-surface, #0a0e14));
 }
 
 .hs-tree-slot-select:focus {

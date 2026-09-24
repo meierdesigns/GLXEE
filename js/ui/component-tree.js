@@ -207,25 +207,27 @@ class ComponentTree {
      * Update all details elements based on current depth
      */
     updateAllDetails() {
-        const root = document.querySelector('#hsComponentTree');
-        if (!root) return;
+        const roots = document.querySelectorAll('.hs-component-tree[data-ship-id]');
+        if (!roots.length) return;
 
-        // Update branches (depth 1)
-        root.querySelectorAll('.hs-tree-branch').forEach((branch) => {
-            if (this.expandedDepth >= 1) {
-                branch.setAttribute('open', '');
-            } else {
-                branch.removeAttribute('open');
-            }
-        });
+        roots.forEach((root) => {
+            // Update branches (depth 1)
+            root.querySelectorAll('.hs-tree-branch').forEach((branch) => {
+                if (this.expandedDepth >= 1) {
+                    branch.setAttribute('open', '');
+                } else {
+                    branch.removeAttribute('open');
+                }
+            });
 
-        // Update items/slots (depth 2)
-        root.querySelectorAll('.hs-tree-item').forEach((item) => {
-            if (this.expandedDepth >= 2) {
-                item.setAttribute('open', '');
-            } else {
-                item.removeAttribute('open');
-            }
+            // Update items/slots (depth 2)
+            root.querySelectorAll('.hs-tree-item').forEach((item) => {
+                if (this.expandedDepth >= 2) {
+                    item.setAttribute('open', '');
+                } else {
+                    item.removeAttribute('open');
+                }
+            });
         });
     }
 }

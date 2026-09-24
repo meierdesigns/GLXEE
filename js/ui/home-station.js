@@ -37,6 +37,9 @@ class HomeStationUI {
         this._hangarLiveDrawRaf = 0;
         this._hangarSegmentHover = null;
         this._hangarSelectedModule = null;
+        this._hangarShowGuides = true;
+        this._hangarCardOffsets = {};
+        this._hangarCardDragState = null;
         this._hangarPanelResize = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = false;
@@ -1397,7 +1400,7 @@ class HomeStationUI {
             this.setupHangarPanelResize();
             this.startHangarPreview();
             this.drawHangarBay();
-            this.renderComponentTree();
+            this.renderAllComponentTrees();
             this.bindComponentTreeEvents();
             this.bindHangarSlotEvents();
         } else {
@@ -2133,7 +2136,8 @@ class HomeStationUI {
             const canBuy = !maxed && !locked && check.ok;
             const tip = this.buildUpgradeTooltip(node, level, maxed, locked, check, cost, false);
 
-            return `<button type="button" class="${stateClass}" style="left:${left}px;top:${top}px;width:${nodeSize}px;height:${nodeSize}px"` +
+            const leftPercent = (left / treeW) * 100;
+            return `<button type="button" class="${stateClass}" style="left:${leftPercent}%;top:${top}px;width:${nodeSize}px;height:${nodeSize}px"` +
                 ` data-nav-item data-upgrade-node="${node.id}"` +
                 (canBuy ? ` data-upgrade="${node.id}"` : '') +
                 ` aria-label="${node.label} ${level}/${node.maxLevel}">` +
@@ -2178,8 +2182,8 @@ class HomeStationUI {
 
         return summary +
             `<div class="hs-upg-tree-scroll">` +
-            `<div class="hs-upg-tree" style="width:${treeW}px;height:${treeH}px">` +
-            `<svg class="hs-upg-links" width="${treeW}" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
+            `<div class="hs-upg-tree" style="width:100%;height:${treeH}px">` +
+            `<svg class="hs-upg-links" width="100%" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="none" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
             nodeButtons +
             `</div></div>` +
             dock;
@@ -3113,9 +3117,11 @@ class HomeStationUI {
         if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getAvailableSkins) return '';
         const skins = shipLoadoutManager.getAvailableSkins(kind);
         if (!skins || skins.length <= 1) return '';
-        const activeSkin = shipLoadoutManager.getModuleSkin
+        const activeSkin = current && shipLoadoutManager.getModuleSkin
             ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, current, slot.face)
-            : 'default';
+            : (shipLoadoutManager.getSlotSkin
+                ? shipLoadoutManager.getSlotSkin(this.hangarShipId, kind, slot.index)
+                : 'default');
         return `<div class="hs-hangar-slot-skin-wrap">` +
             `<span class="hs-hangar-slot-skin-label">SKIN</span>` +
             `<div class="hs-hangar-slot-skin-options">` +
@@ -3183,7 +3189,7 @@ class HomeStationUI {
             options.join('') +
             `</select>` +
             `</label>` +
-            (current ? this.renderHangarSlotSkinDropdown(slot, kind, current) : '') +
+            this.renderHangarSlotSkinDropdown(slot, kind, current) +
             `<div class="hs-hangar-slot-options">` +
             `<button type="button" class="hs-hangar-slot-option${current ? '' : ' is-active'}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="">` +
             `<span class="hs-hangar-slot-mark">○</span><span>EMPTY</span></button>` +
@@ -3246,11 +3252,18 @@ class HomeStationUI {
         const frameMaxed = frameLevel >= frameMax;
 
         const shipButtons = owned.map((id) => {
-            const active = id === shipId ? ' active' : '';
             const selected = id === profile.activeShipId ? ' ★' : '';
-            return `<button type="button" class="action-button hs-hangar-ship${active}" data-hangar-ship="${id}">` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>` +
-                `<span>${this.shipName(id)}${selected}</span></button>`;
+            return `
+                <details class="hs-hangar-ship-tree" data-ship-tree="${id}"${id === shipId ? ' open' : ''}>
+                    <summary class="hs-hangar-ship${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">
+                        <span class="hs-btn-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
+                        <span>${this.shipName(id)}${selected}</span>
+                    </summary>
+                    <div class="hs-component-tree-container" aria-label="${this.shipName(id)} components">
+                        <div class="hs-component-tree-header">COMPONENTS</div>
+                        <div class="hs-component-tree" data-ship-id="${id}"></div>
+                    </div>
+                </details>`;
         }).join('');
 
         const powerBudget = (typeof shipLoadoutManager !== 'undefined'
@@ -3342,10 +3355,6 @@ class HomeStationUI {
                                 aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
                         </h3>
                         <div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>
-                        <div class="hs-component-tree-container" aria-label="Selected ship components">
-                            <div class="hs-component-tree-header">COMPONENTS</div>
-                            <div class="hs-component-tree" id="hsComponentTree"></div>
-                        </div>
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -3392,6 +3401,9 @@ class HomeStationUI {
                                     min="25" max="600" step="5" value="100"
                                     title="Module scale" aria-label="Module scale">
                                 <span class="pe-zoom-label" id="hsHangarModuleScaleLabel">100%</span>
+                            </div>
+                            <div class="hs-hangar-bay-tools">
+                                <button type="button" class="action-button hs-mod" id="hsResetAnatomy">RESET ANATOMY</button>
                             </div>
                             <p class="hs-muted hs-hangar-bay-hint">DRAG MODULES WITHIN THEIR COMPONENT · CLICK A SLOT TO EQUIP</p>
                         </div>
@@ -3736,6 +3748,11 @@ class HomeStationUI {
         const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
         const key = shipLoadoutManager.kindToLoadoutKey(kind);
         const modId = (loadout[key] || [])[index];
+        const slotEl = this.overlay.querySelector(
+            `.hs-hangar-slot[data-slot-kind="${kind}"][data-slot-index="${index}"]`
+        );
+        const slotPin = slotEl ? slotEl.querySelector('.hs-hangar-slot-pin') : null;
+        const modFace = slotPin ? (slotPin.getAttribute('data-mod-face') || '') : '';
         
         // Update settings (skins)
         if (settingsEl) {
@@ -3745,7 +3762,7 @@ class HomeStationUI {
                 const skins = shipLoadoutManager.getAvailableSkins ? shipLoadoutManager.getAvailableSkins(kind) : [];
                 if (skins && skins.length > 1) {
                     const activeSkin = shipLoadoutManager.getModuleSkin
-                        ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, modId, index)
+                        ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, modId, modFace)
                         : 'default';
                     const skinHtml = `
                         <div class="hs-component-skins">
@@ -3766,7 +3783,12 @@ class HomeStationUI {
                             const slotIdx = Number(btn.getAttribute('data-slot-index'));
                             const skinId = btn.getAttribute('data-skin-id');
                             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.setModuleSkin) {
-                                shipLoadoutManager.setModuleSkin(this.hangarShipId, skinKind, modId, slotIdx, skinId);
+                                shipLoadoutManager.setModuleSkin(this.hangarShipId, skinKind, modId, modFace, skinId);
+                                // Also persist by slot so the selected area keeps its
+                                // cosmetic when the same module is mounted more than once.
+                                if (shipLoadoutManager.setSlotSkin) {
+                                    shipLoadoutManager.setSlotSkin(this.hangarShipId, skinKind, slotIdx, skinId);
+                                }
                                 this.updateComponentDetails(kind, index, false);
                                 this.drawHangarBay();
                             }
@@ -3807,7 +3829,245 @@ class HomeStationUI {
         if (hangarList) hangarList.classList.add('hs-component-selected');
     }
 
+    showFloatingAreaStyle(area) {
+        if (!this.overlay || typeof profileManager === 'undefined'
+            || typeof graphicsManager === 'undefined'
+            || !graphicsManager.shipAssetLoader) return;
+        const stage = this.overlay.querySelector('#hsHangarBayStage');
+        if (!stage) return;
+        const old = stage.querySelector('.hs-floating-area-style');
+        if (old) old.remove();
+
+        const shipId = this.hangarShipId || 'player_scrap';
+        const isWing = area === 'wingLeft' || area === 'wingRight';
+        const symmetric = !isWing || profileManager.getWingStyleSymmetry(shipId);
+        const segmentId = isWing && symmetric ? 'wing' : area;
+        const loader = graphicsManager.shipAssetLoader;
+        const count = segmentId === 'wing'
+            ? loader.wingShapeVariants.length
+            : loader.bodyShapeVariantCount(segmentId);
+        const saved = profileManager.getSegmentShapeVariant(shipId, segmentId);
+        const fallbackId = segmentId === 'wing' ? 'wingLeft' : segmentId;
+        const active = saved == null
+            ? loader.hullShapeVariantIndex(loader.resolveHullShapeSeed({ id: shipId }), fallbackId, count)
+            : saved;
+
+        const panel = document.createElement('div');
+        panel.className = 'hs-floating-area-style';
+        panel.innerHTML = `<strong>${isWing ? 'WING STYLE' : 'AREA STYLE'}</strong>` +
+            (isWing ? `<canvas class="hs-floating-wing-preview" width="240" height="120" aria-label="Wing crop preview"></canvas>` : '') +
+            `<label class="hs-floating-style-select-label">STYLE
+                <select class="hs-floating-style-select" data-style-select>
+                    ${Array.from({ length: count }, (_, index) =>
+                        `<option value="${index}"${index === active ? ' selected' : ''}>STYLE ${index + 1}</option>`
+                    ).join('')}
+                </select>
+            </label>` +
+            `<label class="hs-floating-style-select-label">VOXEL SIZE
+                <input type="range" data-voxel-scale min="0.1" max="10" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
+            </label>` +
+            (isWing ? `<div class="hs-floating-area-crop">
+                <label>CROP X <input type="range" data-crop="x" min="0" max="0.9" step="0.01" value="${this.getWingCropValue(shipId, 'x')}"></label>
+                <label>CROP Y <input type="range" data-crop="y" min="0" max="0.9" step="0.01" value="${this.getWingCropValue(shipId, 'y')}"></label>
+                <label>CROP W <input type="range" data-crop="w" min="0.05" max="1" step="0.01" value="${this.getWingCropValue(shipId, 'w')}"></label>
+                <label>CROP H <input type="range" data-crop="h" min="0.05" max="1" step="0.01" value="${this.getWingCropValue(shipId, 'h')}"></label>
+                <label>CONNECTION <input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
+                <label>CONN. WIDTH <input type="range" data-wing-connection-width min="0.02" max="0.5" step="0.01" value="${this.getWingConnectionWidthValue(shipId)}"></label>
+                <label>ROTATION <input type="range" data-wing-rotation min="-60" max="60" step="1" value="${this.getWingRotationValue(shipId)}"></label>
+                <span class="hs-floating-connection-label">CONNECTION STYLE</span>
+                <div class="hs-floating-connection-options">${
+                    ['strut', 'plate', 'double', 'hinge'].map((style) =>
+                        `<button type="button" data-wing-connection-style="${style}" class="${style === this.getWingConnectionStyle(shipId) ? 'is-active' : ''}">${style.toUpperCase()}</button>`
+                    ).join('')
+                }</div>
+            </div>` : '');
+        panel.querySelectorAll('[data-style-select]').forEach((select) => {
+            select.addEventListener('change', () => {
+                profileManager.setSegmentShapeVariant(
+                    shipId,
+                    segmentId,
+                    Number(select.value)
+                );
+                this.showFloatingAreaStyle(area);
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-crop]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipConfigManager === 'undefined') return;
+                const cfg = shipConfigManager.getConfig(shipId);
+                const wing = Object.assign({}, this.getWingCrop(shipId), {
+                    [input.getAttribute('data-crop')]: Number(input.value)
+                });
+                shipConfigManager.setConfig(shipId, {
+                    segmentUv: Object.assign({}, cfg.segmentUv || {}, { wing: wing })
+                });
+                this.renderFloatingWingCropPreview(panel, shipId, area);
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-wing-connection]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipLoadoutManager === 'undefined'
+                    || !shipLoadoutManager.setWingConnection) return;
+                shipLoadoutManager.setWingConnection(
+                    shipId,
+                    Number(input.value)
+                );
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-voxel-scale]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipLoadoutManager === 'undefined'
+                    || !shipLoadoutManager.setVoxelScale) return;
+                shipLoadoutManager.setVoxelScale(shipId, Number(input.value));
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-wing-connection-width]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipLoadoutManager === 'undefined'
+                    || !shipLoadoutManager.setWingConnectionWidth) return;
+                shipLoadoutManager.setWingConnectionWidth(shipId, Number(input.value));
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-wing-rotation]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipLoadoutManager === 'undefined'
+                    || !shipLoadoutManager.setWingRotation) return;
+                shipLoadoutManager.setWingRotation(shipId, Number(input.value));
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-wing-connection-style]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (typeof shipLoadoutManager === 'undefined'
+                    || !shipLoadoutManager.setWingConnectionStyle) return;
+                shipLoadoutManager.setWingConnectionStyle(
+                    shipId,
+                    button.getAttribute('data-wing-connection-style')
+                );
+                this.showFloatingAreaStyle(area);
+                this.drawHangarBay();
+            });
+        });
+        if (isWing) this.renderFloatingWingCropPreview(panel, shipId, area);
+        stage.appendChild(panel);
+    }
+
+    renderFloatingWingCropPreview(panel, shipId, area) {
+        const canvas = panel && panel.querySelector('.hs-floating-wing-preview');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const w = canvas.width;
+        const h = canvas.height;
+        const crop = this.getWingCrop(shipId);
+        const left = area === 'wingLeft';
+        const cropX = Math.max(0, Math.min(0.92, (Number(crop.x) - 0.02) / 0.24));
+        const cropY = Math.max(0, Math.min(0.92, (Number(crop.y) - 0.30) / 0.40));
+        const cropW = Math.max(0.08, Math.min(1 - cropX, Number(crop.w) / 0.24 || 1));
+        const cropH = Math.max(0.08, Math.min(1 - cropY, Number(crop.h) / 0.40 || 1));
+        const px = 10;
+        const py = 10;
+        const pw = w - 20;
+        const ph = h - 20;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#09090d';
+        ctx.fillRect(0, 0, w, h);
+        ctx.imageSmoothingEnabled = false;
+
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        const model = typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel
+            ? shipConfigManager.getMergedModel(shipId)
+            : null;
+        const variant = profileManager.getSegmentShapeVariant(shipId, 'wing');
+        const seed = loader && loader.resolveHullShapeSeed
+            ? loader.resolveHullShapeSeed({ id: shipId })
+            : '';
+        if (loader && loader.renderProceduralWing) {
+            loader.renderProceduralWing(
+                ctx,
+                { id: left ? 'wingLeft' : 'wingRight' },
+                px,
+                py,
+                pw,
+                ph,
+                null,
+                0,
+                loader.resolvePlayerFactionStyle(model),
+                seed,
+                variant,
+                null
+            );
+        }
+
+        const cutX = left ? px + pw * (1 - cropX - cropW) : px + pw * cropX;
+        const cutY = py + ph * cropY;
+        const cutW = pw * cropW;
+        const cutH = ph * cropH;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+        ctx.fillRect(px, py, pw, Math.max(0, cutY - py));
+        ctx.fillRect(px, cutY + cutH, pw, Math.max(0, py + ph - cutY - cutH));
+        if (left) {
+            ctx.fillRect(cutX + cutW, cutY, Math.max(0, px + pw - cutX - cutW), cutH);
+        } else {
+            ctx.fillRect(px, cutY, Math.max(0, cutX - px), cutH);
+        }
+        ctx.strokeStyle = '#ff00d4';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cutX, cutY, cutW, cutH);
+        ctx.fillStyle = '#00e6c3';
+        ctx.font = '10px monospace';
+        ctx.fillText('VISIBLE CROP', 8, h - 4);
+    }
+
+    getWingCrop(shipId) {
+        const defaults = { x: 0.02, y: 0.30, w: 0.24, h: 0.40 };
+        if (typeof shipConfigManager === 'undefined') return defaults;
+        const cfg = shipConfigManager.getConfig(shipId);
+        return Object.assign({}, defaults, cfg && cfg.segmentUv && cfg.segmentUv.wing);
+    }
+
+    getWingCropValue(shipId, key) {
+        return this.getWingCrop(shipId)[key];
+    }
+
+    getWingConnectionValue(shipId) {
+        if (typeof shipLoadoutManager === 'undefined') return 0;
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        return Number(loadout && loadout.wingConnectionY) || 0;
+    }
+
+    getVoxelScaleValue(shipId) {
+        if (typeof shipLoadoutManager === 'undefined') return 1;
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        return Number(loadout && loadout.voxelScale) || 1;
+    }
+
+    getWingConnectionStyle(shipId) {
+        if (typeof shipLoadoutManager === 'undefined') return 'strut';
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        return loadout && loadout.wingConnectionStyle || 'strut';
+    }
+
+    getWingConnectionWidthValue(shipId) {
+        if (typeof shipLoadoutManager === 'undefined') return 0.1;
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        return Number(loadout && loadout.wingConnectionWidth) || 0.1;
+    }
+
+    getWingRotationValue(shipId) {
+        if (typeof shipLoadoutManager === 'undefined') return 0;
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        return Number(loadout && loadout.wingRotation) || 0;
+    }
+
     drawHangarSegmentHover(canvas, model, ox, oy, scale) {
+        if (!this._hangarShowGuides) return;
         const hoverState = this._hangarSegmentHover;
         const selectedModule = this._hangarSelectedModule;
         if (!canvas || !model || (!hoverState && !selectedModule)) return;
@@ -3933,6 +4193,46 @@ class HomeStationUI {
         return fallback ? fallback.index : null;
     }
 
+    findHangarSlotForSegment(segmentId, side) {
+        if (!segmentId || typeof shipLoadoutManager === 'undefined'
+            || !shipLoadoutManager.buildHangarSlots) return null;
+        const model = this._hangarLastModel;
+        const hangarSlots = shipLoadoutManager.buildHangarSlots(
+            this.hangarShipId,
+            model && model.modelClass,
+            model
+        );
+        const slots = (hangarSlots && hangarSlots.slots) || [];
+        const modules = (model && model.layout && model.layout.modules) || [];
+        const moduleForSegment = modules.find((module) => {
+            if (!module) return false;
+            if (segmentId === 'wing') {
+                return module.mountSegment === 'wing'
+                    && (!side || module.face === side);
+            }
+            return module.mountSegment === segmentId;
+        });
+        if (moduleForSegment) {
+            const slot = slots.find((candidate) =>
+                candidate.kind === moduleForSegment.kind
+                && candidate.id === moduleForSegment.id
+                && (!moduleForSegment.face || candidate.face === moduleForSegment.face)
+            );
+            if (slot) return { kind: slot.kind, index: slot.index };
+        }
+
+        const fallbackKind = {
+            front: 'weapon',
+            center: 'energy',
+            wing: 'weapon',
+            back: 'ability'
+        }[segmentId];
+        const fallback = slots.find((slot) =>
+            slot.kind === fallbackKind && (!side || slot.side === side)
+        ) || slots.find((slot) => slot.kind === fallbackKind);
+        return fallback ? { kind: fallback.kind, index: fallback.index } : null;
+    }
+
     bindHangarWingDrag(canvas, model, ox, oy, scale) {
         if (!canvas || !model || !model.layout || typeof shipLoadoutManager === 'undefined'
             || !shipLoadoutManager.setWingOffset
@@ -3983,7 +4283,48 @@ class HomeStationUI {
                 pt.lx >= seg.x && pt.lx <= seg.x + seg.width
                 && pt.ly >= seg.y && pt.ly <= seg.y + seg.height
             );
-            if (!hit) return null;
+            if (!hit) {
+                const center = segments.find((seg) => seg.id === 'center');
+                const loadoutNow = shipLoadoutManager.getLoadout(this.hangarShipId);
+                const connectionY = Number(loadoutNow.wingConnectionY) || 0;
+                const connectionWidth = Number(loadoutNow.wingConnectionWidth) || 0.1;
+                const crop = model.segmentUv && model.segmentUv.wing;
+                const cropX = crop
+                    ? Math.max(0, Math.min(0.92, (Number(crop.x) - 0.02) / 0.24))
+                    : 0;
+                if (center) {
+                    for (const wing of segments.filter((seg) =>
+                        seg.id === 'wingLeft' || seg.id === 'wingRight'
+                    )) {
+                        const left = wing.id === 'wingLeft';
+                        const centerX = left ? center.x : center.x + center.width;
+                        const rootX = left
+                            ? wing.x + wing.width * (1 - cropX)
+                            : wing.x + wing.width * cropX;
+                        const centerY = center.y + center.height * (0.5 + connectionY * 0.5);
+                        const wingY = wing.y + wing.height * 0.5;
+                        const minX = Math.min(centerX, rootX) - 6;
+                        const maxX = Math.max(centerX, rootX) + 6;
+                        if (pt.lx < minX || pt.lx > maxX) continue;
+                        const span = rootX - centerX;
+                        const t = Math.abs(span) > 0.01 ? (pt.lx - centerX) / span : 0;
+                        const bridgeY = centerY + (wingY - centerY) * Math.max(0, Math.min(1, t));
+                        const half = Math.max(4, center.height * connectionWidth);
+                        if (Math.abs(pt.ly - bridgeY) <= half) {
+                            return {
+                                segment: 'wing',
+                                left: left,
+                                right: !left,
+                                width: Math.abs(span),
+                                height: half * 2,
+                                edge: null,
+                                connector: true
+                            };
+                        }
+                    }
+                }
+                return null;
+            }
             const marginX = Math.max(1.5, hit.width * EDGE_FRAC);
             const marginY = Math.max(1.5, hit.height * EDGE_FRAC);
             const distLeft = pt.lx - hit.x;
@@ -4054,16 +4395,34 @@ class HomeStationUI {
         };
         const down = (e) => {
             if (e.button !== 0) return;
-            console.log('down() called');
             // Ignore clicks on hangar slot buttons - check if click coordinates hit a slot element
             const elementAtClick = document.elementFromPoint(e.clientX, e.clientY);
             const slotElement = elementAtClick?.closest('.hs-hangar-slot, [data-hangar-slot-toggle]');
             if (slotElement) {
-                console.log('down() ignoring slot element');
                 return;
             }
-            const module = moduleHit(e);
-            console.log('down() moduleHit:', module?.id);
+            // Ship areas have priority over the modules drawn inside them.
+            // Clicking the hull must select/adjust the area, not move a module.
+            const rawModule = moduleHit(e);
+            let areaHit = wingHit(e);
+            if (!areaHit && rawModule) {
+                const segmentId = rawModule.mountSegment === 'wing'
+                    ? (rawModule.face === 'left' ? 'wingLeft' : 'wingRight')
+                    : rawModule.mountSegment;
+                const segment = (model.layout.segments || []).find((seg) => seg.id === segmentId);
+                if (segment) {
+                    areaHit = {
+                        segment: segmentId === 'wingLeft' || segmentId === 'wingRight'
+                            ? 'wing' : segmentId,
+                        left: segmentId === 'wingLeft',
+                        right: segmentId === 'wingRight',
+                        width: segment.width,
+                        height: segment.height,
+                        edge: null
+                    };
+                }
+            }
+            const module = null;
             if (module && shipLoadoutManager.setModuleOffset) {
                 // A single drag both selects and moves the module now — a
                 // release without real movement still counts as "select" so
@@ -4097,7 +4456,7 @@ class HomeStationUI {
                 e.preventDefault();
                 return;
             }
-            const hit = wingHit(e);
+            const hit = areaHit || wingHit(e);
             if (!hit) {
                 if (this._hangarSelectedModule) {
                     this._hangarSelectedModule = null;
@@ -4135,6 +4494,7 @@ class HomeStationUI {
                 segment: segmentId,
                 edge: hit.edge,
                 side: hit.left ? 'left' : 'right',
+                connector: !!hit.connector,
                 frameWidth: Math.max(1, hit.width || core.width || 1),
                 frameHeight: Math.max(1, hit.height || core.height || 1)
             };
@@ -4238,7 +4598,11 @@ class HomeStationUI {
             const wasPanning = !!drag.pan;
             const movingModule = !!drag.module;
             const clickedModule = movingModule && !drag.moved ? drag.module : null;
-            console.log('up() - movingModule:', movingModule, 'drag.moved:', drag.moved, 'clickedModule:', clickedModule);
+            const clickedSegment = !movingModule && !wasPanning && !drag.moved
+                ? drag.segment
+                : null;
+            const clickedConnector = !!drag.connector && !movingModule && !wasPanning && !drag.moved;
+            const clickedSegmentSide = clickedSegment ? drag.side : null;
             applyDrag(e);
             drag = null;
             this._hangarWingDragState = null;
@@ -4263,7 +4627,22 @@ class HomeStationUI {
             // so a component can be reskinned by clicking it directly instead
             // of having to find the matching card by its label first.
             let moduleToSelect = null;
-            if (clickedModule) {
+            let floatingArea = null;
+            if (clickedConnector) {
+                floatingArea = clickedSegmentSide === 'left' ? 'wingLeft' : 'wingRight';
+                this._hangarSuppressNextOutsideClick = true;
+            } else if (clickedSegment === 'wing') {
+                // A wing click selects the wing area itself. Do not route it
+                // through the first weapon mounted on that wing.
+                const wingArea = clickedSegmentSide === 'left' ? 'wingLeft' : 'wingRight';
+                floatingArea = wingArea;
+                if (typeof window.componentTree !== 'undefined'
+                    && window.componentTree.setNodeExpanded) {
+                    window.componentTree.setNodeExpanded(`hs-tree-area-${wingArea}`, true);
+                }
+                this._hangarOpenSlot = null;
+                this._hangarSuppressNextOutsideClick = true;
+            } else if (clickedModule) {
                 const slotIndex = this.findHangarSlotIndexForModule(clickedModule);
                 if (slotIndex != null) {
                     moduleToSelect = { kind: clickedModule.kind, index: slotIndex };
@@ -4278,6 +4657,13 @@ class HomeStationUI {
                     // in the same gesture.
                     this._hangarSuppressNextOutsideClick = true;
                 }
+            } else if (clickedSegment) {
+                const segmentSlot = this.findHangarSlotForSegment(clickedSegment, clickedSegmentSide);
+                if (segmentSlot) {
+                    moduleToSelect = segmentSlot;
+                    this._hangarOpenSlot = segmentSlot;
+                    this._hangarSuppressNextOutsideClick = true;
+                }
             }
             // Keep the side dropdown open while an individual module moves.
             // Still refresh canvas + pink pins without rebuilding the hangar DOM.
@@ -4287,6 +4673,9 @@ class HomeStationUI {
             // Show component details in sidebar AFTER createUI()
             if (moduleToSelect) {
                 this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);
+            }
+            if (floatingArea) {
+                this.showFloatingAreaStyle(floatingArea);
             }
         };
         const cancel = () => {
@@ -4371,6 +4760,7 @@ class HomeStationUI {
         this.bindHangarModuleScale();
         this.bindHangarSlotPinDrag();
         this.bindHangarSlotHoverLink();
+        this.bindHangarSlotCardDrag();
 
         // Close button for component details
         const closeBtn = this.overlay.querySelector('[data-close-component]');
@@ -4443,8 +4833,15 @@ class HomeStationUI {
                 const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
                 const key = shipLoadoutManager.kindToLoadoutKey(kind);
                 const modId = (loadout[key] || [])[Number(btn.getAttribute('data-slot-index') || 0)];
-                if (!modId) return;
-                shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, skinId);
+                const slotIndex = Number(btn.getAttribute('data-slot-index') || 0);
+                if (modId) {
+                    shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, skinId);
+                }
+                if (shipLoadoutManager.setSlotSkin) {
+                    shipLoadoutManager.setSlotSkin(this.hangarShipId, kind, slotIndex, skinId);
+                } else if (!modId) {
+                    return;
+                }
                 const group = btn.closest('.hs-hangar-slot-skin-options');
                 if (group) {
                     group.querySelectorAll('.hs-hangar-slot-skin-option').forEach((b) => {
@@ -4489,6 +4886,71 @@ class HomeStationUI {
         requestAnimationFrame(() => {
             this.drawHangarBay();
             requestAnimationFrame(() => this.drawHangarBay());
+        });
+    }
+
+    bindHangarSlotCardDrag() {
+        if (!this.overlay) return;
+        const stage = this.overlay.querySelector('#hsHangarBayStage');
+        if (!stage) return;
+
+        this.overlay.querySelectorAll('.hs-hangar-slot-card').forEach((card) => {
+            const slot = card.closest('.hs-hangar-slot');
+            if (!slot) return;
+            const key = `${slot.getAttribute('data-slot-kind')}:${slot.getAttribute('data-slot-index')}`;
+            const offset = this._hangarCardOffsets[key] || { x: 0, y: 0 };
+            card.style.setProperty('--card-drag-x', `${offset.x}px`);
+            card.style.setProperty('--card-drag-y', `${offset.y}px`);
+
+            card.addEventListener('pointerdown', (event) => {
+                if (event.button !== 0
+                    || event.target.closest('button, select, option, input, label')) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const cardRect = card.getBoundingClientRect();
+                this._hangarCardDragState = {
+                    card,
+                    key,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    offsetX: offset.x,
+                    offsetY: offset.y,
+                    width: cardRect.width,
+                    height: cardRect.height
+                };
+                card.setPointerCapture(event.pointerId);
+                card.classList.add('is-dragging');
+            });
+
+            card.addEventListener('pointermove', (event) => {
+                const drag = this._hangarCardDragState;
+                if (!drag || drag.card !== card) return;
+                const stageRect = stage.getBoundingClientRect();
+                const baseRect = card.getBoundingClientRect();
+                const nextX = drag.offsetX + event.clientX - drag.startX;
+                const nextY = drag.offsetY + event.clientY - drag.startY;
+                const baseLeft = baseRect.left - drag.offsetX;
+                const baseTop = baseRect.top - drag.offsetY;
+                const minX = stageRect.left + 8 - baseLeft;
+                const maxX = stageRect.right - 8 - drag.width - baseLeft;
+                const minY = stageRect.top + 8 - baseTop;
+                const maxY = stageRect.bottom - 8 - drag.height - baseTop;
+                const x = Math.max(minX, Math.min(maxX, nextX));
+                const y = Math.max(minY, Math.min(maxY, nextY));
+                card.style.setProperty('--card-drag-x', `${x}px`);
+                card.style.setProperty('--card-drag-y', `${y}px`);
+                this._hangarCardOffsets[drag.key] = { x, y };
+            });
+
+            const stopDrag = (event) => {
+                const drag = this._hangarCardDragState;
+                if (!drag || drag.card !== card) return;
+                if (card.hasPointerCapture(event.pointerId)) card.releasePointerCapture(event.pointerId);
+                card.classList.remove('is-dragging');
+                this._hangarCardDragState = null;
+            };
+            card.addEventListener('pointerup', stopDrag);
+            card.addEventListener('pointercancel', stopDrag);
         });
     }
 
@@ -4873,6 +5335,56 @@ class HomeStationUI {
                 right: this._hangarRightCollapsed
             }));
         } catch (e) { /* ignore */ }
+        this.createUI();
+    }
+
+    toggleHangarAreaGuides() {
+        this._hangarShowGuides = !this._hangarShowGuides;
+        this._hangarSegmentHover = null;
+        this._hangarSelectedModule = null;
+        this.drawHangarBay();
+        const button = this.overlay && this.overlay.querySelector('#hsToggleAreaGuides');
+        if (button) button.textContent = this._hangarShowGuides ? 'HIDE AREAS' : 'SHOW AREAS';
+    }
+
+    recalculateHangarAreas() {
+        this._hangarSegmentHover = null;
+        this._hangarSelectedModule = null;
+        this._hangarWingDragState = null;
+        this.drawHangarBay();
+        this.updateHangarSlotPins(this._hangarLastModel);
+    }
+
+    resetHangarAnatomy() {
+        const shipId = this.hangarShipId || 'player_scrap';
+        if (typeof shipLoadoutManager !== 'undefined') {
+            const loadout = shipLoadoutManager.getLoadout(shipId);
+            loadout.wingOffsetX = 0;
+            loadout.wingOffsetY = 0;
+            loadout.wingConnectionY = 0;
+            loadout.wingConnectionWidth = 0.1;
+            loadout.wingRotation = 0;
+            loadout.voxelScale = 1;
+            loadout.wingConnectionStyle = 'strut';
+            loadout.segmentScale = {};
+            loadout.segmentOffset = {};
+            loadout.moduleOffset = {};
+            loadout.moduleOffsets = {};
+            shipLoadoutManager.setLoadout(shipId, loadout);
+        }
+        if (typeof shipConfigManager !== 'undefined') {
+            shipConfigManager.setConfig(shipId, { segmentUv: null });
+        }
+        if (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
+            const profile = profileManager.getActiveProfile();
+            if (profile) {
+                if (profile.segmentShapeVariants) delete profile.segmentShapeVariants[shipId];
+                if (profile.wingStyleSymmetry) delete profile.wingStyleSymmetry[shipId];
+                if (profileManager.save) profileManager.save();
+            }
+        }
+        this._hangarSegmentHover = null;
+        this._hangarSelectedModule = null;
         this.createUI();
     }
 
@@ -5838,7 +6350,9 @@ class HomeStationUI {
 
         this.overlay.querySelectorAll('[data-hangar-ship]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                this.hangarShipId = btn.getAttribute('data-hangar-ship');
+                const selectedShipId = btn.getAttribute('data-hangar-ship');
+                if (selectedShipId === this.hangarShipId) return;
+                this.hangarShipId = selectedShipId;
                 this.statusMsg = '';
                 this.createUI();
             });
@@ -5849,7 +6363,8 @@ class HomeStationUI {
                 this.toggleHangarSidebar(btn.getAttribute('data-hangar-sidebar'));
             });
         });
-
+        const resetAnatomy = this.overlay.querySelector('#hsResetAnatomy');
+        if (resetAnatomy) resetAnatomy.addEventListener('click', () => this.resetHangarAnatomy());
         this.overlay.querySelectorAll('[data-activate-ship]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-activate-ship');
@@ -5951,11 +6466,11 @@ class HomeStationUI {
         this.bindKeyNav();
     }
 
-    renderComponentTree() {
+    renderComponentTree(shipId, treeContainer) {
         if (!this.overlay) return;
-        const treeContainer = this.overlay.querySelector('#hsComponentTree');
+        shipId = shipId || this.hangarShipId || 'player_scrap';
+        treeContainer = treeContainer || this.overlay.querySelector(`[data-ship-id="${shipId}"]`);
         if (!treeContainer) return;
-        const shipId = this.hangarShipId || 'player_scrap';
         if (typeof window.componentTree !== 'undefined') {
             window.componentTree.setShip(shipId);
             treeContainer.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
@@ -6059,11 +6574,22 @@ class HomeStationUI {
         }
     }
 
+    renderAllComponentTrees() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('.hs-component-tree[data-ship-id]').forEach((tree) => {
+            this.renderComponentTree(tree.getAttribute('data-ship-id'), tree);
+        });
+    }
+
     bindComponentTreeEvents() {
         if (!this.overlay) return;
         this.overlay.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
             node.addEventListener('toggle', () => {
                 if (typeof window.componentTree === 'undefined' || !node.id) return;
+                const shipTree = node.closest('[data-ship-tree]');
+                if (shipTree) {
+                    window.componentTree.setShip(shipTree.getAttribute('data-ship-tree'));
+                }
                 window.componentTree.setNodeExpanded(node.id, node.open);
             });
         });
@@ -6073,6 +6599,8 @@ class HomeStationUI {
                 const kind = select.getAttribute('data-slot-kind');
                 const slotIndex = Number(select.getAttribute('data-slot-index'));
                 const selectedId = event.target.value;
+                const shipTree = select.closest('[data-ship-tree]');
+                const shipId = shipTree ? shipTree.getAttribute('data-ship-tree') : this.hangarShipId;
                 const loadoutKeys = {
                     weapon: 'weapons',
                     defense: 'defenses',
@@ -6082,14 +6610,14 @@ class HomeStationUI {
                 const loadoutKey = loadoutKeys[kind];
 
                 if (!loadoutKey || typeof shipLoadoutManager === 'undefined') return;
-                const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
+                const loadout = shipLoadoutManager.getLoadout(shipId);
                 const modules = loadout[loadoutKey];
                 const currentId = modules[slotIndex];
 
                 if (!selectedId) {
                     if (kind === 'weapon' && modules.length <= 1) {
                         this.setStatus('AT LEAST ONE WEAPON IS REQUIRED');
-                        this.renderComponentTree();
+                        this.renderAllComponentTrees();
                         return;
                     }
                     modules.splice(slotIndex, 1);
@@ -6100,8 +6628,8 @@ class HomeStationUI {
                     }
                     modules[slotIndex] = selectedId;
                 }
-                shipLoadoutManager.setLoadout(this.hangarShipId, loadout);
-                this.renderComponentTree();
+                shipLoadoutManager.setLoadout(shipId, loadout);
+                this.renderAllComponentTrees();
                 this.drawHangarBay();
             });
         });
@@ -6113,20 +6641,22 @@ class HomeStationUI {
                 const slotIndex = Number(button.getAttribute('data-slot-index'));
                 const face = button.getAttribute('data-mod-face') || '';
                 const skinId = button.getAttribute('data-skin-id') || 'default';
+                const shipTree = button.closest('[data-ship-tree]');
+                const shipId = shipTree ? shipTree.getAttribute('data-ship-tree') : this.hangarShipId;
                 const loadoutKey = shipLoadoutManager.kindToLoadoutKey(kind);
                 const moduleId = loadoutKey
-                    ? shipLoadoutManager.getLoadout(this.hangarShipId)[loadoutKey][slotIndex]
+                    ? shipLoadoutManager.getLoadout(shipId)[loadoutKey][slotIndex]
                     : null;
                 if (!moduleId) return;
 
                 shipLoadoutManager.setModuleSkin(
-                    this.hangarShipId,
+                    shipId,
                     kind,
                     moduleId,
                     face,
                     skinId
                 );
-                this.renderComponentTree();
+                this.renderAllComponentTrees();
                 this.bindComponentTreeEvents();
                 this.drawHangarBay();
             });
@@ -6137,10 +6667,12 @@ class HomeStationUI {
                 if (typeof profileManager === 'undefined') return;
                 const segmentId = button.getAttribute('data-segment-id');
                 const styleIndex = Number(button.getAttribute('data-style-index'));
+                const shipTree = button.closest('[data-ship-tree]');
+                const shipId = shipTree ? shipTree.getAttribute('data-ship-tree') : this.hangarShipId;
                 if (!segmentId || !Number.isInteger(styleIndex)) return;
 
-                profileManager.setSegmentShapeVariant(this.hangarShipId, segmentId, styleIndex);
-                this.renderComponentTree();
+                profileManager.setSegmentShapeVariant(shipId, segmentId, styleIndex);
+                this.renderAllComponentTrees();
                 this.bindComponentTreeEvents();
                 this.drawHangarBay();
             });
@@ -6150,8 +6682,10 @@ class HomeStationUI {
             button.addEventListener('click', () => {
                 if (typeof profileManager === 'undefined') return;
                 const enableSymmetry = button.getAttribute('data-tree-wing-symmetry') !== 'on';
-                profileManager.setWingStyleSymmetry(this.hangarShipId, enableSymmetry);
-                this.renderComponentTree();
+                const shipTree = button.closest('[data-ship-tree]');
+                const shipId = shipTree ? shipTree.getAttribute('data-ship-tree') : this.hangarShipId;
+                profileManager.setWingStyleSymmetry(shipId, enableSymmetry);
+                this.renderAllComponentTrees();
                 this.bindComponentTreeEvents();
                 this.drawHangarBay();
             });

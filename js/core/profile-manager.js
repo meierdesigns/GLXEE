@@ -1138,6 +1138,22 @@ class ProfileManager {
         return true;
     }
 
+    getWingStyleSymmetry(shipId) {
+        const profile = this.getActiveProfile();
+        const byShip = profile && profile.wingStyleSymmetry;
+        if (!byShip) return true;
+        return byShip[String(shipId || '')] !== false;
+    }
+
+    setWingStyleSymmetry(shipId, enabled) {
+        const profile = this.getActiveProfile();
+        if (!profile) return false;
+        if (!profile.wingStyleSymmetry) profile.wingStyleSymmetry = {};
+        profile.wingStyleSymmetry[String(shipId || '')] = !!enabled;
+        this.save();
+        return true;
+    }
+
     addOwnedShip(shipId) {
         const profile = this.getActiveProfile();
         if (!profile) return false;

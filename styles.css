@@ -12663,6 +12663,9 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .home-station-overlay .hs-components-host select {
     pointer-events: auto !important;
 }
+.home-station-overlay .hs-hangar-slot-select {
+    pointer-events: auto !important;
+}
  
 .hs-components-host ~ .home-station-overlay select {
     display: none !important;

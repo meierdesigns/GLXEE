@@ -157,13 +157,24 @@ class ShipLoadoutManager {
             slotAnchors: this.normalizeSlotAnchors(src.slotAnchors),
             moduleScales: this.normalizeModuleScales(src.moduleScales),
             moduleSkins: this.normalizeModuleSkins(src.moduleSkins),
+            slotSkins: this.normalizeSlotSkins(src.slotSkins),
             // Both wings share the same vertical shift and mirror their
             // horizontal distance from the centerline.
             wingOffsetY: Math.max(-1.5, Math.min(1.5, Number(src.wingOffsetY) || 0)),
             wingOffsetX: Math.max(-2, Math.min(2, Number(src.wingOffsetX) || 0)),
+            wingConnectionY: Math.max(-1, Math.min(1, Number(src.wingConnectionY) || 0)),
+            wingConnectionWidth: Math.max(0.02, Math.min(0.5, Number(src.wingConnectionWidth) || 0.1)),
+            wingRotation: Math.max(-60, Math.min(60, Number(src.wingRotation) || 0)),
+            voxelScale: Math.max(0.1, Math.min(10, Number(src.voxelScale) || 1)),
+            wingConnectionStyle: ['strut', 'plate', 'double', 'hinge'].indexOf(src.wingConnectionStyle) !== -1
+                ? src.wingConnectionStyle
+                : 'strut',
             segmentScale: this.normalizeSegmentScale(src.segmentScale),
             segmentOffset: this.normalizeSegmentOffset(src.segmentOffset),
             moduleOffset: this.normalizeModuleOffset(src.moduleOffset),
+            segmentUv: src.segmentUv && typeof src.segmentUv === 'object'
+                ? src.segmentUv
+                : null,
             fireMode: this.fireModeFromAbilities(abilities, src.fireMode)
         };
     }
@@ -244,6 +255,19 @@ class ShipLoadoutManager {
         return out;
     }
 
+    normalizeSlotSkins(raw) {
+        const src = raw && typeof raw === 'object' ? raw : {};
+        const out = {};
+        ['weapon', 'defense', 'ability', 'energy'].forEach((kind) => {
+            out[kind] = {};
+            const values = src[kind] && typeof src[kind] === 'object' ? src[kind] : {};
+            Object.keys(values).forEach((index) => {
+                if (values[index]) out[kind][String(index)] = String(values[index]);
+            });
+        });
+        return out;
+    }
+
     /** Skins available for a given module kind, independent of any specific id's stats. */
     getAvailableSkins(kind) {
         const common = [{ id: 'default', label: 'DEFAULT' }];
@@ -285,6 +309,23 @@ class ShipLoadoutManager {
         if (!skins) return 'default';
         const offsetKey = this.moduleOffsetKey(moduleId, face);
         return skins[offsetKey] || 'default';
+    }
+
+    setSlotSkin(shipId, kind, slotIndex, skinId) {
+        const loadout = this.getLoadout(shipId);
+        const skins = this.normalizeSlotSkins(loadout.slotSkins);
+        skins[kind] = skins[kind] || {};
+        const key = String(Math.max(0, Number(slotIndex) || 0));
+        if (!skinId || skinId === 'default') delete skins[kind][key];
+        else skins[kind][key] = String(skinId);
+        loadout.slotSkins = skins;
+        return { ok: true, loadout: this.setLoadout(shipId, loadout) };
+    }
+
+    getSlotSkin(shipId, kind, slotIndex) {
+        const loadout = this.getLoadout(shipId);
+        const skins = loadout.slotSkins && loadout.slotSkins[kind];
+        return (skins && skins[String(slotIndex)]) || 'default';
     }
 
     normalizeModuleScales(raw) {
@@ -680,7 +721,8 @@ class ShipLoadoutManager {
         const centerMs = evenSize(ms);
         const hullMid = coreWidth / 2;
         const parts = [];
-        const uv = this.segmentUv;
+        const uv = L.segmentUv || this.segmentUv;
+        const slotCounters = { weapon: 0, defense: 0, ability: 0, energy: 0 };
 
         const alignCenter = (center, size) => Math.floor(center - size / 2);
 
@@ -715,9 +757,14 @@ class ShipLoadoutManager {
             const rest = extra ? Object.assign({}, extra) : {};
             delete rest.scaleW;
             delete rest.scaleH;
+            const slotIndex = rest.slotIndex != null
+                ? Number(rest.slotIndex)
+                : (slotCounters[kind]++);
+            delete rest.slotIndex;
             parts.push(Object.assign({
                 id: id,
                 kind: kind,
+                slotIndex: slotIndex,
                 x: x,
                 y: y,
                 width: w,
@@ -1166,7 +1213,10 @@ class ShipLoadoutManager {
         // scaling a component keeps its installed hardware attached to it.
         parts.forEach((part) => {
             const skins = L.moduleSkins && L.moduleSkins[part.kind];
-            const skin = skins ? skins[this.moduleOffsetKey(part.id, part.face)] : null;
+            const slotSkins = L.slotSkins && L.slotSkins[part.kind];
+            const moduleSkin = skins ? skins[this.moduleOffsetKey(part.id, part.face)] : null;
+            const slotSkin = slotSkins ? slotSkins[String(part.slotIndex)] : null;
+            const skin = moduleSkin || slotSkin;
             if (skin) part.skin = skin;
             const segmentId = part.mountSegment === 'wing'
                 ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
@@ -1431,6 +1481,7 @@ class ShipLoadoutManager {
         const id = shipId || model.id;
         const coreSize = this.getCoreSize(model.modelClass, model);
         const loadout = this.getLoadout(id);
+        if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const layout = this.buildLayout(coreSize.width, coreSize.height, loadout);
         const caps = this.getSlotCaps(id, model.modelClass);
         const hullBonus = this.getFrameHullBonus(id);
@@ -1918,6 +1969,42 @@ class ShipLoadoutManager {
         const loadout = this.getLoadout(shipId);
         loadout.wingOffsetX = Math.max(-2, Math.min(2, Number(offsetX) || 0));
         loadout.wingOffsetY = Math.max(-1.5, Math.min(1.5, Number(offsetY) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    setWingConnection(shipId, connectionY) {
+        const loadout = this.getLoadout(shipId);
+        loadout.wingConnectionY = Math.max(-1, Math.min(1, Number(connectionY) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    setWingConnectionWidth(shipId, width) {
+        const loadout = this.getLoadout(shipId);
+        loadout.wingConnectionWidth = Math.max(0.02, Math.min(0.5, Number(width) || 0.1));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    setWingRotation(shipId, degrees) {
+        const loadout = this.getLoadout(shipId);
+        loadout.wingRotation = Math.max(-60, Math.min(60, Number(degrees) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    setVoxelScale(shipId, scale) {
+        const loadout = this.getLoadout(shipId);
+        loadout.voxelScale = Math.max(0.1, Math.min(10, Number(scale) || 1));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    }
+
+    setWingConnectionStyle(shipId, style) {
+        const allowed = ['strut', 'plate', 'double', 'hinge'];
+        const loadout = this.getLoadout(shipId);
+        loadout.wingConnectionStyle = allowed.indexOf(style) !== -1 ? style : 'strut';
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     }

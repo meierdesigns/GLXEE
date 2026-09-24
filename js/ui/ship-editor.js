@@ -63,6 +63,7 @@ class ShipEditorUI {
                     <button type="button" data-tab="stats" class="pe-tab active">STATS</button>
                     <button type="button" data-tab="weapons" class="pe-tab">WEAPONS</button>
                     <button type="button" data-tab="abilities" class="pe-tab">ABILITIES</button>
+                    <button type="button" data-tab="graphics" class="pe-tab">GRAPHICS</button>
                 </div>
                 <div class="planet-editor-body" id="seEditorBody">
                     <aside class="planet-editor-sidebar" id="seSidebar">
@@ -390,7 +391,8 @@ class ShipEditorUI {
 
         if (this.activeTab === 'stats') this.renderStatsTab(root);
         else if (this.activeTab === 'weapons') this.renderWeaponsTab(root);
-        else this.renderAbilitiesTab(root);
+        else if (this.activeTab === 'abilities') this.renderAbilitiesTab(root);
+        else this.renderGraphicsTab(root);
     }
 
     renderStatsTab(root) {
@@ -478,6 +480,27 @@ class ShipEditorUI {
         root.appendChild(this.makeSlider('Weapon cooldown (ms)', this.draft.weaponCooldown, 50, 2000, 10, (v) => {
             this.draft.weaponCooldown = Math.round(v);
         }));
+    }
+
+    renderGraphicsTab(root) {
+        const wing = Object.assign(
+            { x: 0.02, y: 0.30, w: 0.24, h: 0.40 },
+            this.draft.segmentUv && this.draft.segmentUv.wing
+        );
+        const setWing = (key, value) => {
+            this.draft.segmentUv = Object.assign({}, this.draft.segmentUv || {}, {
+                wing: Object.assign({}, wing, { [key]: value })
+            });
+            this.resetPreviewSim();
+        };
+        root.appendChild(this.makeSlider('Wing crop X', wing.x, 0, 0.9, 0.01, (v) => setWing('x', v)));
+        root.appendChild(this.makeSlider('Wing crop Y', wing.y, 0, 0.9, 0.01, (v) => setWing('y', v)));
+        root.appendChild(this.makeSlider('Wing crop width', wing.w, 0.05, 1, 0.01, (v) => setWing('w', v)));
+        root.appendChild(this.makeSlider('Wing crop height', wing.h, 0.05, 1, 0.01, (v) => setWing('h', v)));
+        const hint = document.createElement('p');
+        hint.className = 'pe-hint';
+        hint.textContent = 'Crop the wing from the ship graphic set. Smaller width/height removes fuselage pixels.';
+        root.appendChild(hint);
     }
 
     getAbilityMeta(id) {

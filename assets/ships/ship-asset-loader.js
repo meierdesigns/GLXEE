@@ -304,7 +304,10 @@ class ShipAssetLoader {
         if (!sprite || !sprite.length || !sprite[0]) return false;
         const cols = sprite[0].length;
         const rows = sprite.length;
-        const c0 = Math.floor(uv.x * cols);
+        // Wings are cropped from the outer sprite edges. Do not use the
+        // inset UV x-coordinate here, otherwise the detector can miss the
+        // actual wing pixels at the left/right border.
+        const c0 = 0;
         const r0 = Math.floor(uv.y * rows);
         const cw = Math.max(1, Math.floor(uv.w * cols));
         const rh = Math.max(1, Math.floor(uv.h * rows));
@@ -316,6 +319,51 @@ class ShipAssetLoader {
             }
         }
         return false;
+    }
+
+    /**
+     * Convert the legacy inset UV bands into edge-based crops.
+     * Body bands are cut from the top / middle / bottom of the fuselage;
+     * wings are cut from the left / right outer edge of the source image.
+     */
+    getEdgeCropForSegment(seg, uv) {
+        if (!uv) return null;
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const id = String(seg && seg.id || '');
+        const fullUv = (uv.front || uv.back || uv.wing)
+            ? uv
+            : ((typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.segmentUv)
+                || {});
+        const band = fullUv[id] || fullUv.wing || uv;
+        const frontH = clamp(Number(fullUv.front && fullUv.front.h) || 0.2, 0.01, 1);
+        const backH = clamp(Number(fullUv.back && fullUv.back.h) || 0.2, 0.01, 1);
+        const wing = fullUv.wing || band;
+
+        if (id === 'wingLeft' || id === 'wingRight') {
+            const edgeInset = clamp(Number(band.x) || 0, 0, 1);
+            const w = clamp(Number(band.w || wing.w) || 0.24, 0.01, 1);
+            return {
+                x: id === 'wingRight' ? 1 - edgeInset - w : edgeInset,
+                y: clamp(Number(band.y || wing.y) || 0.3, 0, 1),
+                w: w,
+                h: clamp(Number(band.h || wing.h) || 0.4, 0.01, 1)
+            };
+        }
+
+        const x = clamp(Number(band.x) || 0, 0, 1);
+        const w = clamp(Number(band.w) || 1, 0.01, 1 - x);
+        if (id === 'front') {
+            return { x: x, y: 0, w: w, h: frontH };
+        }
+        if (id === 'back') {
+            return { x: x, y: 1 - backH, w: w, h: backH };
+        }
+        return {
+            x: x,
+            y: frontH,
+            w: w,
+            h: Math.max(0.01, 1 - frontH - backH)
+        };
     }
 
     /**
@@ -460,6 +508,28 @@ class ShipAssetLoader {
      * Prefer dedicated segment PNGs; else distinct procedural blocks
      * (full-sprite UV crop only as last soft fallback — it looks fused).
      */
+    cropWingSegment(seg, shipModel) {
+        if (!seg || (seg.id !== 'wingLeft' && seg.id !== 'wingRight')
+            || !shipModel || !shipModel.segmentUv || !shipModel.segmentUv.wing) {
+            return seg;
+        }
+        const crop = shipModel.segmentUv.wing;
+        const spanFactor = Math.max(0.2, Math.min(3, Number(crop.w) / 0.24));
+        const heightFactor = Math.max(0.25, Math.min(2.5, Number(crop.h) / 0.40));
+        const cropX = Math.max(0, Math.min(1 - Math.min(1, spanFactor), (Number(crop.x) - 0.02) / 0.24));
+        const cropY = Math.max(0, Math.min(1 - Math.min(1, heightFactor), (Number(crop.y) - 0.30) / 0.40));
+        const width = Math.max(1, seg.width * spanFactor);
+        const height = Math.max(1, seg.height * heightFactor);
+        return Object.assign({}, seg, {
+            x: seg.id === 'wingLeft'
+                ? seg.x + seg.width * (1 - cropX - Math.min(1, spanFactor))
+                : seg.x + seg.width * cropX,
+            y: seg.y + seg.height * cropY,
+            width: width,
+            height: height
+        });
+    }
+
     renderHullSegments(ctx, shipModel, x, y, scale, colorOverlay, overlayIntensity, renderOptions) {
         const layout = shipModel.layout;
         const order = { back: 0, wingLeft: 1, wingRight: 2, center: 3, front: 4 };
@@ -480,26 +550,79 @@ class ShipAssetLoader {
             ctx.fillStyle = wingPalette[2];
             segs.filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight').forEach((wing) => {
                 const isLeft = wing.id === 'wingLeft';
-                const centerEdge = x + (isLeft
-                    ? centerSeg.x
-                    : centerSeg.x + centerSeg.width) * scale;
-                const wingEdge = x + (isLeft
-                    ? wing.x + wing.width
-                    : wing.x) * scale;
-                const centerY = y + (centerSeg.y + centerSeg.height * 0.5) * scale;
+                const centerEdge = x + (isLeft ? centerSeg.x : centerSeg.x + centerSeg.width) * scale;
+                const crop = shipModel.segmentUv && shipModel.segmentUv.wing;
+                const cropX = crop
+                    ? Math.max(0, Math.min(0.92, (Number(crop.x) - 0.02) / 0.24))
+                    : 0;
+                const wingRoot = isLeft
+                    ? wing.x + wing.width * (1 - cropX)
+                    : wing.x + wing.width * cropX;
+                const wingEdge = x + wingRoot * scale;
+                const connectionY = Math.max(-1, Math.min(1,
+                    Number(layout.loadout && layout.loadout.wingConnectionY) || 0
+                ));
+                const connectionWidth = Math.max(0.02, Math.min(0.5,
+                    Number(layout.loadout && layout.loadout.wingConnectionWidth) || 0.1
+                ));
+                const centerY = y + (
+                    centerSeg.y + centerSeg.height * (0.5 + connectionY * 0.5)
+                ) * scale;
                 const wingY = y + (wing.y + wing.height * 0.5) * scale;
-                const centerHalf = Math.max(2, centerSeg.height * scale * 0.16);
-                const wingHalf = Math.max(2, wing.height * scale * 0.22);
-                ctx.beginPath();
-                ctx.moveTo(centerEdge, centerY - centerHalf);
-                ctx.lineTo(wingEdge, wingY - wingHalf);
-                ctx.lineTo(wingEdge, wingY + wingHalf);
-                ctx.lineTo(centerEdge, centerY + centerHalf);
-                ctx.closePath();
-                ctx.fill();
+                const style = layout.loadout && layout.loadout.wingConnectionStyle || 'strut';
+                const rootOverlap = Math.max(1, Math.min(3, scale));
+                const bridgeStart = isLeft ? centerEdge + rootOverlap : centerEdge - rootOverlap;
+                const bridgeEnd = isLeft ? wingEdge - rootOverlap : wingEdge + rootOverlap;
+                const centerHalf = Math.max(2, centerSeg.height * scale * (
+                    style === 'plate' ? connectionWidth * 2 : connectionWidth
+                ));
+                const wingHalf = Math.max(2, wing.height * scale * (
+                    style === 'plate' ? connectionWidth * 2.2 : connectionWidth * 1.2
+                ));
+                const voxelSize = Math.max(
+                    1,
+                    Math.round(
+                        this.HULL_PIXEL_CELL_PX * scale
+                        / Math.max(0.1, Math.min(10,
+                            Number(layout.loadout && layout.loadout.voxelScale) || 1
+                        ))
+                    )
+                );
+                const drawBridge = (fromY, toY, halfA, halfB) => {
+                    const minX = Math.min(bridgeStart, bridgeEnd);
+                    const maxX = Math.max(bridgeStart, bridgeEnd);
+                    const span = bridgeEnd - bridgeStart;
+                    const firstVoxelX = Math.floor(minX / voxelSize) * voxelSize;
+                    const thickness = style === 'plate' ? 2 : (style === 'double' ? 1 : 1);
+                    for (let vx = firstVoxelX; vx <= maxX; vx += voxelSize) {
+                        const centerX = Math.min(maxX, vx + voxelSize * 0.5);
+                        const t = Math.max(0, Math.min(1, (centerX - bridgeStart) / (span || 1)));
+                        const centerY = fromY + (toY - fromY) * t;
+                        const row = Math.round(centerY / voxelSize) * voxelSize;
+                        for (let layer = 0; layer < thickness; layer++) {
+                            this.fillVoxelCell(
+                                ctx,
+                                vx,
+                                row + (layer - Math.floor(thickness / 2)) * voxelSize,
+                                voxelSize,
+                                voxelSize,
+                                wingPalette[2]
+                            );
+                        }
+                    }
+                };
+                if (style === 'double') {
+                    drawBridge(centerY - centerHalf * 1.25, wingY - wingHalf * 0.9, centerHalf * 0.35, wingHalf * 0.35);
+                    drawBridge(centerY + centerHalf * 1.25, wingY + wingHalf * 0.9, centerHalf * 0.35, wingHalf * 0.35);
+                } else {
+                    drawBridge(centerY, wingY, centerHalf, wingHalf);
+                }
+                if (style === 'hinge') {
+                    ctx.fillRect(bridgeStart - 2, centerY - centerHalf, 4, centerHalf * 2);
+                    ctx.fillRect(bridgeEnd - 2, wingY - wingHalf, 4, wingHalf * 2);
+                }
             });
         }
-
         const hasDedicatedSegments = !factionStyle && segs.some((seg) => {
             const key = this.resolveSegmentSpriteKey(shipModel, seg.id);
             return key
@@ -539,10 +662,11 @@ class ShipAssetLoader {
         }
 
         segs.forEach((seg) => {
-            const sx = x + seg.x * scale;
-            const sy = y + seg.y * scale;
-            const sw = Math.max(1, seg.width * scale);
-            const sh = Math.max(1, seg.height * scale);
+            const renderSeg = this.cropWingSegment(seg, shipModel);
+            const sx = x + renderSeg.x * scale;
+            const sy = y + renderSeg.y * scale;
+            const sw = Math.max(1, renderSeg.width * scale);
+            const sh = Math.max(1, renderSeg.height * scale);
 
             // Module replace: draw mount art stretched into the segment box
             if (seg.replace && seg.replace.id) {
@@ -605,7 +729,7 @@ class ShipAssetLoader {
             // at least one authored segment exists and the missing part needs
             // a temporary visual. Player hulls with a faction style skip this
             // entirely — each segment is generated procedurally instead.
-            if (!factionStyle && this.renderSegmentFromFullSprite(
+            if (this.renderSegmentFromFullSprite(
                 ctx, shipModel, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity
             )) {
                 if (showGuides) {
@@ -617,11 +741,18 @@ class ShipAssetLoader {
             const variantOverride = this.resolveSegmentVariantOverride(shipModel, seg.id);
             if (seg.id === 'wingLeft' || seg.id === 'wingRight') {
                 this.renderProceduralWing(
-                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride
+                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+                    variantOverride, shipModel.segmentUv && shipModel.segmentUv.wing,
+                    shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.wingRotation,
+                    shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.voxelScale,
+                    scale
                 );
             } else {
                 this.renderProceduralBodyBand(
-                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride
+                    ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+                    variantOverride,
+                    shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.voxelScale,
+                    scale
                 );
             }
             if (showGuides) {
@@ -649,10 +780,11 @@ class ShipAssetLoader {
     ) {
         const showGuides = !!(renderOptions && renderOptions.showSegmentGuides === true);
         segs.forEach((seg) => {
-            const sx = x + seg.x * scale;
-            const sy = y + seg.y * scale;
-            const sw = Math.max(1, seg.width * scale);
-            const sh = Math.max(1, seg.height * scale);
+            const renderSeg = seg;
+            const sx = x + renderSeg.x * scale;
+            const sy = y + renderSeg.y * scale;
+            const sw = Math.max(1, renderSeg.width * scale);
+            const sh = Math.max(1, renderSeg.height * scale);
             if (seg.replace && seg.replace.id) {
                 const replaceModule = ((shipModel.layout && shipModel.layout.modules) || []).find(
                     (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
@@ -697,9 +829,22 @@ class ShipAssetLoader {
             if (!drawn) {
                 const variantOverride = this.resolveSegmentVariantOverride(shipModel, seg.id);
                 if (seg.id === 'wingLeft' || seg.id === 'wingRight') {
-                    this.renderProceduralWing(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride);
+                    ctx.save();
+                    this.renderProceduralWing(
+                        ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+                        variantOverride, shipModel.segmentUv && shipModel.segmentUv.wing,
+                        shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.wingRotation,
+                        shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.voxelScale,
+                        scale
+                    );
+                    ctx.restore();
                 } else {
-                    this.renderProceduralBodyBand(ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride);
+                    this.renderProceduralBodyBand(
+                        ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+                        variantOverride,
+                        shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.voxelScale,
+                        scale
+                    );
                 }
             }
             if (showGuides) {
@@ -810,11 +955,12 @@ class ShipAssetLoader {
     }
 
     renderSegmentFromFullSprite(ctx, shipModel, seg, x, y, w, h, colorOverlay, overlayIntensity) {
-        const uv = seg.uv || (typeof shipLoadoutManager !== 'undefined'
+        const rawUv = seg.uv || (typeof shipLoadoutManager !== 'undefined'
             && shipLoadoutManager.segmentUv
             && shipLoadoutManager.segmentUv[
                 seg.id === 'wingLeft' || seg.id === 'wingRight' ? 'wing' : seg.id
             ]);
+        const uv = this.getEdgeCropForSegment(seg, rawUv);
         if (!uv) return false;
 
         const spriteName = this.getSpriteNameForShip(shipModel);
@@ -830,10 +976,6 @@ class ShipAssetLoader {
             let sy = Math.floor(uv.y * srcH);
             let sw = Math.max(1, Math.floor(uv.w * srcW));
             let sh = Math.max(1, Math.floor(uv.h * srcH));
-            if (seg.id === 'wingRight' && !seg.mirror) {
-                // Explicit right wing crop from opposite side of sprite
-                sx = Math.floor((1 - uv.x - uv.w) * srcW);
-            }
             // Stretch the authored crop into the full segment frame so scaled
             // wings/body never leave empty cells inside their bounds.
             const drawW = Math.max(1, Math.round(w));
@@ -866,9 +1008,6 @@ class ShipAssetLoader {
         let r0 = Math.floor(uv.y * rows);
         let cw = Math.max(1, Math.floor(uv.w * cols));
         let rh = Math.max(1, Math.floor(uv.h * rows));
-        if (seg.id === 'wingRight' && !seg.mirror) {
-            c0 = Math.floor((1 - uv.x - uv.w) * cols);
-        }
         const colors = shipModel.colors || {};
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;
@@ -935,8 +1074,10 @@ class ShipAssetLoader {
         return 4;
     }
 
-    hullPartResolution(w, h) {
-        const cell = this.HULL_PIXEL_CELL_PX;
+    hullPartResolution(w, h, voxelScale = 1, pixelZoom = 1) {
+        const cell = this.HULL_PIXEL_CELL_PX
+            * Math.max(0.25, Number(pixelZoom) || 1)
+            / Math.max(0.1, Math.min(10, Number(voxelScale) || 1));
         // Never request more grid cells than there are physical pixels to draw
         // them into — at small preview/gameplay scale that forced extra cells
         // to share a pixel, so the shape's edges overwrote each other and the
@@ -995,8 +1136,11 @@ class ShipAssetLoader {
      * never a vector path or an image-scaled bitmap, so it's never blurred
      * or anti-aliased — a real pixel-art sprite, not a stretched drawing.
      */
-    renderProceduralWing(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride = null) {
-        const { resW, resH } = this.hullPartResolution(w, h);
+    renderProceduralWing(
+        ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+        variantOverride = null, crop = null, rotation = 0, voxelScale = 1, pixelZoom = 1
+    ) {
+        const { resW, resH } = this.hullPartResolution(w, h, voxelScale, pixelZoom);
         let shapeVariant;
         if (variantOverride != null) {
             shapeVariant = variantOverride;
@@ -1009,7 +1153,82 @@ class ShipAssetLoader {
         }
         const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
-        this.drawPixelGridHull(ctx, grid, colors, x, y, w, h);
+        const angle = Math.max(-60, Math.min(60, Number(rotation) || 0)) * Math.PI / 180;
+        if (Math.abs(angle) < 0.001) {
+            this.drawPixelGridHull(ctx, grid, colors, x, y, w, h);
+        } else {
+            this.drawRotatedVoxelGrid(
+                ctx, grid, colors, x, y, w, h,
+                angle * (seg.id === 'wingLeft' ? -1 : 1)
+            );
+        }
+    }
+
+    drawRotatedVoxelGrid(ctx, grid, colors, x, y, width, height, angle) {
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const size = Math.max(1, Math.min(width / cols, height / rows));
+        const originX = x + (width - cols * size) * 0.5;
+        const originY = y + (height - rows * size) * 0.5;
+        const cx = x + width * 0.5;
+        const cy = y + height * 0.5;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const cell = Math.max(1, Math.round(size));
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const px = originX + (col + 0.5) * size;
+                const py = originY + (row + 0.5) * size;
+                // Sample the destination voxel area, not just its center.
+                // This closes sub-voxel gaps introduced by diagonal
+                // rotations while retaining one fixed screen raster.
+                let pixel = 0;
+                [-0.25, 0.25].some((ox) => [-0.25, 0.25].some((oy) => {
+                    const dx = px + ox * size - cx;
+                    const dy = py + oy * size - cy;
+                    const sx = dx * cos + dy * sin + cx;
+                    const sy = -dx * sin + dy * cos + cy;
+                    const sourceCol = Math.floor((sx - originX) / size);
+                    const sourceRow = Math.floor((sy - originY) / size);
+                    if (sourceCol < 0 || sourceCol >= cols || sourceRow < 0 || sourceRow >= rows) {
+                        return false;
+                    }
+                    pixel = grid[sourceRow][sourceCol];
+                    return !!pixel;
+                }));
+                if (!pixel) continue;
+                const left = Math.round(originX + col * size);
+                const top = Math.round(originY + row * size);
+                this.fillVoxelCell(ctx, left, top, cell, cell, colors[pixel] || '#888888');
+            }
+        }
+    }
+
+    applyWingCrop(grid, seg, crop) {
+        if (!grid || !grid.length || !crop) return;
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const cropX = Math.max(0, Math.min(0.92, (Number(crop.x) - 0.02) / 0.24));
+        const cropY = Math.max(0, Math.min(0.92, (Number(crop.y) - 0.30) / 0.40));
+        const cropW = Math.max(0.08, Math.min(1 - cropX, Number(crop.w) / 0.24 || 1));
+        const cropH = Math.max(0.08, Math.min(1 - cropY, Number(crop.h) / 0.40 || 1));
+        const right = seg && seg.id === 'wingRight';
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const nx = (col + 0.5) / cols;
+                const ny = (row + 0.5) / rows;
+                // The crop origin follows the hull connection: the left wing
+                // is cropped from its right/root edge, the right wing from
+                // its left/root edge. This keeps both wings aligned to the
+                // same attachment direction.
+                const inX = right
+                    ? nx >= cropX && nx <= cropX + cropW
+                    : nx >= 1 - cropX - cropW && nx <= 1 - cropX;
+                if (!inX || ny < cropY || ny > cropY + cropH) {
+                    grid[row][col] = 0;
+                }
+            }
+        }
     }
 
     // Base tip geometry per shape variant: reach (0-1.3, how far the tip extends
@@ -1019,7 +1238,9 @@ class ShipAssetLoader {
         return [
             { reach: 1.0, center: 0.5, spread: 0.22 },  // delta — straight wide triangle
             { reach: 1.05, center: 0.72, spread: 0.16 }, // swept — tip pulled toward the back
-            { reach: 0.55, center: 0.5, spread: 0.3 }    // stub — short, blunt wing
+            { reach: 0.55, center: 0.5, spread: 0.3 },    // stub — short, blunt wing
+            { reach: 0.95, center: 0.5, spread: 0.2 },    // bat — split upper/lower lobes
+            { reach: 0.9, center: 0.36, spread: 0.27 }    // gull — lifted swept wing
         ];
     }
 
@@ -1080,20 +1301,46 @@ class ShipAssetLoader {
             const t = rows <= 1 ? 0.5 : r / (rows - 1);
             const dist = Math.abs(t - center) / Math.max(0.08, spread);
             const taper = Math.max(0, 1 - dist);
-            let widthFrac = Math.min(1, 0.22 + taper * Math.max(0, reach - 0.22));
+            let widthFrac;
+            if (shapeVariant === 1) {
+                // Swept blade: narrow root with a strong diagonal tip.
+                widthFrac = 0.04 + taper * 0.82;
+            } else if (shapeVariant === 2) {
+                // Stub/fork: compact wing with a blunt central shoulder.
+                widthFrac = 0.12 + taper * 0.58;
+            } else if (shapeVariant === 3) {
+                // Bat wing: two broad lobes with a shallow center notch.
+                const lobe = Math.max(0, 1 - Math.abs(Math.abs(t - 0.5) - 0.22) / 0.18);
+                widthFrac = 0.04 + lobe * 0.86;
+            } else if (shapeVariant === 4) {
+                // Gull wing: broad upper sweep with a raised outer tip.
+                widthFrac = 0.06 + Math.max(0, taper * (0.72 + (0.5 - t) * 0.42));
+            } else {
+                // Delta: broad triangular wing.
+                widthFrac = 0.05 + taper * Math.max(0, reach - 0.05);
+            }
             const prof = this.factionRowProfile(silhouette, t, left ? 1 : 2);
             widthFrac = Math.min(1, widthFrac * prof.widthMul);
+            // The default modular faction must still read as a wing: its
+            // silhouette profile is for body plates and otherwise widens the
+            // wing into a rectangular bar.
+            if (silhouette === 'modular') widthFrac *= 0.58;
             const width = Math.max(1, Math.round(cols * widthFrac));
             if (left) this.gridFillRect(g, cols - width, r, width, 1, 2);
             else this.gridFillRect(g, 0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        // Hardpoint rail accent
-        const railW = Math.max(1, Math.round(cols * 0.16));
-        const railC = left ? Math.max(1, cols - Math.round(cols * 0.55)) : Math.round(cols * 0.35);
+        // Slim wing rail accent: keep it attached to the wing silhouette
+        // instead of rendering a large rectangular block over the wing.
         const railR0 = Math.round(rows * 0.22);
         const railH = Math.max(1, Math.round(rows * 0.56));
-        this.gridFillRect(g, railC, railR0, railW, railH, 3);
+        for (let r = railR0; r < railR0 + railH; r++) {
+            const t = railH <= 1 ? 0 : (r - railR0) / (railH - 1);
+            const railC = left
+                ? cols - 1 - Math.round(t * Math.max(0, cols * 0.12))
+                : Math.round(t * Math.max(0, cols * 0.12));
+            this.gridFillRect(g, railC, r, 1, 1, 3);
+        }
         if (silhouette === 'rings') {
             const holeC = Math.round(cols * (left ? 0.58 : 0.42));
             const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.18));
@@ -1111,8 +1358,11 @@ class ShipAssetLoader {
         return 2;
     }
 
-    renderProceduralBodyBand(ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed, variantOverride = null) {
-        const { resW, resH } = this.hullPartResolution(w, h);
+    renderProceduralBodyBand(
+        ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
+        variantOverride = null, voxelScale = 1, pixelZoom = 1
+    ) {
+        const { resW, resH } = this.hullPartResolution(w, h, voxelScale, pixelZoom);
         let shapeVariant;
         if (variantOverride != null) {
             shapeVariant = variantOverride;
@@ -1203,7 +1453,18 @@ class ShipAssetLoader {
         const g = this.blankGrid(cols, rows);
         const silhouette = factionStyle ? factionStyle.silhouette : 'modular';
         const variant = shapeVariant || 0;
-        this.gridFillRect(g, 0, 0, cols, rows, 2);
+        // A continuous tapered fuselage reads as one ship body instead of
+        // several stacked rectangular plates.
+        for (let r = 0; r < rows; r++) {
+            const t = rows <= 1 ? 0.5 : r / (rows - 1);
+            const taper = 0.88 + Math.sin(t * Math.PI) * 0.12;
+            const variantMul = variant === 1 ? 0.9 : (variant === 2 ? 0.78 : 1);
+            const prof = this.factionRowProfile(silhouette, t, 4);
+            const width = Math.max(1, Math.round(cols * taper * variantMul * prof.widthMul));
+            const c0 = Math.max(0, Math.min(cols - width,
+                Math.round((cols - width) / 2 + prof.offsetMul * cols)));
+            this.gridFillRect(g, c0, r, width, 1, 2);
+        }
         this.outlineGridEdges(g);
         if (silhouette === 'rings') {
             // Twin hollow ring apertures — the voidborn's hallmark void gap.
@@ -1367,18 +1628,10 @@ class ShipAssetLoader {
         return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
 
-    /** Fill one hull "voxel" cell with a light top/left + dark bottom/right bevel for a raised 2D-voxel look. */
+    /** Fill one clean, axis-aligned 2D voxel cell. */
     fillVoxelCell(ctx, x, y, w, h, baseColor) {
         ctx.fillStyle = baseColor;
         ctx.fillRect(x, y, w, h);
-        if (baseColor.charAt(0) !== '#') return;
-        const bevel = Math.max(1, Math.round(Math.min(w, h) * 0.28));
-        ctx.fillStyle = this.shadeHex(baseColor, 38);
-        ctx.fillRect(x, y, w, bevel);
-        ctx.fillRect(x, y, bevel, h);
-        ctx.fillStyle = this.shadeHex(baseColor, -38);
-        ctx.fillRect(x, y + h - bevel, w, bevel);
-        ctx.fillRect(x + w - bevel, y, bevel, h);
     }
 
     /** Scale an indexed pixel grid (sprite[row][col] -> colors[index]) into any target rect, regenerating cell sizes each call. */
@@ -1390,10 +1643,15 @@ class ShipAssetLoader {
         }
         const cols = sprite[0].length;
         const rows = sprite.length;
-        const px = width / cols;
-        const py = height / rows;
+        // Rasterize every generated hull part into equal square 2D voxels.
+        // This is also used after rotation, so no part falls back to
+        // stretched rectangular pixels.
+        const cell = Math.max(1, Math.min(width / cols, height / rows));
+        const gridWidth = cols * cell;
+        const gridHeight = rows * cell;
+        const originX = x + (width - gridWidth) * 0.5;
+        const originY = y + (height - gridHeight) * 0.5;
         const palette = colors || {};
-        const voxel = this.getShipRenderStyle() === 'VOXEL';
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;
             if (typeof color === 'string' && color.indexOf('var(') === 0) {
@@ -1411,16 +1669,11 @@ class ShipAssetLoader {
                 const pixel = sprite[row][col];
                 if (!pixel) continue;
                 const color = resolve(palette[pixel] || '#888888');
-                const left = Math.floor(x + col * px);
-                const top = Math.floor(y + row * py);
-                const right = Math.ceil(x + (col + 1) * px);
-                const bottom = Math.ceil(y + (row + 1) * py);
-                if (voxel) {
-                    this.fillVoxelCell(ctx, left, top, right - left, bottom - top, color);
-                } else {
-                    ctx.fillStyle = color;
-                    ctx.fillRect(left, top, right - left, bottom - top);
-                }
+                const left = Math.floor(originX + col * cell);
+                const top = Math.floor(originY + row * cell);
+                const right = Math.ceil(originX + (col + 1) * cell);
+                const bottom = Math.ceil(originY + (row + 1) * cell);
+                this.fillVoxelCell(ctx, left, top, right - left, bottom - top, color);
             }
         }
     }

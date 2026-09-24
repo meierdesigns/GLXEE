@@ -27,6 +27,7 @@ class GraphicsManager {
         this.shipAssetLoader = null;
         this._shieldHullCache = Object.create(null);
         this._shieldSilhouetteBake = false;
+        this._playerModelExplicitlySelected = false;
         
         this.init();
     }
@@ -83,8 +84,11 @@ class GraphicsManager {
             // Load all ship assets
             await this.shipAssetLoader.loadAllShips();
             
-            // Set default models from assets
-            this.currentPlayerModel = this.shipAssetLoader.getShip('player');
+            // Keep the loadout model selected by the hangar while assets load.
+            // Replacing it here silently reset the in-game ship to the default hull.
+            if (!this._playerModelExplicitlySelected) {
+                this.currentPlayerModel = this.shipAssetLoader.getShip('player');
+            }
             this.currentEnemyModel = this.shipAssetLoader.getShip('enemyBasic');
 
             if (typeof window !== 'undefined') {
@@ -94,7 +98,9 @@ class GraphicsManager {
         } catch (error) {
             console.error('Failed to initialize ship assets:', error);
             // Fallback to old ship models
-            this.currentPlayerModel = this.shipModels.getShipModel('player');
+            if (!this._playerModelExplicitlySelected) {
+                this.currentPlayerModel = this.shipModels.getShipModel('player');
+            }
             this.currentEnemyModel = this.shipModels.getShipModel('enemyBasic');
         }
     }
@@ -125,7 +131,19 @@ class GraphicsManager {
         
         // Use asset loader if available, otherwise fallback to old system
         if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
-            this.shipAssetLoader.renderShip(ctx, model, x, y, drawScale, colorOverlay, overlayIntensity);
+            this.shipAssetLoader.renderShip(
+                ctx,
+                model,
+                x,
+                y,
+                drawScale,
+                colorOverlay,
+                overlayIntensity,
+                {
+                    showThrusterGlow: true,
+                    allowColorMountSprites: true
+                }
+            );
         } else {
             this.shipModels.renderShip(ctx, model, x, y, drawScale, colorOverlay, overlayIntensity);
         }
@@ -211,6 +229,7 @@ class GraphicsManager {
     
     // Set player ship model
     setPlayerShipModel(shipModel) {
+        this._playerModelExplicitlySelected = true;
         this.currentPlayerModel = shipModel;
         this._shieldHullCache = Object.create(null);
         

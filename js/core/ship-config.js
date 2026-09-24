@@ -233,7 +233,10 @@ class ShipConfigManager {
             energy: Array.isArray(data.energy) ? data.energy.map(String) : [],
             tier: data.tier != null ? Math.round(Number(data.tier)) : 1,
             cost: data.cost != null ? Math.round(Number(data.cost)) : 0,
-            faction: data.faction ? String(data.faction).toLowerCase() : null
+            faction: data.faction ? String(data.faction).toLowerCase() : null,
+            segmentUv: data.segmentUv && typeof data.segmentUv === 'object'
+                ? data.segmentUv
+                : null
         };
     }
 
@@ -379,6 +382,14 @@ class ShipConfigManager {
         merged.name = cfg.name || baseModel.name;
         merged.description = cfg.description || baseModel.description;
         merged.modelClass = cfg.modelClass || baseModel.modelClass;
+        if (cfg.segmentUv && typeof shipLoadoutManager !== 'undefined') {
+            merged.segmentUv = Object.assign(
+                {},
+                shipLoadoutManager.segmentUv,
+                cfg.segmentUv,
+                { wing: Object.assign({}, shipLoadoutManager.segmentUv.wing, cfg.segmentUv.wing) }
+            );
+        }
         merged.faction = cfg.faction != null ? cfg.faction : (baseModel.faction || null);
         merged.speed = cfg.speed;
         merged.maxHealth = cfg.maxHealth;

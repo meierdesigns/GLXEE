@@ -3342,6 +3342,10 @@ class HomeStationUI {
                                 aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
                         </h3>
                         <div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>
+                        <div class="hs-component-tree-container" aria-label="Selected ship components">
+                            <div class="hs-component-tree-header">COMPONENTS</div>
+                            <div class="hs-component-tree" id="hsComponentTree"></div>
+                        </div>
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -3375,13 +3379,6 @@ class HomeStationUI {
                             </div>
                         </div>
                         <div class="hs-hangar-bay hs-panel">
-                            <div class="hs-component-tree-container">
-                                <div class="hs-component-tree-header">
-                                    <label for="hsComponentTreeDepth" class="hs-tree-label">EXPAND</label>
-                                    <input type="range" id="hsComponentTreeDepth" class="hs-tree-depth-slider" min="0" max="3" value="1" aria-label="Expand tree depth">
-                                </div>
-                                <div class="hs-component-tree" id="hsComponentTree"></div>
-                            </div>
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
@@ -5066,7 +5063,11 @@ class HomeStationUI {
         const h = canvas.height;
         const accent = this.getHangarPreviewAccent();
         const shipId = this.hangarShipId || 'player_scrap';
-        const model = this.getHangarShipModel(shipId);
+        let model = this.getHangarShipModel(shipId);
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+            model = Object.assign({}, model);
+            shipLoadoutManager.applyLayoutToModel(model, shipId);
+        }
 
         ctx.imageSmoothingEnabled = false;
         ctx.fillStyle = '#050508';
@@ -5108,16 +5109,19 @@ class HomeStationUI {
         ctx.globalAlpha = 1;
 
         const p = sim.player;
-        if (typeof shipRenderer !== 'undefined') {
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) {
+            const scale = Math.min(p.width / (model.width || 20), p.height / (model.height || 16));
+            graphicsManager.shipAssetLoader.renderShip(ctx, model, p.x, p.y, scale, null, 0, {
+                showThrusterGlow: true,
+                allowColorMountSprites: true
+            });
+        } else if (typeof shipRenderer !== 'undefined') {
             if (shipRenderer.init) shipRenderer.init();
             const tmp = document.createElement('canvas');
             tmp.width = Math.max(1, p.width);
             tmp.height = Math.max(1, p.height);
             shipRenderer.renderShipPreview(tmp, model, 1);
             ctx.drawImage(tmp, Math.round(p.x), Math.round(p.y), p.width, p.height);
-        } else if (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) {
-            const scale = Math.min(p.width / (model.width || 20), p.height / (model.height || 16));
-            graphicsManager.shipAssetLoader.renderShip(ctx, model, p.x, p.y, scale, accent, 0.15);
         } else {
             ctx.fillStyle = accent;
             ctx.fillRect(p.x, p.y, p.width, p.height);
@@ -5951,8 +5955,14 @@ class HomeStationUI {
         if (!this.overlay) return;
         const treeContainer = this.overlay.querySelector('#hsComponentTree');
         if (!treeContainer) return;
-
         const shipId = this.hangarShipId || 'player_scrap';
+        if (typeof window.componentTree !== 'undefined') {
+            window.componentTree.setShip(shipId);
+            treeContainer.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
+                window.componentTree.setNodeExpanded(node.id, node.open);
+            });
+        }
+
         const modelClass = this.shipModelClass(
             shipId,
             typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null
@@ -5971,37 +5981,184 @@ class HomeStationUI {
             : { slots: [] };
 
         if (typeof window.componentTree !== 'undefined') {
-            treeContainer.innerHTML = window.componentTree.render(hangarSlots, loadout, inventory);
+            const layoutModules = (hangarSlots.layout && hangarSlots.layout.modules) || [];
+            const usedModules = new Set();
+            const slotsWithAreas = (hangarSlots.slots || []).map((slot) => {
+                const moduleIndex = slot.id
+                    ? layoutModules.findIndex((candidate, index) =>
+                        !usedModules.has(index)
+                        && candidate.kind === slot.kind
+                        && candidate.id === slot.id
+                        && (!slot.face || candidate.face === slot.face)
+                    )
+                    : -1;
+                const module = moduleIndex === -1 ? null : layoutModules[moduleIndex];
+                if (moduleIndex !== -1) usedModules.add(moduleIndex);
+                const mountSegment = module && module.mountSegment;
+                const emptySlotArea = slot.kind === 'weapon'
+                    ? (slot.index % 2 === 0 ? 'wingLeft' : 'wingRight')
+                    : (slot.kind === 'ability' ? 'back' : 'center');
+                const area = mountSegment === 'wing'
+                    ? (module.face === 'right' ? 'wingRight' : 'wingLeft')
+                    : (mountSegment || emptySlotArea);
+                return { ...slot, area };
+            });
+            treeContainer.innerHTML = window.componentTree.render(
+                { ...hangarSlots, slots: slotsWithAreas },
+                loadout,
+                inventory,
+                (kind, slot, moduleId) => {
+                    const skins = shipLoadoutManager.getAvailableSkins(kind);
+                    const activeSkin = shipLoadoutManager.getModuleSkin(
+                        shipId,
+                        kind,
+                        moduleId,
+                        slot.face
+                    );
+                    return skins.map((skin) => ({
+                        ...skin,
+                        active: skin.id === activeSkin
+                    }));
+                },
+                (area) => {
+                    if (typeof profileManager === 'undefined'
+                        || typeof graphicsManager === 'undefined'
+                        || !graphicsManager.shipAssetLoader) {
+                        return [];
+                    }
+                    const isWing = area === 'wingLeft' || area === 'wingRight';
+                    const symmetric = !isWing || profileManager.getWingStyleSymmetry(shipId);
+                    const segmentId = isWing && symmetric ? 'wing' : area;
+                    const loader = graphicsManager.shipAssetLoader;
+                    const count = segmentId === 'wing'
+                        ? loader.wingShapeVariants.length
+                        : loader.bodyShapeVariantCount(segmentId);
+                    const savedStyle = profileManager.getSegmentShapeVariant(shipId, segmentId);
+                    const defaultSegmentId = segmentId === 'wing'
+                        ? 'wingLeft'
+                        : segmentId;
+                    const activeStyle = savedStyle == null
+                        ? loader.hullShapeVariantIndex(
+                            loader.resolveHullShapeSeed({ id: shipId }),
+                            defaultSegmentId,
+                            count
+                        )
+                        : savedStyle;
+                    return {
+                        isWing,
+                        symmetric,
+                        styles: Array.from({ length: count }, (_, index) => ({
+                            segmentId,
+                            index,
+                            label: `STYLE ${index + 1}`,
+                            active: index === activeStyle
+                        }))
+                    };
+                }
+            );
         }
     }
 
     bindComponentTreeEvents() {
         if (!this.overlay) return;
-        const depthSlider = this.overlay.querySelector('#hsComponentTreeDepth');
-        if (depthSlider && typeof window.componentTree !== 'undefined') {
-            depthSlider.addEventListener('input', (e) => {
-                window.componentTree.setExpandDepth(e.target.value);
+        this.overlay.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
+            node.addEventListener('toggle', () => {
+                if (typeof window.componentTree === 'undefined' || !node.id) return;
+                window.componentTree.setNodeExpanded(node.id, node.open);
             });
-        }
+        });
 
-        // Handle slot dropdown changes
         this.overlay.querySelectorAll('.hs-tree-slot-select').forEach((select) => {
-            select.addEventListener('change', (e) => {
+            select.addEventListener('change', (event) => {
                 const kind = select.getAttribute('data-slot-kind');
                 const slotIndex = Number(select.getAttribute('data-slot-index'));
-                const selectedId = e.target.value;
+                const selectedId = event.target.value;
+                const loadoutKeys = {
+                    weapon: 'weapons',
+                    defense: 'defenses',
+                    ability: 'abilities',
+                    energy: 'energy'
+                };
+                const loadoutKey = loadoutKeys[kind];
 
-                if (typeof shipLoadoutManager === 'undefined') return;
+                if (!loadoutKey || typeof shipLoadoutManager === 'undefined') return;
+                const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
+                const modules = loadout[loadoutKey];
+                const currentId = modules[slotIndex];
+
                 if (!selectedId) {
-                    shipLoadoutManager.unequipModule(this.hangarShipId, kind, slotIndex);
+                    if (kind === 'weapon' && modules.length <= 1) {
+                        this.setStatus('AT LEAST ONE WEAPON IS REQUIRED');
+                        this.renderComponentTree();
+                        return;
+                    }
+                    modules.splice(slotIndex, 1);
                 } else {
-                    shipLoadoutManager.equipModule(this.hangarShipId, kind, slotIndex, selectedId);
+                    const selectedIndex = modules.indexOf(selectedId);
+                    if (selectedIndex !== -1 && selectedIndex !== slotIndex) {
+                        modules[selectedIndex] = currentId;
+                    }
+                    modules[slotIndex] = selectedId;
                 }
+                shipLoadoutManager.setLoadout(this.hangarShipId, loadout);
                 this.renderComponentTree();
                 this.drawHangarBay();
             });
         });
+
+        this.overlay.querySelectorAll('[data-tree-skin-set]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (typeof shipLoadoutManager === 'undefined') return;
+                const kind = button.getAttribute('data-tree-skin-set');
+                const slotIndex = Number(button.getAttribute('data-slot-index'));
+                const face = button.getAttribute('data-mod-face') || '';
+                const skinId = button.getAttribute('data-skin-id') || 'default';
+                const loadoutKey = shipLoadoutManager.kindToLoadoutKey(kind);
+                const moduleId = loadoutKey
+                    ? shipLoadoutManager.getLoadout(this.hangarShipId)[loadoutKey][slotIndex]
+                    : null;
+                if (!moduleId) return;
+
+                shipLoadoutManager.setModuleSkin(
+                    this.hangarShipId,
+                    kind,
+                    moduleId,
+                    face,
+                    skinId
+                );
+                this.renderComponentTree();
+                this.bindComponentTreeEvents();
+                this.drawHangarBay();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-tree-area-style]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (typeof profileManager === 'undefined') return;
+                const segmentId = button.getAttribute('data-segment-id');
+                const styleIndex = Number(button.getAttribute('data-style-index'));
+                if (!segmentId || !Number.isInteger(styleIndex)) return;
+
+                profileManager.setSegmentShapeVariant(this.hangarShipId, segmentId, styleIndex);
+                this.renderComponentTree();
+                this.bindComponentTreeEvents();
+                this.drawHangarBay();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-tree-wing-symmetry]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (typeof profileManager === 'undefined') return;
+                const enableSymmetry = button.getAttribute('data-tree-wing-symmetry') !== 'on';
+                profileManager.setWingStyleSymmetry(this.hangarShipId, enableSymmetry);
+                this.renderComponentTree();
+                this.bindComponentTreeEvents();
+                this.drawHangarBay();
+            });
+        });
     }
+
+}
 
 const homeStationUI = new HomeStationUI();
 window.homeStationUI = homeStationUI;

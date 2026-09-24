@@ -447,7 +447,12 @@ class ShipAssetLoader {
         }
         const shipId = shipModel.id;
         if (!shipId) return null;
-        return profileManager.getSegmentShapeVariant(shipId, segmentId);
+        const isWing = segmentId === 'wingLeft' || segmentId === 'wingRight';
+        const profileSegmentId = isWing && profileManager.getWingStyleSymmetry
+            && profileManager.getWingStyleSymmetry(shipId)
+            ? 'wing'
+            : segmentId;
+        return profileManager.getSegmentShapeVariant(shipId, profileSegmentId);
     }
 
     /**
@@ -1230,11 +1235,12 @@ class ShipAssetLoader {
                     this.gridFillRect(g, px, py, nodeW, nodeH, 3);
                 }
             }
-        } else if (variant === 1) {
+        }
+        if (variant === 1) {
             this.gridFillRect(g, cols * 0.22, rows * 0.24, cols * 0.56, Math.max(1, rows * 0.24), 3);
             this.gridFillRect(g, 1, rows * 0.62, Math.max(1, cols * 0.1), Math.max(1, rows * 0.15), 3);
             this.gridFillRect(g, cols - 1 - Math.max(1, cols * 0.1), rows * 0.62, Math.max(1, cols * 0.1), Math.max(1, rows * 0.15), 3);
-        } else {
+        } else if (silhouette === 'modular') {
             this.gridFillRect(g, cols * 0.3, rows * 0.28, cols * 0.4, Math.max(1, rows * 0.22), 3);
         }
         return g;

@@ -123,6 +123,32 @@
 
 ---
 
+## Wave 35 — Ship Anatomy & Voxel Rendering
+
+- Edge-based wing crops prevent fuselage pixels from leaking into left/right component previews.
+- Ship hull parts render on a shared square voxel raster with configurable scale and wing rotation.
+- Wing connectors support strut, plate, double, and hinge styles with adjustable attachment position and width.
+- Persistent ship loadouts now store segment UVs, anatomy settings, and symmetric wing shape variants.
+
+## Wave 36 — Hangar Component Customization
+
+- Hangar component trees stay synchronized with equipped modules, slot skins, and ship selection.
+- Area guides, wing hit targets, slot pins, draggable module cards, and anatomy reset controls complete the bay editor.
+- Cosmetic module skins persist both by mounted module and by hangar slot.
+
+## Wave 37 — Hangar Editing & Profile Handoff
+
+- Ship editor exposes live wing crop controls for asset authoring.
+- Hangar, onboarding, profile selection, and start-screen transitions preserve the selected ship and loadout.
+- Menu appearance and navigation handoffs keep the hangar editor inside the station flow.
+
+## Wave 38 — Archive Docs
+
+- README feature inventory now documents editable ship anatomy, symmetric wing styling, and draggable hangar cards.
+- Git deployment strategy records the feature-focused commit commands for Waves 35–37.
+
+---
+
 ## Pilot checklist
 
 ```

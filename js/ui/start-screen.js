@@ -2720,7 +2720,9 @@ class StartScreenManager {
                     this.hideOverlay();
                     break;
                 }
-                if (typeof profileSelectionManager !== 'undefined') {
+                if (typeof profileSelectionManager !== 'undefined'
+                    && typeof profileManager !== 'undefined'
+                    && !profileManager.hasActiveProfile()) {
                     profileSelectionManager.show({
                         onClose: () => this.returnToHub()
                     });

@@ -829,12 +829,12 @@ class GameControlSystem {
         }
 
         if (typeof startScreenManager !== 'undefined') {
-            startScreenManager.returnToHub();
+            startScreenManager.returnToHub({ tab: 'play' });
         }
 
         if (typeof menuStateManager !== 'undefined') {
             if (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
-                menuStateManager.setScreen('home-station', { tab: 'station' });
+                menuStateManager.setScreen('home-station', { tab: 'play' });
             } else {
                 menuStateManager.setScreen('start');
             }

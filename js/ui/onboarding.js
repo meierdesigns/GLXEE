@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * First-run onboarding: Story → Name → Scrap Fighter reveal.
+ * First-run onboarding: Story → Name/Faction → Scrap Fighter assembly.
  */
 class OnboardingManager {
     constructor() {
@@ -11,6 +11,7 @@ class OnboardingManager {
         this.step = 'story'; // story | name | scrap
         this.onComplete = null;
         this._pendingName = '';
+        this._pendingFaction = 'terran';
     }
 
     show(options) {
@@ -18,6 +19,9 @@ class OnboardingManager {
         this.onComplete = options && options.onComplete;
         this.step = 'story';
         this._pendingName = '';
+        this._pendingFaction = (typeof factionManager !== 'undefined' && factionManager.getFactionIds)
+            ? factionManager.getFactionIds()[0]
+            : 'terran';
         this.createUI();
         if (typeof menuStateManager !== 'undefined') {
             menuStateManager.setScreen('onboarding');
@@ -40,6 +44,28 @@ class OnboardingManager {
         const cb = this.onComplete;
         this.hide();
         if (typeof cb === 'function') cb();
+    }
+
+    getFactionIds() {
+        if (typeof factionManager !== 'undefined' && factionManager.getFactionIds) {
+            return factionManager.getFactionIds();
+        }
+        return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+    }
+
+    getFactionLabel(id) {
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta) {
+            const meta = planetConfigManager.getFactionMeta(id);
+            if (meta && meta.label) return meta.label;
+        }
+        return String(id || '').toUpperCase();
+    }
+
+    getFactionColor(id) {
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor) {
+            return factionShipStyles.getFactionColor(id);
+        }
+        return '#888888';
     }
 
     createUI() {
@@ -73,6 +99,19 @@ class OnboardingManager {
                     <h2 class="profile-selection-title">PILOT CALLSIGN</h2>
                     <p class="onboarding-hint">ENTER YOUR NAME</p>
                     <input type="text" class="profile-name-input" id="obNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>
+                    <div class="profile-faction-picker onboarding-faction-picker">
+                        <div class="profile-faction-picker-label">FACTION</div>
+                        <div class="profile-faction-swatches">
+                            ${this.getFactionIds().map((id) => `
+                                <button type="button" class="profile-faction-swatch${id === this._pendingFaction ? ' selected' : ''}"
+                                    data-faction="${id}" title="${this.getFactionLabel(id)}"
+                                    style="--faction-color: ${this.getFactionColor(id)}">
+                                    <span class="profile-faction-swatch-dot"></span>
+                                    <span class="profile-faction-swatch-label">${this.getFactionLabel(id)}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
                     <div class="profile-selection-actions">
                         <button class="action-button" id="obNext">CONFIRM</button>
                     </div>
@@ -81,15 +120,15 @@ class OnboardingManager {
         } else {
             this.overlay.innerHTML = `
                 <div class="profile-selection-content onboarding-content">
-                    <h2 class="profile-selection-title">SCRAP FIGHTER</h2>
-                    <p class="onboarding-hint">ASSEMBLED FROM CRASHED WRECKAGE</p>
+                    <h2 class="profile-selection-title">SHIP ASSEMBLY</h2>
+                    <p class="onboarding-hint">SET THE STYLE AND POSITION OF YOUR STARTER HULL</p>
                     <div class="onboarding-ship-wrap">
                         <canvas class="onboarding-ship-canvas" width="300" height="200"></canvas>
                     </div>
-                    <p class="onboarding-ship-stats">LASER · ENERGY SHIELD · BARELY FLIGHTWORTHY</p>
+                    <p class="onboarding-ship-stats">DRAG AREAS TO POSITION · SELECT HULL STYLE IN THE COMPONENT TREE</p>
                     <p class="hs-status">SCRAP FIGHTER READY</p>
                     <div class="profile-selection-actions">
-                        <button class="action-button" id="obNext">TO MAIN MENU</button>
+                        <button class="action-button" id="obNext">OPEN HANGAR</button>
                     </div>
                     <div class="profile-selection-instructions"><p>ENTER Continue</p></div>
                 </div>`;
@@ -112,6 +151,14 @@ class OnboardingManager {
                 input.focus();
                 if (this._pendingName) input.value = this._pendingName;
             }
+            this.overlay.querySelectorAll('.profile-faction-swatch').forEach((button) => {
+                button.addEventListener('click', () => {
+                    this._pendingFaction = button.dataset.faction;
+                    this.overlay.querySelectorAll('.profile-faction-swatch').forEach((item) => {
+                        item.classList.toggle('selected', item.dataset.faction === this._pendingFaction);
+                    });
+                });
+            });
         }
 
         if (this.step === 'scrap') {
@@ -145,7 +192,7 @@ class OnboardingManager {
             const input = this.overlay.querySelector('#obNameInput');
             const name = input ? input.value : '';
             if (typeof profileManager === 'undefined') return;
-            const p = profileManager.create(name);
+            const p = profileManager.create(name, this._pendingFaction);
             if (!p) {
                 if (input) {
                     input.classList.add('nav-focused');
@@ -159,7 +206,15 @@ class OnboardingManager {
             this.createUI();
             return;
         }
-        this.finish();
+        this.hide();
+        if (typeof homeStationUI !== 'undefined') {
+            homeStationUI.show({
+                tab: 'hangar',
+                onClose: this.onComplete
+            });
+            return;
+        }
+        if (typeof this.onComplete === 'function') this.onComplete();
     }
 
     renderScrapPreview() {

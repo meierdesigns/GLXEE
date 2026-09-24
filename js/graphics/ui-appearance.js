@@ -32,34 +32,18 @@ class UIAppearanceManager {
             h2: ['10', '11', '12', '14', '16', '18', '20', '24'],
             text: ['8', '9', '10', '11', '12', '14', '16', '18']
         };
-        this.fxLevels = {
-            glow: {
-                OFF: 0,
-                LOW: 0.9,
-                MED: 1.8,
-                HIGH: 3.0,
-                MAX: 4.5
-            },
-            scanlines: {
-                OFF: 0,
-                LOW: 0.4,
-                MED: 0.7,
-                HIGH: 1.15,
-                MAX: 1.6
-            },
-            crt: {
-                OFF: 0,
-                LOW: 0.7,
-                MED: 1.15,
-                HIGH: 1.7,
-                MAX: 2.3
-            },
-            chroma: {
-                OFF: 0,
-                LOW: 0.9,
-                HIGH: 1.7,
-                MAX: 2.5
+        const fxSteps = (max) => {
+            const levels = { OFF: 0 };
+            for (let percent = 10; percent <= 100; percent += 10) {
+                levels[`${percent}%`] = max * percent / 100;
             }
+            return levels;
+        };
+        this.fxLevels = {
+            glow: fxSteps(2.2),
+            scanlines: fxSteps(1.0),
+            crt: fxSteps(1.25),
+            chroma: fxSteps(1.1)
         };
         this.shipRenderStyles = ['FLAT', 'VOXEL'];
         this.borderWeight = 'NORMAL';
@@ -107,8 +91,7 @@ class UIAppearanceManager {
 
     getFxOptions(fxKey) {
         if (fxKey === 'arcade') return ['OFF', 'ON'];
-        if (fxKey === 'chroma') return ['OFF', 'LOW', 'HIGH', 'MAX'];
-        return ['OFF', 'LOW', 'MED', 'HIGH', 'MAX'];
+        return this.fxLevels[fxKey] ? Object.keys(this.fxLevels[fxKey]) : ['OFF'];
     }
 
     getFxValue(fxKey) {
@@ -148,6 +131,9 @@ class UIAppearanceManager {
                 const val = String(data[key] || '').toUpperCase();
                 if (this.fxLevels[key] && Object.prototype.hasOwnProperty.call(this.fxLevels[key], val)) {
                     this[key] = val;
+                } else if (this.fxLevels[key]) {
+                    const legacy = { LOW: '20%', MED: '40%', HIGH: '70%', MAX: '100%' };
+                    this[key] = legacy[val] || 'OFF';
                 }
             });
             if (data.arcade === 'ON' || data.arcade === 'OFF') {

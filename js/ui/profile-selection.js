@@ -436,19 +436,14 @@ class ProfileSelectionManager {
             if (!p) return;
             profileManager.setActive(p.id);
             profileManager.ensureEconomyDefaults(p);
-            this.mode = 'list';
-            this.createUI();
-            const hint = this.overlay.querySelector('.profile-list-empty') || this.overlay.querySelector('.profile-selection-instructions');
-            if (this.overlay) {
-                let note = this.overlay.querySelector('.hs-create-note');
-                if (!note) {
-                    note = document.createElement('p');
-                    note.className = 'hs-create-note hs-status';
-                    note.style.textAlign = 'center';
-                    const content = this.overlay.querySelector('.profile-selection-content');
-                    if (content) content.insertBefore(note, content.querySelector('.profile-selection-actions'));
-                }
-                note.textContent = 'SCRAP FIGHTER READY — OPEN STATION FOR SHOP';
+            this.hide();
+            if (typeof homeStationUI !== 'undefined') {
+                homeStationUI.show({
+                    tab: 'hangar',
+                    onClose: this.onClose
+                });
+            } else if (typeof this.onClose === 'function') {
+                this.onClose();
             }
             return;
         } else if (this.mode === 'rename') {

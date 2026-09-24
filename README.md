@@ -433,6 +433,9 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  ▸ hangar component tree with expandable slots and live module previews     │
 │  ▸ per-component cosmetic skins with persistent profile loadouts             │
 │  ▸ interactive component dropdowns for equipping and unequipping modules    │
+│  ▸ editable hangar anatomy — wing crops, voxel scale, rotation, connectors │
+│  ▸ symmetric wing styling with persistent per-ship shape variants           │
+│  ▸ draggable hangar slot cards with live area guides and reset controls     │
 │  ▸ difficulty curves · explosion FX · mission start briefs                  │
 │  ▸ embedded hub menus · parallax crossfade handoffs                         │
 │  ▸ global look recipe · 8 palettes · UI editors · hangar arena              │

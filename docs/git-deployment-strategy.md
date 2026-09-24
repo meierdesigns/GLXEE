@@ -314,6 +314,60 @@ Transmission README + update notes + deployment strategy covering combat events 
 
 ---
 
+### **Wave 35: Ship Anatomy & Voxel Rendering**
+*Commit: "feat: Ship anatomy controls and voxel hull rendering wave 35"*
+
+**Files to include:**
+- `assets/ships/ship-asset-loader.js`
+- `js/core/ship-config.js`, `js/core/ship-loadout.js`
+- `js/graphics/graphics-manager.js`
+- `js/ui/ship-editor.js`
+
+**Feature description:**
+Edge-based wing crops, square voxel rasterization, adjustable wing rotation and connectors, and persistent per-ship anatomy settings.
+
+---
+
+### **Wave 36: Hangar Component Customization**
+*Commit: "feat: Hangar component customization wave 36"*
+
+**Files to include:**
+- `js/ui/component-tree.js`
+- `js/ui/home-station.js`
+- `styles.css`
+- `index.html`
+
+**Feature description:**
+Synchronized component trees, cosmetic slot skins, area guides, slot pins, draggable hangar cards, wing hit targets, and anatomy reset controls.
+
+---
+
+### **Wave 37: Hangar Editing & Profile Handoff**
+*Commit: "feat: Hangar editing and profile handoff wave 37"*
+
+**Files to include:**
+- `js/core/game-control-system.js`
+- `js/graphics/ui-appearance.js`
+- `js/ui/onboarding.js`, `js/ui/profile-selection.js`, `js/ui/start-screen.js`
+
+**Feature description:**
+Ship and loadout preservation across onboarding, profile selection, start-screen navigation, station entry, and menu appearance handoffs.
+
+---
+
+### **Wave 38: Archive Docs**
+*Commit: "docs: document ship anatomy and hangar customization waves 35–37"*
+
+**Files to include:**
+- `README.md`
+- `docs/UPDATE_NOTES.md`
+- `docs/git-deployment-strategy.md`
+
+**Feature description:**
+Document the new ship anatomy editor, voxel rendering controls, persistent cosmetic loadouts, and feature-wave commit boundaries.
+
+---
+
 ## 🔧 Git Commands for Each Wave
 
 ### **Wave 1: Core Foundation**
@@ -587,6 +641,44 @@ git commit -m "docs: README and Wave 15–24 featurewave archive
 
 - Transmission README covering combat events through asset pipeline
 - Update notes and deployment strategy extended through Wave 24"
+```
+
+### **Wave 35: Ship Anatomy & Voxel Rendering**
+```bash
+git add assets/ships/ship-asset-loader.js js/core/ship-config.js \
+  js/core/ship-loadout.js js/graphics/graphics-manager.js js/ui/ship-editor.js
+git commit -m "feat: Ship anatomy controls and voxel hull rendering wave 35
+
+- Add edge-based wing crops and square voxel hull rasterization
+- Persist wing rotation, connector settings, and segment anatomy"
+```
+
+### **Wave 36: Hangar Component Customization**
+```bash
+git add js/ui/component-tree.js js/ui/home-station.js styles.css index.html
+git commit -m "feat: Hangar component customization wave 36
+
+- Synchronize component trees and persistent cosmetic slot skins
+- Add area guides, slot pins, draggable cards, and anatomy reset"
+```
+
+### **Wave 37: Hangar Editing & Profile Handoff**
+```bash
+git add js/core/game-control-system.js js/graphics/ui-appearance.js \
+  js/ui/onboarding.js js/ui/profile-selection.js js/ui/start-screen.js
+git commit -m "feat: Hangar editing and profile handoff wave 37
+
+- Preserve selected ships and loadouts through menu and station transitions
+- Keep onboarding and profile handoffs aligned with hangar editing"
+```
+
+### **Wave 38: Archive Docs**
+```bash
+git add README.md docs/UPDATE_NOTES.md docs/git-deployment-strategy.md
+git commit -m "docs: document ship anatomy and hangar customization waves 35–37
+
+- Document voxel rendering, anatomy editing, and cosmetic loadouts
+- Record feature-focused wave boundaries and commands"
 ```
 
 ---

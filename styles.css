@@ -12660,6 +12660,9 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     z-index: auto;
     pointer-events: none;
 }
+.home-station-overlay .hs-components-host select {
+    pointer-events: auto !important;
+}
  
 .hs-components-host ~ .home-station-overlay select {
     display: none !important;

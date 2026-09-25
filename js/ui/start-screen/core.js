@@ -266,7 +266,7 @@ class StartScreenManager {
             }
         ];
         this.fontMenuItems = this.buildFontMenuItems();
-        
+
         // Planets are now managed by PlanetSelectionManager
 
         // Initialize from app theme (menus only)

@@ -35,15 +35,15 @@ extendClass(CollisionManager, {
         const bulletCenterY = bullet.y + bullet.height / 2;
         const obstacleCenterX = obstacle.x + obstacle.width / 2;
         const obstacleCenterY = obstacle.y + obstacle.height / 2;
-        
+
         // Calculate collision point relative to obstacle center
         const relativeX = bulletCenterX - obstacleCenterX;
         const relativeY = bulletCenterY - obstacleCenterY;
-        
+
         // Determine which side of the obstacle was hit
         const absX = Math.abs(relativeX);
         const absY = Math.abs(relativeY);
-        
+
         if (absX > absY) {
             // Hit left or right side - reflect horizontally
             if (bullet.angle !== undefined) {
@@ -64,7 +64,7 @@ extendClass(CollisionManager, {
                 bullet.speed = -bullet.speed;
             }
         }
-        
+
         // Ensure bullet moves away from obstacle
         if (bullet.angle !== undefined) {
             // Adjust angle to ensure proper direction
@@ -83,15 +83,15 @@ extendClass(CollisionManager, {
         const bulletCenterY = bullet.y + bullet.height / 2;
         const obstacleCenterX = obstacle.x + obstacle.width / 2;
         const obstacleCenterY = obstacle.y + obstacle.height / 2;
-        
+
         // Calculate collision point relative to obstacle center
         const relativeX = bulletCenterX - obstacleCenterX;
         const relativeY = bulletCenterY - obstacleCenterY;
-        
+
         // Determine which side of the obstacle was hit
         const absX = Math.abs(relativeX);
         const absY = Math.abs(relativeY);
-        
+
         if (absX > absY) {
             // Hit left or right side - reflect horizontally
             // Add horizontal movement to enemy bullet
@@ -107,7 +107,7 @@ extendClass(CollisionManager, {
         const bullets = bulletManager.getBullets();
         const enemyBullets = bulletManager.getEnemyBullets();
         const obstacles = obstacleManager.getObstacles();
-        
+
         // Check player bullets vs obstacles
         for (let i = bullets.length - 1; i >= 0; i--) {
             for (let j = obstacles.length - 1; j >= 0; j--) {
@@ -124,23 +124,23 @@ extendClass(CollisionManager, {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'player', i, j);
                         if (handled) break;
                     }
-                    
+
                     if (obstacle.reflectsShots) {
                         // Convert reflected bullet to enemy bullet
                         const reflectedBullet = bullets[i];
                         reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
                         reflectedBullet.y += 5; // Move away from obstacle
                         reflectedBullet.reflected = true;
-                        
+
                         // Add to enemy bullets array
                         bulletManager.getEnemyBullets().push(reflectedBullet);
-                        
+
                         // Remove from player bullets
                         bulletManager.removeBullet(i);
-                        
+
                         // Play reflection sound
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-                        
+
                         // Damage obstacle (shields are fragile)
                         obstacle.health--;
                         if (obstacle.health <= 0) {
@@ -161,10 +161,10 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'damage');
                             if (typeof soundManager !== 'undefined') soundManager.playHit();
                         }
-                        
+
                         // Remove bullet
                         bulletManager.removeBullet(i);
-                        
+
                         // Award points for destruction
                         game.score += 10;
                     } else {
@@ -173,12 +173,12 @@ extendClass(CollisionManager, {
                         this.createDetailedHitEffect(bulletX, bulletY, 'impact');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
-                    
+
                     break;
                 }
             }
         }
-        
+
         // Check enemy bullets vs obstacles
         for (let i = enemyBullets.length - 1; i >= 0; i--) {
             for (let j = obstacles.length - 1; j >= 0; j--) {
@@ -195,23 +195,23 @@ extendClass(CollisionManager, {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'enemy', i, j);
                         if (handled) break;
                     }
-                    
+
                     if (obstacle.reflectsShots) {
                         // Convert reflected enemy bullet to player bullet
                         const reflectedBullet = enemyBullets[i];
                         reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
                         reflectedBullet.y -= 10; // Move away from obstacle
                         reflectedBullet.reflected = true;
-                        
+
                         // Add to player bullets array
                         bulletManager.getBullets().push(reflectedBullet);
-                        
+
                         // Remove from enemy bullets
                         bulletManager.removeEnemyBullet(i);
-                        
+
                         // Play reflection sound
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-                        
+
                         // Damage obstacle
                         obstacle.health--;
                         if (obstacle.health <= 0) {
@@ -229,7 +229,7 @@ extendClass(CollisionManager, {
                         } else if (typeof soundManager !== 'undefined') {
                             soundManager.playHit();
                         }
-                        
+
                         // Remove bullet
                         bulletManager.removeEnemyBullet(i);
                     } else {
@@ -238,7 +238,7 @@ extendClass(CollisionManager, {
                         this.createExplosion(bulletX, bulletY, 'small_pop');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
-                    
+
                     break;
                 }
             }

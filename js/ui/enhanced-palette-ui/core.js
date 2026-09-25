@@ -96,15 +96,15 @@ class EnhancedPaletteUI {
         if (index > -1) {
             this.paletteHistory.splice(index, 1);
         }
-        
+
         // Add to beginning
         this.paletteHistory.unshift(paletteId);
-        
+
         // Keep only last 10
         if (this.paletteHistory.length > 10) {
             this.paletteHistory = this.paletteHistory.slice(0, 10);
         }
-        
+
         this.saveUserPreferences();
     }
 
@@ -126,7 +126,7 @@ class EnhancedPaletteUI {
         const notification = document.createElement('div');
         notification.className = `palette-notification palette-notification-${type}`;
         notification.textContent = message;
-        
+
         // Style notification
         notification.style.cssText = `
             position: fixed;

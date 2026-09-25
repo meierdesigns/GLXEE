@@ -138,32 +138,32 @@ extendClass(GraphicsManager, {
 
     drawSprite(ctx, sprite, x, y, width, height, lightingIntensity = 0, lightingColor = 'var(--current-text)', overlayColor = null, overlayIntensity = 0) {
         if (!sprite) return;
-        
+
         const pixelWidth = width / sprite[0].length;
         const pixelHeight = height / sprite.length;
         const resolve = (c) => this.colorPalette.resolveCssColor(c);
-        
+
         // Use global overlay settings if not specified
         const finalOverlayColor = resolve(overlayColor || globalOverlayColor);
         const finalOverlayIntensity = overlayIntensity > 0 ? overlayIntensity : globalOverlayIntensity;
         const resolvedLighting = resolve(lightingColor);
-        
+
         for (let row = 0; row < sprite.length; row++) {
             for (let col = 0; col < sprite[row].length; col++) {
                 const colorIndex = sprite[row][col];
                 let color = this.colorPalette.getColor(colorIndex);
-                
+
                 if (color !== 'transparent') {
                     // Apply lighting effect if present
                     if (lightingIntensity > 0) {
                         color = this.colorPalette.applyLighting(color, lightingIntensity, resolvedLighting);
                     }
-                    
+
                     // Apply color overlay if present
                     if (finalOverlayColor && finalOverlayIntensity > 0) {
                         color = this.colorPalette.applyColorOverlay(color, finalOverlayColor, finalOverlayIntensity);
                     }
-                    
+
                     ctx.fillStyle = color;
                     const left = Math.floor(x + col * pixelWidth);
                     const top = Math.floor(y + row * pixelHeight);
@@ -178,12 +178,12 @@ extendClass(GraphicsManager, {
     getSprite(name) {
         // First try to get from sprite factory (programmatic sprites)
         let sprite = this.spriteFactory.getSprite(name);
-        
+
         // If not found, try to get from sprite loader (loaded PNG files)
         if (!sprite && typeof window !== 'undefined' && window.spriteLoader) {
             sprite = window.spriteLoader.getSprite(name);
         }
-        
+
         return sprite;
     },
 
@@ -209,7 +209,7 @@ extendClass(GraphicsManager, {
         // Fill with darkest green
         ctx.fillStyle = this.colorPalette.getPalette().black;
         ctx.fillRect(0, 0, width, height);
-        
+
         // Add subtle grid pattern
         ctx.fillStyle = this.colorPalette.getPalette().dark;
         for (let x = 0; x < width; x += 8) {
@@ -231,16 +231,16 @@ extendClass(GraphicsManager, {
 
     renderColorOverlay(ctx, width, height) {
         if (!this.colorOverlay.enabled) return;
-        
+
         // Save context state
         ctx.save();
-        
+
         // Create additive color overlay
         ctx.globalCompositeOperation = 'screen'; // Additive blending
         ctx.fillStyle = this.colorPalette.resolveCssColor(this.colorOverlay.color);
         ctx.globalAlpha = this.colorOverlay.intensity;
         ctx.fillRect(0, 0, width, height);
-        
+
         // Restore context state
         ctx.restore();
     },

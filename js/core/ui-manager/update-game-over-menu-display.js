@@ -21,7 +21,7 @@ extendClass(UIManager, {
 
     selectGameOverOption() {
         const selectedOption = this.gameOverMenuItems[this.gameOverMenuIndex];
-        
+
         switch (selectedOption) {
             case 'restart':
                 if (typeof game !== 'undefined') {
@@ -38,8 +38,8 @@ extendClass(UIManager, {
 
     handleVictoryInput(event) {
         event.preventDefault();
-        
-        
+
+
         switch (event.key) {
             case 'ArrowUp':
                 this.victoryMenuIndex = (this.victoryMenuIndex - 1 + this.victoryMenuItems.length) % this.victoryMenuItems.length;
@@ -78,7 +78,7 @@ extendClass(UIManager, {
         } else if (this.victoryMenuIndex >= this.victoryMenuItems.length) {
             this.victoryMenuIndex = 0;
         }
-        
+
         buttons.forEach((button, index) => {
             if (index === this.victoryMenuIndex) {
                 button.classList.add('selected');
@@ -90,7 +90,7 @@ extendClass(UIManager, {
 
     selectVictoryOption() {
         const selectedOption = this.victoryMenuItems[this.victoryMenuIndex];
-        
+
         switch (selectedOption) {
             case 'nextLevel':
                 if (typeof game !== 'undefined') {
@@ -131,7 +131,7 @@ extendClass(UIManager, {
 
     selectPauseMenuItem() {
         const selectedItem = this.pauseMenuItems[this.pauseMenuIndex];
-        
+
         switch (selectedItem) {
             case 'RESUME':
                 if (typeof game !== 'undefined') {

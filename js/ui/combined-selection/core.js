@@ -10,7 +10,7 @@ class CombinedSelectionManager {
         this.levels = [];
         this.playerShips = [];
         this.overlay = null;
-        
+
         // Initialize with delay
         setTimeout(() => {
             this.initialize();
@@ -19,13 +19,13 @@ class CombinedSelectionManager {
 
     // Initialize levels and ships
     initialize() {
-        
+
         // Initialize levels
         this.initializeLevels();
-        
+
         // Initialize ships
         this.initializeShips();
-        
+
     }
 
     // Initialize levels from planet selection manager
@@ -56,7 +56,7 @@ class CombinedSelectionManager {
     async initializeShips() {
         // Always create fallback ships first
         this.createFallbackPlayerShips();
-        
+
         // Prefer ship config manager (includes edits + custom ships)
         if (typeof shipConfigManager !== 'undefined' && shipConfigManager.getAllMergedPlayerModels) {
             const configured = shipConfigManager.getAllMergedPlayerModels();

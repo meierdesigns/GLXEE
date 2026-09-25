@@ -100,15 +100,15 @@ class CollisionManager {
     checkBulletEnemyCollisions(gameState) {
         const bullets = bulletManager.getBullets();
         const enemy = enemyManager.getEnemy();
-        
+
         if (!enemy || enemyManager.isExploding()) return;
-        
+
         for (let i = bullets.length - 1; i >= 0; i--) {
             if (this.isColliding(bullets[i], enemy)) {
                 // Store enemy position before damage
                 const enemyX = enemy.x + enemy.width / 2;
                 const enemyY = enemy.y + enemy.height / 2;
-                
+
                 // Damage enemy (use bullet damage or instant kill cheat)
                 let damage = 10; // Default damage
                 if (bullets[i] && bullets[i].damage !== undefined) {
@@ -122,12 +122,12 @@ class CollisionManager {
                 bulletManager.removeBullet(i);
 
                 const enemyDefeated = enemyManager.takeDamage(damage);
-                
+
                 if (typeof soundManager !== 'undefined') {
                     if (enemyDefeated) soundManager.playKill(1.2);
                     else soundManager.playHit();
                 }
-                
+
                 // Create explosion effect
                 let enemyExplosionId = 'default';
                 if (typeof enemyConfigManager !== 'undefined' && enemy) {
@@ -136,12 +136,12 @@ class CollisionManager {
                     if (cfg && cfg.explosionId) enemyExplosionId = cfg.explosionId;
                 }
                 this.createExplosion(enemyX, enemyY, enemyDefeated ? enemyExplosionId : 'small_pop');
-                
+
                 // Create hit particles
                 if (typeof graphicsManager !== 'undefined' && !enemyDefeated) {
                     graphicsManager.createHitEffect(enemyX, enemyY, 12);
                 }
-                
+
                 // Enemy will start exploding, victory will be shown after explosion
                 // No need to call game.playerWins() here anymore
                 break;
@@ -152,13 +152,13 @@ class CollisionManager {
     checkEnemyBulletPlayerCollisions(gameState) {
         const enemyBullets = bulletManager.getEnemyBullets();
         const player = playerManager.getPosition();
-        
+
         for (let i = enemyBullets.length - 1; i >= 0; i--) {
             if (this.isColliding(enemyBullets[i], player)) {
                 // Store player position for particles
                 const playerX = player.x + player.width / 2;
                 const playerY = player.y + player.height / 2;
-                
+
                 // Damage player (use bullet damage or god mode cheat)
                 let damage = 10; // Default damage
                 if (enemyBullets[i] && enemyBullets[i].damage !== undefined) {
@@ -172,7 +172,7 @@ class CollisionManager {
                 bulletManager.removeEnemyBullet(i);
 
                 const playerDefeated = playerManager.takeDamage(damage);
-                
+
                 // Create hit particles
                 if (typeof graphicsManager !== 'undefined') {
                     graphicsManager.createHitEffect(playerX, playerY, 8);
@@ -181,7 +181,7 @@ class CollisionManager {
                 if (typeof soundManager !== 'undefined' && damage > 0) {
                     soundManager.playHurt();
                 }
-                
+
                 if (playerDefeated) {
                     game.gameOver();
                 }
@@ -193,7 +193,7 @@ class CollisionManager {
     checkPlayerBulletEnemyBulletCollisions(gameState) {
         const playerBullets = bulletManager.getBullets();
         const enemyBullets = bulletManager.getEnemyBullets();
-        
+
         for (let i = playerBullets.length - 1; i >= 0; i--) {
             for (let j = enemyBullets.length - 1; j >= 0; j--) {
                 if (this.isColliding(playerBullets[i], enemyBullets[j])) {
@@ -228,7 +228,7 @@ class CollisionManager {
                         const directionSide = Math.random() < 0.5 ? 'player' : 'enemy';
                         this.redirectLaserClash(pb, eb, directionSide, hitX, hitY);
                     }
-                    
+
                     break;
                 }
             }

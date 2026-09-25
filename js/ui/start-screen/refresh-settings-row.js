@@ -217,10 +217,10 @@ extendClass(StartScreenManager, {
         const title = document.createElement('h2');
         title.textContent = 'LEVEL SELECTION';
         title.className = 'start-screen-title';
-        
+
         const menu = document.createElement('div');
         menu.className = 'start-screen-menu';
-        
+
         this.planets.forEach((planet, index) => {
             const menuItem = document.createElement('div');
             menuItem.className = `menu-item ${index === this.levelIndex ? 'selected' : ''} ${planet.unlocked ? '' : 'locked'}`;
@@ -238,13 +238,13 @@ extendClass(StartScreenManager, {
             }
             menu.appendChild(menuItem);
         });
-        
+
         const instructions = this.buildControlsHint([
             'ARROW KEYS / MOUSE: Navigate',
             'SPACEBAR / CLICK: Select',
             'ESC: Back'
         ]);
-        
+
         content.appendChild(title);
         content.appendChild(menu);
         content.appendChild(instructions);

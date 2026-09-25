@@ -9,15 +9,15 @@ extendClass(ObstacleManager, {
         }
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         // Get canvas dimensions
         const canvasHeight = (gameState && gameState.height) ? gameState.height : 300;
-        
+
         // Horizontal speed: left to right movement
         const horizontalSpeed = 0.5 + Math.random() * 1.0; // 0.5-1.5 pixels per frame
         // Vertical speed: 30% of horizontal speed
         const verticalSpeed = horizontalSpeed * 0.3;
-        
+
         const obstacle = {
             x: -size.width, // Start from left side of screen
             y: Math.random() * canvasHeight, // Random vertical position
@@ -153,12 +153,12 @@ extendClass(ObstacleManager, {
         // Get canvas dimensions
         const canvasHeight = (gameState && gameState.height) ? gameState.height : 300;
         const startY = Math.random() * (canvasHeight * 0.5); // Random vertical position for the formation
-        
+
         // Horizontal speed: left to right movement
         const horizontalSpeed = 0.5 + Math.random() * 1.0; // 0.5-1.5 pixels per frame
         // Vertical speed: 30% of horizontal speed
         const verticalSpeed = horizontalSpeed * 0.3;
-        
+
         switch (formationType) {
             case 'wall':
                 this.spawnWall(startY, horizontalSpeed, verticalSpeed);
@@ -195,7 +195,7 @@ extendClass(ObstacleManager, {
         const wallHeight = 6 + Math.floor(Math.random() * 4); // Increased from 4-6 to 6-9 obstacles high
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < wallHeight; i++) {
             const obstacle = {
                 x: -size.width,
@@ -222,11 +222,11 @@ extendClass(ObstacleManager, {
         const barrierLength = 8 + Math.floor(Math.random() * 4); // Increased from 6-9 to 8-11 obstacles wide
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < barrierLength; i++) {
             // Reduced gap chance for more connected barriers
             if (Math.random() < 0.15) continue; // Reduced from 0.3 to 0.15
-            
+
             const obstacle = {
                 x: -size.width - (i * size.width * 0.9), // Reduced spacing for tighter connection
                 y: startY,
@@ -252,7 +252,7 @@ extendClass(ObstacleManager, {
         const zigzagLength = 5 + Math.floor(Math.random() * 3); // 5-7 obstacles
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < zigzagLength; i++) {
             const obstacle = {
                 x: -size.width - (i * size.width),

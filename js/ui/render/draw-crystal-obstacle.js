@@ -149,7 +149,7 @@ extendClass(RenderManager, {
     calculateBulletLighting(bullet) {
         let maxIntensity = 0;
         let lightingColor = 'var(--current-text)';
-        
+
         // Check proximity to enemy
         const enemy = enemyManager.getEnemy();
         if (enemy) {
@@ -162,7 +162,7 @@ extendClass(RenderManager, {
                 }
             }
         }
-        
+
         // Check proximity to obstacles
         obstacleManager.getObstacles().forEach(obstacle => {
             const distance = this.calculateDistance(bullet, obstacle);
@@ -174,7 +174,7 @@ extendClass(RenderManager, {
                 }
             }
         });
-        
+
         // Check proximity to player
         const player = playerManager.getPosition();
         if (player) {
@@ -187,7 +187,7 @@ extendClass(RenderManager, {
                 }
             }
         }
-        
+
         return {
             intensity: maxIntensity,
             color: lightingColor

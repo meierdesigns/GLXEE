@@ -4,7 +4,7 @@
 extendClass(PlayerSelectionManager, {
     // Create player selection UI
     createPlayerSelectionUI() {
-        
+
         // Remove existing overlay
         if (this.overlay) {
             this.overlay.remove();
@@ -27,7 +27,7 @@ extendClass(PlayerSelectionManager, {
                         `).join('')}
                     </div>
                 </div>
-                
+
                 <!-- Ship Details -->
                 <div class="ship-details-container">
                     <div class="ship-preview-large">
@@ -36,7 +36,7 @@ extendClass(PlayerSelectionManager, {
                     <div class="ship-info-detailed">
                         <h3 class="ship-name-large">${this.playerShips[this.selectedIndex]?.name || ''}</h3>
                         <p class="ship-description-large">${this.playerShips[this.selectedIndex]?.description || ''}</p>
-                        
+
                         <div class="ship-stats-detailed">
                             <div class="stat-row">
                                 <span class="stat-label">Speed:</span>
@@ -55,7 +55,7 @@ extendClass(PlayerSelectionManager, {
                                 <span class="stat-value">${this.playerShips[this.selectedIndex]?.damage || 0}</span>
                             </div>
                         </div>
-                        
+
                         <div class="ship-weapons">
                             <h4 class="weapons-title">Weapons:</h4>
                             <div class="weapons-list">
@@ -64,7 +64,7 @@ extendClass(PlayerSelectionManager, {
                                 `).join('')}
                             </div>
                         </div>
-                        
+
                         <div class="ship-abilities">
                             <h4 class="abilities-title">Special Abilities:</h4>
                             <div class="abilities-list">
@@ -102,7 +102,7 @@ extendClass(PlayerSelectionManager, {
                 this.renderShipPreview(canvas, ship, 1.5); // Scaled for belt
             }
         });
-        
+
         // Render large canvas
         const largeCanvas = this.overlay.querySelector('.ship-large-canvas');
         if (largeCanvas) {
@@ -150,7 +150,7 @@ extendClass(PlayerSelectionManager, {
         });
 
         document.addEventListener('keydown', this._keyHandler);
-        
+
         // Listen for color changes to refresh ship previews
         if (typeof colorManager !== 'undefined' && !this._colorHooked) {
             this._colorHooked = true;
@@ -200,7 +200,7 @@ extendClass(PlayerSelectionManager, {
         beltItems.forEach((item, index) => {
             item.classList.toggle('selected', index === this.selectedIndex);
         });
-        
+
         // Update ship details
         this.updateShipDetails();
     },
@@ -208,7 +208,7 @@ extendClass(PlayerSelectionManager, {
     // Get detailed abilities for a ship
     getDetailedAbilities(ship) {
         if (!ship || !ship.abilities) return '';
-        
+
         // Try to get abilities from ability manager if available
         if (typeof abilityManager !== 'undefined') {
             const abilityDescriptions = abilityManager.getAbilityDescriptions(ship.abilities);
@@ -227,7 +227,7 @@ extendClass(PlayerSelectionManager, {
                 </div>
             `).join('');
         }
-        
+
         // Fallback to simple display
         return ship.abilities.map(ability => `
             <span class="ability-item">${ability}</span>
@@ -237,13 +237,13 @@ extendClass(PlayerSelectionManager, {
     // Get ability effects for display
     getAbilityEffects(ability) {
         if (!ability.effects) return '';
-        
+
         const effects = [];
         for (const [key, value] of Object.entries(ability.effects)) {
             if (typeof value === 'number') {
                 let displayValue = value;
                 let label = key.replace(/([A-Z])/g, ' $1').replace(/Modifier$/, '').trim();
-                
+
                 if (key.includes('Modifier')) {
                     displayValue = `${Math.round((value - 1) * 100)}%`;
                     if (value > 1) displayValue = '+' + displayValue;
@@ -252,7 +252,7 @@ extendClass(PlayerSelectionManager, {
                 } else {
                     displayValue = value.toString();
                 }
-                
+
                 effects.push(`
                     <div class="ability-effect">
                         <div class="ability-effect-label">${label}</div>
@@ -261,7 +261,7 @@ extendClass(PlayerSelectionManager, {
                 `);
             }
         }
-        
+
         return effects.join('');
     },
 });

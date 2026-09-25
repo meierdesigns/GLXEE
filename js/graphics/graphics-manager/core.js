@@ -14,13 +14,13 @@ class GraphicsManager {
         this.spriteFactory = new SpriteFactory();
         this.colorPalette = new ColorPalette();
         this.lightingSystem = new LightingSystem();
-        
+
         this.colorOverlay = {
             enabled: false,
             color: 'var(--current-primary)',
             intensity: 0.3
         };
-        
+
         this.shipModels = null;
         this.currentPlayerModel = null;
         this.currentEnemyModel = null;
@@ -28,27 +28,27 @@ class GraphicsManager {
         this._shieldHullCache = Object.create(null);
         this._shieldSilhouetteBake = false;
         this._playerModelExplicitlySelected = false;
-        
+
         this.init();
     }
 
     init() {
         // Initialize ship models
         this.shipModels = shipModels;
-        
+
         if (this.shipModels) {
             this.currentPlayerModel = this.shipModels.getShipModel('player');
             this.currentEnemyModel = this.shipModels.getShipModel('enemyBasic');
         } else {
             console.error('ShipModels not available!');
         }
-        
+
         // Initialize sprite factory
         this.spriteFactory.init();
-        
+
         // Initialize ship asset loader
         this.initializeShipAssets();
-        
+
         // Wait for sprite loader to be ready
         this.waitForSpriteLoader();
     }
@@ -80,10 +80,10 @@ class GraphicsManager {
             // Import ship asset loader
             const { shipAssetLoader } = await import('../../../assets/ships/ship-asset-loader.js');
             this.shipAssetLoader = shipAssetLoader;
-            
+
             // Load all ship assets
             await this.shipAssetLoader.loadAllShips();
-            
+
             // Keep the loadout model selected by the hangar while assets load.
             // Replacing it here silently reset the in-game ship to the default hull.
             if (!this._playerModelExplicitlySelected) {
@@ -94,7 +94,7 @@ class GraphicsManager {
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('vf-ships-loaded'));
             }
-            
+
         } catch (error) {
             console.error('Failed to initialize ship assets:', error);
             // Fallback to old ship models
@@ -119,16 +119,16 @@ class GraphicsManager {
         const drawScale = Math.max(0.25, (scale || 1) * fit);
         const x = player.x - (mw * drawScale - player.width) / 2;
         const y = player.y - (mh * drawScale - player.height) / 2;
-        
+
         // Get current color overlay from color manager
         let colorOverlay = null;
         let overlayIntensity = 0;
-        
+
         if (typeof colorManager !== 'undefined') {
             colorOverlay = colorManager.getCurrentOverlayColor();
             overlayIntensity = colorManager.getCurrentOverlayIntensity();
         }
-        
+
         // Use asset loader if available, otherwise fallback to old system
         if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
             this.shipAssetLoader.renderShip(
@@ -232,12 +232,12 @@ class GraphicsManager {
         this._playerModelExplicitlySelected = true;
         this.currentPlayerModel = shipModel;
         this._shieldHullCache = Object.create(null);
-        
+
         // Update player manager with ship model
         if (typeof playerManager !== 'undefined') {
             playerManager.setShipModel(shipModel);
         }
-        
+
         // Update weapon system with ship model
         if (typeof bulletManager !== 'undefined') {
             bulletManager.setShipModel(shipModel);

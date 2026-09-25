@@ -30,26 +30,26 @@ class InputHandler {
             this.keys['s'] = this.keys['S'] = false;
             this.keys['d'] = this.keys['D'] = false;
         }
-        
+
         // Handle level selection first - it has highest priority
         if (typeof cheatSystem !== 'undefined' && cheatSystem.levelSelectVisible) {
             cheatSystem.handleLevelSelectInput(event.key);
             return;
         }
-        
+
         // Handle cheat menu second - it has high priority
         if (typeof cheatSystem !== 'undefined' && cheatSystem.cheatMenuVisible) {
             cheatSystem.handleCheatMenuInput(event.key);
             return;
         }
-        
+
         // Handle start screen first - it has priority over game controls
         if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible()) {
             // Check for cheat sequence first, even in start screen
             if (typeof cheatSystem !== 'undefined') {
                 cheatSystem.detectCheatSequence(event.key);
             }
-            
+
             if (startScreenManager.handleKeyDown(event)) {
                 return; // Start screen consumed the key
             }
@@ -74,25 +74,25 @@ class InputHandler {
                 return;
             }
         }
-        
+
         // Handle combined selection
         if (typeof combinedSelectionManager !== 'undefined' && combinedSelectionManager.isVisible) {
             // Combined selection handles its own keyboard input
             return; // Combined selection consumed the key
         }
-        
+
         // Handle player selection
         if (typeof playerSelectionManager !== 'undefined' && playerSelectionManager.isVisible) {
             // Player selection handles its own keyboard input
             return; // Player selection consumed the key
         }
-        
+
         // Handle planet selection
         if (typeof planetSelectionManager !== 'undefined' && planetSelectionManager.isVisible) {
             planetSelectionManager.handleKeyDown(event);
             return; // Planet selection consumed the key
         }
-        
+
         // Handle game over screen
         const gameOverOverlay = document.getElementById('gameOver');
         if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) {
@@ -101,7 +101,7 @@ class InputHandler {
             }
             return; // Game over consumed the key
         }
-        
+
         // Handle victory screen
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) {
@@ -110,11 +110,11 @@ class InputHandler {
             }
             return; // Victory screen consumed the key
         }
-        
+
         // Handle ESC key for pause/unpause and settings close
         if (event.key === 'Escape') {
             event.preventDefault();
-            
+
             // Check if settings overlay is visible
             const settingsOverlay = document.getElementById('settingsOverlay');
             if (settingsOverlay && !settingsOverlay.classList.contains('hidden')) {
@@ -124,12 +124,12 @@ class InputHandler {
                 }
                 return;
             }
-            
+
             // Otherwise toggle pause/unpause
             this.togglePause();
             return;
         }
-        
+
         // Handle pause menu navigation
         if (this.gameState.isPaused) {
             if (event.key === 'ArrowUp') {
@@ -140,7 +140,7 @@ class InputHandler {
                 }
                 return;
             }
-            
+
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 if (typeof uiManager !== 'undefined') {
@@ -149,7 +149,7 @@ class InputHandler {
                 }
                 return;
             }
-            
+
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 if (typeof uiManager !== 'undefined') {
@@ -158,7 +158,7 @@ class InputHandler {
                 return;
             }
         }
-        
+
         // Don't handle other keys if paused
         if (this.gameState.isPaused) {
             return;
@@ -174,7 +174,7 @@ class InputHandler {
             }
             return;
         }
-        
+
         // Shoot on spacebar (mode-dependent)
         if (event.key === ' ') {
             event.preventDefault();
@@ -186,7 +186,7 @@ class InputHandler {
                     }
                 } else {
                     bulletManager.shoot(playerManager.getPosition());
-                    
+
                     // Fast fire cheat - shoot multiple bullets
                     if (typeof cheatSystem !== 'undefined' && cheatSystem.cheats && cheatSystem.cheats.fastFire) {
                         this.clearFastFireTimeouts();
@@ -211,7 +211,7 @@ class InputHandler {
                 chargeSystem.beginDriveCharge();
             }
         }
-        
+
         // Switch shot type with Q and E
         if (event.key === 'q' || event.key === 'Q') {
             if (typeof bulletManager !== 'undefined') {
@@ -229,21 +229,21 @@ class InputHandler {
                 }
             }
         }
-        
+
         // Kill enemy cheat with K
         if (event.key === 'k' || event.key === 'K') {
             if (typeof enemyManager !== 'undefined') {
                 enemyManager.killEnemy();
             }
         }
-        
+
         // S key cheat - cycle ship types
         if (event.key === 's' || event.key === 'S') {
             if (typeof cheatSystem !== 'undefined' && cheatSystem.cheats && cheatSystem.cheats.shipSelect) {
                 this.cycleEnemyShipType();
             }
         }
-        
+
         // Display scale is locked to full-map fit during missions (+/- disabled in-game)
         if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '_') {
             const ingame = typeof menuStateManager !== 'undefined'

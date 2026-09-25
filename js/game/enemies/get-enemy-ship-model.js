@@ -32,7 +32,7 @@ extendClass(EnemyManager, {
     // Set ship type based on level difficulty
     async setShipTypeByLevel(levelId) {
         let shipType = 'enemyBasic';
-        
+
         switch(levelId) {
             case 1:
             case '1':
@@ -94,7 +94,7 @@ extendClass(EnemyManager, {
                     shipType = 'enemyBasic';
                 }
         }
-        
+
         await this.setShipType(shipType);
     },
 

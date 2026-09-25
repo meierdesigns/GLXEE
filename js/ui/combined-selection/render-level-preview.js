@@ -5,43 +5,43 @@ extendClass(CombinedSelectionManager, {
     // Render individual level preview
     renderLevelPreview(canvas, level, scale = 3) {
         const ctx = canvas.getContext('2d');
-        
+
         // Clear canvas with transparent background
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         // Set canvas background to transparent
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1.0;
-        
+
         // Get current color overlay from color manager
         let colorOverlay = null;
         let overlayIntensity = 0;
-        
+
         if (typeof colorManager !== 'undefined') {
             colorOverlay = colorManager.getCurrentOverlayColor();
             overlayIntensity = colorManager.getCurrentOverlayIntensity();
         }
-        
+
         // Save context for locked level effects
         ctx.save();
-        
+
         // Apply locked level effects
         if (!level.unlocked) {
             ctx.globalAlpha = 0.3;
             ctx.filter = 'grayscale(100%)';
         }
-        
+
         // Try to use PNG sprite first, fallback to text rendering
         const spriteName = this.getSpriteNameForLevel(level);
-        
+
         if (typeof spriteLoader !== 'undefined' && spriteLoader.getSprite(spriteName)) {
             // Use PNG sprite - maintain aspect ratio
             const sprite = spriteLoader.getSprite(spriteName);
             const spriteAspect = sprite.width / sprite.height;
             const canvasAspect = canvas.width / canvas.height;
-            
+
             let renderWidth, renderHeight, offsetX, offsetY;
-            
+
             if (spriteAspect > canvasAspect) {
                 // Sprite is wider - fit to width
                 renderWidth = canvas.width;
@@ -55,16 +55,16 @@ extendClass(CombinedSelectionManager, {
                 offsetX = (canvas.width - renderWidth) / 2;
                 offsetY = 0;
             }
-            
+
             spriteLoader.renderSprite(ctx, spriteName, offsetX, offsetY, renderWidth, renderHeight, colorOverlay, overlayIntensity);
         } else {
             // Fallback to text rendering
             this.renderLevelText(ctx, level, canvas.width, canvas.height, colorOverlay, overlayIntensity);
         }
-        
+
         // Restore context
         ctx.restore();
-        
+
         // Add lock icon for locked levels
         if (!level.unlocked) {
             this.renderLockIcon(ctx, canvas.width, canvas.height);
@@ -74,7 +74,7 @@ extendClass(CombinedSelectionManager, {
     // Get sprite name for level
     getSpriteNameForLevel(level) {
         if (!level) return null;
-        
+
         const name = level.name.toLowerCase();
         switch (name) {
             case 'mars': return 'mars-surface';
@@ -90,11 +90,11 @@ extendClass(CombinedSelectionManager, {
     renderLevelText(ctx, level, width, height, colorOverlay, overlayIntensity) {
         // Save current context state
         ctx.save();
-        
+
         // Reset composite operation for normal rendering
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1.0;
-        
+
         // Set text properties
         ctx.fillStyle = (typeof colorManager !== 'undefined' && colorManager.currentColors)
             ? colorManager.currentColors.text
@@ -102,11 +102,11 @@ extendClass(CombinedSelectionManager, {
         ctx.font = 'bold 24px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
+
         // Draw level initial
         const initial = level.name.charAt(0);
         ctx.fillText(initial, width / 2, height / 2);
-        
+
         // Restore context state
         ctx.restore();
     },
@@ -114,7 +114,7 @@ extendClass(CombinedSelectionManager, {
     // Render lock icon for locked levels
     renderLockIcon(ctx, width, height) {
         ctx.save();
-        
+
         // Set lock icon properties
         ctx.fillStyle = (typeof colorManager !== 'undefined' && colorManager.currentColors)
             ? colorManager.currentColors.textSecondary
@@ -124,10 +124,10 @@ extendClass(CombinedSelectionManager, {
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
         ctx.shadowBlur = 5;
-        
+
         // Draw lock icon
         ctx.fillText('🔒', width / 2, height / 2);
-        
+
         ctx.restore();
     },
 
@@ -216,7 +216,7 @@ extendClass(CombinedSelectionManager, {
         });
 
         document.addEventListener('keydown', this._keyHandler);
-        
+
         // Listen for HSL color changes to refresh ship previews
         if (typeof colorManager !== 'undefined' && colorManager.setHSL && !this._hslHooked) {
             this._hslHooked = true;

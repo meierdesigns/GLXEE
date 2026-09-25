@@ -88,14 +88,14 @@ class ShipAssetLoader {
 
     // Get ships by speed range
     getShipsBySpeedRange(minSpeed, maxSpeed) {
-        return Array.from(this.ships.values()).filter(ship => 
+        return Array.from(this.ships.values()).filter(ship =>
             ship.speed >= minSpeed && ship.speed <= maxSpeed
         );
     }
 
     // Get ships by health range
     getShipsByHealthRange(minHealth, maxHealth) {
-        return Array.from(this.ships.values()).filter(ship => 
+        return Array.from(this.ships.values()).filter(ship =>
             ship.maxHealth >= minHealth && ship.maxHealth <= maxHealth
         );
     }
@@ -131,10 +131,10 @@ class ShipAssetLoader {
         if (this.renderShipAsSegments(ctx, shipModel, x, y, scale, colorOverlay, overlayIntensity, renderOptions)) {
             return;
         }
-        
+
         // Check if this is an enemy ship (needs vertical flip)
         const isEnemyShip = this.isEnemyShip(shipModel);
-        
+
         // Try to use PNG sprite first, fallback to pixel sprite
         const spriteName = this.getSpriteNameForShip(shipModel);
         const hasSprite = typeof spriteLoader !== 'undefined' && spriteName && spriteLoader.getSprite(spriteName);
@@ -145,9 +145,9 @@ class ShipAssetLoader {
             const targetWidth = shipModel.width * scale;
             const targetHeight = shipModel.height * scale;
             const targetAspect = targetWidth / targetHeight;
-            
+
             let renderWidth, renderHeight, offsetX, offsetY;
-            
+
             if (spriteAspect > targetAspect) {
                 // Sprite is wider - fit to width
                 renderWidth = targetWidth;
@@ -161,7 +161,7 @@ class ShipAssetLoader {
                 offsetX = (targetWidth - renderWidth) / 2;
                 offsetY = 0;
             }
-            
+
             // Apply vertical flip for enemy ships
             if (isEnemyShip) {
                 ctx.save();
@@ -177,7 +177,7 @@ class ShipAssetLoader {
             // Fallback to pixel sprite
             this.renderPixelShip(ctx, shipModel, x, y, scale, colorOverlay, overlayIntensity, isEnemyShip);
         }
-        
+
         // Render engine glow if available (cell size matches fitted pixel grid)
         if (shipModel.engineGlow
             && !(typeof graphicsManager !== 'undefined' && graphicsManager._shieldSilhouetteBake)) {

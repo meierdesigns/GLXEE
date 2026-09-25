@@ -8,7 +8,7 @@ class PlayerSelectionManager {
         this.playerShips = [];
         this.selectedShip = null;
         this.overlay = null;
-        
+
         // Initialize with delay to allow shipAssetLoader to load
         setTimeout(() => {
             this.initialize();
@@ -17,7 +17,7 @@ class PlayerSelectionManager {
 
     // Initialize player ships from asset loader
     async initialize() {
-        
+
         // Always create fallback ships first
         this.createFallbackPlayerShips();
 
@@ -29,7 +29,7 @@ class PlayerSelectionManager {
                 return;
             }
         }
-        
+
         // Try to load from asset loader if available
         try {
             const { shipAssetLoader } = await import('../../../assets/ships/ship-asset-loader.js');

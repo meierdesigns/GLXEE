@@ -160,7 +160,7 @@ extendClass(HomeStationUI, {
     _bindHangarEvents() {
         // Bind events for the new HangarUI module
         if (!this.hangarUI || !this.overlay) return;
-        
+
         // Slot selection
         this.overlay.addEventListener('click', (e) => {
             const slotItem = e.target.closest('.hs-slot-item');
@@ -169,7 +169,7 @@ extendClass(HomeStationUI, {
                 this.hangarUI.onSlotSelected(idx);
             }
         });
-        
+
         // Collapse/Expand sidebars
         this.overlay.addEventListener('click', (e) => {
             const collapseBtn = e.target.closest('.hs-hangar-collapse-btn');
@@ -184,7 +184,7 @@ extendClass(HomeStationUI, {
                 this.createUI();
             }
         });
-        
+
         // Equipment selection
         this.overlay.addEventListener('change', (e) => {
             const select = e.target.closest('.hs-hangar-slot-select');

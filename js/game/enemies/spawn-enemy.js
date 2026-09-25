@@ -18,11 +18,11 @@ extendClass(EnemyManager, {
             canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
             canvasHeight = game?.internalHeight || game?.baseHeight || game?.height || 300;
         }
-        
+
         let enemySpeed = 0.4;
         let enemyVerticalSpeed = 0.25;
         let enemyMaxHealth = 100;
-        
+
         if (typeof graphicsManager !== 'undefined' && graphicsManager.currentEnemyModel) {
             const model = graphicsManager.currentEnemyModel;
             enemySpeed = model.speed || 0.4;
@@ -60,7 +60,7 @@ extendClass(EnemyManager, {
             enemySpeed *= profile.enemySpeedMul;
             enemyMaxHealth = Math.max(1, Math.round(enemyMaxHealth * profile.enemyHealthMul));
         }
-        
+
         const champType = (scheduleEntry && scheduleEntry.type)
             || (currentLevel && currentLevel.isBoss ? 'boss' : 'spaceship');
         const champFaction = (scheduleEntry && scheduleEntry.faction) || 'pirate';
@@ -126,9 +126,9 @@ extendClass(EnemyManager, {
             colors: hitProfile.colors,
             collision: hitProfile.collision
         };
-        
+
         this.maxHealth = enemyMaxHealth;
-        
+
         if (typeof graphicsManager !== 'undefined' && graphicsManager.currentEnemyModel) {
             const model = graphicsManager.currentEnemyModel;
             this.evasionCooldown = model.evasionCooldown || 5000;
@@ -172,7 +172,7 @@ extendClass(EnemyManager, {
             this.enemy.damageMul = ai.damageMul;
         }
         this.shield = this.shieldMax;
-        
+
         this.health = this.maxHealth;
         this.exploding = false;
         this.explosionTimer = 0;

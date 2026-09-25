@@ -5,7 +5,7 @@ extendClass(ComponentEditorUI, {
     hideBackgroundUI() {
         // Store original styles for restoration
         if (!this._originalStyles) this._originalStyles = new Map();
-        
+
         // Hide ONLY hangar slot select dropdowns, NOT component editor selects
         const slotSelects = document.querySelectorAll(".hs-hangar-slot-select");
         slotSelects.forEach(s => {
@@ -14,7 +14,7 @@ extendClass(ComponentEditorUI, {
             }
             s.style.display = "none";
         });
-        
+
         // Hide weapon/defense/ability/energy dropdowns in home-station (NOT in component-editor)
         const homeOverlay = document.querySelector(".home-station-overlay");
         if (homeOverlay) {
@@ -34,7 +34,7 @@ extendClass(ComponentEditorUI, {
                 s.style.display = "none";
             });
         }
-        
+
         // Lower z-index of home-station but don't disable pointer events
         const hs = document.querySelector(".home-station-overlay");
         if (hs) {
@@ -47,7 +47,7 @@ extendClass(ComponentEditorUI, {
 
     showBackgroundUI() {
         if (!this._originalStyles) return;
-        
+
         // Restore all styles
         this._originalStyles.forEach((originalStyle, el) => {
             if (el.style) {
@@ -60,7 +60,7 @@ extendClass(ComponentEditorUI, {
 
     startDropdownObserver() {
         if (this._dropdownObs) return;
-        
+
         // Watch for new dropdowns being added and hide them
         this._dropdownObs = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
@@ -70,7 +70,7 @@ extendClass(ComponentEditorUI, {
                     newSlotSelects.forEach(s => {
                         s.style.display = "none";
                     });
-                    
+
                     // Hide new regular selects in home-station-overlay
                     const newSelects = mutation.target.querySelectorAll("select, input[type='select']");
                     newSelects.forEach(s => {
@@ -81,7 +81,7 @@ extendClass(ComponentEditorUI, {
                 }
             });
         });
-        
+
         // Start observing for changes in the home-station-overlay
         const hs = document.querySelector(".home-station-overlay");
         if (hs) {
@@ -174,9 +174,9 @@ extendClass(ComponentEditorUI, {
         const eraseBtn = r.querySelector("#ceToolErase");
         if (drawBtn) drawBtn.onclick = () => this.setPaintTool("draw");
         if (eraseBtn) eraseBtn.onclick = () => this.setPaintTool("erase");
-        
+
         this.renderPalette();
-        
+
         r.querySelectorAll(".hs-comp-size-btn").forEach((btn) => {
             btn.onclick = () => {
                 const sz = parseInt(btn.getAttribute("data-ce-size"), 10) || 1;

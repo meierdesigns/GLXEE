@@ -67,23 +67,23 @@ extendClass(BulletManager, {
 
     enemyShoot(enemy) {
         const currentTime = Date.now();
-        
+
         // Check cooldown - prevent shooting too frequently
         if (currentTime - this.lastEnemyShotTime < this.enemyShotCooldown) {
             return;
         }
-        
+
         // Check maximum enemy bullets on screen
         if (this.enemyBullets.length >= this.maxEnemyBullets) {
             return;
         }
-        
+
         // Get enemy ship model for weapon configuration
         let enemyModel = null;
         if (typeof enemyManager !== 'undefined' && enemyManager.currentEnemyModel) {
             enemyModel = enemyManager.currentEnemyModel;
         }
-        
+
         let weaponId = 'laser';
         // Use ship-specific weapon if available
         if (enemyModel && enemyModel.weaponConfig) {
@@ -104,7 +104,7 @@ extendClass(BulletManager, {
                 profileManager.discoverEnemyContents(enemy.type);
             }
         }
-        
+
         // Update last shot time
         this.lastEnemyShotTime = currentTime;
     },
@@ -112,12 +112,12 @@ extendClass(BulletManager, {
     enemyShootWithWeapon(enemy, enemyModel) {
         const defaultWeapon = enemyModel.defaultWeapon || 'laser';
         const weaponConfig = enemyModel.weaponConfig[defaultWeapon];
-        
+
         if (!weaponConfig) {
             this.enemyShootDefault(enemy);
             return;
         }
-        
+
         const cfg = Object.assign({}, weaponConfig);
         const damageMul = enemy && enemy.damageMul != null ? enemy.damageMul : 1;
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
@@ -170,13 +170,13 @@ extendClass(BulletManager, {
         const bulletCount = Math.min(config.bulletCount || 3, 2);
         const spreadAngle = config.spreadAngle || 0.3;
         const angles = [];
-        
+
         // Calculate spread angles
         for (let i = 0; i < bulletCount; i++) {
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
             angles.push(angle);
         }
-        
+
         angles.forEach(angle => {
             const bullet = {
                 x: enemy.x + enemy.width / 2 - 1.5,
@@ -200,7 +200,7 @@ extendClass(BulletManager, {
     enemyShootRapid(enemy, config) {
         // Limit rapid shots to maximum 2 bullets to stay within 3 total limit
         const bulletCount = Math.min(config.bulletCount || 2, 2);
-        
+
         for (let i = 0; i < bulletCount; i++) {
             const bullet = {
                 x: enemy.x + enemy.width / 2 - 1.5 + (i * 3),

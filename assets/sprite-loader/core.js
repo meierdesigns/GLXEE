@@ -88,7 +88,7 @@ class SpriteLoader {
             'player-bomber', 'player-bomber-heavy', 'player-stealth', 'player-stealth-advanced',
             'player-destroyer', 'player-carrier', 'player-frigate',
             'player-corvette', 'player-gunship', 'player-dreadnought',
-            
+
             // Enemy ships
             'enemy-fighter', 'enemy-battleship', 'enemy-cruiser',
             'enemy-interceptor', 'enemy-scout', 'enemy-destroyer',
@@ -126,12 +126,12 @@ class SpriteLoader {
             'spread-shot-basic', 'spread-shot-advanced', 'spread-shot-heavy',
             'plasma-basic', 'plasma-advanced', 'plasma-heavy',
             'missile-basic', 'missile-advanced', 'missile-heavy',
-            
+
             // Advanced weapons
             'ion-cannon', 'photon-torpedo', 'quantum-torpedo',
             'disruptor-beam', 'antimatter-cannon', 'gravity-bomb',
             'energy-burst', 'shield-breaker',
-            
+
             // Enemy weapons
             'enemy-laser-basic', 'enemy-laser-advanced', 'enemy-laser-heavy'
         ];
@@ -144,19 +144,19 @@ class SpriteLoader {
             // Mars
             'mars-surface', 'mars-canyon', 'mars-volcano', 'mars-dust-storm',
             'mars-polar-cap', 'mars-phobos', 'mars-deimos', 'mars-sinope',
-            
+
             // Jupiter
             'jupiter-atmosphere', 'jupiter-moons', 'jupiter-red-spot',
             'jupiter-lightning', 'jupiter-magnetosphere', 'jupiter-io', 'jupiter-amalthea',
-            
+
             // Saturn
             'saturn-rings', 'saturn-storm', 'saturn-titan', 'saturn-aurora',
             'saturn-enceladus', 'saturn-europa', 'saturn-himalia',
-            
+
             // Neptune
             'neptune-storm', 'neptune-ice', 'neptune-wind', 'neptune-dark-spot',
             'neptune-triton', 'neptune-ganymede', 'neptune-elara',
-            
+
             // Pluto
             'pluto-surface', 'pluto-ice', 'pluto-mountains', 'pluto-nitrogen',
             'pluto-charon', 'pluto-callisto', 'pluto-pasiphae'

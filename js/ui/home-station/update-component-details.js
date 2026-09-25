@@ -9,7 +9,7 @@ extendClass(HomeStationUI, {
         const titleEl = detailsPanel?.querySelector('.hs-component-title');
         const infoEl = detailsPanel?.querySelector('.hs-component-info');
         const settingsEl = detailsPanel?.querySelector('.hs-component-settings');
-        
+
         if (same || !kind) {
             // Hide details, show ships
             if (hangarList) hangarList.classList.remove('hs-component-selected');
@@ -39,7 +39,7 @@ extendClass(HomeStationUI, {
         );
         const slotPin = slotEl ? slotEl.querySelector('.hs-hangar-slot-pin') : null;
         const modFace = slotPin ? (slotPin.getAttribute('data-mod-face') || '') : '';
-        
+
         // Update settings (skins)
         if (settingsEl) {
             if (!modId) {
@@ -59,7 +59,7 @@ extendClass(HomeStationUI, {
                         </div>
                     `;
                     settingsEl.innerHTML = skinHtml;
-                    
+
                     // Bind skin button events
                     settingsEl.querySelectorAll('[data-skin-kind]').forEach((btn) => {
                         btn.addEventListener('click', (e) => {
@@ -85,7 +85,7 @@ extendClass(HomeStationUI, {
                 }
             }
         }
-        
+
         if (!modId) {
             // Show details panel and hide ships (even if slot is empty)
             if (hangarList) hangarList.classList.add('hs-component-selected');
@@ -96,7 +96,7 @@ extendClass(HomeStationUI, {
         // Get module info from library
         const lib = typeof moduleLibrary !== 'undefined' ? moduleLibrary : null;
         const mod = lib ? lib.getModule(kind, modId) : null;
-        
+
         if (infoEl) {
             let info = `${mod?.label || modId}`;
             if (mod?.description) {
@@ -110,7 +110,7 @@ extendClass(HomeStationUI, {
             }
             infoEl.textContent = info;
         }
-        
+
         // Show details panel and hide ships
         if (hangarList) hangarList.classList.add('hs-component-selected');
     },

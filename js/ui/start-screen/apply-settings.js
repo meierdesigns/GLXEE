@@ -23,7 +23,7 @@ extendClass(StartScreenManager, {
         if (soundSetting && typeof soundManager !== 'undefined') {
             soundManager.setSoundEnabled(soundSetting.value === 'ON');
         }
-        
+
         const musicSetting = this.settingsItems.find(item => item.name === 'Music');
         if (musicSetting && typeof soundManager !== 'undefined') {
             soundManager.setMusicEnabled(musicSetting.value === 'ON');
@@ -86,7 +86,7 @@ extendClass(StartScreenManager, {
 
     applyPaletteChange() {
         const paletteSetting = this.settingsItems.find(item => item.name === 'App Theme' || item.name === 'Color Theme');
-        
+
         if (paletteSetting) {
             const paletteId = paletteSetting.value;
             if (typeof themeContextManager !== 'undefined') {
@@ -127,14 +127,14 @@ extendClass(StartScreenManager, {
 
     // Start game with selected level and ship
     startGameWithLevelAndShip(selectedLevel, selectedShip) {
-        
+
         // Set the selected ship in graphics manager
         if (typeof graphicsManager !== 'undefined') {
             graphicsManager.setPlayerShipModel(selectedShip);
         } else {
             console.error('graphicsManager not available');
         }
-        
+
         // Start the game with selected level
         this.startGameWithLevel(selectedLevel);
     },
@@ -166,14 +166,14 @@ extendClass(StartScreenManager, {
 
     // Start game with selected ship
     startGameWithShip(selectedShip) {
-        
+
         // Set the selected ship in graphics manager
         if (typeof graphicsManager !== 'undefined') {
             graphicsManager.setPlayerShipModel(selectedShip);
         } else {
             console.error('graphicsManager not available');
         }
-        
+
         // Start the game
         this.startGame();
     },

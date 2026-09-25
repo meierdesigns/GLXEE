@@ -7,7 +7,7 @@ extendClass(ObstacleManager, {
         const rungs = 3 + Math.floor(Math.random() * 2); // 3-4 rungs
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let rung = 0; rung < rungs; rung++) {
             const rungLength = 2 + Math.floor(Math.random() * 2); // 2-3 obstacles per rung
             for (let i = 0; i < rungLength; i++) {
@@ -37,7 +37,7 @@ extendClass(ObstacleManager, {
         const bridgeLength = 4 + Math.floor(Math.random() * 3); // 4-6 obstacles
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         // Bridge deck
         for (let i = 0; i < bridgeLength; i++) {
             const obstacle = {
@@ -58,7 +58,7 @@ extendClass(ObstacleManager, {
             };
             this.obstacles.push(obstacle);
         }
-        
+
         // Bridge supports
         for (let i = 0; i < bridgeLength; i += 2) {
             const obstacle = {
@@ -86,7 +86,7 @@ extendClass(ObstacleManager, {
         const clusterSize = 3 + Math.floor(Math.random() * 3); // 3-5 obstacles
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < clusterSize; i++) {
             const obstacle = {
                 x: -size.width - (i * size.width * 0.7), // Overlap slightly
@@ -127,20 +127,20 @@ extendClass(ObstacleManager, {
         // Reset lighting
         obstacle.lightIntensity = 0;
         obstacle.lightColor = null;
-        
+
         // Check distance to all lighting bullets
         for (const bullet of this.lightingBullets) {
             const dx = (obstacle.x + obstacle.width/2) - (bullet.x + bullet.width/2);
             const dy = (obstacle.y + obstacle.height/2) - (bullet.y + bullet.height/2);
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             // If within light radius
             if (distance <= bullet.lightRadius) {
                 // Enhanced light intensity calculation with smoother falloff
                 const normalizedDistance = distance / bullet.lightRadius;
                 const falloffFactor = Math.pow(1 - normalizedDistance, 2); // Quadratic falloff for smoother transition
                 const intensity = bullet.lightIntensity * falloffFactor;
-                
+
                 // Accumulate light from multiple sources
                 if (intensity > obstacle.lightIntensity) {
                     obstacle.lightIntensity = Math.min(1.5, intensity); // Cap at 1.5 for bright effect
@@ -156,7 +156,7 @@ extendClass(ObstacleManager, {
         const blockHeight = 3 + Math.floor(Math.random() * 2); // 3-4 obstacles high
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let x = 0; x < blockWidth; x++) {
             for (let y = 0; y < blockHeight; y++) {
                 const obstacle = {
@@ -185,11 +185,11 @@ extendClass(ObstacleManager, {
         const wallLength = 6 + Math.floor(Math.random() * 4); // 6-9 obstacles
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < wallLength; i++) {
             // Create gaps only at specific intervals for maze effect
             if (i % 3 === 1 && Math.random() < 0.4) continue;
-            
+
             const obstacle = {
                 x: -size.width - (i * size.width * 0.9),
                 y: startY + (i % 2 === 0 ? 0 : size.height * 0.8), // Alternating height
@@ -215,7 +215,7 @@ extendClass(ObstacleManager, {
         const corridorLength = 5 + Math.floor(Math.random() * 3); // 5-7 obstacles
         const obstacleType = this.getRandomObstacleType();
         const size = this.getObstacleSize(obstacleType);
-        
+
         for (let i = 0; i < corridorLength; i++) {
             // Top wall
             const topObstacle = {
@@ -235,7 +235,7 @@ extendClass(ObstacleManager, {
                 reflectsShots: this.doesObstacleReflect(obstacleType)
             };
             this.obstacles.push(topObstacle);
-            
+
             // Bottom wall
             const bottomObstacle = {
                 x: -size.width - (i * size.width * 0.9),

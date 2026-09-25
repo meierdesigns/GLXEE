@@ -264,14 +264,14 @@ extendClass(EnemyManager, {
     // Set enemy ship type based on level
     async setShipType(type) {
         this.currentShipType = type;
-        
+
         // Update graphics manager
         if (typeof graphicsManager !== 'undefined') {
             graphicsManager.setEnemyShipType(type);
         }
-        
+
         // Get ship model for weapon configuration
         this.currentEnemyModel = await this.getEnemyShipModel(type);
-        
+
     },
 });

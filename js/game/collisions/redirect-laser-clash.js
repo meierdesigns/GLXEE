@@ -83,7 +83,7 @@ extendClass(CollisionManager, {
     checkObstaclePlayerCollisions(gameState) {
         const obstacles = obstacleManager.getObstacles();
         const player = playerManager.getPosition();
-        
+
         for (let i = obstacles.length - 1; i >= 0; i--) {
             if (obstacles[i].isFog) continue;
             if (this.isColliding(obstacles[i], player)) {
@@ -94,20 +94,20 @@ extendClass(CollisionManager, {
                 const obstacleY = obstacles[i].y + obstacles[i].height / 2;
                 const dmg = Math.max(1, obstacles[i].collisionDamage != null ? obstacles[i].collisionDamage : 15);
                 const explosionId = obstacles[i].explosionId || 'asteroid_burst';
-                
+
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
-                
+
                 // Damage player
                 const playerDefeated = playerManager.takeDamage(dmg);
-                
+
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId);
                 if (typeof graphicsManager !== 'undefined') {
                     graphicsManager.createHitEffect(playerX, playerY, 10);
                 }
 
                 if (typeof soundManager !== 'undefined') soundManager.playHurt();
-                
+
                 if (playerDefeated) {
                     game.gameOver();
                 }
@@ -119,9 +119,9 @@ extendClass(CollisionManager, {
     checkObstacleEnemyCollisions(gameState) {
         const obstacles = obstacleManager.getObstacles();
         const enemy = enemyManager.getEnemy();
-        
+
         if (!enemy || enemyManager.isExploding()) return;
-        
+
         for (let i = obstacles.length - 1; i >= 0; i--) {
             if (obstacles[i].isFog) continue;
             if (this.isColliding(obstacles[i], enemy)) {
@@ -132,13 +132,13 @@ extendClass(CollisionManager, {
                 const obstacleY = obstacles[i].y + obstacles[i].height / 2;
                 const dmg = Math.max(1, obstacles[i].collisionDamage != null ? obstacles[i].collisionDamage : 20);
                 const explosionId = obstacles[i].explosionId || 'asteroid_burst';
-                
+
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
-                
+
                 // Damage enemy
                 const enemyDefeated = enemyManager.takeDamage(dmg);
-                
+
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId);
                 if (typeof graphicsManager !== 'undefined') {
                     graphicsManager.createHitEffect(enemyX, enemyY, 12);
@@ -148,7 +148,7 @@ extendClass(CollisionManager, {
                     if (enemyDefeated) soundManager.playKill();
                     else soundManager.playHit();
                 }
-                
+
                 if (enemyDefeated) {
                     // Victory is handled by ObjectiveManager after champion kill / explosion
                 }

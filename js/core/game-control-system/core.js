@@ -20,7 +20,7 @@ class GameControlSystem {
     // Game flow control
     startGame(levelId = 'mars') {
         this.cancelVictoryLootPhase();
-        
+
         if (typeof menuStateManager !== 'undefined') {
             menuStateManager.setScreen('ingame');
         }
@@ -37,12 +37,12 @@ class GameControlSystem {
         if (startScreen) {
             startScreen.classList.add('hidden');
         }
-        
+
         // Hide StartScreenManager
         if (typeof startScreenManager !== 'undefined') {
             startScreenManager.hide();
         }
-        
+
         // Show left HUD cluster (info panel + vitals)
         const leftCluster = document.getElementById('gameLeftCluster');
         if (leftCluster) {
@@ -53,7 +53,7 @@ class GameControlSystem {
         if (rightCluster) {
             rightCluster.style.display = '';
         }
-        
+
         // Show game container
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) {
@@ -63,7 +63,7 @@ class GameControlSystem {
         if (typeof window.viewportFit !== 'undefined' && window.viewportFit.update) {
             window.viewportFit.update();
         }
-        
+
         // Set up the level (applies map size → canvas bitmap = full level)
         if (!this.coreLevelManager.startLevel(levelId)) {
             console.error('Failed to start level:', levelId);
@@ -144,18 +144,18 @@ class GameControlSystem {
     }
 
     restartGame() {
-        
+
         // Stop current game
         this.stopGame();
-        
+
         // Hide victory overlay
         this.hideVictoryOverlay();
-        
+
         const currentLevel = this.coreLevelManager.getCurrentLevel();
         const levelId = currentLevel
             ? (currentLevel.id || currentLevel.planetId || 'mars-1')
             : 'mars-1';
-        
+
         return this.startGame(levelId);
     }
 
@@ -164,17 +164,17 @@ class GameControlSystem {
 
         // Stop all systems
         this.systemManager.stopAll();
-        
+
         // Stop game state
         this.gameState.stopGame();
 
         if (typeof missionStartManager !== 'undefined') {
             missionStartManager.cancel();
         }
-        
+
         // Hide overlays
         this.hideAllOverlays();
-        
+
     }
 
     pauseGame() {
@@ -221,16 +221,16 @@ class GameControlSystem {
 
     // Game over handling
     gameOver() {
-        
+
         this.gameState.stopGame();
         this.showGameOverOverlay();
-        
+
         // Hide level info panel
         const levelInfoManager = this.systemManager.getSubsystem('levelInfoManager');
         if (levelInfoManager) {
             levelInfoManager.endLevel();
         }
-        
+
         // Play game over sound
         if (typeof soundManager !== 'undefined') {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();

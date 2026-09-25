@@ -71,6 +71,9 @@ class FactionManager {
             profileManager.discoverFaction(key);
         }
         this.save();
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) {
+            factionShipStyles.applyDocumentFactionTheme(key);
+        }
         return true;
     }
 

@@ -518,6 +518,7 @@ stable while large implementations move into focused folders loaded in order by
 ```
 ┌─ TRANSMISSION INDEX ────────────────────────────────────────────────────────┐
 │  Update notes ...................... docs/UPDATE_NOTES.md                 │
+│  Devlog 02 .......................... docs/ITCH_DEVLOG_02.md              │
 │  Architecture ...................... docs/ARCHITECTURE.md                   │
 │  Technical ......................... docs/TECHNICAL.md                      │
 │  Git main .................. docs/git-deployment-strategy.md        │
@@ -530,6 +531,7 @@ stable while large implementations move into focused folders loaded in order by
 | Transmission | Link |
 |:-------------|:-----|
 | Update notes | [docs/UPDATE_NOTES.md](docs/UPDATE_NOTES.md) |
+| Devlog 02 | [docs/ITCH_DEVLOG_02.md](docs/ITCH_DEVLOG_02.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Technical | [docs/TECHNICAL.md](docs/TECHNICAL.md) |
 | Git main | [docs/git-deployment-strategy.md](docs/git-deployment-strategy.md) |

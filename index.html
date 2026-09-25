@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="styles.css?v=tree-view-added">
     <link rel="stylesheet" href="css/optimized-variables.css">
+    <link rel="stylesheet" href="css/asset-gen-ui.css">
 </head>
 <body>
     <div class="game-container">
@@ -169,79 +170,216 @@
     
     <!-- Core Game Engine -->
     <!-- Core modules -->
+    <script src="js/core/extend-class.js"></script>
     <script src="js/core/game-state-manager.js"></script>
+    <script src="js/core/menu-state/core.js"></script>
+    <script src="js/core/menu-state/restore.js"></script>
     <script src="js/core/menu-state.js"></script>
+    <script src="js/core/economy-config/station-upgrades-base.js"></script>
+    <script src="js/core/economy-config/station-upgrades-advanced.js"></script>
+    <script src="js/core/economy-config/core.js"></script>
+    <script src="js/core/economy-config/compute-station-stats.js"></script>
+    <script src="js/core/economy-config/pick-weighted-resource-id.js"></script>
     <script src="js/core/economy-config.js"></script>
     <script src="js/core/difficulty-config.js"></script>
+    <script src="js/core/planet-config/core.js"></script>
+    <script src="js/core/planet-config/get-faction-meta.js"></script>
+    <script src="js/core/planet-config/next-enemy-id.js"></script>
+    <script src="js/core/planet-config/sync-available-enemy-types.js"></script>
+    <script src="js/core/planet-config/create-main-planet-defaults.js"></script>
+    <script src="js/core/planet-config/create-pluto-defaults.js"></script>
+    <script src="js/core/planet-config/apply-playfield-to-runtime.js"></script>
+    <script src="js/core/planet-config/generate-explored-planet.js"></script>
+    <script src="js/core/planet-config/add-planet.js"></script>
+    <script src="js/core/planet-config/sync-galaxy-membership.js"></script>
     <script src="js/core/planet-config.js"></script>
+    <script src="js/core/profile-manager/core.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/owns-portal.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/get-module-upgrade-bonuses.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/has-discovered-galaxy.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/create.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/try-blueprint-drop.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/buy-blueprint.js?v=wing-symmetry-1"></script>
+    <script src="js/core/profile-manager/get-resume-level-id.js?v=wing-symmetry-1"></script>
     <script src="js/core/profile-manager.js?v=wing-symmetry-1"></script>
     <script src="js/core/faction-manager.js"></script>
     <script src="js/core/flight-profiles.js"></script>
+    <script src="js/core/weapon-config/core.js"></script>
+    <script src="js/core/weapon-config/make-weapon.js"></script>
     <script src="js/core/weapon-config.js"></script>
+    <script src="js/core/ability-config/core.js"></script>
+    <script src="js/core/ability-config/create-combat-ability-defaults.js"></script>
+    <script src="js/core/ability-config/delete-ability.js"></script>
     <script src="js/core/ability-config.js"></script>
     <script src="js/core/combat-event-config.js"></script>
     <script src="js/core/explosion-config.js"></script>
+    <script src="js/core/enemy-config/core.js"></script>
+    <script src="js/core/enemy-config/create-hull-enemy-defaults.js"></script>
+    <script src="js/core/enemy-config/make-enemy.js"></script>
+    <script src="js/core/enemy-config/apply-overrides-to-model.js"></script>
     <script src="js/core/enemy-config.js"></script>
+    <script src="js/core/ship-config/core.js"></script>
+    <script src="js/core/ship-config/create-ship.js"></script>
+    <script src="js/core/ship-config/get-all-merged-player-models.js"></script>
     <script src="js/core/ship-config.js"></script>
+    <script src="js/core/ship-loadout/core.js"></script>
+    <script src="js/core/ship-loadout/get-available-skins.js"></script>
+    <script src="js/core/ship-loadout/resolve-model-class.js"></script>
+    <script src="js/core/ship-loadout/create-layout-context.js"></script>
+    <script src="js/core/ship-loadout/place-layout-modules.js"></script>
+    <script src="js/core/ship-loadout/dock-layout-parts.js"></script>
+    <script src="js/core/ship-loadout/resolve-module-icon.js"></script>
+    <script src="js/core/ship-loadout/compute-power-budget.js"></script>
+    <script src="js/core/ship-loadout/set-slot-module.js"></script>
+    <script src="js/core/ship-loadout/build-hangar-slots.js"></script>
     <script src="js/core/ship-loadout.js"></script>
     <script src="js/core/objective-manager.js"></script>
     <script src="js/core/daily-tracker.js"></script>
+    <script src="js/core/level-manager/core.js"></script>
+    <script src="js/core/level-manager/build-stage-level.js"></script>
     <script src="js/core/level-manager.js"></script>
     <script src="js/core/system-manager.js"></script>
+    <script src="js/core/game-control-system/core.js"></script>
+    <script src="js/core/game-control-system/begin-victory-loot-phase.js"></script>
+    <script src="js/core/game-control-system/show-victory-overlay.js"></script>
+    <script src="js/core/game-control-system/leave-game-session.js"></script>
     <script src="js/core/game-control-system.js"></script>
     <script src="js/core/game-loop.js"></script>
     <script src="js/core/menu-nav.js"></script>
+    <script src="js/core/input-handler/core.js"></script>
+    <script src="js/core/input-handler/handle-key-up.js"></script>
     <script src="js/core/input-handler.js"></script>
+    <script src="js/core/ui-manager/core.js"></script>
+    <script src="js/core/ui-manager/update-game-over-menu-display.js"></script>
     <script src="js/core/ui-manager.js"></script>
     <script src="js/core/cheat-system.js"></script>
     <script src="js/core/settings-manager.js"></script>
     <script src="js/core/render-manager.js"></script>
     <script src="js/core/viewport-fit.js"></script>
+    <script src="js/core/core/core.js"></script>
+    <script src="js/core/core/show-start-screen.js"></script>
     <script src="js/core/core.js"></script>
     
     <!-- Game Logic -->
+    <script src="js/game/sounds/core.js"></script>
+    <script src="js/game/sounds/play-game-over.js"></script>
     <script src="js/game/sounds.js"></script>
+    <script src="js/game/youtube-soundtrack/core.js"></script>
+    <script src="js/game/youtube-soundtrack/create-player.js"></script>
     <script src="js/game/youtube-soundtrack.js"></script>
     <script src="js/game/beat-sync.js"></script>
     <script src="js/game/charge-system.js"></script>
+    <script src="js/game/player/core.js"></script>
+    <script src="js/game/player/set-ship-model.js"></script>
     <script src="js/game/player.js"></script>
+    <script src="js/game/bullets/core.js"></script>
+    <script src="js/game/bullets/get-weapon-icon-key.js"></script>
+    <script src="js/game/bullets/shoot-with-legacy-system.js"></script>
+    <script src="js/game/bullets/shoot-burst.js"></script>
+    <script src="js/game/bullets/reset.js"></script>
     <script src="js/game/bullets.js"></script>
+    <script src="js/game/enemies/core.js"></script>
+    <script src="js/game/enemies/resolve-enemy-hit-profile.js"></script>
+    <script src="js/game/enemies/spawn-scheduled-normal.js"></script>
+    <script src="js/game/enemies/update-side-enemies.js"></script>
+    <script src="js/game/enemies/get-enemy-ship-model.js"></script>
+    <script src="js/game/enemies/update.js"></script>
+    <script src="js/game/enemies/spawn-enemy.js"></script>
+    <script src="js/game/enemies/start-explosion.js"></script>
     <script src="js/game/enemies.js"></script>
+    <script src="js/game/obstacles/core.js"></script>
+    <script src="js/game/obstacles/spawn-obstacle.js"></script>
+    <script src="js/game/obstacles/spawn-ladder.js"></script>
+    <script src="js/game/obstacles/remove-obstacle.js"></script>
     <script src="js/game/obstacles.js"></script>
     <script src="js/game/pickups.js"></script>
+    <script src="js/game/collisions/core.js"></script>
+    <script src="js/game/collisions/redirect-laser-clash.js"></script>
+    <script src="js/game/collisions/is-sprite-solid-at.js"></script>
+    <script src="js/game/collisions/apply-optical-bullet-hit.js"></script>
     <script src="js/game/collisions.js"></script>
     
     <!-- Graphics & Rendering -->
     <script src="js/graphics/particle-system.js"></script>
     <script src="js/graphics/explosion-system.js"></script>
+    <script src="js/graphics/icon-sprites/shots.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/abilities-offense.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/abilities-defense.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/stats.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/menu.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/home-station-tabs.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/home-station-panels.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/icon-sprites/emblems.js?v=hs-tab-icons-4"></script>
     <script src="js/graphics/icon-sprites.js?v=hs-tab-icons-4"></script>
+    <script src="js/graphics/module-sprites/weapons-abilities.js"></script>
+    <script src="js/graphics/module-sprites/defenses-energy.js"></script>
     <script src="js/graphics/module-sprites.js"></script>
+    <script src="js/graphics/icon-renderer/core.js?v=icon-crisp-2"></script>
+    <script src="js/graphics/icon-renderer/get-module-kind-color.js?v=icon-crisp-2"></script>
     <script src="js/graphics/icon-renderer.js?v=icon-crisp-2"></script>
     <script src="js/ui/ui-tooltip.js?v=2"></script>
+    <script src="js/ui/color-picker-overlay/core.js"></script>
+    <script src="js/ui/color-picker-overlay/sync-ui.js"></script>
     <script src="js/ui/color-picker-overlay.js"></script>
+    <script src="js/graphics/faction-ship-styles/core.js"></script>
+    <script src="js/graphics/faction-ship-styles/paint-class-topology.js"></script>
+    <script src="js/graphics/faction-ship-styles/build-all-pixel-sprites.js"></script>
     <script src="js/graphics/faction-ship-styles.js"></script>
+    <script src="js/graphics/asset-gen-registry/core.js"></script>
+    <script src="js/graphics/asset-gen-registry/find-from-element.js"></script>
+    <script src="js/graphics/asset-gen-registry/faction-ids.js"></script>
     <script src="js/graphics/asset-gen-registry.js"></script>
     <script src="js/graphics/asset-gen-client.js"></script>
     <script src="js/graphics/sprite-meta.js"></script>
     <script src="js/graphics/sprite-factory.js"></script>
     <script src="js/graphics/color-palette.js"></script>
     <script src="js/graphics/lighting-system.js"></script>
+    <script src="js/graphics/graphics-manager/core.js"></script>
+    <script src="js/graphics/graphics-manager/draw-shield-hull.js"></script>
     <script src="js/graphics/graphics-manager.js"></script>
     <script src="js/graphics/graphics.js"></script>
+    <script src="js/graphics/color-palette-system/core.js"></script>
+    <script src="js/graphics/color-palette-system/save-global-look.js"></script>
+    <script src="js/graphics/color-palette-system/normalize-palette.js"></script>
     <script src="js/graphics/color-palette-system.js"></script>
     <script src="js/graphics/performance-optimizer.js"></script>
     <script src="js/graphics/theme-context.js"></script>
     <script src="js/graphics/ui-appearance.js"></script>
+    <script src="js/ui/enhanced-palette-ui/core.js"></script>
+    <script src="js/ui/enhanced-palette-ui/create-palette-history.js"></script>
     <script src="js/ui/enhanced-palette-ui.js"></script>
     <script src="js/graphics/color-manager.js"></script>
+    <script src="js/graphics/ship-models/core.js"></script>
+    <script src="js/graphics/ship-models/render-ship.js"></script>
     <script src="js/graphics/ship-models.js"></script>
+    <script src="js/ui/theme-editor/core.js"></script>
+    <script src="js/ui/theme-editor/setup-panel-resize.js"></script>
+    <script src="js/ui/theme-editor/get-contrast-filter.js"></script>
     <script src="js/ui/theme-editor.js"></script>
+    <script src="js/ui/asset-gen-ui/core.js"></script>
+    <script src="js/ui/asset-gen-ui/hide.js"></script>
+    <script src="js/ui/asset-gen-ui/faction-ids.js"></script>
+    <script src="js/ui/asset-gen-ui/draw-pixel-matrix.js"></script>
+    <script src="js/ui/asset-gen-ui/clear-staging.js"></script>
+    <script src="js/ui/asset-gen-ui/read-settings-from-form.js"></script>
     <script src="js/ui/asset-gen-ui.js"></script>
+    <script src="js/ui/component-editor/core.js"></script>
+    <script src="js/ui/component-editor/build-shell-html.js"></script>
+    <script src="js/ui/component-editor/hide-background-ui.js"></script>
+    <script src="js/ui/component-editor/get-palette-shades.js"></script>
+    <script src="js/ui/component-editor/refresh-all.js"></script>
+    <script src="js/ui/component-editor/draw-center.js"></script>
+    <script src="js/ui/component-editor/set-view-zoom.js"></script>
+    <script src="js/ui/component-editor/start-ship-preview.js"></script>
+    <script src="js/ui/component-editor/on-generate.js"></script>
+    <script src="js/ui/component-editor/on-component-property-change.js"></script>
     <script src="js/ui/component-editor.js"></script>
     <script src="js/ui/difficulty-editor.js"></script>
     <script src="js/ui/faction-command.js"></script>
     
     <!-- Ship Assets -->
+    <script src="assets/sprite-loader/core.js"></script>
+    <script src="assets/sprite-loader/when-loaded.js"></script>
     <script src="assets/sprite-loader.js"></script>
     <script type="module" src="assets/ships/ship-asset-loader.js?v=voxel-raster-2"></script>
     <script type="module" src="assets/ships/player-starfighter-model.js"></script>
@@ -257,25 +395,84 @@
     <!-- Ability System -->
     <script type="module" src="js/abilities/ability-manager.js"></script>
     
+    <script src="js/ui/render/core.js"></script>
+    <script src="js/ui/render/draw-crystal-obstacle.js"></script>
+    <script src="js/ui/render/draw-bullet.js"></script>
     <script src="js/ui/render.js"></script>
+    <script src="js/ui/parallax/core.js"></script>
+    <script src="js/ui/parallax/draw-custom-tile.js"></script>
     <script src="js/ui/parallax.js"></script>
+    <script src="js/ui/bg-mouse-parallax/state.js"></script>
+    <script src="js/ui/bg-mouse-parallax/backgrounds.js"></script>
+    <script src="js/ui/bg-mouse-parallax/hosts.js"></script>
     <script src="js/ui/bg-mouse-parallax.js"></script>
     <script src="js/ui/panel-resize.js"></script>
     <script src="js/ui/dev-profile-toggles.js"></script>
+    <script src="js/ui/planet-viewer/core.js"></script>
+    <script src="js/ui/planet-viewer/mount-dev-toggles.js"></script>
+    <script src="js/ui/planet-viewer/update-preview-obstacles.js"></script>
+    <script src="js/ui/planet-viewer/open-editor.js"></script>
     <script src="js/ui/planet-viewer.js"></script>
+    <script src="js/ui/enemy-viewer/core.js"></script>
+    <script src="js/ui/enemy-viewer/create-ui.js"></script>
+    <script src="js/ui/enemy-viewer/update-preview-sim.js"></script>
+    <script src="js/ui/enemy-viewer/open-gfx-editor.js"></script>
     <script src="js/ui/enemy-viewer.js"></script>
+    <script src="js/ui/ship-viewer/core.js"></script>
+    <script src="js/ui/ship-viewer/bind-preview-controls.js"></script>
+    <script src="js/ui/ship-viewer/stat-icon-html.js"></script>
     <script src="js/ui/ship-viewer.js"></script>
+    <script src="js/ui/ability-viewer/core.js"></script>
+    <script src="js/ui/ability-viewer/apply-preview-view.js"></script>
+    <script src="js/ui/ability-viewer/render-detail.js"></script>
     <script src="js/ui/ability-viewer.js"></script>
+    <script src="js/ui/weapon-viewer/core.js"></script>
+    <script src="js/ui/weapon-viewer/apply-preview-view.js"></script>
+    <script src="js/ui/weapon-viewer/persist.js"></script>
     <script src="js/ui/weapon-viewer.js"></script>
+    <script src="js/ui/defense-viewer/core.js"></script>
+    <script src="js/ui/defense-viewer/apply-preview-view.js"></script>
+    <script src="js/ui/defense-viewer/render-detail.js"></script>
     <script src="js/ui/defense-viewer.js"></script>
+    <script src="js/ui/explosion-viewer/core.js"></script>
+    <script src="js/ui/explosion-viewer/make-slider.js"></script>
     <script src="js/ui/explosion-viewer.js"></script>
+    <script src="js/ui/faction-viewer/core.js"></script>
+    <script src="js/ui/faction-viewer/bind-preview-controls.js"></script>
+    <script src="js/ui/faction-viewer/render-detail.js"></script>
     <script src="js/ui/faction-viewer.js"></script>
     <script src="js/ui/event-viewer.js"></script>
+    <script src="js/ui/planet-editor/core.js"></script>
+    <script src="js/ui/planet-editor/apply-preview-view.js"></script>
+    <script src="js/ui/planet-editor/select-planet-now.js"></script>
+    <script src="js/ui/planet-editor/render-background-tab.js"></script>
+    <script src="js/ui/planet-editor/render-obstacles-tab.js"></script>
+    <script src="js/ui/planet-editor/render-obstacle-card.js"></script>
+    <script src="js/ui/planet-editor/render-enemies-tab.js"></script>
+    <script src="js/ui/planet-editor/render-objectives-tab.js"></script>
+    <script src="js/ui/planet-editor/render-graphics-tab.js"></script>
+    <script src="js/ui/planet-editor/make-multi-check.js"></script>
+    <script src="js/ui/planet-editor/open-pattern-editor.js"></script>
+    <script src="js/ui/planet-editor/draw-pattern-thumbnail.js"></script>
+    <script src="js/ui/planet-editor/update-preview-obstacles.js"></script>
     <script src="js/ui/planet-editor.js"></script>
+    <script src="js/ui/enemy-editor/core.js"></script>
+    <script src="js/ui/enemy-editor/show.js"></script>
+    <script src="js/ui/enemy-editor/make-multi-check.js"></script>
+    <script src="js/ui/enemy-editor/reset.js"></script>
+    <script src="js/ui/enemy-editor/spawn-preview-enemy-shot.js"></script>
     <script src="js/ui/enemy-editor.js"></script>
+    <script src="js/ui/ship-editor/core.js"></script>
+    <script src="js/ui/ship-editor/show.js"></script>
+    <script src="js/ui/ship-editor/render-abilities-tab.js"></script>
+    <script src="js/ui/ship-editor/update-preview-sim.js"></script>
     <script src="js/ui/ship-editor.js"></script>
     <script src="js/ui/ability-editor.js"></script>
+    <script src="js/ui/level-info-manager/core.js"></script>
+    <script src="js/ui/level-info-manager/update-element.js"></script>
     <script src="js/ui/level-info-manager.js"></script>
+    <script src="js/ui/mission-start/core.js"></script>
+    <script src="js/ui/mission-start/prepare-fly-in.js"></script>
     <script src="js/ui/mission-start.js"></script>
     
     <!-- Level System -->
@@ -288,22 +485,90 @@
     
     <!-- UI & Menus -->
     <script src="js/ui/ship-renderer.js"></script>
+    <script src="js/ui/combined-selection/core.js"></script>
+    <script src="js/ui/combined-selection/create-fallback-player-ships.js"></script>
+    <script src="js/ui/combined-selection/show.js"></script>
+    <script src="js/ui/combined-selection/create-combined-selection-ui.js"></script>
+    <script src="js/ui/combined-selection/render-level-preview.js"></script>
+    <script src="js/ui/combined-selection/handle-key-down.js"></script>
+    <script src="js/ui/combined-selection/update-ship-details.js"></script>
     <script src="js/ui/combined-selection.js"></script>
     <script src="js/ui/galaxy-selection.js"></script>
+    <script src="js/ui/galaxy-map/core.js"></script>
+    <script src="js/ui/galaxy-map/create-ui.js"></script>
+    <script src="js/ui/galaxy-map/render-explore-controls.js"></script>
+    <script src="js/ui/galaxy-map/navigate-by-arrow.js"></script>
     <script src="js/ui/galaxy-map.js"></script>
+    <script src="js/ui/profile-selection/core.js"></script>
+    <script src="js/ui/profile-selection/render-profile-details.js"></script>
     <script src="js/ui/profile-selection.js"></script>
     <script src="js/ui/onboarding.js"></script>
+    <script src="js/ui/hangar-test-arena/core.js"></script>
+    <script src="js/ui/hangar-test-arena/render-stats.js"></script>
+    <script src="js/ui/hangar-test-arena/apply-defense.js"></script>
+    <script src="js/ui/hangar-test-arena/update.js"></script>
+    <script src="js/ui/hangar-test-arena/get-shield-threat-proximity.js"></script>
     <script src="js/ui/hangar-test-arena.js"></script>
+    <script src="js/ui/hangar-ui/core.js"></script>
+    <script src="js/ui/hangar-ui/on-slot-equipment-change.js"></script>
     <script src="js/ui/hangar-ui.js"></script>
     <script src="js/ui/component-tree.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/core.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/resource-icon-key.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/open-main-menu-overlay.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/get-missing-materials.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/get-portal-faction-filters.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/create-ui.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/mount-play-tab.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/switch-sub-tab.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-upgrade-tip-events.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-module-type-upgrades.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-parts-list.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-shop-part-rows.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-shop-tab.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-hangar-tab.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/draw-hangar-bay.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/update-component-details.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/wing-preview-pixel-zoom.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/draw-hangar-connection-marker.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/hangar-drag-layout-point.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/on-hangar-drag-down.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/on-hangar-drag-up.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-hangar-slot-events.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-hangar-slot-pin-drag.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/reset-hangar-preview-sim.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/update-hangar-preview-sim.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-controls-toggle.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-navigation-events.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/bind-station-events.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/home-station/render-component-tree.js?v=wing-symmetry-1"></script>
     <script src="js/ui/home-station.js?v=wing-symmetry-1"></script>
+    <script src="js/ui/player-selection/core.js"></script>
+    <script src="js/ui/player-selection/create-fallback-player-ships.js"></script>
+    <script src="js/ui/player-selection/create-player-selection-ui.js"></script>
+    <script src="js/ui/player-selection/update-ship-details.js"></script>
     <script src="js/ui/player-selection.js"></script>
     <script src="js/ui/planet-selection.js"></script>
     
     <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
     
+    <script src="js/ui/start-screen/core.js"></script>
+    <script src="js/ui/start-screen/build-font-menu-items.js"></script>
+    <script src="js/ui/start-screen/show-overlay.js"></script>
+    <script src="js/ui/start-screen/create-main-menu-ui.js"></script>
+    <script src="js/ui/start-screen/fill-embedded-credits.js"></script>
+    <script src="js/ui/start-screen/build-settings-row.js"></script>
+    <script src="js/ui/start-screen/build-theme-strip.js"></script>
+    <script src="js/ui/start-screen/refresh-settings-row.js"></script>
+    <script src="js/ui/start-screen/build-controls-show-btn.js"></script>
+    <script src="js/ui/start-screen/handle-arrow-down.js"></script>
+    <script src="js/ui/start-screen/refresh-asset-bridge-status.js"></script>
+    <script src="js/ui/start-screen/apply-settings.js"></script>
     <script src="js/ui/start-screen.js"></script>
     <script src="js/ui/volume-controls.js"></script>
+    <script src="js/graphics/planet-svgs/core.js"></script>
+    <script src="js/graphics/planet-svgs/apply-rings.js"></script>
+    <script src="js/graphics/planet-svgs/get-planet-svg.js"></script>
     <script src="js/graphics/planet-svgs.js"></script>
     
     <!-- Game Initialization -->

@@ -11,7 +11,7 @@ extendClass(StartScreenManager, {
         const title = document.createElement('h1');
         title.textContent = 'GLXEE';
         title.className = 'start-screen-title';
-        
+
         const subtitle = document.createElement('p');
         subtitle.textContent = 'RETRO SPACE SHOOTER';
         subtitle.className = 'start-screen-subtitle';

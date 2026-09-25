@@ -5,7 +5,7 @@ extendClass(HangarUI, {
     onSlotEquipmentChange(idx, newId) {
         const profile = this.parent.getProfile();
         if (!profile || !profile.ships || !profile.ships[this.shipId]) return;
-        
+
         const ship = profile.ships[this.shipId];
         if (ship.slots && ship.slots[idx]) {
             ship.slots[idx].equipped = newId;

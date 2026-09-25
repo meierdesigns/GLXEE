@@ -249,7 +249,7 @@ class UIManager {
 
     handleGameOverInput(event) {
         event.preventDefault();
-        
+
         switch (event.key) {
             case 'ArrowUp':
                 this.gameOverMenuIndex = (this.gameOverMenuIndex - 1 + this.gameOverMenuItems.length) % this.gameOverMenuItems.length;

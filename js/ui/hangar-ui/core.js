@@ -20,7 +20,7 @@ class HangarUI {
         this.panelResize = null;
         this.leftCollapsed = false;
         this.rightCollapsed = false;
-        
+
         this._loadPrefs();
     }
 
@@ -56,10 +56,10 @@ class HangarUI {
     render() {
         const profile = this.parent.getProfile();
         if (!profile) return '';
-        
+
         const ship = profile.ships && profile.ships[this.shipId];
         if (!ship) return `<div class="hs-hangar-empty">Select a ship to view</div>`;
-        
+
         return `
             <div class="hs-hangar-container">
                 ${this._renderLeftPanel(profile, ship)}
@@ -118,7 +118,7 @@ class HangarUI {
         const label = this._getSlotLabel(slot);
         const current = slot.equipped || '';
         const currentLabel = this._getComponentLabel(current, profile);
-        
+
         return `
             <div class="hs-slot-item${selectedClass}" data-slot-idx="${idx}">
                 <div class="hs-slot-header">
@@ -139,13 +139,13 @@ class HangarUI {
     _renderSlotDropdown(slot, idx, profile, ship, equippedByKind) {
         const current = slot.equipped || '';
         const inventory = this._getInventoryForKind(profile, slot.kind);
-        
+
         let options = '<option value="">— Empty —</option>';
         inventory.forEach(item => {
             const selected = item.id === current ? ' selected' : '';
             options += `<option value="${item.id}"${selected}>${item.label}</option>`;
         });
-        
+
         return `
             <select class="hs-hangar-slot-select" data-slot-idx="${idx}" data-kind="equipment">
                 ${options}
@@ -244,30 +244,30 @@ class HangarUI {
 
     _getInventoryForKind(profile, kind) {
         if (!profile || !profile.inventory) return [];
-        
+
         const inventory = [];
         const items = profile.inventory[kind] || [];
-        
+
         items.forEach(item => {
             inventory.push({
                 id: item.id,
                 label: item.label || item.id
             });
         });
-        
+
         return inventory;
     }
 
     _getItemById(profile, id) {
         if (!profile || !id) return null;
-        
+
         // Search in inventory
         for (const kind in profile.inventory || {}) {
             const items = profile.inventory[kind] || [];
             const found = items.find(i => i.id === id);
             if (found) return found;
         }
-        
+
         return null;
     }
 

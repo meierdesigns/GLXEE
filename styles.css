@@ -34,7 +34,7 @@
     --vf-scan: 0;
     --vf-crt: 0;
     --vf-chroma: 0;
-    
+
     /* High contrast grayscale palette */
     --gray-100: #ffffff;
     --gray-200: #f8f8f8;
@@ -46,7 +46,7 @@
     --gray-800: #404040;
     --gray-900: #202020;
     --gray-1000: #000000;
-    
+
     /* Game-specific colors with better contrast */
     --game-bg-light: var(--gray-200);
     --game-bg-medium: var(--gray-400);
@@ -55,7 +55,7 @@
     --game-text-dark: var(--gray-900);
     --game-border-light: var(--gray-300);
     --game-border-dark: var(--gray-700);
-    
+
     /* UI colors - affected by theme (updated for new system) */
     --ui-background: var(--color-background);
     --ui-surface: var(--color-surface);
@@ -65,7 +65,7 @@
     --ui-text-disabled: var(--color-text-muted);
     --ui-hover: var(--color-hover);
     --ui-active: var(--color-active);
-    
+
     /* Status colors */
     --status-success: var(--status-success);
     --status-warning: var(--status-warning);
@@ -1462,7 +1462,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border);
     width: var(--canvas-w);
@@ -2013,7 +2013,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 48px);
     border-radius: 0px;
     text-align: center;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--ui-border),
         0 0 0 2px var(--color-primary);
     min-width: min(320px, 90vw);
@@ -2121,7 +2121,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     padding: 28px 32px;
     border-radius: 8px;
     text-align: center;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--ui-border),
         0 0 0 2px var(--color-primary);
     min-width: 560px;
@@ -2717,7 +2717,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     max-height: 96vh;
     overflow: auto;
     box-sizing: border-box;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--ui-border),
         0 0 0 2px var(--ui-border),
         0 0 30px var(--color-primary);
@@ -2790,7 +2790,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--ui-surface);
     border-color: var(--color-border);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
@@ -2800,7 +2800,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     transform: scale(1.1);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -2862,7 +2862,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     flex-direction: column;
     align-items: center;
     text-align: center;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border);
 }
@@ -2886,7 +2886,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .planet-card:hover {
     background: var(--ui-surface);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px rgba(155, 188, 15, 0.6);
@@ -2896,7 +2896,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     transform: scale(1.1);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -2983,7 +2983,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     height: min(96vh, 900px);
     overflow-y: auto;
     box-sizing: border-box;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--ui-border),
         0 0 0 2px var(--ui-border),
         0 0 30px var(--color-primary);
@@ -3033,7 +3033,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     color: var(--color-text);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--color-primary),
         0 0 0 2px var(--color-primary),
         0 0 15px var(--color-primary);
@@ -3083,7 +3083,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--ui-surface);
     border-color: var(--color-border);
     transform: scale(1.02);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
@@ -3093,7 +3093,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -3284,7 +3284,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     height: min(96vh, 900px);
     overflow-y: auto;
     box-sizing: border-box;
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 2px var(--ui-border),
         0 0 0 2px var(--ui-border),
         0 0 30px var(--color-primary);
@@ -3326,7 +3326,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--ui-surface);
     border-color: var(--color-border);
     transform: scale(1.02);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
@@ -3336,7 +3336,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -3456,7 +3456,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: transparent;
     border-color: var(--color-primary);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--color-primary),
         0 0 0 1px var(--color-primary),
         0 0 15px var(--color-primary);
@@ -3466,7 +3466,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: transparent;
     border-color: var(--color-primary);
     transform: scale(1.1);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -3526,7 +3526,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--ui-surface);
     border-color: var(--color-border);
     transform: scale(1.05);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 1px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
@@ -3536,7 +3536,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-border);
     border-color: var(--color-border);
     transform: scale(1.1);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 3px var(--color-primary),
         0 0 0 3px var(--color-primary),
         0 0 25px var(--color-primary);
@@ -12903,7 +12903,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     visibility: hidden !important;
     pointer-events: none !important;
 }
- 
+
 /* Hide ship preview overlays/dropdowns */
 .home-station-overlay select {
     z-index: auto;
@@ -12918,7 +12918,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .home-station-overlay .hs-hangar-slot-select {
     pointer-events: auto !important;
 }
- 
+
 .home-station-overlay .hs-floating-style-select {
     pointer-events: auto !important;
 }

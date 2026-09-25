@@ -31,12 +31,12 @@ extendClass(ParallaxManager, {
 
     drawGrid(ctx, layer) {
         const gridSize = 16;
-        
+
         for (let x = 0; x < 400; x += gridSize) {
             for (let y = 0; y < 600; y += gridSize) {
                 const offsetX = (x + this.horizontalOffset * 0.1) % 400;
                 const offsetY = (y + layer.y) % 600;
-                
+
                 if ((Math.floor(offsetX / gridSize) + Math.floor(offsetY / gridSize)) % 2 === 0) {
                     ctx.fillRect(Math.floor(offsetX), Math.floor(offsetY), 4, 4);
                 }
@@ -58,7 +58,7 @@ extendClass(ParallaxManager, {
         dots.forEach(dot => {
             const x = (dot.x + this.horizontalOffset * 0.2) % 400;
             const y = (dot.y + layer.y) % 600;
-            
+
             ctx.fillRect(Math.floor(x), Math.floor(y), 5, 5);
         });
     },
@@ -87,19 +87,19 @@ extendClass(ParallaxManager, {
 
     updateFlyingStars(deltaTime) {
         this.starSpawnTimer += deltaTime;
-        
+
         // Spawn new stars
         if (this.starSpawnTimer >= this.starSpawnInterval) {
             this.spawnFlyingStar();
             this.starSpawnTimer = 0;
         }
-        
+
         // Update existing stars
         for (let i = this.flyingStars.length - 1; i >= 0; i--) {
             const star = this.flyingStars[i];
             star.x += star.speedX;
             star.y += star.speedY;
-            
+
             // Remove stars that are off screen
             if (star.x < -10 || star.x > 410 || star.y < -10 || star.y > 610) {
                 this.flyingStars.splice(i, 1);

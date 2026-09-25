@@ -68,19 +68,19 @@ class RenderManager {
                 return;
             }
         }
-        
+
         // Get dimensions if not provided
         if (!width) width = ctx.canvas.width;
         if (!height) height = ctx.canvas.height;
-        
+
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
-        
+
         // Render parallax background first
         if (typeof parallaxManager !== 'undefined' && ctx) {
             parallaxManager.render(ctx);
         }
-        
+
         const player = playerManager.getPosition();
         const fogList = (typeof obstacleManager !== 'undefined' && obstacleManager.getFogObstacles)
             ? obstacleManager.getFogObstacles()

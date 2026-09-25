@@ -36,7 +36,7 @@ extendClass(EnemyManager, {
 
     updateExplosion(deltaTime) {
         if (!this.exploding) return false;
-        
+
         this.explosionTimer += deltaTime;
         if (this.explosionTimer >= this.explosionDuration) {
             this.exploding = false;
@@ -63,19 +63,19 @@ extendClass(EnemyManager, {
 
     updateEvasion(deltaTime, game) {
         this.evasionTimer += deltaTime;
-        
+
         // Check if enemy should start evading (improved detection)
         if (!this.isEvading && this.evasionTimer >= this.evasionCooldown) {
             // Check if player bullets are nearby
             const bullets = bulletManager.getBullets();
             const enemyCenterX = this.enemy.x + this.enemy.width / 2;
             const enemyCenterY = this.enemy.y + this.enemy.height / 2;
-            
+
             for (let bullet of bullets) {
                 const bulletCenterX = bullet.x + bullet.width / 2;
                 const bulletCenterY = bullet.y + bullet.height / 2;
                 const distance = Math.sqrt((bulletCenterX - enemyCenterX) ** 2 + (bulletCenterY - enemyCenterY) ** 2);
-                
+
                 // If bullet is close, start evading (increased detection range)
                 const evasionFreqMul = this.enemy.flightProfile ? this.enemy.flightProfile.evasionFreqMul : 1;
                 const evasionBeatPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
@@ -87,10 +87,10 @@ extendClass(EnemyManager, {
                 }
             }
         }
-        
+
         // Check for nearby obstacles and avoid them
         this.avoidObstacles(game);
-        
+
         // Update evasion movement
         if (this.isEvading) {
             if (this.evasionTimer >= this.evasionDuration) {
@@ -104,21 +104,21 @@ extendClass(EnemyManager, {
                     let closestBulletDistance = Infinity;
                     const enemyCenterX = this.enemy.x + this.enemy.width / 2;
                     const enemyCenterY = this.enemy.y + this.enemy.height / 2;
-                    
+
                     for (let bullet of bullets) {
                         const bulletCenterX = bullet.x + bullet.width / 2;
                         const bulletCenterY = bullet.y + bullet.height / 2;
                         const distance = Math.sqrt((bulletCenterX - enemyCenterX) ** 2 + (bulletCenterY - enemyCenterY) ** 2);
-                        
+
                         if (distance < closestBulletDistance) {
                             closestBulletDistance = distance;
                             closestBullet = bullet;
                         }
                     }
-                    
+
                     const bulletCenterX = closestBullet.x + closestBullet.width / 2;
                     const bulletCenterY = closestBullet.y + closestBullet.height / 2;
-                    
+
                     // Calculate evasion direction with better logic
                     const player = (typeof playerManager !== 'undefined') ? playerManager.getPosition() : null;
                     const playerX = player ? player.x : enemyCenterX;
@@ -130,24 +130,24 @@ extendClass(EnemyManager, {
                     this.lastPlayerPosition = { x: playerX, y: playerY };
                     const deltaX = enemyCenterX - bulletCenterX + (predictedX - playerX) * 0.25;
                     const deltaY = enemyCenterY - bulletCenterY + (predictedY - playerY) * 0.25;
-                    
+
                     // Normalize the evasion vector
                     const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                     if (magnitude > 0) {
                         const normalizedX = deltaX / magnitude;
                         const normalizedY = deltaY / magnitude;
-                        
+
                         // Apply evasion movement with strength based on distance
                         const evasionStrength = Math.max(0.6, 1.0 - (closestBulletDistance / 100));
                         this.enemy.x += normalizedX * this.evasionSpeed * evasionStrength;
                         this.enemy.y += normalizedY * this.evasionSpeed * evasionStrength;
                     }
-                    
+
                     // Keep enemy on screen with robust boundary checking
                     const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
                     this.enemy.x = Math.max(0, Math.min(canvasWidth - this.enemy.width, this.enemy.x));
                     this.enemy.y = Math.max(this.enemy.minY, Math.min(this.enemy.maxY, this.enemy.y));
-                    
+
                     // Force enemy back if it somehow escaped
                     if (this.enemy.x < 0) this.enemy.x = 0;
                     if (this.enemy.x > canvasWidth - this.enemy.width) this.enemy.x = canvasWidth - this.enemy.width;
@@ -162,48 +162,48 @@ extendClass(EnemyManager, {
         const obstacles = obstacleManager.getObstacles();
         const enemyCenterX = this.enemy.x + this.enemy.width / 2;
         const enemyCenterY = this.enemy.y + this.enemy.height / 2;
-        
+
         // Find the closest obstacle
         let closestObstacle = null;
         let closestDistance = Infinity;
-        
+
         for (let obstacle of obstacles) {
             const obstacleCenterX = obstacle.x + obstacle.width / 2;
             const obstacleCenterY = obstacle.y + obstacle.height / 2;
             const distance = Math.sqrt((obstacleCenterX - enemyCenterX) ** 2 + (obstacleCenterY - enemyCenterY) ** 2);
-            
+
             if (distance < closestDistance) {
                 closestDistance = distance;
                 closestObstacle = obstacle;
             }
         }
-        
+
         // If obstacle is close, avoid it with improved logic
         if (closestObstacle && closestDistance < 80) { // Increased detection range from 60 to 80
             const obstacleCenterX = closestObstacle.x + closestObstacle.width / 2;
             const obstacleCenterY = closestObstacle.y + closestObstacle.height / 2;
-            
+
             // Calculate avoidance direction with better logic
             const deltaX = enemyCenterX - obstacleCenterX;
             const deltaY = enemyCenterY - obstacleCenterY;
-            
+
             // Normalize the avoidance vector
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
             if (magnitude > 0) {
                 const normalizedX = deltaX / magnitude;
                 const normalizedY = deltaY / magnitude;
-                
+
                 // Apply stronger avoidance movement
                 const avoidanceStrength = Math.max(0.8, 1.2 - (closestDistance / 80)); // Stronger when closer
                 this.enemy.x += normalizedX * this.evasionSpeed * avoidanceStrength;
                 this.enemy.y += normalizedY * this.enemy.verticalSpeed * avoidanceStrength;
             }
-            
+
             // Keep enemy within bounds with robust boundary checking
             const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
             this.enemy.x = Math.max(0, Math.min(canvasWidth - this.enemy.width, this.enemy.x));
             this.enemy.y = Math.max(this.enemy.minY, Math.min(this.enemy.maxY, this.enemy.y));
-            
+
             // Force enemy back if it somehow escaped
             if (this.enemy.x < 0) this.enemy.x = 0;
             if (this.enemy.x > canvasWidth - this.enemy.width) this.enemy.x = canvasWidth - this.enemy.width;

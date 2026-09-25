@@ -17,13 +17,13 @@ extendClass(GameCore, {
                 startScreen.classList.remove('hidden');
             }
         }
-        
+
         // Hide level info panel
         const levelInfoPanel = document.getElementById('levelInfoPanel');
         if (levelInfoPanel) {
             levelInfoPanel.style.display = 'none';
         }
-        
+
         // Hide game container
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) {
@@ -47,7 +47,7 @@ extendClass(GameCore, {
         if (startScreen) {
             startScreen.classList.add('hidden');
         }
-        
+
         // Hide StartScreenManager
         if (typeof startScreenManager !== 'undefined') {
             startScreenManager.hide();

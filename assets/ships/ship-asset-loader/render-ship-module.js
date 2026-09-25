@@ -254,10 +254,10 @@ extendClass(ShipAssetLoader, {
         if (spriteName) {
             return spriteName.includes('enemy-') || spriteName.includes('enemy_');
         }
-        
+
         // Check by ship type/name patterns
         const shipName = shipModel.name ? shipModel.name.toLowerCase() : '';
-        return shipName.includes('enemy') || shipName.includes('fighter') || 
+        return shipName.includes('enemy') || shipName.includes('fighter') ||
                shipName.includes('battleship') || shipName.includes('cruiser') ||
                shipName.includes('interceptor') || shipName.includes('scout') ||
                shipName.includes('destroyer') || shipName.includes('carrier') ||

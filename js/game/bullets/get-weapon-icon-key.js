@@ -46,12 +46,12 @@ extendClass(BulletManager, {
         const infoElement = document.getElementById('weaponInfo');
         const mode = this.getFireMode();
         const modeLabel = mode === 'charge' ? 'CHARGE' : 'AUTO';
-        
+
         if (weaponElement) {
             if (this.currentShipModel && this.currentShipModel.availableWeapons) {
                 weaponElement.textContent = this.currentWeapon.toUpperCase();
                 this.renderWeaponIcon(this.currentWeapon);
-                
+
                 // Update weapon info
                 if (infoElement) {
                     const weaponConfig = this.currentShipModel.weaponConfig[this.currentWeapon];
@@ -113,7 +113,7 @@ extendClass(BulletManager, {
                 return false;
             }
         }
-        
+
         // Use ship-specific weapon system if available
         if (this.currentShipModel && this.currentShipModel.weaponConfig) {
             shotFired = this.shootWithShipWeapon(playerPosition, currentTime, opts);
@@ -132,7 +132,7 @@ extendClass(BulletManager, {
                 );
             }
         }
-        
+
         // Play shooting sound only if a shot was actually fired
         if (shotFired && typeof soundManager !== 'undefined') {
             soundManager.playWeaponShoot(this.currentWeapon || 'laser');

@@ -146,21 +146,21 @@ class ParallaxManager {
             console.warn('ParallaxManager.render: ctx is undefined');
             return;
         }
-        
-        
+
+
         // Set pixelated rendering first
         ctx.imageSmoothingEnabled = false;
         ctx.webkitImageSmoothingEnabled = false;
         ctx.mozImageSmoothingEnabled = false;
         ctx.msImageSmoothingEnabled = false;
-        
+
         // Fill base background with theme color
         const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--current-background').trim();
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;
         ctx.fillRect(0, 0, cw, ch);
-        
+
         // Render parallax background layers (respect visibility + opacity)
         this.layers.forEach((layer, index) => {
             if (layer.visible === false) return;

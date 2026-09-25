@@ -6,19 +6,19 @@ extendClass(BulletManager, {
         const opts = options || {};
         const currentType = this.shotTypes[this.shotType];
         let maxBullets = 4;
-        
+
         // Check for infinite ammo cheat
         if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
-        
+
         // Check if we can shoot based on current bullet count
         if (this.bullets.length >= maxBullets) {
             return false;
         }
 
         const chargeMult = opts.chargeMult || 1;
-        
+
         switch (currentType) {
             case 'normal':
             case 'laser':
@@ -39,7 +39,7 @@ extendClass(BulletManager, {
                 }, false);
                 break;
         }
-        
+
         return true; // Shot was fired successfully
     },
 
@@ -67,7 +67,7 @@ extendClass(BulletManager, {
         // Shoot 3 bullets in spread pattern (but respect bullet limit)
         const angles = [-0.3, 0, 0.3];
         const maxBullets = 4;
-        
+
         angles.forEach(angle => {
             if (this.bullets.length < maxBullets) {
                 const bullet = {
@@ -93,7 +93,7 @@ extendClass(BulletManager, {
     shootRapid(playerPosition) {
         // Shoot 2 bullets rapidly (but respect bullet limit)
         const maxBullets = 4;
-        
+
         for (let i = 0; i < 2; i++) {
             if (this.bullets.length < maxBullets) {
                 const bullet = {
@@ -143,13 +143,13 @@ extendClass(BulletManager, {
         const bulletCount = config.bulletCount || 3;
         const spreadAngle = config.spreadAngle || 0.3;
         const angles = [];
-        
+
         // Calculate spread angles
         for (let i = 0; i < bulletCount; i++) {
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
             angles.push(angle);
         }
-        
+
         angles.forEach(angle => {
             if (this.bullets.length < 6) { // Max bullets for spread
                 const bullet = {
@@ -174,7 +174,7 @@ extendClass(BulletManager, {
 
     shootRapidWeapon(playerPosition, config) {
         const bulletCount = config.bulletCount || 2;
-        
+
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length < 6) {
                 const bullet = {

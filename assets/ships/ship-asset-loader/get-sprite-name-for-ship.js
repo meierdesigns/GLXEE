@@ -23,10 +23,10 @@ extendClass(ShipAssetLoader, {
                 return shipModel.spriteKey;
             }
         }
-        
+
         const type = shipModel.type;
         const modelClass = shipModel.modelClass;
-        
+
         if (type === 'player') {
             switch (modelClass) {
                 case 'starfighter': return 'player-starfighter';
@@ -53,7 +53,7 @@ extendClass(ShipAssetLoader, {
                 default: return 'enemy-fighter';
             }
         }
-        
+
         return null;
     },
 

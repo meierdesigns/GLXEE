@@ -96,7 +96,7 @@ extendClass(CombinedSelectionManager, {
             levelBeltItems.forEach((item, index) => {
                 item.classList.toggle('selected', index === this.selectedLevelIndex);
             });
-            
+
             // Update level details
             this.updateLevelDetails();
         } else {
@@ -105,7 +105,7 @@ extendClass(CombinedSelectionManager, {
             shipBeltItems.forEach((item, index) => {
                 item.classList.toggle('selected', index === this.selectedShipIndex);
             });
-            
+
             // Update ship details
             this.updateShipDetails();
         }
@@ -115,10 +115,10 @@ extendClass(CombinedSelectionManager, {
     // Update level details display
     updateLevelDetails() {
         if (!this.overlay) return;
-        
+
         const selectedLevel = this.levels[this.selectedLevelIndex];
         if (!selectedLevel) return;
-        
+
         // Update level name
         const levelNameElement = this.overlay.querySelector('.level-name-large');
         if (levelNameElement) {
@@ -131,7 +131,7 @@ extendClass(CombinedSelectionManager, {
                 levelNameElement.style.color = 'var(--current-text)';
             }
         }
-        
+
         // Update level description
         const levelDescriptionElement = this.overlay.querySelector('.level-description-large');
         if (levelDescriptionElement) {
@@ -145,7 +145,7 @@ extendClass(CombinedSelectionManager, {
                 levelDescriptionElement.style.color = 'var(--current-text-secondary)';
             }
         }
-        
+
         // Update level stats
         const statElements = this.overlay.querySelectorAll('.level-stats-detailed .stat-value');
         if (statElements.length >= 4) {
@@ -169,13 +169,13 @@ extendClass(CombinedSelectionManager, {
                 });
             }
         }
-        
+
         // Update locked indicator
         const lockedIndicator = this.overlay.querySelector('.locked-indicator-large');
         if (lockedIndicator) {
             lockedIndicator.style.display = !selectedLevel.unlocked ? 'block' : 'none';
         }
-        
+
         // Update large canvas
         const largeCanvas = this.overlay.querySelector('.level-large-canvas');
         if (largeCanvas) {
@@ -186,7 +186,7 @@ extendClass(CombinedSelectionManager, {
     // Get detailed abilities for a ship
     getDetailedAbilities(ship) {
         if (!ship || !ship.abilities) return '';
-        
+
         // Try to get abilities from ability manager if available
         if (typeof abilityManager !== 'undefined') {
             const abilityDescriptions = abilityManager.getAbilityDescriptions(ship.abilities);
@@ -205,7 +205,7 @@ extendClass(CombinedSelectionManager, {
                 </div>
             `).join('');
         }
-        
+
         // Fallback to simple display
         return ship.abilities.map(ability => `
             <span class="ability-item">${ability}</span>
@@ -215,13 +215,13 @@ extendClass(CombinedSelectionManager, {
     // Get ability effects for display
     getAbilityEffects(ability) {
         if (!ability.effects) return '';
-        
+
         const effects = [];
         for (const [key, value] of Object.entries(ability.effects)) {
             if (typeof value === 'number') {
                 let displayValue = value;
                 let label = key.replace(/([A-Z])/g, ' $1').replace(/Modifier$/, '').trim();
-                
+
                 if (key.includes('Modifier')) {
                     displayValue = `${Math.round((value - 1) * 100)}%`;
                     if (value > 1) displayValue = '+' + displayValue;
@@ -230,7 +230,7 @@ extendClass(CombinedSelectionManager, {
                 } else {
                     displayValue = value.toString();
                 }
-                
+
                 effects.push(`
                     <div class="ability-effect">
                         <div class="ability-effect-label">${label}</div>
@@ -239,7 +239,7 @@ extendClass(CombinedSelectionManager, {
                 `);
             }
         }
-        
+
         return effects.join('');
     },
 });

@@ -7,7 +7,7 @@ extendClass(GameControlSystem, {
         if (typeof startScreenManager !== 'undefined') {
             startScreenManager.hide();
         }
-        
+
         // Hide side HUD clusters
         const leftCluster = document.getElementById('gameLeftCluster');
         if (leftCluster) {
@@ -18,7 +18,7 @@ extendClass(GameControlSystem, {
         if (rightCluster) {
             rightCluster.style.display = 'none';
         }
-        
+
         // Create / refresh victory overlay layout
         let victoryOverlay = document.getElementById('victoryOverlay');
         const needsBuild = !victoryOverlay || !document.getElementById('victoryLootList');
@@ -216,7 +216,7 @@ extendClass(GameControlSystem, {
         if (victoryOverlay) {
             victoryOverlay.classList.add('hidden');
         }
-        
+
         // Show side HUD clusters again
         const leftCluster = document.getElementById('gameLeftCluster');
         if (leftCluster) {
@@ -233,7 +233,7 @@ extendClass(GameControlSystem, {
         this.hidePauseOverlay();
         this.hideGameOverOverlay();
         this.hideVictoryOverlay();
-        
+
         // Hide settings overlay
         const settingsOverlay = document.getElementById('settingsOverlay');
         if (settingsOverlay) {

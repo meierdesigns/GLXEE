@@ -16,7 +16,7 @@ extendClass(EnemyManager, {
             this.championCombatElapsedMs += deltaTime;
             this.evaluateCombatEvents(gameState);
         }
-        
+
         // Apply slow motion cheat
         let effectiveDeltaTime = deltaTime;
         if (gameState && gameState.cheats && gameState.cheats.slowMotion) {
@@ -31,7 +31,7 @@ extendClass(EnemyManager, {
                 this.shield = Math.min(this.shieldMax, this.shield + this.shieldRegen * (effectiveDeltaTime / 1000));
             }
         }
-        
+
         // Update explosion if enemy is exploding
         if (this.exploding) {
             const explosionFinished = this.updateExplosion(effectiveDeltaTime);
@@ -59,7 +59,7 @@ extendClass(EnemyManager, {
             }
             return; // Don't update enemy movement during explosion
         }
-        
+
         // Update enemy position (move left/right and up/down)
         // Calculate frame-rate independent speed multiplier
         let speedMultiplier = effectiveDeltaTime / 16.67; // 16.67ms = 60 FPS baseline
@@ -84,7 +84,7 @@ extendClass(EnemyManager, {
         // Get current canvas dimensions with multiple fallbacks
         const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
         const canvasHeight = game?.internalHeight || game?.baseHeight || game?.height || 300;
-        
+
         // Bounce off walls horizontally with safety margins
         if (this.enemy.x <= 0) {
             this.enemy.x = 0;
@@ -93,7 +93,7 @@ extendClass(EnemyManager, {
             this.enemy.x = canvasWidth - this.enemy.width;
             this.enemy.speed = -Math.abs(this.enemy.speed); // Force negative speed
         }
-        
+
         // Bounce off vertical boundaries (1/3 of screen) with safety margins
         if (this.enemy.y <= this.enemy.minY) {
             this.enemy.y = this.enemy.minY;
@@ -102,10 +102,10 @@ extendClass(EnemyManager, {
             this.enemy.y = this.enemy.maxY;
             this.enemy.verticalSpeed = -Math.abs(this.enemy.verticalSpeed); // Force negative speed
         }
-        
+
         // Enemy evasion behavior
         this.updateEvasion(deltaTime, game);
-        
+
         // Enemy shooting - use model-specific shooting interval (only if not exploding)
         if (!this.exploding) {
             let shootChance = 0.002; // Reduced default 0.2% chance per frame
@@ -121,12 +121,12 @@ extendClass(EnemyManager, {
                     shootChance *= 0.25;
                 }
             }
-            
+
             if (Math.random() < shootChance) {
                 bulletManager.enemyShoot(this.enemy);
             }
         }
-        
+
         // Final safety check - force enemy back into bounds if it somehow escaped
         const finalCanvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
         if (this.enemy.x < 0) {

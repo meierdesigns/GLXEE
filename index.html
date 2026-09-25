@@ -48,7 +48,7 @@
                 </div>
             </aside>
         </div>
-        
+
         <div class="game-canvas-container">
             <div class="game-header">
                 <h1>GLXEE</h1>
@@ -159,15 +159,15 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Color Overlay for HTML Elements -->
     <div id="colorOverlay" class="color-overlay"></div>
-    
+
     <!-- Start Screen -->
     <div id="startScreen" class="start-screen">
         <!-- StartScreenManager will create the UI dynamically -->
     </div>
-    
+
     <!-- Core Game Engine -->
     <!-- Core modules -->
     <script src="js/core/extend-class.js"></script>
@@ -259,7 +259,7 @@
     <script src="js/core/core/core.js"></script>
     <script src="js/core/core/show-start-screen.js"></script>
     <script src="js/core/core.js"></script>
-    
+
     <!-- Game Logic -->
     <script src="js/game/sounds/core.js"></script>
     <script src="js/game/sounds/play-game-over.js"></script>
@@ -298,7 +298,7 @@
     <script src="js/game/collisions/is-sprite-solid-at.js"></script>
     <script src="js/game/collisions/apply-optical-bullet-hit.js"></script>
     <script src="js/game/collisions.js"></script>
-    
+
     <!-- Graphics & Rendering -->
     <script src="js/graphics/particle-system.js"></script>
     <script src="js/graphics/explosion-system.js"></script>
@@ -376,7 +376,7 @@
     <script src="js/ui/component-editor.js"></script>
     <script src="js/ui/difficulty-editor.js"></script>
     <script src="js/ui/faction-command.js"></script>
-    
+
     <!-- Ship Assets -->
     <script src="assets/sprite-loader/core.js"></script>
     <script src="assets/sprite-loader/when-loaded.js"></script>
@@ -391,10 +391,10 @@
     <script type="module" src="assets/ships/interceptor-model.js"></script>
     <script type="module" src="assets/ships/cruiser-model.js"></script>
     <script type="module" src="assets/ships/battleship-model.js"></script>
-    
+
     <!-- Ability System -->
     <script type="module" src="js/abilities/ability-manager.js"></script>
-    
+
     <script src="js/ui/render/core.js"></script>
     <script src="js/ui/render/draw-crystal-obstacle.js"></script>
     <script src="js/ui/render/draw-bullet.js"></script>
@@ -474,7 +474,7 @@
     <script src="js/ui/mission-start/core.js"></script>
     <script src="js/ui/mission-start/prepare-fly-in.js"></script>
     <script src="js/ui/mission-start.js"></script>
-    
+
     <!-- Level System -->
     <script src="js/levels/mars.js"></script>
     <script src="js/levels/jupiter.js"></script>
@@ -482,7 +482,7 @@
     <script src="js/levels/neptune.js"></script>
     <script src="js/levels/pluto.js"></script>
     <script src="js/levels/level-manager.js"></script>
-    
+
     <!-- UI & Menus -->
     <script src="js/ui/ship-renderer.js"></script>
     <script src="js/ui/combined-selection/core.js"></script>
@@ -549,9 +549,9 @@
     <script src="js/ui/player-selection/update-ship-details.js"></script>
     <script src="js/ui/player-selection.js"></script>
     <script src="js/ui/planet-selection.js"></script>
-    
+
     <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
-    
+
     <script src="js/ui/start-screen/core.js"></script>
     <script src="js/ui/start-screen/build-font-menu-items.js"></script>
     <script src="js/ui/start-screen/show-overlay.js"></script>
@@ -570,15 +570,15 @@
     <script src="js/graphics/planet-svgs/apply-rings.js"></script>
     <script src="js/graphics/planet-svgs/get-planet-svg.js"></script>
     <script src="js/graphics/planet-svgs.js"></script>
-    
+
     <!-- Game Initialization -->
     <script>
         // Initialize game when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            
+
             // Create global game instance
             game = new GameCore();
-            
+
             // Initialize the game
             game.init();
 

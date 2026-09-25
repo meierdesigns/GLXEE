@@ -134,7 +134,7 @@ extendClass(StartScreenManager, {
         if (item.type === 'youtubeUrl') {
             return;
         }
-        
+
         if (item.type === 'palette') {
             const palettes = (typeof themeContextManager !== 'undefined')
                 ? themeContextManager.getPresetOptions(false)

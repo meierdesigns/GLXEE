@@ -136,11 +136,11 @@ class BulletManager {
                 this.updateChargeHud();
             }
         }
-        
+
         // Update player bullets
         for (let i = this.bullets.length - 1; i >= 0; i--) {
             const bullet = this.bullets[i];
-            
+
         // Handle angled bullets (spread shot) and wave sway
             if (bullet.type === 'wave_beam' && bullet.waveAmp) {
                 bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
@@ -152,7 +152,7 @@ class BulletManager {
             } else {
                 bullet.y -= bullet.speed * speedMultiplier;
             }
-            
+
             // Remove bullets that are off screen
             // Get canvas width from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
@@ -164,7 +164,7 @@ class BulletManager {
         // Update enemy bullets
         for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
             const bullet = this.enemyBullets[i];
-            
+
             // Handle angled enemy bullets (after reflection)
             if (bullet.angle !== undefined) {
                 bullet.x += Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
@@ -172,7 +172,7 @@ class BulletManager {
             } else {
                 bullet.y += bullet.speed * speedMultiplier;
             }
-            
+
             // Remove bullets that are off screen
             // Get canvas dimensions from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
@@ -248,7 +248,7 @@ class BulletManager {
             const fallback = this.shotTypes[this.shotType];
             return fallback;
         }
-        
+
         const currentIndex = this.currentShipModel.availableWeapons.indexOf(this.currentWeapon);
         const nextIndex = (currentIndex + 1) % this.currentShipModel.availableWeapons.length;
         this.currentWeapon = this.currentShipModel.availableWeapons[nextIndex];

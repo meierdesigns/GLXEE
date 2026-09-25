@@ -5,24 +5,24 @@ extendClass(CombinedSelectionManager, {
     // Update ship details display
     updateShipDetails() {
         if (!this.overlay) return;
-        
+
         const selectedShip = this.playerShips[this.selectedShipIndex];
         if (!selectedShip) return;
-        
+
         // Update large canvas
         const largeCanvas = this.overlay.querySelector('.ship-large-canvas');
         if (largeCanvas) {
             largeCanvas.dataset.ship = selectedShip.name;
             this.renderShipPreview(largeCanvas, selectedShip, 1.5);
         }
-        
+
         // Update ship info
         const nameElement = this.overlay.querySelector('.ship-name-large');
         if (nameElement) nameElement.textContent = selectedShip.name;
-        
+
         const descElement = this.overlay.querySelector('.ship-description-large');
         if (descElement) descElement.textContent = selectedShip.description;
-        
+
         // Update stats
         const statRows = this.overlay.querySelectorAll('.stat-row');
         if (statRows.length >= 4) {
@@ -31,15 +31,15 @@ extendClass(CombinedSelectionManager, {
             statRows[2].querySelector('.stat-value').textContent = selectedShip.armor;
             statRows[3].querySelector('.stat-value').textContent = selectedShip.damage;
         }
-        
+
         // Update weapons
         const weaponsList = this.overlay.querySelector('.weapons-list');
         if (weaponsList && selectedShip.weapons) {
-            weaponsList.innerHTML = selectedShip.weapons.map(weapon => 
+            weaponsList.innerHTML = selectedShip.weapons.map(weapon =>
                 `<span class="weapon-item">${weapon}</span>`
             ).join('');
         }
-        
+
         // Update abilities
         const abilitiesList = this.overlay.querySelector('.abilities-detailed-list');
         if (abilitiesList) {
@@ -51,7 +51,7 @@ extendClass(CombinedSelectionManager, {
     updateSummary() {
         const selectedLevel = this.overlay.querySelector('.selected-level');
         const selectedShip = this.overlay.querySelector('.selected-ship');
-        
+
         if (selectedLevel) {
             const name = this.selectedPlanet
                 ? this.selectedPlanet.name
@@ -67,12 +67,12 @@ extendClass(CombinedSelectionManager, {
     startGame() {
         const selectedLevel = this.selectedPlanet || this.levels[this.selectedLevelIndex];
         const selectedShip = this.playerShips[this.selectedShipIndex];
-        
+
         if (!selectedLevel || !selectedShip) {
             console.error('Missing level or ship selection');
             return;
         }
-        
+
         if (selectedLevel.unlocked === false) {
             this.showLockedMessage();
             return;
@@ -81,17 +81,17 @@ extendClass(CombinedSelectionManager, {
         if (typeof profileManager !== 'undefined' && profileManager.setActiveShip) {
             profileManager.setActiveShip(selectedShip.id || selectedShip.type);
         }
-        
+
         this.hide();
 
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
             homeStationUI.hide();
         }
-        
+
         if (typeof graphicsManager !== 'undefined') {
             graphicsManager.setPlayerShipModel(selectedShip);
         }
-        
+
         if (typeof startScreenManager !== 'undefined') {
             startScreenManager.startGameWithLevelAndShip(selectedLevel, selectedShip);
         }
@@ -154,9 +154,9 @@ extendClass(CombinedSelectionManager, {
             box-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
         `;
         messageOverlay.textContent = '🔒 Level locked! Complete previous levels first.';
-        
+
         document.body.appendChild(messageOverlay);
-        
+
         // Remove message after 2 seconds
         setTimeout(() => {
             if (messageOverlay.parentNode) {

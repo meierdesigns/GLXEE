@@ -78,7 +78,7 @@ extendClass(HomeStationUI, {
         // Still refresh canvas + pink pins without rebuilding the hangar DOM.
         if (movingModule && !clickedModule) this.drawHangarBay();
         else this.createUI();
-        
+
         // Show component details in sidebar AFTER createUI()
         if (moduleToSelect) {
             this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);

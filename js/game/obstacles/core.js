@@ -155,12 +155,12 @@ class ObstacleManager {
         }
         if (!gameState.obstacleSpawnTimer) gameState.obstacleSpawnTimer = 0;
         if (!gameState.obstacleSpawnInterval) gameState.obstacleSpawnInterval = 3000;
-        
+
         gameState.obstacleSpawnTimer += deltaTime;
-        
+
         // Update lighting bullets from bullet manager
         this.updateLightingBullets();
-        
+
         // Spawn new obstacles more frequently
         if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
@@ -177,19 +177,19 @@ class ObstacleManager {
             }
             gameState.obstacleSpawnTimer = 0;
         }
-        
+
         // Update existing obstacles
         const canvasWidth = gameState.width || 240;
         const canvasHeight = gameState.height || 300;
         for (let i = this.obstacles.length - 1; i >= 0; i--) {
             const obstacle = this.obstacles[i];
-            
+
             obstacle.x += obstacle.horizontalSpeed;
             obstacle.y += obstacle.verticalSpeed;
             obstacle.rotation += obstacle.rotationSpeed;
-            
+
             this.calculateObstacleLighting(obstacle);
-            
+
             const margin = Math.max(obstacle.width, obstacle.height) + 8;
             if (
                 obstacle.x > canvasWidth + margin ||

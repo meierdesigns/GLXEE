@@ -56,17 +56,17 @@ extendClass(SpriteLoader, {
             tempCanvas.width = width;
             tempCanvas.height = height;
             tempCtx.imageSmoothingEnabled = false;
-            
+
             // Draw the sprite to temp canvas
             tempCtx.drawImage(sprite, 0, 0, width, height);
-            
+
             // Get image data to check alpha values
             const imageData = tempCtx.getImageData(0, 0, width, height);
             const data = imageData.data;
             const or = parseInt(colorOverlay.slice(1, 3), 16);
             const og = parseInt(colorOverlay.slice(3, 5), 16);
             const ob = parseInt(colorOverlay.slice(5, 7), 16);
-            
+
             // Lift dark pixels, then tint — keeps hulls readable on dark playfields
             const lift = 32;
             const scale = (255 - lift) / 255;
@@ -84,10 +84,10 @@ extendClass(SpriteLoader, {
                     data[i + 2] = Math.max(0, Math.min(255, Math.round(b)));
                 }
             }
-            
+
             // Put modified image data back
             tempCtx.putImageData(imageData, 0, 0);
-            
+
             // Draw the modified sprite to the main canvas
             ctx.drawImage(tempCanvas, x, y);
         } else {
@@ -142,8 +142,8 @@ extendClass(SpriteLoader, {
 
     // Get weapon sprites
     getWeaponSprites() {
-        return Array.from(this.sprites.keys()).filter(name => 
-            name.includes('laser') || name.includes('rapid-fire') || 
+        return Array.from(this.sprites.keys()).filter(name =>
+            name.includes('laser') || name.includes('rapid-fire') ||
             name.includes('spread-shot') || name.includes('plasma') ||
             name.includes('missile') || name.includes('cannon') ||
             name.includes('torpedo') || name.includes('beam') ||
@@ -154,7 +154,7 @@ extendClass(SpriteLoader, {
 
     // Get level sprites
     getLevelSprites() {
-        return Array.from(this.sprites.keys()).filter(name => 
+        return Array.from(this.sprites.keys()).filter(name =>
             name.startsWith('mars-') || name.startsWith('jupiter-') ||
             name.startsWith('saturn-') || name.startsWith('neptune-') ||
             name.startsWith('pluto-')

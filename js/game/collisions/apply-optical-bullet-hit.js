@@ -154,7 +154,7 @@ extendClass(CollisionManager, {
                     graphicsManager.createHitEffect(x, y, 8);
             }
         }
-        
+
         this.createExplosion(x, y, presetId || 'small_pop');
     },
 });

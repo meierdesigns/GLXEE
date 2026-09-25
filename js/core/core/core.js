@@ -12,11 +12,11 @@ class GameCore {
         this.coreLevelManager = this.levelManager;
         this.systemManager = new SystemManager(this.gameState);
         this.gameControl = new GameControlSystem(this.gameState, this.levelManager, this.systemManager);
-        
+
         // Game state properties
         this.obstacleSpawnTimer = 0;
         this.obstacleSpawnInterval = 2000; // 2 seconds default
-        
+
         // Legacy compatibility - expose commonly used subsystems
         this.gameLoop = null;
         this.inputHandler = null;
@@ -28,10 +28,10 @@ class GameCore {
     }
 
     init() {
-        
+
         // Initialize all systems
         this.systemManager.init();
-        
+
         // Set up legacy compatibility
         this.setupLegacyCompatibility();
 
@@ -54,7 +54,7 @@ class GameCore {
         } else {
             this.showStartScreen({ skipPersist: true });
         }
-        
+
     }
 
     showBootVeil(state) {
@@ -148,7 +148,7 @@ class GameCore {
         this.settingsManager = this.systemManager.getSubsystem('settingsManager');
         this.renderManager = this.systemManager.getSubsystem('renderManager');
         this.levelInfoManager = this.systemManager.getSubsystem('levelInfoManager');
-        
+
         // Make managers globally available
         if (this.uiManager) {
             window.uiManager = this.uiManager;
@@ -162,7 +162,7 @@ class GameCore {
         if (typeof startScreenManager !== 'undefined') {
             window.startScreenManager = startScreenManager;
         }
-        
+
         // Make game globally available
         window.game = this;
         this.width = this.gameState.width;
@@ -187,20 +187,20 @@ class GameCore {
         this.obstacleSpawnTimer = 0;
         this.gameRunning = true;
         this.isPaused = false;
-        
+
         // Hide victory screen if visible
         const victoryScreen = document.getElementById('victoryScreen');
         if (victoryScreen) {
             victoryScreen.classList.add('hidden');
         }
-        
+
         // Reset all managers
         if (typeof bulletManager !== 'undefined') bulletManager.reset();
         if (typeof enemyManager !== 'undefined') enemyManager.reset();
         if (typeof playerManager !== 'undefined') playerManager.reset();
         if (typeof obstacleManager !== 'undefined') obstacleManager.reset();
         if (typeof pickupManager !== 'undefined') pickupManager.reset(true);
-        
+
         // Hide game over screen
         const gameOverScreen = document.getElementById('gameOver');
         if (gameOverScreen) {

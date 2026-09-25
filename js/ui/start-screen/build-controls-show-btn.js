@@ -168,7 +168,7 @@ extendClass(StartScreenManager, {
             }
             return true;
         }
-        
+
         const handlers = {
             'Escape': () => this.handleEscape(),
             'Backspace': () => this.handleEscape(),
@@ -179,7 +179,7 @@ extendClass(StartScreenManager, {
             'Enter': () => this.handleEnter(),
             ' ': () => this.handleEnter()
         };
-        
+
         const handler = handlers[event.key];
         return handler ? handler() : false;
     },

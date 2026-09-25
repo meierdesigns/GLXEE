@@ -4,7 +4,7 @@
 extendClass(CombinedSelectionManager, {
     // Create combined selection UI
     createCombinedSelectionUI() {
-        
+
         // Remove existing overlay
         if (this.overlay) {
             this.overlay.remove();
@@ -16,7 +16,7 @@ extendClass(CombinedSelectionManager, {
         this.overlay.innerHTML = `
             <div class="combined-selection-content">
                 <h2 class="combined-selection-title">SELECT LEVEL & SHIP</h2>
-                
+
                 <div class="selection-tabs">
                     <button class="tab-button ${this.currentSelection === 'level' ? 'active' : ''}" data-tab="level">
                         LEVEL SELECTION
@@ -25,7 +25,7 @@ extendClass(CombinedSelectionManager, {
                         SHIP SELECTION
                     </button>
                 </div>
-                
+
                 <div class="selection-content">
                     <div class="level-selection ${this.currentSelection === 'level' ? 'active' : ''}">
                         <!-- Horizontal Level Belt -->
@@ -38,7 +38,7 @@ extendClass(CombinedSelectionManager, {
                                 `).join('')}
                             </div>
                         </div>
-                        
+
                         <!-- Level Details -->
                         <div class="level-details-container">
                             <div class="level-preview-large">
@@ -47,7 +47,7 @@ extendClass(CombinedSelectionManager, {
                             <div class="level-info-detailed">
                                 <h3 class="level-name-large">${this.levels[this.selectedLevelIndex]?.name || ''}</h3>
                                 <p class="level-description-large">${this.levels[this.selectedLevelIndex]?.description || ''}</p>
-                                
+
                                 <div class="level-stats-detailed">
                                     <div class="stat-row">
                                         <span class="stat-label">Difficulty:</span>
@@ -66,12 +66,12 @@ extendClass(CombinedSelectionManager, {
                                         <span class="stat-value">${this.levels[this.selectedLevelIndex]?.reward || 'XP'}</span>
                                     </div>
                                 </div>
-                                
+
                                 ${!this.levels[this.selectedLevelIndex]?.unlocked ? '<div class="locked-indicator-large">LEVEL LOCKED</div>' : ''}
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="ship-selection ${this.currentSelection === 'ship' ? 'active' : ''}">
                         <!-- Horizontal Ship Belt -->
                         <div class="ship-belt-container">
@@ -84,7 +84,7 @@ extendClass(CombinedSelectionManager, {
                                 `).join('')}
                             </div>
                         </div>
-                        
+
                         <!-- Ship Details -->
                         <div class="ship-details-container">
                             <div class="ship-preview-large">
@@ -93,7 +93,7 @@ extendClass(CombinedSelectionManager, {
                             <div class="ship-info-detailed">
                                 <h3 class="ship-name-large">${this.playerShips[this.selectedShipIndex]?.name || ''}</h3>
                                 <p class="ship-description-large">${this.playerShips[this.selectedShipIndex]?.description || ''}</p>
-                                
+
                                 <div class="ship-stats-detailed">
                                     <div class="stat-row">
                                         <span class="stat-label">Speed:</span>
@@ -112,7 +112,7 @@ extendClass(CombinedSelectionManager, {
                                         <span class="stat-value">${this.playerShips[this.selectedShipIndex]?.damage || 0}</span>
                                     </div>
                                 </div>
-                                
+
                                 <div class="ship-weapons">
                                     <h4 class="weapons-title">Weapons:</h4>
                                     <div class="weapons-list">
@@ -121,7 +121,7 @@ extendClass(CombinedSelectionManager, {
                                         `).join('')}
                                     </div>
                                 </div>
-                                
+
                                 <div class="ship-abilities">
                                     <h4 class="abilities-title">Special Abilities:</h4>
                                     <div class="abilities-detailed-list">
@@ -132,7 +132,7 @@ extendClass(CombinedSelectionManager, {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="selection-summary">
                     <div class="selected-level">
                         <strong>Level:</strong> ${this.levels[this.selectedLevelIndex]?.name || 'None'}
@@ -146,7 +146,7 @@ extendClass(CombinedSelectionManager, {
                     <button type="button" class="pe-btn pe-primary" id="csStart">START</button>
                     <button type="button" class="pe-btn" id="csCancel">CANCEL</button>
                 </div>
-                
+
                 <div class="combined-selection-instructions">
                     <p>CLICK to select • TAB Level/Ship • ←→ Navigate • ENTER Start • ESC Cancel</p>
                 </div>
@@ -160,7 +160,7 @@ extendClass(CombinedSelectionManager, {
 
         // Add event listeners
         this.addEventListeners();
-        
+
         // Render previews
         this.renderLevelPreviews();
         this.renderShipPreviews();
@@ -168,7 +168,7 @@ extendClass(CombinedSelectionManager, {
 
     // Render level previews on canvases
     renderLevelPreviews() {
-        
+
         // Render belt canvases
         const beltCanvases = this.overlay.querySelectorAll('.level-belt-canvas');
         beltCanvases.forEach((canvas, index) => {
@@ -177,7 +177,7 @@ extendClass(CombinedSelectionManager, {
                 this.renderLevelPreview(canvas, level, 1); // Full scale for belt
             }
         });
-        
+
         // Render large canvas
         const largeCanvas = this.overlay.querySelector('.level-large-canvas');
         if (largeCanvas) {
@@ -198,7 +198,7 @@ extendClass(CombinedSelectionManager, {
                 this.renderShipPreview(canvas, ship, 1); // Full scale for belt
             }
         });
-        
+
         // Render large canvas
         const largeCanvas = this.overlay.querySelector('.ship-large-canvas');
         if (largeCanvas) {

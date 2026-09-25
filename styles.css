@@ -9624,29 +9624,48 @@ button.hs-tab.active.nav-focused {
     content: '';
     position: absolute;
     inset: 0;
-    opacity: 0.75;
+    opacity: 1;
     mix-blend-mode: screen;
 }
-/* Faction silhouette frame — the cover's own outline bends per faction so
-   the station reads distinct at a glance, not just by its texture/tint. */
+/* Faction silhouette frame — the cover's own outline bends hard per faction
+   so the station reads as a different structure at a glance, not the same
+   rectangle with another tint. */
 .home-station-overlay[data-hs-faction="terran"] .hs-station-cover {
-    clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
-}
-.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover {
-    clip-path: polygon(0 0, calc(100% - 56px) 0, 100% 56px, 100% 100%, 56px 100%, 0 calc(100% - 56px));
-}
-.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover {
-    border-radius: 52px 14px 52px 14px;
-}
-.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover {
-    clip-path: polygon(0 32px, 34px 0, calc(100% - 64px) 0, 100% 48px, 100% 100%, 46px 100%, 46px calc(100% - 18px), 0 calc(100% - 18px));
-}
-.home-station-overlay[data-hs-faction="machine"] .hs-station-cover {
+    /* Straight top edge — no notches cut into the station banner. */
     clip-path: polygon(
         0 0, 100% 0,
-        100% 22%, calc(100% - 16px) 22%, calc(100% - 16px) 33%, 100% 33%,
-        100% 67%, calc(100% - 16px) 67%, calc(100% - 16px) 78%, 100% 78%,
-        100% 100%, 0 100%
+        100% calc(100% - 34px), calc(100% - 46px) 100%,
+        46px 100%, 0 calc(100% - 34px)
+    );
+}
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover {
+    /* Straight top edge — the blade cuts live on the lower flanks only. */
+    clip-path: polygon(
+        0 0, 100% 0, 100% 100%,
+        62% 100%, 54% calc(100% - 26px), 46% 100%,
+        120px 100%, 0 62%
+    );
+}
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover {
+    /* Flat top edge — the pod rounds only its lower corners now. */
+    border-radius: 0 0 50% 12% / 0 0 60% 16%;
+}
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover {
+    /* Straight top edge — the welded jag lives on the lower flanks only. */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% calc(100% - 46px),
+        calc(100% - 88px) 100%, 34% 100%, 30% calc(100% - 22px),
+        96px calc(100% - 14px), 0 calc(100% - 52px)
+    );
+}
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover {
+    /* Straight top edge — machined teeth live on the lower edge only. */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% 100%, 86% 100%, 86% calc(100% - 18px), 80% calc(100% - 18px), 80% 100%,
+        52% 100%, 52% calc(100% - 18px), 46% calc(100% - 18px), 46% 100%,
+        20% 100%, 20% calc(100% - 18px), 14% calc(100% - 18px), 14% 100%, 0 100%
     );
 }
 /* Terran — disciplined orthogonal service grid */
@@ -10345,6 +10364,12 @@ button.hs-shop-cat.active.nav-focused {
     box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
+/* Editing a left-hand part: keep the panel off the thing being edited. */
+.hs-floating-area-style.is-right {
+    left: auto;
+    right: 10px;
+}
+
 .hs-floating-area-style strong {
     display: block;
     margin-bottom: 8px;
@@ -10355,18 +10380,27 @@ button.hs-shop-cat.active.nav-focused {
 .hs-floating-wing-preview {
     display: block;
     width: 100%;
-    height: 84px;
-    margin: 0 0 8px;
+    height: auto;
+    aspect-ratio: 2 / 1;
+    margin: 0 0 3px;
     border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     background: #09090d;
     image-rendering: pixelated;
 }
 
+.hs-floating-preview-caption {
+    display: block;
+    margin-bottom: 8px;
+    color: #00e6c3;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+
 .hs-floating-style-select-label {
     display: grid;
-    grid-template-columns: 48px 1fr;
+    grid-template-columns: 74px 1fr;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     margin: 4px 0 6px;
     color: var(--color-primary);
     font-size: 10px;
@@ -10393,7 +10427,7 @@ button.hs-shop-cat.active.nav-focused {
 
 .hs-floating-area-crop {
     display: grid;
-    gap: 2px;
+    gap: 4px;
     margin-top: 5px;
     padding-top: 5px;
     border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
@@ -10404,9 +10438,19 @@ button.hs-shop-cat.active.nav-focused {
 
 .hs-floating-area-crop label {
     display: grid;
-    grid-template-columns: 42px 1fr;
+    grid-template-columns: 74px 1fr;
     align-items: center;
-    gap: 3px;
+    gap: 6px;
+    /* The global `label` rule sets --font-h2, which beats the inherited
+       panel size and made these labels overflow their column. */
+    font-size: 10px;
+}
+
+.hs-floating-area-crop label span,
+.hs-floating-style-select-label span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .hs-floating-area-crop input {
@@ -10415,33 +10459,22 @@ button.hs-shop-cat.active.nav-focused {
     accent-color: var(--color-primary);
 }
 
-.hs-floating-connection-label {
+.hs-floating-panel-link {
     display: block;
-    margin-top: 3px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: transparent;
     color: var(--color-primary);
-}
-
-.hs-floating-connection-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.hs-floating-connection-options button {
-    flex: 1 1 45%;
-    padding: 3px;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
     cursor: pointer;
     font: inherit;
     font-size: 9px;
+    letter-spacing: 1px;
 }
 
-.hs-floating-connection-options button.is-active,
-.hs-floating-connection-options button:hover {
-    border-color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 25%, var(--color-surface));
+.hs-floating-panel-link:hover {
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .hs-hangar-bay-canvas {
@@ -13345,4 +13378,110 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     text-align: center;
     font-size: 0.8rem;
     font-style: italic;
+}
+
+/* ==========================================================================
+   Faction identity — shared shape + surface language
+   The document root carries data-faction (factionShipStyles.applyDocumentFactionTheme),
+   so the in-game HUD, the station chrome and the menus all reskin from one
+   source. Each faction gets its own frame geometry, not just its own colour.
+   ========================================================================== */
+:root {
+    --faction-accent: var(--color-primary);
+    --faction-hull: var(--color-primary);
+    /* Frame geometry, overridden per faction below. */
+    --faction-clip: none;
+    --faction-radius: 0;
+    --faction-border-width: var(--ui-border-width);
+    --faction-surface: none;
+    --faction-surface-opacity: 0.16;
+}
+
+/* Terran — disciplined orthogonal plating, small chamfered corners. */
+html[data-faction="terran"] {
+    --faction-clip: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    --faction-surface:
+        repeating-linear-gradient(0deg, transparent 0 11px, color-mix(in srgb, var(--faction-accent) 55%, transparent) 11px 12px),
+        repeating-linear-gradient(90deg, transparent 0 19px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 19px 20px);
+}
+
+/* Kronax — deep angled blade cuts, aggressive diagonal banding. */
+html[data-faction="kronax"] {
+    --faction-clip: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px);
+    --faction-border-width: calc(var(--ui-border-width) + 1px);
+    --faction-surface: repeating-linear-gradient(
+        58deg,
+        transparent 0 14px,
+        color-mix(in srgb, var(--faction-accent) 60%, transparent) 14px 18px,
+        transparent 18px 34px
+    );
+    --faction-surface-opacity: 0.2;
+}
+
+/* Voidborn — asymmetric rounded pod, concentric arcs. */
+html[data-faction="voidborn"] {
+    --faction-radius: 30px 6px 30px 6px;
+    --faction-surface:
+        radial-gradient(circle at 12% 38%, transparent 0 16px, color-mix(in srgb, var(--faction-accent) 55%, transparent) 17px 20px, transparent 22px),
+        radial-gradient(circle at 78% 68%, transparent 0 26px, color-mix(in srgb, var(--faction-accent) 45%, transparent) 27px 30px, transparent 33px);
+    --faction-surface-opacity: 0.24;
+}
+
+/* Pirate — lopsided welded salvage, mismatched edges. */
+html[data-faction="pirate"] {
+    --faction-clip: polygon(0 14px, 18px 0, calc(100% - 30px) 0, 100% 22px, 100% calc(100% - 9px), calc(100% - 52px) 100%, 24px 100%, 0 calc(100% - 26px));
+    --faction-surface:
+        repeating-linear-gradient(12deg, transparent 0 20px, color-mix(in srgb, var(--faction-accent) 50%, transparent) 20px 23px, transparent 23px 42px),
+        repeating-linear-gradient(-31deg, transparent 0 27px, color-mix(in srgb, var(--faction-accent) 38%, transparent) 27px 30px, transparent 30px 52px);
+    --faction-surface-opacity: 0.22;
+}
+
+/* Machine — machined rectangular notches, fine circuit traces. */
+html[data-faction="machine"] {
+    --faction-clip: polygon(
+        0 0, 100% 0,
+        100% 20%, calc(100% - 9px) 20%, calc(100% - 9px) 31%, 100% 31%,
+        100% 69%, calc(100% - 9px) 69%, calc(100% - 9px) 80%, 100% 80%,
+        100% 100%, 0 100%,
+        0 80%, 9px 80%, 9px 69%, 0 69%,
+        0 31%, 9px 31%, 9px 20%, 0 20%
+    );
+    --faction-surface:
+        repeating-linear-gradient(0deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px),
+        repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px);
+}
+
+/* --- In-game HUD panels wear the faction frame ------------------------- */
+.game-info-panel,
+.player-vitals-side,
+.game-left-cluster .weapon-selection,
+.game-right-cluster .enemy-vitals-side {
+    position: relative;
+    clip-path: var(--faction-clip);
+    border-radius: var(--faction-radius);
+    border-width: var(--faction-border-width);
+    border-color: color-mix(in srgb, var(--faction-accent) 60%, var(--color-primary));
+}
+
+.game-info-panel::after,
+.player-vitals-side::after,
+.game-left-cluster .weapon-selection::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--faction-surface);
+    opacity: var(--faction-surface-opacity);
+}
+
+/* The HUD's own accents follow the faction, not just the theme primary. */
+.player-vitals-side .health-fill::before,
+.game-info-panel .gi-diff {
+    border-color: color-mix(in srgb, var(--faction-accent) 55%, var(--color-primary));
+}
+
+/* --- Station chrome uses the same geometry tokens ---------------------- */
+.home-station-overlay .hs-panel,
+.home-station-overlay .hs-hangar-bay-stage {
+    border-radius: var(--faction-radius);
 }

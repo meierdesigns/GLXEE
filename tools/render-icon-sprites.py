@@ -15,7 +15,7 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPRITES_JS = ROOT / "js" / "graphics" / "icon-sprites.js"
+SPRITES_DIR = ROOT / "js" / "graphics" / "icon-sprites"
 OUT_DIR = ROOT / "tools" / "icon-previews"
 
 # Matches IconRenderer.getGray (indices 1–15)
@@ -123,10 +123,11 @@ def main() -> int:
     ap.add_argument("--scale", type=int, default=16, help="Nearest-neighbor scale (default 16 → 256px)")
     ap.add_argument("--tint", default="FF6A00", help="Hex tint like game menu orange, or '' for gray")
     ap.add_argument("--out", type=Path, default=OUT_DIR, help="Output directory")
-    ap.add_argument("--src", type=Path, default=SPRITES_JS, help="icon-sprites.js path")
+    ap.add_argument("--src", type=Path, default=SPRITES_DIR, help="icon-sprites/ directory or a single .js file")
     args = ap.parse_args()
 
-    src = args.src.read_text(encoding="utf-8")
+    files = sorted(args.src.glob("*.js")) if args.src.is_dir() else [args.src]
+    src = "\n".join(f.read_text(encoding="utf-8") for f in files)
     sprites = parse_sprites(src)
     if not sprites:
         print("No sprites parsed from", args.src)

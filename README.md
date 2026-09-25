@@ -52,8 +52,9 @@
 | 10 | [Combat Events](#ch10--combat-events) |
 | 11 | [Features](#ch11--features) |
 | 12 | [Layout](#ch12--layout) |
-| 13 | [Docs](#ch13--archive) |
-| 14 | [Credits](#ch14--credits) |
+| 13 | [Development Waves](#ch13--development-waves) |
+| 14 | [Docs](#ch14--archive) |
+| 15 | [Credits](#ch15--credits) |
 | **LORE** | **[Faction & Galactic Lore Archive](#chlore--faction--galactic-lore-archive)** |
 
 <br/>
@@ -192,7 +193,7 @@ Every hostile uses key `enemy-{faction}-{enemyClass}` with a shared gray body la
 
 ```
   shared hull gray   #7a8490
-  registry           js/graphics/faction-ship-styles.js
+  registry           js/graphics/faction-ship-styles/
   asset-gen tabs     Settings → Assets → faction library
 ```
 
@@ -296,7 +297,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
   BASE         resource cap · cargo · ship slots · craft discount · drop bonus
   DISCOVERY    ships · planets · enemies · factions · weapons · abilities · events
   START KNOWN  Terran · Scrap Fighter · Energy Core
-  MISSION      js/ui/mission-start.js  ·  brief → launch
+  MISSION      js/ui/mission-start/  ·  brief → launch
 ```
 
 <br/>
@@ -328,7 +329,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 ```
   HOSTILES  enemy-{faction}-{enemyClass}  ·  5×5 silhouette grid
   CLASSES   scout · assault · heavy · elite · capital
-  STYLE     js/graphics/faction-ship-styles.js
+  STYLE     js/graphics/faction-ship-styles/
   LOADOUT   visual module mounts  ·  assets/modules/
 ```
 
@@ -358,7 +359,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 
 ```
   mount sprites · cooldowns · light radii · sound tags
-  registry  js/core/weapon-config.js
+  registry  js/core/weapon-config/
   cycle     Q / E
 ```
 
@@ -377,7 +378,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  KRONAX ....... Carapace Armor · Spike Drive · Reflex Shell                 │
 │  CHARGE LINKS . Shield Sync · Shield Divert · Drive Dampen                  │
 │                                                                             │
-│  catalog  js/core/ability-config.js                                         │
+│  catalog  js/core/ability-config/                                           │
 │  in-game  Ability Viewer                                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -398,7 +399,7 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  TETHER ........... drags / slows the pilot                                 │
 │                                                                             │
 │  registry   js/core/combat-event-config.js                                  │
-│  runtime    js/game/enemies.js   (escorts · announce · debuffs)             │
+│  runtime    js/game/enemies/    (escorts · announce · debuffs)              │
 │  archive    Explorations → ARCHIVE → EVENTS                                 │
 │  discovery  profileManager.getDiscovered('events')                          │
 │                                                                             │
@@ -457,16 +458,20 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  package.json                                                               │
 │                                                                             │
 │  js/                                                                        │
-│    core/             loop · state · input · configs · faction-manager       │
-│    game/             player · enemies · bullets · pickups · audio           │
-│    graphics/         sprites · palettes · faction-ship-styles · explosions  │
+│    core/             state · input · configs · loop                         │
+│      <feature>/      core.js + focused method/data modules                  │
+│    game/             player · enemies · bullets · collisions · audio         │
+│      <feature>/      core.js + focused runtime modules                     │
+│    graphics/         sprites · palettes · ship styles · explosions           │
+│      <feature>/      core.js + focused rendering/data modules               │
 │    levels/           Mars … Pluto                                           │
 │    abilities/        ship abilities + manager                               │
-│    ui/               menus · Home Station · faction-command/viewer · HUD    │
+│    ui/               menus · Home Station · editors · HUD                   │
+│      <feature>/      core.js + focused view modules                        │
 │                                                                             │
 │  assets/             sprites · models · modules · meta · ui/ chrome         │
 │  css/                theme variables + SCSS                                 │
-│  docs/               architecture · notes · main                    │
+│  docs/               architecture · notes · main                            │
 │  rules/              design rules / tactical manual                         │
 │  tools/              ComfyUI · asset-gen · icon-previews                    │
 │  packages/           Cursed IDE packages                                    │
@@ -475,9 +480,40 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 
 <br/>
 
-<img src="assets/ui/readme-h-docs.svg" alt="CH.13 ARCHIVE" width="960" />
+<img src="assets/ui/readme-h-docs.svg" alt="CH.13 DEVELOPMENT WAVES" width="960" />
 
-<a id="ch13--archive"></a>
+<a id="ch13--development-waves"></a>
+
+# CH.13 — DEVELOPMENT WAVES
+
+Changes are committed in small, feature-focused waves so each runtime area can
+be reviewed, tested, and reverted independently. The browser entry points stay
+stable while large implementations move into focused folders loaded in order by
+`index.html`.
+
+```
+┌─ WAVE WORKFLOW ─────────────────────────────────────────────────────────────┐
+│  1  Split one feature into core.js + focused modules                         │
+│  2  Preserve the public entry point and window globals                       │
+│  3  Update index.html script order and architecture notes                    │
+│  4  Run syntax / whitespace checks                                            │
+│  5  Commit one feature area with a wave-style message                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Wave | Feature area | Scope |
+|:-----|:-------------|:------|
+| 39A | Core runtime | Config, state, input, loadout, and game-control modules |
+| 39B | Combat runtime | Player, bullets, enemies, obstacles, collisions, and audio |
+| 39C | Graphics and assets | Renderers, palettes, ship styles, sprite data, and loaders |
+| 39D | UI modules | Station, hangar, editors, viewers, menus, and overlays |
+| 39E | Shell and docs | Entry-point wiring, styles, architecture notes, and README |
+
+<br/>
+
+<img src="assets/ui/readme-h-docs.svg" alt="CH.14 ARCHIVE" width="960" />
+
+<a id="ch14--archive"></a>
 
 ```
 ┌─ TRANSMISSION INDEX ────────────────────────────────────────────────────────┐
@@ -503,9 +539,9 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 
 <br/>
 
-<img src="assets/ui/readme-h-credits.svg" alt="CH.14 CREDITS" width="960" />
+<img src="assets/ui/readme-h-credits.svg" alt="CH.15 CREDITS" width="960" />
 
-<a id="ch14--credits"></a>
+<a id="ch15--credits"></a>
 
 <div align="center">
 

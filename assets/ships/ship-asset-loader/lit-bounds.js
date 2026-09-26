@@ -27,8 +27,8 @@ extendClass(ShipAssetLoader, {
         const rows = grid.length;
         const cols = grid[0].length;
         const size = cellPx || Math.max(1, Math.min(width / cols, height / rows));
-        const originX = Math.round(x + (width - cols * size) * 0.5);
-        const originY = Math.round(y + (height - rows * size) * 0.5);
+        const originX = this.snapToVoxelLattice(x + (width - cols * size) * 0.5, size, 'x');
+        const originY = this.snapToVoxelLattice(y + (height - rows * size) * 0.5, size, 'y');
         const cx = pivotX != null ? pivotX : x + width * 0.5;
         const cy = pivotY != null ? pivotY : y + height * 0.5;
         const cos = Math.cos(angle);
@@ -58,23 +58,15 @@ extendClass(ShipAssetLoader, {
             for (let col = colStart; col < colEnd; col++) {
                 const px = originX + (col + 0.5) * size;
                 const py = originY + (row + 0.5) * size;
-                // Sample the destination voxel area, not just its center.
-                // This closes sub-voxel gaps introduced by diagonal
-                // rotations while retaining one fixed screen raster.
-                let pixel = 0;
-                [-0.25, 0.25].some((ox) => [-0.25, 0.25].some((oy) => {
-                    const dx = px + ox * size - cx;
-                    const dy = py + oy * size - cy;
-                    const sx = dx * cos + dy * sin + cx;
-                    const sy = -dx * sin + dy * cos + cy;
-                    const sourceCol = Math.floor((sx - originX) / size);
-                    const sourceRow = Math.floor((sy - originY) / size);
-                    if (sourceCol < 0 || sourceCol >= cols || sourceRow < 0 || sourceRow >= rows) {
-                        return false;
-                    }
-                    pixel = grid[sourceRow][sourceCol];
-                    return !!pixel;
-                }));
+                // Nearest-neighbour: one sample at the voxel centre. The old
+                // any-of-four supersample dilated every diagonal edge by a
+                // voxel, so rotated wings grew ragged, uneven stair steps.
+                const dx = px - cx;
+                const dy = py - cy;
+                const sourceCol = Math.floor((dx * cos + dy * sin + cx - originX) / size);
+                const sourceRow = Math.floor((-dx * sin + dy * cos + cy - originY) / size);
+                if (sourceCol < 0 || sourceCol >= cols || sourceRow < 0 || sourceRow >= rows) continue;
+                const pixel = grid[sourceRow][sourceCol];
                 if (!pixel) continue;
                 const left = Math.round(originX + col * size);
                 const top = Math.round(originY + row * size);
@@ -124,9 +116,9 @@ extendClass(ShipAssetLoader, {
         // frame slightly, centred on it.
         const gridW = (resW * cell) / wPx;
         const gridH = (resH * cell) / hPx;
-        const { cropX, cropY, cropW, cropH } = this.normalizeWingCrop(
-            shipModel && shipModel.segmentUv && shipModel.segmentUv.wingCrop
-        );
+        // Wings are generated without hull fragments, so the frame always
+        // trims to the whole wing (no manual crop window).
+        const { cropX, cropY, cropW, cropH } = this.normalizeWingCrop(null);
         const startX = seg.id === 'wingRight' ? cropX : 1 - cropX - cropW;
         // Tighten onto the voxels that survive the crop. The wing silhouette
         // rarely fills its own frame, so the crop window alone would still
@@ -228,13 +220,25 @@ extendClass(ShipAssetLoader, {
     // Base tip geometry per shape variant: reach (0-1.3, how far the tip extends
     // from root toward the outer edge), center/spread (vertical opening as a
     // fraction of height). Faction silhouette nudges these further below.
+    /**
+     * Wing styles. Each planform maps span position u (0 = hull root,
+     * 1 = tip) to the row band(s) [lead, trail] the wing covers, as fractions
+     * of the wing frame (0 = front, 1 = aft). Return null for no wing there.
+     */
     get wingShapeVariants() {
         return [
-            { reach: 1.0, center: 0.5, spread: 0.22 },  // delta — straight wide triangle
-            { reach: 1.05, center: 0.72, spread: 0.16 }, // swept — tip pulled toward the back
-            { reach: 0.55, center: 0.5, spread: 0.3 },    // stub — short, blunt wing
-            { reach: 0.95, center: 0.5, spread: 0.2 },    // bat — split upper/lower lobes
-            { reach: 0.9, center: 0.36, spread: 0.27 }    // gull — lifted swept wing
+            { id: 'delta', label: 'DELTA', planform: (u) => [0.1 + 0.7 * u, 1] },
+            { id: 'swept', label: 'SWEPT', planform: (u) => [0.04 + 0.62 * u, Math.min(1, 0.7 + 0.3 * u)] },
+            { id: 'stub', label: 'STUB', planform: (u) => (u > 0.65 ? null : [0.16 + 0.2 * u, 0.94 - 0.14 * u]) },
+            { id: 'bat', label: 'BAT', planform: (u) => [0.06 + 0.5 * u, 1 - 0.3 * Math.abs(Math.sin(u * Math.PI * 1.5))] },
+            { id: 'forward', label: 'FORWARD', planform: (u) => [Math.max(0, 0.4 - 0.4 * u), 0.96 - 0.5 * u] },
+            { id: 'twin', label: 'TWIN FIN', planform: (u) => (u < 0.25
+                ? [0.08, 0.96]
+                : [[0.06 + 0.26 * u, 0.46 + 0.06 * u], [0.54 + 0.26 * u, 1]]) },
+            { id: 'plank', label: 'PLANK', planform: (u) => [0.24 + 0.16 * u, 0.86 - 0.04 * u] },
+            { id: 'lance', label: 'LANCE', planform: (u) => (u < 0.3
+                ? [0.08 + 0.6 * u, 0.96 - 0.3 * u]
+                : [0.26 + 0.14 * u, 0.74 - 0.02 * u]) }
         ];
     },
 

@@ -83,22 +83,38 @@ extendClass(ShipLoadoutManager, {
         const segmentScale = this.normalizeSegmentScale(L.segmentScale);
         const segmentOffset = this.normalizeSegmentOffset(L.segmentOffset);
         const moduleOffset = this.normalizeModuleOffset(L.moduleOffset);
-        let frontH = Math.max(2, Math.round(coreHeight * uv.front.h));
-        let backH = Math.max(2, Math.round(coreHeight * uv.back.h));
+        // Without a custom anatomy the hull uses spaceship proportions: a
+        // long tapered nose, a compact aft and broad wings. The sprite UV
+        // bands are tuned for cropping art and made a stubby nose cap, a
+        // tall block body and pencil-thin wings when used as hull sizes.
+        const hullBands = L.segmentUv
+            ? { front: uv.front.h, back: uv.back.h, wing: uv.wing.h }
+            : { front: 0.32, back: 0.2, wing: 0.62 };
+        let frontH = Math.max(2, Math.round(coreHeight * hullBands.front));
+        let backH = Math.max(2, Math.round(coreHeight * hullBands.back));
         let centerH = Math.max(2, coreHeight - frontH - backH);
         let wingSpan = 0;
-        let wingH = Math.max(2, Math.floor(coreHeight * uv.wing.h));
-        // Center fuselage is narrower than nose/aft so parts read as separate blocks
+        let wingH = Math.max(2, Math.floor(coreHeight * hullBands.wing));
+        // Center fuselage is narrower than the aft; the nose is narrowest so
+        // the hull tapers forward instead of wearing a wide cap.
         const centerW = Math.max(4, Math.round(coreWidth * 0.72));
-        const frontW = Math.max(4, Math.round(coreWidth * 0.78));
+        const frontW = Math.max(4, Math.round(coreWidth * 0.6));
         const backW = Math.max(4, Math.round(coreWidth * 0.82));
+        // Unscaled band heights: the body stays anchored on these so scaling
+        // one part grows only that part (see the Y placement below).
+        const baseFrontH = frontH;
+        const baseCenterH = centerH;
         frontH = Math.max(2, Math.round(frontH * segmentScale.front.y));
         centerH = Math.max(2, Math.round(centerH * segmentScale.center.y));
         backH = Math.max(2, Math.round(backH * segmentScale.back.y));
         wingH = Math.max(2, Math.round(wingH * segmentScale.wing.y));
-        const scaledFrontW = Math.max(4, Math.round(frontW * segmentScale.front.x));
-        const scaledCenterW = Math.max(4, Math.round(centerW * segmentScale.center.x));
-        const scaledBackW = Math.max(4, Math.round(backW * segmentScale.back.x));
+        // Horizontal scaling moves in steps that keep each body part exactly
+        // centred on the core: an odd width difference would leave a half
+        // unit that floor() pushes to one side.
+        const centred = (w) => Math.max(4, w + ((coreWidth - w) % 2 !== 0 ? 1 : 0));
+        const scaledFrontW = centred(Math.round(frontW * segmentScale.front.x));
+        const scaledCenterW = centred(Math.round(centerW * segmentScale.center.x));
+        const scaledBackW = centred(Math.round(backW * segmentScale.back.x));
         const scaledFrontX = Math.floor((coreWidth - scaledFrontW) / 2);
         const scaledCenterX = Math.floor((coreWidth - scaledCenterW) / 2);
         const scaledBackX = Math.floor((coreWidth - scaledBackW) / 2);
@@ -159,7 +175,7 @@ extendClass(ShipLoadoutManager, {
         // installed. This lets the player move both mirrored wings inward.
         wingSpan = Math.max(
             edgeMs + 1,
-            expandWing || Math.round(coreWidth * 0.24),
+            expandWing || Math.round(coreWidth * (L.segmentUv ? 0.24 : 0.42)),
             Math.min(3, Math.max(1, wingNeed)) * edgeMs
         );
         wingSpan = Math.max(2, Math.round(wingSpan * segmentScale.wing.x));
@@ -186,26 +202,39 @@ extendClass(ShipLoadoutManager, {
             wingH = Math.max(wingH, leftH, rightH, edgeMs);
         }
 
-        // Absolute Y offsets with visible gaps between front / center / back
+        // Y placement: the center body stays centred where its unscaled band
+        // sits; the nose grows upward from it and the aft downward. Stacking
+        // from y=0 made resizing the nose (or body) push every part below it.
+        // Negative Y is fine — the bbox is normalised when docking.
+        const baseCenterMid = baseFrontH + segGap + baseCenterH / 2;
+        const centerY = Math.round(baseCenterMid - centerH / 2);
+        const frontY = centerY - segGap - frontH;
+        const backY = centerY + centerH + segGap;
         const totalCoreH = frontH + segGap + centerH + segGap + backH;
-        const frontY = 0;
-        const centerY = frontH + segGap;
-        const backY = frontH + segGap + centerH + segGap;
+        const hullBottom = backY + backH;
         // Shift scales with the whole hull height (not just the center band).
         // Wings may overhang both hull ends by their own height: pinning them
         // flush to nose and tail left roughly two thirds of the drag range
         // doing nothing, so they could not be swept forward or past the
         // engines at all.
-        const wingShiftY = Math.round(totalCoreH * L.wingOffsetY);
+        // Measured against the unscaled hull height: using the scaled total
+        // made resizing the nose or aft drag the wings along with it.
+        const baseCoreH = coreHeight + segGap * 2;
+        const wingShiftY = Math.round(baseCoreH * L.wingOffsetY);
         const wingTravel = wingH;
+        // Wing seat follows the unscaled body band, so resizing the body
+        // doesn't slide the wings either; only the travel limits track the hull.
         const wingY = Math.max(
             frontY - wingTravel,
             Math.min(
-                Math.max(frontY, totalCoreH - wingH) + wingTravel,
-                Math.floor(centerY + (centerH - wingH) / 2 + wingShiftY)
+                Math.max(frontY, hullBottom - wingH) + wingTravel,
+                Math.floor(baseFrontH + segGap + (baseCenterH - wingH) * (L.segmentUv ? 0.5 : 0.8) + wingShiftY)
             )
         );
-        const wingShiftX = Math.round(coreWidth * L.wingOffsetX);
+        // Default anatomy seats the wing roots on the fuselage flank instead
+        // of the wider core edge, which left a gap only a thin strut crossed.
+        const wingShiftX = Math.round(coreWidth * L.wingOffsetX)
+            - (L.segmentUv ? 0 : scaledCenterX);
 
         return {
             coreWidth, coreHeight, L, ms, gap, evenSize, edgeMs, centerMs, hullMid, parts,
@@ -213,7 +242,7 @@ extendClass(ShipLoadoutManager, {
             moduleOffset, frontH, backH, centerH, wingSpan, wingH, scaledFrontW,
             scaledCenterW, scaledBackW, scaledFrontX, scaledCenterX, scaledBackX, armorIds,
             shieldIds, drives, systemPods, zoneReplace, centerInserts, expandFront,
-            expandBack, insertH, totalCoreH, frontY, centerY, backY, wingY, wingShiftX
+            expandBack, insertH, totalCoreH, baseCoreH, hullBottom, frontY, centerY, backY, wingY, wingShiftX
         };
     },
 });

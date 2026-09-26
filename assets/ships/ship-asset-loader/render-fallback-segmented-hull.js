@@ -71,7 +71,7 @@ extendClass(ShipAssetLoader, {
                     ctx.save();
                     this.renderProceduralWing(
                         ctx, seg, sx, sy, sw, sh, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
-                        variantOverride, shipModel.segmentUv && shipModel.segmentUv.wingCrop,
+                        variantOverride, null,
                         shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.wingRotation,
                         shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.voxelScale,
                         scale

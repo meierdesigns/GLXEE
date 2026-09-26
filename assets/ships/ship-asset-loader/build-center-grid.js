@@ -15,7 +15,7 @@ extendClass(ShipAssetLoader, {
             const taper = 0.88 + Math.sin(t * Math.PI) * 0.12;
             const variantMul = variant === 1 ? 0.9 : (variant === 2 ? 0.78 : 1);
             const prof = this.factionRowProfile(silhouette, t, 4);
-            const width = Math.max(1, Math.round(cols * taper * variantMul * prof.widthMul));
+            const width = this.evenSpan(cols, Math.max(1, Math.round(cols * taper * variantMul * prof.widthMul)));
             const c0 = Math.max(0, Math.min(cols - width,
                 Math.round((cols - width) / 2 + prof.offsetMul * cols)));
             this.gridFillRect(g, c0, r, width, 1, 2);
@@ -190,6 +190,17 @@ extendClass(ShipAssetLoader, {
         ctx.fillRect(x, y, w, h);
     },
 
+    /**
+     * Snap a screen coordinate onto the ship-wide voxel lattice (anchored at
+     * the ship origin while a hull renders); plain rounding otherwise.
+     */
+    snapToVoxelLattice(v, cell, axis) {
+        const anchor = this._shipVoxelAnchor;
+        if (!anchor || !(cell >= 1)) return Math.round(v);
+        const a = anchor[axis];
+        return a + Math.round((v - a) / cell) * cell;
+    },
+
     /** Scale an indexed pixel grid (sprite[row][col] -> colors[index]) into any target rect, regenerating cell sizes each call. */
     drawPixelGridHull(ctx, sprite, colors, x, y, width, height, cellPx) {
         if (!sprite || !sprite.length) {
@@ -211,8 +222,12 @@ extendClass(ShipAssetLoader, {
         // Rounding each cell against its absolute screen position instead made
         // the voxel raster depend on where the ship sat, so panning the view
         // reshuffled every cell boundary by a pixel.
-        const originX = Math.round(x + (width - gridWidth) * 0.5);
-        const originY = Math.round(y + (height - gridHeight) * 0.5);
+        const originX = cellPx
+            ? this.snapToVoxelLattice(x + (width - gridWidth) * 0.5, cell, 'x')
+            : Math.round(x + (width - gridWidth) * 0.5);
+        const originY = cellPx
+            ? this.snapToVoxelLattice(y + (height - gridHeight) * 0.5, cell, 'y')
+            : Math.round(y + (height - gridHeight) * 0.5);
         const palette = colors || {};
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;

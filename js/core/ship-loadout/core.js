@@ -125,6 +125,12 @@ class ShipLoadoutManager {
         return m === 'charge' ? 'charge' : 'auto';
     }
 
+    normalizeWingJointSides(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const f = (v) => Math.max(0.01, Math.min(0.6, Number(v) || 0.1));
+        return { up0: f(raw.up0), down0: f(raw.down0), up1: f(raw.up1), down1: f(raw.down1) };
+    }
+
     normalizeLoadout(raw) {
         const src = raw && typeof raw === 'object' ? raw : {};
         const uniq = (arr) => {
@@ -165,12 +171,29 @@ class ShipLoadoutManager {
             wingConnectionY: Math.max(-1, Math.min(1, Number(src.wingConnectionY) || 0)),
             wingConnectionWidth: Math.max(0.02, Math.min(0.5, Number(src.wingConnectionWidth) || 0.1)),
             wingRotation: Math.max(-60, Math.min(60, Number(src.wingRotation) || 0)),
-            voxelScale: Math.max(0.1, Math.min(10, Number(src.voxelScale) || 1)),
+            voxelScale: Math.max(0.5, Math.min(1.5, Number(src.voxelScale) || 1)),
             // 0 = follow the hull's voxelScale instead of its own value.
             wingConnectionVoxelScale: Math.max(0, Math.min(10, Number(src.wingConnectionVoxelScale) || 0)),
             wingConnectionStyle: ['strut', 'plate', 'double', 'hinge'].indexOf(src.wingConnectionStyle) !== -1
                 ? src.wingConnectionStyle
                 : 'strut',
+            // Fore/aft spine joints (nose→body→aft), tuned like the wing ones.
+            spineConnectionStyle: ['strut', 'plate', 'double', 'hinge'].indexOf(src.spineConnectionStyle) !== -1
+                ? src.spineConnectionStyle
+                : 'strut',
+            spineConnectionWidth: Math.max(0.05, Math.min(0.6, Number(src.spineConnectionWidth) || 0.18)),
+            // End-side strength; 0 = same as the start-side strength.
+            wingConnectionWidthEnd: Math.max(0, Math.min(0.5, Number(src.wingConnectionWidthEnd) || 0)),
+            spineConnectionWidthEnd: Math.max(0, Math.min(0.6, Number(src.spineConnectionWidthEnd) || 0)),
+            // Per-joint visibility, toggled from the outer parts' panels.
+            hideWingConnection: src.hideWingConnection === true,
+            hideSpineFront: src.hideSpineFront === true,
+            hideSpineBack: src.hideSpineBack === true,
+            // Per-side wing joint extents {up0, down0, up1, down1} (0 = hull
+            // end, 1 = wing end), in the same units as the strength values.
+            // null = symmetric, taken from the two strength values.
+            wingJointSides: this.normalizeWingJointSides(src.wingJointSides),
+            spineConnectionX: Math.max(-1, Math.min(1, Number(src.spineConnectionX) || 0)),
             segmentScale: this.normalizeSegmentScale(src.segmentScale),
             segmentOffset: this.normalizeSegmentOffset(src.segmentOffset),
             moduleOffset: this.normalizeModuleOffset(src.moduleOffset),

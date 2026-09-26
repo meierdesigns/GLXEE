@@ -164,26 +164,39 @@ extendClass(ShipAssetLoader, {
      * moved, since it always reads the current w/h.
      */
     get HULL_PIXEL_CELL_PX() {
-        return 4;
+        // Fixed default cell (no longer shrunk per smallest part, so it has
+        // to be fine on its own — 4 read far too coarse).
+        return 2;
     },
 
     /**
-     * Ship-wide voxel size in pixels: the hull's voxelScale target, shrunk
-     * until even the smallest part gets at least 6 cells to show its shape.
+     * Ship-wide voxel size in pixels. The default size (factor 1) is the
+     * target cell, independent of part sizes so resizing a part never changes
+     * the resolution. voxelScale is a plain size factor on that default:
+     * 2 = voxels twice as big, 0.5 = half. It used to divide the target
+     * before the cap, so for most ships the slider changed nothing.
      */
     shipVoxelCell(shipModel, scale) {
+        // Hangar zoom magnifies an image voxelised at the fit scale; at any
+        // other scale report that same grid, proportionally, so hit tests
+        // and handles line up with what is shown.
+        const refInfo = this._voxelRef;
+        const ref = refInfo && refInfo.model === shipModel ? refInfo.scale : 0;
+        if (ref && scale && Math.abs(scale - ref) > 0.001) {
+            return this.shipVoxelCellAt(shipModel, ref) * scale / ref;
+        }
+        return this.shipVoxelCellAt(shipModel, scale);
+    },
+
+    shipVoxelCellAt(shipModel, scale) {
         const layout = shipModel && shipModel.layout;
         const loadout = layout && layout.loadout;
         const zoom = Math.max(0.25, Number(scale) || 1);
-        const target = this.HULL_PIXEL_CELL_PX * zoom
-            / Math.max(0.1, Math.min(10, Number(loadout && loadout.voxelScale) || 1));
-        let smallest = Infinity;
-        ((layout && layout.segments) || []).forEach((seg) => {
-            if (['front', 'center', 'back', 'wingLeft', 'wingRight'].indexOf(seg.id) === -1) return;
-            smallest = Math.min(smallest, seg.width * zoom, seg.height * zoom);
-        });
-        const fit = Number.isFinite(smallest) ? smallest / 6 : target;
-        return Math.max(1, Math.floor(Math.min(target, fit)));
+        const factor = Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 1));
+        // Voxel size depends only on zoom and the ship's voxel setting — not
+        // on part sizes. Deriving it from the smallest part made the whole
+        // ship's resolution jump whenever one part was resized.
+        return Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX * zoom * factor));
     },
 
     hullPartResolution(w, h, voxelScale = 1, pixelZoom = 1) {
@@ -192,12 +205,21 @@ extendClass(ShipAssetLoader, {
         // in size between nose, body, wings and joints.
         const cell = this._shipVoxelCell || Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX
             * Math.max(0.25, Number(pixelZoom) || 1)
-            / Math.max(0.1, Math.min(10, Number(voxelScale) || 1))));
+            * Math.max(0.5, Math.min(1.5, Number(voxelScale) || 1))));
         return {
             resW: Math.max(6, Math.round(w / cell)),
             resH: Math.max(6, Math.round(h / cell)),
             cell: cell
         };
+    },
+
+    /**
+     * Row width with the same parity as the grid, so a centred row has equal
+     * margins on both sides instead of leaning one voxel to a side.
+     */
+    evenSpan(cols, width) {
+        if ((cols - width) % 2 === 0) return width;
+        return width < cols ? width + 1 : width - 1;
     },
 
     blankGrid(cols, rows) {
@@ -222,17 +244,21 @@ extendClass(ShipAssetLoader, {
      * dark outline (like real pixel-art sprites) without hand-authoring one
      * per shape.
      */
-    outlineGridEdges(g) {
+    outlineGridEdges(g, openSide = null) {
         const rows = g.length;
         const cols = g[0].length;
         const src = g.map((row) => row.slice());
+        // openSide ('left' | 'right'): that grid border continues into
+        // another part (a wing's root), so it gets no outline there.
+        const pastLeft = openSide === 'left' ? 2 : 0;
+        const pastRight = openSide === 'right' ? 2 : 0;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (src[r][c] !== 2) continue;
                 const up = r > 0 ? src[r - 1][c] : 0;
                 const down = r < rows - 1 ? src[r + 1][c] : 0;
-                const leftN = c > 0 ? src[r][c - 1] : 0;
-                const rightN = c < cols - 1 ? src[r][c + 1] : 0;
+                const leftN = c > 0 ? src[r][c - 1] : pastLeft;
+                const rightN = c < cols - 1 ? src[r][c + 1] : pastRight;
                 if (!up || !down || !leftN || !rightN) g[r][c] = 1;
             }
         }
@@ -275,8 +301,8 @@ extendClass(ShipAssetLoader, {
             let pivotY = null;
             if (bounds) {
                 const size = cell;
-                const originX = Math.round(x + (w - grid[0].length * size) * 0.5);
-                const originY = Math.round(y + (h - grid.length * size) * 0.5);
+                const originX = this.snapToVoxelLattice(x + (w - grid[0].length * size) * 0.5, size, 'x');
+                const originY = this.snapToVoxelLattice(y + (h - grid.length * size) * 0.5, size, 'y');
                 const isLeft = seg.id === 'wingLeft';
                 pivotX = originX + (isLeft ? bounds.x1 : bounds.x0) * size;
                 pivotY = originY + (bounds.y0 + bounds.y1) * 0.5 * size;

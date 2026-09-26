@@ -175,21 +175,16 @@ class UIManager {
                 const main = document.createElement('div');
                 main.className = 'enemy-health-main';
 
+                // Readable enemy portrait: big for the champion, rendered at
+                // 2× so the pixel ship stays crisp in its framed box.
+                const iconSize = isChampion ? 44 : 32;
                 const icon = document.createElement('canvas');
                 icon.className = 'health-ship-icon ui-icon-tip';
-                icon.width = layout.iconSize;
-                icon.height = layout.iconSize;
+                icon.width = iconSize * 2;
+                icon.height = iconSize * 2;
+                icon.style.width = iconSize + 'px';
+                icon.style.height = iconSize + 'px';
                 icon.setAttribute('aria-hidden', 'true');
-
-                const fill = document.createElement('div');
-                fill.className = 'health-fill';
-                fill.dataset.enemyKey = enemy.key;
-
-                main.appendChild(icon);
-                main.appendChild(fill);
-                row.appendChild(factionEl);
-                row.appendChild(main);
-                container.appendChild(row);
 
                 const model = enemy.model
                     || (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getMergedModel
@@ -199,6 +194,31 @@ class UIManager {
                     || enemy.type
                     || enemy.factionLabel
                     || 'ENEMY';
+
+                const text = document.createElement('div');
+                text.className = 'enemy-text';
+                const nameEl = document.createElement('div');
+                nameEl.className = 'enemy-name';
+                nameEl.textContent = (isChampion ? 'BOSS · ' : '') + String(tipName).replace(/_/g, ' ').toUpperCase();
+                text.appendChild(factionEl);
+                text.appendChild(nameEl);
+
+                const head = document.createElement('div');
+                head.className = 'enemy-head';
+                head.appendChild(icon);
+                head.appendChild(text);
+
+                const fill = document.createElement('div');
+                fill.className = 'health-fill';
+                fill.dataset.enemyKey = enemy.key;
+                const hpText = document.createElement('span');
+                hpText.className = 'enemy-hp-text';
+                fill.appendChild(hpText);
+
+                main.appendChild(fill);
+                row.appendChild(head);
+                row.appendChild(main);
+                container.appendChild(row);
                 icon.setAttribute('data-ui-tip', String(tipName).replace(/_/g, ' ').toUpperCase());
                 this.renderHealthShipIcon(icon, model);
             }
@@ -211,6 +231,8 @@ class UIManager {
             if (!enemy) continue;
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
             fill.style.setProperty('--health-width', pct + '%');
+            const hpText = fill.querySelector('.enemy-hp-text');
+            if (hpText) hpText.textContent = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
         }
     }
 

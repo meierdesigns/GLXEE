@@ -16,11 +16,11 @@ extendClass(ObstacleManager, {
         // Horizontal speed: left to right movement
         const horizontalSpeed = 0.5 + Math.random() * 1.0; // 0.5-1.5 pixels per frame
         // Vertical speed: 30% of horizontal speed
-        const verticalSpeed = horizontalSpeed * 0.3;
+        const verticalSpeed = horizontalSpeed * 0.12;
 
         const obstacle = {
             x: -size.width, // Start from left side of screen
-            y: Math.random() * canvasHeight, // Random vertical position
+            y: this.pickLaneY(canvasHeight, size.height), // Mostly the mid lane
             width: size.width,
             height: size.height,
             // Movement properties
@@ -152,12 +152,16 @@ extendClass(ObstacleManager, {
     spawnFormation(formationType, gameState = null) {
         // Get canvas dimensions
         const canvasHeight = (gameState && gameState.height) ? gameState.height : 300;
-        const startY = Math.random() * (canvasHeight * 0.5); // Random vertical position for the formation
+        // Formations start at the top of the mid lane (rarely anywhere).
+        const lane = this.midLane(canvasHeight);
+        const startY = Math.random() < 0.15
+            ? Math.random() * (canvasHeight * 0.5)
+            : lane.top + Math.random() * (lane.bottom - lane.top) * 0.4;
 
         // Horizontal speed: left to right movement
         const horizontalSpeed = 0.5 + Math.random() * 1.0; // 0.5-1.5 pixels per frame
         // Vertical speed: 30% of horizontal speed
-        const verticalSpeed = horizontalSpeed * 0.3;
+        const verticalSpeed = horizontalSpeed * 0.12;
 
         switch (formationType) {
             case 'wall':

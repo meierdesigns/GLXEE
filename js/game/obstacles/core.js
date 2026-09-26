@@ -56,7 +56,7 @@ class ObstacleManager {
         const s = Math.max(0.1, Number(speed) || 0.8);
         switch (direction) {
             case 'rtl':
-                return { horizontalSpeed: -s, verticalSpeed: -s * 0.3 };
+                return { horizontalSpeed: -s, verticalSpeed: -s * 0.12 };
             case 'ttb':
                 return { horizontalSpeed: s * 0.15, verticalSpeed: s };
             case 'btt':
@@ -67,8 +67,29 @@ class ObstacleManager {
                 return { horizontalSpeed: s * 0.85, verticalSpeed: -s * 0.55 };
             case 'ltr':
             default:
-                return { horizontalSpeed: s, verticalSpeed: s * 0.3 };
+                // Shallow drift so side-crossing obstacles stay in the mid lane.
+                return { horizontalSpeed: s, verticalSpeed: s * 0.12 };
         }
+    }
+
+    /**
+     * Mid lane between the enemy zone (top third) and the player zone
+     * (bottom): obstacles mostly cross here so neither ship's flight band is
+     * cluttered. A small share still spawns anywhere to keep it unpredictable.
+     */
+    midLane(canvasHeight) {
+        const H = canvasHeight || 300;
+        return { top: H * 0.36, bottom: H * 0.66 };
+    }
+
+    pickLaneY(canvasHeight, h, strayChance) {
+        const H = canvasHeight || 300;
+        const size = h || 10;
+        if (Math.random() < (strayChance != null ? strayChance : 0.15)) {
+            return Math.random() * Math.max(1, H - size);
+        }
+        const lane = this.midLane(H);
+        return lane.top + Math.random() * Math.max(1, lane.bottom - lane.top - size);
     }
 
     spawnOriginForDirection(direction, width, height, gameState) {
@@ -78,7 +99,7 @@ class ObstacleManager {
         const h = height || 18;
         switch (direction) {
             case 'rtl':
-                return { x: canvasWidth + 2, y: Math.random() * Math.max(1, canvasHeight - h) };
+                return { x: canvasWidth + 2, y: this.pickLaneY(canvasHeight, h) };
             case 'ttb':
                 return { x: Math.random() * Math.max(1, canvasWidth - w), y: -h - 2 };
             case 'btt':
@@ -88,7 +109,7 @@ class ObstacleManager {
             case 'diag_dr':
             case 'ltr':
             default:
-                return { x: -w - 2, y: Math.random() * Math.max(1, canvasHeight - h) };
+                return { x: -w - 2, y: this.pickLaneY(canvasHeight, h) };
         }
     }
 
@@ -102,8 +123,8 @@ class ObstacleManager {
             : 1;
         const baseW = ov.width != null ? ov.width : (d.width || 10);
         const baseH = ov.height != null ? ov.height : (d.height || 10);
-        const width = Math.max(4, Math.min(20, Math.round(baseW * contentScale)));
-        const height = Math.max(4, Math.min(20, Math.round(baseH * contentScale)));
+        const width = Math.max(4, Math.min(32, Math.round(baseW * contentScale)));
+        const height = Math.max(4, Math.min(32, Math.round(baseH * contentScale)));
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
         const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' ? 'prism' : 'none'));
@@ -157,6 +178,7 @@ class ObstacleManager {
         if (!gameState.obstacleSpawnInterval) gameState.obstacleSpawnInterval = 3000;
 
         gameState.obstacleSpawnTimer += deltaTime;
+        this.runTime = (this.runTime || 0) + deltaTime;
 
         // Update lighting bullets from bullet manager
         this.updateLightingBullets();
@@ -164,18 +186,22 @@ class ObstacleManager {
         // Spawn new obstacles more frequently
         if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
-                // Prefer cluster wave; sometimes a single weighted pick
-                if (Math.random() < 0.65) {
-                    this.spawnClusterWave(gameState);
+                // Mostly shaped pattern waves; the authored cluster waves stay
+                // in the mix so planet-specific groupings still show up.
+                if (Math.random() < 0.8) {
+                    this.spawnPatternWave(gameState);
                 } else {
-                    this.spawnFromDef(this.pickWeightedDef(), gameState);
+                    this.spawnClusterWave(gameState);
                 }
             } else if (Math.random() < 0.7) {
                 this.spawnObstacleGroup(gameState);
             } else {
                 this.spawnObstacle(gameState);
             }
-            gameState.obstacleSpawnTimer = 0;
+            // Jitter the next wave so the rhythm isn't a metronome; the
+            // pause shortens as the run's intensity ramps up.
+            const pace = 1.1 - this.patternIntensity() * 0.35;
+            gameState.obstacleSpawnTimer = -gameState.obstacleSpawnInterval * (pace * (0.8 + Math.random() * 0.5) - 1);
         }
 
         // Update existing obstacles
@@ -191,6 +217,19 @@ class ObstacleManager {
             this.calculateObstacleLighting(obstacle);
 
             const margin = Math.max(obstacle.width, obstacle.height) + 8;
+            // Pattern rocks start queued outside the field; only cull them
+            // once they've been inside (or if they never arrive).
+            if (obstacle.entering) {
+                obstacle.age = (obstacle.age || 0) + deltaTime;
+                const inside = obstacle.x + obstacle.width > 0 && obstacle.x < canvasWidth
+                    && obstacle.y + obstacle.height > 0 && obstacle.y < canvasHeight;
+                if (inside) {
+                    obstacle.entering = false;
+                } else {
+                    if (obstacle.age > 20000) this.obstacles.splice(i, 1);
+                    continue;
+                }
+            }
             if (
                 obstacle.x > canvasWidth + margin ||
                 obstacle.y > canvasHeight + margin ||

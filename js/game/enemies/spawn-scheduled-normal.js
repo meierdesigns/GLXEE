@@ -21,7 +21,7 @@ extendClass(EnemyManager, {
         } else if (role === 'bomber') {
             baseHp = Math.max(10, Math.round(baseHp * 0.7));
         }
-        const SIDE_DRAW_SCALE = 0.7;
+        const SIDE_DRAW_SCALE = 1; // same size table as champions (≤ 1.5× player)
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;

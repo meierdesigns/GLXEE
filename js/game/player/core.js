@@ -87,14 +87,24 @@ class PlayerManager {
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             const canvasWidth = game.internalWidth || game.baseWidth || 200;
-            this.player.minY = canvasHeight * 0.33;
+            // Once every enemy is down (victory loot phase) the ship may fly
+            // the whole screen to reach pickups; otherwise it keeps to the
+            // lower two thirds and drifts back there after the phase ends.
+            const freeFlight = !!(game.gameControl && game.gameControl._victoryLootPhase);
+            this.player.minY = freeFlight ? 0 : canvasHeight * 0.33;
             this.player.maxY = canvasHeight - this.player.height;
+            if (!freeFlight && this.player.y < this.player.minY) {
+                this.player.y = Math.min(this.player.minY, this.player.y + moveSpeed);
+            }
 
+            // The ship's centre (its guns) may reach either edge, so enemies
+            // bouncing along the walls stay hittable.
+            const halfW = this.player.width / 2;
             if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-                this.player.x = Math.max(0, this.player.x - moveSpeed);
+                this.player.x = Math.max(-halfW, this.player.x - moveSpeed);
             }
             if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-                this.player.x = Math.min(canvasWidth - this.player.width, this.player.x + moveSpeed);
+                this.player.x = Math.min(canvasWidth - halfW, this.player.x + moveSpeed);
             }
         } else {
             if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
@@ -223,19 +233,13 @@ class PlayerManager {
     reset() {
         let canvasWidth = 200;
         let canvasHeight = 300;
-        const contentScale = (typeof game !== 'undefined' && game && game.contentScale != null)
-            ? Math.max(0.5, Math.min(3, Number(game.contentScale) || 1))
-            : 1;
 
         if (typeof game !== 'undefined') {
             canvasWidth = game.internalWidth || game.baseWidth || 200;
             canvasHeight = game.internalHeight || game.baseHeight || 300;
         }
 
-        const baseW = (this.currentShipModel && (this.currentShipModel.width || this.currentShipModel.nativeWidth)) || 20;
-        const baseH = (this.currentShipModel && (this.currentShipModel.height || this.currentShipModel.nativeHeight)) || 16;
-        this.player.width = Math.max(8, Math.round(Number(baseW) * contentScale));
-        this.player.height = Math.max(6, Math.round(Number(baseH) * contentScale));
+        this.applyFixedFootprint();
         this.player.x = (canvasWidth / 2) - (this.player.width / 2);
         this.player.y = canvasHeight - this.player.height - 20;
         this.player.minY = canvasHeight * 0.33;

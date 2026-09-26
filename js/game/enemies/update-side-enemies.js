@@ -102,6 +102,12 @@ extendClass(EnemyManager, {
                     e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
                 }
                 if (bobY) e.y += bobY * 0.12;
+                // Free-flying side enemies steer around obstacles too.
+                const push = this.computeObstacleAvoidance(e);
+                if (push) {
+                    e.x += push.x * 1.6 * speedMul;
+                    e.y += push.y * 1.2 * speedMul;
+                }
                 if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
                 if (e.x > canvasWidth - 8 && e.speed > 0) e.speed = -Math.abs(e.speed);
                 if (e.x < 8 && e.speed < 0 && e.lifetimeMs > 4000) {
@@ -198,7 +204,11 @@ extendClass(EnemyManager, {
     isFieldClear() {
         if (this.enemy || this.exploding) return false;
         if (this.sideEnemies && this.sideEnemies.length > 0) return false;
-        if (this.schedule && this.schedule.some((e) => !e.spawned)) return false;
+        // Entries parked at 999999 never spawn, and once the objective is done
+        // updateSchedule holds back all normals — neither may block the win.
+        const objectiveDone = typeof objectiveManager !== 'undefined' && objectiveManager.completed;
+        if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999
+            && (e.champion || !objectiveDone))) return false;
         return true;
     },
 
@@ -211,6 +221,7 @@ extendClass(EnemyManager, {
     },
 
     notifyKill(info) {
+        if (this.directorOnKill) this.directorOnKill(info);
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.onEnemyKilled(info);
         }

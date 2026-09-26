@@ -124,7 +124,7 @@ extendClass(EnemyManager, {
             maxY: canvasHeight / 3,
             sprite: hitProfile.sprite,
             colors: hitProfile.colors,
-            collision: hitProfile.collision
+            collision: this.scaleEnemyCollision(hitProfile.collision, contentScale)
         };
 
         this.maxHealth = enemyMaxHealth;

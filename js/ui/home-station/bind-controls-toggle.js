@@ -252,7 +252,7 @@ extendClass(HomeStationUI, {
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
                     startScreenManager.toggleDevMode();
-                    this.statusMsg = startScreenManager.devMode ? 'DEV MODE ON' : 'DEV MODE OFF';
+                    this.statusMsg = startScreenManager.devMode ? 'DEV MODE ON — DRAG TABS TO REORDER' : 'DEV MODE OFF';
                     this.createUI();
                 }
                 return;
@@ -285,9 +285,25 @@ extendClass(HomeStationUI, {
                     this.exitTabContent();
                     return;
                 }
-                // On tab bar: ESC toggles game tabs ↔ menu tabs
+                // On tab bar: ESC swaps the left (game) tab row for the right
+                // (menu) tab row and back — nothing else.
                 e.preventDefault();
-                this.openMainMenuOverlay();
+                if (this.isMenuRowTab()) {
+                    const back = this._lastGameTab || 'station';
+                    if (this.tab === 'menu') this.unmountMenuTab();
+                    else this.unmountComponentsTab();
+                    this._menuOpts = null;
+                    this._prevTab = null;
+                    this._menuArmed = false;
+                    this.statusMsg = '';
+                    this.focusIndex = 0;
+                    this.tab = back;
+                    this.persistTab();
+                    this.createUI();
+                } else {
+                    this._lastGameTab = this.tab;
+                    this.openMainMenuOverlay({ force: true });
+                }
                 this._navLevel = 'tabs';
                 this.focusActiveTab();
                 return;

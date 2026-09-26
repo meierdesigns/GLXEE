@@ -142,13 +142,16 @@ extendClass(HomeStationUI, {
                     <aside class="hs-hangar-list hs-panel">
                         <h3 class="hs-panel-title">
                             <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                            <span class="hs-panel-label">SHIPS</span>
+                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'}</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
+                            ${this.renderHangarLeftViewToggle()}
                             <button type="button" class="hs-sidebar-toggle" data-hangar-sidebar="left"
                                 aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
                                 aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
                         </h3>
-                        <div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>
+                        ${this._hangarLeftView === 'parts'
+                            ? this.renderHangarPartsGrid(inventory, loadout)
+                            : `<div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>`}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -173,7 +176,7 @@ extendClass(HomeStationUI, {
                             </div>
                             <div class="hs-hangar-stats">
                                 <span class="hs-hangar-stat"><em>SIZE</em>${layout.width}×${layout.height}</span>
-                                <span class="hs-hangar-stat"><em>FRAME</em>L${frameLevel}/${frameMax}</span>
+                                <span class="hs-hangar-stat" title="Hull area levels (each S → M → L)"><em>AREAS</em>${frameLevel}/${frameMax}</span>
                                 <span class="hs-hangar-stat" title="Weapons ${loadout.weapons.length}/${caps.weapons} · Defense ${loadout.defenses.length}/${caps.defenses} · Abilities ${loadout.abilities.length}/${caps.abilities} · Energy ${(loadout.energy || []).length}/${caps.energy || 1}">
                                     <em>SLOTS</em>${filledSlots}/${totalSlots}
                                     <small>W${loadout.weapons.length} D${loadout.defenses.length} A${loadout.abilities.length} E${(loadout.energy || []).length}</small>
@@ -189,14 +192,8 @@ extendClass(HomeStationUI, {
                                     <input type="range" data-voxel-scale data-hangar-voxel min="0.5" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
                                     <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
                                 </label>
-                                <div class="hs-hangar-frame-up">
-                                    ${frameMaxed
-                                        ? '<span class="hs-muted hs-line-action">FRAME MAX</span>'
-                                        : ((frameCost ? this.renderCostGrid(frameCost, profile.resources || {}) : '') +
-                                            `<button type="button" class="action-button hs-line-action" data-frame-up="${shipId}" ${frameCheck.ok ? '' : 'disabled'}>` +
-                                            `FRAME → L${frameLevel + 1}</button>`)}
-                                </div>
                             </div>
+                            ${this.renderHangarAreaUpgrades(shipId, profile)}
                         </div>
                         <div class="hs-hangar-bay hs-panel">
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
@@ -215,6 +212,7 @@ extendClass(HomeStationUI, {
                             </div>
                             <div class="hs-hangar-bay-tools">
                                 <button type="button" class="action-button hs-mod" id="hsResetAnatomy">RESET ANATOMY</button>
+                                <button type="button" class="action-button hs-mod" id="hsSaveAnatomyDefault" title="Save this ship as the RESET ANATOMY default for your faction">SET AS DEFAULT</button>
                             </div>
                             <p class="hs-muted hs-hangar-bay-hint">DRAG MODULES WITHIN THEIR COMPONENT · CLICK A SLOT TO EQUIP</p>
                         </div>

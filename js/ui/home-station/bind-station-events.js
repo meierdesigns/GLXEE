@@ -171,6 +171,8 @@ extendClass(HomeStationUI, {
         });
         const resetAnatomy = this.overlay.querySelector('#hsResetAnatomy');
         if (resetAnatomy) resetAnatomy.addEventListener('click', () => this.resetHangarAnatomy());
+        const saveAnatomy = this.overlay.querySelector('#hsSaveAnatomyDefault');
+        if (saveAnatomy) saveAnatomy.addEventListener('click', () => this.saveHangarAnatomyDefault());
         this.overlay.querySelectorAll('[data-activate-ship]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-activate-ship');

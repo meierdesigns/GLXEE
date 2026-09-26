@@ -70,7 +70,7 @@ extendClass(HomeStationUI, {
     },
 
     renderShopCategoryTabs() {
-        return this._shopCategories.map((id) => {
+        return this.getAvailableShopCategories().map((id) => {
             const meta = this._shopCatMeta[id] || { label: id.toUpperCase() };
             const active = this.shopCategory === id;
             return `<button type="button" class="hs-shop-cat ${active ? 'active' : ''}" data-shop-cat="${id}" data-nav-item>` +

@@ -189,7 +189,7 @@ extendClass(HomeStationUI, {
     captureFlashTarget(btn) {
         if (!btn || !btn.getAttribute) return null;
         const attrs = [
-            'data-upgrade-node', 'data-upgrade', 'data-frame-up', 'data-mod-up',
+            'data-upgrade-node', 'data-upgrade', 'data-frame-up', 'data-area-up', 'data-mod-up',
             'data-travel', 'data-unlock', 'data-buy', 'data-buy-bp', 'data-buy-part',
             'data-buy-portal', 'data-buy-style', 'data-sell-ship', 'data-sell-bp',
             'data-sell-part', 'data-sell-style', 'data-craft', 'data-activate-ship', 'data-toggle-mod',

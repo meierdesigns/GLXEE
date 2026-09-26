@@ -8,6 +8,15 @@ extendClass(HomeStationUI, {
             if (pin.dataset.dragBound === '1') return;
             pin.dataset.dragBound = '1';
             let drag = null;
+            // Right-click a filled slot to empty it.
+            pin.addEventListener('contextmenu', (e) => {
+                const modId = pin.getAttribute('data-mod-id') || '';
+                const kind = pin.getAttribute('data-hangar-slot-toggle');
+                if (!modId || !kind) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.applyHangarSlotChoice(kind, Number(pin.getAttribute('data-slot-index') || 0), '', null);
+            });
             pin.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 const kind = pin.getAttribute('data-hangar-slot-toggle');
@@ -46,6 +55,9 @@ extendClass(HomeStationUI, {
                     e.stopPropagation();
                     return;
                 }
+                // Occupied slots are pulled out by grabbing the part on the
+                // ship itself (startHangarModuleGrab), not via this marker.
+                if (modId) return;
                 if (!shipLoadoutManager.setModuleOffset) return;
                 // Two equipped modules can share the same id (e.g. the same
                 // weapon in both weapon slots) — match by face too, or
@@ -105,14 +117,23 @@ extendClass(HomeStationUI, {
                     // Empty-slot anchors are ship-normalized, so 0.5 is the
                     // hull centreline rather than 0.
                     const nx = drag.startNx + dxCanvas / sw;
-                    const snappedNx = 0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale);
+                    let snappedNx = 0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale);
                     this._hangarSnapCenter = snappedNx !== nx ? drag.kind : null;
+                    let ny = drag.startNy + dyCanvas / sh;
+                    // Only the areas its type allows: weapons nose/wings,
+                    // defense/energy core, abilities aft/core.
+                    const lastModel = this._hangarLastModel;
+                    if (lastModel && lastModel.layout && shipLoadoutManager.clampToSlotArea) {
+                        const c = shipLoadoutManager.clampToSlotArea(drag.kind, snappedNx, ny, lastModel.layout);
+                        snappedNx = c.nx;
+                        ny = c.ny;
+                    }
                     shipLoadoutManager.setEmptySlotAnchor(
                         this.hangarShipId,
                         drag.kind,
                         drag.index,
                         snappedNx,
-                        drag.startNy + dyCanvas / sh
+                        ny
                     );
                 } else {
                     const dx = (e.clientX - drag.startX) * sx / Math.max(1, scale);

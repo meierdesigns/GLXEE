@@ -266,7 +266,7 @@ extendClass(StartScreenManager, {
                     if (st && st.accent) row.style.setProperty('--row-accent', st.accent);
                 }
                 const emblem = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
-                    ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+                    ? profileSelectionManager.getFactionEmblemHtml(faction, 32) : '';
                 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 row.innerHTML =
                     `<span class="hs-menu-profile-emblem">${emblem}</span>` +

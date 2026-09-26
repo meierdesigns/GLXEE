@@ -24,6 +24,8 @@ extendClass(HomeStationUI, {
         }
 
         this.bindResourceBuyModalEvents();
+        this.bindTabOrderEditing();
+        this.alignCreditsBarToTabs();
 
         this.overlay.querySelectorAll('[data-tab]').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -80,6 +82,7 @@ extendClass(HomeStationUI, {
             });
         });
 
+        this.bindAreaUpgradeButtons();
         this.overlay.querySelectorAll('[data-frame-up]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-frame-up');
@@ -224,5 +227,148 @@ extendClass(HomeStationUI, {
                 }
             });
         });
+    },
+
+    /** Start the resource row under the first tab so the crest can hang beside it. */
+    alignCreditsBarToTabs() {
+        const header = this.overlay && this.overlay.querySelector('.hs-header');
+        const tabs = header && header.querySelector('.hs-tabs');
+        const bar = header && header.querySelector('.hs-credits-bar');
+        if (!tabs || !bar) return;
+        const measure = () => {
+            const offset = tabs.getBoundingClientRect().left - header.getBoundingClientRect().left;
+            header.style.setProperty('--hs-tabs-offset', Math.max(0, Math.round(offset)) + 'px');
+        };
+        measure();
+        requestAnimationFrame(measure);
+    },
+
+    /**
+     * Dev mode (Shift+C): drag tabs and '|' dividers within their row to
+     * reorder them. Main row only: drag the "+ |" handle in to add a divider,
+     * drag a divider out of the row to remove it.
+     */
+    bindTabOrderEditing() {
+        if (typeof MENU_ORDER === 'undefined' || typeof startScreenManager === 'undefined' ||
+            !startScreenManager.devMode) return;
+        const row = this.overlay.querySelector('.hs-tabs');
+        if (!row) return;
+        const isEsc = this.isMenuRowTab();
+        const list = isEsc ? MENU_ORDER.esc : MENU_ORDER.main;
+        const NEW_DIVIDER = -2;
+        // Main row items carry their MENU_ORDER.main index; ESC row items are found by id.
+        const indexOf = (el) => isEsc
+            ? list.indexOf(el.getAttribute('data-menu-tab'))
+            : parseInt(el.getAttribute('data-order-index'), 10);
+        const items = Array.from(row.querySelectorAll(isEsc ? '[data-menu-tab]' : '[data-order-index]'))
+            .filter((el) => indexOf(el) >= 0);
+        const commit = () => {
+            saveMenuOrder();
+            this.applyMenuOrder();
+            this.createUI();
+        };
+
+        row.classList.add('hs-tabs-editing');
+        // One bar shows where the dragged item will land (tabs are clip-pathed,
+        // so it cannot be drawn on the tabs themselves).
+        const marker = document.createElement('span');
+        marker.className = 'hs-drop-marker';
+        marker.setAttribute('aria-hidden', 'true');
+        row.appendChild(marker);
+
+        let dragFrom = -1;
+        let dropAt = -1; // insertion index into list (before removal)
+        const hideMarker = () => {
+            marker.classList.remove('visible');
+            dropAt = -1;
+        };
+        const showMarker = (el, after) => {
+            const gap = 1;
+            marker.style.left = (el.offsetLeft + (after ? el.offsetWidth + gap : -gap - 2)) + 'px';
+            marker.style.top = el.offsetTop + 'px';
+            marker.style.height = el.offsetHeight + 'px';
+            marker.classList.add('visible');
+        };
+        const isNoop = (to) => dragFrom >= 0 && (to === dragFrom || to === dragFrom + 1);
+
+        const startDrag = (el, from, e) => {
+            dragFrom = from;
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', 'hs-tab'); } catch (err) { /* ignore */ }
+            el.classList.add('hs-tab-dragging');
+            row.classList.add('hs-tabs-dragging');
+        };
+        const endDrag = (el) => {
+            dragFrom = -1;
+            hideMarker();
+            el.classList.remove('hs-tab-dragging');
+            row.classList.remove('hs-tabs-dragging');
+        };
+
+        items.forEach((el) => {
+            el.draggable = true;
+            el.addEventListener('dragstart', (e) => startDrag(el, indexOf(el), e));
+            el.addEventListener('dragend', (e) => {
+                const from = dragFrom;
+                endDrag(el);
+                // A divider dropped outside the row is removed.
+                if (!isEsc && from >= 0 && list[from] === '|' && e.dataTransfer.dropEffect === 'none') {
+                    list.splice(from, 1);
+                    commit();
+                }
+            });
+        });
+
+        // The whole row is the drop zone (gaps and row ends included): the
+        // insertion point is the item edge closest to the pointer.
+        const findDrop = (clientX) => {
+            for (let k = 0; k < items.length; k++) {
+                const rect = items[k].getBoundingClientRect();
+                if (clientX < rect.left + rect.width / 2) return { el: items[k], after: false, to: indexOf(items[k]) };
+            }
+            const last = items[items.length - 1];
+            return last ? { el: last, after: true, to: indexOf(last) + 1 } : null;
+        };
+        row.addEventListener('dragover', (e) => {
+            if (dragFrom === -1) return;
+            const hit = findDrop(e.clientX);
+            if (!hit || isNoop(hit.to)) {
+                hideMarker();
+                return;
+            }
+            e.preventDefault();
+            e.dataTransfer.dropEffect = dragFrom === NEW_DIVIDER ? 'copy' : 'move';
+            dropAt = hit.to;
+            showMarker(hit.el, hit.after);
+        });
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const to = dropAt;
+            const from = dragFrom;
+            if (to < 0 || from === -1) return;
+            if (from === NEW_DIVIDER) {
+                list.splice(to, 0, '|');
+            } else {
+                const moved = list.splice(from, 1)[0];
+                list.splice(from < to ? to - 1 : to, 0, moved);
+            }
+            commit();
+        });
+        row.addEventListener('dragleave', (e) => {
+            if (!row.contains(e.relatedTarget)) hideMarker();
+        });
+
+        if (isEsc) return;
+        const source = document.createElement('span');
+        source.className = 'hs-divider-source';
+        source.draggable = true;
+        source.title = 'Drag into the row to add a divider';
+        source.textContent = '+ |';
+        source.addEventListener('dragstart', (e) => {
+            startDrag(source, NEW_DIVIDER, e);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+        source.addEventListener('dragend', () => endDrag(source));
+        row.appendChild(source);
     },
 });

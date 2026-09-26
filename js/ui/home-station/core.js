@@ -12,7 +12,7 @@ class HomeStationUI {
         this.onClose = null;
         this.tab = 'station'; // station | upgrade | hangar | components | shop | craft | travel | explorations | play
         this.upgradeSubTab = 'station'; // station | ships | modules
-        this.shopCategory = 'ships'; // ships | blueprints | parts | portals | resources
+        this.shopCategory = 'resources'; // resources | ships | blueprints | parts | portals | styles
         this.shopFilter = 'all';
         this.shopSort = 'name'; // name | cost | tier
         this.shopResourceQty = 1;
@@ -44,6 +44,11 @@ class HomeStationUI {
         this._hangarPanelResize = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = false;
+        // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
+        this._hangarLeftView = 'areas';
+        try {
+            if (localStorage.getItem('vf_hs_hangar_left_view') === 'parts') this._hangarLeftView = 'parts';
+        } catch (e) { /* ignore */ }
         try {
             const raw = localStorage.getItem('vf_hs_hangar_sidebar_prefs_v1');
             const prefs = raw ? JSON.parse(raw) : null;
@@ -52,14 +57,7 @@ class HomeStationUI {
                 this._hangarRightCollapsed = prefs.right === true;
             }
         } catch (e) { /* ignore */ }
-        this._tabs = ['station', 'play', 'travel', 'explorations', 'upgrade', 'hangar', 'components', 'craft', 'shop'];
-        this._tabClusterOf = {
-            play: 'mission', travel: 'mission', explorations: 'mission',
-            upgrade: 'build', hangar: 'build', components: 'build', craft: 'build',
-            shop: 'trade'
-        };
-        // Tabs reachable from the ESC/menu tab row instead of the main row.
-        this._menuOnlyTabs = ['components'];
+        this.applyMenuOrder();
         this._upgradeSubTabs = ['station', 'ships', 'modules'];
         this.selectedUpgradeNode = null;
         this._upgTipHost = null;
@@ -72,7 +70,7 @@ class HomeStationUI {
             ships: { label: 'SHIPS', icon: 'hsShip' },
             modules: { label: 'MODULES', icon: 'hsCraft' }
         };
-        this._shopCategories = ['ships', 'blueprints', 'parts', 'portals', 'resources', 'styles'];
+        this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];
         this._shopCatMeta = {
             ships: { label: 'SHIPS', icon: 'hsShip' },
             blueprints: { label: 'BLUEPRINTS', icon: 'hsBlueprint' },
@@ -258,6 +256,18 @@ class HomeStationUI {
         return iconRenderer.imgHtml(key, size, 'hs-faction-emblem', style && style.accent, label);
     }
 
+    /**
+     * Faction emblem framed in a pixel shield crest (station modal).
+     * Sizes and outline come from the --crest-* variables in styles.css;
+     * `place` picks the size variable (topbar | banner).
+     */
+    factionCrestHtml(profile, place) {
+        // Rendered large and scaled down by CSS so any --crest-* size stays sharp.
+        return `<span class="hs-crest hs-crest-${place}">` +
+            `<span class="hs-crest-field">${this.factionEmblemHtml(profile, 128)}</span>` +
+            `</span>`;
+    }
+
     menuButtonHtml() {
         return '<span class="hs-menu-glyph" aria-hidden="true">≡</span>';
     }
@@ -279,6 +289,18 @@ class HomeStationUI {
         }).join('');
     }
 
+    /** Build the tab rows from MENU_ORDER (js/ui/menu-order.js). */
+    applyMenuOrder() {
+        const stationTabs = ['play', 'travel', 'explorations', 'upgrade', 'hangar', 'components', 'craft', 'shop'];
+        const order = (typeof MENU_ORDER !== 'undefined') ? MENU_ORDER : { main: stationTabs, esc: [] };
+        const isStationTab = (id) => stationTabs.indexOf(id) !== -1;
+        // Tabs reachable from the ESC/menu tab row instead of the main row.
+        this._menuOnlyTabs = order.esc.filter(isStationTab);
+        const main = order.main.filter((id) => id === 'station' || isStationTab(id));
+        if (main.indexOf('station') === -1) main.unshift('station');
+        this._tabs = main.concat(this._menuOnlyTabs);
+    }
+
     /** Menu tab row: embedded start-menu tabs plus station menu-only tabs. */
     getMenuRowTabs() {
         const base = (typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTabs) || [];
@@ -286,10 +308,83 @@ class HomeStationUI {
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             return { id: id, label: meta.label, icon: meta.icon };
         });
-        return base.concat(extra);
+        const all = base.concat(extra);
+        if (typeof MENU_ORDER === 'undefined') return all;
+        const rank = (t) => {
+            const i = MENU_ORDER.esc.indexOf(t.id);
+            return i === -1 ? MENU_ORDER.esc.length : i;
+        };
+        return all.sort((a, b) => rank(a) - rank(b));
+    }
+
+    /**
+     * Shop categories on offer right now: a docked trading post shows its own
+     * specialty; the home station starts with resources only and gains the
+     * categories of every trader unlocked by docking (dev mode: everything).
+     */
+    getAvailableShopCategories() {
+        const post = this.getVisitedTradingPost && this.getVisitedTradingPost();
+        let cats;
+        if (post) {
+            cats = post.categories || ['resources', 'parts'];
+        } else if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) {
+            cats = this._shopCategories.slice();
+        } else if (typeof profileManager !== 'undefined' && profileManager.getUnlockedShopCategories) {
+            cats = profileManager.getUnlockedShopCategories();
+        } else {
+            cats = ['resources'];
+        }
+        return this._shopCategories.filter((id) => cats.indexOf(id) !== -1);
+    }
+
+    /** Keep shopCategory on an available category. */
+    ensureShopCategory() {
+        const cats = this.getAvailableShopCategories();
+        if (cats.indexOf(this.shopCategory) === -1) this.shopCategory = cats[0] || 'resources';
+        return this.shopCategory;
     }
 
     tabIconHtml(iconKey) {
-        return this.iconHtml(iconKey, 32, 'hs-tab-pixel');
+        return this.iconHtml(this.tabIconKey(iconKey), 32, 'hs-tab-pixel', this.tabMetaLabel(iconKey));
+    }
+
+    tabMetaLabel(iconKey) {
+        const meta = Object.values(this._tabMeta || {}).find((m) => m.icon === iconKey);
+        return meta ? meta.label : undefined;
+    }
+
+    /**
+     * Tab icons share one 16×16 grid but were drawn off-centre and with grey
+     * fringe pixels, so they read as different sizes and blurry once tinted.
+     * Derive a clean variant: drop the fringe (below 10), crop to the shape
+     * and centre it. Cached as IconSprites['<key>__tab'].
+     */
+    tabIconKey(iconKey) {
+        if (typeof IconSprites === 'undefined' || !IconSprites || !IconSprites[iconKey]) return iconKey;
+        const outKey = iconKey + '__tab';
+        if (IconSprites[outKey]) return outKey;
+        const src = IconSprites[iconKey];
+        const rows = src.length;
+        const cols = src[0].length;
+        let x0 = cols, y0 = rows, x1 = -1, y1 = -1;
+        const clean = src.map((row, y) => row.map((v, x) => {
+            if (v < 10) return 0;
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+            y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+            return 15;
+        }));
+        if (x1 < 0) return iconKey;
+        const dx = Math.floor((cols - (x1 - x0 + 1)) / 2) - x0;
+        const dy = Math.floor((rows - (y1 - y0 + 1)) / 2) - y0;
+        const out = [];
+        for (let y = 0; y < rows; y++) {
+            out[y] = [];
+            for (let x = 0; x < cols; x++) {
+                const sy = y - dy, sx = x - dx;
+                out[y][x] = (sy >= 0 && sy < rows && sx >= 0 && sx < cols) ? clean[sy][sx] : 0;
+            }
+        }
+        IconSprites[outKey] = out;
+        return outKey;
     }
 }

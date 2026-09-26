@@ -63,8 +63,8 @@ extendClass(HomeStationUI, {
         let title = 'STATION UPGRADE TREE';
         let hint = 'Spend station resources to expand capacity, hangar slots, drives and station systems.';
         if (this.upgradeSubTab === 'ships') {
-            title = 'SHIP FRAME UPGRADES';
-            hint = 'Upgrade owned mainframes for more weapon / defense / ability slots and hull stats.';
+            title = 'HULL AREAS';
+            hint = 'Upgrade a hull area to grow its slots S → M → L (bigger parts fit) and open extra slots. Every level adds hull HP and armor.';
             inner = this.renderShipFrameUpgrades(profile);
         } else if (this.upgradeSubTab === 'modules') {
             title = 'MODULE TYPE UPGRADES';
@@ -167,7 +167,7 @@ extendClass(HomeStationUI, {
                 const count = this.getExploreItemCount(entry.id);
                 const empty = !this.isExploreItemVisible(entry.id);
                 return `<button type="button" class="action-button hs-explore-item${empty ? ' is-empty' : ''}" data-explore="${entry.open}" data-nav-item${empty ? ' disabled' : ''}>` +
-                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon, 64, 'hs-pixel')}</span>` +
+                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon, 128, 'hs-pixel')}</span>` +
                     `<span class="hs-explore-label">${entry.id}</span>` +
                     `<span class="hs-explore-count">${count == null ? '—' : count}</span>` +
                     `</button>`;

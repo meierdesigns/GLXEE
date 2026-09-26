@@ -227,7 +227,9 @@ extendClass(HomeStationUI, {
             this.updateHangarSlotPins(model);
         }
         this.syncHangarModuleScaleUi();
+        this.drawHangarModuleIcons(canvas, model, ox, oy, scale);
         this.drawHangarSegmentHover(canvas, model, ox, oy, scale);
+        this.drawHangarModuleHover(canvas, model, ox, oy, scale);
         this.bindHangarWingDrag(canvas, model, ox, oy, scale);
     },
 
@@ -280,6 +282,10 @@ extendClass(HomeStationUI, {
             merged
         );
         const slots = (hangarSlots && hangarSlots.slots) || [];
+        const layout = merged && merged.layout;
+        const shipW = parseFloat(layer.style.getPropertyValue('--bay-ship-w')) || 0;
+        const pxPerUnit = layout && layout.width ? shipW / layout.width : 0;
+        const modsLeft = ((layout && layout.modules) || []).slice();
         slots.forEach((slot) => {
             const el = layer.querySelector(
                 `.hs-hangar-slot[data-slot-kind="${slot.kind}"][data-slot-index="${slot.index}"]`
@@ -289,11 +295,146 @@ extendClass(HomeStationUI, {
             const pinY = Math.round((slot.ny != null ? slot.ny : 0.5) * 1000) / 1000;
             el.style.setProperty('--pin-x', String(pinX));
             el.style.setProperty('--pin-y', String(pinY));
+            if (slot.mirrorNx != null) {
+                el.style.setProperty('--pin-mx', String(Math.round(slot.mirrorNx * 1000) / 1000));
+                el.style.setProperty('--pin-my', String(Math.round(slot.mirrorNy * 1000) / 1000));
+            }
+            // A filled slot's grab frame covers the whole installed part.
+            const mi = slot.id ? modsLeft.findIndex((m) => m.kind === slot.kind && m.id === slot.id) : -1;
+            if (mi !== -1 && pxPerUnit) {
+                const m = modsLeft.splice(mi, 1)[0];
+                el.style.setProperty('--pin-w', Math.max(18, Math.round(m.width * pxPerUnit) + 6) + 'px');
+                el.style.setProperty('--pin-h', Math.max(18, Math.round(m.height * pxPerUnit) + 6) + 'px');
+            } else {
+                el.style.removeProperty('--pin-w');
+                el.style.removeProperty('--pin-h');
+            }
+            // Ship part the pin sits on — pins show while that part is hovered.
+            if (layout) {
+                // Weapon spots know their part (a rotated wing's pin can sit
+                // outside the wing's unrotated box).
+                el.setAttribute('data-slot-area', slot.area
+                    || this.hangarAreaAt(layout, pinX * layout.width, pinY * layout.height) || '');
+            }
             if (slot.side === 'left' || slot.side === 'right') {
                 el.setAttribute('data-slot-side', slot.side);
             }
         });
         this.updateHangarSlotLinks();
+        this.setHangarHoverArea(this._hangarHoverArea || null);
+    },
+
+    /**
+     * Installed parts are drawn as hull mounts, which all look alike. In the
+     * hangar each one also shows its part icon (same as the PARTS grid), so
+     * you can see what sits in which slot.
+     */
+    drawHangarModuleIcons(canvas, model, ox, oy, scale) {
+        if (!canvas || !model || !model.layout || typeof iconRenderer === 'undefined') return;
+        const ctx = canvas.getContext('2d');
+        const tint = (getComputedStyle(this.overlay || document.documentElement)
+            .getPropertyValue('--color-second-basecolor') || '').trim() || '#ffffff';
+        // Parts stacked in one spot (shield + core in the fuselage) would hide
+        // each other's icon: group overlapping mounts and list their icons
+        // top to bottom on the centreline of the group.
+        // Only weapons are placed on the ship; other parts are switched in the sidebar.
+        // Icons only show for the hovered hull part.
+        const hoverArea = this._hangarHoverArea;
+        if (!hoverArea) return;
+        const items = (model.layout.modules || []).filter((mod) => mod.kind === 'weapon'
+            && this.hangarAreaAt(model.layout, mod.x + mod.width / 2, mod.y + mod.height / 2) === hoverArea).map((mod) => {
+            const w = mod.width * scale;
+            const h = mod.height * scale;
+            return {
+                mod: mod,
+                cx: ox + mod.x * scale + w / 2,
+                cy: oy + mod.y * scale + h / 2,
+                size: Math.max(16, Math.floor(Math.min(w, h) * 0.8 / 16) * 16)
+            };
+        });
+        const groups = [];
+        items.forEach((it) => {
+            const g = groups.find((gr) => gr.some((o) =>
+                Math.abs(o.cx - it.cx) < (o.size + it.size) / 2 && Math.abs(o.cy - it.cy) < (o.size + it.size) / 2));
+            if (g) g.push(it);
+            else groups.push([it]);
+        });
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        groups.forEach((g) => {
+            const n = g.length;
+            const cx = g.reduce((a, it) => a + it.cx, 0) / n;
+            const cy = g.reduce((a, it) => a + it.cy, 0) / n;
+            const base = Math.min.apply(null, g.map((it) => it.size));
+            const size = n > 1 ? Math.max(16, Math.floor(base / n / 16) * 16 || 16) : base;
+            const gap = 2;
+            const total = n * size + (n - 1) * gap;
+            g.forEach((it, i) => {
+                const x = Math.round(cx - size / 2);
+                const y = Math.round(cy - total / 2 + i * (size + gap));
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                ctx.fillRect(x - 1, y - 1, size + 2, size + 2);
+                iconRenderer.drawKey(ctx, this.hangarModuleIconKey(it.mod.kind, it.mod.id), x, y, size, tint);
+            });
+        });
+        ctx.restore();
+    },
+
+    /** Hover feedback for an equipped part on the ship: glowing accent frame + tint. */
+    drawHangarModuleHover(canvas, model, ox, oy, scale) {
+        const hov = this._hangarHoverModule;
+        if (!hov || !canvas || !model || !model.layout) return;
+        const mod = (model.layout.modules || []).find((m) =>
+            m.kind === hov.kind && m.id === hov.id && (!hov.face || m.face === hov.face));
+        if (!mod) return;
+        const ctx = canvas.getContext('2d');
+        const accent = (getComputedStyle(this.overlay || document.documentElement)
+            .getPropertyValue('--faction-accent') || '').trim() || '#ffffff';
+        const x = Math.round(ox + mod.x * scale) - 2;
+        const y = Math.round(oy + mod.y * scale) - 2;
+        const w = Math.round(mod.width * scale) + 4;
+        const h = Math.round(mod.height * scale) + 4;
+        ctx.save();
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.18;
+        ctx.fillRect(x, y, w, h);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 10;
+        ctx.strokeRect(x, y, w, h);
+        ctx.restore();
+    },
+
+    /** Smallest hull part (front/center/back/wingLeft/wingRight) containing a layout point. */
+    hangarAreaAt(layout, lx, ly) {
+        let best = null;
+        let bestArea = Infinity;
+        (layout.segments || []).forEach((seg) => {
+            if (lx < seg.x || lx > seg.x + seg.width || ly < seg.y || ly > seg.y + seg.height) return;
+            const area = seg.width * seg.height;
+            if (area < bestArea) {
+                bestArea = area;
+                best = seg.id;
+            }
+        });
+        return best;
+    },
+
+    /** Reveal the slot pins of one hull part (null hides them all again). */
+    setHangarHoverArea(areaId) {
+        const changed = (areaId || null) !== (this._hangarHoverArea || null);
+        this._hangarHoverArea = areaId || null;
+        if (!this.overlay) return;
+        if (changed && !this._hangarHoverAreaSyncing) {
+            // Part icons are drawn on the canvas: redraw so they follow the hover.
+            this._hangarHoverAreaSyncing = true;
+            try { this.drawHangarBay(true); } finally { this._hangarHoverAreaSyncing = false; }
+        }
+        this.overlay.querySelectorAll('.hs-hangar-slot').forEach((el) => {
+            el.classList.toggle('is-area-hover', !!areaId && el.getAttribute('data-slot-area') === areaId);
+        });
     },
 
     /**

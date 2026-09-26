@@ -22,7 +22,7 @@ class ProfileSelectionManager {
     }
 
     /** Faction emblem as a pixel icon, tinted in the faction accent. */
-    getFactionEmblemHtml(id, size = 20) {
+    getFactionEmblemHtml(id, size = 16) {
         if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
         const key = factionShipStyles.emblemCamelKey ? factionShipStyles.emblemCamelKey(id) : null;
         if (!key) return '';
@@ -218,7 +218,7 @@ class ProfileSelectionManager {
                     <div class="profile-list">
                         ${profiles.length ? profiles.map((p, i) => `
                             <div class="profile-list-item ${i === this.selectedIndex ? 'selected' : ''} ${p.id === activeId ? 'active' : ''}" data-index="${i}">
-                                <span class="profile-list-emblem">${this.getFactionEmblemHtml(p.faction || 'pirate', 18)}</span>
+                                <span class="profile-list-emblem">${this.getFactionEmblemHtml(p.faction || 'pirate', 16)}</span>
                                 <span class="profile-list-name">${p.name}</span>
                                 ${p.id === activeId ? '<span class="profile-list-badge">ACTIVE</span>' : ''}
                             </div>

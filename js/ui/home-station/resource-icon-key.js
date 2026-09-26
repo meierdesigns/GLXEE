@@ -22,18 +22,29 @@ extendClass(HomeStationUI, {
     },
 
     renderTabs() {
-        let prevCluster = null;
-        return this._tabs.filter((id) => id !== 'station' && this._menuOnlyTabs.indexOf(id) === -1).map((id) => {
-            const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
+        const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
+        const order = (typeof MENU_ORDER !== 'undefined') ? MENU_ORDER.main.slice() : mainTabs;
+        if (order.indexOf('station') === -1) order.unshift('station');
+        // data-order-index points into MENU_ORDER.main so dev-mode dragging can
+        // move tabs and '|' dividers alike.
+        const items = [];
+        order.forEach((id, i) => {
+            if (id === '|' || mainTabs.indexOf(id) !== -1) items.push({ id: id, i: i });
+        });
+        return items.map(({ id, i }) => {
+            if (id === '|') {
+                return `<span class="hs-tab-divider" data-order-index="${i}" aria-hidden="true"></span>`;
+            }
             const active = this.tab === id;
+            if (id === 'station') {
+                return `<button type="button" class="hs-home-btn ${active ? 'active' : ''}" data-tab="station" data-order-index="${i}" data-nav-item title="Home Station">` +
+                    `<span class="hs-home-icon">${this.iconHtml('hsStation', 32, 'hs-pixel hs-pixel-32')}</span>` +
+                    `<span class="hs-home-text">HOME STATION</span>` +
+                    `</button>`;
+            }
+            const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             const playClass = id === 'play' ? ' hs-tab-play' : '';
-            const cluster = this._tabClusterOf[id] || null;
-            const divider = (prevCluster !== null && cluster !== prevCluster)
-                ? '<span class="hs-tab-divider" aria-hidden="true"></span>'
-                : '';
-            prevCluster = cluster;
-            return divider +
-                `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-nav-item title="${meta.label}">` +
+            return `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-order-index="${i}" data-nav-item title="${meta.label}">` +
                 `<span class="hs-tab-icon">${this.tabIconHtml(meta.icon)}</span>` +
                 `<span class="hs-tab-label">${meta.label}</span>` +
                 `</button>`;
@@ -76,7 +87,8 @@ extendClass(HomeStationUI, {
         const savedState = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : {};
         const savedShopCat = opts.shopCategory || savedState.shopCategory;
         this.tab = this._tabs.includes(savedTab) ? savedTab : 'station';
-        this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'ships';
+        this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'resources';
+        this.ensureShopCategory();
         const savedUpgradeSub = opts.upgradeSubTab || savedState.upgradeSubTab;
         this.upgradeSubTab = this._upgradeSubTabs.includes(savedUpgradeSub) ? savedUpgradeSub : 'station';
         this.applyShopPrefsForCategory(this.shopCategory, {

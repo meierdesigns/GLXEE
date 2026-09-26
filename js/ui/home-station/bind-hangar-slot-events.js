@@ -56,7 +56,8 @@ extendClass(HomeStationUI, {
                     el.classList.toggle('is-open', open);
                 });
                 this.updateHangarSlotLinks();
-                this.updateComponentDetails(kind, index, same);
+                // No separate details panel on slot clicks: the slot's own
+                // card (and the tree, when shown) hold its settings.
             });
         });
 
@@ -88,9 +89,7 @@ extendClass(HomeStationUI, {
                 const kind = btn.getAttribute('data-hangar-slot-skin-set');
                 const face = btn.getAttribute('data-mod-face') || '';
                 const skinId = btn.getAttribute('data-skin-id') || 'default';
-                const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
-                const key = shipLoadoutManager.kindToLoadoutKey(kind);
-                const modId = (loadout[key] || [])[Number(btn.getAttribute('data-slot-index') || 0)];
+                const modId = this.hangarSlotModuleId(kind, btn.getAttribute('data-slot-index'));
                 const slotIndex = Number(btn.getAttribute('data-slot-index') || 0);
                 if (modId) {
                     shipLoadoutManager.setModuleSkin(this.hangarShipId, kind, modId, face, skinId);
@@ -254,7 +253,14 @@ extendClass(HomeStationUI, {
             });
             setLinked(closestSlot);
         });
-        stage.addEventListener('pointerleave', () => setLinked(null));
+        stage.addEventListener('pointerleave', () => {
+            setLinked(null);
+            if (this.setHangarHoverArea) this.setHangarHoverArea(null);
+            if (this._hangarHoverModule) {
+                this._hangarHoverModule = null;
+                this.drawHangarBay();
+            }
+        });
         this.overlay.querySelectorAll('.hs-hangar-slot-card').forEach((card) => {
             if (card.dataset.hoverLinkBound === '1') return;
             card.dataset.hoverLinkBound = '1';

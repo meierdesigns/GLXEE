@@ -94,7 +94,7 @@ extendClass(HomeStationUI, {
             loadout.wingConnectionY = 0;
             loadout.wingConnectionWidth = 0.1;
             loadout.wingRotation = 0;
-            loadout.voxelScale = 1;
+            loadout.voxelScale = 0.5;
             loadout.wingConnectionVoxelScale = 0;
             loadout.wingConnectionStyle = 'strut';
             loadout.spineConnectionStyle = 'strut';
@@ -111,16 +111,42 @@ extendClass(HomeStationUI, {
             loadout.segmentOffset = {};
             loadout.moduleOffset = {};
             loadout.moduleOffsets = {};
+            // Moved empty slots go back to their default spots too.
+            loadout.slotAnchors = {};
+            loadout.singleWeaponSide = null;
+            // Switched-off areas (nose / aft / wings) come back on.
+            loadout.disabledAreas = { front: false, back: false, wing: false };
+            // Factions with a stock anatomy reset to that instead of the bare frame.
+            if (shipLoadoutManager.applyFactionLayoutDefaults) shipLoadoutManager.applyFactionLayoutDefaults(loadout);
             shipLoadoutManager.setLoadout(shipId, loadout);
         }
         if (typeof shipConfigManager !== 'undefined') {
-            shipConfigManager.setConfig(shipId, { segmentUv: null });
+            const stockUv = shipLoadoutManager.getFactionLayoutDefaults
+                ? (shipLoadoutManager.getFactionLayoutDefaults(
+                    typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction
+                        ? factionShipStyles.resolveActiveFaction() : null) || {}).segmentUv
+                : null;
+            shipConfigManager.setConfig(shipId, { segmentUv: stockUv || null });
         }
         if (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
             const profile = profileManager.getActiveProfile();
             if (profile) {
                 if (profile.segmentShapeVariants) delete profile.segmentShapeVariants[shipId];
                 if (profile.wingStyleSymmetry) delete profile.wingStyleSymmetry[shipId];
+                // Faction stock wing shapes / symmetry, if it has any.
+                const stock = shipLoadoutManager.getFactionLayoutDefaults
+                    ? shipLoadoutManager.getFactionLayoutDefaults(
+                        typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction
+                            ? factionShipStyles.resolveActiveFaction() : null)
+                    : null;
+                if (stock && stock.segmentShapeVariants) {
+                    profile.segmentShapeVariants = profile.segmentShapeVariants || {};
+                    profile.segmentShapeVariants[shipId] = stock.segmentShapeVariants;
+                }
+                if (stock && stock.wingStyleSymmetry != null) {
+                    profile.wingStyleSymmetry = profile.wingStyleSymmetry || {};
+                    profile.wingStyleSymmetry[shipId] = stock.wingStyleSymmetry;
+                }
                 if (profileManager.save) profileManager.save();
             }
         }
@@ -131,6 +157,17 @@ extendClass(HomeStationUI, {
         this._hangarBayPanX = 0;
         this._hangarBayPanY = 0;
         this.createUI();
+    },
+
+    /** Store the current ship anatomy as this faction's RESET ANATOMY target. */
+    saveHangarAnatomyDefault() {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.saveFactionLayoutDefault) return;
+        const ok = shipLoadoutManager.saveFactionLayoutDefault(this.hangarShipId || 'player_scrap');
+        const btn = this.overlay && this.overlay.querySelector('#hsSaveAnatomyDefault');
+        if (btn) {
+            btn.textContent = ok ? 'SAVED AS DEFAULT' : 'SAVE FAILED';
+            setTimeout(() => { btn.textContent = 'SET AS DEFAULT'; }, 1500);
+        }
     },
 
     startHangarPreview() {

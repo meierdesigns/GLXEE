@@ -3,7 +3,8 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     renderShopTab(profile) {
-        if (this.getVisitedTradingPost()) return this.renderTradingPostShop(profile);
+        const post = this.getVisitedTradingPost();
+        this.ensureShopCategory();
         let rows = '';
         let title = 'SHIP SHOP';
         let titleIcon = 'hsShop';
@@ -45,6 +46,10 @@ extendClass(HomeStationUI, {
         } else {
             stockHint = `<p class="hs-muted hs-hint">Station stock for ${galaxyName} · FACTION ${shopFaction}. Travel to change available ships and parts.</p>`;
         }
+        if (post) {
+            title = post.name + ' · ' + title;
+            if (this.shopCategory === 'parts') stockHint = this.renderTradingPostHint(post);
+        }
         let head = this.shopCategory === 'resources'
             ? this.renderShopResourceHeader()
             : this.renderShopCostHeader();
@@ -54,9 +59,13 @@ extendClass(HomeStationUI, {
             head = this.renderShopSellHeader();
             stockHint = `<p class="hs-muted hs-hint">Sell back for 50% of the price in credits. Your starter and active ship cannot be sold; only uncrafted blueprints are listed.</p>`;
         }
-        return `<div class="hs-section hs-panel hs-shop-root">` +
+        const undock = post
+            ? `<button type="button" class="hs-shop-cat" id="hsUndock" data-nav-item>` +
+                `<span class="hs-chip-icon">${this.iconHtml('hsStation', 32, 'hs-pixel')}</span><span>← UNDOCK</span></button>`
+            : '';
+        return `<div class="hs-section hs-panel hs-shop-root${post ? ' hs-trading-post' : ''}">` +
             `${this.renderShopWalletBar(profile)}` +
-            `<div class="hs-shop-cats">${this.renderShopCategoryTabs()}</div>` +
+            `<div class="hs-shop-cats">${undock}${this.renderShopCategoryTabs()}</div>` +
             `${this.panelTitle(titleIcon, title)}` +
             `${stockHint}` +
             `${this.renderShopToolbar()}` +
@@ -146,17 +155,25 @@ extendClass(HomeStationUI, {
         const installBlocked = (id) => {
             if (!id || id === current) return null;
             if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.canInstallModule) return null;
+            const fit = shipLoadoutManager.partFitsSlot
+                ? shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, id, slot.index) : { ok: true };
+            if (!fit.ok) return 'TOO_BIG';
             const check = shipLoadoutManager.canInstallModule(this.hangarShipId, kind, id);
             if (check.ok || check.removing || check.reason === 'FULL') return null;
             return check.reason || 'BLOCKED';
         };
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const partSize = (id) => (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S');
+        const slotSize = slm && slm.getSlotSizeLevel
+            ? slm.slotSizeLabel(slm.getSlotSizeLevel(this.hangarShipId, kind, slot.index)) : 'S';
         const options = [`<option value="">EMPTY</option>`].concat(pool.map((id) => {
             const usedElsewhere = !!(equipped[id] && id !== current);
             const blocked = installBlocked(id);
-            const label = this.hangarModuleLabel(id)
+            const label = `[${partSize(id)}] ` + this.hangarModuleLabel(id)
                 + (blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CHARGE SHOT'
                     : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CHARGE DRIVE'
-                        : (usedElsewhere ? ' · EQUIPPED' : '')));
+                        : (blocked === 'TOO_BIG' ? ' · NEEDS ' + partSize(id) + ' SLOT'
+                            : (usedElsewhere ? ' · EQUIPPED' : ''))));
             return `<option value="${id}" ${id === current ? 'selected' : ''}${blocked ? ' disabled' : ''}>${label}</option>`;
         }));
         const iconKey = current
@@ -175,15 +192,20 @@ extendClass(HomeStationUI, {
         const railN = Math.max(1, slot.railCount != null ? slot.railCount : 1);
         const side = slot.side === 'left' ? 'left' : 'right';
         const factionAccent = this.hangarFactionAccent();
-        return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}" data-slot-kind="${kind}" data-slot-index="${slot.index}" data-slot-side="${side}" style="--pin-x:${pinX};--pin-y:${pinY};--rail-i:${railI};--rail-n:${railN};">` +
+        // Wing weapon slots are a mirrored pair: a second, display-only marker
+        // sits on the right wing (same slot, same weapon).
+        const mirror = slot.mirrorNx != null;
+        const mirrorVars = mirror ? `--pin-mx:${Math.round(slot.mirrorNx * 1000) / 1000};--pin-my:${Math.round(slot.mirrorNy * 1000) / 1000};` : '';
+        return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}${mirror ? ' is-wing-pair' : ''}" data-slot-kind="${kind}" data-slot-size="${slotSize}" data-slot-index="${slot.index}" data-slot-side="${side}" data-slot-mount="${slot.mount || ''}" style="--pin-x:${pinX};--pin-y:${pinY};${mirrorVars}--rail-i:${railI};--rail-n:${railN};">` +
             `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label}">` +
             `<span class="hs-hangar-slot-dot"></span>` +
             `</button>` +
+            (mirror ? `<span class="hs-hangar-slot-pin is-mirror" aria-hidden="true"><span class="hs-hangar-slot-dot"></span></span>` : '') +
             `<div class="hs-hangar-slot-card">` +
             `<button type="button" class="hs-hangar-slot-btn" data-nav-item data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}">` +
             `<span class="hs-btn-icon">${this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20', null, factionAccent)}</span>` +
             `<span class="hs-hangar-slot-meta">` +
-            `<span class="hs-hangar-slot-kind">${slot.label}</span>` +
+            `<span class="hs-hangar-slot-kind">${this.slotGlyphHtml(kind)}${slot.label} <span class="hs-slot-size" title="Slot size">${slotSize}</span></span>` +
             `<span class="hs-hangar-slot-name" title="${name}"><span class="hs-hangar-slot-mark">${mark}</span> ${name}</span>` +
             `</span>` +
             `<span class="hs-hangar-slot-caret">▾</span>` +
@@ -206,7 +228,8 @@ extendClass(HomeStationUI, {
                 const blockedCls = blocked ? ' is-blocked' : '';
                 return `<button type="button" class="hs-hangar-slot-option${on ? ' is-active' : ''}${usedElsewhere ? ' is-used' : ''}${blockedCls}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="${id}"${disabled}>` +
                     `<span class="hs-btn-icon">${this.iconHtml(this.hangarModuleIconKey(kind, id), 18, 'hs-pixel hs-pixel-18', null, factionAccent)}</span>` +
-                    `<span>${this.hangarModuleLabel(id)}${blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CS' : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CD' : '')}</span>` +
+                    `<span class="hs-slot-size" title="Part size">${partSize(id)}</span>` +
+                    `<span>${this.hangarModuleLabel(id)}${blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CS' : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CD' : (blocked === 'TOO_BIG' ? ' · NEEDS ' + partSize(id) : ''))}</span>` +
                     `<span class="hs-hangar-slot-mark">${on ? '●' : (blocked ? '✕' : (usedElsewhere ? '◇' : '○'))}</span>` +
                     `</button>`;
             }).join('') +

@@ -129,6 +129,7 @@ extendClass(HomeStationUI, {
                 }
             );
             this.appendConnectionBranches(treeContainer, shipId);
+            if (this.appendAreaToggles) this.appendAreaToggles(treeContainer, shipId);
             this.renderStyleThumbs(treeContainer);
         }
     },

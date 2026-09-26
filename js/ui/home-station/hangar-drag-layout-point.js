@@ -13,6 +13,50 @@ extendClass(HomeStationUI, {
         };
     },
 
+    /** Nearest visible empty-slot marker within radius (screen px), or null. */
+    hangarEmptyPinNear(clientX, clientY, radius) {
+        if (!this.overlay) return null;
+        let best = null;
+        let bestD = radius;
+        // Weapon slots sit on fixed mounts and aren't moved.
+        this.overlay.querySelectorAll('.hs-hangar-slot.is-empty:not([data-slot-kind="weapon"]) .hs-hangar-slot-pin:not(.is-mirror)').forEach((pin) => {
+            if (getComputedStyle(pin).opacity === '0') return;
+            const r = pin.getBoundingClientRect();
+            const d = Math.hypot(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2));
+            if (d < bestD) {
+                bestD = d;
+                best = pin;
+            }
+        });
+        return best;
+    },
+
+    /**
+     * Module under the pointer whose centre is nearest — stacked parts
+     * (e.g. shield + core in the fuselage) overlap, and the topmost one
+     * would otherwise always win.
+     */
+    hangarNearestModuleAt(h, e) {
+        const pt = this.hangarDragLayoutPoint(h, e);
+        // Tiny parts get a grab zone of at least ~22 screen px.
+        const minUnits = 22 / Math.max(1, h.scale);
+        let best = null;
+        let bestD = Infinity;
+        (h.model.layout.modules || []).forEach((mod) => {
+            if (mod.kind !== 'weapon') return;
+            const padX = Math.max(0, (minUnits - mod.width) / 2);
+            const padY = Math.max(0, (minUnits - mod.height) / 2);
+            if (pt.lx < mod.x - padX || pt.lx > mod.x + mod.width + padX
+                || pt.ly < mod.y - padY || pt.ly > mod.y + mod.height + padY) return;
+            const d = Math.hypot(pt.lx - (mod.x + mod.width / 2), pt.ly - (mod.y + mod.height / 2));
+            if (d < bestD) {
+                bestD = d;
+                best = mod;
+            }
+        });
+        return best;
+    },
+
     /** Topmost layout module under the pointer, or null. */
     hangarDragModuleHit(h, e) {
         const pt = this.hangarDragLayoutPoint(h, e);
@@ -20,6 +64,7 @@ extendClass(HomeStationUI, {
         // Topmost module wins (later in draw order).
         for (let i = modules.length - 1; i >= 0; i--) {
             const mod = modules[i];
+            if (mod.kind !== 'weapon') continue;
             if (pt.lx >= mod.x && pt.lx <= mod.x + mod.width
                 && pt.ly >= mod.y && pt.ly <= mod.y + mod.height) {
                 return mod;
@@ -410,8 +455,27 @@ extendClass(HomeStationUI, {
 
     updateHangarDragHover(h, e) {
         h.lastPointerEvent = { clientX: e.clientX, clientY: e.clientY };
-        if (this.hangarDragModuleHit(h, e)) {
-            h.canvas.style.cursor = 'move';
+        const layout = h.model && h.model.layout;
+        const hovMod = this.hangarDragModuleHit(h, e);
+        const prevHov = this._hangarHoverModule;
+        const nextHov = hovMod ? { kind: hovMod.kind, id: hovMod.id, face: hovMod.face } : null;
+        const hovChanged = !!prevHov !== !!nextHov || (prevHov && nextHov
+            && (prevHov.kind !== nextHov.kind || prevHov.id !== nextHov.id || prevHov.face !== nextHov.face));
+        if (hovChanged) {
+            this._hangarHoverModule = nextHov;
+            if (!nextHov || !this._hangarSegmentHover) this.drawHangarBay();
+        }
+        if (layout && this.hangarAreaAt) {
+            const mod = hovMod;
+            const pt = this.hangarDragLayoutPoint(h, e);
+            const area = mod
+                ? this.hangarAreaAt(layout, mod.x + mod.width / 2, mod.y + mod.height / 2)
+                : this.hangarAreaAt(layout, pt.lx, pt.ly);
+            if (area !== this._hangarHoverArea) this.setHangarHoverArea(area);
+        }
+        if (hovMod) {
+            // Installed parts are grabbed to pull them out of their slot.
+            h.canvas.style.cursor = 'grab';
             if (this._hangarSegmentHover) {
                 this._hangarSegmentHover = null;
                 this.drawHangarBay();

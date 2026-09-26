@@ -136,6 +136,9 @@ extendClass(HomeStationUI, {
         if (act.type === 'frame-upgrade') {
             return profileManager.purchaseShipFrameUpgrade(act.id);
         }
+        if (act.type === 'area-upgrade') {
+            return profileManager.purchaseShipAreaUpgrade(act.id, act.area);
+        }
         if (act.type === 'module-upgrade') {
             return profileManager.purchaseModuleUpgrade(act.cat, act.track);
         }

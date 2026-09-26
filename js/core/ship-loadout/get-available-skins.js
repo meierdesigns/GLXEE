@@ -5,15 +5,42 @@ extendClass(ShipLoadoutManager, {
     /** Skins available for a given module kind, independent of any specific id's stats. */
     getAvailableSkins(kind) {
         const common = [{ id: 'default', label: 'DEFAULT' }];
-        if (kind === 'weapon') {
-            return common.concat([
+        const byKind = {
+            weapon: [
                 { id: 'hardpoint_twin', label: 'TWIN' },
-                { id: 'hardpoint_heavy', label: 'HEAVY' }
-            ]);
-        }
-        return common.concat([
-            { id: 'plating_capacitor', label: 'CAPACITOR' }
-        ]);
+                { id: 'hardpoint_heavy', label: 'HEAVY' },
+                { id: 'hardpoint_rail', label: 'RAIL' },
+                { id: 'hardpoint_quad', label: 'QUAD' },
+                { id: 'hardpoint_flak', label: 'FLAK' },
+                { id: 'hardpoint_lance', label: 'LANCE' },
+                { id: 'hardpoint_pulse', label: 'PULSE' }
+            ],
+            defense: [
+                { id: 'plating_capacitor', label: 'CAPACITOR' },
+                { id: 'plating_hex', label: 'HEX' },
+                { id: 'plating_armor', label: 'ARMOR' },
+                { id: 'plating_stripe', label: 'HAZARD' },
+                { id: 'plating_mesh', label: 'MESH' },
+                { id: 'plating_bastion', label: 'BASTION' }
+            ],
+            ability: [
+                { id: 'plating_capacitor', label: 'CAPACITOR' },
+                { id: 'core_prism', label: 'PRISM' },
+                { id: 'core_ring', label: 'RING' },
+                { id: 'core_cross', label: 'CROSS' },
+                { id: 'core_star', label: 'STAR' },
+                { id: 'core_eye', label: 'EYE' }
+            ],
+            energy: [
+                { id: 'plating_capacitor', label: 'CAPACITOR' },
+                { id: 'core_cell', label: 'CELL' },
+                { id: 'core_grid', label: 'GRID' },
+                { id: 'core_coil', label: 'COIL' },
+                { id: 'core_spark', label: 'SPARK' },
+                { id: 'core_twin', label: 'TWIN CELL' }
+            ]
+        };
+        return common.concat(byKind[kind] || byKind.defense);
     },
 
     setModuleSkin(shipId, kind, moduleId, face, skinId) {

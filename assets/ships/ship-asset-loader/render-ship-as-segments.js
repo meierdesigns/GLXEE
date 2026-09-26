@@ -17,6 +17,31 @@ extendClass(ShipAssetLoader, {
         const destH = (shipModel.height || 12) * scale;
         const isEnemyShip = this.isEnemyShip(shipModel);
 
+        // Procedural faction enemies are one authored pixel sprite, not a
+        // segmented hull: slicing them into nose/core/aft/wing bands with
+        // fixed proportions stretched them into flat blocks. Draw the whole
+        // sprite instead (Scale2x-refined on the supersampled playfield).
+        if (shipModel.factionSpriteKey && shipModel.sprite && !this.hasFactionShipPng(shipModel)) {
+            ctx.save();
+            if (isEnemyShip) {
+                ctx.translate(x + destW / 2, y + destH / 2);
+                ctx.scale(1, -1);
+                ctx.translate(-(x + destW / 2), -(y + destH / 2));
+            }
+            const drew = this.renderSegmentFromFullSprite(ctx, shipModel,
+                { id: 'full', fullUv: true, uv: { x: 0, y: 0, w: 1, h: 1 }, mirror: false },
+                x, y, destW, destH, colorOverlay, overlayIntensity);
+            if (drew && shipModel.engineGlow
+                && !(typeof graphicsManager !== 'undefined' && graphicsManager._shieldSilhouetteBake)) {
+                const sp = shipModel.sprite;
+                const cellW = destW / Math.max(1, sp[0].length);
+                const cellH = destH / Math.max(1, sp.length);
+                this.renderEngineGlow(ctx, shipModel.engineGlow, x, y, scale, false, cellW, cellH);
+            }
+            ctx.restore();
+            return drew;
+        }
+
         // Detect whether wings exist in the source art (opaque pixels in wing UV)
         const hasWings = this.shipSpriteHasWingPixels(shipModel);
 
@@ -98,6 +123,11 @@ extendClass(ShipAssetLoader, {
 
         ctx.restore();
         return drew;
+    },
+
+    hasFactionShipPng(shipModel) {
+        return !!(typeof spriteLoader !== 'undefined' && spriteLoader.getSprite
+            && spriteLoader.getSprite(this.getSpriteNameForShip(shipModel)));
     },
 
     shipSpriteHasWingPixels(shipModel) {

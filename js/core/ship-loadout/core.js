@@ -5,6 +5,29 @@
  * Modules attach, replace a zone, insert between segments, or expand the hull.
  * Frame upgrades raise per-category slot caps + hull stats.
  */
+const SPINE_JOINT_STYLES = ['strut', 'plate', 'double', 'hinge'];
+
+/**
+ * Settings of one hull joint ('spineFront' = nose↔core, 'spineBack' =
+ * core↔aft). Each joint may override style / strength / offset in
+ * loadout.spineJoints; unset values fall back to the shared spine fields.
+ */
+function resolveSpineJoint(loadout, jointId) {
+    const lo = loadout || {};
+    const own = (lo.spineJoints && lo.spineJoints[jointId]) || {};
+    const pick = (key, shared) => (own[key] != null ? own[key] : shared);
+    const width = Number(pick('width', lo.spineConnectionWidth)) || 0.18;
+    return {
+        style: SPINE_JOINT_STYLES.indexOf(pick('style', lo.spineConnectionStyle)) !== -1
+            ? pick('style', lo.spineConnectionStyle) : 'strut',
+        width: Math.max(0.05, Math.min(0.6, width)),
+        // 0 = same as the start-side strength.
+        widthEnd: Math.max(0, Math.min(0.6, Number(pick('widthEnd', lo.spineConnectionWidthEnd)) || 0)),
+        x: Math.max(-1, Math.min(1, Number(pick('x', lo.spineConnectionX)) || 0))
+    };
+}
+window.resolveSpineJoint = resolveSpineJoint;
+
 class ShipLoadoutManager {
     constructor() {
         // Mounts use their native 8x8 component footprint. The renderer crops
@@ -171,7 +194,7 @@ class ShipLoadoutManager {
             wingConnectionY: Math.max(-1, Math.min(1, Number(src.wingConnectionY) || 0)),
             wingConnectionWidth: Math.max(0.02, Math.min(0.5, Number(src.wingConnectionWidth) || 0.1)),
             wingRotation: Math.max(-60, Math.min(60, Number(src.wingRotation) || 0)),
-            voxelScale: Math.max(0.5, Math.min(1.5, Number(src.voxelScale) || 1)),
+            voxelScale: Math.max(0.5, Math.min(1.5, Number(src.voxelScale) || 0.5)),
             // 0 = follow the hull's voxelScale instead of its own value.
             wingConnectionVoxelScale: Math.max(0, Math.min(10, Number(src.wingConnectionVoxelScale) || 0)),
             wingConnectionStyle: ['strut', 'plate', 'double', 'hinge'].indexOf(src.wingConnectionStyle) !== -1
@@ -193,6 +216,8 @@ class ShipLoadoutManager {
             // end, 1 = wing end), in the same units as the strength values.
             // null = symmetric, taken from the two strength values.
             wingJointSides: this.normalizeWingJointSides(src.wingJointSides),
+            // Per-joint overrides for nose↔core and core↔aft (see resolveSpineJoint).
+            spineJoints: this.normalizeSpineJoints(src.spineJoints),
             spineConnectionX: Math.max(-1, Math.min(1, Number(src.spineConnectionX) || 0)),
             segmentScale: this.normalizeSegmentScale(src.segmentScale),
             segmentOffset: this.normalizeSegmentOffset(src.segmentOffset),

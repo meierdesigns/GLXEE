@@ -24,7 +24,7 @@ extendClass(ShipAssetLoader, {
         const prevCell = this._shipVoxelCell;
         const prevAnchor = this._shipVoxelAnchor;
         this._shipVoxelCell = this.shipVoxelCell(shipModel, scale);
-        this._shipVoxelAnchor = { x: Math.round(x), y: Math.round(y) };
+        this._shipVoxelAnchor = { x: this.devicePx(x), y: this.devicePx(y) };
         try {
             draw();
         } finally {
@@ -140,13 +140,12 @@ extendClass(ShipAssetLoader, {
         if (!paths.length) return;
         const palette = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
         const voxelSize = this.hullPartResolution(
-            1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 1, scale
+            1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 0.5, scale
         ).cell;
         const ox = Math.round(x);
         const oy = Math.round(y);
-        const style = (layout.loadout && layout.loadout.spineConnectionStyle) || 'strut';
         // Silhouette along the joint: 0 = upper part, 1 = lower part.
-        const profile = (t) => {
+        const profileFor = (style) => (t) => {
             const pinch = Math.abs(t * 2 - 1);
             if (style === 'plate') return 1;
             if (style === 'hinge') return 0.4 + 0.6 * pinch;
@@ -154,6 +153,8 @@ extendClass(ShipAssetLoader, {
             return 0.75 + 0.25 * pinch;
         };
         paths.forEach((path, index) => {
+            const style = path.style;
+            const profile = profileFor(style);
             // Reach a little into both parts so the joint is seated, not
             // butted against their outlines.
             const topY = path.seatY0 * scale;
@@ -220,10 +221,6 @@ extendClass(ShipAssetLoader, {
         const byId = {};
         segs.forEach((seg) => { byId[seg.id] = seg; });
         const loadout = (layout && layout.loadout) || {};
-        const style = loadout.spineConnectionStyle || 'strut';
-        const startFrac = Math.max(0.05, Math.min(0.6, Number(loadout.spineConnectionWidth) || 0.18));
-        const endFrac = Number(loadout.spineConnectionWidthEnd) || startFrac;
-        const offsetX = Math.max(-1, Math.min(1, Number(loadout.spineConnectionX) || 0));
         // Strength alone sets the joint's outer width; styles only change
         // how that width is filled, so switching style never resizes it.
         const plateMul = 1;
@@ -231,11 +228,18 @@ extendClass(ShipAssetLoader, {
             .map(([a, b]) => [byId[a], byId[b]])
             .filter(([upper, lower]) => upper && lower)
             .map(([upper, lower]) => {
+                // Nose↔core and core↔aft are tuned independently.
+                const id = upper.id === 'front' ? 'spineFront' : 'spineBack';
+                const joint = window.resolveSpineJoint(loadout, id);
+                const startFrac = joint.width;
+                const endFrac = joint.widthEnd || startFrac;
+                const offsetX = joint.x;
                 const narrow = Math.min(upper.width, lower.width);
                 // Offset slides the joint sideways within the narrower part.
                 const shift = offsetX * narrow * 0.4;
                 return {
-                    id: upper.id === 'front' ? 'spineFront' : 'spineBack',
+                    id: id,
+                    style: joint.style,
                     upperId: upper.id,
                     lowerId: lower.id,
                     x0: upper.x + upper.width / 2 + shift,
@@ -266,7 +270,7 @@ extendClass(ShipAssetLoader, {
         const gap = isLeft ? centerEdge - wingEdge : wingEdge - centerEdge;
         const center = (layout.segments || []).find((seg) => seg.id === 'center');
         const voxel = this.hullPartResolution
-            ? this.hullPartResolution(1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 1, scale).cell
+            ? this.hullPartResolution(1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 0.5, scale).cell
             : Math.max(1, scale);
         const rootOverlap = voxel * 2;
         // Same reach into the hull as the bridge itself (see renderHullSegmentParts).
@@ -327,7 +331,7 @@ extendClass(ShipAssetLoader, {
                 if (!this.wingConnectionVisible(layout, isLeft, centerEdge, wingEdge, scale)) return;
                 // Bridges use the ship-wide voxel size like every hull part.
                 const voxelSize = this.hullPartResolution(
-                    1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 1, scale
+                    1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 0.5, scale
                 ).cell;
                 // Tuck both ends two voxels under the parts they join, so the
                 // parts' own outlines close the seam instead of a gap or a

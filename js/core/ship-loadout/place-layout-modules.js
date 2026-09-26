@@ -4,10 +4,22 @@
 extendClass(ShipLoadoutManager, {
     /** buildLayout phase 2: place weapons, center stack and aft modules (may grow wings). */
     placeLayoutModules(ctx) {
-        const { coreWidth, L, ms, gap, evenSize, edgeMs, centerMs, hullMid, alignCenter,
+        const { coreWidth, L, ms, gap, evenSize, hullMid, alignCenter,
             resolveDim, pushPart, wingGap, frontH, backH, centerH, armorIds, shieldIds,
             drives, systemPods, centerInserts, insertH, totalCoreH, frontY, centerY, backY,
             wingY, wingShiftX } = ctx;
+
+        // Slot base size follows the part it mounts on (a share of that
+        // part's width and height) instead of one fixed module size, so
+        // small parts get small mounts and big parts get big ones.
+        const fitBase = (w, h) => evenSize(Math.max(4, Math.min(ms * 2, w, h)));
+        const noseMs = fitBase(ctx.scaledFrontW * 0.55, frontH * 0.7);
+        const wingPerSide = Math.max(1, Math.ceil(Math.max(0, L.weapons.length - (L.weapons.length === 2 ? 0 : 1)) / 2));
+        const wingMs = fitBase(ctx.wingSpan * 0.7, (ctx.wingH * 0.8) / wingPerSide);
+        const aftCount = Math.max(1, systemPods.length, drives.length);
+        const aftRows = (systemPods.length ? 1 : 0) + (drives.length ? 1 : 0) || 1;
+        const aftMs = fitBase((ctx.scaledBackW * 0.8) / aftCount, (backH * 0.9) / aftRows);
+        const coreMs = fitBase(ctx.scaledCenterW * 0.6, centerH);
 
         const placeRow = (ids, kind, y, centerX, face, size) => {
             if (!ids.length) return;
@@ -90,41 +102,41 @@ extendClass(ShipLoadoutManager, {
             placeRow(
                 L.weapons,
                 'weapon',
-                frontY + Math.max(0, frontH - edgeMs),
+                frontY + Math.max(0, frontH - noseMs),
                 hullMid,
                 'up',
-                edgeMs
+                noseMs
             );
         } else if (L.weapons.length === 2) {
             placeSideColumns(
                 L.weapons,
                 'weapon',
-                Math.floor(wingY + (ctx.wingH - edgeMs) / 2),
+                Math.floor(wingY + (ctx.wingH - wingMs) / 2),
                 false,
-                edgeMs
+                wingMs
             );
         } else {
             placeRow(
                 L.weapons.slice(0, 1),
                 'weapon',
-                frontY + Math.max(0, frontH - edgeMs),
+                frontY + Math.max(0, frontH - noseMs),
                 hullMid,
                 'up',
-                edgeMs
+                noseMs
             );
             placeSideColumns(
                 L.weapons.slice(1),
                 'weapon',
-                Math.floor(wingY + (ctx.wingH - edgeMs) / 2),
+                Math.floor(wingY + (ctx.wingH - wingMs) / 2),
                 false,
-                edgeMs
+                wingMs
             );
         }
 
         // Center inserts (reactor layers etc.) then defense / energy attach stack
         let insertCursor = centerY + Math.floor((centerH - insertH) / 2);
         centerInserts.forEach((it) => {
-            const d = resolveDim(it.id, it.kind, Math.min(centerMs, evenSize(coreWidth * 0.7)));
+            const d = resolveDim(it.id, it.kind, coreMs);
             pushPart(
                 it.id,
                 it.kind,
@@ -155,7 +167,7 @@ extendClass(ShipLoadoutManager, {
             }
         });
         if (attachCenter.length) {
-            let fitMs = Math.min(centerMs, evenSize(coreWidth));
+            let fitMs = coreMs;
             const n = attachCenter.length;
             while (fitMs > 4 && (n * fitMs + Math.max(0, n - 1) * gap) > centerH) {
                 fitMs = evenSize(fitMs - 2);
@@ -178,13 +190,13 @@ extendClass(ShipLoadoutManager, {
         }
 
         // Aft pods / drives
-        let aftY = backY + Math.max(0, backH - Math.max(2, Math.floor(edgeMs * 0.35)));
+        let aftY = backY + Math.max(0, backH - Math.max(2, Math.floor(aftMs * 0.35)));
         if (systemPods.length) {
-            placeRow(systemPods, 'ability', aftY, hullMid, 'down', edgeMs);
-            aftY += edgeMs + gap;
+            placeRow(systemPods, 'ability', aftY, hullMid, 'down', aftMs);
+            aftY += aftMs + gap;
         }
         if (drives.length) {
-            placeRow(drives, 'ability', aftY, hullMid, 'down', edgeMs);
+            placeRow(drives, 'ability', aftY, hullMid, 'down', aftMs);
         }
     },
 

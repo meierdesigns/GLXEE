@@ -88,7 +88,55 @@ extendClass(ShipAssetLoader, {
                 [3, 6, 10, 15, 15, 10, 6, 3]
             ]
         };
-        return templates[visualId] || null;
+        if (templates[visualId]) return templates[visualId];
+        const shader = this.getGeneratedSkinShader(visualId);
+        if (!shader) return null;
+        const grid = [];
+        for (let y = 0; y < 8; y++) {
+            const row = [];
+            for (let x = 0; x < 8; x++) {
+                row.push(Math.max(0, Math.min(15, Math.round(shader(x, y)))));
+            }
+            grid.push(row);
+        }
+        return grid;
+    },
+
+    /**
+     * Unlockable cosmetic skins described as shade functions over the 8×8
+     * module grid (x, y in 0..7, shade 0–15). `cx`/`cy` are distances from
+     * the centre line, so shapes stay mirror-symmetric.
+     */
+    getGeneratedSkinShader(visualId) {
+        const cx = (x) => Math.abs(x - 3.5);
+        const cy = (y) => Math.abs(y - 3.5);
+        const shaders = {
+            // Weapons
+            hardpoint_rail: (x, y) => (cx(x) < 1 ? 15 - y * 0.5 : (cx(x) < 2 ? 6 + y : (y > 4 ? 9 : 3))),
+            hardpoint_quad: (x, y) => ((x === 1 || x === 6 || x === 2 || x === 5) && y < 5 ? 14 - y : (y >= 5 ? 11 : 4)),
+            hardpoint_flak: (x, y) => (Math.max(cx(x), cy(y)) < 1.5 ? 15 : ((x + y) % 2 ? 11 : 6)),
+            hardpoint_lance: (x, y) => (cx(x) < 0.6 ? 15 : (cx(x) < 1.6 ? 8 + y : (y > 5 ? 10 : 2))),
+            hardpoint_pulse: (x, y) => [15, 6, 12, 5, 12, 6, 15, 8][Math.round(Math.hypot(cx(x), cy(y)))] || 4,
+            // Defenses
+            plating_hex: (x, y) => ((x + (y % 2) * 2) % 4 === 0 ? 4 : 11),
+            plating_armor: (x, y) => (y % 3 === 2 ? 5 : (cx(x) > 3 ? 7 : 12)),
+            plating_stripe: (x, y) => (((x + y) >> 1) % 2 ? 14 : 4),
+            plating_mesh: (x, y) => (x % 2 === 0 || y % 2 === 0 ? 10 : 3),
+            plating_bastion: (x, y) => (Math.max(cx(x), cy(y)) > 3 ? 5 : (Math.max(cx(x), cy(y)) > 2 ? 13 : 9)),
+            // Abilities
+            core_prism: (x, y) => (cx(x) + cy(y) < 2 ? 15 : (cx(x) + cy(y) < 4 ? 10 : 3)),
+            core_ring: (x, y) => { const d = Math.hypot(cx(x), cy(y)); return d < 1.2 ? 4 : (d < 2.8 ? 15 : 5); },
+            core_cross: (x, y) => (cx(x) < 1 || cy(y) < 1 ? 15 : 5),
+            core_star: (x, y) => (cx(x) < 1 || cy(y) < 1 || Math.abs(cx(x) - cy(y)) < 0.6 ? 14 : 4),
+            core_eye: (x, y) => { const d = Math.hypot(cx(x), cy(y) * 1.8); return d < 1 ? 2 : (d < 2.5 ? 15 : (d < 3.8 ? 9 : 3)); },
+            // Energy
+            core_cell: (x, y) => (cy(y) > 3 ? 6 : (cx(x) < 2.5 ? 12 + (y % 2) * 3 : 4)),
+            core_grid: (x, y) => (x % 3 === 0 || y % 3 === 0 ? 6 : 14),
+            core_coil: (x, y) => ((y % 2 === 0) ? 13 : (cx(x) > 2.5 ? 8 : 4)),
+            core_spark: (x, y) => (Math.abs(x - y) < 1 || Math.abs(7 - x - y) < 1 ? 15 : 5),
+            core_twin: (x, y) => (Math.hypot(cx(x) - 1.8, cy(y)) < 1.6 ? 15 : 5)
+        };
+        return shaders[visualId] || null;
     },
 
     /**
@@ -202,6 +250,23 @@ extendClass(ShipAssetLoader, {
                 line[mirror ? cols - 1 - col : col] = colorIndex.get(color);
             }
             grid.push(line);
+        }
+        // Dark contour around the part so it separates from the hull below.
+        if (factionStyle && factionStyle.edge && rows >= 3 && cols >= 3) {
+            const outline = this.shiftModuleHex(factionStyle.edge, -0.6);
+            colors.push(outline);
+            const o = colors.length - 1;
+            const filled = (r, c) => r >= 0 && c >= 0 && r < rows && c < cols && grid[r][c] && grid[r][c] !== o;
+            const edgeCells = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (!grid[r][c]) continue;
+                    if (!filled(r - 1, c) || !filled(r + 1, c) || !filled(r, c - 1) || !filled(r, c + 1)) {
+                        edgeCells.push([r, c]);
+                    }
+                }
+            }
+            edgeCells.forEach(([r, c]) => { grid[r][c] = o; });
         }
         ctx.imageSmoothingEnabled = false;
         this.drawPixelGridHull(ctx, grid, colors, x, y, width, height, cell);

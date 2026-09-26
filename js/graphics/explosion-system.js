@@ -3,6 +3,11 @@
 /**
  * Runtime explosion player — particles + timed ring bursts from presets.
  */
+// Velocity kept per frame by explosion particles: max spread ≈ speed / (1 − drag).
+const EXPLOSION_PARTICLE_DRAG = 0.9;
+// Largest ring base size in playfield pixels.
+const EXPLOSION_MAX_BASE = 36;
+
 class ExplosionSystem {
     constructor() {
         this.active = [];
@@ -41,7 +46,8 @@ class ExplosionSystem {
                 speed: preset.particleSpeed * scale,
                 life: preset.particleLife,
                 size: preset.particleSize * scale,
-                colors: colors
+                colors: colors,
+                drag: EXPLOSION_PARTICLE_DRAG
             });
             if (preset.colors && preset.colors.length > 1) {
                 graphicsManager.particleSystem.createHitParticles(
@@ -51,7 +57,8 @@ class ExplosionSystem {
                         speed: preset.particleSpeed * 0.85 * scale,
                         life: Math.round(preset.particleLife * 0.8),
                         size: preset.particleSize * 0.9 * scale,
-                        colors: [preset.colors[1]]
+                        colors: [preset.colors[1]],
+                        drag: EXPLOSION_PARTICLE_DRAG
                     }
                 );
             }
@@ -63,8 +70,8 @@ class ExplosionSystem {
             this.active.push({
                 x: x,
                 y: y,
-                width: opts.width != null ? opts.width : 24,
-                height: opts.height != null ? opts.height : 24,
+                width: opts.width != null ? opts.width : 14,
+                height: opts.height != null ? opts.height : 14,
                 timer: 0,
                 duration: preset.ringDurationMs,
                 rings: preset.rings,
@@ -128,11 +135,14 @@ class ExplosionSystem {
 
     drawBurst(ctx, burst) {
         const progress = Math.min(1, burst.timer / Math.max(1, burst.duration));
-        const baseSize = (burst.width + burst.height) * 0.5 * burst.ringScale;
-        const explosionSize = baseSize * (0.5 + progress * 2);
+        // Capped so big ships don't fill half the playfield; the ring grows
+        // to ~1.5× its base instead of 2.5×.
+        const baseSize = Math.max(8, Math.min(EXPLOSION_MAX_BASE,
+            (burst.width + burst.height) * 0.5 * burst.ringScale));
+        const explosionSize = baseSize * (0.5 + progress);
         const centerX = burst.x;
         const centerY = burst.y;
-        const pixelSize = 4;
+        const pixelSize = baseSize < 20 ? 2 : 3;
         const explosionRadius = Math.floor(explosionSize / pixelSize);
 
         const fallbacks = [

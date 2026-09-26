@@ -47,6 +47,9 @@ class FactionShipStyles {
                 accent: '#7ec8ff',
                 engine: this.sharedEngine,
                 silhouette: 'modular',
+                // Balanced line fighter: even bands, straight mid wings.
+                anatomy: { front: { x: 1, y: 1 }, center: { x: 1.1, y: 1 }, back: { x: 1.1, y: 1 }, wing: { x: 1, y: 0.9 } },
+                defaultWeapons: ['laser'],
                 prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails'
             },
             kronax: {
@@ -56,6 +59,9 @@ class FactionShipStyles {
                 accent: '#ff7a4a',
                 engine: this.sharedEngine,
                 silhouette: 'spikes',
+                // Raider: long ram nose, slim body, wide swept blades.
+                anatomy: { front: { x: 0.8, y: 1.4 }, center: { x: 0.85, y: 1 }, back: { x: 0.9, y: 0.8 }, wing: { x: 1.35, y: 0.8 } },
+                defaultWeapons: ['claw_beam'],
                 prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating'
             },
             voidborn: {
@@ -65,6 +71,9 @@ class FactionShipStyles {
                 accent: '#c090ff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
+                // Ring body: stubby nose, broad core, tall narrow arcs.
+                anatomy: { front: { x: 0.9, y: 0.7 }, center: { x: 1.3, y: 1.2 }, back: { x: 0.8, y: 0.8 }, wing: { x: 0.8, y: 1.3 } },
+                defaultWeapons: ['wave'],
                 prompt: 'broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor'
             },
             pirate: {
@@ -74,6 +83,9 @@ class FactionShipStyles {
                 accent: '#d4a84a',
                 engine: this.sharedEngine,
                 silhouette: 'scrap',
+                // Salvage hauler: heavy engine block, short stubby wings.
+                anatomy: { front: { x: 1.1, y: 0.85 }, center: { x: 1.1, y: 1 }, back: { x: 1.35, y: 1.2 }, wing: { x: 0.85, y: 1 } },
+                defaultWeapons: ['spread'],
                 prompt: 'asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery'
             },
             machine: {
@@ -83,6 +95,9 @@ class FactionShipStyles {
                 accent: '#50e0a8',
                 engine: this.sharedEngine,
                 silhouette: 'circuit',
+                // Forge drone: blocky, wide at every band.
+                anatomy: { front: { x: 1.2, y: 0.9 }, center: { x: 1.2, y: 1.1 }, back: { x: 1.2, y: 1 }, wing: { x: 1.1, y: 1.1 } },
+                defaultWeapons: ['ion'],
                 prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels'
             }
         };
@@ -98,6 +113,18 @@ class FactionShipStyles {
             }
         }
         return base;
+    }
+
+    /** Per-part size multipliers (front/center/back/wing × x/y) for player hulls. */
+    getFactionAnatomy(factionId) {
+        const style = this.styles[this.normalizeFaction(factionId)];
+        return (style && style.anatomy) || null;
+    }
+
+    /** Weapons a fresh ship of this faction comes with. */
+    getFactionDefaultWeapons(factionId) {
+        const style = this.styles[this.normalizeFaction(factionId)];
+        return (style && style.defaultWeapons) ? style.defaultWeapons.slice() : ['laser'];
     }
 
     /** The faction the player currently belongs to, however it was chosen. */
@@ -189,7 +216,8 @@ class FactionShipStyles {
     }
 
     scaleMulForTier(tier) {
-        return 0.92 + Math.max(1, Math.min(5, tier)) * 0.04;
+        // Narrow band (0.97–1.05) so tier never pushes a capital past 1.5× player.
+        return 0.95 + Math.max(1, Math.min(5, tier)) * 0.02;
     }
 
     /** Asset / PNG pixel budget — not the on-screen hitbox size. */
@@ -213,17 +241,18 @@ class FactionShipStyles {
      */
     displaySizeForClass(enemyClass) {
         switch (this.normalizeClass(enemyClass)) {
+            // Relative to the 28px player: scouts ~0.8×, capitals ~1.45× (×tier ≤ 1.5×).
             case 'scout':
-                return { width: 18, height: 14 };
+                return { width: 22, height: 17 };
             case 'assault':
-                return { width: 24, height: 19 };
+                return { width: 26, height: 20 };
             case 'heavy':
-                return { width: 30, height: 23 };
+                return { width: 31, height: 24 };
             case 'elite':
-                return { width: 33, height: 26 };
+                return { width: 36, height: 28 };
             case 'capital':
             default:
-                return { width: 39, height: 30 };
+                return { width: 40, height: 31 };
         }
     }
 

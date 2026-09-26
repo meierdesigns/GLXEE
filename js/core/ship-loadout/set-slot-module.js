@@ -110,7 +110,7 @@ extendClass(ShipLoadoutManager, {
 
     setVoxelScale(shipId, scale) {
         const loadout = this.getLoadout(shipId);
-        loadout.voxelScale = Math.max(0.5, Math.min(1.5, Number(scale) || 1));
+        loadout.voxelScale = Math.max(0.5, Math.min(1.5, Number(scale) || 0.5));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },
@@ -123,19 +123,40 @@ extendClass(ShipLoadoutManager, {
         return { ok: true, loadout: saved };
     },
 
-    setSpineConnectionStyle(shipId, style) {
-        const allowed = ['strut', 'plate', 'double', 'hinge'];
+    /** joint: 'spineFront' | 'spineBack'; omitted = the shared setting of both. */
+    setSpineConnectionStyle(shipId, style, joint) {
+        return this.setSpineJointValue(shipId, joint, 'style',
+            SPINE_JOINT_STYLES.indexOf(style) !== -1 ? style : 'strut', 'spineConnectionStyle');
+    },
+
+    setSpineConnectionWidth(shipId, width, joint) {
+        return this.setSpineJointValue(shipId, joint, 'width',
+            Math.max(0.05, Math.min(0.6, Number(width) || 0.18)), 'spineConnectionWidth');
+    },
+
+    setSpineJointValue(shipId, joint, key, value, sharedKey) {
         const loadout = this.getLoadout(shipId);
-        loadout.spineConnectionStyle = allowed.indexOf(style) !== -1 ? style : 'strut';
+        if (joint === 'spineFront' || joint === 'spineBack') {
+            const joints = Object.assign({}, loadout.spineJoints || {});
+            joints[joint] = Object.assign({}, resolveSpineJoint(loadout, joint), joints[joint] || {}, { [key]: value });
+            loadout.spineJoints = joints;
+        } else {
+            loadout[sharedKey] = value;
+        }
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },
 
-    setSpineConnectionWidth(shipId, width) {
-        const loadout = this.getLoadout(shipId);
-        loadout.spineConnectionWidth = Math.max(0.05, Math.min(0.6, Number(width) || 0.18));
-        const saved = this.setLoadout(shipId, loadout);
-        return { ok: true, loadout: saved };
+    normalizeSpineJoints(src) {
+        if (!src || typeof src !== 'object') return null;
+        const out = {};
+        ['spineFront', 'spineBack'].forEach((id) => {
+            const j = src[id];
+            if (!j || typeof j !== 'object') return;
+            const r = resolveSpineJoint({ spineJoints: { [id]: j } }, id);
+            out[id] = r;
+        });
+        return Object.keys(out).length ? out : null;
     },
 
     /** Asymmetric joint sides from the hangar handles; null = symmetric. */
@@ -155,11 +176,9 @@ extendClass(ShipLoadoutManager, {
         return { ok: true, loadout: saved };
     },
 
-    setSpineConnectionWidthEnd(shipId, width) {
-        const loadout = this.getLoadout(shipId);
-        loadout.spineConnectionWidthEnd = Math.max(0, Math.min(0.6, Number(width) || 0));
-        const saved = this.setLoadout(shipId, loadout);
-        return { ok: true, loadout: saved };
+    setSpineConnectionWidthEnd(shipId, width, joint) {
+        return this.setSpineJointValue(shipId, joint, 'widthEnd',
+            Math.max(0, Math.min(0.6, Number(width) || 0)), 'spineConnectionWidthEnd');
     },
 
     /** joint: 'wing' | 'spineFront' | 'spineBack'. */
@@ -172,11 +191,9 @@ extendClass(ShipLoadoutManager, {
         return { ok: true, loadout: saved };
     },
 
-    setSpineConnectionX(shipId, offset) {
-        const loadout = this.getLoadout(shipId);
-        loadout.spineConnectionX = Math.max(-1, Math.min(1, Number(offset) || 0));
-        const saved = this.setLoadout(shipId, loadout);
-        return { ok: true, loadout: saved };
+    setSpineConnectionX(shipId, offset, joint) {
+        return this.setSpineJointValue(shipId, joint, 'x',
+            Math.max(-1, Math.min(1, Number(offset) || 0)), 'spineConnectionX');
     },
 
     setSegmentScale(shipId, segmentId, scaleX, scaleY) {

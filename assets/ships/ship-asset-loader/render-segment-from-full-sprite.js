@@ -10,7 +10,8 @@ extendClass(ShipAssetLoader, {
             && shipLoadoutManager.segmentUv[
                 seg.id === 'wingLeft' || seg.id === 'wingRight' ? 'wing' : seg.id
             ]);
-        const uv = this.getEdgeCropForSegment(seg, rawUv);
+        // fullUv: draw the authored crop as-is (whole-sprite enemies).
+        const uv = seg.fullUv ? seg.uv : this.getEdgeCropForSegment(seg, rawUv);
         if (!uv) return false;
 
         const spriteName = this.getSpriteNameForShip(shipModel);
@@ -50,14 +51,37 @@ extendClass(ShipAssetLoader, {
         }
 
         // Pixel-grid crop
-        const sprite = shipModel.sprite;
+        let sprite = shipModel.sprite;
         if (!sprite || !sprite.length || !sprite[0]) return false;
-        const cols = sprite[0].length;
-        const rows = sprite.length;
+        let cols = sprite[0].length;
+        let rows = sprite.length;
         let c0 = Math.floor(uv.x * cols);
         let r0 = Math.floor(uv.y * rows);
         let cw = Math.max(1, Math.floor(uv.w * cols));
         let rh = Math.max(1, Math.floor(uv.h * rows));
+        // Supersampled playfield: refine the low-res sprite with Scale2x
+        // until one voxel is ~2-3 backing pixels, so combat ships show far
+        // more (and smoother-edged) voxels than their authored grid.
+        const d = this.getDeviceScale();
+        if (d > 1) {
+            let passes = 0;
+            while (passes < 3 && (w * d) / (cw * Math.pow(2, passes + 1)) >= 2) passes++;
+            if (passes > 0) {
+                const crop = [];
+                for (let r = 0; r < rh; r++) {
+                    const src = sprite[r0 + r] || [];
+                    const line = [];
+                    for (let c = 0; c < cw; c++) line.push(src[c0 + c] || 0);
+                    crop.push(line);
+                }
+                sprite = this.scale2xGridCached(shipModel.sprite, `${c0},${r0},${cw},${rh}`, crop, passes);
+                c0 = 0;
+                r0 = 0;
+                cw = sprite[0].length;
+                rh = sprite.length;
+            }
+        }
+        const snap = (v) => Math.floor(v * d) / d;
         const colors = shipModel.colors || {};
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;
@@ -82,21 +106,63 @@ extendClass(ShipAssetLoader, {
         for (let r = 0; r < rh; r++) {
             const row = sprite[r0 + r];
             if (!row) continue;
-            const top = Math.floor(y + (r * h) / rh);
-            const bottom = Math.floor(y + ((r + 1) * h) / rh);
+            const top = snap(y + (r * h) / rh);
+            const bottom = snap(y + ((r + 1) * h) / rh);
             for (let c = 0; c < cw; c++) {
                 const pixel = row[c0 + c];
                 if (!pixel) continue;
                 let fill = resolve(colors[pixel] || '#888888');
                 fill = this.tintPixelColor(fill, colorOverlay, overlayIntensity);
                 ctx.fillStyle = fill;
-                const left = Math.floor(x + (c * w) / cw);
-                const right = Math.floor(x + ((c + 1) * w) / cw);
-                ctx.fillRect(left, top, Math.max(1, right - left), Math.max(1, bottom - top));
+                const left = snap(x + (c * w) / cw);
+                const right = snap(x + ((c + 1) * w) / cw);
+                ctx.fillRect(left, top, Math.max(1 / d, right - left), Math.max(1 / d, bottom - top));
             }
         }
         ctx.restore();
         return true;
+    },
+
+    /**
+     * Scale2x (EPX) on an indexed pixel grid, `passes` times. Doubles the
+     * resolution while rounding diagonal edges instead of repeating blocks.
+     */
+    scale2xGrid(grid, passes) {
+        let g = grid;
+        for (let p = 0; p < passes; p++) {
+            const rows = g.length;
+            const cols = g[0].length;
+            const out = Array.from({ length: rows * 2 }, () => new Array(cols * 2).fill(0));
+            const at = (r, c) => (r < 0 || c < 0 || r >= rows || c >= cols) ? g[Math.max(0, Math.min(rows - 1, r))][Math.max(0, Math.min(cols - 1, c))] : g[r][c];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const P = g[r][c];
+                    const A = at(r - 1, c);
+                    const B = at(r, c + 1);
+                    const C = at(r, c - 1);
+                    const D = at(r + 1, c);
+                    out[r * 2][c * 2] = (C === A && C !== D && A !== B) ? A : P;
+                    out[r * 2][c * 2 + 1] = (A === B && A !== C && B !== D) ? B : P;
+                    out[r * 2 + 1][c * 2] = (D === C && D !== B && C !== A) ? C : P;
+                    out[r * 2 + 1][c * 2 + 1] = (B === D && B !== A && D !== C) ? D : P;
+                }
+            }
+            g = out;
+        }
+        return g;
+    },
+
+    /** scale2xGrid cached per source sprite + crop + pass count. */
+    scale2xGridCached(source, cropKey, crop, passes) {
+        if (!this._scale2xCache) this._scale2xCache = new WeakMap();
+        let bySprite = this._scale2xCache.get(source);
+        if (!bySprite) {
+            bySprite = new Map();
+            this._scale2xCache.set(source, bySprite);
+        }
+        const key = cropKey + '|' + passes;
+        if (!bySprite.has(key)) bySprite.set(key, this.scale2xGrid(crop, passes));
+        return bySprite.get(key);
     },
 
     /** Indexed palette for a hull part: 0 transparent, 1 edge, 2 hull, 3 accent. */
@@ -192,20 +258,37 @@ extendClass(ShipAssetLoader, {
         const layout = shipModel && shipModel.layout;
         const loadout = layout && layout.loadout;
         const zoom = Math.max(0.25, Number(scale) || 1);
-        const factor = Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 1));
+        const factor = Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
         // Voxel size depends only on zoom and the ship's voxel setting — not
         // on part sizes. Deriving it from the smallest part made the whole
         // ship's resolution jump whenever one part was resized.
-        return Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX * zoom * factor));
+        // deviceScale: backing pixels per logical unit (supersampled
+        // playfield); voxelDetail < 1 packs more voxels into a ship. Both
+        // default to 1, so hangar and editors are unchanged.
+        const d = this.getDeviceScale();
+        const detail = Math.max(0.25, Math.min(1, Number(this.voxelDetail) || 1));
+        return Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX * zoom * factor * detail * d)) / d;
+    },
+
+    getDeviceScale() {
+        const d = Number(this.deviceScale);
+        return Number.isFinite(d) && d >= 1 ? d : 1;
+    },
+
+    /** Round to the nearest whole backing pixel (logical units). */
+    devicePx(v) {
+        const d = this.getDeviceScale();
+        return Math.round(v * d) / d;
     },
 
     hullPartResolution(w, h, voxelScale = 1, pixelZoom = 1) {
         // One whole-pixel voxel size for the entire ship: every part (and the
         // wing bridges) is drawn with this exact cell, so voxels never differ
         // in size between nose, body, wings and joints.
+        const d = this.getDeviceScale();
         const cell = this._shipVoxelCell || Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX
             * Math.max(0.25, Number(pixelZoom) || 1)
-            * Math.max(0.5, Math.min(1.5, Number(voxelScale) || 1))));
+            * Math.max(0.5, Math.min(1.5, Number(voxelScale) || 0.5)) * d)) / d;
         return {
             resW: Math.max(6, Math.round(w / cell)),
             resH: Math.max(6, Math.round(h / cell)),

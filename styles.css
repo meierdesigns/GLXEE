@@ -3840,7 +3840,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 }
 
 .ability-type.passive {
-    background: rgba(0, 255, 136, 0.2);
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
     color: var(--status-success);
     border: var(--ui-border-width-thin) solid var(--status-success);
 }
@@ -7457,7 +7457,8 @@ body.pe-resizing * {
 }
 .galaxy-selection-actions .action-button,
 .galaxy-map-actions .action-button,
-.profile-selection-actions .action-button {
+.profile-selection-actions .action-button,
+.ui-dialog-actions .action-button {
     background: var(--ui-surface);
     border: var(--ui-border-width) solid var(--color-border);
     color: var(--color-text-secondary);
@@ -7472,6 +7473,7 @@ body.pe-resizing * {
 .galaxy-selection-actions .action-button:hover,
 .galaxy-map-actions .action-button:hover,
 .profile-selection-actions .action-button:hover,
+.ui-dialog-actions .action-button:hover,
 .galaxy-selection-actions .action-button:not(.secondary),
 .galaxy-map-actions .action-button:not(.secondary) {
     box-shadow: 0 0 10px var(--color-primary);
@@ -9641,9 +9643,10 @@ button.hs-tab.active.nav-focused {
 .home-station-overlay[data-hs-faction="kronax"] .hs-station-cover {
     /* Straight top edge — the blade cuts live on the lower flanks only. */
     clip-path: polygon(
-        0 0, 100% 0, 100% 100%,
+        0 0, 100% 0, 100% 62%,
+        calc(100% - 120px) 100%,
         62% 100%, 54% calc(100% - 26px), 46% 100%,
-        120px 100%, 0 62%
+        0 100%
     );
 }
 .home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover {
@@ -9723,6 +9726,13 @@ button.hs-tab.active.nav-focused {
     color: var(--color-text);
     text-shadow: 0 0 8px #000, 0 0 12px var(--faction-accent, var(--color-primary));
     letter-spacing: 2px;
+}
+/* Keep the caption clear of the lower-left silhouette cuts. */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover-caption {
+    bottom: 38px;
+}
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover-caption {
+    bottom: 56px;
 }
 .hs-station-cover-kicker {
     color: var(--faction-accent, var(--color-primary));
@@ -10388,6 +10398,45 @@ button.hs-shop-cat.active.nav-focused {
     image-rendering: pixelated;
 }
 
+.hs-wing-style-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin: 6px 0 8px;
+}
+.hs-wing-style-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: #09090d;
+    color: var(--color-text-dim, var(--color-text));
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+.hs-wing-style-tile canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    image-rendering: pixelated;
+}
+.hs-wing-style-tile:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.hs-wing-style-tile.is-active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    box-shadow: inset 0 0 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-wing-style-tile:focus-visible {
+    outline: 1px solid var(--color-primary);
+    outline-offset: 1px;
+}
 .hs-floating-preview-caption {
     display: block;
     margin-bottom: 8px;
@@ -12150,6 +12199,23 @@ button.nav-focused {
         0 0 12px color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
+/* Any keyboard-focused control (sliders, tiles, inputs, tree nodes…).
+   Drawn inset + tinted so it stays visible inside faction clip-paths,
+   which cut away outlines and outer shadows. */
+.nav-focused,
+:is(button, input, select, textarea, a, [tabindex], [data-nav-item]):focus-visible {
+    outline: 2px solid var(--faction-accent, var(--color-primary));
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px var(--faction-accent, var(--color-primary)),
+        inset 0 0 0 4px color-mix(in srgb, #000 70%, transparent);
+    background-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent);
+}
+input[type="range"].nav-focused,
+input[type="checkbox"].nav-focused {
+    background-color: transparent;
+    outline-offset: 2px;
+}
+
 /* Start screen footer / Dev Mode */
 .start-screen-footer {
     margin-top: clamp(2px, 0.5vh, 6px);
@@ -12947,7 +13013,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     color: var(--current-text, #d8fff5);
     background: var(--gray-950, #101515);
     border: 2px solid var(--current-primary, #00ffcc);
-    box-shadow: 0 0 28px rgba(0, 255, 204, .2);
+    box-shadow: 0 0 28px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 .difficulty-editor-header,
 .difficulty-editor-footer {
@@ -12974,7 +13040,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .difficulty-editor-nav {
     padding: 16px;
-    border-right: 1px solid rgba(0, 255, 204, .35);
+    border-right: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .de-section-title {
     margin: 8px 0;
@@ -13025,7 +13091,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .de-ai-controls {
     margin-top: 28px;
     padding-top: 20px;
-    border-top: 1px solid rgba(0,255,204,.25);
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .de-slider-row {
     display: grid;
@@ -13044,7 +13110,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 @media (max-width: 650px) {
     .difficulty-editor-body { grid-template-columns: 1fr; overflow: auto; }
-    .difficulty-editor-nav { border-right: 0; border-bottom: 1px solid rgba(0,255,204,.35); }
+    .difficulty-editor-nav { border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
     .difficulty-editor-controls { min-height: 360px; }
 }
 
@@ -13083,7 +13149,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .faction-command-list {
     padding: 18px;
-    border-right: 1px solid rgba(0,255,204,.35);
+    border-right: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .faction-command-list h3,
 .faction-command-detail h3 {
@@ -13197,7 +13263,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-branch > summary:hover,
 .hs-tree-item > summary:hover {
-    background: rgba(0, 255, 204, 0.08);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .hs-tree-toggle {
@@ -13228,7 +13294,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     flex-direction: column;
     gap: 2px;
     padding: 4px 8px;
-    border-top: 1px solid rgba(0, 255, 204, 0.2);
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .hs-tree-area-style {
@@ -13236,13 +13302,13 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: flex-start;
     gap: 6px;
     padding: 2px 0 6px;
-    border-bottom: 1px solid rgba(0, 255, 204, 0.15);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .hs-tree-wing-symmetry {
     align-self: flex-start;
     padding: 4px 6px;
-    border: 1px solid rgba(0, 255, 204, 0.45);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     background: var(--gray-900, #0a0e14);
     color: var(--current-text, #d8fff5);
     cursor: pointer;
@@ -13253,13 +13319,13 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-tree-wing-symmetry:hover,
 .hs-tree-wing-symmetry.is-active {
     border-color: var(--current-primary, #00ffcc);
-    background: rgba(0, 255, 204, 0.14);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     color: var(--current-primary, #00ffcc);
 }
 
 .hs-tree-item {
     background: var(--gray-950, #050508);
-    border-color: rgba(0, 255, 204, 0.4);
+    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
 .hs-tree-slot-name {
@@ -13284,7 +13350,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-slot-content {
     padding: 6px 8px;
-    border-top: 1px solid rgba(0, 255, 204, 0.15);
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .hs-tree-skin-controls {
@@ -13311,7 +13377,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-skin-option {
     padding: 4px 6px;
-    border: 1px solid rgba(0, 255, 204, 0.45);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     background: var(--gray-900, #0a0e14);
     color: var(--current-text, #d8fff5);
     cursor: pointer;
@@ -13322,7 +13388,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-tree-skin-option:hover,
 .hs-tree-skin-option.is-active {
     border-color: var(--current-primary, #00ffcc);
-    background: rgba(0, 255, 204, 0.14);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     color: var(--current-primary, #00ffcc);
 }
 
@@ -13369,7 +13435,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-tree-slot-select:focus {
     outline: none;
     border-color: var(--current-primary, #00ffcc);
-    box-shadow: 0 0 0 2px rgba(0, 255, 204, 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .hs-tree-empty {
@@ -13397,42 +13463,43 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     --faction-surface-opacity: 0.16;
 }
 
-/* Terran — disciplined orthogonal plating, small chamfered corners. */
+/* Terran — disciplined orthogonal plating, small stepped pixel corners. */
 html[data-faction="terran"] {
-    --faction-clip: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    --faction-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, calc(100% - 10px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 10px 100%, 5px 100%, 5px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
     --faction-surface:
-        repeating-linear-gradient(0deg, transparent 0 11px, color-mix(in srgb, var(--faction-accent) 55%, transparent) 11px 12px),
-        repeating-linear-gradient(90deg, transparent 0 19px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 19px 20px);
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 55%, transparent) 0 2px, transparent 2px) 0 0 / 100% 12px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 34%, transparent) 0 2px, transparent 2px) 0 0 / 20px 100%;
 }
 
-/* Kronax — deep angled blade cuts, aggressive diagonal banding. */
+/* Kronax — deep stair-stepped blade cuts, pixel diagonal banding. */
 html[data-faction="kronax"] {
-    --faction-clip: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px);
+    --faction-clip: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, 100% 0, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 0 100%);
     --faction-border-width: calc(var(--ui-border-width) + 1px);
-    --faction-surface: repeating-linear-gradient(
-        58deg,
-        transparent 0 14px,
-        color-mix(in srgb, var(--faction-accent) 60%, transparent) 14px 18px,
-        transparent 18px 34px
-    );
+    --faction-surface:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 0px 0px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 4px 4px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 8px 8px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 12px 12px / 16px 16px;
     --faction-surface-opacity: 0.2;
 }
 
-/* Voidborn — asymmetric rounded pod, concentric arcs. */
+/* Voidborn — asymmetric pixel-rounded pod, dither surface. */
 html[data-faction="voidborn"] {
-    --faction-radius: 30px 6px 30px 6px;
     --faction-surface:
-        radial-gradient(circle at 12% 38%, transparent 0 16px, color-mix(in srgb, var(--faction-accent) 55%, transparent) 17px 20px, transparent 22px),
-        radial-gradient(circle at 78% 68%, transparent 0 26px, color-mix(in srgb, var(--faction-accent) 45%, transparent) 27px 30px, transparent 33px);
-    --faction-surface-opacity: 0.24;
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 55%, transparent) 0) 0px 0px / 8px 8px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 55%, transparent) 0) 4px 4px / 8px 8px;
+    --faction-surface-opacity: 0.14;
+    --faction-clip: polygon(0px 28px, 0px 24px, 1px 24px, 1px 20px, 2px 20px, 2px 16px, 4px 16px, 4px 12px, 7px 12px, 7px 8px, 11px 8px, 11px 4px, 18px 4px, 18px 0px, 28px 0px, calc(100% - 8px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 4px, 100% 4px, 100% 8px, 100% calc(100% - 28px), 100% calc(100% - 24px), calc(100% - 1px) calc(100% - 24px), calc(100% - 1px) calc(100% - 20px), calc(100% - 2px) calc(100% - 20px), calc(100% - 2px) calc(100% - 16px), calc(100% - 4px) calc(100% - 16px), calc(100% - 4px) calc(100% - 12px), calc(100% - 7px) calc(100% - 12px), calc(100% - 7px) calc(100% - 8px), calc(100% - 11px) calc(100% - 8px), calc(100% - 11px) calc(100% - 4px), calc(100% - 18px) calc(100% - 4px), calc(100% - 18px) 100%, calc(100% - 28px) 100%, 8px 100%, 3px 100%, 3px calc(100% - 4px), 0px calc(100% - 4px), 0px calc(100% - 8px));
 }
 
-/* Pirate — lopsided welded salvage, mismatched edges. */
+/* Pirate — lopsided welded salvage, uneven pixel steps. */
 html[data-faction="pirate"] {
-    --faction-clip: polygon(0 14px, 18px 0, calc(100% - 30px) 0, 100% 22px, 100% calc(100% - 9px), calc(100% - 52px) 100%, 24px 100%, 0 calc(100% - 26px));
+    --faction-clip: polygon(0px 15px, 0px 12px, 3px 12px, 3px 9px, 6px 9px, 6px 6px, 9px 6px, 9px 3px, 12px 3px, 12px 0px, 15px 0px, calc(100% - 21px) 0px, calc(100% - 18px) 0px, calc(100% - 18px) 3px, calc(100% - 15px) 3px, calc(100% - 15px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 9px, calc(100% - 9px) 9px, calc(100% - 9px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 15px, calc(100% - 3px) 15px, calc(100% - 3px) 18px, 100% 18px, 100% 21px, 100% calc(100% - 9px), 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, calc(100% - 9px) 100%, 24px 100%, 21px 100%, 21px calc(100% - 3px), 18px calc(100% - 3px), 18px calc(100% - 6px), 15px calc(100% - 6px), 15px calc(100% - 9px), 12px calc(100% - 9px), 12px calc(100% - 12px), 9px calc(100% - 12px), 9px calc(100% - 15px), 6px calc(100% - 15px), 6px calc(100% - 18px), 3px calc(100% - 18px), 3px calc(100% - 21px), 0px calc(100% - 21px), 0px calc(100% - 24px));
     --faction-surface:
-        repeating-linear-gradient(12deg, transparent 0 20px, color-mix(in srgb, var(--faction-accent) 50%, transparent) 20px 23px, transparent 23px 42px),
-        repeating-linear-gradient(-31deg, transparent 0 27px, color-mix(in srgb, var(--faction-accent) 38%, transparent) 27px 30px, transparent 30px 52px);
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 50%, transparent) 0) 0px 0px / 20px 20px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 50%, transparent) 0) 8px 4px / 20px 20px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 38%, transparent) 0) 14px 12px / 28px 28px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 38%, transparent) 0) 2px 18px / 28px 28px;
     --faction-surface-opacity: 0.22;
 }
 
@@ -13449,6 +13516,9 @@ html[data-faction="machine"] {
     --faction-surface:
         repeating-linear-gradient(0deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px),
         repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px);
+    --faction-surface:
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 52%, transparent) 0 2px, transparent 2px) 0 0 / 100% 8px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 52%, transparent) 0 2px, transparent 2px) 0 0 / 8px 100%;
 }
 
 /* --- In-game HUD panels wear the faction frame ------------------------- */
@@ -13484,4 +13554,935 @@ html[data-faction="machine"] {
 .home-station-overlay .hs-panel,
 .home-station-overlay .hs-hangar-bay-stage {
     border-radius: var(--faction-radius);
+}
+
+/* --- Station GUI follows the faction frame language ---------------------
+   Panels, sections, tabs and station buttons take the faction's stepped
+   silhouette instead of one shared chamfer. Shapes are deliberately bold so
+   each faction reads at a glance. */
+html[data-faction="terran"] {
+    --faction-panel-clip: polygon(0px 16px, 0px 12px, 4px 12px, 4px 8px, 8px 8px, 8px 4px, 12px 4px, 12px 0px, 16px 0px, calc(100% - 16px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 4px, calc(100% - 8px) 4px, calc(100% - 8px) 8px, calc(100% - 4px) 8px, calc(100% - 4px) 12px, 100% 12px, 100% 16px, 100% calc(100% - 16px), 100% calc(100% - 12px), calc(100% - 4px) calc(100% - 12px), calc(100% - 4px) calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) calc(100% - 4px), calc(100% - 12px) calc(100% - 4px), calc(100% - 12px) 100%, calc(100% - 16px) 100%, 16px 100%, 12px 100%, 12px calc(100% - 4px), 8px calc(100% - 4px), 8px calc(100% - 8px), 4px calc(100% - 8px), 4px calc(100% - 12px), 0px calc(100% - 12px), 0px calc(100% - 16px));
+    --faction-ctl-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
+}
+html[data-faction="kronax"] {
+    --faction-panel-clip: polygon(0px 28px, 0px 21px, 7px 21px, 7px 14px, 14px 14px, 14px 7px, 21px 7px, 21px 0px, 28px 0px, calc(50% - 24px) 0px, calc(50% - 24px) 7px, 50% 8px, calc(50% + 24px) 7px, calc(50% + 24px) 0px, 100% 0, 100% calc(100% - 28px), 100% calc(100% - 21px), calc(100% - 7px) calc(100% - 21px), calc(100% - 7px) calc(100% - 14px), calc(100% - 14px) calc(100% - 14px), calc(100% - 14px) calc(100% - 7px), calc(100% - 21px) calc(100% - 7px), calc(100% - 21px) 100%, calc(100% - 28px) 100%, calc(50% + 24px) 100%, calc(50% + 24px) calc(100% - 7px), 50% calc(100% - 8px), calc(50% - 24px) calc(100% - 7px), calc(50% - 24px) 100%, 0 100%);
+    --faction-ctl-clip: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
+}
+html[data-faction="voidborn"] {
+    --faction-panel-clip: polygon(0px 30px, 0px 25px, 1px 25px, 1px 20px, 3px 20px, 3px 15px, 6px 15px, 6px 10px, 10px 10px, 10px 5px, 18px 5px, 18px 0px, 30px 0px, calc(100% - 10px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 30px), 100% calc(100% - 25px), calc(100% - 1px) calc(100% - 25px), calc(100% - 1px) calc(100% - 20px), calc(100% - 3px) calc(100% - 20px), calc(100% - 3px) calc(100% - 15px), calc(100% - 6px) calc(100% - 15px), calc(100% - 6px) calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) calc(100% - 5px), calc(100% - 18px) calc(100% - 5px), calc(100% - 18px) 100%, calc(100% - 30px) 100%, 10px 100%, 3px 100%, 3px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
+    --faction-ctl-clip: polygon(0px 12px, 0px 8px, 2px 8px, 2px 4px, 5px 4px, 5px 0px, 12px 0px, calc(100% - 12px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 8px, 100% 8px, 100% 12px, 100% calc(100% - 12px), 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 4px), calc(100% - 5px) calc(100% - 4px), calc(100% - 5px) 100%, calc(100% - 12px) 100%, 12px 100%, 5px 100%, 5px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 8px), 0px calc(100% - 8px), 0px calc(100% - 12px));
+}
+html[data-faction="pirate"] {
+    --faction-panel-clip: polygon(0px 12px, 0px 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0px, 12px 0px, calc(100% - 24px) 0px, calc(100% - 20px) 0px, calc(100% - 20px) 4px, calc(100% - 16px) 4px, calc(100% - 16px) 8px, calc(100% - 12px) 8px, calc(100% - 12px) 12px, calc(100% - 8px) 12px, calc(100% - 8px) 16px, calc(100% - 4px) 16px, calc(100% - 4px) 20px, 100% 20px, 100% 24px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 20px 100%, 16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px), 12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px), 4px calc(100% - 12px), 4px calc(100% - 16px), 0px calc(100% - 16px), 0px calc(100% - 20px));
+    --faction-ctl-clip: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
+}
+html[data-faction="machine"] {
+    --faction-panel-clip: polygon(0 12px, 12px 12px, 12px 0, calc(100% - 12px) 0, calc(100% - 12px) 12px, 100% 12px, 100% calc(50% - 10px), calc(100% - 6px) calc(50% - 10px), calc(100% - 6px) calc(50% + 10px), 100% calc(50% + 10px), 100% calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 12px calc(100% - 12px), 0 calc(100% - 12px), 0 calc(50% + 10px), 6px calc(50% + 10px), 6px calc(50% - 10px), 0 calc(50% - 10px));
+    --faction-ctl-clip: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
+}
+.home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root),
+.home-station-overlay .hs-hangar-bay-stage {
+    clip-path: var(--faction-panel-clip, polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px));
+}
+.home-station-overlay .hs-tab,
+.home-station-overlay .hs-menu-btn,
+.home-station-overlay .hs-menu-tab-btn,
+.home-station-overlay .hs-home-btn,
+.home-station-overlay .hs-logout-btn,
+.home-station-overlay .hs-shop-ctrl,
+.home-station-overlay .hs-shop-cat,
+.home-station-overlay .hs-play,
+.home-station-overlay .hs-chip,
+.home-station-overlay .action-button {
+    clip-path: var(--faction-ctl-clip, none);
+    border-radius: 0;
+}
+
+/* Bold corner cuts need room so header icons and last rows aren't sliced. */
+html[data-faction] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    padding: 10px 14px;
+}
+html[data-faction="kronax"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    padding: 12px 16px 12px 24px;
+}
+html[data-faction="voidborn"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    padding: 12px 18px 12px 22px;
+}
+
+/* Panel headers carry a faction signature strip. */
+.home-station-overlay .hs-panel-title {
+    padding-left: 10px;
+    padding-top: 4px;
+    border-bottom-width: 2px;
+}
+html[data-faction="terran"] .home-station-overlay .hs-panel-title {
+    box-shadow: inset 4px 0 0 var(--faction-accent);
+    background: linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 0) 0 100% / 100% 4px no-repeat;
+}
+html[data-faction="kronax"] .home-station-overlay .hs-panel-title {
+    /* Stair-stepped blade banding behind the header. */
+    background:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 0px 0px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 4px 4px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 8px 8px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 12px 12px / 16px 16px;
+}
+html[data-faction="voidborn"] .home-station-overlay .hs-panel-title {
+    background: radial-gradient(ellipse 40% 120% at 0 50%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent), transparent 70%);
+    border-bottom-style: dotted;
+}
+html[data-faction="pirate"] .home-station-overlay .hs-panel-title {
+    background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 0 8px, transparent 8px 16px) 0 100% / 100% 4px no-repeat;
+    border-bottom-style: dashed;
+}
+html[data-faction="machine"] .home-station-overlay .hs-panel-title {
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px;
+    background-size: 6px 6px;
+    background-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 5%, transparent);
+}
+/* Faction crest on the station banner + pilot badge emblem. */
+.hs-station-cover-crest {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    opacity: 0.9;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent));
+    pointer-events: none;
+}
+.hs-station-cover-crest img,
+.hs-profile-emblem img {
+    display: block;
+    image-rendering: pixelated;
+}
+.hs-profile-emblem {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Clipped station controls: focus ring drawn inside so the cut keeps it. */
+.home-station-overlay :is(.hs-tab, .hs-menu-btn, .hs-menu-tab-btn, .hs-home-btn, .hs-logout-btn,
+    .hs-shop-ctrl, .hs-shop-cat, .hs-play, .hs-chip, .action-button).nav-focused {
+    outline: 2px solid var(--faction-accent, var(--color-primary));
+    outline-offset: -4px;
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, #000 60%, transparent);
+}
+
+/* Pixel finish: hard edges, no smoothing on faction chrome. */
+html[data-faction] .game-info-panel,
+html[data-faction] .player-vitals-side,
+html[data-faction] .weapon-selection,
+html[data-faction] .enemy-vitals-side,
+.profile-selection-content[data-faction] {
+    image-rendering: pixelated;
+    border-style: solid;
+}
+
+/* Connection strength rows: label, −, slider, +, live % readout. */
+.hs-connection-strength {
+    display: grid;
+    grid-template-columns: 42px 18px minmax(50px, 1fr) 18px 34px;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+.hs-connection-strength input[type="range"] {
+    width: 100%;
+    min-width: 0;
+}
+.hs-connection-strength input[type="range"]:disabled {
+    opacity: 0.4;
+}
+.hs-connection-step {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    background: #09090d;
+    color: var(--color-primary);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+.hs-connection-step:hover {
+    border-color: var(--color-primary);
+}
+.hs-connection-strength output {
+    text-align: right;
+    color: var(--color-primary);
+    font-variant-numeric: tabular-nums;
+}
+.hs-connection-link-ends {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+
+/* Style carousel: ‹ thumbnail strip › with an n/m counter. Used for hull
+   styles and module skins in the sidebar tree and the floating panel. */
+.hs-tree-area-style,
+.hs-tree-skin-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 8px;
+}
+.hs-style-carousel {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 20px;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 2px 4px;
+    min-width: 0;
+}
+.hs-style-carousel-track {
+    /* Positioned so thumb offsetLeft is measured from the strip itself. */
+    position: relative;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding: 2px 0;
+    min-width: 0;
+}
+.hs-style-carousel-track::-webkit-scrollbar {
+    display: none;
+}
+.hs-style-thumb {
+    flex: 0 0 auto;
+    padding: 2px;
+    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, transparent);
+    background: #09090d;
+    cursor: pointer;
+    scroll-snap-align: center;
+    line-height: 0;
+}
+.hs-style-thumb canvas {
+    display: block;
+    width: 48px;
+    height: 36px;
+    image-rendering: pixelated;
+}
+.hs-style-thumb:hover {
+    border-color: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 70%, transparent);
+}
+.hs-style-thumb.is-active {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+    box-shadow: inset 0 0 8px color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent);
+}
+.hs-style-thumb:focus-visible,
+.hs-style-carousel-step:focus-visible {
+    outline: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    outline-offset: 1px;
+}
+.hs-style-carousel-step {
+    width: 20px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    background: #09090d;
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+}
+.hs-style-carousel-step:hover {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-style-carousel-count {
+    grid-column: 2;
+    text-align: center;
+    font-size: 0.6rem;
+    letter-spacing: 1px;
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    font-variant-numeric: tabular-nums;
+}
+.hs-floating-style-carousel {
+    margin: 6px 0 8px;
+}
+
+/* Connection sections in the component tree. */
+.hs-tree-connection-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hs-tree-joint-range {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+.hs-tree-joint-range input {
+    width: 100%;
+    min-width: 0;
+}
+
+/* Brief flash on a tree section opened from a click on the ship. */
+.hs-tree-branch.is-focused > .hs-tree-branch-label {
+    box-shadow: inset 0 0 0 1px var(--current-primary, var(--color-primary, #00ffcc)),
+        0 0 10px color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    transition: box-shadow 0.3s ease-out;
+}
+
+/* Themed controls in the hangar sidebar tree and floating panels — the
+   browser's default blue sliders/checkboxes clashed with the faction UI. */
+.hs-hangar-list input[type="range"],
+.hs-floating-area-style input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 14px;
+    background: transparent;
+    cursor: pointer;
+    accent-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-hangar-list input[type="range"]::-webkit-slider-runnable-track,
+.hs-floating-area-style input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, #09090d);
+    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+}
+.hs-hangar-list input[type="range"]::-moz-range-track,
+.hs-floating-area-style input[type="range"]::-moz-range-track {
+    height: 4px;
+    background: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, #09090d);
+    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+}
+.hs-hangar-list input[type="range"]::-moz-range-progress,
+.hs-floating-area-style input[type="range"]::-moz-range-progress {
+    height: 4px;
+    background: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-hangar-list input[type="range"]::-webkit-slider-thumb,
+.hs-floating-area-style input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 14px;
+    margin-top: -6px;
+    border: 1px solid #ffffff;
+    border-radius: 0;
+    background: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-hangar-list input[type="range"]::-moz-range-thumb,
+.hs-floating-area-style input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 14px;
+    border: 1px solid #ffffff;
+    border-radius: 0;
+    background: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-hangar-list input[type="range"]:disabled,
+.hs-floating-area-style input[type="range"]:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.hs-hangar-list input[type="checkbox"],
+.hs-floating-area-style input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    background: #09090d;
+    display: inline-grid;
+    place-content: center;
+    cursor: pointer;
+}
+.hs-hangar-list input[type="checkbox"]::before,
+.hs-floating-area-style input[type="checkbox"]::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--current-primary, var(--color-primary, #00ffcc));
+    transform: scale(0);
+    transition: transform 0.1s ease-out;
+}
+.hs-hangar-list input[type="checkbox"]:checked::before,
+.hs-floating-area-style input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+.hs-hangar-list input[type="checkbox"]:focus-visible,
+.hs-floating-area-style input[type="checkbox"]:focus-visible,
+.hs-hangar-list input[type="range"]:focus-visible,
+.hs-floating-area-style input[type="range"]:focus-visible {
+    outline: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    outline-offset: 2px;
+}
+
+/* Hangar header: title row, stat chips, controls row (voxel + frame). */
+.hs-hangar-detail-head {
+    gap: 8px;
+}
+.hs-hangar-head-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+.hs-hangar-head-name {
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    white-space: nowrap;
+}
+.hs-hangar-head-title .hs-activate-ship {
+    padding: 4px 10px;
+    min-height: 0;
+}
+.hs-hangar-head-title .hs-hangar-fire-inline {
+    margin-left: auto;
+    gap: 0;
+}
+.hs-hangar-head-title .hs-hangar-fire-inline .hs-mod {
+    min-height: 0;
+    padding: 4px 12px;
+}
+.hs-hangar-head-title .hs-hangar-fire-inline .hs-mod + .hs-mod {
+    margin-left: -1px;
+}
+.hs-hangar-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.hs-hangar-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.hs-hangar-stat em {
+    font-style: normal;
+    color: var(--color-text-secondary);
+    font-size: 0.85em;
+}
+.hs-hangar-stat small {
+    color: var(--color-text-secondary);
+    font-size: 0.8em;
+}
+.hs-hangar-stat.is-negative {
+    border-color: var(--color-danger, #ff4d4d);
+    color: var(--color-danger, #ff4d4d);
+}
+.hs-hangar-head-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 0;
+}
+.hs-hangar-voxel {
+    display: grid;
+    grid-template-columns: auto minmax(120px, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 260px;
+    min-width: 0;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--color-primary);
+}
+.hs-hangar-voxel input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--color-primary);
+}
+.hs-hangar-voxel output {
+    text-align: right;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+.hs-hangar-head-bar .hs-hangar-frame-up {
+    flex: 0 1 auto;
+    justify-content: flex-end;
+}
+
+/* New-profile faction picker: emblems, live faction palette, ship preview. */
+.profile-faction-swatch-emblem {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+.profile-faction-swatch-emblem img,
+.profile-faction-preview-emblem img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+.profile-faction-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 4px auto 14px;
+    padding: 8px 12px;
+    width: min(360px, 92%);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background:
+        radial-gradient(circle at 35% 50%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 70%),
+        #050508;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.profile-faction-ship {
+    width: 150px;
+    height: 105px;
+    image-rendering: pixelated;
+}
+.profile-faction-preview-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+    text-align: left;
+}
+.profile-faction-preview-emblem {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+}
+.profile-faction-preview-name {
+    color: var(--color-primary);
+    letter-spacing: 2px;
+}
+.profile-faction-preview-trait {
+    color: var(--color-text-secondary);
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 1px;
+}
+.profile-selection-name-mode {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Faction emblem beside each profile (list + detail header). */
+.profile-list-emblem {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+.profile-list-item .profile-list-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.profile-list-emblem img,
+.profile-details-emblem img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+.profile-details-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.profile-details-emblem {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+.profile-details-title {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+.profile-details-title small {
+    font-size: var(--font-text-small, 11px);
+    font-weight: normal;
+    letter-spacing: 2px;
+    color: var(--color-text-secondary);
+}
+
+/* ——— Faction frame shapes for the profile dialogs ———
+   The box itself stays unclipped (so its drop-shadow glow survives); two
+   pseudo layers draw the frame: ::before = faction-coloured outline shape,
+   ::after = the dark fill inset by the frame width. Each faction defines
+   --pf-shape (outer) and --pf-shape-in (inner) so the outline follows the
+   same silhouette. Controls inside follow the faction's cut too. */
+.profile-selection-content[data-faction] {
+    position: relative;
+    isolation: isolate;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--ui-border) 70%, transparent));
+    --pf-frame: 4px;
+}
+.profile-selection-content[data-faction]::before,
+.profile-selection-content[data-faction]::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+}
+.profile-selection-content[data-faction]::before {
+    inset: 0;
+    background: var(--ui-border);
+    clip-path: var(--pf-shape);
+    border-radius: var(--pf-radius, 0);
+}
+.profile-selection-content[data-faction]::after {
+    inset: var(--pf-frame);
+    background: var(--color-background, #000);
+    clip-path: var(--pf-shape-in, var(--pf-shape));
+    border-radius: var(--pf-radius-in, 0);
+}
+
+/* Terran — disciplined, evenly chamfered corners. */
+.profile-selection-content[data-faction="terran"] {
+    --pf-shape: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, calc(100% - 24px) 0px, calc(100% - 18px) 0px, calc(100% - 18px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 18px, 100% 18px, 100% 24px, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 24px 100%, 18px 100%, 18px calc(100% - 6px), 12px calc(100% - 6px), 12px calc(100% - 12px), 6px calc(100% - 12px), 6px calc(100% - 18px), 0px calc(100% - 18px), 0px calc(100% - 24px));
+    --pf-shape-in: polygon(0px 20px, 0px 15px, 5px 15px, 5px 10px, 10px 10px, 10px 5px, 15px 5px, 15px 0px, 20px 0px, calc(100% - 20px) 0px, calc(100% - 15px) 0px, calc(100% - 15px) 5px, calc(100% - 10px) 5px, calc(100% - 10px) 10px, calc(100% - 5px) 10px, calc(100% - 5px) 15px, 100% 15px, 100% 20px, 100% calc(100% - 20px), 100% calc(100% - 15px), calc(100% - 5px) calc(100% - 15px), calc(100% - 5px) calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) calc(100% - 5px), calc(100% - 15px) calc(100% - 5px), calc(100% - 15px) 100%, calc(100% - 20px) 100%, 20px 100%, 15px 100%, 15px calc(100% - 5px), 10px calc(100% - 5px), 10px calc(100% - 10px), 5px calc(100% - 10px), 5px calc(100% - 15px), 0px calc(100% - 15px), 0px calc(100% - 20px));
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+/* Kronax — aggressive blade cuts on opposite corners plus a spine notch. */
+.profile-selection-content[data-faction="kronax"] {
+    --pf-shape: polygon(0px 42px, 0px 36px, 6px 36px, 6px 30px, 12px 30px, 12px 24px, 18px 24px, 18px 18px, 24px 18px, 24px 12px, 30px 12px, 30px 6px, 36px 6px, 36px 0px, 42px 0px, calc(50% - 30px) 0px, calc(50% - 30px) 6px, calc(50% - 15px) 6px, calc(50% - 15px) 12px, 50% 12px, calc(50% + 15px) 12px, calc(50% + 15px) 6px, calc(50% + 30px) 6px, calc(50% + 30px) 0px, 100% 0, 100% calc(100% - 42px), 100% calc(100% - 36px), calc(100% - 6px) calc(100% - 36px), calc(100% - 6px) calc(100% - 30px), calc(100% - 12px) calc(100% - 30px), calc(100% - 12px) calc(100% - 24px), calc(100% - 18px) calc(100% - 24px), calc(100% - 18px) calc(100% - 18px), calc(100% - 24px) calc(100% - 18px), calc(100% - 24px) calc(100% - 12px), calc(100% - 30px) calc(100% - 12px), calc(100% - 30px) calc(100% - 6px), calc(100% - 36px) calc(100% - 6px), calc(100% - 36px) 100%, calc(100% - 42px) 100%, calc(50% + 30px) 100%, calc(50% + 30px) calc(100% - 6px), calc(50% + 15px) calc(100% - 6px), calc(50% + 15px) calc(100% - 12px), 50% calc(100% - 12px), calc(50% - 15px) calc(100% - 12px), calc(50% - 15px) calc(100% - 6px), calc(50% - 30px) calc(100% - 6px), calc(50% - 30px) 100%, 0 100%);
+    --pf-shape-in: polygon(0px 40px, 0px 35px, 5px 35px, 5px 30px, 10px 30px, 10px 25px, 15px 25px, 15px 20px, 20px 20px, 20px 15px, 25px 15px, 25px 10px, 30px 10px, 30px 5px, 35px 5px, 35px 0px, 40px 0px, calc(50% - 30px) 0px, calc(50% - 30px) 5px, calc(50% - 15px) 5px, calc(50% - 15px) 10px, 50% 10px, calc(50% + 15px) 10px, calc(50% + 15px) 5px, calc(50% + 30px) 5px, calc(50% + 30px) 0px, 100% 0, 100% calc(100% - 40px), 100% calc(100% - 35px), calc(100% - 5px) calc(100% - 35px), calc(100% - 5px) calc(100% - 30px), calc(100% - 10px) calc(100% - 30px), calc(100% - 10px) calc(100% - 25px), calc(100% - 15px) calc(100% - 25px), calc(100% - 15px) calc(100% - 20px), calc(100% - 20px) calc(100% - 20px), calc(100% - 20px) calc(100% - 15px), calc(100% - 25px) calc(100% - 15px), calc(100% - 25px) calc(100% - 10px), calc(100% - 30px) calc(100% - 10px), calc(100% - 30px) calc(100% - 5px), calc(100% - 35px) calc(100% - 5px), calc(100% - 35px) 100%, calc(100% - 40px) 100%, calc(50% + 30px) 100%, calc(50% + 30px) calc(100% - 5px), calc(50% + 15px) calc(100% - 5px), calc(50% + 15px) calc(100% - 10px), 50% calc(100% - 10px), calc(50% - 15px) calc(100% - 10px), calc(50% - 15px) calc(100% - 5px), calc(50% - 30px) calc(100% - 5px), calc(50% - 30px) 100%, 0 100%);
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+/* Voidborn — organic pod with pixel-stepped rounding. */
+.profile-selection-content[data-faction="voidborn"] {
+    --pf-shape: polygon(0px 36px, 0px 30px, 1px 30px, 1px 24px, 3px 24px, 3px 18px, 7px 18px, 7px 12px, 12px 12px, 12px 6px, 22px 6px, 22px 0px, 36px 0px, calc(100% - 36px) 0px, calc(100% - 22px) 0px, calc(100% - 22px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 12px, calc(100% - 7px) 12px, calc(100% - 7px) 18px, calc(100% - 3px) 18px, calc(100% - 3px) 24px, calc(100% - 1px) 24px, calc(100% - 1px) 30px, 100% 30px, 100% 36px, 100% calc(100% - 36px), 100% calc(100% - 30px), calc(100% - 1px) calc(100% - 30px), calc(100% - 1px) calc(100% - 24px), calc(100% - 3px) calc(100% - 24px), calc(100% - 3px) calc(100% - 18px), calc(100% - 7px) calc(100% - 18px), calc(100% - 7px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 22px) calc(100% - 6px), calc(100% - 22px) 100%, calc(100% - 36px) 100%, 36px 100%, 22px 100%, 22px calc(100% - 6px), 12px calc(100% - 6px), 12px calc(100% - 12px), 7px calc(100% - 12px), 7px calc(100% - 18px), 3px calc(100% - 18px), 3px calc(100% - 24px), 1px calc(100% - 24px), 1px calc(100% - 30px), 0px calc(100% - 30px), 0px calc(100% - 36px));
+    --pf-shape-in: polygon(0px 32px, 0px 28px, 1px 28px, 1px 24px, 2px 24px, 2px 20px, 3px 20px, 3px 16px, 6px 16px, 6px 12px, 9px 12px, 9px 8px, 13px 8px, 13px 4px, 21px 4px, 21px 0px, 32px 0px, calc(100% - 32px) 0px, calc(100% - 21px) 0px, calc(100% - 21px) 4px, calc(100% - 13px) 4px, calc(100% - 13px) 8px, calc(100% - 9px) 8px, calc(100% - 9px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 16px, calc(100% - 3px) 16px, calc(100% - 3px) 20px, calc(100% - 2px) 20px, calc(100% - 2px) 24px, calc(100% - 1px) 24px, calc(100% - 1px) 28px, 100% 28px, 100% 32px, 100% calc(100% - 32px), 100% calc(100% - 28px), calc(100% - 1px) calc(100% - 28px), calc(100% - 1px) calc(100% - 24px), calc(100% - 2px) calc(100% - 24px), calc(100% - 2px) calc(100% - 20px), calc(100% - 3px) calc(100% - 20px), calc(100% - 3px) calc(100% - 16px), calc(100% - 6px) calc(100% - 16px), calc(100% - 6px) calc(100% - 12px), calc(100% - 9px) calc(100% - 12px), calc(100% - 9px) calc(100% - 8px), calc(100% - 13px) calc(100% - 8px), calc(100% - 13px) calc(100% - 4px), calc(100% - 21px) calc(100% - 4px), calc(100% - 21px) 100%, calc(100% - 32px) 100%, 32px 100%, 21px 100%, 21px calc(100% - 4px), 13px calc(100% - 4px), 13px calc(100% - 8px), 9px calc(100% - 8px), 9px calc(100% - 12px), 6px calc(100% - 12px), 6px calc(100% - 16px), 3px calc(100% - 16px), 3px calc(100% - 20px), 2px calc(100% - 20px), 2px calc(100% - 24px), 1px calc(100% - 24px), 1px calc(100% - 28px), 0px calc(100% - 28px), 0px calc(100% - 32px));
+    --pf-ctl: polygon(0px 8px, 0px 4px, 3px 4px, 3px 0px, 8px 0px, calc(100% - 8px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 4px, 100% 4px, 100% 8px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 3px) calc(100% - 4px), calc(100% - 3px) 100%, calc(100% - 8px) 100%, 8px 100%, 3px 100%, 3px calc(100% - 4px), 0px calc(100% - 4px), 0px calc(100% - 8px));
+}
+/* Pirate — welded scrap: uneven, lopsided edges. */
+.profile-selection-content[data-faction="pirate"] {
+    --pf-shape: polygon(0px 12px, 0px 9px, 3px 9px, 3px 6px, 6px 6px, 6px 3px, 9px 3px, 9px 0px, 12px 0px, calc(100% - 18px) 0px, calc(100% - 15px) 0px, calc(100% - 15px) 3px, calc(100% - 12px) 3px, calc(100% - 12px) 6px, calc(100% - 9px) 6px, calc(100% - 9px) 9px, calc(100% - 6px) 9px, calc(100% - 6px) 12px, calc(100% - 3px) 12px, calc(100% - 3px) 15px, 100% 15px, 100% 18px, 100% calc(100% - 10px), 100% calc(100% - 7px), calc(100% - 3px) calc(100% - 7px), calc(100% - 3px) calc(100% - 3px), calc(100% - 7px) calc(100% - 3px), calc(100% - 7px) 100%, calc(100% - 10px) 100%, 21px 100%, 18px 100%, 18px calc(100% - 3px), 15px calc(100% - 3px), 15px calc(100% - 6px), 12px calc(100% - 6px), 12px calc(100% - 9px), 9px calc(100% - 9px), 9px calc(100% - 12px), 6px calc(100% - 12px), 6px calc(100% - 15px), 3px calc(100% - 15px), 3px calc(100% - 18px), 0px calc(100% - 18px), 0px calc(100% - 21px));
+    --pf-shape-in: polygon(0px 9px, 0px 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0px, 9px 0px, calc(100% - 15px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 3px, calc(100% - 9px) 3px, calc(100% - 9px) 6px, calc(100% - 6px) 6px, calc(100% - 6px) 9px, calc(100% - 3px) 9px, calc(100% - 3px) 12px, 100% 12px, 100% 15px, 100% calc(100% - 9px), 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, calc(100% - 9px) 100%, 18px 100%, 15px 100%, 15px calc(100% - 3px), 12px calc(100% - 3px), 12px calc(100% - 6px), 9px calc(100% - 6px), 9px calc(100% - 9px), 6px calc(100% - 9px), 6px calc(100% - 12px), 3px calc(100% - 12px), 3px calc(100% - 15px), 0px calc(100% - 15px), 0px calc(100% - 18px));
+    --pf-ctl: polygon(0px 3px, 0px 0px, 3px 0px, calc(100% - 4px) 0px, 100% 0px, 100% 4px, 100% calc(100% - 2px), 100% 100%, calc(100% - 2px) 100%, 3px 100%, 0px 100%, 0px calc(100% - 3px));
+}
+/* Machine — machined steps: square notches on every corner. */
+.profile-selection-content[data-faction="machine"] {
+    --pf-shape: polygon(0 16px, 16px 16px, 16px 0, calc(100% - 16px) 0, calc(100% - 16px) 16px, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 16px calc(100% - 16px), 0 calc(100% - 16px));
+    --pf-shape-in: polygon(0 13px, 13px 13px, 13px 0, calc(100% - 13px) 0, calc(100% - 13px) 13px, 100% 13px, 100% calc(100% - 13px), calc(100% - 13px) calc(100% - 13px), calc(100% - 13px) 100%, 13px 100%, 13px calc(100% - 13px), 0 calc(100% - 13px));
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px));
+}
+/* Controls inherit the faction cut. Outlines drawn as inset shadows so a
+   clipped diagonal still shows an edge colour behind it. */
+.profile-selection-content[data-faction] .action-button,
+.profile-selection-content[data-faction] .profile-faction-swatch,
+.profile-selection-content[data-faction] .profile-name-input,
+.profile-selection-content[data-faction] .profile-faction-preview,
+.profile-selection-content[data-faction] .profile-list,
+.profile-selection-content[data-faction] .profile-details {
+    clip-path: var(--pf-ctl, none);
+    border-radius: var(--pf-ctl-radius, 0);
+}
+.profile-selection-content[data-faction="voidborn"] .profile-faction-preview,
+.profile-selection-content[data-faction="voidborn"] .profile-list,
+.profile-selection-content[data-faction="voidborn"] .profile-details {
+    clip-path: polygon(0px 16px, 0px 12px, 1px 12px, 1px 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0px, 16px 0px, calc(100% - 16px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 8px, calc(100% - 1px) 8px, calc(100% - 1px) 12px, 100% 12px, 100% 16px, 100% calc(100% - 16px), 100% calc(100% - 12px), calc(100% - 1px) calc(100% - 12px), calc(100% - 1px) calc(100% - 8px), calc(100% - 4px) calc(100% - 8px), calc(100% - 4px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px), calc(100% - 8px) 100%, calc(100% - 16px) 100%, 16px 100%, 8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px), 4px calc(100% - 8px), 1px calc(100% - 8px), 1px calc(100% - 12px), 0px calc(100% - 12px), 0px calc(100% - 16px));
+}
+.profile-faction-preview-hero {
+    color: var(--color-primary);
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 1px;
+    opacity: 0.9;
+    cursor: help;
+}
+
+/* ==========================================================================
+   Shared modal dialog (uiDialog) — replaces native confirm/alert/prompt.
+   Frame follows the active faction (html[data-faction] --faction-clip),
+   drawn as ::before outline + ::after fill so the stepped edge keeps a border.
+   ========================================================================== */
+.ui-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: color-mix(in srgb, #000 62%, transparent);
+    image-rendering: pixelated;
+}
+.ui-dialog {
+    position: relative;
+    isolation: isolate;
+    min-width: min(320px, 100%);
+    max-width: min(460px, 100%);
+    padding: 22px 24px 18px;
+    font-family: var(--ui-font-family);
+    color: var(--color-text);
+    text-align: center;
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent));
+}
+.ui-dialog::before,
+.ui-dialog::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    clip-path: var(--faction-clip, none);
+}
+.ui-dialog::before {
+    inset: 0;
+    background: var(--faction-accent, var(--color-primary));
+}
+.ui-dialog::after {
+    inset: 3px;
+    background:
+        var(--faction-surface, none),
+        var(--color-background, #000);
+    background-blend-mode: normal;
+}
+.ui-dialog-title {
+    margin: 0 0 10px;
+    font-size: var(--font-text, 14px);
+    letter-spacing: 2px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.ui-dialog-message {
+    margin: 0 0 16px;
+    font-size: var(--font-text, 14px);
+    letter-spacing: 1px;
+    line-height: 1.4;
+    text-transform: uppercase;
+    white-space: pre-wrap;
+}
+.ui-dialog-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 16px;
+    padding: 8px 10px;
+    font: inherit;
+    letter-spacing: 1px;
+    color: var(--color-text);
+    background: #000;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    border-radius: 0;
+}
+.ui-dialog-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+.ui-dialog-actions .action-button {
+    min-width: 100px;
+    clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
+    border-radius: 0;
+}
+.ui-dialog-actions .action-button.danger {
+    color: #ff8a8a;
+    border-color: #ff5a5a;
+}
+
+/* ==========================================================================
+   Interactables — lighter than the base colour so clickable things read as
+   clickable. Mixes the base (primary) with the light 2nd base (which, for the
+   faction palette, is the base colour lightened).
+   Re-declared on [data-faction] boxes so a locally re-coloured box (profile
+   dialog previewing another faction) recomputes instead of inheriting the
+   root's already-resolved value.
+   ========================================================================== */
+:root,
+[data-faction] {
+    --color-interactive: color-mix(in srgb, var(--color-primary) 45%, var(--color-second-basecolor, #ffffff));
+    --color-interactive-border: color-mix(in srgb, var(--color-primary) 60%, var(--color-second-basecolor, #ffffff));
+}
+.settings-row-value,
+.settings-cycle-btn,
+.theme-edit-btn,
+.hs-connection-step,
+.hs-style-carousel-step,
+.hs-tree-wing-symmetry,
+.hs-floating-panel-link,
+.profile-selection-actions .action-button,
+.galaxy-selection-actions .action-button,
+.galaxy-map-actions .action-button,
+.ui-dialog-actions .action-button {
+    color: var(--color-interactive);
+}
+.settings-cycle-btn,
+.theme-edit-btn,
+.hs-connection-step,
+.hs-style-carousel-step,
+.hs-tree-wing-symmetry,
+.profile-selection-actions .action-button,
+.galaxy-selection-actions .action-button,
+.galaxy-map-actions .action-button,
+.ui-dialog-actions .action-button {
+    border-color: var(--color-interactive-border);
+}
+.settings-cycle-btn:hover,
+.theme-edit-btn:hover,
+.hs-connection-step:hover,
+.hs-style-carousel-step:hover {
+    background: var(--color-interactive);
+    color: var(--color-background);
+}
+.volume-slider::-webkit-slider-thumb,
+.settings-look-slider::-webkit-slider-thumb,
+.hs-floating-area-style input[type="range"]::-webkit-slider-thumb {
+    background: var(--color-interactive);
+}
+.volume-slider::-moz-range-thumb,
+.settings-look-slider::-moz-range-thumb,
+.hs-floating-area-style input[type="range"]::-moz-range-thumb {
+    background: var(--color-interactive);
+}
+
+/* Embedded PROFILES tab — pilot list shown directly. */
+.hs-menu-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 14px;
+}
+.hs-menu-profile-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    text-align: left;
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 45%, transparent);
+    cursor: pointer;
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-menu-profile-row:hover {
+    background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 20%, transparent);
+}
+.hs-menu-profile-row.is-active {
+    border-color: var(--row-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 18%, transparent);
+}
+.hs-menu-profile-emblem img {
+    display: block;
+    image-rendering: pixelated;
+}
+.hs-menu-profile-name {
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-menu-profile-faction {
+    color: var(--row-accent, var(--color-text-secondary));
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 2px;
+}
+.hs-menu-profile-badge {
+    padding: 1px 6px;
+    font-size: var(--font-text-small, 11px);
+    letter-spacing: 1px;
+    color: var(--color-background);
+    background: var(--row-accent, var(--color-primary));
+}
+
+/* ==========================================================================
+   Faction frames with a visible stepped outline.
+   A plain clip-path only nibbled tiny corners off a 1px, low-contrast border,
+   so panels still read as rectangles. Here every framed box gets:
+     ::before  accent-coloured slab over the whole box, cut to the faction
+               shape → the outline, steps included
+     ::after   the box's own fill (background: inherit), inset by the frame
+               width and cut to the same shape → the inside
+   Independent of the element's own border (some panels zero it).
+   Same polygon on both, offset by the border width, gives an exact 2px
+   stepped frame along every staircase edge.
+   ========================================================================== */
+.home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root),
+.home-station-overlay .hs-hangar-bay-stage {
+    --frame-w: 2px;
+    --frame-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 75%, transparent);
+    position: relative;
+    isolation: isolate;
+    border: var(--frame-w) solid transparent;
+    box-shadow: none;
+}
+.home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,
+.home-station-overlay .hs-hangar-bay-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    z-index: -1;
+    opacity: 1;
+    pointer-events: none;
+    background: var(--frame-color);
+    clip-path: var(--faction-panel-clip, none);
+}
+.home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::after,
+.home-station-overlay .hs-hangar-bay-stage::after {
+    content: '';
+    position: absolute;
+    inset: var(--frame-w);
+    z-index: -1;
+    pointer-events: none;
+    background: inherit;
+    background-color: var(--color-background, #050508);
+    clip-path: var(--faction-panel-clip, none);
+}
+
+/* Station buttons & tabs: same frame with the smaller control shape. */
+.home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn,
+    .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button) {
+    --frame-w: 2px;
+    --frame-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    position: relative;
+    isolation: isolate;
+    border-color: transparent;
+    border-width: var(--frame-w);
+    border-style: solid;
+}
+.home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn,
+    .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--frame-color);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn,
+    .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::after {
+    content: '';
+    position: absolute;
+    inset: var(--frame-w);
+    z-index: -1;
+    pointer-events: none;
+    background: inherit;
+    clip-path: var(--faction-ctl-clip, none);
+}
+.home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn,
+    .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button):is(:hover, .active, .nav-focused) {
+    --frame-color: var(--faction-accent, var(--color-primary));
 }

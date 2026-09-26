@@ -116,7 +116,8 @@ extendClass(HomeStationUI, {
 
     isMenuChrome(el) {
         return !!(el && (el.id === 'hsMenu' ||
-            (el.classList && el.classList.contains('hs-menu-btn'))));
+            (el.classList && (el.classList.contains('hs-menu-btn') ||
+                el.classList.contains('hs-menu-tab-btn')))));
     },
 
     isTabChromeFocused() {

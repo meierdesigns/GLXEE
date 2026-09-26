@@ -11,6 +11,7 @@ extendClass(ComponentEditorUI, {
         }
         this.readGenFields();
         this.busy = true;
+        this.drawCenter();
         this.setStatus("Generating via Flux…");
         try {
             const promptEl = this.root.querySelector("#cePrompt");

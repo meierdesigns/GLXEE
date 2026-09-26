@@ -28,76 +28,48 @@ extendClass(HomeStationUI, {
             .find((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight');
     },
 
-    renderFloatingWingCropPreview(panel, shipId, area) {
-        const canvas = panel && panel.querySelector('.hs-floating-wing-preview');
+    /**
+     * Draw one wing style on its own, fitted to the canvas. Wings carry no
+     * hull fragments, so the whole generated wing is shown — no crop window.
+     */
+    renderFloatingWingPreview(canvas, shipId, area, variant) {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!ctx || !loader || !loader.renderProceduralWing) return;
         const w = canvas.width;
         const h = canvas.height;
-        const left = area === 'wingLeft';
-        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
-        const { cropX, cropY, cropW, cropH } = loader
-            ? loader.normalizeWingCrop(this.getWingCrop(shipId))
-            : { cropX: 0, cropY: 0, cropW: 1, cropH: 1 };
-        // Match the bay wing's aspect so the crop rect lands on the same part
-        // of the art here as it does on the ship.
-        const boxW = w - 20;
-        const boxH = h - 20;
+        const pad = Math.max(4, Math.round(Math.min(w, h) * 0.08));
+        const boxW = w - pad * 2;
+        const boxH = h - pad * 2;
         const aspect = this.wingPreviewAspect();
         const pw = Math.min(boxW, boxH * aspect);
         const ph = Math.min(boxH, boxW / aspect);
-        const px = 10 + (boxW - pw) / 2;
-        const py = 10 + (boxH - ph) / 2;
-
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = '#09090d';
         ctx.fillRect(0, 0, w, h);
         ctx.imageSmoothingEnabled = false;
-
         const model = typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel
             ? shipConfigManager.getMergedModel(shipId)
             : null;
-        const variant = profileManager.getSegmentShapeVariant(shipId, 'wing');
-        const seed = loader && loader.resolveHullShapeSeed
-            ? loader.resolveHullShapeSeed({ id: shipId })
-            : '';
-        if (loader && loader.renderProceduralWing) {
-            const voxelScale = this.getVoxelScaleValue(shipId);
-            loader.renderProceduralWing(
-                ctx,
-                { id: left ? 'wingLeft' : 'wingRight' },
-                px,
-                py,
-                pw,
-                ph,
-                null,
-                0,
-                loader.resolvePlayerFactionStyle(model),
-                seed,
-                variant,
-                null,
-                0,
-                voxelScale,
-                this.wingPreviewPixelZoom(pw)
-            );
-        }
-
-        const cutX = left ? px + pw * (1 - cropX - cropW) : px + pw * cropX;
-        const cutY = py + ph * cropY;
-        const cutW = pw * cropW;
-        const cutH = ph * cropH;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-        ctx.fillRect(px, py, pw, Math.max(0, cutY - py));
-        ctx.fillRect(px, cutY + cutH, pw, Math.max(0, py + ph - cutY - cutH));
-        if (left) {
-            ctx.fillRect(cutX + cutW, cutY, Math.max(0, px + pw - cutX - cutW), cutH);
-        } else {
-            ctx.fillRect(px, cutY, Math.max(0, cutX - px), cutH);
-        }
-        ctx.strokeStyle = '#ff00d4';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(cutX, cutY, cutW, cutH);
+        const seed = loader.resolveHullShapeSeed ? loader.resolveHullShapeSeed({ id: shipId }) : '';
+        loader.renderProceduralWing(
+            ctx,
+            { id: area === 'wingRight' ? 'wingRight' : 'wingLeft' },
+            pad + (boxW - pw) / 2,
+            pad + (boxH - ph) / 2,
+            pw,
+            ph,
+            null,
+            0,
+            loader.resolvePlayerFactionStyle(model),
+            seed,
+            variant,
+            null,
+            0,
+            this.getVoxelScaleValue(shipId),
+            this.wingPreviewPixelZoom(pw)
+        );
     },
 
     /**
@@ -126,7 +98,8 @@ extendClass(HomeStationUI, {
     getVoxelScaleValue(shipId) {
         if (typeof shipLoadoutManager === 'undefined') return 1;
         const loadout = shipLoadoutManager.getLoadout(shipId);
-        return Number(loadout && loadout.voxelScale) || 1;
+        // Max 1.5 — older loadouts may still store larger values.
+        return Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 1));
     },
 
     getWingConnectionStyle(shipId) {
@@ -211,8 +184,20 @@ extendClass(HomeStationUI, {
         const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
         const connectionY = Number(loadout.wingConnectionY) || 0;
         const connectionWidth = Number(loadout.wingConnectionWidth) || 0.1;
+        const endWidth = Number(loadout.wingConnectionWidthEnd) || connectionWidth;
+        const style = loadout.wingConnectionStyle || 'strut';
+        const loader = graphicsManager.shipAssetLoader;
         return segments
             .filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight')
+            .filter((seg) => {
+                // Same visibility rule as the renderer: no bridge, no hit.
+                const isLeft = seg.id === 'wingLeft';
+                const attach = loader.wingAttachPoint(seg, model, scale);
+                const edge = isLeft ? center.x : center.x + center.width;
+                return loader.wingConnectionVisible(
+                    model.layout, isLeft, edge * scale, attach.x * scale, scale
+                );
+            })
             .map((seg) => {
                 const left = seg.id === 'wingLeft';
                 const attach = graphicsManager.shipAssetLoader.wingAttachPoint(seg, model, scale);
@@ -223,7 +208,22 @@ extendClass(HomeStationUI, {
                     y0: center.y + center.height * (0.5 + connectionY * 0.5),
                     x1: attach.x,
                     y1: attach.y,
-                    half: Math.max(4, center.height * connectionWidth)
+                    // Outer extents exactly as renderHullSegments draws them:
+                    // plate widens the band, double splits it into two
+                    // struts whose outer edges reach further out.
+                    ...(() => {
+                        const sides = loader.wingJointSides(model.layout.loadout);
+                        // Same rule as the renderer: style never changes the
+                        // outer extents, only strength does.
+                        const hullUnit = center.height;
+                        const wingUnit = loader.wingVisibleRect(seg, model, scale).height * 1.2;
+                        const up0 = Math.max(1, hullUnit * sides.up0);
+                        const down0 = Math.max(1, hullUnit * sides.down0);
+                        const up1 = Math.max(1, wingUnit * sides.up1);
+                        const down1 = Math.max(1, wingUnit * sides.down1);
+                        return { up0, down0, up1, down1, half0: (up0 + down0) / 2, half1: (up1 + down1) / 2 };
+                    })(),
+                    half: Math.max(4, center.height * Math.max(connectionWidth, endWidth))
                 };
             });
     },

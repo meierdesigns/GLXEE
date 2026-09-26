@@ -104,6 +104,7 @@ extendClass(HomeStationUI, {
                         <div class="hs-station-cover-image"></div>
                         <div class="hs-station-cover-faction" aria-hidden="true"></div>
                         <div class="hs-station-cover-scanline"></div>
+                        <div class="hs-station-cover-crest" aria-hidden="true">${this.factionEmblemHtml(profile, 96)}</div>
                         <div class="hs-station-cover-caption">
                             <span class="hs-station-cover-kicker">HOME STATION // DOCK 01</span>
                             <strong>WELCOME ABOARD</strong>
@@ -175,7 +176,7 @@ extendClass(HomeStationUI, {
                             </button>
                             ${this.renderTabs()}
                         </div>
-                        <p class="hs-profile"><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
+                        <p class="hs-profile"><span class="hs-profile-emblem">${this.factionEmblemHtml(profile, 20)}</span><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
                         <div class="hs-topbar-actions">
                             ${this.renderMenuTabs()}
                             <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" title="Logout" data-nav-item>

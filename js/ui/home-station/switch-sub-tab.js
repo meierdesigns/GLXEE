@@ -90,6 +90,7 @@ extendClass(HomeStationUI, {
     focusActiveTab() {
         const list = this.getFocusables();
         const active = this.overlay && (
+            (this.tab === 'menu' && this.overlay.querySelector('.hs-menu-tab-btn.active')) ||
             this.overlay.querySelector('.hs-tab.active') ||
             this.overlay.querySelector('.hs-home-btn.active')
         );

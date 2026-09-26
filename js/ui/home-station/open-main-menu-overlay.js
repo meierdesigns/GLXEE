@@ -28,8 +28,13 @@ extendClass(HomeStationUI, {
             this.closeMenuTab();
             return;
         }
+        // Opening / switching the menu always starts in the tab row.
+        this._menuArmed = false;
+        this._navLevel = 'tabs';
         if (this.tab === 'menu' && !o.force && o.tab && typeof startScreenManager !== 'undefined') {
-            startScreenManager.setEmbeddedMenuTab(o.tab);
+            this._menuOpts = Object.assign({}, this._menuOpts || {}, { tab: o.tab });
+            startScreenManager.embeddedMenuTab = o.tab;
+            this.createUI();
             return;
         }
         if (this.tab !== 'menu') {

@@ -136,6 +136,12 @@ extendClass(StartScreenManager, {
 
     handleKeyDown(event) {
         if (!this.visible) return false;
+        // Embedded in the station: keys belong to the station tab row until
+        // the player pressed ENTER/SPACE on the menu tab.
+        if (this.embeddedMode && typeof homeStationUI !== 'undefined' &&
+            homeStationUI.isVisible && !homeStationUI._menuArmed) {
+            return false;
+        }
 
         if (!this.showCredits && !this.showLevels && !this.showFontMenu &&
             !(this.showSettings && !this.embeddedMode) &&
@@ -152,7 +158,16 @@ extendClass(StartScreenManager, {
             return true;
         }
 
-        if (this.embeddedMode && !this.showFontMenu && !this.showSettings &&
+        const stationOwnsTabs = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+        // Button-style embedded tabs (assets, profiles, credits): arrows walk
+        // the buttons, ENTER/SPACE presses the focused one.
+        if (this.embeddedMode && stationOwnsTabs && !this.showSettings && !this.showFontMenu &&
+            this.handleEmbeddedButtonNav(event)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+        }
+        if (this.embeddedMode && !stationOwnsTabs && !this.showFontMenu && !this.showSettings &&
             (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
             event.preventDefault();
             this.cycleEmbeddedMenuTab(event.key === 'ArrowLeft' ? -1 : 1);
@@ -181,7 +196,50 @@ extendClass(StartScreenManager, {
         };
 
         const handler = handlers[event.key];
-        return handler ? handler() : false;
+        const handled = handler ? handler() : false;
+        // Inside the station the station's own key listener runs after this
+        // one on the same event. Once the embedded menu handled a key (e.g.
+        // ESC → back to the tab row), stop it so the station doesn't act on
+        // it a second time (ESC would otherwise close the menu straight away).
+        if (handled && this.embeddedMode && typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+            event.stopImmediatePropagation();
+        }
+        return handled;
+    },
+
+    getEmbeddedButtons() {
+        const host = this.embeddedHost;
+        if (!host || typeof menuNavHelper === 'undefined') return [];
+        const body = host.querySelector('.hs-menu-panel-body') || host;
+        return menuNavHelper.collectFocusables(body);
+    },
+
+    /** Focus the first (or current) button of a button-style embedded tab. */
+    focusEmbeddedButtons() {
+        const list = this.getEmbeddedButtons();
+        if (!list.length) return false;
+        const cur = list.indexOf(document.activeElement);
+        this._embeddedBtnIndex = menuNavHelper.applyFocus(list, cur >= 0 ? cur : 0);
+        return true;
+    },
+
+    handleEmbeddedButtonNav(event) {
+        const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[event.key];
+        const isPress = event.key === 'Enter' || event.key === ' ';
+        if (!dir && !isPress) return false;
+        const list = this.getEmbeddedButtons();
+        if (!list.length) return false;
+        let idx = list.indexOf(document.activeElement);
+        if (idx < 0) {
+            this._embeddedBtnIndex = menuNavHelper.applyFocus(list, 0);
+            return true;
+        }
+        if (dir) {
+            this._embeddedBtnIndex = menuNavHelper.moveFocusSpatial(list, idx, dir);
+            return true;
+        }
+        list[idx].click();
+        return true;
     },
 
     handleEscape() {
@@ -195,7 +253,9 @@ extendClass(StartScreenManager, {
         }
         if (this.embeddedMode) {
             if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
-                homeStationUI.closeMenuTab();
+                // ESC leaves the menu content back to the tab row; a second
+                // ESC (handled by the station) closes the menu.
+                homeStationUI.exitMenuContent();
             } else {
                 this.hideEmbedded();
             }

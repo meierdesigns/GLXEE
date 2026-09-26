@@ -244,6 +244,17 @@ class HomeStationUI {
         return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
     }
 
+    /** The pilot's faction emblem, tinted in the faction accent. */
+    factionEmblemHtml(profile, size) {
+        if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
+        const id = factionShipStyles.normalizeFaction(
+            (profile && profile.faction) || factionShipStyles.resolveActiveFaction());
+        const key = factionShipStyles.emblemCamelKey(id);
+        const style = factionShipStyles.getFactionStyle(id);
+        const label = id.charAt(0).toUpperCase() + id.slice(1);
+        return iconRenderer.imgHtml(key, size, 'hs-faction-emblem', style && style.accent, label);
+    }
+
     menuButtonHtml() {
         return '<span class="hs-menu-glyph" aria-hidden="true">≡</span>';
     }

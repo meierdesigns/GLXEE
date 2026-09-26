@@ -97,6 +97,15 @@ extendClass(HomeStationUI, {
             loadout.voxelScale = 1;
             loadout.wingConnectionVoxelScale = 0;
             loadout.wingConnectionStyle = 'strut';
+            loadout.spineConnectionStyle = 'strut';
+            loadout.spineConnectionWidth = 0.18;
+            loadout.spineConnectionX = 0;
+            loadout.wingConnectionWidthEnd = 0;
+            loadout.wingJointSides = null;
+            loadout.spineConnectionWidthEnd = 0;
+            loadout.hideWingConnection = false;
+            loadout.hideSpineFront = false;
+            loadout.hideSpineBack = false;
             loadout.segmentScale = {};
             loadout.segmentOffset = {};
             loadout.moduleOffset = {};
@@ -116,6 +125,10 @@ extendClass(HomeStationUI, {
         }
         this._hangarSegmentHover = null;
         this._hangarSelectedModule = null;
+        // Reset also re-fits and re-centres the ship in the bay.
+        this._hangarFit = null;
+        this._hangarBayPanX = 0;
+        this._hangarBayPanY = 0;
         this.createUI();
     },
 

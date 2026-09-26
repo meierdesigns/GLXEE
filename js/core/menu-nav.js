@@ -41,6 +41,7 @@ class MenuNavHelper {
             () => typeof planetEditorUI !== 'undefined' && planetEditorUI.visible,
             () => typeof enemyEditorUI !== 'undefined' && enemyEditorUI.visible,
             () => typeof abilityEditorUI !== 'undefined' && abilityEditorUI.visible,
+            () => typeof uiDialog !== 'undefined' && uiDialog.isOpen,
             () => typeof onboardingManager !== 'undefined' && onboardingManager.isVisible
         ];
         return checks.some((fn) => {
@@ -69,15 +70,28 @@ class MenuNavHelper {
     collectFocusables(root) {
         if (!root) return [];
         const nodes = root.querySelectorAll(
-            'button.action-button:not([disabled]), button:not([disabled]).hs-focusable, [data-nav-item]'
+            'button:not([disabled]), [data-nav-item], a[href], select:not([disabled]), ' +
+            'textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), [tabindex]:not([tabindex="-1"])'
         );
         return Array.prototype.slice.call(nodes).filter((el) => {
             if (el.disabled) return false;
             if (el.getAttribute('aria-disabled') === 'true') return false;
+            if (el.closest && el.closest('[data-nav-skip], [inert], [aria-hidden="true"]')) return false;
+            // Hidden via display:none on any ancestor → no layout box.
+            if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
             const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
             if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
             return true;
         });
+    }
+
+    /** Text-entry fields keep arrow keys for caret movement. */
+    isTextEntry(el) {
+        if (!el || !el.tagName) return false;
+        if (el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+        if (el.tagName !== 'INPUT') return false;
+        const type = (el.getAttribute('type') || 'text').toLowerCase();
+        return !['range', 'checkbox', 'radio', 'button', 'submit', 'color'].includes(type);
     }
 
     applyFocus(list, index) {
@@ -87,6 +101,9 @@ class MenuNavHelper {
             el.classList.toggle('nav-focused', idx === i);
             if (idx === i && typeof el.focus === 'function') {
                 try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+                if (typeof el.scrollIntoView === 'function') {
+                    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ }
+                }
             }
         });
         return i;

@@ -26,11 +26,9 @@ extendClass(ComponentEditorUI, {
         const ctx = canvas.getContext("2d");
         const w = canvas.width;
         const h = canvas.height;
+        // Ship preview stays clean — the key/BG colour only shows on the
+        // component pixel canvas, where you're actually editing.
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = this.bgColor || "#FF00FF";
-        ctx.globalAlpha = 0.45;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
         this._previewHits = [];
 
         const entry = this.currentEntry();

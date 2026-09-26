@@ -25,7 +25,13 @@ extendClass(ProfileSelectionManager, {
         const activeShip = profile.activeShipId;
 
         return `
-            <div class="profile-details-header">${profile.name}</div>
+            <div class="profile-details-header">
+                <span class="profile-details-emblem">${this.getFactionEmblemHtml(profile.faction || 'pirate', 32)}</span>
+                <span class="profile-details-title">
+                    ${profile.name}
+                    <small>${this.getFactionLabel(profile.faction || 'pirate')}</small>
+                </span>
+            </div>
             <div class="profile-details-section">
                 <div class="profile-details-label">STATION</div>
                 <div class="profile-details-value">${this.galaxyName(stationGid)}</div>
@@ -71,7 +77,11 @@ extendClass(ProfileSelectionManager, {
         const pane = this.overlay && this.overlay.querySelector('#profileDetails');
         if (!pane) return;
         const profiles = this.getProfiles();
-        pane.innerHTML = this.renderProfileDetails(profiles[this.selectedIndex] || null);
+        const selected = profiles[this.selectedIndex] || null;
+        pane.innerHTML = this.renderProfileDetails(selected);
+        // The dialog takes the selected profile's faction look and shape.
+        const box = this.overlay.querySelector('.profile-selection-content');
+        if (box && selected && this.applyFactionVars) this.applyFactionVars(box, selected.faction || 'pirate');
     },
 
     bindListEvents() {
@@ -214,11 +224,12 @@ extendClass(ProfileSelectionManager, {
         this.close();
     },
 
-    deleteSelected() {
+    async deleteSelected() {
         const profiles = this.getProfiles();
         const p = profiles[this.selectedIndex];
         if (!p || typeof profileManager === 'undefined') return;
-        if (!window.confirm(`Delete profile "${p.name}"?`)) return;
+        if (!(await uiDialog.confirm(`Delete profile "${p.name}"?`, { okLabel: 'DELETE', danger: true }))) return;
+        if (!this.isVisible) return;
         profileManager.delete(p.id);
         this.selectedIndex = 0;
         this.createUI();

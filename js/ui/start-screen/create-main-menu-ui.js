@@ -151,7 +151,10 @@ extendClass(StartScreenManager, {
             btn.addEventListener('click', () => this.setEmbeddedMenuTab(tab.id));
             tabs.appendChild(btn);
         });
-        header.appendChild(tabs);
+        // The station top bar already shows these tabs (renderMenuTabs);
+        // only build the in-panel copy when no station bar hosts the menu.
+        const stationHostsTabs = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+        if (!stationHostsTabs) header.appendChild(tabs);
 
         const body = document.createElement('div');
         body.className = 'hs-menu-panel-body';
@@ -196,6 +199,44 @@ extendClass(StartScreenManager, {
             active.textContent = 'No profile loaded.';
         }
         panel.appendChild(active);
+
+        // Profiles listed right here — pick one to switch pilots.
+        if (typeof profileManager !== 'undefined' && profileManager.getProfiles) {
+            const activeId = profileManager.hasActiveProfile() ? profileManager.getActiveProfile().id : null;
+            const list = document.createElement('div');
+            list.className = 'hs-menu-profile-list';
+            profileManager.getProfiles().forEach((p) => {
+                const faction = p.faction || 'pirate';
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'hs-menu-profile-row' + (p.id === activeId ? ' is-active' : '');
+                row.setAttribute('data-faction', faction);
+                if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+                    const st = factionShipStyles.getFactionStyle(faction);
+                    if (st && st.accent) row.style.setProperty('--row-accent', st.accent);
+                }
+                const emblem = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
+                    ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+                const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                row.innerHTML =
+                    `<span class="hs-menu-profile-emblem">${emblem}</span>` +
+                    `<span class="hs-menu-profile-name">${esc(p.name)}</span>` +
+                    `<span class="hs-menu-profile-faction">${esc(faction.toUpperCase())}</span>` +
+                    (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '');
+                row.addEventListener('click', () => {
+                    if (p.id === activeId) return;
+                    profileManager.setActive(p.id);
+                    if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+                        homeStationUI.createUI();
+                        if (homeStationUI._menuArmed && this.focusEmbeddedButtons) this.focusEmbeddedButtons();
+                    } else {
+                        this.createStartScreenUI();
+                    }
+                });
+                list.appendChild(row);
+            });
+            panel.appendChild(list);
+        }
 
         const btn = document.createElement('button');
         btn.type = 'button';

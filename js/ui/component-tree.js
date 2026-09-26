@@ -45,10 +45,18 @@ class ComponentTree {
     render(hangarSlots, loadout, inventory, skinOptionsForSlot, styleOptionsForArea) {
         if (!hangarSlots || !hangarSlots.slots) return '<div class="hs-tree-empty">No components</div>';
 
+        // With wing symmetry on, both wings share one style, so they show as
+        // a single WINGS branch holding the slots of both sides.
+        const wingConfig = styleOptionsForArea ? styleOptionsForArea('wingLeft') : null;
+        const symmetric = !!(wingConfig && wingConfig.symmetric);
         const tree = {};
-        const areas = ['front', 'center', 'wingLeft', 'wingRight', 'back'];
+        const areas = symmetric
+            ? ['front', 'center', 'wings', 'back']
+            : ['front', 'center', 'wingLeft', 'wingRight', 'back'];
         areas.forEach((area) => {
-            tree[area] = (hangarSlots.slots || []).filter((slot) => slot && slot.area === area);
+            tree[area] = (hangarSlots.slots || []).filter((slot) => slot && (area === 'wings'
+                ? slot.area === 'wingLeft' || slot.area === 'wingRight'
+                : slot.area === area));
         });
 
         return `<div class="hs-tree-root">${
@@ -72,14 +80,19 @@ class ComponentTree {
         const label = this.labelForArea(area);
         const nodeId = `hs-tree-area-${area}`;
         const isExpanded = this.expandedNodes.has(nodeId);
-        const styleConfig = styleOptionsForArea ? styleOptionsForArea(area) : { styles: [] };
+        const styleConfig = styleOptionsForArea
+            ? styleOptionsForArea(area === 'wings' ? 'wingLeft' : area)
+            : { styles: [] };
         const styles = Array.isArray(styleConfig) ? styleConfig : styleConfig.styles;
         const styleControls = styles.length > 1
             ? `<div class="hs-tree-area-style">
                     <span class="hs-tree-skin-label">HULL STYLE</span>
-                    <div class="hs-tree-skin-options">
-                        ${styles.map((style) => `<button type="button" class="hs-tree-skin-option${style.active ? ' is-active' : ''}" data-tree-area-style="${area}" data-segment-id="${style.segmentId}" data-style-index="${style.index}">${style.label}</button>`).join('')}
-                    </div>
+                    ${this.renderStyleCarousel(styles.map((style) => ({
+                        active: style.active,
+                        label: style.label,
+                        attrs: `data-tree-area-style="${area}" data-segment-id="${style.segmentId}" data-style-index="${style.index}"`,
+                        thumb: `data-thumb="area" data-thumb-area="${area === 'wings' ? 'wingRight' : area}" data-thumb-index="${style.index}"`
+                    })))}
                 </div>`
             : '';
         const symmetryControl = styleConfig.isWing
@@ -105,6 +118,30 @@ class ComponentTree {
     }
 
     /**
+     * Horizontal style picker: ‹ / › step to the neighbouring style, and the
+     * strip in between shows every style as a thumbnail. Each control carries
+     * the same data attributes as the old text buttons, so the existing
+     * click handlers apply the choice unchanged. Thumbnails are canvases
+     * painted after render (see renderStyleThumbs).
+     */
+    renderStyleCarousel(options) {
+        if (!options.length) return '';
+        const activeIndex = Math.max(0, options.findIndex((opt) => opt.active));
+        const prev = options[(activeIndex - 1 + options.length) % options.length];
+        const next = options[(activeIndex + 1) % options.length];
+        return `<div class="hs-style-carousel">
+                <button type="button" class="hs-style-carousel-step" ${prev.attrs} aria-label="Previous style">‹</button>
+                <div class="hs-style-carousel-track">
+                    ${options.map((opt) => `<button type="button" class="hs-style-thumb${opt.active ? ' is-active' : ''}" ${opt.attrs} title="${opt.label}" aria-label="${opt.label}" aria-pressed="${!!opt.active}">
+                        <canvas width="48" height="36" ${opt.thumb}></canvas>
+                    </button>`).join('')}
+                </div>
+                <button type="button" class="hs-style-carousel-step" ${next.attrs} aria-label="Next style">›</button>
+                <span class="hs-style-carousel-count">${activeIndex + 1}/${options.length}</span>
+            </div>`;
+    }
+
+    /**
      * Render a single slot with dropdown for equipping
      */
     renderSlot(kind, slot, loadout, inventory, skinOptionsForSlot) {
@@ -125,9 +162,12 @@ class ComponentTree {
         const skinControls = skins.length > 1
             ? `<div class="hs-tree-skin-controls">
                     <span class="hs-tree-skin-label">STYLE</span>
-                    <div class="hs-tree-skin-options">
-                        ${skins.map((skin) => `<button type="button" class="hs-tree-skin-option${skin.active ? ' is-active' : ''}" data-tree-skin-set="${kind}" data-slot-index="${slotIndex}" data-mod-face="${slot.face || ''}" data-skin-id="${skin.id}">${skin.label}</button>`).join('')}
-                    </div>
+                    ${this.renderStyleCarousel(skins.map((skin) => ({
+                        active: skin.active,
+                        label: skin.label,
+                        attrs: `data-tree-skin-set="${kind}" data-slot-index="${slotIndex}" data-mod-face="${slot.face || ''}" data-skin-id="${skin.id}"`,
+                        thumb: `data-thumb="skin" data-thumb-kind="${kind}" data-thumb-module="${equipped}" data-thumb-skin="${skin.id}" data-thumb-face="${slot.face || ''}"`
+                    })))}
                 </div>`
             : '';
 
@@ -177,6 +217,7 @@ class ComponentTree {
             center: 'CORE',
             wingLeft: 'LEFT WING',
             wingRight: 'RIGHT WING',
+            wings: 'WINGS',
             back: 'AFT'
         }[area] || area.toUpperCase();
     }
@@ -190,6 +231,7 @@ class ComponentTree {
             center: '◆',
             wingLeft: '◀',
             wingRight: '▶',
+            wings: '◀▶',
             back: '▼'
         };
         return icons[area] || '◆';

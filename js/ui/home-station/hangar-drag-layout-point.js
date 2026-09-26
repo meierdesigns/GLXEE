@@ -28,6 +28,175 @@ extendClass(HomeStationUI, {
         return null;
     },
 
+    /**
+     * The selected joint as a straight band in layout units: centreline
+     * p0 → p1 with half-widths half0 / half1 at each end. Wing bridges run
+     * sideways from the hull, spine joints run fore/aft between parts.
+     */
+    hangarSelectedJointBand(model, scale) {
+        const id = this._hangarSelectedConnection;
+        if (!id || !model || !model.layout) return null;
+        // Same rule as the marker: only while its panel or the sidebar is open.
+        const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
+            || !this._hangarLeftCollapsed;
+        if (!panelOpen) return null;
+        return this.hangarJointBand(model, scale, id);
+    },
+
+    /**
+     * A joint as the renderer draws it, in layout units: centre points of
+     * its two end edges (x0,y0 at the hull / upper part, x1,y1 at the wing /
+     * lower part), their half-widths, and each end edge's own direction
+     * (n0 / n1). Wing joints have a vertical hull edge and a wing edge
+     * turned with the wing; spine joints have two horizontal edges.
+     */
+    hangarJointBand(model, scale, id) {
+        if (id.indexOf('spine') === 0) {
+            const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            const path = loader && loader.spineJointPaths
+                && loader.spineJointPaths(model.layout, scale).find((p) => p.id === id);
+            if (!path) return null;
+            // Double = two struts offset ±1.1·half, each 0.4·half wide.
+            const spread = 1;
+            return {
+                id, kind: 'spine',
+                x0: path.x0, y0: path.y0, x1: path.x1, y1: path.y1,
+                half0: path.half0 * spread, half1: path.half1 * spread,
+                up0: path.half0 * spread, down0: path.half0 * spread,
+                up1: path.half1 * spread, down1: path.half1 * spread,
+                n0: [1, 0], n1: [1, 0]
+            };
+        }
+        const path = this.hangarConnectionPaths(model, scale).find((p) => p.id === id);
+        if (!path) return null;
+        const loadout = model.layout.loadout || {};
+        const deg = Math.max(-60, Math.min(60, Number(loadout.wingRotation) || 0));
+        const left = id === 'wingLeft';
+        // Same frame renderHullSegments uses for the wing-side edge.
+        const ang = deg * Math.PI / 180 * (left ? -1 : 1);
+        const dirX = (left ? -1 : 1) * Math.cos(ang);
+        const dirY = (left ? -1 : 1) * Math.sin(ang);
+        const n1 = left ? [dirY, -dirX] : [-dirY, dirX];
+        return {
+            id, kind: 'wing',
+            x0: path.x0, y0: path.y0, x1: path.x1, y1: path.y1,
+            half0: path.half0, half1: path.half1,
+            up0: path.up0, down0: path.down0, up1: path.up1, down1: path.down1,
+            n0: [0, 1], n1
+        };
+    },
+
+    /** The joint's four corners and the midpoints of its two long sides. */
+    hangarJointCorners(band) {
+        // side "-1" = up / left of the edge, "+1" = down / right.
+        const s0 = [band.x0 - band.n0[0] * band.up0, band.y0 - band.n0[1] * band.up0];
+        const s1 = [band.x0 + band.n0[0] * band.down0, band.y0 + band.n0[1] * band.down0];
+        const e0 = [band.x1 - band.n1[0] * band.up1, band.y1 - band.n1[1] * band.up1];
+        const e1 = [band.x1 + band.n1[0] * band.down1, band.y1 + band.n1[1] * band.down1];
+        const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+        return { s0, s1, e0, e1, side0: mid(s0, e0), side1: mid(s1, e1) };
+    },
+
+    /** Unit direction and normal of a joint band (centreline). */
+    hangarJointAxes(band) {
+        const dx = band.x1 - band.x0;
+        const dy = band.y1 - band.y0;
+        const len = Math.max(0.0001, Math.hypot(dx, dy));
+        return { ux: dx / len, uy: dy / len, nx: -dy / len, ny: dx / len, len };
+    },
+
+    /**
+     * Resize handle of the selected joint under the pointer: the four
+     * corners scale one end ('start' / 'end'), the two long sides scale
+     * both ends together ('both').
+     */
+    hangarJointHandleHit(h, pt) {
+        const band = this.hangarSelectedJointBand(h.model, h.scale);
+        if (!band) return null;
+        const k = this.hangarJointCorners(band);
+        const reach = 7 / Math.max(1, h.scale);
+        const corners = [['start', -1, k.s0], ['start', 1, k.s1], ['end', -1, k.e0], ['end', 1, k.e1]];
+        for (const [end, side, c] of corners) {
+            if (Math.hypot(pt.lx - c[0], pt.ly - c[1]) <= reach) return { band, end, side };
+        }
+        // Long sides: anywhere along the edge from a start corner to the
+        // matching end corner.
+        const onEdge = (p, q) => {
+            const vx = q[0] - p[0];
+            const vy = q[1] - p[1];
+            const len2 = Math.max(0.0001, vx * vx + vy * vy);
+            const t = Math.max(0, Math.min(1, ((pt.lx - p[0]) * vx + (pt.ly - p[1]) * vy) / len2));
+            const d = Math.hypot(pt.lx - (p[0] + vx * t), pt.ly - (p[1] + vy * t));
+            return d <= reach ? t : null;
+        };
+        const t0 = onEdge(k.s0, k.e0);
+        if (t0 != null) return { band, end: 'both', side: -1, t: t0 };
+        const t1 = onEdge(k.s1, k.e1);
+        if (t1 != null) return { band, end: 'both', side: 1, t: t1 };
+        return null;
+    },
+
+    /** Resize cursor for a joint handle: perpendicular to the band. */
+    hangarJointHandleCursor(hit) {
+        const band = hit.band;
+        // Corners resize along their own end edge; sides across the centreline.
+        const n = hit.end === 'start' ? band.n0 : (hit.end === 'end' ? band.n1 : null);
+        const a = this.hangarJointAxes(band);
+        const vx = n ? n[0] : a.nx;
+        const vy = n ? n[1] : a.ny;
+        const deg = ((Math.atan2(vy, vx) * 180 / Math.PI) % 180 + 180) % 180;
+        const step = Math.round(deg / 45) % 4;
+        return ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][step];
+    },
+
+    /**
+     * Wings whose rotation knob is live: only a wing you clicked (selected)
+     * or the one being rotated. Hover alone no longer spawns knobs, which
+     * left them flickering in and lingering around the ship.
+     */
+    hangarRotatableWings() {
+        const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
+            || !this._hangarLeftCollapsed;
+        const selected = panelOpen ? this._hangarSelectedArea : null;
+        const wings = new Set();
+        if (selected === 'wingLeft' || selected === 'wingRight') wings.add(selected);
+        if (this._hangarWingDragState && this._hangarWingDragState.rotate) {
+            wings.add(this._hangarWingDragState.side === 'left' ? 'wingLeft' : 'wingRight');
+        }
+        return [...wings];
+    },
+
+    /**
+     * Rotation knob position in layout units: the middle of the wing's
+     * outer edge, swung with the wing around its root pivot, then pushed a
+     * fixed screen distance further out.
+     */
+    hangarWingRotateHandle(wingId, model, scale) {
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        const seg = model && model.layout && (model.layout.segments || []).find((s) => s.id === wingId);
+        if (!seg || !loader || !loader.wingVisibleRect) return null;
+        const vis = loader.wingVisibleRect(seg, model, scale);
+        const pivot = loader.wingAttachPoint(seg, model, scale);
+        const left = wingId === 'wingLeft';
+        const tipX = left ? vis.x : vis.x + vis.width;
+        const tipY = vis.y + vis.height * 0.5;
+        const rot = this.hangarSegmentRotation(wingId, model, scale);
+        const angle = rot ? rot.angle : 0;
+        const dx = tipX - pivot.x;
+        const dy = tipY - pivot.y;
+        const x = pivot.x + dx * Math.cos(angle) - dy * Math.sin(angle);
+        const y = pivot.y + dx * Math.sin(angle) + dy * Math.cos(angle);
+        const len = Math.max(0.0001, Math.hypot(x - pivot.x, y - pivot.y));
+        const push = 16 / Math.max(1, scale);
+        return {
+            x: x + (x - pivot.x) / len * push,
+            y: y + (y - pivot.y) / len * push,
+            tipX: x,
+            tipY: y,
+            pivot
+        };
+    },
+
     /** Hull segment / wing bridge / resize grip under the pointer, or null. */
     hangarDragAreaHit(h, e) {
         const pt = this.hangarDragLayoutPoint(h, e);
@@ -57,24 +226,35 @@ extendClass(HomeStationUI, {
             return q.lx - seg.x <= inward(seg.width) || seg.x + seg.width - q.lx <= inward(seg.width)
                 || q.ly - seg.y <= inward(seg.height) || seg.y + seg.height - q.ly <= inward(seg.height);
         };
-        // The wing root (rotation pivot) is the joint handle, even where the
-        // bridge band itself is only a pixel or two thick.
+        const jointHandle = this.hangarJointHandleHit(h, pt);
+        if (jointHandle) {
+            return {
+                segment: 'joint',
+                jointHandle,
+                connector: true,
+                spine: jointHandle.band.kind === 'spine' ? jointHandle.band.id : null,
+                left: jointHandle.band.id === 'wingLeft',
+                right: jointHandle.band.id === 'wingRight',
+                edge: null
+            };
+        }
+        // Rotation knob just past the tip of the wing in focus. It sits in
+        // empty space outside the wing, so it never competes with the
+        // wing's own move/resize grips or with the joint.
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
-        if (loader && loader.wingAttachPoint) {
-            for (const seg of h.model.layout.segments || []) {
-                if (seg.id !== 'wingLeft' && seg.id !== 'wingRight') continue;
-                const pivot = loader.wingAttachPoint(seg, h.model, h.scale);
-                if (Math.hypot(pt.lx - pivot.x, pt.ly - pivot.y) <= reach) {
-                    return {
-                        segment: 'wing',
-                        left: seg.id === 'wingLeft',
-                        right: seg.id === 'wingRight',
-                        width: seg.width,
-                        height: seg.height,
-                        edge: null,
-                        connector: true
-                    };
-                }
+        for (const wingId of this.hangarRotatableWings()) {
+            const knob = this.hangarWingRotateHandle(wingId, h.model, h.scale);
+            if (knob && Math.hypot(pt.lx - knob.x, pt.ly - knob.y) <= reach * 1.2) {
+                const seg = (h.model.layout.segments || []).find((s) => s.id === wingId);
+                return {
+                    segment: 'wing',
+                    left: wingId === 'wingLeft',
+                    right: wingId === 'wingRight',
+                    width: seg ? seg.width : 0,
+                    height: seg ? seg.height : 0,
+                    edge: null,
+                    rotateHandle: true
+                };
             }
         }
         let hit = segments.find((seg) =>
@@ -85,6 +265,31 @@ extendClass(HomeStationUI, {
                 && q.ly >= seg.y && q.ly <= seg.y + seg.height;
         });
         if (hit) localPt = local(hit);
+        if (!hit && loader && loader.spineJointPaths) {
+            // Nose→body→aft joints: clickable in the visible gap between
+            // the parts, with a few screen pixels of slack so thin joints
+            // stay easy to hit.
+            const slack = 6 / Math.max(1, h.scale);
+            for (const path of loader.spineJointPaths(h.model.layout, h.scale)) {
+                if (path.y1 - path.y0 <= 0) continue;
+                if (pt.ly < path.y0 - slack * 0.5 || pt.ly > path.y1 + slack * 0.5) continue;
+                const t = Math.max(0, Math.min(1, (pt.ly - path.y0) / (path.y1 - path.y0)));
+                const cx = path.x0 + (path.x1 - path.x0) * t;
+                const half = path.half0 + (path.half1 - path.half0) * t;
+                if (Math.abs(pt.lx - cx) <= Math.max(half, slack)) {
+                    return {
+                        segment: 'spine',
+                        spine: path.id,
+                        left: false,
+                        right: false,
+                        width: half * 2,
+                        height: path.y1 - path.y0,
+                        edge: null,
+                        connector: true
+                    };
+                }
+            }
+        }
         if (!hit) {
             // The bridge keeps priority over the grip ring around it.
             for (const path of this.hangarConnectionPaths(h.model, h.scale)) {
@@ -98,7 +303,8 @@ extendClass(HomeStationUI, {
                 const t = Math.abs(span) > 0.01 ? (pt.lx - path.x0) / span : 0;
                 const bridgeY = path.y0
                     + (path.y1 - path.y0) * Math.max(0, Math.min(1, t));
-                if (Math.abs(pt.ly - bridgeY) <= path.half) {
+                const bridgeHalf = path.half0 + (path.half1 - path.half0) * Math.max(0, Math.min(1, t));
+                if (Math.abs(pt.ly - bridgeY) <= Math.max(bridgeHalf, slack)) {
                     return {
                         segment: 'wing',
                         left: path.left,
@@ -154,6 +360,8 @@ extendClass(HomeStationUI, {
 
     hangarDragCursor(hit) {
         if (!hit) return 'grab';
+        if (hit.jointHandle) return this.hangarJointHandleCursor(hit.jointHandle);
+        if (hit.rotateHandle) return 'grab';
         if (hit.connector) return 'alias';
         if (hit.edge && hit.rotation) {
             // Turn the edge's direction with the wing, then pick the
@@ -180,8 +388,24 @@ extendClass(HomeStationUI, {
             case 'bottom-left':
                 return 'nesw-resize';
             default:
-                return 'move';
+                return this.hangarMoveCursor(hit);
         }
+    },
+
+    /**
+     * Grab-to-move cursor that only shows the directions the part can still
+     * go: body parts slide fore/aft only, and at the end of their travel the
+     * blocked arrow drops away.
+     */
+    hangarMoveCursor(hit) {
+        if (!hit || ['front', 'center', 'back'].indexOf(hit.segment) === -1
+            || typeof shipLoadoutManager === 'undefined') return 'move';
+        const loadout = shipLoadoutManager.getLoadout(this.hangarShipId || 'player_scrap');
+        const offset = loadout.segmentOffset && loadout.segmentOffset[hit.segment];
+        const y = Number(offset && offset.y) || 0;
+        if (y >= 0.999) return 'n-resize';
+        if (y <= -0.999) return 's-resize';
+        return 'ns-resize';
     },
 
     updateHangarDragHover(h, e) {
@@ -201,12 +425,16 @@ extendClass(HomeStationUI, {
                 segment: hit.segment,
                 edge: hit.edge,
                 connector: !!hit.connector,
+                spine: hit.spine || null,
+                handle: hit.jointHandle ? hit.jointHandle.end + hit.jointHandle.side
+                    : (hit.rotateHandle ? 'rotate' : null),
                 side: hit.left ? 'left' : 'right'
             }
             : null;
         const prev = this._hangarSegmentHover;
         if ((prev && next && prev.segment === next.segment && prev.edge === next.edge
-            && prev.connector === next.connector && prev.side === next.side)
+            && prev.connector === next.connector && prev.side === next.side
+            && prev.spine === next.spine && prev.handle === next.handle)
             || (!prev && !next)) {
             return;
         }

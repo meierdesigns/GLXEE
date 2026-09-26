@@ -44,6 +44,7 @@ extendClass(ComponentEditorUI, {
         <span id="ceShadeLabel">12</span>
       </label>
       <label class="hs-comp-check"><input type="checkbox" id="ceSymmetry" checked> SYMMETRY</label>
+      <label class="hs-comp-check" title="Show the generator key colour behind the pixels"><input type="checkbox" id="ceShowBg"> BG</label>
       <button type="button" class="pe-btn" id="ceApplySym">MIRROR</button>
       <button type="button" class="pe-btn" id="ceClearPx">CLEAR</button>
       <button type="button" class="pe-btn pe-primary" id="ceSavePixels">SAVE PIXELS</button>

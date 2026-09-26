@@ -439,9 +439,14 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  ▸ ship-wide voxel lattice for aligned hull, wing, spine, and module pixels │
 │  ▸ adjustable spine joints, wing joint sides, connection widths, and hides  │
 │  ▸ delta / swept / stub / bat / twin-fin / lance wing planform variants     │
+│  ▸ expanded hull silhouettes — pointed / forked noses, keels, skirts, fans │
+│  ▸ supersampled Scale2x combat sprites with device-pixel lattice snapping   │
 │  ▸ draggable hangar slot cards with live area guides and reset controls     │
 │  ▸ themed keyboard-safe confirm / alert / prompt dialogs                    │
 │  ▸ grouped menu-tab navigation with focus-aware text-entry handling         │
+│  ▸ galaxy flight travel with faction ambush encounters and seeded sectors   │
+│  ▸ combat wave direction, patterned obstacles, pickups, and victory loot    │
+│  ▸ Trading Posts with sell-back, ship location, style unlocks, and cosmetics│
 │  ▸ difficulty curves · explosion FX · mission start briefs                  │
 │  ▸ embedded hub menus · parallax crossfade handoffs                         │
 │  ▸ global look recipe · 8 palettes · UI editors · hangar arena              │
@@ -516,6 +521,10 @@ stable while large implementations move into focused folders loaded in order by
 | 40A | Ship anatomy | Voxel lattice alignment, joint geometry, and wing planforms |
 | 40B | Station interaction | Hangar controls, profile handoff, dialogs, and menu navigation |
 | 40C | Visual consistency | Faction themes, palette persistence, parallax, and editor polish |
+| 41A | Ship rendering | Expanded hull silhouettes, Scale2x sprites, and pixel snapping |
+| 41B | Galaxy travel | Flight travel, ambush encounters, and procedural arrival sectors |
+| 41C | Combat progression | Wave direction, obstacle patterns, pickups, and victory loot |
+| 41D | Station commerce | Trading Posts, sell-back, ship location, and style unlocks |
 
 <br/>
 

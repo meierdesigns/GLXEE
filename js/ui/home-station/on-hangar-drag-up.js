@@ -127,8 +127,11 @@ extendClass(HomeStationUI, {
         if (movingModule && !clickedModule) this.drawHangarBay();
         else this.createUI();
 
-        // Show component details in sidebar AFTER createUI()
+        // Show component details in sidebar AFTER createUI(). With the ship
+        // tree open, jump to the slot's own entry there instead of swapping
+        // the sidebar over to the details view.
         if (moduleToSelect) {
+            if (!this._hangarLeftCollapsed && this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index)) return;
             this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);
         }
         // With the ship sidebar open, its tree already holds every setting:
@@ -159,6 +162,34 @@ extendClass(HomeStationUI, {
         } else if (floatingArea) {
             this.showFloatingAreaStyle(floatingArea);
         }
+    },
+
+    /**
+     * Open a slot's entry in the sidebar tree: expand its area section (and
+     * the entry itself), scroll it into view and flash it. Returns false if
+     * the tree has no entry for that slot.
+     */
+    focusTreeSlot(kind, index) {
+        if (!this.overlay) return false;
+        const item = this.overlay.querySelector(`#hs-tree-slot-${kind}-${index}`);
+        if (!item) return false;
+        const branch = item.closest('.hs-tree-branch');
+        if (branch && branch.id) {
+            branch.parentElement.querySelectorAll(':scope > .hs-tree-branch').forEach((other) => {
+                other.open = other === branch;
+                if (window.componentTree && window.componentTree.setNodeExpanded) {
+                    window.componentTree.setNodeExpanded(other.id, other.open);
+                }
+            });
+        }
+        item.open = true;
+        if (window.componentTree && window.componentTree.setNodeExpanded) {
+            window.componentTree.setNodeExpanded(item.id, true);
+        }
+        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        item.classList.add('is-focused');
+        setTimeout(() => item.classList.remove('is-focused'), 900);
+        return true;
     },
 
     /** Expand one sidebar tree section, collapse its sibling sections, and scroll it into view. */

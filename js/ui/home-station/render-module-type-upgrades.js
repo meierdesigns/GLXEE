@@ -19,7 +19,9 @@ extendClass(HomeStationUI, {
                 if (maxed) {
                     action = '<span class="hs-muted hs-line-action">MAX</span>';
                 } else {
-                    action = `<button class="action-button hs-line-action" data-mod-up="${cat}:${track}" ${check.ok ? '' : 'disabled'}>` +
+                    // Missing resources stays focusable: the click opens the buy modal.
+                    const lockAttr = check.ok ? '' : (check.reason === 'RESOURCES' ? 'data-short="1"' : 'disabled');
+                    action = `<button class="action-button hs-line-action" data-mod-up="${cat}:${track}" ${lockAttr}>` +
                         `UPGRADE` +
                         `</button>`;
                 }
@@ -105,7 +107,9 @@ extendClass(HomeStationUI, {
             const faction = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction)
                 ? planetConfigManager.getGalaxyFaction(gid)
                 : ((g && g.faction) || '');
-            const factionLabel = faction ? (' · FACTION ' + String(faction).toUpperCase()) : '';
+            const factionLabel = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControlLabel)
+                ? (' · ' + planetConfigManager.getGalaxyControlLabel(gid))
+                : (faction ? (' · FACTION ' + String(faction).toUpperCase()) : '');
             let action = '';
             if (here) {
                 action = '<span class="hs-muted hs-line-action">CURRENT</span>';
@@ -142,25 +146,30 @@ extendClass(HomeStationUI, {
         return true;
     },
 
-    renderExplorationsTab(profile) {
-        const clusters = this._exploreClusters.map((cluster) => {
-            const items = cluster.items.filter((entry) => this.isExploreItemVisible(entry.id));
-            return { id: cluster.id, label: cluster.label, items: items };
-        }).filter((cluster) => cluster.items.length > 0);
+    /** Discovered entries behind an Explorations item, or null if untracked. */
+    getExploreItemCount(itemId) {
+        if (typeof profileManager === 'undefined' || !profileManager.hasActiveProfile()) return 0;
+        const count = (cat) => (profileManager.getDiscovered(cat) || []).length;
+        const cats = {
+            SHIPS: ['ships'], PLANETS: ['planets'], ENEMIES: ['enemies'], FACTIONS: ['factions'],
+            EVENTS: ['events'], WEAPONS: ['weapons'], ABILITIES: ['abilities'],
+            'DEFENSE SYSTEMS': ['defenses'], COMPONENTS: ['weapons', 'abilities', 'defenses']
+        }[itemId];
+        return cats ? cats.reduce((sum, cat) => sum + count(cat), 0) : null;
+    },
 
-        if (!clusters.length) {
-            return `<div class="hs-section hs-panel hs-explore-root">` +
-                `${this.panelTitle('hsExplore', 'EXPLORATIONS')}` +
-                `<div class="hs-tab-fill">` +
-                `<p class="hs-muted hs-hint">No archive or arsenal entries unlocked yet. Discover ships, planets, enemies and gear in missions.</p>` +
-                `</div></div>`;
-        }
+    renderExplorationsTab(profile) {
+        // Every entry is listed; ones with nothing discovered yet are dimmed.
+        const clusters = this._exploreClusters;
 
         const groups = clusters.map((cluster) => {
             const rows = cluster.items.map((entry) => {
-                return `<button type="button" class="action-button hs-explore-item" data-explore="${entry.open}" data-nav-item>` +
-                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon, 32, 'hs-pixel')}</span>` +
+                const count = this.getExploreItemCount(entry.id);
+                const empty = !this.isExploreItemVisible(entry.id);
+                return `<button type="button" class="action-button hs-explore-item${empty ? ' is-empty' : ''}" data-explore="${entry.open}" data-nav-item${empty ? ' disabled' : ''}>` +
+                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon, 64, 'hs-pixel')}</span>` +
                     `<span class="hs-explore-label">${entry.id}</span>` +
+                    `<span class="hs-explore-count">${count == null ? '—' : count}</span>` +
                     `</button>`;
             }).join('');
             return `<div class="hs-explore-cluster" data-cluster="${cluster.id}">` +

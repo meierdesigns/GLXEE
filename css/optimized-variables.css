@@ -69,7 +69,7 @@
      ======================================== */
   
   --overlay-color: #808080;           /* Overlay color */
-  --overlay-opacity: 0.3;             /* Overlay opacity */
+  --overlay-opacity: 0.1;             /* Faction tint over everything (screen blend); higher washes out blacks */
   
   /* ========================================
      GRADIENT SYSTEM

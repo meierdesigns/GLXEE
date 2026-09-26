@@ -203,9 +203,59 @@ extendClass(StartScreenManager, {
         // Profiles listed right here — pick one to switch pilots.
         if (typeof profileManager !== 'undefined' && profileManager.getProfiles) {
             const activeId = profileManager.hasActiveProfile() ? profileManager.getActiveProfile().id : null;
+            const profiles = profileManager.getProfiles();
+            const factions = (typeof factionManager !== 'undefined' && factionManager.getFactionIds)
+                ? factionManager.getFactionIds().slice() : [];
+            profiles.forEach((p) => {
+                const f = p.faction || 'pirate';
+                if (factions.indexOf(f) === -1) factions.push(f);
+            });
+            if (this._profileFactionFilter && factions.indexOf(this._profileFactionFilter) === -1) {
+                this._profileFactionFilter = null;
+            }
             const list = document.createElement('div');
             list.className = 'hs-menu-profile-list';
-            profileManager.getProfiles().forEach((p) => {
+            let applyFilter = () => {
+                const f = this._profileFactionFilter;
+                list.querySelectorAll('.hs-menu-profile-row').forEach((row) => {
+                    row.hidden = !!f && row.getAttribute('data-faction') !== f;
+                });
+                filterBar.querySelectorAll('[data-profile-filter]').forEach((b) => {
+                    const on = b.getAttribute('data-profile-filter') === (f || '');
+                    b.classList.toggle('is-active', on);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+            };
+            const filterBar = document.createElement('div');
+            filterBar.className = 'hs-menu-profile-filters';
+            filterBar.setAttribute('role', 'group');
+            filterBar.setAttribute('aria-label', 'Filter by faction');
+            ['', ...factions].forEach((f) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'hs-menu-profile-filter';
+                b.setAttribute('data-profile-filter', f);
+                const count = f ? profiles.filter((p) => (p.faction || 'pirate') === f).length : profiles.length;
+                b.textContent = (f ? f.toUpperCase() : 'ALL') + ' ' + count;
+                if (!count) b.classList.add('is-empty');
+                if (f && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+                    const st = factionShipStyles.getFactionStyle(f);
+                    if (st && st.accent) b.style.setProperty('--row-accent', st.accent);
+                }
+                b.addEventListener('click', () => {
+                    this._profileFactionFilter = f || null;
+                    applyFilter();
+                });
+                filterBar.appendChild(b);
+            });
+            const createBtn = document.createElement('button');
+            createBtn.type = 'button';
+            createBtn.className = 'hs-menu-profile-filter hs-menu-profile-create';
+            createBtn.textContent = '+ CREATE PROFILE';
+            createBtn.addEventListener('click', () => this.openProfileCreate(this._profileFactionFilter));
+            filterBar.appendChild(createBtn);
+            panel.appendChild(filterBar);
+            profiles.forEach((p) => {
                 const faction = p.faction || 'pirate';
                 const row = document.createElement('button');
                 row.type = 'button';
@@ -235,28 +285,65 @@ extendClass(StartScreenManager, {
                 });
                 list.appendChild(row);
             });
-            panel.appendChild(list);
+            const renderStats = (profile) => {
+                if (typeof profileSelectionManager === 'undefined' || !profileSelectionManager.renderProfileDetails) return;
+                stats.innerHTML = profileSelectionManager.renderProfileDetails(profile || null);
+                if (profile && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+                    const st = factionShipStyles.getFactionStyle(profile.faction || 'pirate');
+                    if (st && st.accent) stats.style.setProperty('--row-accent', st.accent);
+                }
+            };
+            const activeProfile = profiles.find((p) => p.id === activeId) || null;
+            list.querySelectorAll('.hs-menu-profile-row').forEach((row, i) => {
+                const show = () => renderStats(profiles[i]);
+                row.addEventListener('mouseenter', show);
+                row.addEventListener('focus', show);
+            });
+            list.addEventListener('mouseleave', () => renderStats(activeProfile));
+            const split = document.createElement('div');
+            split.className = 'hs-menu-profile-split';
+            const left = document.createElement('div');
+            left.className = 'hs-menu-profile-col';
+            const stats = document.createElement('aside');
+            stats.className = 'profile-details hs-menu-profile-stats';
+            const empty = document.createElement('p');
+            empty.className = 'hs-menu-panel-copy hs-menu-profile-empty';
+            empty.textContent = 'No pilots in this faction.';
+            left.appendChild(list);
+            left.appendChild(empty);
+            split.appendChild(left);
+            split.appendChild(stats);
+            panel.appendChild(split);
+            renderStats(activeProfile);
+            const baseApply = applyFilter;
+            applyFilter = () => {
+                baseApply();
+                empty.hidden = !!list.querySelector('.hs-menu-profile-row:not([hidden])');
+            };
+            applyFilter();
         }
 
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'action-button hs-menu-panel-action';
-        btn.textContent = 'MANAGE PROFILES';
-        btn.addEventListener('click', () => {
-            if (typeof profileSelectionManager === 'undefined') return;
-            this.hideEmbedded();
-            profileSelectionManager.show({
-                onClose: () => {
-                    if (this.hasActiveProfile()) {
-                        this.returnToHub();
-                    } else {
-                        this.show({ forceMenu: true });
-                    }
-                }
-            });
-        });
-        panel.appendChild(btn);
         body.appendChild(panel);
+    },
+
+    openProfileCreate(factionId) {
+        if (typeof profileSelectionManager === 'undefined') return;
+        this.hideEmbedded();
+        profileSelectionManager.show({
+            onClose: () => {
+                if (this.hasActiveProfile()) {
+                    this.returnToHub();
+                } else {
+                    this.show({ forceMenu: true });
+                }
+            }
+        });
+        const ids = profileSelectionManager.getFactionIds ? profileSelectionManager.getFactionIds() : [];
+        profileSelectionManager.mode = 'create';
+        profileSelectionManager.createStep = 'faction';
+        profileSelectionManager._heroDefaultName = '';
+        profileSelectionManager.pendingFaction = (factionId && ids.indexOf(factionId) !== -1) ? factionId : ids[0];
+        profileSelectionManager.createUI();
     },
 
     fillEmbeddedAssets(body) {

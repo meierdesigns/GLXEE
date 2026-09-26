@@ -3,6 +3,12 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
+        // A trading-post visit ends as soon as another tab is shown.
+        if (this.tab !== 'shop' && this.visitPostId) {
+            this.visitPostId = null;
+            if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
+            this._shopCategoryBeforeDock = null;
+        }
         this.stopHangarPreview();
         const scrollState = this.captureScrollState();
         if (this._keyHandler) {
@@ -49,8 +55,6 @@ extendClass(HomeStationUI, {
         }
 
         const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const cargoResHtml = this.renderResourceList(profile.cargo.resources, 'cargo');
-        const cargoBpHtml = this.renderBlueprintList(profile.cargo.blueprints);
         const stationBpHtml = this.renderBlueprintList(profile.blueprints);
         const stats = (typeof profileManager !== 'undefined')
             ? profileManager.getStationStats(profile)
@@ -113,15 +117,6 @@ extendClass(HomeStationUI, {
                     <div class="hs-panel hs-panel-stores">
                         ${this.panelTitle('hsStores', 'STATION STORES')}
                         <div class="hs-row hs-res-grid">${walletHtml}</div>
-                    </div>
-                    <div class="hs-panel hs-panel-cargo">
-                        ${this.panelTitle('hsCargo', 'MISSION CARGO')}
-                        <div class="hs-row hs-res-grid">${cargoResHtml}</div>
-                        <div class="hs-row hs-bp">${cargoBpHtml}</div>
-                        <button class="action-button hs-panel-action hs-teleport" id="hsTeleport" ${profileManager.hasCargo() ? '' : 'disabled'}>` +
-                            `<span class="hs-btn-icon">${this.iconHtml('hsTeleport', 32, 'hs-pixel')}</span>` +
-                            `<span>TELEPORT CARGO</span>` +
-                        `</button>
                     </div>
                     <div class="hs-panel hs-panel-bp">
                         ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}

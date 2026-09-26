@@ -24,6 +24,7 @@ extendClass(HomeStationUI, {
             this._resBuyModal = null;
             this.statusMsg = '';
             this._navLevel = 'sub';
+            this.persistTab();
             this.createUI();
             return true;
         }
@@ -90,7 +91,7 @@ extendClass(HomeStationUI, {
     focusActiveTab() {
         const list = this.getFocusables();
         const active = this.overlay && (
-            (this.tab === 'menu' && this.overlay.querySelector('.hs-menu-tab-btn.active')) ||
+            ((this.tab === 'menu' || this._menuOnlyTabs.indexOf(this.tab) !== -1) && this.overlay.querySelector('.hs-menu-tab-btn.active')) ||
             this.overlay.querySelector('.hs-tab.active') ||
             this.overlay.querySelector('.hs-home-btn.active')
         );

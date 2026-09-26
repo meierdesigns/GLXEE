@@ -23,7 +23,7 @@ extendClass(HomeStationUI, {
 
     renderTabs() {
         let prevCluster = null;
-        return this._tabs.filter((id) => id !== 'station').map((id) => {
+        return this._tabs.filter((id) => id !== 'station' && this._menuOnlyTabs.indexOf(id) === -1).map((id) => {
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             const active = this.tab === id;
             const playClass = id === 'play' ? ' hs-tab-play' : '';
@@ -77,6 +77,8 @@ extendClass(HomeStationUI, {
         const savedShopCat = opts.shopCategory || savedState.shopCategory;
         this.tab = this._tabs.includes(savedTab) ? savedTab : 'station';
         this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'ships';
+        const savedUpgradeSub = opts.upgradeSubTab || savedState.upgradeSubTab;
+        this.upgradeSubTab = this._upgradeSubTabs.includes(savedUpgradeSub) ? savedUpgradeSub : 'station';
         this.applyShopPrefsForCategory(this.shopCategory, {
             filter: opts.shopFilter != null ? opts.shopFilter : savedState.shopFilter,
             sort: opts.shopSort != null ? opts.shopSort : savedState.shopSort,
@@ -85,7 +87,17 @@ extendClass(HomeStationUI, {
         this.statusMsg = '';
         this.focusIndex = 0;
         this._focusExplore = opts.focusExplore || null;
+        const savedMenuTab = opts.menuTab !== undefined ? opts.menuTab : (!opts.tab && savedState.menuTab);
+        // Mission cargo lands in the station automatically; this also pulls
+        // in anything left over from a run that hit the storage cap.
+        if (typeof profileManager !== 'undefined' && profileManager.hasCargo && profileManager.hasCargo()) {
+            profileManager.teleportCargoToStation();
+        }
         this.createUI();
+        if (savedMenuTab && typeof startScreenManager !== 'undefined'
+            && startScreenManager.embeddedMenuTabs.some((t) => t.id === savedMenuTab)) {
+            this.openMainMenuOverlay({ tab: savedMenuTab, skipPersist: true });
+        }
         if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
             soundManager.startMenuMusic();
         }
@@ -102,7 +114,11 @@ extendClass(HomeStationUI, {
         this.captureShopPrefs();
         const extra = {
             tab: tab,
+            // Open ESC-menu tab (profiles/settings/…) restored on reload.
+            menuTab: (this.tab === 'menu' && typeof startScreenManager !== 'undefined')
+                ? startScreenManager.embeddedMenuTab : null,
             shopCategory: this.shopCategory,
+            upgradeSubTab: this.upgradeSubTab,
             shopFilter: this.shopFilter,
             shopSort: this.shopSort,
             shopResourceQty: this.shopResourceQty

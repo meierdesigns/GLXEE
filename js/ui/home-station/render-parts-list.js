@@ -100,6 +100,16 @@ extendClass(HomeStationUI, {
     },
 
     catalogPartListings() {
+        const post = this.getVisitedTradingPost();
+        if (post) {
+            return profileManager.getTradingPostStock(post).map((e) => ({
+                kind: e.kind,
+                id: e.id,
+                name: String((e.item && e.item.name) || e.id).toUpperCase(),
+                item: e.item,
+                faction: e.faction
+            }));
+        }
         const list = [];
         const profile = this.getProfile();
         const shopFaction = this.getShopFaction(profile);
@@ -210,7 +220,7 @@ extendClass(HomeStationUI, {
                 `<span class="hs-chip-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>` +
                 `<span class="hs-line-text">` +
                 `<strong>${e.name}</strong>` +
-                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier}</span>` +
+                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier} · ${this.factionTagHtml(this.shipFaction(e.id))}</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}${action}</div>`;
         }).join('');
@@ -252,7 +262,7 @@ extendClass(HomeStationUI, {
                 `<span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
                 `<span class="hs-line-text">` +
                 `<strong>BP: ${e.name}${stock}</strong>` +
-                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier}</span>` +
+                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier} · ${this.factionTagHtml(this.shipFaction(e.id))}</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}` +
                 `<button class="action-button hs-line-action" data-buy-bp="${e.id}" ${afford ? '' : 'disabled'}>BUY</button></div>`;

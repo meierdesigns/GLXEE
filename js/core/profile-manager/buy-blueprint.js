@@ -34,7 +34,8 @@ extendClass(ProfileManager, {
         return { ok: true };
     },
 
-    buyPart(kind, partId) {
+    /** `postId` buys from a docked trading post instead of the home shop. */
+    buyPart(kind, partId, postId) {
         const profile = this.getActiveProfile();
         if (!profile || typeof economyConfig === 'undefined') {
             return { ok: false, reason: 'NO PROFILE' };
@@ -94,7 +95,11 @@ extendClass(ProfileManager, {
             discoverCat = 'abilities';
         }
 
-        if (!this.isPartAvailableInShop(k, id, profile)) {
+        if (postId) {
+            if (!this.isPartInTradingPost(postId, k, id)) {
+                return { ok: false, reason: 'NOT IN STOCK' };
+            }
+        } else if (!this.isPartAvailableInShop(k, id, profile)) {
             return { ok: false, reason: 'WRONG GALAXY' };
         }
 

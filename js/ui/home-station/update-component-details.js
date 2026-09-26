@@ -154,7 +154,8 @@ extendClass(HomeStationUI, {
             `<div class="hs-floating-style-carousel" data-ship-tree="${shipId}">${window.componentTree.renderStyleCarousel(
                 Array.from({ length: count }, (_, index) => ({
                     active: index === active,
-                    label: isWing ? wingStyles[index].label : `STYLE ${index + 1}`,
+                    locked: index !== active && !this.isStyleOwned(profileManager.hullStyleGroup(segmentId), index),
+                    label: isWing ? wingStyles[index].label : (loader.bodyShapeVariantLabels(segmentId)[index] || `STYLE ${index + 1}`),
                     attrs: `data-panel-style="${index}"`,
                     thumb: `data-thumb="area" data-thumb-area="${area}" data-thumb-index="${index}"`
                 }))
@@ -243,7 +244,7 @@ extendClass(HomeStationUI, {
             <label class="hs-floating-style-select-label"><span>STYLE</span>
                 <select class="hs-floating-style-select" data-wing-connection-style-select>
                     ${['strut', 'plate', 'double', 'hinge'].map((style) =>
-                        `<option value="${style}"${style === activeStyle ? ' selected' : ''}>${style.toUpperCase()}</option>`
+                        `<option value="${style}"${style === activeStyle ? ' selected' : ''}${style !== activeStyle && !this.isStyleOwned('joint', style) ? ' disabled' : ''}>${style.toUpperCase()}${style !== activeStyle && !this.isStyleOwned('joint', style) ? ' · LOCKED' : ''}</option>`
                     ).join('')}
                 </select>
             </label>
@@ -290,8 +291,8 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * Fore/aft spine joint settings (nose→body→aft). One setting covers both
-     * joints so the hull stays consistent, like the mirrored wing joints.
+     * Settings of one spine joint: nose↔core (spineFront) or core↔aft
+     * (spineBack). Each joint has its own style, strength and offset.
      */
     showFloatingSpineConnectionStyle(area, spineId = null) {
         if (!this.overlay || typeof shipLoadoutManager === 'undefined') return;
@@ -307,43 +308,45 @@ extendClass(HomeStationUI, {
 
         const shipId = this.hangarShipId || 'player_scrap';
         const loadout = shipLoadoutManager.getLoadout(shipId);
-        const activeStyle = loadout.spineConnectionStyle || 'strut';
-        const start = Number(loadout.spineConnectionWidth) || 0.18;
-        const end = Number(loadout.spineConnectionWidthEnd) || start;
+        const joint = this._hangarSelectedConnection;
+        const settings = resolveSpineJoint(loadout, joint);
+        const activeStyle = settings.style;
+        const start = settings.width;
+        const end = settings.widthEnd || start;
         const panel = document.createElement('div');
         panel.className = 'hs-floating-area-style hs-floating-connection-style';
-        panel.innerHTML = `<strong>HULL CONNECTION</strong>
+        panel.innerHTML = `<strong>${joint === 'spineBack' ? 'CORE ↔ AFT' : 'NOSE ↔ CORE'} CONNECTION</strong>
             <label class="hs-floating-style-select-label"><span>STYLE</span>
                 <select class="hs-floating-style-select" data-spine-style-select>
                     ${['strut', 'plate', 'double', 'hinge'].map((style) =>
-                        `<option value="${style}"${style === activeStyle ? ' selected' : ''}>${style.toUpperCase()}</option>`
+                        `<option value="${style}"${style === activeStyle ? ' selected' : ''}${style !== activeStyle && !this.isStyleOwned('joint', style) ? ' disabled' : ''}>${style.toUpperCase()}${style !== activeStyle && !this.isStyleOwned('joint', style) ? ' · LOCKED' : ''}</option>`
                     ).join('')}
                 </select>
             </label>
             <div class="hs-floating-area-crop">
                 ${this.connectionStrengthRow('FRONT', 'data-spine-width', 0.05, 0.6, start)}
                 ${this.connectionStrengthRow('AFT', 'data-spine-width-end', 0.05, 0.6, end)}
-                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(loadout.spineConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
-                <label><span>OFFSET</span><input type="range" data-spine-offset min="-1" max="1" step="0.01" value="${Number(loadout.spineConnectionX) || 0}"></label>
+                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${settings.widthEnd ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
+                <label><span>OFFSET</span><input type="range" data-spine-offset min="-1" max="1" step="0.01" value="${settings.x}"></label>
             </div>
             <span class="hs-floating-preview-caption">DRAG THE JOINT'S CORNERS OR SIDES TO SCALE</span>
             <button type="button" class="hs-floating-panel-link" data-open-area>← BACK TO AREA</button>`;
 
         panel.querySelectorAll('[data-spine-style-select]').forEach((select) => {
             select.addEventListener('change', () => {
-                shipLoadoutManager.setSpineConnectionStyle(shipId, select.value);
+                shipLoadoutManager.setSpineConnectionStyle(shipId, select.value, joint);
                 this.drawHangarBay();
             });
         });
         this.bindConnectionStrength(panel, {
             start: '[data-spine-width]',
             end: '[data-spine-width-end]',
-            setStart: (v) => shipLoadoutManager.setSpineConnectionWidth(shipId, v),
-            setEnd: (v) => shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v)
+            setStart: (v) => shipLoadoutManager.setSpineConnectionWidth(shipId, v, joint),
+            setEnd: (v) => shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v, joint)
         });
         panel.querySelectorAll('[data-spine-offset]').forEach((input) => {
             input.addEventListener('input', () => {
-                shipLoadoutManager.setSpineConnectionX(shipId, Number(input.value));
+                shipLoadoutManager.setSpineConnectionX(shipId, Number(input.value), joint);
                 this.drawHangarBay();
             });
         });
@@ -416,11 +419,11 @@ extendClass(HomeStationUI, {
             if (out) out.textContent = Math.round(Number(value) * 100) + '%';
         };
         const wingStart = Number(loadout.wingConnectionWidth) || 0.1;
-        const spineStart = Number(loadout.spineConnectionWidth) || 0.18;
+        const spine = resolveSpineJoint(loadout, this._hangarSelectedConnection === 'spineBack' ? 'spineBack' : 'spineFront');
         set('data-wing-connection-width', wingStart);
         set('data-wing-connection-width-end', Number(loadout.wingConnectionWidthEnd) || wingStart);
-        set('data-spine-width', spineStart);
-        set('data-spine-width-end', Number(loadout.spineConnectionWidthEnd) || spineStart);
+        set('data-spine-width', spine.width);
+        set('data-spine-width-end', spine.widthEnd || spine.width);
         const link = stage.querySelector('[data-link-ends]');
         if (link && link.checked) {
             const endInput = stage.querySelector('[data-wing-connection-width-end], [data-spine-width-end]');

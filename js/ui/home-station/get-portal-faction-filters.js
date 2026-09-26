@@ -39,7 +39,8 @@ extendClass(HomeStationUI, {
         const isParts = this.shopCategory === 'parts';
         const isPortals = this.shopCategory === 'portals';
         const isResources = this.shopCategory === 'resources';
-        const filters = isResources
+        const isStyles = this.shopCategory === 'styles';
+        const filters = isStyles ? this.getStyleShopFilters() : isResources
             ? this._resourceBagFilters
             : (isPortals
                 ? this.getPortalFactionFilters()
@@ -93,6 +94,7 @@ extendClass(HomeStationUI, {
         }
 
         return `<div class="hs-shop-toolbar">` +
+            this.renderShopModeToggle() +
             `<div class="hs-shop-ctrl-group">` +
             `<span class="hs-shop-ctrl-label">${isResources ? 'BAG' : 'FILTER'}</span>` +
             `<div class="hs-shop-ctrl-row">${filterBtns}</div>` +

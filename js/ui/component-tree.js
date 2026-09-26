@@ -89,6 +89,7 @@ class ComponentTree {
                     <span class="hs-tree-skin-label">HULL STYLE</span>
                     ${this.renderStyleCarousel(styles.map((style) => ({
                         active: style.active,
+                        locked: style.locked,
                         label: style.label,
                         attrs: `data-tree-area-style="${area}" data-segment-id="${style.segmentId}" data-style-index="${style.index}"`,
                         thumb: `data-thumb="area" data-thumb-area="${area === 'wings' ? 'wingRight' : area}" data-thumb-index="${style.index}"`
@@ -124,15 +125,26 @@ class ComponentTree {
      * click handlers apply the choice unchanged. Thumbnails are canvases
      * painted after render (see renderStyleThumbs).
      */
-    renderStyleCarousel(options) {
+    renderStyleCarousel(allOptions) {
+        // Only unlocked styles are offered; buying more happens in the shop.
+        const options = allOptions.filter((opt) => !opt.locked);
         if (!options.length) return '';
         const activeIndex = Math.max(0, options.findIndex((opt) => opt.active));
-        const prev = options[(activeIndex - 1 + options.length) % options.length];
-        const next = options[(activeIndex + 1) % options.length];
+        // ‹ / › step to the nearest unlocked neighbour; locked styles are
+        // shown (so players see what the shop offers) but not selectable.
+        const step = (dir) => {
+            for (let i = 1; i < options.length; i++) {
+                const opt = options[(activeIndex + dir * i + options.length * i) % options.length];
+                if (!opt.locked) return opt;
+            }
+            return options[activeIndex];
+        };
+        const prev = step(-1);
+        const next = step(1);
         return `<div class="hs-style-carousel">
                 <button type="button" class="hs-style-carousel-step" ${prev.attrs} aria-label="Previous style">‹</button>
                 <div class="hs-style-carousel-track">
-                    ${options.map((opt) => `<button type="button" class="hs-style-thumb${opt.active ? ' is-active' : ''}" ${opt.attrs} title="${opt.label}" aria-label="${opt.label}" aria-pressed="${!!opt.active}">
+                    ${options.map((opt) => `<button type="button" class="hs-style-thumb${opt.active ? ' is-active' : ''}${opt.locked ? ' is-locked' : ''}" ${opt.locked ? 'disabled' : opt.attrs} title="${opt.label}${opt.locked ? ' · LOCKED (SHOP → STYLES)' : ''}" aria-label="${opt.label}${opt.locked ? ' (locked)' : ''}" aria-pressed="${!!opt.active}">
                         <canvas width="48" height="36" ${opt.thumb}></canvas>
                     </button>`).join('')}
                 </div>
@@ -164,6 +176,7 @@ class ComponentTree {
                     <span class="hs-tree-skin-label">STYLE</span>
                     ${this.renderStyleCarousel(skins.map((skin) => ({
                         active: skin.active,
+                        locked: skin.locked,
                         label: skin.label,
                         attrs: `data-tree-skin-set="${kind}" data-slot-index="${slotIndex}" data-mod-face="${slot.face || ''}" data-skin-id="${skin.id}"`,
                         thumb: `data-thumb="skin" data-thumb-kind="${kind}" data-thumb-module="${equipped}" data-thumb-skin="${skin.id}" data-thumb-face="${slot.face || ''}"`

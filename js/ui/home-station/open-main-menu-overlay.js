@@ -23,6 +23,11 @@ extendClass(HomeStationUI, {
             return;
         }
 
+        if (o.tab && this._menuOnlyTabs.indexOf(o.tab) !== -1) {
+            this.openMenuOnlyTab(o.tab);
+            return;
+        }
+
         // With profile: menu is a tab inside the station modal (no separate overlay BG).
         if (this.tab === 'menu' && !o.force && !o.showSettings && !o.showCredits && !o.tab) {
             this.closeMenuTab();
@@ -35,12 +40,21 @@ extendClass(HomeStationUI, {
             this._menuOpts = Object.assign({}, this._menuOpts || {}, { tab: o.tab });
             startScreenManager.embeddedMenuTab = o.tab;
             this.createUI();
+            if (!o.skipPersist) this.persistTab();
             return;
         }
         if (this.tab !== 'menu') {
             this._prevTab = this.tab;
         }
         this.tab = 'menu';
+        // The top bar highlights startScreenManager.embeddedMenuTab, and it is
+        // drawn before the menu mounts — pick the tab first (same rules as
+        // showEmbedded) so highlight and content always match.
+        const ssm = startScreenManager;
+        if (o.tab && ssm.embeddedMenuTabs.some((t) => t.id === o.tab)) ssm.embeddedMenuTab = o.tab;
+        else if (o.showSettings) ssm.embeddedMenuTab = 'settings';
+        else if (o.showCredits) ssm.embeddedMenuTab = 'credits';
+        else if (!(o.showSettings || o.showCredits || o.tab) || !ssm.embeddedMenuTab) ssm.embeddedMenuTab = 'settings';
         this._menuOpts = {
             tab: o.tab || null,
             showSettings: !!o.showSettings,
@@ -50,6 +64,23 @@ extendClass(HomeStationUI, {
         };
         this.statusMsg = '';
         this.createUI();
+    },
+
+    /** Show a station tab that lives in the menu row (e.g. COMPONENTS). */
+    openMenuOnlyTab(tabId) {
+        if (this.tab === 'menu') {
+            this.unmountMenuTab();
+            this._menuOpts = null;
+        }
+        this._prevTab = null;
+        this._menuArmed = false;
+        this._navLevel = 'tabs';
+        this.statusMsg = '';
+        this.focusIndex = 0;
+        this.tab = tabId;
+        this.persistTab();
+        this.createUI();
+        this.focusActiveTab();
     },
 
     closeMenuTab(silent) {
@@ -63,6 +94,7 @@ extendClass(HomeStationUI, {
         this._prevTab = null;
         if (!silent && wasMenu && this.isVisible) {
             this.createUI();
+            this.persistTab(); // closed menu must not reopen on reload
         }
     },
 

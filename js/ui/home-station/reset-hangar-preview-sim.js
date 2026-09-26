@@ -103,6 +103,7 @@ extendClass(HomeStationUI, {
             loadout.wingConnectionWidthEnd = 0;
             loadout.wingJointSides = null;
             loadout.spineConnectionWidthEnd = 0;
+            loadout.spineJoints = null;
             loadout.hideWingConnection = false;
             loadout.hideSpineFront = false;
             loadout.hideSpineBack = false;

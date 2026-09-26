@@ -31,21 +31,22 @@ extendClass(ShipAssetLoader, {
         // always wins over the module's own baked-in visual.
         const visualId = (mod.skin && mod.skin !== 'default') ? mod.skin
             : (cfg && cfg.visual ? cfg.visual : null);
-        this.withModuleFace(ctx, face, x, y, w, h, (dx, dy) => {
-            this.drawProceduralModule(
-                ctx,
-                Math.round(dx),
-                Math.round(dy),
-                w,
-                h,
-                role,
-                mod.kind,
-                colorOverlay,
-                intensity,
-                visualId,
-                factionStyle
-            );
-        });
+        // Drawn straight in screen space (mirroring is baked into the voxel
+        // grid) so the module lands on the ship's shared voxel lattice.
+        this.drawProceduralModule(
+            ctx,
+            x,
+            y,
+            w,
+            h,
+            role,
+            mod.kind,
+            colorOverlay,
+            intensity,
+            visualId,
+            factionStyle,
+            face === 'right'
+        );
     },
 
     /**
@@ -167,29 +168,43 @@ extendClass(ShipAssetLoader, {
         ];
     },
 
-    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId, factionStyle) {
-        const w = Math.max(1, Math.round(width));
-        const h = Math.max(1, Math.round(height));
+    /**
+     * Modules are voxelised like every other hull part: the same ship-wide
+     * square cell, the faction silhouette sampled once per voxel (not per
+     * screen pixel, which carved smooth curves), and the shade template
+     * resampled onto that voxel grid instead of stretched over the frame.
+     */
+    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId, factionStyle, mirror = false) {
         const template = this.getProceduralModuleTemplate(role, kind, visualId);
-        const rows = template.length;
-        const cols = template[0].length;
+        const tRows = template.length;
+        const tCols = template[0].length;
         const shadeBias = this.getModuleRoleShadeBias(role, kind);
-        ctx.imageSmoothingEnabled = false;
-        for (let row = 0; row < h; row++) {
-            const sy = Math.min(rows - 1, Math.floor((row * rows) / h));
-            for (let col = 0; col < w; col++) {
-                if (!this.isFactionModuleCell(col, row, w, h, factionStyle)) continue;
-                const sx = Math.min(cols - 1, Math.floor((col * cols) / w));
+        const { resW: cols, resH: rows, cell } = this.hullPartResolution(width, height);
+        const colors = [null];
+        const colorIndex = new Map();
+        const grid = [];
+        for (let row = 0; row < rows; row++) {
+            const line = new Array(cols).fill(0);
+            const sy = Math.min(tRows - 1, Math.floor(((row + 0.5) * tRows) / rows));
+            for (let col = 0; col < cols; col++) {
+                if (!this.isFactionModuleCell(col, row, cols, rows, factionStyle)) continue;
+                const sx = Math.min(tCols - 1, Math.floor(((col + 0.5) * tCols) / cols));
                 const idx = template[sy][sx];
                 if (!idx) continue;
                 let color = this.getFactionModuleShade(idx, factionStyle)
                     || this.getHullMountShade(idx);
                 if (!color) continue;
                 color = this.applyHullOverlayHex(color, colorOverlay, intensity, shadeBias);
-                ctx.fillStyle = color;
-                ctx.fillRect(x + col, y + row, 1, 1);
+                if (!colorIndex.has(color)) {
+                    colorIndex.set(color, colors.length);
+                    colors.push(color);
+                }
+                line[mirror ? cols - 1 - col : col] = colorIndex.get(color);
             }
+            grid.push(line);
         }
+        ctx.imageSmoothingEnabled = false;
+        this.drawPixelGridHull(ctx, grid, colors, x, y, width, height, cell);
     },
 
     drawMappedImage(ctx, image, bounds, x, y, width, height) {

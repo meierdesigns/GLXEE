@@ -249,24 +249,27 @@ extendClass(ShipAssetLoader, {
         }
 
         // Attached modules (replace/insert segments already drew hull pieces)
-        (layout.modules || []).forEach((mod) => {
-            if (mod.integrate === 'replace') return;
-            const mx = Math.round(x + mod.x * scale);
-            const my = Math.round(y + mod.y * scale);
-            const mw = Math.max(1, Math.round(mod.width * scale));
-            const mh = Math.max(1, Math.round((mod.height != null ? mod.height : mod.width) * scale));
-            this.renderShipModule(
-                ctx,
-                mod,
-                mx,
-                my,
-                mw,
-                mh,
-                colorOverlay,
-                overlayIntensity,
-                renderOptions,
-                moduleFactionStyle
-            );
+        // Modules use the hull's voxel size and lattice, not their own.
+        this.withShipVoxelRaster(shipModel, x, y, scale, () => {
+            (layout.modules || []).forEach((mod) => {
+                if (mod.integrate === 'replace') return;
+                const mx = Math.round(x + mod.x * scale);
+                const my = Math.round(y + mod.y * scale);
+                const mw = Math.max(1, Math.round(mod.width * scale));
+                const mh = Math.max(1, Math.round((mod.height != null ? mod.height : mod.width) * scale));
+                this.renderShipModule(
+                    ctx,
+                    mod,
+                    mx,
+                    my,
+                    mw,
+                    mh,
+                    colorOverlay,
+                    overlayIntensity,
+                    renderOptions,
+                    moduleFactionStyle
+                );
+            });
         });
 
         if (!skipFx && renderOptions && renderOptions.showThrusterGlow === true) {

@@ -8,69 +8,58 @@ extendClass(ShipAssetLoader, {
         const g = this.blankGrid(cols, rows);
         const left = seg.id === 'wingLeft';
         const silhouette = factionStyle ? factionStyle.silhouette : 'modular';
-        const base = this.wingShapeVariants[shapeVariant || 0] || this.wingShapeVariants[0];
-        let reach = base.reach;
-        let center = base.center;
-        let spread = base.spread;
-        if (silhouette === 'spikes') {
-            reach *= 1.3;
-            spread *= 0.5;
-        } else if (silhouette === 'scrap') {
-            spread *= 1.35;
+        // Wing planform: for each span column (u = 0 at the hull root, 1 at
+        // the tip) the wing covers one or more row bands [lead, trail] of the
+        // frame. The grid holds only the wing itself — no hull spar or root
+        // rail — so nothing needs cropping away.
+        const variants = this.wingShapeVariants;
+        const planform = (variants[shapeVariant || 0] || variants[0]).planform;
+        for (let c = 0; c < cols; c++) {
+            const u = cols <= 1 ? 0 : c / (cols - 1);
+            const bands = planform(u);
+            if (!bands) continue;
+            (Array.isArray(bands[0]) ? bands : [bands]).forEach(([lead0, trail0]) => {
+                let lead = lead0;
+                let trail = trail0;
+                if (silhouette === 'spikes') {
+                    // Blade tips: the outer span narrows to a sharp point.
+                    lead += 0.14 * u * u;
+                    trail -= 0.08 * u * u;
+                } else if (silhouette === 'scrap') {
+                    // Welded-on salvage: ragged, uneven trailing edge.
+                    const h = (Math.imul(c * 31 + 7, 2654435761) >>> 0) % 3;
+                    trail -= h * 0.05 * u;
+                } else if (silhouette === 'rings') {
+                    // Rounded pod-like tip.
+                    const round = Math.sqrt(Math.max(0, 1 - Math.pow(u, 4)));
+                    const mid = (lead + trail) / 2;
+                    const half = (trail - lead) / 2 * round;
+                    lead = mid - half;
+                    trail = mid + half;
+                } else if (silhouette === 'circuit') {
+                    // Clipped, squared-off tip.
+                    if (u > 0.88) trail = Math.min(trail, lead + 0.22);
+                }
+                const r0 = Math.max(0, Math.round(lead * rows));
+                const r1 = Math.min(rows, Math.round(trail * rows));
+                if (r1 - r0 < 1) return;
+                this.gridFillRect(g, left ? cols - 1 - c : c, r0, 1, r1 - r0, 2);
+            });
         }
-        // Root spar (fuselage-facing strip) tapers out to `reach` at the tip band.
-        for (let r = 0; r < rows; r++) {
-            const t = rows <= 1 ? 0.5 : r / (rows - 1);
-            const dist = Math.abs(t - center) / Math.max(0.08, spread);
-            const taper = Math.max(0, 1 - dist);
-            let widthFrac;
-            if (shapeVariant === 1) {
-                // Swept blade: narrow root with a strong diagonal tip.
-                widthFrac = 0.04 + taper * 0.82;
-            } else if (shapeVariant === 2) {
-                // Stub/fork: compact wing with a blunt central shoulder.
-                widthFrac = 0.12 + taper * 0.58;
-            } else if (shapeVariant === 3) {
-                // Bat wing: two broad lobes with a shallow center notch.
-                const lobe = Math.max(0, 1 - Math.abs(Math.abs(t - 0.5) - 0.22) / 0.18);
-                widthFrac = 0.04 + lobe * 0.86;
-            } else if (shapeVariant === 4) {
-                // Gull wing: broad upper sweep with a raised outer tip.
-                widthFrac = 0.06 + Math.max(0, taper * (0.72 + (0.5 - t) * 0.42));
-            } else {
-                // Delta: broad triangular wing.
-                widthFrac = 0.05 + taper * Math.max(0, reach - 0.05);
-            }
-            const prof = this.factionRowProfile(silhouette, t, left ? 1 : 2);
-            widthFrac = Math.min(1, widthFrac * prof.widthMul);
-            // The default modular faction must still read as a wing: its
-            // silhouette profile is for body plates and otherwise widens the
-            // wing into a rectangular bar.
-            if (silhouette === 'modular') widthFrac *= 0.58;
-            const width = Math.max(1, Math.round(cols * widthFrac));
-            if (left) this.gridFillRect(g, cols - width, r, width, 1, 2);
-            else this.gridFillRect(g, 0, r, width, 1, 2);
-        }
-        this.outlineGridEdges(g);
+        // The root side joins the hull or its connection: leave it open so
+        // no dark seam line runs across the joint (worst on a turned wing).
+        this.outlineGridEdges(g, left ? 'right' : 'left');
         this.applyFactionPlating(g, silhouette, left ? 1 : 2);
-        // Slim wing rail accent: keep it attached to the wing silhouette
-        // instead of rendering a large rectangular block over the wing.
-        const railR0 = Math.round(rows * 0.22);
-        const railH = Math.max(1, Math.round(rows * 0.56));
-        for (let r = railR0; r < railR0 + railH; r++) {
-            const t = railH <= 1 ? 0 : (r - railR0) / (railH - 1);
-            const railC = left
-                ? cols - 1 - Math.round(t * Math.max(0, cols * 0.12))
-                : Math.round(t * Math.max(0, cols * 0.12));
-            this.gridFillRect(g, railC, r, 1, 1, 3);
-        }
-        if (silhouette === 'rings') {
-            const holeC = Math.round(cols * (left ? 0.58 : 0.42));
-            const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.18));
-            this.gridFillRect(g, holeC - holeR / 2, rows * 0.5 - holeR / 2, holeR, holeR, 0);
-        } else if (silhouette === 'circuit') {
-            this.gridFillRect(g, Math.round(cols * (left ? 0.68 : 0.18)), Math.round(rows * 0.15), 1, Math.max(1, Math.round(rows * 0.12)), 1);
-            this.gridFillRect(g, Math.round(cols * (left ? 0.32 : 0.6)), Math.round(rows * 0.75), 1, Math.max(1, Math.round(rows * 0.12)), 1);
+        // Accent trim follows the leading edge: the first interior voxel of
+        // each column, so it always sits on the wing and never off it.
+        for (let c = 0; c < cols; c++) {
+            for (let r = 0; r < rows; r++) {
+                if (g[r][c] === 0) continue;
+                if (g[r][c] === 1 && r + 1 < rows && g[r + 1][c] && g[r + 1][c] !== 1) {
+                    g[r + 1][c] = 3;
+                }
+                break;
+            }
         }
         return g;
     },
@@ -85,7 +74,12 @@ extendClass(ShipAssetLoader, {
         ctx, seg, x, y, w, h, colorOverlay, overlayIntensity, factionStyle, shapeSeed,
         variantOverride = null, voxelScale = 1, pixelZoom = 1
     ) {
-        const { resW, resH, cell } = this.hullPartResolution(w, h, voxelScale, pixelZoom);
+        const res = this.hullPartResolution(w, h, voxelScale, pixelZoom);
+        // Body parts share one centre line; an even column count puts that
+        // line on a voxel seam for every part, so nose, core and aft stay
+        // aligned to each other at any width.
+        const resW = res.resW + (res.resW % 2);
+        const { resH, cell } = res;
         let shapeVariant;
         if (variantOverride != null) {
             shapeVariant = variantOverride;
@@ -117,7 +111,7 @@ extendClass(ShipAssetLoader, {
             }
             const prof = this.factionRowProfile(silhouette, t, 0);
             widthFrac *= prof.widthMul;
-            const width = Math.max(1, Math.round(cols * Math.min(1, widthFrac)));
+            const width = this.evenSpan(cols, Math.max(1, Math.round(cols * Math.min(1, widthFrac))));
             let c0 = Math.round((cols - width) / 2 + prof.offsetMul * cols);
             c0 = Math.max(0, Math.min(cols - width, c0));
             this.gridFillRect(g, c0, r, width, 1, 2);
@@ -170,8 +164,13 @@ extendClass(ShipAssetLoader, {
         for (let r = 0; r < rows; r++) {
             const t = rows <= 1 ? 0 : r / (rows - 1);
             const prof = this.factionRowProfile(silhouette, t, 3);
-            const widthFrac = Math.min(1, prof.widthMul);
-            const width = Math.max(1, Math.round(cols * widthFrac));
+            // The style picks the tail outline: 0 block, 1 tapered tail,
+            // 2 pinched waist flaring into a wide exhaust skirt.
+            const variantMul = variant === 1
+                ? 1 - 0.45 * t
+                : (variant === 2 ? 0.62 + 0.38 * Math.pow(Math.abs(t * 2 - 1), 1.5) : 1);
+            const widthFrac = Math.min(1, prof.widthMul * variantMul);
+            const width = this.evenSpan(cols, Math.max(1, Math.round(cols * widthFrac)));
             let c0 = Math.round((cols - width) / 2 + prof.offsetMul * cols);
             c0 = Math.max(0, Math.min(cols - width, c0));
             this.gridFillRect(g, c0, r, width, 1, 2);

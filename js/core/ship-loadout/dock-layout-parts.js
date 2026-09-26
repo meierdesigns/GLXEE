@@ -5,13 +5,16 @@ extendClass(ShipLoadoutManager, {
     /** buildLayout phase 4: apply segment/module offsets and dock parts to their segments. */
     dockLayoutParts(ctx, segments) {
         const { coreWidth, L, parts, segmentOffset, moduleOffset, totalCoreH } = ctx;
+        // Offsets are fractions of the unscaled hull height, so resizing one
+        // part never shifts the others (the scaled total changed with it).
+        const offsetH = ctx.baseCoreH || totalCoreH;
 
         const moveFor = (id) => {
             const key = id === 'wingLeft' || id === 'wingRight' ? 'wing' : id;
             const off = segmentOffset[key] || { x: 0, y: 0 };
             return {
                 x: Math.round(coreWidth * off.x),
-                y: Math.round(totalCoreH * off.y)
+                y: Math.round(offsetH * off.y)
             };
         };
         segments.forEach((seg) => {
@@ -26,7 +29,7 @@ extendClass(ShipLoadoutManager, {
             const key = String(part.kind || 'module') + ':' + String(part.id || '');
             const modOff = moduleOffset[key] || { x: 0, y: 0 };
             part.x += Math.round(coreWidth * modOff.x);
-            part.y += Math.round(totalCoreH * modOff.y);
+            part.y += Math.round(offsetH * modOff.y);
         });
         // Re-dock modules to their segment roots after segment moves/scales so
         // growing frames stay attached to the hull instead of floating in empty space.
@@ -68,7 +71,12 @@ extendClass(ShipLoadoutManager, {
             y: Math.min(box.y, seg.y),
             right: Math.max(box.right, seg.x + seg.width),
             bottom: Math.max(box.bottom, seg.y + seg.height)
-        }), { x: 0, y: 0, right: coreWidth, bottom: totalCoreH });
+        }), {
+            x: 0,
+            y: ctx.frontY != null ? ctx.frontY : 0,
+            right: coreWidth,
+            bottom: ctx.hullBottom != null ? ctx.hullBottom : totalCoreH
+        });
 
         // Module offsets are local to their owning component, so moving or
         // scaling a component keeps its installed hardware attached to it.
@@ -189,10 +197,12 @@ extendClass(ShipLoadoutManager, {
             syncedWings.forEach((w) => wingPanels.push(w));
         }
 
+        // Hull spans frontY..hullBottom (the body is anchored, so the nose can
+        // sit above y=0 or below it) — start the bbox there, not at 0..total.
         let minX = 0;
-        let minY = 0;
+        let minY = ctx.frontY != null ? ctx.frontY : 0;
         let maxX = coreWidth;
-        let maxY = totalCoreH;
+        let maxY = ctx.hullBottom != null ? ctx.hullBottom : totalCoreH;
         segments.forEach((seg) => {
             minX = Math.min(minX, seg.x);
             minY = Math.min(minY, seg.y);
@@ -242,12 +252,17 @@ extendClass(ShipLoadoutManager, {
         return {
             width: Math.max(1, Math.round(maxX - minX)),
             height: Math.max(1, Math.round(maxY - minY)),
+            // Actual hull span (nose top → aft bottom) for the renderers.
             core: {
                 x: ox,
-                y: oy,
+                y: oy + (ctx.frontY != null ? ctx.frontY : 0),
                 width: coreWidth,
                 height: totalCoreH
             },
+            // Fixed reference point (layout origin, where the unscaled nose
+            // starts). It never moves when a part is resized, so the hangar
+            // pins the view on it instead of on the core.
+            anchor: { x: ox, y: oy },
             segments: segments.map((seg) => ({
                 id: seg.id,
                 x: seg.x + ox,

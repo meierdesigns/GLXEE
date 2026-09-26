@@ -89,6 +89,7 @@ extendClass(ShipLoadoutManager, {
     setWingConnectionWidth(shipId, width) {
         const loadout = this.getLoadout(shipId);
         loadout.wingConnectionWidth = Math.max(0.02, Math.min(0.5, Number(width) || 0.1));
+        loadout.wingJointSides = null;
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },
@@ -109,7 +110,7 @@ extendClass(ShipLoadoutManager, {
 
     setVoxelScale(shipId, scale) {
         const loadout = this.getLoadout(shipId);
-        loadout.voxelScale = Math.max(0.1, Math.min(10, Number(scale) || 1));
+        loadout.voxelScale = Math.max(0.5, Math.min(1.5, Number(scale) || 1));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },
@@ -118,6 +119,62 @@ extendClass(ShipLoadoutManager, {
         const allowed = ['strut', 'plate', 'double', 'hinge'];
         const loadout = this.getLoadout(shipId);
         loadout.wingConnectionStyle = allowed.indexOf(style) !== -1 ? style : 'strut';
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    setSpineConnectionStyle(shipId, style) {
+        const allowed = ['strut', 'plate', 'double', 'hinge'];
+        const loadout = this.getLoadout(shipId);
+        loadout.spineConnectionStyle = allowed.indexOf(style) !== -1 ? style : 'strut';
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    setSpineConnectionWidth(shipId, width) {
+        const loadout = this.getLoadout(shipId);
+        loadout.spineConnectionWidth = Math.max(0.05, Math.min(0.6, Number(width) || 0.18));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    /** Asymmetric joint sides from the hangar handles; null = symmetric. */
+    setWingJointSides(shipId, sides) {
+        const loadout = this.getLoadout(shipId);
+        loadout.wingJointSides = this.normalizeWingJointSides(sides);
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    setWingConnectionWidthEnd(shipId, width) {
+        const loadout = this.getLoadout(shipId);
+        // The strength sliders are symmetric: they replace per-side extents.
+        loadout.wingJointSides = null;
+        loadout.wingConnectionWidthEnd = Math.max(0, Math.min(0.5, Number(width) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    setSpineConnectionWidthEnd(shipId, width) {
+        const loadout = this.getLoadout(shipId);
+        loadout.spineConnectionWidthEnd = Math.max(0, Math.min(0.6, Number(width) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    /** joint: 'wing' | 'spineFront' | 'spineBack'. */
+    setConnectionHidden(shipId, joint, hidden) {
+        const key = { wing: 'hideWingConnection', spineFront: 'hideSpineFront', spineBack: 'hideSpineBack' }[joint];
+        if (!key) return { ok: false };
+        const loadout = this.getLoadout(shipId);
+        loadout[key] = !!hidden;
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
+    setSpineConnectionX(shipId, offset) {
+        const loadout = this.getLoadout(shipId);
+        loadout.spineConnectionX = Math.max(-1, Math.min(1, Number(offset) || 0));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },

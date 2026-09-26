@@ -127,6 +127,12 @@ class FactionShipStyles {
         root.style.setProperty('--faction-hull', style.hull || '#7a8490');
         root.style.setProperty('--faction-edge', style.edge || '#2a3038');
         root.style.setProperty('--faction-accent', style.accent || '#c8d0d8');
+        // The app palette follows the faction (skipped on first load, before
+        // the palette system exists — ColorManager.init picks it up then).
+        if (typeof themeContextManager !== 'undefined' && themeContextManager.refreshFactionTheme &&
+            typeof colorPaletteSystem !== 'undefined') {
+            try { themeContextManager.refreshFactionTheme(id); } catch (e) { /* palette not ready */ }
+        }
         return id;
     }
 

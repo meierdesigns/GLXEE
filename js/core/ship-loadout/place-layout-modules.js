@@ -46,11 +46,14 @@ extendClass(ShipLoadoutManager, {
             const rightH = rightDims.reduce((sum, d) => sum + d.h, 0)
                 + Math.max(0, rightDims.length - 1) * gap;
             const pairedH = Math.max(leftH, rightH);
+            // Hull spans frontY..hullBottom (body-anchored layout).
+            const hullTop = frontY;
+            const hullEnd = ctx.hullBottom != null ? ctx.hullBottom : totalCoreH;
             const pairedStartY = preferTop
-                ? Math.max(0, Math.min(startY, totalCoreH - pairedH))
-                : Math.max(0, Math.min(
-                    startY != null ? startY : Math.floor((totalCoreH - pairedH) / 2),
-                    totalCoreH - pairedH
+                ? Math.max(hullTop, Math.min(startY, hullEnd - pairedH))
+                : Math.max(hullTop, Math.min(
+                    startY != null ? startY : Math.floor((hullTop + hullEnd - pairedH) / 2),
+                    hullEnd - pairedH
                 ));
             const placeSide = (sideIds, sideDims, face) => {
                 if (!sideIds.length) return;

@@ -80,7 +80,10 @@ extendClass(ShipLoadoutManager, {
         if (!model) return model;
         const id = shipId || model.id;
         const coreSize = this.getCoreSize(model.modelClass, model);
-        const loadout = this.getLoadout(id);
+        // A faction preview (profile creation) shows that faction's fresh ship.
+        const loadout = model.factionPreview && model.faction
+            ? Object.assign(this.defaultLoadoutFromShip(id, model.faction), { faction: model.faction })
+            : this.getLoadout(id);
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const layout = this.buildLayout(coreSize.width, coreSize.height, loadout);
         const caps = this.getSlotCaps(id, model.modelClass);

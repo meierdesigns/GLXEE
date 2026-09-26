@@ -66,8 +66,18 @@ extendClass(ShipAssetLoader, {
 
     /** Number of shape variants available for a given body-band segment id. */
     bodyShapeVariantCount(segId) {
-        if (segId === 'front' || segId === 'back') return 3;
-        return 2;
+        return this.bodyShapeVariantLabels(segId).length;
+    },
+
+    /** Style names per body band, in variant-index order. */
+    bodyShapeVariantLabels(segId) {
+        if (segId === 'front') {
+            return ['POINTED', 'BLUNT', 'FORKED', 'NEEDLE', 'SHOVEL', 'BULB', 'STEPPED', 'ARROWHEAD'];
+        }
+        if (segId === 'back') {
+            return ['BLOCK', 'TAPER', 'SKIRT', 'FLARE', 'NOTCHED', 'WAIST', 'STUB', 'FAN'];
+        }
+        return ['SLAB', 'PANELED', 'SLIM', 'HOURGLASS', 'BARREL', 'WEDGE', 'KEEL', 'RIBBED'];
     },
 
     renderProceduralBodyBand(
@@ -106,6 +116,17 @@ extendClass(ShipAssetLoader, {
             } else if (variant === 2) {
                 const bump = Math.abs(Math.sin(Math.min(1, t * 1.6) * Math.PI));
                 widthFrac = 0.25 + t * 0.55 + bump * 0.18; // forked twin prong
+            } else if (variant === 3) {
+                widthFrac = 0.06 + t * t * 0.94; // needle: long thin spike
+            } else if (variant === 4) {
+                widthFrac = t < 0.3 ? 0.72 : 0.72 + (t - 0.3) / 0.7 * 0.28; // shovel: flat wide scoop
+            } else if (variant === 5) {
+                widthFrac = 0.3 + Math.sqrt(t) * 0.7; // bulb: rounded dome
+            } else if (variant === 6) {
+                widthFrac = 0.25 + Math.floor(t * 4) / 4 * 0.75; // stepped terraces
+            } else if (variant === 7) {
+                // arrowhead: barbs flare out, then pinch into the neck.
+                widthFrac = t < 0.65 ? 0.1 + t / 0.65 * 0.9 : 1 - (t - 0.65) * 1.1;
             } else {
                 widthFrac = 0.1 + t * 0.9; // pointed
             }
@@ -155,6 +176,20 @@ extendClass(ShipAssetLoader, {
         return g;
     },
 
+    /** Tail outline width multiplier for aft style `variant` at row `t`. */
+    aftVariantWidth(variant, t) {
+        switch (variant) {
+        case 1: return 1 - 0.45 * t; // tapered tail
+        case 2: return 0.62 + 0.38 * Math.pow(Math.abs(t * 2 - 1), 1.5); // skirt
+        case 3: return 0.6 + 0.4 * t; // flare: widens into the exhaust
+        case 4: return ((t * 6) | 0) % 2 ? 0.76 : 1; // notched fins
+        case 5: return 1 - 0.32 * Math.sin(t * Math.PI); // pinched waist
+        case 6: return t > 0.7 ? 0.5 : 1; // stub nozzle
+        case 7: return 0.7 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2)); // fan
+        default: return 1; // block
+        }
+    },
+
     buildAftGrid(cols, rows, factionStyle, shapeVariant) {
         const g = this.blankGrid(cols, rows);
         const silhouette = factionStyle ? factionStyle.silhouette : 'modular';
@@ -166,9 +201,7 @@ extendClass(ShipAssetLoader, {
             const prof = this.factionRowProfile(silhouette, t, 3);
             // The style picks the tail outline: 0 block, 1 tapered tail,
             // 2 pinched waist flaring into a wide exhaust skirt.
-            const variantMul = variant === 1
-                ? 1 - 0.45 * t
-                : (variant === 2 ? 0.62 + 0.38 * Math.pow(Math.abs(t * 2 - 1), 1.5) : 1);
+            const variantMul = this.aftVariantWidth(variant, t);
             const widthFrac = Math.min(1, prof.widthMul * variantMul);
             const width = this.evenSpan(cols, Math.max(1, Math.round(cols * widthFrac)));
             let c0 = Math.round((cols - width) / 2 + prof.offsetMul * cols);

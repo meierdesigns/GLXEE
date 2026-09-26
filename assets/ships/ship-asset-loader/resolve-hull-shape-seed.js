@@ -23,7 +23,11 @@ extendClass(ShipAssetLoader, {
     /** Deterministic 0..count-1 variant index for one hull part, from the ship's shape seed. */
     hullShapeVariantIndex(shapeSeed, segId, count) {
         if (typeof factionShipStyles === 'undefined' || !factionShipStyles.hash) return 0;
-        return factionShipStyles.hash(String(shapeSeed) + '|' + segId) % count;
+        // Seeded picks stay inside the original style pool so adding new
+        // (unlockable) styles never changes how existing ships look.
+        const legacy = { front: 3, back: 3, center: 2 }[segId] || 8;
+        const pool = Math.max(1, Math.min(count, legacy));
+        return factionShipStyles.hash(String(shapeSeed) + '|' + segId) % pool;
     },
 
     /**
@@ -42,9 +46,28 @@ extendClass(ShipAssetLoader, {
 
     getFactionModuleShade(index, style) {
         if (!style) return null;
-        if (index <= 3) return style.edge || null;
-        if (index >= 13) return style.accent || null;
-        return style.hull || null;
+        // Modules sit on top of the hull, so they use a darker body and
+        // brighter trim of the faction colours: still the player's faction,
+        // but readable as a separate part instead of blending into the hull.
+        if (index <= 3) return style.edge ? this.shiftModuleHex(style.edge, -0.45) : null;
+        if (index >= 13) return style.accent ? this.shiftModuleHex(style.accent, 0.35) : null;
+        if (!style.hull) return null;
+        return this.shiftModuleHex(style.hull, index >= 9 ? -0.12 : -0.32);
+    },
+
+    /** Darken (amount < 0) or lighten (amount > 0) a #rrggbb colour. */
+    shiftModuleHex(hex, amount) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+        if (!m) return hex;
+        const n = parseInt(m[1], 16);
+        const ch = (v) => {
+            const next = amount < 0 ? v * (1 + amount) : v + (255 - v) * amount;
+            return Math.max(0, Math.min(255, Math.round(next)));
+        };
+        const r = ch((n >> 16) & 255);
+        const g = ch((n >> 8) & 255);
+        const b = ch(n & 255);
+        return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
     },
 
     isFactionModuleCell(col, row, width, height, style) {

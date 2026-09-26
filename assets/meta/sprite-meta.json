@@ -1,6 +1,6 @@
 {
   "mount_laser": {
-    "displayScale": 0.25,
+    "displayScale": 1,
     "outSize": 8,
     "lengthScale": 1,
     "symmetric": true

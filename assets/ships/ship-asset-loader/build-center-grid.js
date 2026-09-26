@@ -4,6 +4,20 @@ import { ShipAssetLoader } from './core.js';
 
 // ShipAssetLoader methods, split from ship-asset-loader.js.
 extendClass(ShipAssetLoader, {
+    /** Core outline width multiplier for centre style `variant` at row `t`. */
+    centerVariantWidth(variant, t) {
+        switch (variant) {
+        case 1: return 0.9; // paneled
+        case 2: return 0.78; // slim
+        case 3: return 0.65 + 0.35 * Math.abs(t * 2 - 1); // hourglass
+        case 4: return 0.72 + 0.28 * Math.sin(t * Math.PI); // barrel
+        case 5: return 0.7 + 0.3 * t; // wedge widening aft
+        case 6: return 1 - 0.3 * t; // keel narrowing aft
+        case 7: return ((t * 7) | 0) % 2 ? 0.82 : 1; // ribbed
+        default: return 1; // slab
+        }
+    },
+
     buildCenterGrid(cols, rows, factionStyle, shapeVariant) {
         const g = this.blankGrid(cols, rows);
         const silhouette = factionStyle ? factionStyle.silhouette : 'modular';
@@ -13,7 +27,7 @@ extendClass(ShipAssetLoader, {
         for (let r = 0; r < rows; r++) {
             const t = rows <= 1 ? 0.5 : r / (rows - 1);
             const taper = 0.88 + Math.sin(t * Math.PI) * 0.12;
-            const variantMul = variant === 1 ? 0.9 : (variant === 2 ? 0.78 : 1);
+            const variantMul = this.centerVariantWidth(variant, t);
             const prof = this.factionRowProfile(silhouette, t, 4);
             const width = this.evenSpan(cols, Math.max(1, Math.round(cols * taper * variantMul * prof.widthMul)));
             const c0 = Math.max(0, Math.min(cols - width,
@@ -196,7 +210,7 @@ extendClass(ShipAssetLoader, {
      */
     snapToVoxelLattice(v, cell, axis) {
         const anchor = this._shipVoxelAnchor;
-        if (!anchor || !(cell >= 1)) return Math.round(v);
+        if (!anchor || !(cell >= 1 / this.getDeviceScale())) return this.devicePx(v);
         const a = anchor[axis];
         return a + Math.round((v - a) / cell) * cell;
     },

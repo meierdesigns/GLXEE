@@ -104,7 +104,7 @@ extendClass(ShipAssetLoader, {
     wingVisibleRect(seg, shipModel, scale) {
         if (!seg || (seg.id !== 'wingLeft' && seg.id !== 'wingRight')) return seg;
         const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
-        const voxelScale = Number(loadout && loadout.voxelScale) || 1;
+        const voxelScale = Number(loadout && loadout.voxelScale) || 0.5;
         const zoom = Math.max(0.25, Number(scale) || 1);
         const wPx = Math.max(1, seg.width * zoom);
         const hPx = Math.max(1, seg.height * zoom);
@@ -238,7 +238,17 @@ extendClass(ShipAssetLoader, {
             { id: 'plank', label: 'PLANK', planform: (u) => [0.24 + 0.16 * u, 0.86 - 0.04 * u] },
             { id: 'lance', label: 'LANCE', planform: (u) => (u < 0.3
                 ? [0.08 + 0.6 * u, 0.96 - 0.3 * u]
-                : [0.26 + 0.14 * u, 0.74 - 0.02 * u]) }
+                : [0.26 + 0.14 * u, 0.74 - 0.02 * u]) },
+            { id: 'crescent', label: 'CRESCENT', planform: (u) => [0.1 + 0.55 * u * u, 1 - 0.55 * u * u] },
+            { id: 'box', label: 'BOX', planform: (u) => (u > 0.8 ? [0.1, 0.9] : [0.3, 0.7]) },
+            { id: 'razor', label: 'RAZOR', planform: (u) => [0.02 + 0.9 * u, Math.min(1, 0.22 + 0.9 * u)] },
+            { id: 'hook', label: 'HOOK', planform: (u) => (u < 0.7
+                ? [0.2 + 0.3 * u, 0.9 - 0.2 * u]
+                : [0.02 + 0.2 * (1 - u), 0.72]) },
+            { id: 'ddelta', label: 'DOUBLE DELTA', planform: (u) => [u < 0.4 ? 0.1 + 1.2 * u : 0.58 + 0.25 * u, 1] },
+            { id: 'ladder', label: 'LADDER', planform: (u) => (u < 0.2
+                ? [0.08, 0.96]
+                : [[0.08, 0.3], [0.44, 0.62], [0.78, 0.96]]) }
         ];
     },
 

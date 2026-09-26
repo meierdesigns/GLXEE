@@ -6,8 +6,34 @@ extendClass(ShipLoadoutManager, {
      * buildLayout phase 1: base segment geometry, module integration effects
      * and wing sizing. Returns the shared layout context.
      */
+    /** Faction whose anatomy shapes this layout: explicit on the loadout, else the active pilot's. */
+    resolveLayoutFaction(loadout) {
+        if (loadout && loadout.faction) return String(loadout.faction).toLowerCase();
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction) {
+            return factionShipStyles.resolveActiveFaction();
+        }
+        return null;
+    },
+
+    /** Multiply the faction's base anatomy into the per-part scales. */
+    applyFactionAnatomy(scale, faction) {
+        const anatomy = faction && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionAnatomy
+            ? factionShipStyles.getFactionAnatomy(faction) : null;
+        if (!anatomy) return scale;
+        const out = {};
+        Object.keys(scale).forEach((part) => {
+            const a = anatomy[part] || {};
+            out[part] = {
+                x: Math.max(0.25, Math.min(6, scale[part].x * (Number(a.x) || 1))),
+                y: Math.max(0.25, Math.min(6, scale[part].y * (Number(a.y) || 1)))
+            };
+        });
+        return out;
+    },
+
     createLayoutContext(coreWidth, coreHeight, loadout) {
         const L = this.normalizeLoadout(loadout);
+        const faction = this.resolveLayoutFaction(loadout);
         const ms = this.moduleSize;
         const gap = this.moduleGap;
         const evenSize = (n) => {
@@ -80,7 +106,7 @@ extendClass(ShipLoadoutManager, {
         // --- Base segment geometry (layout units inside core) ---
         const segGap = Math.max(0, Number(this.segmentGap) || 0);
         const wingGap = Math.max(0, Number(this.wingGap) || 0);
-        const segmentScale = this.normalizeSegmentScale(L.segmentScale);
+        const segmentScale = this.applyFactionAnatomy(this.normalizeSegmentScale(L.segmentScale), faction);
         const segmentOffset = this.normalizeSegmentOffset(L.segmentOffset);
         const moduleOffset = this.normalizeModuleOffset(L.moduleOffset);
         // Without a custom anatomy the hull uses spaceship proportions: a

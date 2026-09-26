@@ -20,6 +20,8 @@ class ParticleSystem {
         const baseLife = opts && opts.life != null ? Number(opts.life) : 40;
         const baseSize = opts && opts.size != null ? Number(opts.size) : 2;
         const colorList = opts && Array.isArray(opts.colors) ? opts.colors : null;
+        // Per-frame velocity damping (1 = none): bounds how far a burst spreads.
+        const drag = opts && opts.drag != null ? Math.max(0.5, Math.min(1, Number(opts.drag))) : 1;
         const n = Math.max(0, Math.round(count));
 
         for (let i = 0; i < n; i++) {
@@ -41,6 +43,7 @@ class ParticleSystem {
                 life: life,
                 maxLife: life,
                 size: baseSize * (0.7 + Math.random() * 0.8),
+                drag: drag,
                 color: color || this.getRandomHitColor()
             });
         }
@@ -87,6 +90,10 @@ class ParticleSystem {
 
             particle.x += particle.vx;
             particle.y += particle.vy;
+            if (particle.drag && particle.drag < 1) {
+                particle.vx *= particle.drag;
+                particle.vy *= particle.drag;
+            }
 
             particle.vy += 0.1;
             particle.vx *= 0.98;

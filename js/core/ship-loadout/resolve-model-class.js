@@ -10,11 +10,17 @@ extendClass(ShipLoadoutManager, {
         return 'starfighter';
     },
 
-    defaultLoadoutFromShip(shipId) {
+    defaultLoadoutFromShip(shipId, factionId) {
         const cfg = (typeof shipConfigManager !== 'undefined')
             ? shipConfigManager.getConfig(shipId)
             : null;
-        const weapons = (cfg && cfg.availableWeapons) ? cfg.availableWeapons.slice() : ['laser'];
+        const shipWeapons = (cfg && cfg.availableWeapons) ? cfg.availableWeapons.slice() : ['laser'];
+        // Each faction flies its own standard weapon; the hull's list follows.
+        const faction = factionId || (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction
+            ? factionShipStyles.resolveActiveFaction() : null);
+        const factionWeapons = faction && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons
+            ? factionShipStyles.getFactionDefaultWeapons(faction) : [];
+        const weapons = factionWeapons.concat(shipWeapons.filter((w) => factionWeapons.indexOf(w) === -1));
         const allAbilities = (cfg && cfg.abilities) ? cfg.abilities.slice() : [];
         const defenses = [];
         const abilities = [];

@@ -20,8 +20,14 @@ extendClass(PlanetConfigManager, {
         const difficulties = ['EASY', 'NORMAL', 'HARD', 'EXPERT', 'NIGHTMARE'];
         const diffIdx = Math.min(difficulties.length - 1, Math.floor((idx - 1) / 2));
         const difficulty = difficulties[diffIdx];
-        const faction = this.getGalaxyFaction(gid);
+        // Held galaxies: one faction. Contested: owner + an opposing faction
+        // fighting over the planet (see galaxy-control.js).
+        const planetFactions = this.pickPlanetFactions(gid, rng);
+        const faction = planetFactions[0];
+        const rival = planetFactions[1] || null;
+        const contested = !!rival;
         const theme = this.getFactionPlanetTheme(faction);
+        const rivalTheme = rival ? this.getFactionPlanetTheme(rival) : null;
         const names = (theme.names && theme.names.length)
             ? theme.names
             : ['OUTPOST ' + idx, 'SECTOR ' + idx, 'NODE ' + idx, 'RELAY ' + idx];
@@ -46,16 +52,21 @@ extendClass(PlanetConfigManager, {
             : this.availablePatterns.slice();
         const patterns = patternPool.length ? patternPool : this.availablePatterns.slice();
 
-        const enemyCount = 2 + Math.min(4, Math.floor(idx / 2));
+        const rivalPool = (rivalTheme && rivalTheme.enemyPool && rivalTheme.enemyPool.length)
+            ? rivalTheme.enemyPool
+            : enemyPool;
+        // Frontline planets field one extra wave; ~40% of it is the rival.
+        const enemyCount = 2 + Math.min(4, Math.floor(idx / 2)) + (contested ? 1 : 0);
         const enemies = [];
         for (let i = 0; i < enemyCount; i++) {
-            const type = this.pickSeeded(rng, enemyPool) || 'fighter';
+            const isRival = contested && rng() < 0.4;
+            const type = this.pickSeeded(rng, isRival ? rivalPool : enemyPool) || 'fighter';
             enemies.push({
                 id: 'gen_' + id + '_' + i,
                 type: type,
                 weight: 1 + Math.floor(rng() * 3),
                 champion: false,
-                faction: faction
+                faction: isRival ? rival : faction
             });
         }
         enemies.push({
@@ -84,7 +95,7 @@ extendClass(PlanetConfigManager, {
             });
         }
 
-        const healthScale = 80 + idx * 25 + Math.floor(rng() * 40);
+        const healthScale = Math.round((80 + idx * 25 + Math.floor(rng() * 40)) * (contested ? 1.15 : 1));
         const speedScale = 0.85 + rng() * 0.5 + idx * 0.03;
         const resources = [
             { id: 'scrap', weight: 3, min: 10 + idx * 2, max: 22 + idx * 4 },
@@ -94,6 +105,13 @@ extendClass(PlanetConfigManager, {
         if (idx >= 3) {
             resources.push({ id: 'voltex', weight: 1, min: 3, max: 8 + idx });
         }
+        if (contested) {
+            // Battlefield salvage: contested planets pay out a quarter more.
+            resources.forEach((r) => {
+                r.min = Math.round(r.min * 1.25);
+                r.max = Math.round(r.max * 1.25);
+            });
+        }
 
         const galaxyBase = (this.galaxies[gid] && this.galaxies[gid].baseColor) || theme.baseColor || null;
         const origin = opts.arrival ? 'Arrival sector' : 'Explored sector';
@@ -102,9 +120,11 @@ extendClass(PlanetConfigManager, {
             name: name,
             galaxyId: gid,
             difficulty: difficulty,
-            description: origin + ' · ' + faction.toUpperCase() + ' · seed ' +
+            description: origin + ' · ' + (contested
+                ? 'FRONTLINE ' + faction.toUpperCase() + ' vs ' + rival.toUpperCase()
+                : faction.toUpperCase()) + ' · seed ' +
                 this.hashSeed(seed).toString(16).slice(0, 6),
-            factions: [faction],
+            factions: planetFactions,
             enemySpeed: Math.round(speedScale * 100) / 100,
             enemyHealth: healthScale,
             obstacleSpawnRate: Math.max(900, 2200 - idx * 80),

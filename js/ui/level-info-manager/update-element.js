@@ -65,6 +65,42 @@ extendClass(LevelInfoManager, {
         }
     },
 
+    collectPlanetObstacles(planetId) {
+        if (typeof planetConfigManager === 'undefined' || !planetId) return [];
+        const cfg = planetConfigManager.getConfig(planetId);
+        if (!cfg) return [];
+        const types = (Array.isArray(cfg.obstacles) && cfg.obstacles.length)
+            ? cfg.obstacles.map((o) => (o && (o.type || o.id)) || o)
+            : (cfg.obstacleTypes || []);
+        // One chip per obstacle kind (small/medium asteroid -> ASTEROID);
+        // the sizes go into the chip tooltip.
+        const kinds = {};
+        const order = [];
+        types.forEach((t) => {
+            if (!t) return;
+            const parts = String(t).toLowerCase().split('_');
+            const kind = parts[parts.length - 1];
+            const size = parts.slice(0, -1).join(' ');
+            if (!kinds[kind]) { kinds[kind] = []; order.push(kind); }
+            if (size && kinds[kind].indexOf(size) === -1) kinds[kind].push(size);
+        });
+        return order.map((kind) => ({
+            name: kind.charAt(0).toUpperCase() + kind.slice(1),
+            sizes: kinds[kind]
+        }));
+    },
+
+    collectEquippedWeapons() {
+        if (typeof shipLoadoutManager === 'undefined' || typeof profileManager === 'undefined'
+            || !profileManager.getActiveShipId) return [];
+        const ids = (shipLoadoutManager.getLoadout(profileManager.getActiveShipId()).weapons || []);
+        const seen = {};
+        return ids.filter((id) => id && !seen[id] && (seen[id] = true)).map((id) => {
+            const w = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager.getWeapon(id) : null;
+            return { name: (w && w.name) || id, id: id, count: ids.filter((x) => x === id).length };
+        });
+    },
+
     collectLevelData() {
         const levelData = {
             name: 'MARS — STAGE 1/3',
@@ -73,20 +109,13 @@ extendClass(LevelInfoManager, {
             enemySpeed: '0.8',
             enemyHealth: '100',
             enemyCount: '5',
-            obstacles: [
-                { name: 'Asteroid', count: 3 },
-                { name: 'Shield', count: 1 }
-            ],
+            obstacles: [],
             obstacleSpawnRate: 1000,
             playerShipType: 'Starfighter',
             playerSpeed: '1.0',
             playerMaxHealth: '100',
             currentWeapon: 'Laser',
-            weapons: [
-                { name: 'Laser', damage: 10 },
-                { name: 'Spread Shot', damage: 8 },
-                { name: 'Rapid Fire', damage: 6 }
-            ]
+            weapons: []
         };
 
         const coreLM = (typeof game !== 'undefined' && (game.coreLevelManager || game.levelManager))
@@ -108,6 +137,10 @@ extendClass(LevelInfoManager, {
             levelData.objective = current.objective || null;
             if (current.weapons) levelData.weapons = current.weapons;
         }
+        // FIELD shows only what this run really has: the planet's obstacle
+        // types and the weapons equipped on the flying ship.
+        levelData.obstacles = this.collectPlanetObstacles(levelData.planetId);
+        levelData.weapons = this.collectEquippedWeapons();
 
         if (typeof enemyManager !== 'undefined' && enemyManager.getEnemy()) {
             const enemy = enemyManager.getEnemy();

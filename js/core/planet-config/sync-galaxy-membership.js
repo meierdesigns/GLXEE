@@ -8,6 +8,8 @@ extendClass(PlanetConfigManager, {
         });
         this.getPlanetIds().forEach(pid => {
             const cfg = this.configs[pid];
+            // Ambush sectors are transient combat spaces, not galaxy planets.
+            if (cfg && cfg.encounter) return;
             let gid = (cfg && cfg.galaxyId) || 'milky_way';
             if (!this.galaxies[gid]) gid = this.getGalaxyIds()[0];
             if (!gid || !this.galaxies[gid]) return;
@@ -23,14 +25,14 @@ extendClass(PlanetConfigManager, {
         const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
         switch (layer.colorSource) {
             case 'secondary':
-                return css('--current-secondary') || '#606060';
+                return (css('--env-secondary') || css('--current-secondary')) || '#606060';
             case 'accent':
-                return css('--current-accent') || '#808080';
+                return (css('--env-accent') || css('--current-accent')) || '#808080';
             case 'custom':
-                return layer.color || css('--current-primary') || '#808080';
+                return layer.color || (css('--env-primary') || css('--current-primary')) || '#808080';
             case 'primary':
             default:
-                return css('--current-primary') || '#808080';
+                return (css('--env-primary') || css('--current-primary')) || '#808080';
         }
     },
 

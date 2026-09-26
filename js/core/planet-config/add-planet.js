@@ -131,7 +131,12 @@ extendClass(PlanetConfigManager, {
 
     save() {
         try {
-            localStorage.setItem(this.storageKey, JSON.stringify(this.configs));
+            // Transient ambush sectors are rebuilt per flight, never stored.
+            const persisted = {};
+            Object.keys(this.configs).forEach((id) => {
+                if (!(this.configs[id] && this.configs[id].encounter)) persisted[id] = this.configs[id];
+            });
+            localStorage.setItem(this.storageKey, JSON.stringify(persisted));
         } catch (e) {
             console.warn('PlanetConfigManager: save failed', e);
         }

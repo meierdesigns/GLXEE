@@ -242,29 +242,28 @@ class LevelInfoManager {
             'gi-cluster-combat'
         );
 
-        const obstacles = (d.obstacles && d.obstacles.length)
-            ? d.obstacles
-            : [{ name: 'Asteroid' }, { name: 'Shield' }];
+        // Only this run's real content: planet obstacles, equipped weapons.
+        const obstacles = d.obstacles || [];
         const obstacleChips = obstacles.map((o) => {
             const name = (o && o.name) || 'Obstacle';
             const key = /shield/i.test(name) ? 'menuDefense' : 'hsCargo';
             return this.chipHtml(key, name);
         }).join('');
 
-        const weapons = (d.weapons && d.weapons.length)
-            ? d.weapons
-            : [{ name: 'Laser' }, { name: 'Spread Shot' }, { name: 'Rapid Fire' }];
+        const weapons = d.weapons || [];
         const weaponChips = weapons.map((w) => {
             const name = (w && w.name) || 'Weapon';
-            return this.chipHtml(this.weaponIconKey(name), name);
+            return this.chipHtml(this.weaponIconKey(name), name + (w && w.count > 1 ? ' ×' + w.count : ''));
         }).join('');
 
+        const chipRow = (label, chips) => chips
+            ? `<div class="gi-chip-row"><span class="gi-chip-row-label">${label}</span>` +
+                `<div class="gi-chips">${chips}</div></div>`
+            : '';
         const field = this.clusterHtml('FIELD',
-            this.rowHtml('hsCargo', 'SPAWN', `${d.obstacleSpawnRate || 3000}ms`) +
-            `<div class="gi-chip-row"><span class="gi-chip-row-label">OBS</span>` +
-            `<div class="gi-chips">${obstacleChips}</div></div>` +
-            `<div class="gi-chip-row"><span class="gi-chip-row-label">WPN</span>` +
-            `<div class="gi-chips">${weaponChips}</div></div>`,
+            (obstacles.length ? this.rowHtml('hsCargo', 'SPAWN', `${d.obstacleSpawnRate || 3000}ms`) : '') +
+            chipRow('OBS', obstacleChips) +
+            chipRow('WPN', weaponChips),
             'gi-cluster-field'
         );
 

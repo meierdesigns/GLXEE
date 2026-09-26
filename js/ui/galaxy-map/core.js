@@ -16,6 +16,7 @@ class GalaxyMapManager {
         this.onConfirm = null;
         this.onBack = null;
         this.onExplored = null;
+        this.onDock = null;
         this.onEscape = null;
         this.statusMsg = '';
         this.map = null;
@@ -28,6 +29,7 @@ class GalaxyMapManager {
         this.onConfirm = options && options.onConfirm;
         this.onBack = options && options.onBack;
         this.onExplored = options && options.onExplored;
+        this.onDock = options && options.onDock;
         this.onEscape = options && options.onEscape;
         this._mountEl = (options && options.mount) || null;
         // Embedded in Home Station: wait for ENTER to arm planet selection.
@@ -117,6 +119,20 @@ class GalaxyMapManager {
             const firstUnlocked = (this.map.nodes || []).find(n => this.isUnlocked(n.planetId));
             this.selectedPlanetId = firstUnlocked ? firstUnlocked.planetId : (startId || null);
         }
+        // Cursor starts where the ship is.
+        this.selectedPostId = null;
+        const loc = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
+            ? profileManager.getShipLocation(this.galaxyId)
+            : null;
+        if (loc && loc.kind === 'planet' && this.nodeById[loc.id]) {
+            this.selectedPlanetId = loc.id;
+        } else if (loc && loc.kind === 'post' && profileManager.getTradingPost) {
+            const post = profileManager.getTradingPost(loc.id);
+            if (post && this.nodeById[post.planetId]) {
+                this.selectedPlanetId = post.planetId;
+                this.selectedPostId = post.id;
+            }
+        }
     }
 
     isUnlocked(planetId) {
@@ -167,6 +183,10 @@ class GalaxyMapManager {
                 difficulty = cfg.difficulty || '';
                 description = cfg.description || description;
                 enemyCount = (cfg.enemies && cfg.enemies.length) || enemyCount;
+                if (Array.isArray(cfg.factions) && cfg.factions.length > 1) {
+                    description = 'FRONTLINE: ' + cfg.factions.map((f) => String(f).toUpperCase()).join(' vs ')
+                        + ' · ' + description;
+                }
             }
         }
         const stage = (typeof profileManager !== 'undefined')
@@ -197,6 +217,9 @@ class GalaxyMapManager {
         if (typeof planetConfigManager !== 'undefined') {
             const g = planetConfigManager.getGalaxy(this.galaxyId);
             if (g) {
+                if (planetConfigManager.getGalaxyControlLabel) {
+                    return g.name + ' · ' + planetConfigManager.getGalaxyControlLabel(this.galaxyId);
+                }
                 const faction = planetConfigManager.getGalaxyFaction
                     ? planetConfigManager.getGalaxyFaction(this.galaxyId)
                     : g.faction;
@@ -214,7 +237,11 @@ class GalaxyMapManager {
             if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
                 planetSVGManager.init();
             }
-            let svg = planetSVGManager.getPlanetSVG(sid);
+            // Large views get a finer grid instead of an upscaled icon.
+            const detail = px >= 160 ? 4 : (px >= 80 ? 2 : 1);
+            let svg = planetSVGManager.getPlanetSVGDetailed
+                ? planetSVGManager.getPlanetSVGDetailed(sid, detail)
+                : planetSVGManager.getPlanetSVG(sid);
             if (svg) {
                 const uid = 'gm_' + sid + '_' + Math.random().toString(36).slice(2, 7);
                 svg = svg

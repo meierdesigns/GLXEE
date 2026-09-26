@@ -159,19 +159,49 @@ class MissionStartManager {
         }
     }
 
+    /** Crisp 5×7 bitmap digits scaled with nearest-neighbour — no blurry font. */
     drawPixelText(msg) {
         if (!this.pixelCanvas) return;
+        const GLYPHS = {
+            '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+            '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+            '2': ['01110', '10001', '00001', '00110', '01000', '10000', '11111'],
+            '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+            '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+            '5': ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+            '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
+            '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+            '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+            '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100']
+        };
         const canvas = this.pixelCanvas;
-        canvas.width = 48;
-        canvas.height = 64;
+        const chars = String(msg).split('').filter((c) => GLYPHS[c]);
+        // 1px margin + 1px drop shadow; 1px gap between digits.
+        canvas.width = chars.length * 6 + 2;
+        canvas.height = 10;
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = getComputedStyle(this.textEl).color;
-        ctx.font = 'bold 42px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(msg, 24, 33);
+        const color = getComputedStyle(this.textEl).color;
+        const paint = (ox, oy, fill, alpha) => {
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = fill;
+            chars.forEach((c, i) => {
+                GLYPHS[c].forEach((row, y) => {
+                    for (let x = 0; x < 5; x++) {
+                        if (row[x] === '1') ctx.fillRect(1 + i * 6 + x + ox, 1 + y + oy, 1, 1);
+                    }
+                });
+            });
+        };
+        paint(1, 1, '#000', 0.55);
+        paint(0, 0, color, 1);
+        ctx.globalAlpha = 1;
+        // Restart the per-second progress bar and pop-in animation.
+        const el = this.textEl;
+        el.classList.remove('mission-start-tick');
+        void el.offsetWidth;
+        el.classList.add('mission-start-tick');
     }
 
     onFire() {

@@ -436,7 +436,12 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  ▸ interactive component dropdowns for equipping and unequipping modules    │
 │  ▸ editable hangar anatomy — wing crops, voxel scale, rotation, connectors │
 │  ▸ symmetric wing styling with persistent per-ship shape variants           │
+│  ▸ ship-wide voxel lattice for aligned hull, wing, spine, and module pixels │
+│  ▸ adjustable spine joints, wing joint sides, connection widths, and hides  │
+│  ▸ delta / swept / stub / bat / twin-fin / lance wing planform variants     │
 │  ▸ draggable hangar slot cards with live area guides and reset controls     │
+│  ▸ themed keyboard-safe confirm / alert / prompt dialogs                    │
+│  ▸ grouped menu-tab navigation with focus-aware text-entry handling         │
 │  ▸ difficulty curves · explosion FX · mission start briefs                  │
 │  ▸ embedded hub menus · parallax crossfade handoffs                         │
 │  ▸ global look recipe · 8 palettes · UI editors · hangar arena              │
@@ -508,6 +513,9 @@ stable while large implementations move into focused folders loaded in order by
 | 39C | Graphics and assets | Renderers, palettes, ship styles, sprite data, and loaders |
 | 39D | UI modules | Station, hangar, editors, viewers, menus, and overlays |
 | 39E | Shell and docs | Entry-point wiring, styles, architecture notes, and README |
+| 40A | Ship anatomy | Voxel lattice alignment, joint geometry, and wing planforms |
+| 40B | Station interaction | Hangar controls, profile handoff, dialogs, and menu navigation |
+| 40C | Visual consistency | Faction themes, palette persistence, parallax, and editor polish |
 
 <br/>
 

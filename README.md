@@ -447,6 +447,12 @@ Foreign galaxies start without fixed planets. Travel / Explorations seed arrival
 │  ▸ galaxy flight travel with faction ambush encounters and seeded sectors   │
 │  ▸ combat wave direction, patterned obstacles, pickups, and victory loot    │
 │  ▸ Trading Posts with sell-back, ship location, style unlocks, and cosmetics│
+│  ▸ four hull areas — nose / core / aft / wings with S · M · L slot sizes  │
+│  ▸ area upgrades add mirrored weapon pairs, defense, energy, and ability slots│
+│  ▸ area switches can hide nose, aft, or wings and safely remap loadout parts│
+│  ▸ hangar PARTS workspace with size-fit states and pointer drag / drop       │
+│  ▸ mirrored weapon offsets, faction weapon mounts, and seeded layout defaults│
+│  ▸ reorderable Home Station tab rows with persistent menu preferences        │
 │  ▸ difficulty curves · explosion FX · mission start briefs                  │
 │  ▸ embedded hub menus · parallax crossfade handoffs                         │
 │  ▸ global look recipe · 8 palettes · UI editors · hangar arena              │
@@ -525,6 +531,9 @@ stable while large implementations move into focused folders loaded in order by
 | 41B | Galaxy travel | Flight travel, ambush encounters, and procedural arrival sectors |
 | 41C | Combat progression | Wave direction, obstacle patterns, pickups, and victory loot |
 | 41D | Station commerce | Trading Posts, sell-back, ship location, and style unlocks |
+| 42A | Area progression | Hull areas, slot sizes, upgrades, toggles, and loadout remapping |
+| 42B | Hangar workspace | PARTS grid, pointer drag/drop, station controls, and menu ordering |
+| 42C | Faction armament | Weapon mounts, faction art, mirrored placement, and hangar polish |
 
 <br/>
 

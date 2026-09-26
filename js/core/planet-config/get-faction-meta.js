@@ -11,6 +11,12 @@ extendClass(PlanetConfigManager, {
             terran: {
                 id: 'terran',
                 label: 'TERRAN',
+                // The faction's hero: the default pilot name for new profiles.
+                hero: {
+                    name: 'ADA VOSS',
+                    title: 'Commodore of the Concord Escort Wing',
+                    lore: 'Ada Voss never lost a freighter she was assigned to. She flies the lanes her own charts made safe, and every Terran pilot learns her rule before their first launch: the convoy comes home, or you do not.'
+                },
                 icon: 'factionTerran',
                 homeGalaxy: 'milky_way',
                 traits: ['Engineers', 'Colony fleets', 'Safe lanes'],
@@ -20,6 +26,12 @@ extendClass(PlanetConfigManager, {
             kronax: {
                 id: 'kronax',
                 label: 'KRONAX',
+                // The faction's hero: the default pilot name for new profiles.
+                hero: {
+                    name: 'SKARR VELKHAR',
+                    title: 'Clawmaster of the Ash Belt',
+                    lore: 'Skarr Velkhar carries forty interception scars and refuses to let a medic close a single one. He took the Clawmaster banner in a war-season ambush and has not handed it back since; the packs follow the loudest engines, and his are the loudest.'
+                },
                 icon: 'factionKronax',
                 homeGalaxy: 'andromeda',
                 traits: ['Raiders', 'Spike hulls', 'Ambush doctrine'],
@@ -29,6 +41,12 @@ extendClass(PlanetConfigManager, {
             voidborn: {
                 id: 'voidborn',
                 label: 'VOIDBORN',
+                // The faction's hero: the default pilot name for new profiles.
+                hero: {
+                    name: 'ECHO SIX',
+                    title: 'The Voice Between Folds',
+                    lore: 'Echo Six is the only Voidborn who has ever answered a hail. Nobody knows if the name is a rank, a count, or a joke. When the rings open and a single silent hull slips through first, archivists log it simply as: Six was here.'
+                },
                 icon: 'factionVoidborn',
                 homeGalaxy: 'void_reach',
                 traits: ['Fold-space', 'Silent fleets', 'Cold rings'],
@@ -38,6 +56,12 @@ extendClass(PlanetConfigManager, {
             pirate: {
                 id: 'pirate',
                 label: 'PIRATE',
+                // The faction's hero: the default pilot name for new profiles.
+                hero: {
+                    name: 'MAGPIE RENN',
+                    title: 'Captain of the Black Dock',
+                    lore: 'Magpie Renn has survived eleven mutinies by starting nine of them. Her hull is welded from the wrecks of everyone who crossed her, and the Scrap Belt knows the sign: a shine of stolen chrome, then nothing where your cargo used to be.'
+                },
                 icon: 'factionPirate',
                 homeGalaxy: 'scrap_belt',
                 traits: ['Salvage kings', 'Black docks', 'No lasting banner'],
@@ -47,6 +71,12 @@ extendClass(PlanetConfigManager, {
             machine: {
                 id: 'machine',
                 label: 'MACHINE',
+                // The faction's hero: the default pilot name for new profiles.
+                hero: {
+                    name: 'NODE ZERO',
+                    title: 'First Forge of the Synth Grid',
+                    lore: 'Node Zero is the hull the Collective copies when a copy must not fail. It keeps no memory it cannot use and no loyalty it cannot compute — yet every Machine war-line routes its first signal through Node Zero before it moves.'
+                },
                 icon: 'factionMachine',
                 homeGalaxy: 'synth_grid',
                 traits: ['Forge nodes', 'Logic doctrine', 'Self-replicate'],
@@ -66,6 +96,7 @@ extendClass(PlanetConfigManager, {
         const meta = metas[id] || fallback;
         if (!meta.loreLong) meta.loreLong = meta.lore;
         if (!Array.isArray(meta.traits)) meta.traits = [];
+        if (!meta.hero) meta.hero = { name: 'PILOT', title: '', lore: '' };
         return meta;
     },
 

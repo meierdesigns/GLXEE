@@ -60,6 +60,8 @@ extendClass(ColorPaletteSystem, {
                 && themeContextManager.mode === 'context'
                 && themeContextManager.contextSource
                 && themeContextManager.contextSource.palette) {
+                // UI stays on the faction palette; only the environment is planet-themed.
+                this.applyPalette(this.currentPalette, { persist: false });
                 themeContextManager.applyContextTheme(
                     themeContextManager.contextSource.palette,
                     themeContextManager.contextSource

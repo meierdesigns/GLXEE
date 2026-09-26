@@ -2,16 +2,19 @@
 
 /**
  * ThemeContextManager
- * - App theme: menus / settings (persisted)
- * - Context theme: planet / galaxy / stage (temporary while playing or editing)
- * Priority: stage > planet > galaxy > app
+ * - App theme: derived from the player's faction (not user-selectable). Drives
+ *   menus, HUD, ships, bullets and every other object via the --color-* vars.
+ * - Environment theme: planet / galaxy / stage palette, written only to the
+ *   --env-* vars that background layers (parallax, stars, backdrop) read.
+ *   Ships and objects keep the faction look.
+ * Environment priority: stage > planet > galaxy > faction
  */
 class ThemeContextManager {
     constructor() {
         this.appStorageKey = 'vf_appTheme';
         this.mode = 'app'; // 'app' | 'context'
         this.contextSource = null; // { level: 'stage'|'planet'|'galaxy'|'app', id, palette }
-        this.appTheme = this.loadAppTheme();
+        this.appTheme = this.factionPaletteId();
         this.presetIds = [
             'grayscale', 'white', 'retro', 'neon', 'ocean', 'fire', 'purple', 'forest', 'sunset'
         ];
@@ -22,6 +25,62 @@ class ThemeContextManager {
         if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.palettes) {
             this.presetIds = Object.keys(colorPaletteSystem.palettes).filter((id) => id.charAt(0) !== '_');
         }
+    }
+
+    currentFactionId() {
+        const root = typeof document !== 'undefined' ? document.documentElement : null;
+        const id = root && root.dataset ? root.dataset.faction : null;
+        if (id) return id;
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction) {
+            return factionShipStyles.resolveActiveFaction();
+        }
+        return 'terran';
+    }
+
+    factionPaletteId(factionId) {
+        return '_faction_' + String(factionId || this.currentFactionId()).toLowerCase();
+    }
+
+    /** Build (or rebuild) the hidden palette for a faction from its accent colour. */
+    ensureFactionPalette(factionId) {
+        const fid = String(factionId || this.currentFactionId()).toLowerCase();
+        const id = this.factionPaletteId(fid);
+        if (typeof colorPaletteSystem === 'undefined' || !colorPaletteSystem.expandPalette) return id;
+        let accent = null;
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const style = factionShipStyles.getFactionStyle(fid);
+            accent = style && (style.accent || style.hull);
+        }
+        const hex = this.normalizeHexColor(accent) || '#808080';
+        const name = fid.charAt(0).toUpperCase() + fid.slice(1);
+        colorPaletteSystem.palettes[id] = colorPaletteSystem.expandPalette({
+            name: name,
+            baseColor: hex,
+            // "White" text/icons = the faction base colour, lightened.
+            secondBaseColor: this.lightenHex(hex, 0.72)
+        });
+        return id;
+    }
+
+    /** Mix a #RRGGBB colour toward white by amount (0..1). */
+    lightenHex(hex, amount) {
+        const n = parseInt(String(hex).slice(1), 16);
+        const mix = (c) => Math.round(c + (255 - c) * amount);
+        const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255);
+        return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    /** Faction changed (profile switch / creation) — reskin the whole app. */
+    refreshFactionTheme(factionId) {
+        this.appTheme = this.ensureFactionPalette(factionId);
+        if (this.mode === 'app') {
+            this.restoreAppTheme();
+        } else {
+            const env = this.contextSource && this.contextSource.palette;
+            this._apply(this.appTheme, false);
+            this.applyEnvironment(env);
+        }
+        return this.appTheme;
     }
 
     loadAppTheme() {
@@ -44,6 +103,7 @@ class ThemeContextManager {
     }
 
     isValidPreset(id) {
+        if (id && String(id).indexOf('_faction_') === 0) return true;
         if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.palettes) {
             return !!colorPaletteSystem.palettes[id];
         }
@@ -67,42 +127,77 @@ class ThemeContextManager {
     }
 
     /**
-     * Set and persist the application (menus) theme.
+     * The app theme follows the faction; a manual pick is ignored and the
+     * faction palette is (re)applied instead. Kept for existing callers.
      */
-    setAppTheme(paletteId) {
-        if (!this.isValidPreset(paletteId)) paletteId = 'grayscale';
-        this.appTheme = paletteId;
-        this.saveAppTheme(paletteId);
-        this.mode = 'app';
-        this.contextSource = { level: 'app', id: null, palette: paletteId };
-        this._apply(paletteId, true);
-        return paletteId;
+    setAppTheme() {
+        return this.restoreAppTheme();
     }
 
     /**
-     * Re-apply saved app theme (menus / after leaving a level).
+     * Re-apply the faction app theme (menus / after leaving a level).
      */
     restoreAppTheme() {
+        this.appTheme = this.ensureFactionPalette();
         this.mode = 'app';
         this.contextSource = { level: 'app', id: null, palette: this.appTheme };
-        this._apply(this.appTheme, true);
+        this._apply(this.appTheme, false);
+        this.applyEnvironment(null);
         return this.appTheme;
     }
 
     /**
-     * Apply a temporary context theme without overwriting app settings.
+     * Apply a planet/galaxy/stage theme to the environment only (--env-* vars).
+     * The global palette stays on the faction theme.
      */
     applyContextTheme(paletteId, meta) {
-        if (!paletteId || paletteId === 'inherit') {
+        if (!paletteId || paletteId === 'inherit' || !this.isValidPreset(paletteId)) {
             return this.restoreAppTheme();
         }
-        if (!this.isValidPreset(paletteId)) {
-            return this.restoreAppTheme();
+        if (this.mode !== 'context') {
+            this.appTheme = this.ensureFactionPalette();
+            this._apply(this.appTheme, false);
         }
         this.mode = 'context';
         this.contextSource = Object.assign({ level: 'context', id: null, palette: paletteId }, meta || {});
-        this._apply(paletteId, false);
+        this.applyEnvironment(paletteId);
         return paletteId;
+    }
+
+    /**
+     * Write the environment palette to --env-* (background layers only).
+     * null → environment mirrors the current app palette.
+     */
+    applyEnvironment(paletteId) {
+        if (typeof document === 'undefined' || typeof colorPaletteSystem === 'undefined') return;
+        let pal = null;
+        const src = paletteId ? colorPaletteSystem.palettes[paletteId] : null;
+        if (src) {
+            pal = this.expandWithAppRecipe({
+                name: src.name,
+                baseColor: src.baseColor || src.primary,
+                secondBaseColor: src.secondBaseColor
+            });
+        } else {
+            pal = colorPaletteSystem.getCurrentColors ? colorPaletteSystem.getCurrentColors() : null;
+        }
+        if (!pal) return;
+        this.environmentColors = pal;
+        const root = document.documentElement;
+        const set = (k, v, fb) => root.style.setProperty(k, v || fb);
+        set('--env-primary', pal.primary, '#808080');
+        set('--env-secondary', pal.secondary, pal.primary);
+        set('--env-accent', pal.accent, pal.primary);
+        set('--env-background', pal.background, '#0a0a0a');
+        set('--env-background-light', pal.backgroundLight, pal.background);
+        set('--env-text', pal.text, '#e0e0e0');
+        set('--env-text-secondary', pal.textSecondary, pal.text);
+    }
+
+    getEnvironmentColors() {
+        return this.environmentColors
+            || (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getCurrentColors
+                ? colorPaletteSystem.getCurrentColors() : null);
     }
 
     /**

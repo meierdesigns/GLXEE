@@ -186,9 +186,9 @@ extendClass(ThemeEditorUI, {
         this.renderMeta();
     },
 
-    saveAsNew() {
+    async saveAsNew() {
         if (typeof colorPaletteSystem === 'undefined' || !this.draft) return;
-        const name = window.prompt('New theme name', (this.draft.name || 'Custom') + ' Copy');
+        const name = await uiDialog.prompt('New theme name', (this.draft.name || 'Custom') + ' Copy');
         if (name == null) return;
         const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'custom';
         const data = colorPaletteSystem.compactPalette(this.draft);
@@ -205,9 +205,9 @@ extendClass(ThemeEditorUI, {
         this.renderGraphicsPreview();
     },
 
-    createBlank() {
+    async createBlank() {
         if (typeof colorPaletteSystem === 'undefined') return;
-        const name = window.prompt('New theme name', 'Custom');
+        const name = await uiDialog.prompt('New theme name', 'Custom');
         if (name == null) return;
         const data = colorPaletteSystem.compactPalette({
             name: name.trim() || 'Custom',
@@ -225,13 +225,13 @@ extendClass(ThemeEditorUI, {
         this.renderGraphicsPreview();
     },
 
-    deleteCurrent() {
+    async deleteCurrent() {
         if (typeof colorPaletteSystem === 'undefined') return;
         if (colorPaletteSystem.isBuiltin(this.editingId)) {
-            window.alert('Builtin themes cannot be deleted. Use SAVE AS for a custom copy.');
+            uiDialog.alert('Builtin themes cannot be deleted. Use SAVE AS for a custom copy.');
             return;
         }
-        if (!window.confirm(`Delete theme "${this.draft.name || this.editingId}"?`)) return;
+        if (!(await uiDialog.confirm(`Delete theme "${this.draft.name || this.editingId}"?`, { okLabel: 'DELETE', danger: true }))) return;
         colorPaletteSystem.deleteCustomPalette(this.editingId);
         this.loadDraft('grayscale');
         if (typeof themeContextManager !== 'undefined') {

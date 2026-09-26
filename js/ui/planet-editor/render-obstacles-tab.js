@@ -61,8 +61,8 @@ extendClass(PlanetEditorUI, {
         addClusterBtn.type = 'button';
         addClusterBtn.className = 'pe-btn';
         addClusterBtn.textContent = '+ CLUSTER';
-        addClusterBtn.addEventListener('click', () => {
-            const name = window.prompt('New cluster name (e.g. nebula_west)');
+        addClusterBtn.addEventListener('click', async () => {
+            const name = await uiDialog.prompt('New cluster name (e.g. nebula_west)');
             if (!name) return;
             const id = pcm.addCluster ? pcm.addCluster(name) : null;
             if (id) {

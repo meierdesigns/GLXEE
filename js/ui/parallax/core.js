@@ -90,9 +90,9 @@ class ParallaxManager {
             return planetConfigManager.getResolvedLayers(planet);
         }
 
-        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--current-primary').trim() || '#808080';
-        const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--current-secondary').trim() || '#606060';
-        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--current-accent').trim() || '#808080';
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-primary').trim() || '#808080';
+        const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-secondary').trim() || '#606060';
+        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--env-accent').trim() || '#808080';
         const soft = (color, opacity) => ({ y: 0, speed: 0.2, color, height: 300, opacity, visible: true });
 
         switch (planet) {
@@ -155,7 +155,7 @@ class ParallaxManager {
         ctx.msImageSmoothingEnabled = false;
 
         // Fill base background with theme color
-        const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--current-background').trim();
+        const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--env-background').trim();
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;

@@ -117,7 +117,7 @@ extendClass(PlanetEditorUI, {
 
         const hint = document.createElement('p');
         hint.className = 'pe-hint';
-        hint.textContent = 'Theme priority: Stage → Planet → Galaxy → App Theme (Settings). Inherit skips that level.';
+        hint.textContent = 'Environment theme (background only — ships & UI keep the faction look). Priority: Stage → Planet → Galaxy → Faction. Inherit skips that level.';
         root.appendChild(hint);
 
         const hint2 = document.createElement('p');

@@ -15,8 +15,16 @@ class ColorManager {
 
     init() {
         // Prefer dedicated app theme if ThemeContext is already loaded
+        // App theme = faction palette. Applied directly: colorManager itself is
+        // not initialised yet, so ThemeContextManager can't route through it.
         if (typeof themeContextManager !== 'undefined') {
-            this.setPalette(themeContextManager.getAppTheme(), { persist: true, isAppTheme: true });
+            const id = themeContextManager.ensureFactionPalette();
+            themeContextManager.appTheme = id;
+            this.paletteSystem.applyPalette(id, { persist: false });
+            this.currentPalette = this.paletteSystem.getCurrentPalette();
+            this.currentColors = this.paletteSystem.getCurrentColors();
+            this._syncOverlay(id);
+            themeContextManager.applyEnvironment(null);
             return;
         }
         this.currentPalette = this.paletteSystem.getCurrentPalette();
@@ -86,6 +94,10 @@ class ColorManager {
     }
 
     reset() {
+        if (typeof themeContextManager !== 'undefined') {
+            themeContextManager.restoreAppTheme();
+            return;
+        }
         this.setPalette('grayscale', { persist: true, isAppTheme: true });
     }
 

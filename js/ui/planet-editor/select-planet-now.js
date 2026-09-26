@@ -45,14 +45,14 @@ extendClass(PlanetEditorUI, {
         this.persistMenuState();
     },
 
-    deletePlanetFromTree(planetId) {
+    async deletePlanetFromTree(planetId) {
         if (typeof planetConfigManager === 'undefined') return;
         const id = String(planetId || '').toLowerCase();
         if (!id) return;
         if (planetConfigManager.isBuiltinPlanet(id)) return;
         const cfg = planetConfigManager.getConfig(id);
         const label = (cfg && cfg.name) || id.toUpperCase();
-        if (!window.confirm(`Delete planet "${label}"?`)) return;
+        if (!(await uiDialog.confirm(`Delete planet "${label}"?`, { okLabel: 'DELETE', danger: true }))) return;
         const galaxyId = planetConfigManager.getPlanetGalaxyId
             ? planetConfigManager.getPlanetGalaxyId(id)
             : (cfg && cfg.galaxyId);

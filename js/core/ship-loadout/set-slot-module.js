@@ -10,22 +10,23 @@ extendClass(ShipLoadoutManager, {
         const key = this.kindToLoadoutKey(kind);
         const L = this.getLoadout(shipId);
         const caps = this.getSlotCaps(shipId, this.resolveModelClass(shipId));
-        const cap = Math.max(0, Number(caps[key]) || 0);
+        const cap = key === 'weapons'
+            ? this.weaponMountSlots(caps[key])
+            : Math.max(0, Number(caps[key]) || 0);
         const idx = Math.max(0, Math.min(cap - 1, Math.round(Number(slotIndex) || 0)));
         if (cap <= 0 || idx < 0) return { ok: false, reason: 'NO_SLOT', loadout: L };
 
         const nextId = moduleId == null || moduleId === '' || moduleId === 'empty'
             ? null
             : String(moduleId);
-        const list = (L[key] || []).slice();
+        const list = (key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || [])).slice();
 
         while (list.length < cap) list.push(null);
         const current = list[idx] || null;
 
         if (!nextId) {
-            if (key === 'weapons' && list.filter(Boolean).length <= 1 && current) {
-                return { ok: false, reason: 'NEED_WEAPON', loadout: L };
-            }
+            // The last weapon may be removed too; an unarmed ship falls back
+            // to the basic laser in flight (applyLayoutToModel).
             list[idx] = null;
             if (current === 'charge_shot') {
                 const oi = list.indexOf('overcharge_core');
@@ -41,7 +42,7 @@ extendClass(ShipLoadoutManager, {
             if (current !== nextId) {
                 const check = this.canInstallModule(shipId, kind, nextId);
                 if (!check.ok && !check.removing && check.reason !== 'FULL') {
-                    return { ok: false, reason: check.reason || 'BLOCKED', loadout: L };
+                    return { ok: false, reason: check.reason || 'BLOCKED', need: check.need, have: check.have, loadout: L };
                 }
             }
             // Move/replace: remove duplicates elsewhere in this category
@@ -63,8 +64,10 @@ extendClass(ShipLoadoutManager, {
         }
 
         L[key] = list.filter(Boolean);
-        if (key === 'weapons' && !L.weapons.length) {
-            L.weapons.push('laser');
+        if (key === 'weapons') {
+            // Keep slot positions (nose / wing pairs); trim trailing empties.
+            L.weaponSlots = list.map((id) => id || null);
+            while (L.weaponSlots.length && !L.weaponSlots[L.weaponSlots.length - 1]) L.weaponSlots.pop();
         }
         L.fireMode = (L.abilities || []).indexOf('charge_shot') !== -1 ? 'charge' : 'auto';
         const saved = this.setLoadout(shipId, L);

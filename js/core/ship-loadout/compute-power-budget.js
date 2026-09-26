@@ -5,6 +5,21 @@ extendClass(ShipLoadoutManager, {
     /**
      * Hangar power budget: GEN vs IDLE DRAW.
      */
+    /**
+     * Physical weapon mounts of a loadout: slot 0 = nose (one gun), slot 1+
+     * = wing pairs (the same weapon on both wings = two guns).
+     */
+    weaponMounts(loadout) {
+        const slots = (loadout.weaponSlots && loadout.weaponSlots.length ? loadout.weaponSlots : loadout.weapons) || [];
+        const out = [];
+        slots.forEach((id, i) => {
+            if (!id) return;
+            if (i === 0) out.push({ id: id, mount: 'front' });
+            else out.push({ id: id, mount: 'wing' }, { id: id, mount: 'wing' });
+        });
+        return out;
+    },
+
     computePowerBudget(loadout) {
         const L = this.normalizeLoadout(loadout);
         const energyStatsBase = (() => {
@@ -26,7 +41,9 @@ extendClass(ShipLoadoutManager, {
             perModule.push({ id: id, kind: kind, idle: idle });
             idleDraw += idle;
         };
-        (L.weapons || []).forEach((id) => add('weapon', id));
+        // Every weapon mount draws power: the nose gun once, a wing pair
+        // twice (one gun per wing). More weapons → more drain.
+        this.weaponMounts(L).forEach((m) => add('weapon', m.id));
         (L.defenses || []).forEach((id) => add('defense', id));
         (L.abilities || []).forEach((id) => add('ability', id));
         let drainMul = 1;

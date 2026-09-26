@@ -105,7 +105,8 @@ class EconomyConfig {
             scrap_belt: { scrap: 420, ore: 170, crystal: 200, voltex: 140 },
             synth_grid: { scrap: 540, ore: 220, crystal: 260, voltex: 190 }
         };
-        this.maxShipFrameLevel = 9;
+        // Frame level = sum of the 4 hull area levels (each 0..2, S/M/L).
+        this.maxShipFrameLevel = 8;
         this.moduleUpgradeDefs = {
             weapons: {
                 power: { label: 'POWER', desc: '+Damage', maxLevel: 3 },
@@ -209,6 +210,23 @@ class EconomyConfig {
         };
         if (lv >= 3) cost.crystal = 10 + (lv - 2) * 15;
         if (lv >= 6) cost.voltex = 8 + (lv - 5) * 12;
+        return cost;
+    }
+
+    /**
+     * Hull area upgrade (slot size S→M→L). Level 2 adds crystal; the core
+     * costs most (it holds defense + energy), the aft least.
+     */
+    getShipAreaUpgradeCost(areaId, nextLevel) {
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > 2) return null;
+        const mul = { front: 1, center: 1.25, back: 0.9, wing: 1.1 }[areaId];
+        if (!mul) return null;
+        const cost = {
+            scrap: Math.round((lv === 1 ? 90 : 190) * mul),
+            ore: Math.round((lv === 1 ? 30 : 75) * mul)
+        };
+        if (lv >= 2) cost.crystal = Math.round(35 * mul);
         return cost;
     }
 

@@ -14,7 +14,9 @@ extendClass(ShipLoadoutManager, {
         // small parts get small mounts and big parts get big ones.
         const fitBase = (w, h) => evenSize(Math.max(4, Math.min(ms * 2, w, h)));
         const noseMs = fitBase(ctx.scaledFrontW * 0.55, frontH * 0.7);
-        const wingPerSide = Math.max(1, Math.ceil(Math.max(0, L.weapons.length - (L.weapons.length === 2 ? 0 : 1)) / 2));
+        // One weapon per wing-pair slot on each wing (see weapon mounts below).
+        const wingPerSide = Math.max(1, ((L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [])
+            .slice(1).filter(Boolean).length);
         const wingMs = fitBase(ctx.wingSpan * 0.7, (ctx.wingH * 0.8) / wingPerSide);
         const aftCount = Math.max(1, systemPods.length, drives.length);
         const aftRows = (systemPods.length ? 1 : 0) + (drives.length ? 1 : 0) || 1;
@@ -43,13 +45,13 @@ extendClass(ShipLoadoutManager, {
             });
         };
 
-        const placeSideColumns = (ids, kind, startY, preferTop, size) => {
+        const placeSideColumns = (ids, kind, startY, preferTop, size, rightFirst) => {
             if (!ids.length) return;
             const base = size != null ? size : ms;
             const left = [];
             const right = [];
             ids.forEach((id, i) => {
-                (i % 2 === 0 ? left : right).push(id);
+                ((i + (rightFirst ? 1 : 0)) % 2 === 0 ? left : right).push(id);
             });
             const leftDims = left.map((id) => resolveDim(id, kind, base));
             const rightDims = right.map((id) => resolveDim(id, kind, base));
@@ -97,35 +99,20 @@ extendClass(ShipLoadoutManager, {
             placeSide(right, rightDims, 'right');
         };
 
-        // Weapons: 1 → front tip; 2 → wings; 3+ → nose + wings
-        if (L.weapons.length <= 1) {
-            placeRow(
-                L.weapons,
-                'weapon',
-                frontY + Math.max(0, frontH - noseMs),
-                hullMid,
-                'up',
-                noseMs
-            );
-        } else if (L.weapons.length === 2) {
+        // Weapon mounts (player offsets still apply on top): slot 0 sits in
+        // the nose tip; every later slot is a wing pair — the same weapon
+        // mirrored on both wings, so it fires from both sides.
+        const slotList = (L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [];
+        const noseWeapon = slotList[0] || null;
+        const wingWeapons = slotList.slice(1).filter(Boolean);
+        if (noseWeapon) {
+            placeRow([noseWeapon], 'weapon', frontY, hullMid, 'up', noseMs);
+        }
+        if (wingWeapons.length) {
+            const mirrored = [];
+            wingWeapons.forEach((id) => mirrored.push(id, id));
             placeSideColumns(
-                L.weapons,
-                'weapon',
-                Math.floor(wingY + (ctx.wingH - wingMs) / 2),
-                false,
-                wingMs
-            );
-        } else {
-            placeRow(
-                L.weapons.slice(0, 1),
-                'weapon',
-                frontY + Math.max(0, frontH - noseMs),
-                hullMid,
-                'up',
-                noseMs
-            );
-            placeSideColumns(
-                L.weapons.slice(1),
+                mirrored,
                 'weapon',
                 Math.floor(wingY + (ctx.wingH - wingMs) / 2),
                 false,

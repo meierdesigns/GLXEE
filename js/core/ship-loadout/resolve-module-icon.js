@@ -265,7 +265,15 @@ extendClass(ShipLoadoutManager, {
             regen: 12 + regenBonus,
             idleDraw: budget.idleDraw,
             drainMul: drainMul,
-            shotCost: this.getWeaponShotCost(primaryWeapon) * drainMul,
+            // A volley fires every mounted gun, so it costs all of them: nose
+            // gun full price, each wing gun 75% (they're the split, weaker shots).
+            shotCost: (() => {
+                const mounts = this.weaponMounts(L);
+                if (!mounts.length) return this.getWeaponShotCost(primaryWeapon) * drainMul;
+                const sum = mounts.reduce((acc, m) =>
+                    acc + this.getWeaponShotCost(m.id) * (m.mount === 'wing' ? 0.75 : 1), 0);
+                return Math.round(sum * drainMul * 100) / 100;
+            })(),
             chargePerSec: 12 * drainMul,
             shieldAbsorbPerDmg: 0.5 * drainMul,
             boostPerSec: boostPerSec * drainMul,

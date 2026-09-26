@@ -131,8 +131,9 @@ extendClass(HomeStationUI, {
         // tree open, jump to the slot's own entry there instead of swapping
         // the sidebar over to the details view.
         if (moduleToSelect) {
+            // Tree shown: jump to the slot there. Otherwise nothing extra —
+            // the separate component details panel is not used for slots.
             if (!this._hangarLeftCollapsed && this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index)) return;
-            this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);
         }
         // With the ship sidebar open, its tree already holds every setting:
         // open the matching section there instead of a second panel on top
@@ -241,11 +242,19 @@ extendClass(HomeStationUI, {
         if (!res.ok) {
             let msg = 'SLOT UPDATE FAILED';
             if (res.reason === 'NEED_WEAPON') msg = 'NEED AT LEAST ONE WEAPON';
+            if (res.reason === 'NEED_ENERGY') msg = 'NEED AN ENERGY CORE';
             if (res.reason === 'NEED_CHARGE_SHOT') msg = 'NEED CHARGE SHOT FIRST';
             if (res.reason === 'NEED_CHARGE_DRIVE') msg = 'NEED CHARGE DRIVE FIRST';
             if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
+            if (res.reason === 'TOO_BIG') {
+                msg = 'PART NEEDS A ' + shipLoadoutManager.slotSizeLabel(res.need)
+                    + ' SLOT · UPGRADE THE ' + this.areaLabel(shipLoadoutManager.getSlotArea(kind, slotIndex));
+            }
             if (sourceEl) this.playButtonResult(sourceEl, false, msg);
-            else this.statusMsg = msg;
+            else {
+                this.statusMsg = msg;
+                this.createUI();
+            }
             return;
         }
         if (typeof shipConfigManager !== 'undefined') {

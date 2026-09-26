@@ -4,7 +4,7 @@
 extendClass(HomeStationUI, {
     switchSubTab(dir) {
         if (this.tab === 'shop') {
-            const ids = this._shopCategories;
+            const ids = this.getAvailableShopCategories();
             const idx = ids.indexOf(this.shopCategory);
             const next = ids[(idx + dir + ids.length) % ids.length];
             const prev = this.shopCategory;

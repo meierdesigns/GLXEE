@@ -12,6 +12,11 @@ const TRADING_POST_NAMES = [
     'IRON LANTERN', 'DRIFTWORKS', 'HALCYON DEPOT', 'CINDER MARKET', 'VANTAGE POST'
 ];
 
+// Shop categories a trader can specialise in. Every post also trades
+// resources; docking at a post unlocks its trader, and from then on its
+// categories are sold at the home station too.
+const TRADING_POST_CATEGORIES = ['parts', 'ships', 'blueprints', 'portals', 'styles'];
+
 // Ability ids sold anywhere (same set as the home station shop).
 const TRADING_POST_ABILITY_IDS = ['charge_shot', 'overcharge_core', 'charge_drive', 'drive_charge_dampen', 'spike_drive'];
 
@@ -70,7 +75,8 @@ extendClass(ProfileManager, {
                 deepSpace: deep,
                 x: pos.x,
                 y: pos.y,
-                name: TRADING_POST_NAMES[h % TRADING_POST_NAMES.length]
+                name: TRADING_POST_NAMES[h % TRADING_POST_NAMES.length],
+                categories: this.getTradingPostCategories(id)
             };
         });
     },
@@ -132,6 +138,39 @@ extendClass(ProfileManager, {
             }
         }
         return best || { x: anchor.x, y: anchor.y };
+    },
+
+    /** Seeded specialty: 1–2 categories plus resources, e.g. ['resources', 'parts', 'styles']. */
+    getTradingPostCategories(postId) {
+        const h = this.tradingPostHash(String(postId) + '|cats');
+        const all = TRADING_POST_CATEGORIES.slice();
+        const first = all.splice(h % all.length, 1)[0];
+        const cats = [first];
+        if ((h >>> 7) % 2 === 0) cats.push(all[(h >>> 9) % all.length]);
+        return ['resources'].concat(cats);
+    },
+
+    /** Remember a trader once the player has docked there. */
+    unlockTrader(postId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !postId) return false;
+        if (!Array.isArray(p.unlockedTraders)) p.unlockedTraders = [];
+        if (p.unlockedTraders.indexOf(postId) !== -1) return false;
+        p.unlockedTraders.push(postId);
+        if (this.save) this.save();
+        return true;
+    },
+
+    /** Shop categories open at the home station: resources + every unlocked trader's. */
+    getUnlockedShopCategories(profile) {
+        const p = profile || this.getActiveProfile();
+        const out = ['resources'];
+        ((p && p.unlockedTraders) || []).forEach((postId) => {
+            this.getTradingPostCategories(postId).forEach((c) => {
+                if (out.indexOf(c) === -1) out.push(c);
+            });
+        });
+        return out;
     },
 
     getTradingPost(postId) {

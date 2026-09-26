@@ -108,7 +108,7 @@ extendClass(HomeStationUI, {
                         <div class="hs-station-cover-image"></div>
                         <div class="hs-station-cover-faction" aria-hidden="true"></div>
                         <div class="hs-station-cover-scanline"></div>
-                        <div class="hs-station-cover-crest" aria-hidden="true">${this.factionEmblemHtml(profile, 96)}</div>
+                        <div class="hs-station-cover-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'banner')}</div>
                         <div class="hs-station-cover-caption">
                             <span class="hs-station-cover-kicker">HOME STATION // DOCK 01</span>
                             <strong>WELCOME ABOARD</strong>
@@ -164,19 +164,14 @@ extendClass(HomeStationUI, {
             <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header">
                     <div class="hs-topbar">
+                        <span class="hs-topbar-emblem" aria-hidden="true">${this.factionCrestHtml(profile, 'topbar')}</span>
                         <div class="hs-tabs">
-                            <button type="button" class="hs-home-btn ${this.tab === 'station' ? 'active' : ''}" data-tab="station" data-nav-item title="Home Station">
-                                <span class="hs-home-icon">${this.iconHtml('hsStation', 32, 'hs-pixel hs-pixel-32')}</span>
-                                <span class="hs-home-text">HOME STATION</span>
-                            </button>
-                            ${this.renderTabs()}
+                            ${this.isMenuRowTab() ? this.renderMenuTabs() : this.renderTabs()}
                         </div>
-                        <p class="hs-profile"><span class="hs-profile-emblem">${this.factionEmblemHtml(profile, 20)}</span><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
+                        <p class="hs-profile"><span class="hs-profile-emblem">${this.factionEmblemHtml(profile, 16)}</span><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
                         <div class="hs-topbar-actions">
-                            ${this.renderMenuTabs()}
-                            <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" title="Logout" data-nav-item>
-                                <span class="hs-logout-icon" aria-hidden="true">&#9211;</span>
-                                <span class="hs-logout-label">LOGOUT</span>
+                            <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
+                                <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
                             </button>
                         </div>
                     </div>
@@ -214,6 +209,7 @@ extendClass(HomeStationUI, {
             this.renderAllComponentTrees();
             this.bindComponentTreeEvents();
             this.bindHangarSlotEvents();
+            this.bindHangarPartsGrid();
         } else {
             this.destroyHangarPanelResize();
             this._hangarOpenSlot = null;

@@ -32,37 +32,30 @@ extendClass(HomeStationUI, {
                 };
             }
         }
-        const module = null;
-        if (module && shipLoadoutManager.setModuleOffset) {
-            // A single drag both selects and moves the module now — a
-            // release without real movement still counts as "select" so
-            // clicking to highlight a module still works.
-            const moduleOffsetKey = shipLoadoutManager.moduleOffsetKey
-                ? shipLoadoutManager.moduleOffsetKey(module.id, module.face)
-                : module.id;
-            const stored = h.loadout.moduleOffsets
-                && h.loadout.moduleOffsets[module.kind]
-                && (h.loadout.moduleOffsets[module.kind][moduleOffsetKey]
-                    || h.loadout.moduleOffsets[module.kind][module.id]);
-            const segmentId = module.mountSegment === 'wing'
-                ? (module.face === 'left' ? 'wingLeft' : 'wingRight')
-                : module.mountSegment;
-            const segment = (h.model.layout.segments || []).find((seg) => seg.id === segmentId);
-            h.drag = {
-                startX: e.clientX,
-                startY: e.clientY,
-                moved: false,
-                startModuleOffsetX: stored ? Number(stored.x) || 0 : 0,
-                startModuleOffsetY: stored ? Number(stored.y) || 0 : 0,
-                module: module,
-                segmentWidth: Math.max(1, segment ? segment.width : module.width || 1),
-                segmentHeight: Math.max(1, segment ? segment.height : module.height || 1)
-            };
-            this._hangarSelectedModule = { kind: module.kind, id: module.id };
-            this._hangarSegmentHover = null;
-            this._hangarWingDragState = h.drag;
-            h.canvas.classList.add('is-module-dragging');
-            h.canvas.setPointerCapture(e.pointerId);
+        // An installed part is grabbed right on the ship: dragging pulls it
+        // out of its slot (see startHangarSlotPull). Parts win over the hull's
+        // resize edges, which stay usable everywhere outside a part.
+        // An empty slot near the pointer wins over the part underneath it:
+        // pressing just beside its small marker must move the slot, not pull
+        // out the installed part it happens to sit on.
+        const emptyPin = this.hangarEmptyPinNear(e.clientX, e.clientY, 18);
+        if (emptyPin) {
+            emptyPin.dispatchEvent(new PointerEvent('pointerdown', {
+                clientX: e.clientX,
+                clientY: e.clientY,
+                button: 0,
+                buttons: 1,
+                pointerId: e.pointerId,
+                pointerType: e.pointerType,
+                isPrimary: true,
+                bubbles: true,
+                cancelable: true
+            }));
+            e.preventDefault();
+            return;
+        }
+        const grabModule = this.hangarNearestModuleAt(h, e);
+        if (grabModule && this.startHangarModuleGrab(grabModule, e)) {
             e.preventDefault();
             return;
         }

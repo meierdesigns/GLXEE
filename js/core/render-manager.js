@@ -96,8 +96,8 @@ class CoreRenderManager {
     }
 
     renderBackground() {
-        // Simple background
-        this.ctx.fillStyle = this.resolveFill('var(--current-background)');
+        // Environment backdrop — planet theme, not the faction UI palette
+        this.ctx.fillStyle = this.resolveFill('var(--env-background)');
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         // Add some stars

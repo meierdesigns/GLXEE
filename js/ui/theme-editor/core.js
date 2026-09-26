@@ -74,10 +74,10 @@ class ThemeEditorUI {
         const opts = options || {};
         this.returnToSettings = !!opts.returnToSettings;
         this.returnToInGameSettings = !!opts.returnToInGameSettings;
-        this.editingId = opts.paletteId
-            || (typeof themeContextManager !== 'undefined' && themeContextManager.getAppTheme())
-            || (typeof colorManager !== 'undefined' && colorManager.getCurrentPalette())
-            || 'grayscale';
+        // Faction palettes (_faction_*) are generated, not editable — start
+        // on a planet theme preset instead.
+        const requested = opts.paletteId;
+        this.editingId = (requested && String(requested).charAt(0) !== '_') ? requested : 'grayscale';
         this.loadDraft(this.editingId);
         this.visible = true;
         this.createUI();

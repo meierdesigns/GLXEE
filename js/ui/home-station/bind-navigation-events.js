@@ -52,6 +52,9 @@ extendClass(HomeStationUI, {
 
     /** Shop filters, frame/module upgrades, galaxy travel and the resource market. */
     bindShopEvents() {
+        this.bindTradingPostEvents();
+        this.bindShopSellEvents();
+        this.bindShopStyleEvents();
         this.overlay.querySelectorAll('[data-shop-cat]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const prev = this.shopCategory;
@@ -68,6 +71,7 @@ extendClass(HomeStationUI, {
         this.overlay.querySelectorAll('[data-upgrade-sub]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 this.upgradeSubTab = btn.getAttribute('data-upgrade-sub') || 'station';
+                this.persistTab();
                 this._resBuyModal = null;
                 this.statusMsg = '';
                 this.focusIndex = 0;

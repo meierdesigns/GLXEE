@@ -96,10 +96,10 @@ extendClass(HomeStationUI, {
     },
 
     getVoxelScaleValue(shipId) {
-        if (typeof shipLoadoutManager === 'undefined') return 1;
+        if (typeof shipLoadoutManager === 'undefined') return 0.5;
         const loadout = shipLoadoutManager.getLoadout(shipId);
         // Max 1.5 — older loadouts may still store larger values.
-        return Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 1));
+        return Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
     },
 
     getWingConnectionStyle(shipId) {

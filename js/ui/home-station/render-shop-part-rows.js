@@ -21,7 +21,8 @@ extendClass(HomeStationUI, {
                 tier: tier,
                 cost: cost,
                 costTotal: this.costTotal(cost),
-                count: count
+                count: count,
+                faction: entry.faction != null ? entry.faction : String((entry.item && entry.item.faction) || '')
             };
         });
         if (this.shopFilter && this.shopFilter !== 'all') {
@@ -45,7 +46,9 @@ extendClass(HomeStationUI, {
                 `<span class="hs-chip-icon">${this.iconHtml(icon, 32, 'hs-pixel')}</span>` +
                 `<span class="hs-line-text">` +
                 `<strong>${e.name}${stock}</strong>` +
-                `<span class="hs-line-meta">${tag} · T${e.tier}</span>` +
+                `<span class="hs-line-meta">${tag} · T${e.tier}` +
+                ` · ${this.factionTagHtml(e.faction)}` +
+                `</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}` +
                 `<button class="action-button hs-line-action" data-buy-part="${e.kind}:${e.id}" ${afford ? '' : 'disabled'}>BUY</button></div>`;
@@ -120,7 +123,7 @@ extendClass(HomeStationUI, {
                 `<strong>PORTAL: ${e.name}</strong>` +
                 `<span class="hs-line-meta">` +
                 `<span class="hs-shop-ctrl-icon">${this.iconHtml(e.factionIcon, 20, 'hs-pixel hs-pixel-20')}</span>` +
-                `${e.factionLabel} · WARP L${e.tier}</span>` +
+                `${this.factionTagHtml(e.faction)} · WARP L${e.tier}</span>` +
                 (e.lore ? `<span class="hs-line-lore">${e.lore}</span>` : '') +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}${action}</div>`;

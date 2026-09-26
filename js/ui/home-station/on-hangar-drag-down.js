@@ -92,8 +92,9 @@ extendClass(HomeStationUI, {
             const lo = shipLoadoutManager.getLoadout(this.hangarShipId);
             const band = hit.jointHandle.band;
             const isSpine = band.kind === 'spine';
-            const start = isSpine ? (Number(lo.spineConnectionWidth) || 0.18) : (Number(lo.wingConnectionWidth) || 0.1);
-            const end = isSpine ? Number(lo.spineConnectionWidthEnd) : Number(lo.wingConnectionWidthEnd);
+            const sj = isSpine ? resolveSpineJoint(lo, band.id) : null;
+            const start = isSpine ? sj.width : (Number(lo.wingConnectionWidth) || 0.1);
+            const end = isSpine ? sj.widthEnd : Number(lo.wingConnectionWidthEnd);
             h.drag = {
                 jointScale: true,
                 connector: true,
@@ -235,10 +236,10 @@ extendClass(HomeStationUI, {
         const shipId = this.hangarShipId;
         const isSpine = band.kind === 'spine';
         const setStart = (v) => (isSpine
-            ? shipLoadoutManager.setSpineConnectionWidth(shipId, v)
+            ? shipLoadoutManager.setSpineConnectionWidth(shipId, v, band.id)
             : shipLoadoutManager.setWingConnectionWidth(shipId, v));
         const setEnd = (v) => (isSpine
-            ? shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v)
+            ? shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v, band.id)
             : shipLoadoutManager.setWingConnectionWidthEnd(shipId, v));
         const round = (v) => Math.round(v * 100) / 100;
         if (!isSpine && d.sides) {

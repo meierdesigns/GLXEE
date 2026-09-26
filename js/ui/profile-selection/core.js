@@ -49,6 +49,8 @@ class ProfileSelectionManager {
         const hero = meta && meta.hero;
         const trait = this.overlay.querySelector('.profile-faction-preview-trait');
         if (trait) trait.textContent = meta && meta.traits.length ? meta.traits.join(' · ').toUpperCase() : '';
+        const loreEl = this.overlay.querySelector('.profile-faction-lore-text');
+        if (loreEl) loreEl.textContent = (meta && (meta.loreLong || meta.lore)) || '';
         const heroEl = this.overlay.querySelector('.profile-faction-preview-hero');
         if (heroEl) {
             heroEl.textContent = hero ? `HERO · ${hero.name}` : '';
@@ -107,7 +109,7 @@ class ProfileSelectionManager {
         if (!loader || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return;
         try {
             const shipId = 'player_scrap';
-            const model = Object.assign({}, shipConfigManager.getMergedModel(shipId), { id: shipId, faction: id });
+            const model = Object.assign({}, shipConfigManager.getMergedModel(shipId), { id: shipId, faction: id, factionPreview: true });
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(model, shipId);
             }
@@ -153,7 +155,9 @@ class ProfileSelectionManager {
             if (idx >= 0) this.selectedIndex = idx;
         }
         this.createUI();
-        if (typeof menuStateManager !== 'undefined') {
+        // Embedded in the station menu, the station persists its own tab.
+        const inStation = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+        if (typeof menuStateManager !== 'undefined' && !inStation) {
             menuStateManager.setScreen('profiles');
         }
     }
@@ -202,107 +206,7 @@ class ProfileSelectionManager {
         };
 
         if (this.mode === 'create' || this.mode === 'rename') {
-            const title = this.mode === 'create' ? 'NEW PROFILE' : 'RENAME PROFILE';
-            const factionPickerHtml = this.mode === 'create' ? `
-                <div class="profile-faction-picker">
-                    <div class="profile-faction-picker-label">FACTION</div>
-                    <div class="profile-faction-swatches">
-                        ${this.getFactionIds().map((id) => `
-                            <button type="button" class="profile-faction-swatch${id === this.pendingFaction ? ' selected' : ''}"
-                                data-faction="${id}" title="${this.getFactionLabel(id)}"
-                                style="--faction-color: ${this.getFactionColor(id)}">
-                                <span class="profile-faction-swatch-emblem">${this.getFactionEmblemHtml(id)}</span>
-                                <span class="profile-faction-swatch-label">${this.getFactionLabel(id)}</span>
-                            </button>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : '';
-            setHtml(`
-                <div class="profile-selection-content profile-selection-floating profile-selection-name-mode">
-                    <h2 class="profile-selection-title">${title}</h2>
-                    <input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>
-                    ${this.mode === 'create' ? `
-                    <div class="profile-faction-preview">
-                        <canvas class="profile-faction-ship" width="200" height="140" aria-label="Faction ship preview"></canvas>
-                        <div class="profile-faction-preview-text">
-                            <span class="profile-faction-preview-emblem"></span>
-                            <strong class="profile-faction-preview-name"></strong>
-                            <small class="profile-faction-preview-trait"></small>
-                            <small class="profile-faction-preview-hero"></small>
-                        </div>
-                    </div>` : ''}
-                    ${factionPickerHtml}
-                    <div class="profile-selection-actions">
-                        <button class="action-button" id="psSave">SAVE</button>
-                        <button class="action-button secondary" id="psCancelMode">CANCEL</button>
-                    </div>
-                    <div class="profile-selection-instructions"><p>ENTER Save | ESC Cancel</p></div>
-                </div>
-            `);
-            if (!reuse) document.body.appendChild(this.overlay);
-            if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-                VFBgMouseParallax.refresh();
-            }
-            const input = this.overlay.querySelector('#profileNameInput');
-            if (this.mode === 'rename' && profiles[this.selectedIndex]) {
-                input.value = profiles[this.selectedIndex].name;
-            }
-            input.focus();
-            this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    this.pendingFaction = btn.dataset.faction;
-                    this.overlay.querySelectorAll('.profile-faction-swatch').forEach((el) => {
-                        el.classList.toggle('selected', el.dataset.faction === this.pendingFaction);
-                    });
-                    this.applyPendingFactionLook();
-                });
-            });
-            if (this.mode === 'create') this.applyPendingFactionLook();
-            this.overlay.querySelector('#psSave').addEventListener('click', () => this.saveName());
-            this.overlay.querySelector('#psCancelMode').addEventListener('click', () => {
-                this.mode = 'list';
-                this.createUI();
-            });
-            // Arrow nav: name field ↔ faction swatches ↔ SAVE/CANCEL.
-            // Focusing a swatch picks that faction so the preview follows.
-            const navItems = () => {
-                const root = this.overlay.querySelector('.profile-selection-content');
-                return typeof menuNavHelper !== 'undefined' ? menuNavHelper.collectFocusables(root) : [];
-            };
-            const moveNav = (direction) => {
-                const list = navItems();
-                if (!list.length) return;
-                let idx = list.indexOf(document.activeElement);
-                if (idx < 0) idx = 0;
-                const next = menuNavHelper.moveFocusSpatial(list, idx, direction);
-                const el = list[next];
-                if (el && el !== input) input.classList.remove('nav-focused');
-                if (el && el.classList.contains('profile-faction-swatch') && el.dataset.faction !== this.pendingFaction) {
-                    el.click();
-                }
-            };
-            this._keyHandler = (e) => {
-                if (!this.isVisible) return;
-                const onInput = document.activeElement === input;
-                const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.key];
-                if (dir && !(onInput && (dir === 'left' || dir === 'right'))) {
-                    e.preventDefault();
-                    moveNav(dir);
-                    return;
-                }
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const cancel = this.overlay.querySelector('#psCancelMode');
-                    if (document.activeElement === cancel) cancel.click();
-                    else this.saveName();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    this.mode = 'list';
-                    this.createUI();
-                }
-            };
-            document.addEventListener('keydown', this._keyHandler);
+            this.renderNameMode(setHtml, reuse, profiles);
             return;
         }
 
@@ -346,6 +250,158 @@ class ProfileSelectionManager {
             VFBgMouseParallax.refresh();
         }
         this.bindListEvents();
+    }
+
+    /**
+     * Create flow is two steps: 1) pick a faction (← → cycle, ENTER confirm),
+     * 2) name the pilot (defaults to the faction hero). Rename skips step 1.
+     */
+    renderNameMode(setHtml, reuse, profiles) {
+        const create = this.mode === 'create';
+        const step = create ? (this.createStep || 'faction') : 'name';
+        const pickFaction = create && step === 'faction';
+        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : 'NAME YOUR PILOT');
+        const swatchesHtml = pickFaction ? `
+            <div class="profile-faction-picker">
+                <div class="profile-faction-picker-label">← FACTION →</div>
+                <div class="profile-faction-swatches">
+                    ${this.getFactionIds().map((id) => `
+                        <button type="button" class="profile-faction-swatch${id === this.pendingFaction ? ' selected' : ''}"
+                            data-faction="${id}" title="${this.getFactionLabel(id)}" tabindex="-1"
+                            style="--faction-color: ${this.getFactionColor(id)}">
+                            <span class="profile-faction-swatch-emblem">${this.getFactionEmblemHtml(id, 32)}</span>
+                            <span class="profile-faction-swatch-label">${this.getFactionLabel(id)}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>` : '';
+        const previewHtml = create ? `
+            <div class="profile-faction-info-row">
+            <div class="profile-faction-preview">
+                <canvas class="profile-faction-ship" width="200" height="140" aria-label="Faction ship preview"></canvas>
+                <div class="profile-faction-preview-text">
+                    <span class="profile-faction-preview-emblem"></span>
+                    <strong class="profile-faction-preview-name"></strong>
+                    <small class="profile-faction-preview-trait"></small>
+                    <small class="profile-faction-preview-hero"></small>
+                </div>
+            </div>
+            <div class="profile-faction-lore" role="note">
+                <div class="profile-faction-lore-label">ⓘ LORE</div>
+                <p class="profile-faction-lore-text"></p>
+            </div>
+            </div>` : '';
+        const inputHtml = pickFaction ? ''
+            : '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>';
+        const primary = pickFaction ? 'NEXT' : 'SAVE';
+        const secondary = create && !pickFaction ? 'BACK' : 'CANCEL';
+        const hint = pickFaction ? '← → Faction | ENTER Confirm | ESC Cancel'
+            : (create ? 'ENTER Save | ESC Back' : 'ENTER Save | ESC Cancel');
+        setHtml(`
+            <div class="profile-selection-content profile-selection-floating profile-selection-name-mode">
+                <h2 class="profile-selection-title">${title}</h2>
+                ${pickFaction ? '' : inputHtml}
+                ${swatchesHtml}
+                ${previewHtml}
+                <div class="profile-selection-actions">
+                    <button class="action-button" id="psSave">${primary}</button>
+                    <button class="action-button secondary" id="psCancelMode">${secondary}</button>
+                </div>
+                <div class="profile-selection-instructions"><p>${hint}</p></div>
+            </div>
+        `);
+        if (!reuse) document.body.appendChild(this.overlay);
+        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
+            VFBgMouseParallax.refresh();
+        }
+        const input = this.overlay.querySelector('#profileNameInput');
+        if (input && this.mode === 'rename' && profiles[this.selectedIndex]) {
+            input.value = profiles[this.selectedIndex].name;
+        }
+        if (create) this.applyPendingFactionLook();
+        const saveBtn = this.overlay.querySelector('#psSave');
+        const cancelBtn = this.overlay.querySelector('#psCancelMode');
+
+        const pickIndex = (i) => {
+            const ids = this.getFactionIds();
+            const n = ids.length;
+            this.pendingFaction = ids[((i % n) + n) % n];
+            this.overlay.querySelectorAll('.profile-faction-swatch').forEach((el) => {
+                el.classList.toggle('selected', el.dataset.faction === this.pendingFaction);
+            });
+            this.applyPendingFactionLook();
+        };
+        const confirm = () => {
+            if (pickFaction) {
+                this.createStep = 'name';
+                this.createUI();
+            } else {
+                this.saveName();
+            }
+        };
+        const cancel = () => {
+            if (create && !pickFaction) {
+                this.createStep = 'faction';
+            } else {
+                this.mode = 'list';
+            }
+            this.createUI();
+        };
+        this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
+            btn.addEventListener('click', () => pickIndex(this.getFactionIds().indexOf(btn.dataset.faction)));
+            btn.addEventListener('dblclick', confirm);
+        });
+        saveBtn.addEventListener('click', confirm);
+        cancelBtn.addEventListener('click', cancel);
+
+        // Focus rows: [faction row | name input] then [primary, secondary].
+        // Left/right in the faction row cycles factions (wraps); in the button
+        // row it moves between buttons; in the input it moves the caret.
+        let row = 0;
+        let btnIdx = 0;
+        const buttons = [saveBtn, cancelBtn];
+        const syncFocus = () => {
+            buttons.forEach((b, i) => b.classList.toggle('nav-focused', row === 1 && i === btnIdx));
+            const swatchRow = this.overlay.querySelector('.profile-faction-swatches');
+            if (swatchRow) swatchRow.classList.toggle('nav-row-active', row === 0);
+            if (row === 1) buttons[btnIdx].focus();
+            else if (input) input.focus();
+            else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        };
+        syncFocus();
+        if (input) input.select();
+
+        this._keyHandler = (e) => {
+            if (!this.isVisible) return;
+            const key = e.key;
+            if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                const d = key === 'ArrowLeft' ? -1 : 1;
+                if (row === 0 && pickFaction) {
+                    e.preventDefault();
+                    pickIndex(this.getFactionIds().indexOf(this.pendingFaction) + d);
+                } else if (row === 1) {
+                    e.preventDefault();
+                    btnIdx = (btnIdx + d + buttons.length) % buttons.length;
+                    syncFocus();
+                }
+                return;
+            }
+            if (key === 'ArrowUp' || key === 'ArrowDown') {
+                e.preventDefault();
+                row = key === 'ArrowDown' ? 1 : 0;
+                syncFocus();
+                return;
+            }
+            if (key === 'Enter') {
+                e.preventDefault();
+                if (row === 1 && btnIdx === 1) cancel();
+                else confirm();
+            } else if (key === 'Escape') {
+                e.preventDefault();
+                cancel();
+            }
+        };
+        document.addEventListener('keydown', this._keyHandler);
     }
 
     shipName(id) {

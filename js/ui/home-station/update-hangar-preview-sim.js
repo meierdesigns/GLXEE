@@ -191,7 +191,8 @@ extendClass(HomeStationUI, {
         const attrs = [
             'data-upgrade-node', 'data-upgrade', 'data-frame-up', 'data-mod-up',
             'data-travel', 'data-unlock', 'data-buy', 'data-buy-bp', 'data-buy-part',
-            'data-buy-portal', 'data-craft', 'data-activate-ship', 'data-toggle-mod',
+            'data-buy-portal', 'data-buy-style', 'data-sell-ship', 'data-sell-bp',
+            'data-sell-part', 'data-sell-style', 'data-craft', 'data-activate-ship', 'data-toggle-mod',
             'data-hangar-slot-set', 'data-fire-mode', 'id'
         ];
         for (let i = 0; i < attrs.length; i++) {

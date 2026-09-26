@@ -1,6 +1,6 @@
 :root {
     --overlay-color: var(--color-primary);
-    --overlay-intensity: 0.3;
+    --overlay-intensity: 0.1; /* screen-blend faction tint; higher washes out blacks */
 
     /* Viewport fit (set by viewport-fit.js; fallbacks for first paint) */
     --vw: 100vw;
@@ -1290,76 +1290,61 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .mission-start-text.mission-start-count {
     position: relative;
-    isolation: isolate;
-    width: clamp(92px, 19vw, 132px);
+    width: clamp(96px, 20vw, 136px);
     min-width: 0;
-    height: clamp(116px, 25vw, 164px);
+    height: clamp(112px, 24vw, 156px);
     min-height: 0;
     padding: 0;
-    font-size: clamp(64px, 13vw, 94px);
-    line-height: 1;
-    letter-spacing: 0;
     border: var(--ui-border-width-thick, 3px) solid var(--color-primary, #b0b0b0);
     background:
-        linear-gradient(90deg, transparent 49.5%, color-mix(in srgb, var(--color-primary) 26%, transparent) 50%, transparent 50.5%),
-        linear-gradient(0deg, transparent 49.5%, color-mix(in srgb, var(--color-primary) 26%, transparent) 50%, transparent 50.5%),
-        repeating-linear-gradient(0deg, transparent 0 7px, color-mix(in srgb, var(--color-primary) 11%, transparent) 7px 9px),
-        repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb, var(--color-primary) 8%, transparent) 7px 9px),
-        repeating-conic-gradient(from 45deg, color-mix(in srgb, var(--color-primary) 9%, transparent) 0 25%, transparent 0 50%) 0 0 / 8px 8px,
-        radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 62%),
-        linear-gradient(135deg, color-mix(in srgb, var(--color-background) 96%, #000), color-mix(in srgb, var(--color-surface) 72%, #000));
-    background-size: 100% 100%, 100% 100%, 100% 9px, 100% 9px, 8px 8px, 100% 100%, 100% 100%;
-    border-radius: 2px;
-    text-shadow:
-        2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
-        -2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
-        0 2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
-        0 -2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
-        0 0 6px var(--color-primary);
-    -webkit-text-stroke: 1px var(--color-primary);
-    box-shadow: inset 0 0 26px color-mix(in srgb, var(--color-primary) 14%, transparent);
-    animation: mission-start-count-in 0.22s steps(3, end);
+        repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-primary) 6%, transparent) 3px 4px),
+        color-mix(in srgb, var(--color-background) 92%, transparent);
+    box-shadow:
+        inset 0 0 0 2px color-mix(in srgb, var(--color-background) 80%, transparent),
+        inset 0 0 0 3px color-mix(in srgb, var(--color-primary) 30%, transparent),
+        0 0 0 2px color-mix(in srgb, var(--color-background) 70%, transparent),
+        0 0 22px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    text-shadow: none;
     image-rendering: pixelated;
-    text-rendering: optimizeSpeed;
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: unset;
 }
 
 .mission-start-pixel-canvas {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    left: 12%;
+    right: 12%;
+    top: 10%;
+    bottom: 20%;
+    width: 76%;
+    height: 70%;
+    object-fit: contain;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     pointer-events: none;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-primary) 55%, transparent));
 }
 
-.mission-start-text.mission-start-count::before,
+/* Stepped progress bar: drains once per countdown second. */
 .mission-start-text.mission-start-count::after {
-    position: absolute;
-    z-index: 1;
     content: '';
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    bottom: 9%;
+    height: 6px;
+    background: var(--color-primary);
+    transform-origin: left center;
     pointer-events: none;
 }
-
-.mission-start-text.mission-start-count::before {
-    inset: 3px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
-    border-radius: 50%;
-    background:
-        conic-gradient(from 0deg, transparent 0 8%, color-mix(in srgb, var(--color-primary) 90%, transparent) 8.5% 9%, transparent 9.5% 24%, color-mix(in srgb, var(--color-primary) 90%, transparent) 24.5% 25%, transparent 25.5% 58%, color-mix(in srgb, var(--color-primary) 90%, transparent) 58.5% 59%, transparent 59.5% 82%, color-mix(in srgb, var(--color-primary) 90%, transparent) 82.5% 83%, transparent 83.5%);
-    box-shadow:
-        0 0 0 10px color-mix(in srgb, var(--color-primary) 4%, transparent),
-        0 0 24px color-mix(in srgb, var(--color-primary) 28%, transparent);
-    animation: mission-start-radar 6s steps(24, end) infinite;
+.mission-start-text.mission-start-count.mission-start-tick {
+    animation: mission-start-count-in 0.18s steps(3, end);
+}
+.mission-start-text.mission-start-count.mission-start-tick::after {
+    animation: mission-start-drain 0.9s steps(12, end) forwards;
 }
 
-.mission-start-text.mission-start-count::after {
-    inset: 14px;
-    border: 1px dashed color-mix(in srgb, var(--color-primary) 25%, transparent);
-    border-radius: 50%;
-    transform: rotate(25deg) scaleX(0.72);
+@keyframes mission-start-drain {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
 }
 
 .mission-start-text.mission-start-go {
@@ -7499,7 +7484,7 @@ body.pe-resizing * {
 }
 .galaxy-map-area {
     width: 100%;
-    height: min(42vh, 340px);
+    height: min(34vh, 280px);
     border: var(--ui-border-width) solid var(--color-border);
     background: rgba(0, 0, 0, 0.35);
     margin-bottom: 14px;
@@ -7673,18 +7658,28 @@ body.pe-resizing * {
     width: 40%;
     min-width: 120px;
 }
+.galaxy-map-panel-select {
+    overflow: hidden;
+}
+.gm-sector-heading {
+    position: relative;
+    z-index: 1;
+}
+/* Oversized planet bleeding out of the card's bottom-left corner. */
 .gm-sector-planet-bg {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 0;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 115%;
+    aspect-ratio: 1 / 1;
+    transform: translate(-25%, 25%);
+    pointer-events: none;
+    z-index: 0;
 }
 .gm-sector-planet-bg .gm-planet-icon,
 .gm-sector-planet-bg svg {
-    width: auto;
+    width: 100%;
     height: 100%;
-    aspect-ratio: 1 / 1;
 }
 .gm-sector-heading {
     display: flex;
@@ -9219,7 +9214,7 @@ button.hs-tab.active.nav-focused {
     min-height: 0;
 }
 .hs-play-shell {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
     width: 100%;
     display: flex;
@@ -9241,10 +9236,10 @@ button.hs-tab.active.nav-focused {
 .galaxy-map-embedded {
     position: relative;
     inset: auto;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     width: 100%;
     min-height: 0;
-    height: 100%;
+    height: auto;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -9272,15 +9267,16 @@ button.hs-tab.active.nav-focused {
 .galaxy-map-embedded .galaxy-map-title {
     margin: 0;
     text-align: left;
+    font-size: calc(var(--font-h1, 2rem) * 0.7);
+    letter-spacing: 3px;
 }
 .galaxy-map-embedded .galaxy-map-progress-bar {
     margin: 0;
 }
 .galaxy-map-embedded .galaxy-map-area {
-    flex: 1 1 auto;
-    min-height: 180px;
-    height: auto;
-    max-height: none;
+    flex: 0 1 auto;
+    min-height: 160px;
+    height: min(34vh, 280px);
     margin-bottom: 0;
 }
 .galaxy-map-embedded .galaxy-map-panels {
@@ -9290,6 +9286,12 @@ button.hs-tab.active.nav-focused {
 .galaxy-map-embedded .galaxy-map-actions {
     flex: 0 0 auto;
     margin-top: 4px;
+    min-height: 0;
+    gap: 8px;
+}
+.galaxy-map-embedded .galaxy-map-actions .action-button {
+    padding: 10px 26px;
+    font-size: calc(var(--font-h2) * 1.15);
 }
 .gm-actions-row {
     display: flex;
@@ -9564,7 +9566,8 @@ button.hs-tab.active.nav-focused {
 .hs-body > .hs-section,
 .hs-body > .hs-panel,
 .hs-body > .hs-play-shell {
-    flex: 1 1 auto;
+    /* Hug the map content instead of stretching to the full body height. */
+    flex: 0 0 auto;
     width: 100%;
     box-sizing: border-box;
 }
@@ -11590,6 +11593,34 @@ button.hs-shop-cat.active.nav-focused {
 .hs-upgrade-root {
     overflow: hidden;
     min-height: 0;
+}
+/* Trading post: fixed frame, only the stock list scrolls. */
+.hs-body:has(> .hs-trading-post) {
+    overflow: hidden;
+}
+.hs-body > .hs-section.hs-trading-post {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+.hs-trading-post > * {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.hs-body > .hs-section.hs-trading-post > .hs-shop-cats {
+    position: static;
+    padding-top: 4px;
+}
+.hs-trading-post > .hs-tab-fill {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
 }
 .hs-upgrade-root .hs-hint {
     flex: 0 0 auto;
@@ -13749,7 +13780,7 @@ html[data-faction] .enemy-vitals-side,
     display: flex;
     gap: 4px;
     overflow-x: auto;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
     scroll-behavior: smooth;
     scrollbar-width: none;
     padding: 2px 0;
@@ -14485,4 +14516,1194 @@ html[data-faction] .enemy-vitals-side,
 .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn,
     .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button):is(:hover, .active, .nav-focused) {
     --frame-color: var(--faction-accent, var(--color-primary));
+}
+
+/* Logout focus/hover: dark red fill + bright text so it stays readable
+   (generic nav-focused fills would otherwise turn it light purple). */
+.home-station-overlay .hs-logout-btn:is(:hover, :focus-visible, .nav-focused) {
+    --frame-color: #ff5a5a;
+    background: color-mix(in srgb, #ff3b3b 22%, var(--color-surface, #0a0a12));
+    color: #ffe0e0;
+    text-shadow: none;
+}
+.home-station-overlay .hs-logout-btn.nav-focused {
+    outline-color: #ff5a5a;
+}
+
+/* Active tabs: faction-colour fill, light outline, black text/icons. */
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active {
+    --frame-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, #fff);
+    background: var(--faction-accent, var(--color-primary));
+    color: #000;
+}
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :is(.hs-menu-tab-label, .hs-tab-label, .hs-home-text) {
+    color: #000;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    /* Silkscreen is an 8px grid font: whole multiples keep glyphs crisp. */
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 0;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-shadow: none;
+}
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :is(.hs-menu-tab-icon, .hs-tab-icon, .hs-home-icon) {
+    filter: brightness(0);
+    opacity: 1;
+}
+
+/* Upgrade sub-tabs (ships / modules): scroll the list instead of squashing
+   panels; the station tree keeps its own inner scroller. */
+.hs-upgrade-root .hs-tab-fill {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-padding: 12px 0;
+}
+.hs-upgrade-root .hs-tab-fill > :is(.hs-panel, .hs-line, .hs-empty-slot) {
+    flex: 0 0 auto;
+}
+/* Affordability hint on still-focusable upgrade buttons. */
+:is(.hs-upgrade-root, .hs-shop-root) .action-button[data-short] {
+    opacity: 0.65;
+}
+:is(.hs-upgrade-root, .hs-shop-root) .action-button[data-short]:is(:hover, .nav-focused) {
+    opacity: 1;
+}
+
+/* Locked cosmetic styles: visible preview, not selectable (unlock in shop). */
+.hs-style-thumb.is-locked {
+    position: relative;
+    cursor: not-allowed;
+}
+.hs-style-thumb.is-locked canvas {
+    opacity: 0.35;
+    filter: grayscale(1);
+}
+.hs-style-thumb.is-locked::after {
+    content: 'LOCK';
+    position: absolute;
+    inset: auto 0 2px 0;
+    text-align: center;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+    text-shadow: 0 0 3px #000, 0 0 3px #000;
+    pointer-events: none;
+}
+.hs-style-shop-thumb {
+    flex: 0 0 auto;
+    display: inline-flex;
+    margin-right: 10px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    image-rendering: pixelated;
+}
+.hs-style-shop-thumb canvas {
+    display: block;
+    width: 64px;
+    height: 48px;
+    image-rendering: pixelated;
+}
+.hs-style-shop-line.is-owned .hs-style-shop-thumb {
+    opacity: 0.6;
+}
+
+/* Station tab: panels keep their natural height and the body scrolls,
+   instead of squashing the bottom row (ships / parts) into the leftover. */
+.hs-body > .hs-station-grid,
+.hs-body > .hs-section .hs-station-grid {
+    flex: 0 0 auto;
+}
+.hs-station-grid {
+    height: auto;
+    min-height: 100%;
+    grid-template-rows: minmax(110px, auto) auto auto minmax(min-content, 1fr);
+}
+.hs-panel-stack {
+    height: auto;
+}
+.hs-panel-stack > .hs-panel {
+    flex: 0 0 auto;
+    min-height: auto;
+}
+
+/* Shop: the item list is the scroller, so its column header (and style
+   group headings) can stay pinned at the top while rows scroll under it. */
+.hs-body:has(> .hs-shop-root) {
+    overflow: hidden;
+}
+.hs-body > .hs-shop-root {
+    min-height: 0;
+}
+.hs-shop-root .hs-shop-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-padding-top: 40px;
+}
+.hs-shop-list > .hs-shop-line {
+    flex: 0 0 auto;
+}
+.hs-shop-list > .hs-shop-line.hs-shop-head {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    margin-bottom: 0;
+    background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+
+/* Style shop clusters: section (hull / components / connections) and a
+   per-part heading that pins under the column header while scrolling. */
+.hs-style-shop-section {
+    flex: 0 0 auto;
+    margin: 14px 0 4px;
+    padding: 2px 8px;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: var(--faction-accent, var(--color-primary));
+    border-left: 3px solid var(--faction-accent, var(--color-primary));
+}
+.hs-style-shop-section:first-of-type {
+    margin-top: 6px;
+}
+.hs-style-shop-group {
+    position: sticky;
+    top: 30px;
+    z-index: 3;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 4px 8px;
+    letter-spacing: 2px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, var(--color-surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+.hs-style-shop-count {
+    margin-left: auto;
+    font-size: var(--font-text);
+    color: var(--color-text-secondary);
+}
+
+/* Mission cargo panel removed: cargo auto-transfers to the station. */
+.hs-station-grid {
+    grid-template-areas:
+        "cover cover"
+        "stores stores"
+        "blueprints ships";
+    grid-template-rows: minmax(110px, auto) auto minmax(min-content, 1fr);
+}
+
+/* Galaxy map: standalone trading post node. */
+.gm-post-node { cursor: pointer; }
+.gm-post-node.closed { cursor: not-allowed; }
+.gm-post-node:hover .gm-post-badge-bg { stroke-width: 3; }
+.gm-post-label {
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-anchor: middle;
+    fill: var(--faction-accent, var(--color-primary));
+}
+.gm-post-node.closed .gm-post-label {
+    fill: var(--color-text-secondary);
+    opacity: 0.6;
+}
+.gm-post-badge-bg {
+    fill: var(--color-background, #050508);
+    stroke: var(--faction-accent, var(--color-primary));
+    stroke-width: 2;
+}
+.gm-post-badge-mark {
+    fill: var(--faction-accent, var(--color-primary));
+}
+.gm-post-node.closed .gm-post-badge-bg {
+    stroke: var(--color-text-secondary);
+    stroke-dasharray: 3 2;
+}
+.gm-post-node.closed .gm-post-badge-mark {
+    fill: var(--color-text-secondary);
+    opacity: 0.6;
+}
+.gm-dock-btn {
+    border-color: var(--faction-accent, var(--color-primary));
+}
+/* Trading post shop: origin faction per part. */
+.hs-part-faction {
+    color: var(--faction-accent, var(--color-primary));
+    letter-spacing: 1px;
+}
+
+/* Faction chip on shop rows; items without a faction read NEUTRAL. */
+.hs-part-faction {
+    display: inline-block;
+    padding: 0 4px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    color: var(--faction-accent, var(--color-primary));
+    font-weight: bold;
+}
+.hs-part-faction.is-neutral {
+    border-color: color-mix(in srgb, var(--color-text-secondary) 50%, transparent);
+    color: var(--color-text-secondary);
+}
+/* Shop SELL mode: credit payout column. */
+.hs-sell-value {
+    justify-self: end;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: var(--status-success, #7fdc7f);
+}
+
+/* Hangar ship list: the open ship's component tree fills the column height. */
+.hs-hangar-ship-tree {
+    flex: 0 0 auto;
+}
+.hs-hangar-ship-tree[open] {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.hs-hangar-ship-tree[open] > .hs-component-tree-container {
+    flex: 1 1 auto;
+    max-height: none;
+}
+.hs-tree-items > .hs-tree-connection {
+    margin-top: 4px;
+}
+
+/* Slot entry flashed when a slot on the ship is clicked with the tree open. */
+.hs-tree-item.is-focused > .hs-tree-item-label {
+    outline: 2px solid var(--faction-accent, var(--color-primary));
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent);
+}
+
+/* Play tab keeps the same fixed window height as every other tab; the
+   map shell fills the body instead of the window hugging the map. */
+.home-station-content .hs-body-play > .hs-play-shell {
+    flex: 1 1 auto;
+}
+
+/* Trading post selection frame (reuses planet corners). */
+.gm-post-node .gm-selection-frame { opacity: 0; }
+.gm-post-node.selected .gm-selection-frame { opacity: 1; }
+
+/* Trading posts drawn as pixel space stations (map node + sector card). */
+.gm-station-hull { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #d8d8e0); }
+.gm-station-dark { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #1a1a24); }
+.gm-station-panel { fill: #2d5fa8; stroke: #7fb2ff; stroke-width: 0.3; }
+.gm-station-light { fill: #fff6c8; }
+.gm-post-node.open .gm-station-light { animation: gm-station-blink 1.6s steps(2, end) infinite; }
+/* Card-size station detail layers (see stationPixelsSvg detail). */
+.gm-station-glint { fill: #ffffff; opacity: 0.28; }
+.gm-station-shade { fill: #000000; opacity: 0.32; }
+.gm-station-window { fill: #fff6c8; opacity: 0.85; }
+.gm-station-card .gm-station-panel { stroke: none; }
+@keyframes gm-station-blink { 50% { fill: var(--faction-accent, var(--color-primary)); } }
+.gm-post-node.closed .gm-station { filter: grayscale(1) brightness(0.55); }
+.gm-post-node:hover .gm-station { filter: brightness(1.25); }
+.gm-post-node.closed:hover .gm-station { filter: grayscale(1) brightness(0.7); }
+.gm-station-card { width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* Player ship marker on the galaxy map. */
+.gm-ship-marker { pointer-events: none; }
+.gm-ship-marker-body {
+    fill: var(--color-primary);
+    stroke: var(--color-background, #050508);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 3px var(--color-primary));
+}
+
+/* Explorations: every entry listed with its discovered count; empty dimmed. */
+.hs-explore-item .hs-explore-count {
+    margin-left: auto;
+    padding-left: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-explore-item.is-empty {
+    opacity: 0.35;
+    filter: grayscale(1);
+    cursor: default;
+}
+.hs-explore-item.is-empty .hs-explore-count {
+    color: var(--color-text-secondary);
+}
+
+/* Explorations: panel fills the body height and the entry buttons share it. */
+.hs-body > .hs-explore-root {
+    flex: 1 1 auto;
+    min-height: 100%;
+    box-sizing: border-box;
+}
+.hs-explore-root > .hs-explore-grid {
+    flex: 1 1 auto;
+    align-content: stretch;
+    grid-template-rows: 1fr;
+}
+.hs-explore-cluster {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.hs-explore-cluster-items {
+    flex: 1 1 auto;
+}
+.hs-explore-cluster-items > .hs-explore-item {
+    flex: 1 1 0;
+    min-height: 48px;
+}
+.home-station-content .hs-body-play > .hs-play-shell > .galaxy-map-embedded {
+    flex: 1 1 auto;
+}
+/* The map area takes the height left over by the panels below it. */
+.home-station-content .hs-body-play .galaxy-map-embedded .galaxy-map-area {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 160px;
+}
+
+/* Galaxy map cursor: per-faction look (see selectionFrameSvg). */
+.gm-selection-frame { color: var(--faction-accent, var(--color-primary)); }
+.gm-selection-frame .gm-corner { fill: currentColor; }
+.gm-corner-stroke,
+.gm-corner-organic {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: var(--cursor-t, 3px);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.gm-corner-stroke { stroke-linecap: square; stroke-linejoin: miter; }
+/* Voidborn: organic, softly glowing and breathing instead of snapping. */
+.gm-cursor-voidborn { filter: drop-shadow(0 0 3px currentColor); }
+.galaxy-map-overlay .gm-node.selected .gm-cursor-voidborn,
+.galaxy-map-overlay .gm-node.hovered .gm-cursor-voidborn,
+.galaxy-map-embedded.is-input-active .gm-node.selected .gm-cursor-voidborn,
+.galaxy-map-embedded.is-input-active .gm-node.hovered .gm-cursor-voidborn,
+.gm-post-node.selected .gm-cursor-voidborn {
+    animation: gm-void-breathe 2.4s ease-in-out infinite;
+}
+@keyframes gm-void-breathe {
+    0%   { transform: scale(0.94) rotate(0deg); }
+    35%  { transform: scale(1.08, 1.02) rotate(3deg); }
+    70%  { transform: scale(1.0, 1.1) rotate(-2deg); }
+    100% { transform: scale(0.94) rotate(0deg); }
+}
+/* Machine: hard stepped blink instead of a smooth pulse. */
+.galaxy-map-embedded.is-input-active .gm-node.selected .gm-cursor-machine,
+.galaxy-map-overlay .gm-node.selected .gm-cursor-machine {
+    animation: gm-machine-blink 0.8s steps(2, end) infinite;
+}
+@keyframes gm-machine-blink {
+    from { opacity: 1; }
+    to { opacity: 0.45; }
+}
+
+/* Ship orbiting its current map location. */
+.gm-ship-orbit-ring {
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+    opacity: 0.35;
+}
+.gm-ship-marker-img {
+    image-rendering: pixelated;
+    filter: drop-shadow(0 0 2px var(--color-primary));
+}
+
+/* --- Victory screen follows the faction frame language ----------------- */
+html[data-faction] .victory-content {
+    position: relative;
+    border-radius: 0;
+    border-color: var(--faction-accent, var(--color-primary));
+    clip-path: var(--faction-panel-clip, none);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent);
+}
+html[data-faction] .victory-content::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--faction-surface);
+    opacity: var(--faction-surface-opacity);
+}
+html[data-faction] .victory-content > * { position: relative; z-index: 1; }
+html[data-faction] .victory-screen {
+    /* Outer glow survives the clip-path because it sits on the parent. */
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent));
+}
+html[data-faction] :is(.victory-stats, .victory-loot) {
+    border-radius: 0;
+    border-color: var(--faction-accent, var(--color-primary));
+    clip-path: var(--faction-ctl-clip, none);
+}
+html[data-faction] .victory-button {
+    border-radius: 0;
+    clip-path: var(--faction-ctl-clip, none);
+}
+html[data-faction] .victory-title {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+}
+html[data-faction] :is(.victory-loot-title, .victory-stats .stat-value) {
+    color: var(--faction-accent, var(--color-primary));
+}
+
+/* Terran: clean military header rule. */
+html[data-faction="terran"] .victory-header {
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent) 40%, transparent);
+    padding-bottom: 10px;
+}
+/* Kronax: heavy, wide, aggressive title with blade banding. */
+html[data-faction="kronax"] .victory-title {
+    letter-spacing: 0.22em;
+    font-weight: 900;
+    transform: skewX(-8deg);
+}
+html[data-faction="kronax"] .victory-header {
+    background:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 22%, transparent) 0) 0 0 / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 22%, transparent) 0) 8px 8px / 16px 16px;
+    padding: 8px 0;
+}
+/* Voidborn: organic — soft glow halo, breathing title, dotted rules. */
+html[data-faction="voidborn"] .victory-header {
+    background: radial-gradient(ellipse 60% 80% at 50% 40%, color-mix(in srgb, var(--faction-accent) 22%, transparent), transparent 70%);
+}
+html[data-faction="voidborn"] .victory-title {
+    letter-spacing: 0.3em;
+    font-style: italic;
+    animation: victory-void-breathe 3.2s ease-in-out infinite;
+}
+html[data-faction="voidborn"] :is(.victory-stats, .victory-loot, .victory-instructions) {
+    border-style: dotted;
+}
+@keyframes victory-void-breathe {
+    0%, 100% { transform: scale(1); filter: blur(0); opacity: 1; }
+    50% { transform: scale(1.04, 0.98); filter: blur(0.4px); opacity: 0.85; }
+}
+/* Pirate: crooked stencil title, dashed salvage rules. */
+html[data-faction="pirate"] .victory-title {
+    transform: rotate(-2deg);
+    letter-spacing: 0.12em;
+}
+html[data-faction="pirate"] :is(.victory-stats, .victory-loot, .victory-instructions) {
+    border-style: dashed;
+}
+/* Machine: monospaced readout with a scanline grid. */
+html[data-faction="machine"] .victory-title {
+    letter-spacing: 0.4em;
+    font-size: 0.85em;
+}
+html[data-faction="machine"] .victory-stats {
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 14%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 14%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px;
+}
+
+/* --- Death screen follows the faction frame language ------------------- */
+html[data-faction] .game-over-content {
+    position: relative;
+    border-radius: 0;
+    border-color: var(--faction-accent, var(--color-primary));
+    clip-path: var(--faction-panel-clip, none);
+}
+html[data-faction] .game-over-content::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--faction-surface);
+    opacity: var(--faction-surface-opacity);
+}
+html[data-faction] .game-over-content > * { position: relative; z-index: 1; }
+html[data-faction] .game-over {
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent));
+}
+html[data-faction] .game-over-content h2 {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+}
+html[data-faction] .game-over-button {
+    border-radius: 0;
+    clip-path: var(--faction-ctl-clip, none);
+}
+.game-over-loss {
+    margin: 0 auto 18px;
+    max-width: 320px;
+    text-align: left;
+}
+html[data-faction] .game-over-loss {
+    border-radius: 0;
+    clip-path: var(--faction-ctl-clip, none);
+}
+.game-over-loss .victory-loot-amount { color: var(--color-error, #ff5a4a); }
+html[data-faction="kronax"] .game-over-content h2 { letter-spacing: 0.22em; transform: skewX(-8deg); }
+html[data-faction="voidborn"] .game-over-content h2 {
+    font-style: italic;
+    letter-spacing: 0.3em;
+    animation: victory-void-breathe 3.2s ease-in-out infinite;
+}
+html[data-faction="voidborn"] .game-over-loss { border-style: dotted; }
+html[data-faction="pirate"] .game-over-content h2 { transform: rotate(-2deg); }
+html[data-faction="pirate"] .game-over-loss { border-style: dashed; }
+html[data-faction="machine"] .game-over-content h2 { letter-spacing: 0.4em; }
+
+/* --- Pause screen follows the faction frame language ------------------- */
+html[data-faction] .pause-menu {
+    position: relative;
+    border-radius: 0;
+    border-color: var(--faction-accent, var(--color-primary));
+    clip-path: var(--faction-panel-clip, none);
+}
+html[data-faction] .pause-menu::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--faction-surface);
+    opacity: var(--faction-surface-opacity);
+}
+html[data-faction] .pause-menu > * { position: relative; z-index: 1; }
+/* The clip-path would cut an outer glow, so the glow sits inside the frame. */
+html[data-faction] .pause-overlay {
+    --pause-glow: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+html[data-faction] .pause-overlay .pause-menu {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow:
+        inset 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent),
+        inset 0 0 26px var(--pause-glow);
+}
+html[data-faction] .pause-button {
+    border-radius: 0;
+    clip-path: var(--faction-ctl-clip, none);
+}
+html[data-faction] .pause-overlay h2 {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 0 0 12px var(--pause-glow);
+}
+html[data-faction="terran"] .pause-overlay h2 {
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent) 40%, transparent);
+    padding-bottom: 6px;
+}
+html[data-faction="kronax"] .pause-overlay h2 { letter-spacing: 0.22em; font-weight: 900; transform: skewX(-8deg); }
+html[data-faction="voidborn"] .pause-overlay h2 {
+    font-style: italic;
+    letter-spacing: 0.3em;
+    animation: victory-void-breathe 3.2s ease-in-out infinite;
+}
+html[data-faction="voidborn"] .pause-button { border-style: dotted; }
+html[data-faction="pirate"] .pause-overlay h2 { transform: rotate(-2deg); }
+html[data-faction="pirate"] .pause-button { border-style: dashed; }
+html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
+
+/* ===== In-game HUD contrast ============================================
+   Sidebars get a near-black, opaque panel so labels and bars read against
+   the busy playfield-coloured page, with bright text and accent values. */
+.game-info-panel,
+.player-vitals-side,
+.game-left-cluster .weapon-selection,
+.game-right-cluster .enemy-vitals-side {
+    background: color-mix(in srgb, var(--color-background, #050508) 55%, #000) !important;
+    color: color-mix(in srgb, var(--color-text, #fff) 88%, #fff);
+}
+.game-info-panel :is(.gi-label, .info-label, .stat-label, small, .label),
+.game-left-cluster .weapon-info {
+    color: color-mix(in srgb, var(--color-text, #fff) 70%, var(--faction-accent, var(--color-primary)));
+    opacity: 1;
+}
+.game-info-panel :is(.gi-value, .info-value, .stat-value, strong) {
+    color: #fff;
+}
+
+/* Right sidebar: one row per enemy — framed portrait, faction + name, and
+   a horizontal health bar with the HP readout (champion row is larger). */
+.enemy-vitals-side .health-bar.enemy-health,
+.enemy-vitals-side .health-bar.enemy-health.is-champion {
+    padding: 6px;
+    gap: 6px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #000);
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+}
+.enemy-vitals-side .enemy-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.enemy-vitals-side .health-ship-icon {
+    flex: 0 0 auto;
+    box-sizing: content-box;
+    padding: 3px;
+    background: #000;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    image-rendering: pixelated;
+}
+.enemy-vitals-side .enemy-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.enemy-vitals-side .enemy-faction {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: none;
+}
+.enemy-vitals-side .enemy-name {
+    font-family: var(--ui-font-family);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.enemy-vitals-side .health-bar.enemy-health .enemy-health-main,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-health-main {
+    align-items: stretch;
+    min-height: 0;
+}
+.enemy-vitals-side .health-bar.enemy-health .health-fill,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
+    flex: 1 1 auto;
+    width: auto;
+    height: 12px;
+    align-self: stretch;
+    background: #000;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
+    height: 16px;
+}
+.enemy-vitals-side .health-bar.enemy-health .health-fill::before,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill::before {
+    top: 0;
+    bottom: auto;
+    left: 0;
+    height: 100%;
+    width: var(--health-width, 100%);
+    background: var(--faction-accent, var(--color-primary));
+    transition: width 0.3s ease;
+}
+.enemy-vitals-side .enemy-hp-text {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-family: var(--ui-font-family);
+    font-size: 9px;
+    line-height: inherit;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-hp-text {
+    line-height: 14px;
+}
+.enemy-vitals-side .health-bar.enemy-health:not(.is-champion) .enemy-hp-text {
+    line-height: 10px;
+}
+
+/* Profile overlay: body rows are bounded so list/details scroll inside
+   instead of spilling over the action buttons. */
+.profile-selection-content.profile-selection-floating {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.profile-selection-floating .profile-selection-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    height: min(52vh, 420px);
+}
+.profile-selection-floating .profile-selection-body > * {
+    min-height: 0;
+    overflow-y: auto;
+}
+.profile-selection-floating .profile-selection-actions,
+.profile-selection-floating .profile-selection-instructions {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
+}
+@media (max-width: 560px) {
+    .profile-selection-floating .profile-selection-body {
+        grid-template-rows: minmax(0, 0.8fr) minmax(0, 1.2fr);
+        height: min(68vh, 560px);
+    }
+}
+
+/* Profile create: faction row is the active arrow-key row. */
+.profile-faction-swatches.nav-row-active .profile-faction-swatch.selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+.profile-selection-actions .action-button.nav-focused {
+    background: var(--color-primary);
+    color: var(--color-background);
+}
+
+/* Explorations: large entry icons, scaled with the button height. */
+.hs-explore-item .hs-chip-icon {
+    flex: 0 0 auto;
+    width: clamp(32px, 7vh, 64px);
+    height: clamp(32px, 7vh, 64px);
+    margin-right: 14px;
+}
+.hs-explore-item .hs-chip-icon img,
+.hs-explore-item .hs-chip-icon canvas {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+/* Station map node: whole square is clickable, not just painted pixels. */
+.gm-post-hit { fill: transparent; pointer-events: all; }
+/* Card station picture (no longer a .gm-post-node). */
+.gm-station-card.open .gm-station-light { animation: gm-station-blink 1.6s steps(2, end) infinite; }
+.gm-station-card.closed .gm-station { filter: grayscale(1) brightness(0.55); }
+
+/* Galaxy map flight: ship in transit with a fading trail and thruster. */
+.gm-travel-trail {
+    stroke: var(--faction-accent, var(--color-primary));
+    stroke-width: 1.5;
+    stroke-dasharray: 3 3;
+    opacity: 0.7;
+}
+.gm-travel-thrust {
+    fill: #fff6c8;
+    animation: gm-thrust 0.16s steps(2, end) infinite;
+}
+@keyframes gm-thrust { 50% { fill: var(--faction-accent, var(--color-primary)); } }
+
+/* Planned route from the ship to the selected target; "!" marks pirate routes. */
+.gm-route {
+    stroke: var(--faction-accent, var(--color-primary));
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+    opacity: 0.55;
+    pointer-events: none;
+}
+.gm-route.risky { stroke: #ff5a3c; opacity: 0.8; }
+.gm-route-warn path { fill: #000; stroke: #ff5a3c; stroke-width: 1.5; }
+.gm-route-warn text {
+    fill: #ff5a3c;
+    font-size: 12px;
+    font-weight: bold;
+    text-anchor: middle;
+}
+.gm-route-warn { animation: gm-ambush-blink 0.8s steps(2, end) infinite; }
+
+/* Pirate ambush prompt over the map. */
+#gmMapArea { position: relative; }
+.gm-ambush {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 5;
+}
+.gm-ambush-card {
+    max-width: 420px;
+    padding: 14px 18px;
+    text-align: center;
+    background: #000;
+    border: 2px solid #ff5a3c;
+    box-shadow: 0 0 18px rgba(255, 90, 60, 0.45);
+}
+.gm-ambush-title {
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: #ff5a3c;
+    margin-bottom: 6px;
+    animation: gm-ambush-blink 0.8s steps(2, end) infinite;
+}
+@keyframes gm-ambush-blink { 50% { opacity: 0.45; } }
+.gm-ambush-card p { margin: 0 0 12px; color: #fff; }
+.gm-ambush-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* Galaxy map selection: exactly one strong, pulsing frame (the selection);
+   hover only shows a faint, static frame on planets and posts alike. */
+.gm-node.hovered:not(.selected) .gm-selection-frame,
+.gm-post-node.hovered:not(.selected) .gm-selection-frame {
+    opacity: 0.4;
+    animation: none !important;
+}
+.gm-post-node.selected .gm-selection-frame {
+    opacity: 1;
+    transform-origin: center;
+}
+.galaxy-map-overlay .gm-post-node.selected .gm-selection-frame,
+.galaxy-map-embedded.is-input-active .gm-post-node.selected .gm-selection-frame {
+    animation: gm-select-pulse 0.95s ease-in-out infinite alternate;
+}
+
+/* --- Hangar fits the modal vertically: body does not scroll, the columns do. */
+.home-station-content.hs-mode-hangar .hs-body {
+    overflow: hidden;
+}
+.home-station-content.hs-mode-hangar .hs-body > .hs-hangar-root,
+.home-station-content.hs-mode-hangar .hs-hangar-root {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    margin-bottom: 0;
+}
+.home-station-content.hs-mode-hangar .hs-hangar-split {
+    min-height: 0;
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr);
+}
+.home-station-content.hs-mode-hangar .hs-hangar-list,
+.home-station-content.hs-mode-hangar .hs-hangar-preview {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+.home-station-content.hs-mode-hangar .hs-hangar-detail {
+    min-height: 0;
+    overflow: hidden;
+}
+.home-station-content.hs-mode-hangar .hs-hangar-bay {
+    min-height: 0;
+}
+.home-station-content.hs-mode-hangar .hs-hangar-bay-stage {
+    min-height: 160px;
+}
+
+/* --- Profile list faction filter ------------------------------------------ */
+.hs-menu-profile-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+}
+.hs-menu-profile-filter {
+    --row-accent: var(--color-primary);
+    padding: 4px 10px;
+    font: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: var(--row-accent);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--row-accent) 55%, transparent);
+    cursor: pointer;
+}
+.hs-menu-profile-filter:hover,
+.hs-menu-profile-filter:focus-visible {
+    background: color-mix(in srgb, var(--row-accent) 14%, transparent);
+    outline: none;
+}
+.hs-menu-profile-filter.is-active {
+    color: var(--color-background);
+    background: var(--row-accent);
+    border-color: var(--row-accent);
+}
+.hs-menu-profile-row[hidden] {
+    display: none;
+}
+.hs-menu-profile-filter.is-empty:not(.is-active) {
+    opacity: 0.45;
+}
+.hs-menu-profile-empty[hidden] {
+    display: none;
+}
+.hs-menu-profile-create {
+    margin-left: auto;
+    color: var(--color-background);
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+.hs-menu-profile-create:hover,
+.hs-menu-profile-create:focus-visible {
+    background: color-mix(in srgb, var(--color-primary) 80%, #fff);
+}
+
+/* --- Profiles tab: list left, stats right ----------------------------------- */
+.hs-menu-profile-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 34%);
+    gap: 12px;
+    align-items: start;
+    min-height: 0;
+}
+.hs-menu-profile-col {
+    min-width: 0;
+}
+.hs-menu-profile-stats {
+    min-width: 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    border: 1px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 55%, transparent);
+    background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 6%, transparent);
+}
+@media (max-width: 760px) {
+    .hs-menu-profile-split {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- Faction picker: swatches above preview, each cut + tinted in its own faction style. */
+.profile-selection-content .profile-faction-swatch[data-faction="terran"] {
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"] {
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="voidborn"] {
+    --pf-ctl: polygon(0px 8px, 0px 4px, 3px 4px, 3px 0px, 8px 0px, calc(100% - 8px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 4px, 100% 4px, 100% 8px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 3px) calc(100% - 4px), calc(100% - 3px) 100%, calc(100% - 8px) 100%, 8px 100%, 3px 100%, 3px calc(100% - 4px), 0px calc(100% - 4px), 0px calc(100% - 8px));
+}
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"] {
+    --pf-ctl: polygon(0px 3px, 0px 0px, 3px 0px, calc(100% - 4px) 0px, 100% 0px, 100% 4px, 100% calc(100% - 2px), 100% 100%, calc(100% - 2px) 100%, 3px 100%, 0px 100%, 0px calc(100% - 3px));
+}
+.profile-selection-content .profile-faction-swatch[data-faction="machine"] {
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px));
+}
+.profile-selection-content .profile-faction-swatches {
+    margin-bottom: 12px;
+}
+.profile-selection-content .profile-faction-swatch {
+    gap: 8px;
+    padding: 8px 14px 8px 10px;
+    clip-path: var(--pf-ctl, none);
+    color: color-mix(in srgb, var(--faction-color) 75%, #fff);
+    border-color: color-mix(in srgb, var(--faction-color) 55%, transparent);
+    background: color-mix(in srgb, var(--faction-color) 8%, #050508);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-color) 45%, transparent);
+}
+.profile-selection-content .profile-faction-swatch:hover {
+    background: color-mix(in srgb, var(--faction-color) 18%, #050508);
+    box-shadow: inset 0 0 0 1px var(--faction-color);
+}
+.profile-selection-content .profile-faction-swatch.selected {
+    color: #050508;
+    background: var(--faction-color);
+    border-color: var(--faction-color);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-color) 60%, #fff),
+        0 0 12px color-mix(in srgb, var(--faction-color) 45%, transparent);
+}
+.profile-faction-swatch-emblem {
+    width: 32px;
+    height: 32px;
+}
+.profile-faction-picker-label {
+    margin-bottom: 8px;
+}
+.profile-faction-swatch.selected .profile-faction-swatch-emblem {
+    background: #050508;
+    padding: 2px;
+    box-sizing: border-box;
+}
+
+/* --- Faction picker: 5 equal buttons in one row, emblem above label, lore box. */
+.profile-selection-content .profile-faction-swatches {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+.profile-selection-content .profile-faction-swatch {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 10px 4px 8px;
+    text-align: center;
+}
+.profile-selection-content .profile-faction-swatch-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+}
+.profile-selection-content.profile-selection-name-mode {
+    width: min(560px, 94vw);
+}
+.profile-faction-lore {
+    margin: 0 auto 14px;
+    width: min(360px, 92%);
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-left-width: 3px;
+    border-left-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, #050508);
+}
+.profile-faction-lore-label {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: var(--color-primary);
+    margin-bottom: 4px;
+}
+.profile-faction-lore-text {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+    max-height: 7.5em;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+@media (max-width: 480px) {
+    .profile-selection-content .profile-faction-swatches {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* --- Faction picker: wider modal, info left / lore right. */
+.profile-selection-content.profile-selection-floating.profile-selection-name-mode {
+    max-width: min(860px, 94vw);
+    width: min(860px, 94vw);
+}
+.profile-faction-info-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: stretch;
+    margin: 4px 0 14px;
+}
+.profile-faction-info-row .profile-faction-preview,
+.profile-faction-info-row .profile-faction-lore {
+    width: auto;
+    margin: 0;
+}
+.profile-faction-info-row .profile-faction-lore {
+    display: flex;
+    flex-direction: column;
+}
+.profile-faction-info-row .profile-faction-lore-text {
+    flex: 1 1 auto;
+    max-height: 12em;
+}
+@media (max-width: 640px) {
+    .profile-faction-info-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Faction picker cards: each wears its own faction's control silhouette
+   and surface pattern; emblem centred, larger label. */
+.profile-selection-content .profile-faction-swatch[data-faction="terran"] {
+    --pf-ctl: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"] {
+    --pf-ctl: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="voidborn"] {
+    --pf-ctl: polygon(0px 12px, 0px 8px, 2px 8px, 2px 4px, 5px 4px, 5px 0px, 12px 0px, calc(100% - 12px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 8px, 100% 8px, 100% 12px, 100% calc(100% - 12px), 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 4px), calc(100% - 5px) calc(100% - 4px), calc(100% - 5px) 100%, calc(100% - 12px) 100%, 12px 100%, 5px 100%, 5px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 8px), 0px calc(100% - 8px), 0px calc(100% - 12px));
+}
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"] {
+    --pf-ctl: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
+}
+.profile-selection-content .profile-faction-swatch[data-faction="machine"] {
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
+}
+/* Surface language per faction (drawn under the emblem/label). */
+.profile-selection-content .profile-faction-swatch {
+    position: relative;
+    isolation: isolate;
+    padding: 12px 4px 10px;
+}
+.profile-selection-content .profile-faction-swatch::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.55;
+}
+.profile-selection-content .profile-faction-swatch.selected::before { opacity: 0.25; }
+.profile-selection-content .profile-faction-swatch[data-faction="terran"]::before {
+    /* clean hull plating */
+    background: repeating-linear-gradient(0deg, transparent 0 9px,
+        color-mix(in srgb, var(--faction-color) 30%, transparent) 9px 10px);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"]::before {
+    /* aggressive hazard slashes */
+    background: repeating-linear-gradient(135deg, transparent 0 6px,
+        color-mix(in srgb, var(--faction-color) 28%, transparent) 6px 9px);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="voidborn"]::before {
+    /* inner void glow */
+    background: radial-gradient(circle at 50% 38%,
+        color-mix(in srgb, var(--faction-color) 45%, transparent) 0%, transparent 62%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"]::before {
+    /* welded plates with rivets */
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--faction-color) 60%, transparent) 1px, transparent 1.5px) 0 0 / 8px 8px,
+        linear-gradient(90deg, transparent 49%, color-mix(in srgb, var(--faction-color) 25%, transparent) 49% 51%, transparent 51%);
+}
+.profile-selection-content .profile-faction-swatch[data-faction="machine"]::before {
+    /* circuit grid */
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-color) 25%, transparent) 1px, transparent 1px) 0 0 / 10px 10px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-color) 25%, transparent) 1px, transparent 1px) 0 0 / 10px 10px;
+}
+/* Emblem centred in its box (the selected card's padding used to push it). */
+.profile-selection-content .profile-faction-swatch-emblem,
+.profile-faction-swatch.selected .profile-faction-swatch-emblem {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: 36px;
+    height: 36px;
+    margin: 0 auto;
+    padding: 2px;
+    box-sizing: border-box;
+}
+.profile-selection-content .profile-faction-swatch-emblem img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    margin: 0;
+}
+.profile-selection-content .profile-faction-swatch-label {
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    text-overflow: clip;
+}
+
+/* --- Selected faction swatch: tinted, not filled — heavier frame instead. */
+.profile-selection-content .profile-faction-swatch.selected {
+    color: color-mix(in srgb, var(--faction-color) 60%, #fff);
+    background: color-mix(in srgb, var(--faction-color) 16%, #050508);
+    border-color: var(--faction-color);
+    box-shadow:
+        inset 0 0 0 3px var(--faction-color),
+        inset 0 0 14px color-mix(in srgb, var(--faction-color) 40%, transparent);
+}
+.profile-faction-swatch.selected .profile-faction-swatch-emblem {
+    background: none;
+    padding: 0;
+}
+.profile-selection-content .profile-faction-picker {
+    width: 100%;
 }

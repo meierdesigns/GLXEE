@@ -11,6 +11,12 @@ extendClass(HomeStationUI, {
             window.componentTree.setShip(shipId);
             treeContainer.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
                 window.componentTree.setNodeExpanded(node.id, node.open);
+                // Accordion: opening a section closes its open siblings.
+                if (node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
+                    Array.from(node.parentElement.children).forEach((sib) => {
+                        if (sib !== node && sib.classList.contains('hs-tree-branch') && sib.open) sib.open = false;
+                    });
+                }
             });
         }
 
@@ -76,7 +82,9 @@ extendClass(HomeStationUI, {
                     );
                     return skins.map((skin) => ({
                         ...skin,
-                        active: skin.id === activeSkin
+                        active: skin.id === activeSkin,
+                        // The worn skin stays usable even if not bought.
+                        locked: skin.id !== activeSkin && !this.isStyleOwned('skin:' + kind, skin.id)
                     }));
                 },
                 (area) => {
@@ -93,6 +101,9 @@ extendClass(HomeStationUI, {
                         ? loader.wingShapeVariants.length
                         : loader.bodyShapeVariantCount(segmentId);
                     const savedStyle = profileManager.getSegmentShapeVariant(shipId, segmentId);
+                    const styleLabels = segmentId === 'wing'
+                        ? loader.wingShapeVariants.map((v) => v.label)
+                        : loader.bodyShapeVariantLabels(segmentId);
                     const defaultSegmentId = segmentId === 'wing'
                         ? 'wingLeft'
                         : segmentId;
@@ -109,8 +120,10 @@ extendClass(HomeStationUI, {
                         styles: Array.from({ length: count }, (_, index) => ({
                             segmentId,
                             index,
-                            label: `STYLE ${index + 1}`,
-                            active: index === activeStyle
+                            label: styleLabels[index] || `STYLE ${index + 1}`,
+                            active: index === activeStyle,
+                            locked: index !== activeStyle
+                                && !this.isStyleOwned(profileManager.hullStyleGroup(segmentId), index)
                         }))
                     };
                 }
@@ -121,7 +134,7 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * WING CONNECTION and HULL CONNECTION as their own expandable tree
+     * WING, NOSE and AFT CONNECTION as their own expandable tree
      * sections, carrying the same settings as the floating joint panels.
      */
     appendConnectionBranches(treeContainer, shipId) {
@@ -132,6 +145,7 @@ extendClass(HomeStationUI, {
         const styles = ['strut', 'plate', 'double', 'hinge'];
         const styleCarousel = (joint, active) => tree.renderStyleCarousel(styles.map((style) => ({
             active: style === active,
+            locked: style !== active && !this.isStyleOwned('joint', style),
             label: style.toUpperCase(),
             attrs: `data-tree-joint-style="${joint}" data-style-id="${style}"`,
             thumb: `data-thumb="joint" data-thumb-style="${style}"`
@@ -150,7 +164,20 @@ extendClass(HomeStationUI, {
             </details>`;
         };
         const wingStart = Number(lo.wingConnectionWidth) || 0.1;
-        const spineStart = Number(lo.spineConnectionWidth) || 0.18;
+        // Nose↔core and core↔aft joints each get their own section.
+        const spineBranch = (joint, id, icon, label, showLabel) => {
+            const j = resolveSpineJoint(lo, joint);
+            return branch(id, icon, label, `
+                <div data-spine-joint="${joint}">
+                <span class="hs-tree-skin-label">STYLE</span>
+                ${styleCarousel(joint, j.style)}
+                ${toggle(joint, joint === 'spineFront' ? 'hideSpineFront' : 'hideSpineBack', showLabel)}
+                ${this.connectionStrengthRow('START', 'data-spine-width', 0.05, 0.6, j.width)}
+                ${this.connectionStrengthRow('END', 'data-spine-width-end', 0.05, 0.6, j.widthEnd || j.width)}
+                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${j.widthEnd ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
+                <label class="hs-tree-joint-range"><span>OFFSET</span><input type="range" data-tree-joint-offset="${joint}" min="-1" max="1" step="0.01" value="${j.x}"></label>
+                </div>`);
+        };
         const html =
             branch('wing', '╪', 'WING CONNECTION', `
                 <span class="hs-tree-skin-label">STYLE</span>
@@ -160,16 +187,20 @@ extendClass(HomeStationUI, {
                 ${this.connectionStrengthRow('WING', 'data-wing-connection-width-end', 0.02, 0.5, Number(lo.wingConnectionWidthEnd) || wingStart)}
                 <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(lo.wingConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
                 <label class="hs-tree-joint-range"><span>OFFSET</span><input type="range" data-tree-joint-offset="wing" min="-1" max="1" step="0.01" value="${Number(lo.wingConnectionY) || 0}"></label>`) +
-            branch('hull', '╫', 'HULL CONNECTION', `
-                <span class="hs-tree-skin-label">STYLE</span>
-                ${styleCarousel('hull', lo.spineConnectionStyle || 'strut')}
-                ${toggle('spineFront', 'hideSpineFront', 'SHOW NOSE ↔ CORE')}
-                ${toggle('spineBack', 'hideSpineBack', 'SHOW CORE ↔ AFT')}
-                ${this.connectionStrengthRow('FRONT', 'data-spine-width', 0.05, 0.6, spineStart)}
-                ${this.connectionStrengthRow('AFT', 'data-spine-width-end', 0.05, 0.6, Number(lo.spineConnectionWidthEnd) || spineStart)}
-                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(lo.spineConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
-                <label class="hs-tree-joint-range"><span>OFFSET</span><input type="range" data-tree-joint-offset="hull" min="-1" max="1" step="0.01" value="${Number(lo.spineConnectionX) || 0}"></label>`);
-        root.insertAdjacentHTML('beforeend', html);
+            spineBranch('spineFront', 'spine-front', '╫', 'NOSE CONNECTION', 'SHOW NOSE ↔ CORE') +
+            spineBranch('spineBack', 'spine-back', '╫', 'AFT CONNECTION', 'SHOW CORE ↔ AFT');
+        // Each connection lives inside the part it joins: the wing bridge
+        // under WINGS (left wing when asymmetric), nose↔core under NOSE and
+        // core↔aft under AFT.
+        const wingHost = root.querySelector('#hs-tree-area-wings > .hs-tree-items, #hs-tree-area-wingLeft > .hs-tree-items');
+        const noseHost = root.querySelector('#hs-tree-area-front > .hs-tree-items');
+        const aftHost = root.querySelector('#hs-tree-area-back > .hs-tree-items');
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const wingConn = tmp.querySelector('#hs-tree-conn-wing');
+        (wingHost || root).appendChild(wingConn);
+        (noseHost || root).appendChild(tmp.querySelector('#hs-tree-conn-spine-front'));
+        (aftHost || root).appendChild(tmp.querySelector('#hs-tree-conn-spine-back'));
 
         const refresh = () => {
             this.renderAllComponentTrees();
@@ -179,10 +210,11 @@ extendClass(HomeStationUI, {
         root.querySelectorAll('[data-tree-joint-style]').forEach((button) => {
             button.addEventListener('click', () => {
                 const style = button.getAttribute('data-style-id');
-                if (button.getAttribute('data-tree-joint-style') === 'wing') {
+                const joint = button.getAttribute('data-tree-joint-style');
+                if (joint === 'wing') {
                     shipLoadoutManager.setWingConnectionStyle(shipId, style);
                 } else {
-                    shipLoadoutManager.setSpineConnectionStyle(shipId, style);
+                    shipLoadoutManager.setSpineConnectionStyle(shipId, style, joint);
                 }
                 refresh();
             });
@@ -195,16 +227,16 @@ extendClass(HomeStationUI, {
         });
         root.querySelectorAll('[data-tree-joint-offset]').forEach((input) => {
             input.addEventListener('input', () => {
-                if (input.getAttribute('data-tree-joint-offset') === 'wing') {
+                const joint = input.getAttribute('data-tree-joint-offset');
+                if (joint === 'wing') {
                     shipLoadoutManager.setWingConnection(shipId, Number(input.value));
                 } else {
-                    shipLoadoutManager.setSpineConnectionX(shipId, Number(input.value));
+                    shipLoadoutManager.setSpineConnectionX(shipId, Number(input.value), joint);
                 }
                 this.drawHangarBay();
             });
         });
         const wingPanel = root.querySelector('[data-joint-panel="wing"]');
-        const hullPanel = root.querySelector('[data-joint-panel="hull"]');
         if (wingPanel) {
             this.bindConnectionStrength(wingPanel, {
                 start: '[data-wing-connection-width]',
@@ -213,14 +245,15 @@ extendClass(HomeStationUI, {
                 setEnd: (v) => shipLoadoutManager.setWingConnectionWidthEnd(shipId, v)
             });
         }
-        if (hullPanel) {
-            this.bindConnectionStrength(hullPanel, {
+        root.querySelectorAll('[data-spine-joint]').forEach((panel) => {
+            const joint = panel.getAttribute('data-spine-joint');
+            this.bindConnectionStrength(panel, {
                 start: '[data-spine-width]',
                 end: '[data-spine-width-end]',
-                setStart: (v) => shipLoadoutManager.setSpineConnectionWidth(shipId, v),
-                setEnd: (v) => shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v)
+                setStart: (v) => shipLoadoutManager.setSpineConnectionWidth(shipId, v, joint),
+                setEnd: (v) => shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v, joint)
             });
-        }
+        });
     },
 
     /**
@@ -229,6 +262,12 @@ extendClass(HomeStationUI, {
      * same art the ship shows, in the ship's faction colours. The active
      * thumbnail is scrolled into view so the strip opens on the choice.
      */
+    /** Style unlock check that stays permissive if the unlock system is missing. */
+    isStyleOwned(groupId, styleId) {
+        if (typeof profileManager === 'undefined' || !profileManager.isStyleUnlocked) return true;
+        return profileManager.isStyleUnlocked(groupId, styleId);
+    },
+
     renderStyleThumbs(root) {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         if (!root || !loader) return;
@@ -337,6 +376,18 @@ extendClass(HomeStationUI, {
                 track.scrollLeft = active.offsetLeft - (track.clientWidth - active.offsetWidth) / 2;
             }
             track.style.scrollBehavior = '';
+            // The strip hides its scrollbar, so map the mouse wheel to
+            // horizontal scrolling and keep the page from scrolling instead.
+            if (!track._wheelBound) {
+                track._wheelBound = true;
+                track.addEventListener('wheel', (e) => {
+                    if (track.scrollWidth <= track.clientWidth) return;
+                    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+                    if (!delta) return;
+                    e.preventDefault();
+                    track.scrollLeft += delta;
+                }, { passive: false });
+            }
         });
     },
 
@@ -352,7 +403,7 @@ extendClass(HomeStationUI, {
         const scale = this._hangarLastScale || 1;
         const cell = loader.shipVoxelCell(model, scale);
         const res = loader.hullPartResolution(seg.width * scale, seg.height * scale,
-            Number(model.layout.loadout && model.layout.loadout.voxelScale) || 1, scale);
+            Number(model.layout.loadout && model.layout.loadout.voxelScale) || 0.5, scale);
         return {
             aspect: seg.width / seg.height,
             cols: Math.max(1, Math.round(seg.width * scale / cell)) || res.resW,
@@ -377,6 +428,12 @@ extendClass(HomeStationUI, {
                     window.componentTree.setShip(shipTree.getAttribute('data-ship-tree'));
                 }
                 window.componentTree.setNodeExpanded(node.id, node.open);
+                // Accordion: opening a section closes its open siblings.
+                if (node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
+                    Array.from(node.parentElement.children).forEach((sib) => {
+                        if (sib !== node && sib.classList.contains('hs-tree-branch') && sib.open) sib.open = false;
+                    });
+                }
             });
         });
 

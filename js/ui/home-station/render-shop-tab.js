@@ -3,6 +3,7 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     renderShopTab(profile) {
+        if (this.getVisitedTradingPost()) return this.renderTradingPostShop(profile);
         let rows = '';
         let title = 'SHIP SHOP';
         let titleIcon = 'hsShop';
@@ -22,6 +23,10 @@ extendClass(HomeStationUI, {
             title = 'RESOURCE MARKET';
             titleIcon = 'hsStores';
             rows = this.renderShopResourceRows(profile);
+        } else if (this.shopCategory === 'styles') {
+            title = 'STYLE SHOP';
+            titleIcon = 'hsShip';
+            rows = this.renderShopStyleRows(profile);
         } else {
             rows = this.renderShopShipRows(profile);
         }
@@ -35,12 +40,20 @@ extendClass(HomeStationUI, {
             stockHint = `<p class="hs-muted hs-hint">Buy portals only for factions you have already met in combat. Filter by discovered faction.</p>`;
         } else if (this.shopCategory === 'resources') {
             stockHint = `<p class="hs-muted hs-hint">CREDITS = money (uncapped). SCRAP / ORE / CRYSTAL / VOLTEX = materials. Buy &amp; sell materials for credits from STATION or CARGO.</p>`;
+        } else if (this.shopCategory === 'styles') {
+            stockHint = `<p class="hs-muted hs-hint">The first 3 styles of every part and component are free. Unlock more looks here, then pick them in the HANGAR.</p>`;
         } else {
             stockHint = `<p class="hs-muted hs-hint">Station stock for ${galaxyName} · FACTION ${shopFaction}. Travel to change available ships and parts.</p>`;
         }
-        const head = this.shopCategory === 'resources'
+        let head = this.shopCategory === 'resources'
             ? this.renderShopResourceHeader()
             : this.renderShopCostHeader();
+        if (this.isShopSellMode()) {
+            title += ' · SELL';
+            rows = this.renderShopSellRows(profile);
+            head = this.renderShopSellHeader();
+            stockHint = `<p class="hs-muted hs-hint">Sell back for 50% of the price in credits. Your starter and active ship cannot be sold; only uncrafted blueprints are listed.</p>`;
+        }
         return `<div class="hs-section hs-panel hs-shop-root">` +
             `${this.renderShopWalletBar(profile)}` +
             `<div class="hs-shop-cats">${this.renderShopCategoryTabs()}</div>` +

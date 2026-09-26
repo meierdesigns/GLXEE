@@ -58,6 +58,8 @@ class HomeStationUI {
             upgrade: 'build', hangar: 'build', components: 'build', craft: 'build',
             shop: 'trade'
         };
+        // Tabs reachable from the ESC/menu tab row instead of the main row.
+        this._menuOnlyTabs = ['components'];
         this._upgradeSubTabs = ['station', 'ships', 'modules'];
         this.selectedUpgradeNode = null;
         this._upgTipHost = null;
@@ -70,13 +72,14 @@ class HomeStationUI {
             ships: { label: 'SHIPS', icon: 'hsShip' },
             modules: { label: 'MODULES', icon: 'hsCraft' }
         };
-        this._shopCategories = ['ships', 'blueprints', 'parts', 'portals', 'resources'];
+        this._shopCategories = ['ships', 'blueprints', 'parts', 'portals', 'resources', 'styles'];
         this._shopCatMeta = {
             ships: { label: 'SHIPS', icon: 'hsShip' },
             blueprints: { label: 'BLUEPRINTS', icon: 'hsBlueprint' },
             parts: { label: 'PARTS', icon: 'hsCraft' },
             portals: { label: 'PORTALS', icon: 'galaxyMilkyWay' },
-            resources: { label: 'RESOURCES', icon: 'hsStores' }
+            resources: { label: 'RESOURCES', icon: 'hsStores' },
+            styles: { label: 'STYLES', icon: 'hsShip' }
         };
         this._resourceBagFilters = [
             { id: 'station', label: 'STATION', icon: 'hsStores' },
@@ -262,8 +265,10 @@ class HomeStationUI {
     renderMenuTabs() {
         if (typeof startScreenManager === 'undefined') return '';
         const isMenu = this.tab === 'menu';
-        const activeTab = isMenu ? startScreenManager.embeddedMenuTab : null;
-        return startScreenManager.embeddedMenuTabs.map((tab) => {
+        const activeTab = isMenu
+            ? startScreenManager.embeddedMenuTab
+            : (this._menuOnlyTabs.indexOf(this.tab) !== -1 ? this.tab : null);
+        return this.getMenuRowTabs().map((tab) => {
             const active = activeTab === tab.id;
             const icon = tab.icon ? this.iconHtml(tab.icon, 24, 'hs-pixel') : '';
             return `
@@ -272,6 +277,16 @@ class HomeStationUI {
                 ${active ? `<span class="hs-menu-tab-label">${tab.label}</span>` : ''}
             </button>`;
         }).join('');
+    }
+
+    /** Menu tab row: embedded start-menu tabs plus station menu-only tabs. */
+    getMenuRowTabs() {
+        const base = (typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTabs) || [];
+        const extra = this._menuOnlyTabs.map((id) => {
+            const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
+            return { id: id, label: meta.label, icon: meta.icon };
+        });
+        return base.concat(extra);
     }
 
     tabIconHtml(iconKey) {

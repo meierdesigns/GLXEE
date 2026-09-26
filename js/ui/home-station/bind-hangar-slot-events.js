@@ -34,6 +34,17 @@ extendClass(HomeStationUI, {
                 e.stopPropagation();
                 const kind = btn.getAttribute('data-hangar-slot-toggle');
                 const index = Number(btn.getAttribute('data-slot-index') || 0);
+                // Sidebar open: go to the slot's container in the tree; the
+                // slot stays selected instead of toggling open/closed.
+                if (!this._hangarLeftCollapsed && this.focusTreeSlot(kind, index)) {
+                    this._hangarOpenSlot = { kind: kind, index: index };
+                    this.overlay.querySelectorAll('.hs-hangar-slot').forEach((el) => {
+                        el.classList.toggle('is-open', el.getAttribute('data-slot-kind') === kind
+                            && Number(el.getAttribute('data-slot-index')) === index);
+                    });
+                    this.updateHangarSlotLinks();
+                    return;
+                }
                 const same = this._hangarOpenSlot
                     && this._hangarOpenSlot.kind === kind
                     && Number(this._hangarOpenSlot.index) === index;

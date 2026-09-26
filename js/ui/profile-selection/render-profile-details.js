@@ -106,6 +106,8 @@ extendClass(ProfileSelectionManager, {
         bind('psSelect', () => this.activateSelected());
         bind('psCreate', () => {
             this.mode = 'create';
+            this.createStep = 'faction';
+            this._heroDefaultName = '';
             this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
         });
@@ -119,6 +121,15 @@ extendClass(ProfileSelectionManager, {
 
         this.actionFocusIndex = 0;
         this.refreshActionFocus();
+        // Mouse and keyboard share one focus: hovering an action moves it.
+        this.getActionButtons().forEach((btn, i) => {
+            btn.addEventListener('mouseenter', () => {
+                this.actionFocusIndex = i;
+                this.refreshActionFocus();
+            });
+        });
+        const selectedItem = this.overlay.querySelector('.profile-list-item.selected');
+        if (selectedItem) selectedItem.scrollIntoView({ block: 'nearest' });
 
         this._keyHandler = (e) => {
             if (!this.isVisible || this.mode !== 'list') return;
@@ -177,6 +188,7 @@ extendClass(ProfileSelectionManager, {
         this.selectedIndex = Math.max(0, Math.min(profiles.length - 1, index));
         this.overlay.querySelectorAll('.profile-list-item').forEach((el, i) => {
             el.classList.toggle('selected', i === this.selectedIndex);
+            if (i === this.selectedIndex) el.scrollIntoView({ block: 'nearest' });
         });
         this.refreshDetails();
     },
@@ -214,6 +226,8 @@ extendClass(ProfileSelectionManager, {
         const profiles = this.getProfiles();
         if (!profiles.length) {
             this.mode = 'create';
+            this.createStep = 'faction';
+            this._heroDefaultName = '';
             this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
             return;

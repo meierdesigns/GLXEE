@@ -23,7 +23,8 @@ extendClass(HomeStationUI, {
             onEscape: () => {
                 this.exitPlayMap();
             },
-            onExplored: () => {}
+            onExplored: () => {},
+            onDock: (post) => this.openTradingPost(post)
         });
         this.syncPlayHint();
     },
@@ -115,7 +116,7 @@ extendClass(HomeStationUI, {
     },
 
     isMenuChrome(el) {
-        return !!(el && (el.id === 'hsMenu' ||
+        return !!(el && (el.id === 'hsMenu' || el.id === 'hsLogout' ||
             (el.classList && (el.classList.contains('hs-menu-btn') ||
                 el.classList.contains('hs-menu-tab-btn')))));
     },
@@ -141,6 +142,8 @@ extendClass(HomeStationUI, {
     isContentFocusable(el) {
         if (!el) return false;
         if (this.isMainTabChrome(el) || this.isMenuChrome(el) || this.isSubTabEl(el)) return false;
+        // Footer controls toggles are chrome, not tab content.
+        if (el.id === 'hsHideControls' || el.id === 'hsShowControls') return false;
         return true;
     },
 

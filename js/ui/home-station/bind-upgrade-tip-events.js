@@ -239,7 +239,9 @@ extendClass(HomeStationUI, {
             if (maxed) {
                 action = '<span class="hs-muted hs-line-action">MAX</span>';
             } else {
-                action = `<button class="action-button hs-line-action" data-frame-up="${id}" ${check.ok ? '' : 'disabled'}>` +
+                // Missing resources stays focusable: the click opens the buy modal.
+                const lockAttr = check.ok ? '' : (check.reason === 'RESOURCES' ? 'data-short="1"' : 'disabled');
+                action = `<button class="action-button hs-line-action" data-frame-up="${id}" ${lockAttr}>` +
                     `FRAME L${level + 1}` +
                     `</button>`;
             }

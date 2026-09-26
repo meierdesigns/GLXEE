@@ -41,16 +41,25 @@ extendClass(HomeStationUI, {
      * ESC on the tab row toggles between the groups.
      */
     getTabCycle() {
-        if (this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTabs) {
-            return startScreenManager.embeddedMenuTabs.map((t) => 'menu:' + t.id);
+        if (this.isMenuRowTab()) {
+            return this.getMenuRowTabs().map((t) => 'menu:' + t.id).concat(['logout']);
         }
-        return this._tabs.slice();
+        return this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
+    },
+
+    /** True while the menu tab row owns ←/→ (menu or a menu-only tab). */
+    isMenuRowTab() {
+        return this.tab === 'menu' || this._menuOnlyTabs.indexOf(this.tab) !== -1;
     },
 
     currentTabKey() {
+        const list = this.getFocusables();
+        const focused = list[this.focusIndex];
+        if (focused && focused.id === 'hsLogout') return 'logout';
         if (this.tab === 'menu' && typeof startScreenManager !== 'undefined') {
             return 'menu:' + startScreenManager.embeddedMenuTab;
         }
+        if (this._menuOnlyTabs.indexOf(this.tab) !== -1) return 'menu:' + this.tab;
         return this.tab;
     },
 
@@ -59,13 +68,29 @@ extendClass(HomeStationUI, {
         let idx = cycle.indexOf(this.currentTabKey());
         if (idx < 0) idx = 0;
         const nextKey = cycle[(idx + dir + cycle.length) % cycle.length];
+        if (nextKey === 'logout') {
+            // Logout is a tab-row stop, not a tab: just move focus onto it.
+            const list = this.getFocusables();
+            const btn = this.overlay && this.overlay.querySelector('#hsLogout');
+            const i = btn ? list.indexOf(btn) : -1;
+            if (i >= 0) {
+                this.focusIndex = i;
+                this.refreshFocus();
+            }
+            return;
+        }
         this.statusMsg = '';
         this.focusIndex = 0;
         this._navLevel = 'tabs';
         this._menuArmed = false;
+        if (nextKey.indexOf('menu:') === 0 && this._menuOnlyTabs.indexOf(nextKey.slice(5)) !== -1) {
+            this.openMenuOnlyTab(nextKey.slice(5));
+            return;
+        }
         if (nextKey.indexOf('menu:') === 0) {
             // Show the menu tab but stay in the tab row — ENTER goes inside.
             const menuTab = nextKey.slice(5);
+            if (this._menuOnlyTabs.indexOf(this.tab) !== -1) this.unmountComponentsTab();
             if (this.tab !== 'menu') this._prevTab = this.tab;
             this.tab = 'menu';
             if (typeof startScreenManager !== 'undefined') startScreenManager.embeddedMenuTab = menuTab;
@@ -169,6 +194,8 @@ extendClass(HomeStationUI, {
         this._keyHandler = (e) => {
             if (!this.isVisible) return;
             if (typeof hangarTestArena !== 'undefined' && hangarTestArena.isVisible) return;
+            // Profile overlay on top of the station owns the keyboard.
+            if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
             if (this.overlay) {
                 const root = this.overlay.querySelector('.home-station-content');
                 if (root) root.classList.remove('hs-pointer-mode');
@@ -203,8 +230,11 @@ extendClass(HomeStationUI, {
                     this.exitPlayMap();
                     return;
                 }
+                // Arrows move the map cursor; D docks at a trading post —
+                // both handled by the galaxy map's own key handler.
                 if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
-                    e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+                    e.key === 'd' || e.key === 'D') {
                     return;
                 }
             }
@@ -316,6 +346,14 @@ extendClass(HomeStationUI, {
                         ? startScreenManager.embeddedMenuTab : null;
                     // Menu tab row: ENTER goes into the shown section (unless a
                     // different, not-yet-shown menu tab is focused).
+                    if (level === 'tabs' && focused && focused.id === 'hsLogout') {
+                        this.logout();
+                        return;
+                    }
+                    if (level === 'tabs' && menuTabId && menuTabId === this.tab) {
+                        this.enterTabContent();
+                        return;
+                    }
                     if (level === 'tabs' && this.tab === 'menu' && (!menuTabId || menuTabId === shownMenuTab)) {
                         this.enterMenuContent();
                         return;

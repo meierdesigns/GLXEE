@@ -42,7 +42,8 @@ extendClass(StartScreenManager, {
         this.createStartScreenUI();
         const skipPersist = opts.skipPersist;
         if (!skipPersist && typeof menuStateManager !== 'undefined') {
-            if (this.showSettings) menuStateManager.setScreen('settings');
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.persistTab();
+            else if (this.showSettings) menuStateManager.setScreen('settings');
             else if (this.showCredits) menuStateManager.setScreen('credits');
             else if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
                 homeStationUI.persistTab();
@@ -84,11 +85,10 @@ extendClass(StartScreenManager, {
         this.createStartScreenUI();
         const skipPersist = opts.skipPersist;
         if (!skipPersist && typeof menuStateManager !== 'undefined') {
-            if (this.showSettings) menuStateManager.setScreen('settings');
+            // Inside the station the open menu tab is station state.
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.persistTab();
+            else if (this.showSettings) menuStateManager.setScreen('settings');
             else if (this.showCredits) menuStateManager.setScreen('credits');
-            else if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
-                homeStationUI.persistTab();
-            }
         }
     },
 
@@ -105,7 +105,8 @@ extendClass(StartScreenManager, {
         this.syncEmbeddedFlags();
         this.createStartScreenUI();
         if (typeof menuStateManager !== 'undefined') {
-            if (tabId === 'settings') menuStateManager.setScreen('settings');
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.persistTab();
+            else if (tabId === 'settings') menuStateManager.setScreen('settings');
             else if (tabId === 'credits') menuStateManager.setScreen('credits');
             else if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
                 homeStationUI.persistTab();

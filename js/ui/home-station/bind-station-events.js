@@ -123,7 +123,7 @@ extendClass(HomeStationUI, {
                 const sep = raw.indexOf(':');
                 const kind = sep === -1 ? '' : raw.slice(0, sep);
                 const id = sep === -1 ? raw : raw.slice(sep + 1);
-                const res = profileManager.buyPart(kind, id);
+                const res = profileManager.buyPart(kind, id, this.visitPostId || null);
                 this.playButtonResult(btn, !!res.ok, res.ok ? ('PART: ' + id.toUpperCase()) : (res.reason || 'FAILED'));
             });
         });

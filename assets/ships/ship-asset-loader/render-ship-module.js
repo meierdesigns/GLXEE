@@ -45,8 +45,136 @@ extendClass(ShipAssetLoader, {
             intensity,
             visualId,
             factionStyle,
-            face === 'right'
+            face === 'right',
+            face
         );
+    },
+
+    /**
+     * Per-faction gun art (8×8 shades, muzzle at the top). Nose mounts get a
+     * heavy centre cannon; wing mounts (face left/right) get pylon guns.
+     */
+    getFactionWeaponTemplate(factionStyle, onWing) {
+        const id = (factionStyle && factionStyle.id) || 'terran';
+        const guns = {
+            terran: {
+                // Twin rectangular autocannons on a squared breech block.
+                nose: [
+                    [0, 0, 15, 0, 0, 15, 0, 0],
+                    [0, 0, 11, 0, 0, 11, 0, 0],
+                    [0, 0, 11, 0, 0, 11, 0, 0],
+                    [0, 6, 12, 6, 6, 12, 6, 0],
+                    [0, 9, 13, 9, 9, 13, 9, 0],
+                    [4, 10, 14, 12, 12, 14, 10, 4],
+                    [4, 10, 10, 10, 10, 10, 10, 4],
+                    [2, 3, 3, 3, 3, 3, 3, 2]
+                ],
+                wing: [
+                    [0, 0, 0, 15, 15, 0, 0, 0],
+                    [0, 0, 0, 11, 11, 0, 0, 0],
+                    [0, 0, 0, 11, 11, 0, 0, 0],
+                    [0, 0, 0, 11, 11, 0, 0, 0],
+                    [0, 0, 7, 13, 13, 7, 0, 0],
+                    [0, 5, 10, 14, 14, 10, 5, 0],
+                    [0, 5, 10, 10, 10, 10, 5, 0],
+                    [0, 2, 3, 3, 3, 3, 2, 0]
+                ]
+            },
+            kronax: {
+                // Serrated claw prongs with a glowing charge between them.
+                nose: [
+                    [15, 0, 0, 0, 0, 0, 0, 15],
+                    [12, 11, 0, 0, 0, 0, 11, 12],
+                    [0, 12, 10, 0, 0, 10, 12, 0],
+                    [0, 9, 12, 15, 15, 12, 9, 0],
+                    [0, 0, 10, 14, 14, 10, 0, 0],
+                    [0, 6, 9, 12, 12, 9, 6, 0],
+                    [4, 9, 6, 10, 10, 6, 9, 4],
+                    [2, 3, 0, 3, 3, 0, 3, 2]
+                ],
+                wing: [
+                    [0, 0, 0, 15, 15, 0, 0, 0],
+                    [0, 0, 0, 12, 12, 0, 0, 0],
+                    [0, 0, 11, 13, 13, 11, 0, 0],
+                    [0, 0, 9, 12, 12, 9, 0, 0],
+                    [0, 10, 8, 11, 11, 8, 10, 0],
+                    [10, 7, 0, 10, 10, 0, 7, 10],
+                    [6, 0, 0, 8, 8, 0, 0, 6],
+                    [0, 0, 0, 3, 3, 0, 0, 0]
+                ]
+            },
+            voidborn: {
+                // Ring focus lens hovering over a crescent emitter.
+                nose: [
+                    [0, 0, 9, 12, 12, 9, 0, 0],
+                    [0, 9, 13, 0, 0, 13, 9, 0],
+                    [0, 12, 0, 15, 15, 0, 12, 0],
+                    [0, 9, 13, 0, 0, 13, 9, 0],
+                    [0, 0, 9, 12, 12, 9, 0, 0],
+                    [6, 0, 0, 11, 11, 0, 0, 6],
+                    [9, 10, 8, 12, 12, 8, 10, 9],
+                    [0, 4, 6, 6, 6, 6, 4, 0]
+                ],
+                wing: [
+                    [0, 0, 0, 15, 15, 0, 0, 0],
+                    [0, 0, 10, 0, 0, 10, 0, 0],
+                    [0, 0, 12, 13, 13, 12, 0, 0],
+                    [0, 0, 0, 11, 11, 0, 0, 0],
+                    [0, 8, 0, 11, 11, 0, 8, 0],
+                    [0, 10, 9, 12, 12, 9, 10, 0],
+                    [0, 0, 8, 10, 10, 8, 0, 0],
+                    [0, 0, 0, 4, 4, 0, 0, 0]
+                ]
+            },
+            pirate: {
+                // Stubby scatter barrels bolted onto a welded drum.
+                nose: [
+                    [14, 0, 0, 15, 15, 0, 0, 14],
+                    [10, 0, 0, 11, 11, 0, 0, 10],
+                    [10, 0, 8, 11, 11, 8, 0, 10],
+                    [11, 7, 10, 12, 12, 10, 7, 11],
+                    [6, 12, 13, 9, 9, 13, 12, 6],
+                    [6, 12, 9, 14, 14, 9, 12, 6],
+                    [4, 9, 12, 9, 9, 12, 9, 4],
+                    [0, 3, 4, 3, 3, 4, 3, 0]
+                ],
+                wing: [
+                    [0, 0, 14, 0, 0, 14, 0, 0],
+                    [0, 0, 10, 0, 0, 10, 0, 0],
+                    [0, 0, 11, 7, 7, 11, 0, 0],
+                    [0, 6, 12, 10, 10, 12, 6, 0],
+                    [0, 9, 13, 9, 9, 13, 9, 0],
+                    [0, 9, 9, 12, 12, 9, 9, 0],
+                    [0, 4, 8, 8, 8, 8, 4, 0],
+                    [0, 0, 3, 0, 0, 3, 0, 0]
+                ]
+            },
+            machine: {
+                // Rail emitter: long conductor spine with circuit nodes.
+                nose: [
+                    [0, 0, 0, 15, 15, 0, 0, 0],
+                    [0, 13, 0, 12, 12, 0, 13, 0],
+                    [0, 10, 0, 12, 12, 0, 10, 0],
+                    [0, 10, 6, 14, 14, 6, 10, 0],
+                    [0, 12, 10, 12, 12, 10, 12, 0],
+                    [5, 9, 15, 9, 9, 15, 9, 5],
+                    [5, 9, 9, 12, 12, 9, 9, 5],
+                    [0, 3, 5, 3, 3, 5, 3, 0]
+                ],
+                wing: [
+                    [0, 0, 0, 15, 15, 0, 0, 0],
+                    [0, 0, 0, 12, 12, 0, 0, 0],
+                    [0, 0, 6, 12, 12, 6, 0, 0],
+                    [0, 0, 15, 12, 12, 15, 0, 0],
+                    [0, 0, 6, 12, 12, 6, 0, 0],
+                    [0, 7, 10, 14, 14, 10, 7, 0],
+                    [0, 7, 9, 9, 9, 9, 7, 0],
+                    [0, 0, 3, 5, 5, 3, 0, 0]
+                ]
+            }
+        };
+        const set = guns[id] || guns.terran;
+        return onWing ? set.wing : set.nose;
     },
 
     /**
@@ -222,8 +350,13 @@ extendClass(ShipAssetLoader, {
      * screen pixel, which carved smooth curves), and the shade template
      * resampled onto that voxel grid instead of stretched over the frame.
      */
-    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId, factionStyle, mirror = false) {
-        const template = this.getProceduralModuleTemplate(role, kind, visualId);
+    drawProceduralModule(ctx, x, y, width, height, role, kind, colorOverlay, intensity, visualId, factionStyle, mirror = false, face = 'up') {
+        // Weapons without a chosen skin use their faction's gun art; the
+        // template is the silhouette, so the generic cell mask is skipped.
+        const factionWeapon = (kind === 'weapon' && !visualId)
+            ? this.getFactionWeaponTemplate(factionStyle, face === 'left' || face === 'right')
+            : null;
+        const template = factionWeapon || this.getProceduralModuleTemplate(role, kind, visualId);
         const tRows = template.length;
         const tCols = template[0].length;
         const shadeBias = this.getModuleRoleShadeBias(role, kind);
@@ -235,8 +368,13 @@ extendClass(ShipAssetLoader, {
             const line = new Array(cols).fill(0);
             const sy = Math.min(tRows - 1, Math.floor(((row + 0.5) * tRows) / rows));
             for (let col = 0; col < cols; col++) {
-                if (!this.isFactionModuleCell(col, row, cols, rows, factionStyle)) continue;
-                const sx = Math.min(tCols - 1, Math.floor(((col + 0.5) * tCols) / cols));
+                if (!factionWeapon && !this.isFactionModuleCell(col, row, cols, rows, factionStyle)) continue;
+                // Sample the right half as the mirror of the left: plain
+                // floor() lands on different template columns per side
+                // whenever cols is not a multiple of the template width.
+                const lc = col < cols / 2 ? col : cols - 1 - col;
+                const lsx = Math.min(tCols - 1, Math.floor(((lc + 0.5) * tCols) / cols));
+                const sx = col < cols / 2 ? lsx : tCols - 1 - lsx;
                 const idx = template[sy][sx];
                 if (!idx) continue;
                 let color = this.getFactionModuleShade(idx, factionStyle)

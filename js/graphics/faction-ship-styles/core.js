@@ -25,6 +25,9 @@ class FactionShipStyles {
         this.sharedEdge = '#2a3038';
         this.sharedAccent = '#c8d0d8';
         this.sharedEngine = '#9ab0c0';
+        // How far faction ships depart from a neutral hull: 1 = the base
+        // anatomy/profiles below, 2 = twice as pronounced, 0 = all alike.
+        this.styleStrength = 2;
         this.styles = this.buildFactionStyles();
         this.pixelCache = Object.create(null);
         this.buildAllPixelSprites();
@@ -60,7 +63,7 @@ class FactionShipStyles {
                 engine: this.sharedEngine,
                 silhouette: 'spikes',
                 // Raider: long ram nose, slim body, wide swept blades.
-                anatomy: { front: { x: 0.8, y: 1.4 }, center: { x: 0.85, y: 1 }, back: { x: 0.9, y: 0.8 }, wing: { x: 1.35, y: 0.8 } },
+                anatomy: { front: { x: 0.8, y: 1.4 }, center: { x: 0.85, y: 1 }, back: { x: 0.9, y: 0.8 }, wing: { x: 1.35, y: 1.05 } },
                 defaultWeapons: ['claw_beam'],
                 prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating'
             },
@@ -71,6 +74,8 @@ class FactionShipStyles {
                 accent: '#c090ff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
+                // Default wings sweep back (tips aft), never forward.
+                wingVariants: ['delta', 'swept', 'razor'],
                 // Ring body: stubby nose, broad core, tall narrow arcs.
                 anatomy: { front: { x: 0.9, y: 0.7 }, center: { x: 1.3, y: 1.2 }, back: { x: 0.8, y: 0.8 }, wing: { x: 0.8, y: 1.3 } },
                 defaultWeapons: ['wave'],
@@ -118,7 +123,21 @@ class FactionShipStyles {
     /** Per-part size multipliers (front/center/back/wing × x/y) for player hulls. */
     getFactionAnatomy(factionId) {
         const style = this.styles[this.normalizeFaction(factionId)];
-        return (style && style.anatomy) || null;
+        const base = style && style.anatomy;
+        if (!base) return null;
+        // styleStrength scales each part's deviation from a neutral 1.
+        const k = this.styleStrength;
+        const amp = (v) => Math.max(0.45, Math.min(2.4, 1 + ((Number(v) || 1) - 1) * k));
+        const out = {};
+        Object.keys(base).forEach((part) => {
+            out[part] = { x: amp(base[part].x), y: amp(base[part].y) };
+        });
+        return out;
+    }
+
+    /** Global faction-difference factor for the hull builders (see styleStrength). */
+    getStyleStrength() {
+        return Number.isFinite(this.styleStrength) ? Math.max(0, this.styleStrength) : 1;
     }
 
     /** Weapons a fresh ship of this faction comes with. */

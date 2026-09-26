@@ -74,6 +74,8 @@ extendClass(ShipAssetLoader, {
         } else if (silhouette === 'modular') {
             this.gridFillRect(g, cols * 0.3, rows * 0.28, cols * 0.4, Math.max(1, rows * 0.22), 3);
         }
+        // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },
 

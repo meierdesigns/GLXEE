@@ -230,6 +230,7 @@ class BulletManager {
         const scaleY = playerPosition.height / lh;
         return weaponModules.map((m) => ({
             id: m.id,
+            mount: m.mountSegment === 'wing' ? 'wing' : 'front',
             key: String(m.id || '') + '@' + String(m.face || 'up'),
             position: {
                 x: playerPosition.x + m.x * scaleX,

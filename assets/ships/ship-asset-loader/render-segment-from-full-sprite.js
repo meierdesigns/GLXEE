@@ -187,35 +187,38 @@ extendClass(ShipAssetLoader, {
      * cells are touched, so the silhouette and its outline survive, and it
      * runs before each part's own accent marks so those stay on top.
      */
-    applyFactionPlating(g, silhouette, seedIndex = 0) {
+    applyFactionPlating(g, silhouette, seedIndex = 0, flipX = false) {
         const rows = g.length;
         const cols = rows ? g[0].length : 0;
         if (rows < 3 || cols < 3) return;
         for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                if (g[r][c] !== 2) continue;
+            for (let cc = 0; cc < cols; cc++) {
+                if (g[r][cc] !== 2) continue;
+                // flipX runs the pattern mirrored, so a left wing is the exact
+                // mirror image of the right one.
+                const c = flipX ? cols - 1 - cc : cc;
                 if (silhouette === 'modular') {
                     // Brick courses with staggered vertical seams.
-                    if (r % 3 === 2) g[r][c] = 4;
-                    else if ((c + Math.floor(r / 3) * 2) % 5 === 0) g[r][c] = 4;
+                    if (r % 3 === 2) g[r][cc] = 4;
+                    else if ((c + Math.floor(r / 3) * 2) % 5 === 0) g[r][cc] = 4;
                 } else if (silhouette === 'spikes') {
                     // Diagonal blade banding.
-                    if ((c + r + seedIndex) % 4 < 2) g[r][c] = 4;
+                    if ((c + r + seedIndex) % 4 < 2) g[r][cc] = 4;
                 } else if (silhouette === 'rings') {
                     // Concentric shells around the part's centre.
                     const dy = (r - rows / 2) / Math.max(1, rows / 2);
                     const dx = (c - cols / 2) / Math.max(1, cols / 2);
-                    if (Math.floor(Math.sqrt(dx * dx + dy * dy) * 3.5) % 2 === 1) g[r][c] = 4;
+                    if (Math.floor(Math.sqrt(dx * dx + dy * dy) * 3.5) % 2 === 1) g[r][cc] = 4;
                 } else if (silhouette === 'scrap') {
                     // Mismatched welded panels on an irregular block grid.
                     const block = Math.floor(r / 2) * 31 + Math.floor(c / 3) * 17 + seedIndex * 7;
                     const h = (Math.imul(block, 2654435761) >>> 0) % 7;
-                    if (h < 2) g[r][c] = 4;
-                    else if (h === 2) g[r][c] = 5;
+                    if (h < 2) g[r][cc] = 4;
+                    else if (h === 2) g[r][cc] = 5;
                 } else if (silhouette === 'circuit') {
                     // Dark substrate with bright vertical traces.
-                    if (c % 4 === 1) g[r][c] = 5;
-                    else if (r % 3 === 0) g[r][c] = 4;
+                    if (c % 4 === 1) g[r][cc] = 5;
+                    else if (r % 3 === 0) g[r][cc] = 4;
                 }
             }
         }
@@ -229,6 +232,19 @@ extendClass(ShipAssetLoader, {
      * recomputes (more/fewer cells) every render call as parts are scaled or
      * moved, since it always reads the current w/h.
      */
+    /**
+     * Copy the left half of a grid onto the right, mirrored, so parts that
+     * sit on the ship's centre line (nose, core, aft) are symmetric.
+     */
+    mirrorGridLeftToRight(g) {
+        for (let r = 0; r < g.length; r++) {
+            const row = g[r];
+            const cols = row.length;
+            for (let c = 0; c < Math.floor(cols / 2); c++) row[cols - 1 - c] = row[c];
+        }
+        return g;
+    },
+
     get HULL_PIXEL_CELL_PX() {
         // Fixed default cell (no longer shrunk per smallest part, so it has
         // to be fine on its own — 4 read far too coarse).
@@ -364,11 +380,7 @@ extendClass(ShipAssetLoader, {
         if (variantOverride != null) {
             shapeVariant = variantOverride;
         } else {
-            shapeVariant = this.hullShapeVariantIndex(
-                shapeSeed,
-                seg.id === 'wingRight' ? 'wingLeft' : seg.id,
-                this.wingShapeVariants.length
-            );
+            shapeVariant = this.defaultWingVariant(shapeSeed, factionStyle);
         }
         const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
         this.applyWingCrop(grid, seg, crop);

@@ -24,7 +24,7 @@ extendClass(ShipAssetLoader, {
             const sy = y + renderSeg.y * scale;
             const sw = Math.max(1, renderSeg.width * scale);
             const sh = Math.max(1, renderSeg.height * scale);
-            if (seg.replace && seg.replace.id) {
+            if (seg.replace && seg.replace.id && seg.replace.kind === 'weapon') {
                 const replaceModule = ((shipModel.layout && shipModel.layout.modules) || []).find(
                     (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
                 );

@@ -152,6 +152,8 @@ class EnemyManager {
                     .forEach(e => { e.spawnAt = Math.max(e.spawnAt, 999999); });
             }
         }
+        // Every run differs from the authored schedule (see wave-director.js).
+        if (this.varyRun) this.varyRun();
     }
 
     setSideEnemyPool(pool) {
@@ -216,6 +218,8 @@ class EnemyManager {
     }
 
     escortFormationOffset(slot) {
+        const shaped = this.formationOffset ? this.formationOffset(slot) : null;
+        if (shaped) return shaped;
         const i = slot | 0;
         const preferredSide = (i % 2 === 0) ? -1 : 1;
         const side = Math.random() < 0.72 ? preferredSide : -preferredSide;

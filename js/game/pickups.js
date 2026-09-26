@@ -111,6 +111,73 @@ class PickupManager {
         });
     }
 
+    /**
+     * Destroyed obstacles sometimes drop resources. Chance grows with size;
+     * fragments rarely drop so fragmenting rocks don't flood the field.
+     * Crystal obstacles favour crystal, the rest roll the planet's table.
+     */
+    spawnFromObstacle(obstacle) {
+        if (!obstacle || obstacle.isFog || typeof economyConfig === 'undefined') return;
+        const area = (obstacle.width || 8) * (obstacle.height || 8);
+        let chance = Math.min(0.45, 0.12 + area / 900);
+        if (obstacle.fragmentGeneration > 0) chance *= 0.3;
+        if (Math.random() >= chance) return;
+        const planetId = (typeof enemyManager !== 'undefined' && enemyManager.levelMods)
+            ? (enemyManager.levelMods.planetId || null)
+            : null;
+        let id = null;
+        if (obstacle.kind === 'crystal') id = 'crystal';
+        else if (economyConfig.pickWeightedResourceId && economyConfig.getPlanetResourceTable) {
+            id = economyConfig.pickWeightedResourceId(economyConfig.getPlanetResourceTable(planetId));
+        }
+        if (!id) id = Math.random() < 0.6 ? 'scrap' : 'ore';
+        const stats = this.getCollectStats();
+        const amount = Math.max(1, Math.round((1 + Math.floor(Math.random() * (area > 150 ? 3 : 2))) * stats.yieldMul));
+        const cx = obstacle.x + obstacle.width / 2;
+        const cy = obstacle.y + obstacle.height / 2;
+        this.pickups.push({
+            id: id,
+            amount: amount,
+            x: cx,
+            y: cy,
+            vx: (obstacle.horizontalSpeed || 0) * 0.4 + (Math.random() - 0.5) * 0.6,
+            vy: (obstacle.verticalSpeed || 0) * 0.4 + (Math.random() - 0.5) * 0.6,
+            age: 0,
+            life: 14000,
+            size: 7 + Math.min(4, amount)
+        });
+    }
+
+    /**
+     * Death: everything gathered this run is forfeited. Collected amounts are
+     * taken back out of cargo; drops still floating are lost too.
+     * Returns { id: amount } of what was lost.
+     */
+    forfeitRun() {
+        const lost = {};
+        Object.keys(this.collectedThisRun).forEach((id) => {
+            const n = this.collectedThisRun[id] || 0;
+            if (n > 0) lost[id] = n;
+        });
+        this.pickups.forEach((p) => {
+            lost[p.id] = (lost[p.id] || 0) + (p.amount || 0);
+        });
+        const profile = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
+            ? profileManager.getActiveProfile()
+            : null;
+        if (profile && profile.cargo && profile.cargo.resources) {
+            Object.keys(this.collectedThisRun).forEach((id) => {
+                const have = profile.cargo.resources[id] || 0;
+                profile.cargo.resources[id] = Math.max(0, have - (this.collectedThisRun[id] || 0));
+            });
+            if (profileManager.save) profileManager.save();
+        }
+        this.pickups.length = 0;
+        this.collectedThisRun = {};
+        this._saveDirty = false;
+        return lost;
+    }
+
     update(deltaTime) {
         if (!this.pickups.length && !this._saveDirty) return;
         const dt = Math.max(1, Number(deltaTime) || 16);

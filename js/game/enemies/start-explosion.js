@@ -158,58 +158,73 @@ extendClass(EnemyManager, {
         }
     },
 
+    /**
+     * Predictive obstacle steering for any enemy-like entity. Looks ahead
+     * along each obstacle's velocity, keeps only those whose swept path
+     * reaches the entity's padded box, and sums a sideways push (perpendicular
+     * to the obstacle's travel, away from its line) weighted by urgency.
+     * Returns { x, y } in -1..1-ish units, or null if nothing threatens.
+     */
+    computeObstacleAvoidance(entity) {
+        if (!entity || typeof obstacleManager === 'undefined') return null;
+        const obstacles = obstacleManager.getObstacles() || [];
+        const ex = entity.x + entity.width / 2;
+        const ey = entity.y + entity.height / 2;
+        const pad = 10;
+        const lookahead = 45; // frames
+        let ax = 0;
+        let ay = 0;
+        let threat = 0;
+        for (let i = 0; i < obstacles.length; i++) {
+            const o = obstacles[i];
+            if (!o || o.isFog) continue;
+            const ox = o.x + o.width / 2;
+            const oy = o.y + o.height / 2;
+            const vx = o.horizontalSpeed || 0;
+            const vy = o.verticalSpeed || 0;
+            const rx = ex - ox;
+            const ry = ey - oy;
+            const reach = (entity.width + o.width) / 2 + pad;
+            const reachY = (entity.height + o.height) / 2 + pad;
+            // Closest approach time along obstacle velocity (relative frame).
+            const v2 = vx * vx + vy * vy;
+            let t = v2 > 0.0001 ? (rx * vx + ry * vy) / v2 : 0;
+            t = Math.max(0, Math.min(lookahead, t));
+            const cx = rx - vx * t;
+            const cy = ry - vy * t;
+            if (Math.abs(cx) > reach || Math.abs(cy) > reachY) continue;
+            // Urgency: sooner and more central = stronger.
+            const soon = 1 - t / lookahead;
+            const central = 1 - Math.min(1, Math.hypot(cx / reach, cy / reachY));
+            const w = 0.35 + soon * 0.4 + central * 0.25;
+            // Push away from the obstacle's path; if dead-centre, pick the
+            // side perpendicular to its travel that points into open space.
+            let px = cx;
+            let py = cy;
+            if (Math.hypot(px, py) < 1) {
+                px = -vy;
+                py = vx;
+                if (px * rx + py * ry < 0) { px = -px; py = -py; }
+            }
+            const m = Math.hypot(px, py) || 1;
+            ax += (px / m) * w;
+            ay += (py / m) * w;
+            threat = Math.max(threat, w);
+        }
+        if (threat <= 0) return null;
+        const m = Math.hypot(ax, ay) || 1;
+        return { x: (ax / m) * threat, y: (ay / m) * threat };
+    },
+
     avoidObstacles(game) {
-        const obstacles = obstacleManager.getObstacles();
-        const enemyCenterX = this.enemy.x + this.enemy.width / 2;
-        const enemyCenterY = this.enemy.y + this.enemy.height / 2;
-
-        // Find the closest obstacle
-        let closestObstacle = null;
-        let closestDistance = Infinity;
-
-        for (let obstacle of obstacles) {
-            const obstacleCenterX = obstacle.x + obstacle.width / 2;
-            const obstacleCenterY = obstacle.y + obstacle.height / 2;
-            const distance = Math.sqrt((obstacleCenterX - enemyCenterX) ** 2 + (obstacleCenterY - enemyCenterY) ** 2);
-
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestObstacle = obstacle;
-            }
-        }
-
-        // If obstacle is close, avoid it with improved logic
-        if (closestObstacle && closestDistance < 80) { // Increased detection range from 60 to 80
-            const obstacleCenterX = closestObstacle.x + closestObstacle.width / 2;
-            const obstacleCenterY = closestObstacle.y + closestObstacle.height / 2;
-
-            // Calculate avoidance direction with better logic
-            const deltaX = enemyCenterX - obstacleCenterX;
-            const deltaY = enemyCenterY - obstacleCenterY;
-
-            // Normalize the avoidance vector
-            const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            if (magnitude > 0) {
-                const normalizedX = deltaX / magnitude;
-                const normalizedY = deltaY / magnitude;
-
-                // Apply stronger avoidance movement
-                const avoidanceStrength = Math.max(0.8, 1.2 - (closestDistance / 80)); // Stronger when closer
-                this.enemy.x += normalizedX * this.evasionSpeed * avoidanceStrength;
-                this.enemy.y += normalizedY * this.enemy.verticalSpeed * avoidanceStrength;
-            }
-
-            // Keep enemy within bounds with robust boundary checking
-            const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
-            this.enemy.x = Math.max(0, Math.min(canvasWidth - this.enemy.width, this.enemy.x));
-            this.enemy.y = Math.max(this.enemy.minY, Math.min(this.enemy.maxY, this.enemy.y));
-
-            // Force enemy back if it somehow escaped
-            if (this.enemy.x < 0) this.enemy.x = 0;
-            if (this.enemy.x > canvasWidth - this.enemy.width) this.enemy.x = canvasWidth - this.enemy.width;
-            if (this.enemy.y < this.enemy.minY) this.enemy.y = this.enemy.minY;
-            if (this.enemy.y > this.enemy.maxY) this.enemy.y = this.enemy.maxY;
-        }
+        const push = this.computeObstacleAvoidance(this.enemy);
+        if (!push) return;
+        const speed = Math.max(this.evasionSpeed || 1.5, 1.2);
+        this.enemy.x += push.x * speed * 1.4;
+        this.enemy.y += push.y * speed;
+        const canvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
+        this.enemy.x = Math.max(0, Math.min(canvasWidth - this.enemy.width, this.enemy.x));
+        this.enemy.y = Math.max(this.enemy.minY, Math.min(this.enemy.maxY, this.enemy.y));
     },
 
     startEvasion() {

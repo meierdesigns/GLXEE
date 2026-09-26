@@ -207,6 +207,7 @@ extendClass(MenuStateManager, {
                     homeStationUI.show({
                         skipPersist: true,
                         tab: s.tab || 'station',
+                        menuTab: s.menuTab || null,
                         shopCategory: s.shopCategory || 'ships',
                         shopFilter: s.shopFilter,
                         shopSort: s.shopSort,

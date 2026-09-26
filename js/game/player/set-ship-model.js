@@ -1,5 +1,8 @@
 "use strict";
 
+// Fixed in-game player ship width (internal pixels, before contentScale).
+const PLAYER_FOOTPRINT_WIDTH = 28;
+
 // PlayerManager methods, split from player.js.
 extendClass(PlayerManager, {
     setShipModel(shipModel) {
@@ -76,8 +79,7 @@ extendClass(PlayerManager, {
         }
         this.energy = this.maxEnergy;
 
-        if (shipModel.width != null) this.player.width = Math.max(8, Math.round(shipModel.width));
-        if (shipModel.height != null) this.player.height = Math.max(8, Math.round(shipModel.height));
+        this.applyFixedFootprint();
 
         if (shipModel.minY !== undefined) this.player.minY = shipModel.minY;
         if (shipModel.maxY !== undefined) this.player.maxY = shipModel.maxY;
@@ -86,6 +88,22 @@ extendClass(PlayerManager, {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             this.player.maxY = canvasHeight - this.player.height;
         }
+    },
+
+    /**
+     * The in-game ship always occupies the same footprint, whatever the
+     * loadout size; the renderer fits the model into it (aspect kept).
+     */
+    applyFixedFootprint() {
+        const contentScale = (typeof game !== 'undefined' && game && game.contentScale != null)
+            ? Math.max(0.5, Math.min(3, Number(game.contentScale) || 1))
+            : 1;
+        const model = this.currentShipModel || {};
+        const mw = Math.max(1, Number(model.width || model.nativeWidth) || 20);
+        const mh = Math.max(1, Number(model.height || model.nativeHeight) || 16);
+        const aspect = Math.max(0.6, Math.min(1.6, mh / mw));
+        this.player.width = Math.round(PLAYER_FOOTPRINT_WIDTH * contentScale);
+        this.player.height = Math.round(PLAYER_FOOTPRINT_WIDTH * aspect * contentScale);
     },
 
     getCurrentShipModel() {

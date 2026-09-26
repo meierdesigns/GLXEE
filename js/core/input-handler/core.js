@@ -43,6 +43,12 @@ class InputHandler {
             return;
         }
 
+        // The profile overlay has its own key handler; menus underneath
+        // (start screen / embedded main menu) must not react as well.
+        if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+            return;
+        }
+
         // Handle start screen first - it has priority over game controls
         if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible()) {
             // Check for cheat sequence first, even in start screen

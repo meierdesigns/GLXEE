@@ -82,6 +82,7 @@ extendClass(GameControlSystem, {
             victoryOverlay.dataset.bound = '';
         }
         victoryOverlay.classList.remove('hidden');
+        this.applyVictoryFactionFlavor(victoryOverlay);
         this.applyVictoryPixelIcons(victoryOverlay);
 
         if (!victoryOverlay.dataset.bound) {
@@ -90,9 +91,10 @@ extendClass(GameControlSystem, {
         }
 
         this.updateVictoryNextButton();
+        this.scheduleAutoReturnIfPlanetCleared(victoryOverlay);
 
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuIndex = 0;
+            uiManager.victoryMenuIndex = this._victoryAutoReturn ? 2 : 0;
             uiManager.updateVictoryMenuDisplay();
         }
 
@@ -101,6 +103,24 @@ extendClass(GameControlSystem, {
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }
+    },
+
+    /** Faction-specific victory wording; the look comes from html[data-faction]. */
+    applyVictoryFactionFlavor(overlay) {
+        const faction = String(document.documentElement.dataset.faction || 'terran').toLowerCase();
+        const lines = {
+            terran: ['VICTORY!', 'Mission Accomplished'],
+            kronax: ['CONQUEST!', 'The blade prevails'],
+            voidborn: ['ASCENSION', 'The void has fed'],
+            pirate: ['PLUNDERED!', 'Loot secured, crew alive'],
+            machine: ['OBJECTIVE COMPLETE', 'Efficiency: optimal']
+        };
+        const pick = lines[faction] || lines.terran;
+        const title = overlay.querySelector('.victory-title');
+        const sub = overlay.querySelector('.victory-subtitle');
+        if (title) title.textContent = pick[0];
+        if (sub) sub.textContent = pick[1];
+        overlay.dataset.faction = faction;
     },
 
     victoryResourceIconKey(id) {
@@ -167,6 +187,51 @@ extendClass(GameControlSystem, {
         });
     },
 
+    /**
+     * Last stage of a planet won → no next stage to offer: show the victory
+     * screen briefly (with a countdown) and return to planet selection.
+     * Any button pressed meanwhile wins; hiding the overlay cancels the timer.
+     */
+    scheduleAutoReturnIfPlanetCleared(overlay) {
+        this.cancelVictoryAutoReturn();
+        const currentLevel = this.coreLevelManager.getCurrentLevel();
+        const currentId = currentLevel
+            ? (currentLevel.id || currentLevel.planetId || currentLevel.background)
+            : null;
+        const meta = currentId && typeof this.coreLevelManager.getNextLevelMeta === 'function'
+            ? this.coreLevelManager.getNextLevelMeta(currentId)
+            : null;
+        const cleared = !!(currentLevel && currentLevel.isBoss) || !meta || meta.kind === 'planet';
+        if (!cleared) return;
+        const label = overlay.querySelector('.victory-button[data-index="2"] .button-text');
+        let left = 4;
+        const tick = () => {
+            if (label) label.textContent = `PLANET SELECT (${left})`;
+            if (left <= 0) {
+                this.cancelVictoryAutoReturn();
+                if (label) label.textContent = 'PLANET SELECT';
+                if (typeof game !== 'undefined' && game.showLevelSelection) game.showLevelSelection();
+                return;
+            }
+            left -= 1;
+            this._victoryAutoReturn = setTimeout(tick, 1000);
+        };
+        if (typeof uiManager !== 'undefined') {
+            uiManager.victoryMenuIndex = 2;
+            uiManager.updateVictoryMenuDisplay();
+        }
+        tick();
+    },
+
+    cancelVictoryAutoReturn() {
+        if (this._victoryAutoReturn) {
+            clearTimeout(this._victoryAutoReturn);
+            this._victoryAutoReturn = null;
+        }
+        const label = document.querySelector('#victoryOverlay .victory-button[data-index="2"] .button-text');
+        if (label) label.textContent = 'PLANET SELECT';
+    },
+
     updateVictoryNextButton() {
         const currentLevel = this.coreLevelManager.getCurrentLevel();
         const currentId = currentLevel
@@ -212,6 +277,7 @@ extendClass(GameControlSystem, {
     },
 
     hideVictoryOverlay() {
+        this.cancelVictoryAutoReturn();
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay) {
             victoryOverlay.classList.add('hidden');

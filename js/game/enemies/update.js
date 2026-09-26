@@ -4,6 +4,7 @@
 extendClass(EnemyManager, {
     update(deltaTime, gameState) {
         this.updateSchedule(deltaTime, gameState);
+        if (this.updateDirector) this.updateDirector(deltaTime, gameState);
         this.updateSideEnemies(deltaTime, gameState);
 
         if (typeof objectiveManager !== 'undefined') {

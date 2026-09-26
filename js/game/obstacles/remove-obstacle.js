@@ -10,6 +10,9 @@ extendClass(ObstacleManager, {
         if (obstacle && !obstacle.isFog && typeof explosionSystem !== 'undefined' && obstacle._skipDestroyFx !== true) {
             // Destroy FX is usually played by collisions; only play if explicitly requested
         }
+        if (obstacle && typeof pickupManager !== 'undefined' && pickupManager.spawnFromObstacle) {
+            pickupManager.spawnFromObstacle(obstacle);
+        }
         this.obstacles.splice(index, 1);
     },
 
@@ -80,5 +83,6 @@ extendClass(ObstacleManager, {
 
     reset() {
         this.obstacles.length = 0;
+        this.runTime = 0;
     },
 });

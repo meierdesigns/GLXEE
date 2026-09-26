@@ -41,24 +41,31 @@ extendClass(EnemyManager, {
                 collision: null
             };
         }
-        const fullScale = drawScale * scaleMul;
+        let fullScale = drawScale * scaleMul;
+        // Hard cap: no enemy wider than 1.5× the player footprint (28px).
+        const maxW = 28 * 1.5 * drawScale;
+        if ((model.width || 16) * fullScale > maxW) fullScale = maxW / (model.width || 16);
         const drawW = Math.max(4, (model.width || 16) * fullScale);
         const drawH = Math.max(4, (model.height || 12) * fullScale);
         const sprite = model.sprite || null;
         const colors = model.colors || null;
+        // Hit mask from the actually rendered ship (voxel segments / PNG crops,
+        // vertical enemy flip) — falls back to the logical sprite grid.
+        const baked = this.bakeEnemyHitMask(model);
+        const maskSprite = baked || sprite;
         let insetL = 0;
         let insetT = 0;
         let insetR = 0;
         let insetB = 0;
-        if (sprite && sprite.length && sprite[0] && sprite[0].length) {
-            const rows = sprite.length;
-            const cols = sprite[0].length;
+        if (maskSprite && maskSprite.length && maskSprite[0] && maskSprite[0].length) {
+            const rows = maskSprite.length;
+            const cols = maskSprite[0].length;
             let minC = cols;
             let maxC = -1;
             let minR = rows;
             let maxR = -1;
             for (let r = 0; r < rows; r++) {
-                const row = sprite[r];
+                const row = maskSprite[r];
                 if (!row) continue;
                 for (let c = 0; c < cols; c++) {
                     if (!row[c]) continue;
@@ -83,7 +90,7 @@ extendClass(EnemyManager, {
             sprite: sprite,
             colors: colors,
             collision: {
-                sprite: sprite,
+                sprite: maskSprite,
                 colors: colors,
                 drawW: drawW,
                 drawH: drawH,
@@ -93,6 +100,59 @@ extendClass(EnemyManager, {
                 insetB: insetB
             }
         };
+    },
+
+    /**
+     * Render the model once offscreen (the same renderShip path the game
+     * uses) and turn its alpha into a boolean grid. Cached per visual; not
+     * cached while sprites are still loading (empty render).
+     */
+    bakeEnemyHitMask(model) {
+        if (!model || typeof document === 'undefined') return null;
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!loader || !loader.isLoaded || !loader.isLoaded() || !loader.renderShip) return null;
+        const key = [model.factionSpriteKey || model.name || model.id, model.width, model.height].join('|');
+        this._hitMaskCache = this._hitMaskCache || Object.create(null);
+        if (this._hitMaskCache[key]) return this._hitMaskCache[key];
+        const k = 3; // sub-pixel resolution of the mask
+        const mw = Math.max(1, Math.round(model.width || 16));
+        const mh = Math.max(1, Math.round(model.height || 12));
+        const cols = mw * k;
+        const rows = mh * k;
+        try {
+            const c = document.createElement('canvas');
+            c.width = cols;
+            c.height = rows;
+            const ctx = c.getContext('2d', { willReadFrequently: true });
+            loader.renderShip(ctx, model, 0, 0, k, null, 0, {});
+            const data = ctx.getImageData(0, 0, cols, rows).data;
+            const grid = [];
+            let solid = 0;
+            for (let r = 0; r < rows; r++) {
+                const row = new Array(cols);
+                for (let q = 0; q < cols; q++) {
+                    const on = data[(r * cols + q) * 4 + 3] > 110 ? 1 : 0;
+                    row[q] = on;
+                    solid += on;
+                }
+                grid.push(row);
+            }
+            if (solid < 4) return null; // art not loaded yet — retry next spawn
+            this._hitMaskCache[key] = grid;
+            return grid;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /** Collision mask sized to the on-screen footprint (incl. contentScale). */
+    scaleEnemyCollision(collision, contentScale) {
+        if (!collision || contentScale === 1) return collision;
+        const out = Object.assign({}, collision);
+        ['drawW', 'drawH', 'insetL', 'insetT', 'insetR', 'insetB'].forEach((f) => {
+            if (out[f] != null) out[f] *= contentScale;
+        });
+        return out;
     },
 
     applyEnemyHitProfile(entity, opts) {
@@ -105,7 +165,7 @@ extendClass(EnemyManager, {
         entity.height = Math.max(4, Math.round(profile.height * contentScale));
         entity.sprite = profile.sprite;
         entity.colors = profile.colors;
-        entity.collision = profile.collision;
+        entity.collision = this.scaleEnemyCollision(profile.collision, contentScale);
         return entity;
     },
 
@@ -129,7 +189,8 @@ extendClass(EnemyManager, {
     },
 
     beginChampionCombatEvents(entry) {
-        this.activeCombatEvents = this.resolveCombatEventsForEntry(entry);
+        const events = this.resolveCombatEventsForEntry(entry);
+        this.activeCombatEvents = this.varyCombatEvents ? this.varyCombatEvents(events) : events;
         this.firedCombatEventIds = {};
         this.combatEventCooldowns = {};
         this.pendingCombatAnnounces = {};

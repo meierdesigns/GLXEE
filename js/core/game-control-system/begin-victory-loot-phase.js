@@ -187,11 +187,48 @@ extendClass(GameControlSystem, {
     showGameOverOverlay() {
         const gameOverOverlay = document.getElementById('gameOver');
         if (gameOverOverlay) {
+            const lost = (typeof pickupManager !== 'undefined' && pickupManager.forfeitRun)
+                ? pickupManager.forfeitRun()
+                : {};
+            this.applyGameOverFaction(gameOverOverlay, lost);
             gameOverOverlay.classList.remove('hidden');
             if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
                 VFBgMouseParallax.refresh();
             }
         }
+    },
+
+    /** Faction wording + lost-resources list on the death screen. */
+    applyGameOverFaction(overlay, lost) {
+        const faction = String(document.documentElement.dataset.faction || 'terran').toLowerCase();
+        const lines = {
+            terran: ['GAME OVER', 'Mission Failed'],
+            kronax: ['DISHONOR', 'The blade was broken'],
+            voidborn: ['DISSOLVED', 'The void reclaims you'],
+            pirate: ['SUNK', 'Ship scuttled, loot lost'],
+            machine: ['SYSTEM FAILURE', 'Unit terminated']
+        };
+        const pick = lines[faction] || lines.terran;
+        const content = overlay.querySelector('.game-over-content');
+        if (!content) return;
+        const h = content.querySelector('h2');
+        const p = content.querySelector('p');
+        if (h) h.textContent = pick[0];
+        if (p) p.textContent = pick[1];
+        let box = content.querySelector('.game-over-loss');
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'victory-loot game-over-loss';
+            const buttons = content.querySelector('.game-over-buttons');
+            content.insertBefore(box, buttons);
+        }
+        const ids = Object.keys(lost || {}).filter((id) => lost[id] > 0);
+        let rows = '<div class="victory-loot-empty">NOTHING LOST</div>';
+        if (ids.length && this.renderVictoryLootHtml) {
+            rows = this.renderVictoryLootHtml(lost).replace(/>\+(\d+)</g, '>−$1<');
+        }
+        box.innerHTML = '<div class="victory-loot-title">RESOURCES LOST</div>' +
+            `<div class="victory-loot-list">${rows}</div>`;
     },
 
     hideGameOverOverlay() {

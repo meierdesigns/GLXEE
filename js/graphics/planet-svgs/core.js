@@ -230,12 +230,21 @@ class PlanetSVGManager {
         return map[tone] || map.mid;
     }
 
-    /** Build a filled circle mask + base shading on an N×N grid. */
-    buildBaseGrid(n, seed, radiusBias) {
+    /**
+     * Build a filled circle mask + base shading on an N×N grid. k is the
+     * detail factor (1 = classic 16px icon); at k > 1 the sphere is lit as
+     * a 3D ball with an ordered-dither terminator and a lit rim, so large
+     * card views read as a globe instead of a blown-up icon.
+     */
+    buildBaseGrid(n, seed, radiusBias, k) {
+        const kk = k || 1;
         const rng = this.seededRng(seed);
         const cx = (n - 1) / 2;
         const cy = (n - 1) / 2;
-        const r = (n * 0.42) + (radiusBias || 0) + (rng() - 0.5) * 0.4;
+        const r = (n * 0.42) + ((radiusBias || 0) + (rng() - 0.5) * 0.4) * kk;
+        const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+        // Light from upper-left, slightly in front.
+        const L = [-0.55, -0.6, 0.58];
         const grid = [];
         for (let y = 0; y < n; y++) {
             const row = [];
@@ -249,17 +258,27 @@ class PlanetSVGManager {
                 }
                 const nx = dx / r;
                 const ny = dy / r;
-                const light = 0.55 - nx * 0.35 - ny * 0.35 + (rng() - 0.5) * 0.08;
+                let light;
+                if (kk > 1) {
+                    const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+                    const lambert = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+                    const dither = (bayer[(y % 4) * 4 + (x % 4)] / 16 - 0.5) * 0.12;
+                    light = 0.1 + lambert * 0.72 + dither + (rng() - 0.5) * 0.03;
+                } else {
+                    light = 0.55 - nx * 0.35 - ny * 0.35 + (rng() - 0.5) * 0.08;
+                }
                 let tone = 'mid';
                 if (light > 0.62) tone = 'light';
                 else if (light > 0.38) tone = 'mid';
                 else if (light > 0.18) tone = 'dark';
                 else tone = 'deep';
+                // Thin lit rim on the sun side (atmosphere edge).
+                if (kk > 1 && d > r - kk * 0.9 && nx + ny < -0.3) tone = 'soft';
                 row.push(tone);
             }
             grid.push(row);
         }
-        return { grid: grid, cx: cx, cy: cy, r: r, rng: rng };
+        return { grid: grid, cx: cx, cy: cy, r: r, rng: rng, k: kk };
     }
 
     setTone(grid, x, y, tone, allowEmpty) {

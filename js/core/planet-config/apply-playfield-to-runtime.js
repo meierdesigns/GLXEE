@@ -41,8 +41,11 @@ extendClass(PlanetConfigManager, {
         // ui/render.js defines lexical `renderManager`; CoreRenderManager is on window.
         const canvas = document.getElementById('gameCanvas');
         if (canvas) {
-            if (canvas.width !== width) canvas.width = width;
-            if (canvas.height !== height) canvas.height = height;
+            // Backing store is supersampled (see renderManager.getRenderScale).
+            const k = (typeof renderManager !== 'undefined' && renderManager.getRenderScale)
+                ? renderManager.getRenderScale() : 1;
+            if (canvas.width !== width * k) canvas.width = width * k;
+            if (canvas.height !== height * k) canvas.height = height * k;
             const ctx = canvas.getContext('2d');
             if (ctx) ctx.imageSmoothingEnabled = false;
         }

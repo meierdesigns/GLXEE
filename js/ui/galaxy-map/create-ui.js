@@ -31,9 +31,7 @@ extendClass(GalaxyMapManager, {
         const backBtn = embedded
             ? ''
             : '<button class="action-button secondary" id="gmBack">BACK</button>';
-        const instructions = embedded
-            ? '<p>ARROWS Move cursor | ENTER Start Mission</p>'
-            : '<p>ARROWS Move cursor | ENTER Start Mission | ESC Back</p>';
+        const instructions = '';
 
         this.overlay = document.createElement('div');
         this.overlay.className = embedded ? 'galaxy-map-embedded' : 'galaxy-map-overlay';
@@ -89,6 +87,7 @@ extendClass(GalaxyMapManager, {
         }
         this.bindEvents();
         this.paintShipMini();
+        this.scheduleShipGraphicsRefresh();
     },
 
     getActiveShipId() {
@@ -196,10 +195,10 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}</div>
                     </div>
                     <div class="gm-detail">
-                        <div class="stat-row"><span class="stat-label">Difficulty</span><span class="stat-value" id="gmDiff">${diff}</span></div>
-                        <div class="stat-row"><span class="stat-label">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
-                        <div class="stat-row"><span class="stat-label">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>
-                        <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
+                        <div class="stat-row"><span class="stat-label" id="gmDiffLabel">Difficulty</span><span class="stat-value" id="gmDiff">${diff}</span></div>
+                        <div class="stat-row"><span class="stat-label" id="gmStagesLabel">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
+                        <div class="stat-row"><span class="stat-label" id="gmEnemiesLabel">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>
+                        <div class="stat-row"><span class="stat-label" id="gmStatusLabel">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
                     </div>
                 </div>
                 <div class="galaxy-map-panel galaxy-map-panel-ship">
@@ -219,6 +218,29 @@ extendClass(GalaxyMapManager, {
                 </div>
             </div>
         `;
+    },
+
+    /**
+     * Ship art (and lazily loaded module sprites) may arrive after the map is
+     * built — repaint the ship panel and the orbit icon once it's ready, plus
+     * a couple of short retries for late module sprites.
+     */
+    scheduleShipGraphicsRefresh() {
+        const refresh = () => {
+            if (!this.overlay || !this.overlay.isConnected) return;
+            this._shipIconKey = null;
+            this.paintShipMini();
+            const url = this.getShipIconUrl && this.getShipIconUrl();
+            const img = this.overlay.querySelector('.gm-ship-marker-img');
+            if (url && img) img.setAttribute('href', url);
+        };
+        if (typeof spriteLoader !== 'undefined' && !spriteLoader.loaded) {
+            window.addEventListener('vf-sprites-loaded', refresh, { once: true });
+        }
+        clearTimeout(this._shipRefreshA);
+        clearTimeout(this._shipRefreshB);
+        this._shipRefreshA = setTimeout(refresh, 400);
+        this._shipRefreshB = setTimeout(refresh, 1500);
     },
 
     paintShipMini() {

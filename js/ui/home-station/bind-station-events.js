@@ -229,6 +229,22 @@ extendClass(HomeStationUI, {
             });
         });
 
+        // Main voxel size slider in the hangar header: live redraw, and keep
+        // the other voxel sliders (area panels) in step.
+        this.overlay.querySelectorAll('[data-hangar-voxel]').forEach((input) => {
+            input.addEventListener('input', () => {
+                if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setVoxelScale) return;
+                const value = Number(input.value);
+                shipLoadoutManager.setVoxelScale(this.hangarShipId, value);
+                const out = this.overlay.querySelector('[data-hangar-voxel-out]');
+                if (out) out.textContent = value.toFixed(2) + '×';
+                this.overlay.querySelectorAll('[data-voxel-scale]').forEach((other) => {
+                    if (other !== input) other.value = String(value);
+                });
+                this.drawHangarBay();
+            });
+        });
+
         this.overlay.querySelectorAll('[data-fire-mode]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const mode = btn.getAttribute('data-fire-mode');

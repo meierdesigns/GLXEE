@@ -35,15 +35,79 @@ extendClass(HomeStationUI, {
         this.setStatus(msg);
     },
 
+    /**
+     * Two tab groups: game tabs (left) and menu tabs (right: profiles,
+     * settings, assets, credits). ←/→ stay inside the current group;
+     * ESC on the tab row toggles between the groups.
+     */
+    getTabCycle() {
+        if (this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTabs) {
+            return startScreenManager.embeddedMenuTabs.map((t) => 'menu:' + t.id);
+        }
+        return this._tabs.slice();
+    },
+
+    currentTabKey() {
+        if (this.tab === 'menu' && typeof startScreenManager !== 'undefined') {
+            return 'menu:' + startScreenManager.embeddedMenuTab;
+        }
+        return this.tab;
+    },
+
     switchTab(dir) {
-        const idx = this._tabs.indexOf(this.tab);
-        const next = (idx + dir + this._tabs.length) % this._tabs.length;
-        this.tab = this._tabs[next];
+        const cycle = this.getTabCycle();
+        let idx = cycle.indexOf(this.currentTabKey());
+        if (idx < 0) idx = 0;
+        const nextKey = cycle[(idx + dir + cycle.length) % cycle.length];
         this.statusMsg = '';
         this.focusIndex = 0;
         this._navLevel = 'tabs';
+        this._menuArmed = false;
+        if (nextKey.indexOf('menu:') === 0) {
+            // Show the menu tab but stay in the tab row — ENTER goes inside.
+            const menuTab = nextKey.slice(5);
+            if (this.tab !== 'menu') this._prevTab = this.tab;
+            this.tab = 'menu';
+            if (typeof startScreenManager !== 'undefined') startScreenManager.embeddedMenuTab = menuTab;
+            this._menuOpts = { tab: menuTab, showSettings: false, showCredits: false, resetPanels: false };
+            this.createUI();
+            this.focusActiveTab();
+            return;
+        }
+        if (this.tab === 'menu') {
+            this.unmountMenuTab();
+            this._menuOpts = null;
+            this._prevTab = null;
+        }
+        this.tab = nextKey;
         this.persistTab();
         this.createUI();
+    },
+
+    /** ENTER/SPACE on the menu tab: hand keyboard to the embedded menu. */
+    enterMenuContent() {
+        this._menuArmed = true;
+        this._navLevel = 'content';
+        const list = this.getFocusables();
+        list.forEach((el) => el.classList.remove('nav-focused'));
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        if (typeof startScreenManager !== 'undefined') {
+            if (startScreenManager.showSettings) {
+                if (startScreenManager.updateMenuSelection) startScreenManager.updateMenuSelection();
+            } else if (startScreenManager.focusEmbeddedButtons) {
+                // Assets / profiles / credits: land on the first button.
+                startScreenManager.focusEmbeddedButtons();
+            }
+        }
+        this.syncNavHint && this.syncNavHint();
+    },
+
+    /** ESC inside the embedded menu: back up to the tab row. */
+    exitMenuContent() {
+        this._menuArmed = false;
+        this._navLevel = 'tabs';
+        this.focusActiveTab();
+        this.syncNavHint && this.syncNavHint();
     },
 
     activateFocused() {
@@ -110,8 +174,11 @@ extendClass(HomeStationUI, {
                 if (root) root.classList.remove('hs-pointer-mode');
             }
             // Main menu (embedded tab or legacy overlay) owns keyboard while open.
+            // Embedded menu only owns the keys after ENTER/SPACE entered it;
+            // until then its tabs sit in the station tab row like any other tab.
             if (typeof startScreenManager !== 'undefined' &&
-                (startScreenManager.isOverlayOpen() || startScreenManager.isEmbeddedOpen())) {
+                (startScreenManager.isOverlayOpen() ||
+                    (startScreenManager.isEmbeddedOpen() && this._menuArmed))) {
                 return;
             }
             const playMapMounted = this.tab === 'play' &&
@@ -142,7 +209,14 @@ extendClass(HomeStationUI, {
                 }
             }
             const tag = e.target && e.target.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isTextEntry) {
+                if (menuNavHelper.isTextEntry(e.target)) return;
+                // Sliders keep ←/→ for their value; ↑/↓ still move focus.
+                if (tag === 'INPUT' && e.target.type === 'range' &&
+                    !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+            } else if (tag === 'INPUT' || tag === 'TEXTAREA') {
+                return;
+            }
 
             if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
                 e.preventDefault();
@@ -181,9 +255,11 @@ extendClass(HomeStationUI, {
                     this.exitTabContent();
                     return;
                 }
-                // On tab bar: open menu tab
+                // On tab bar: ESC toggles game tabs ↔ menu tabs
                 e.preventDefault();
                 this.openMainMenuOverlay();
+                this._navLevel = 'tabs';
+                this.focusActiveTab();
                 return;
             }
             // Shift+Enter skips the section level and jumps straight into content.
@@ -235,6 +311,20 @@ extendClass(HomeStationUI, {
                     e.preventDefault();
                     const list = this.getFocusables();
                     const focused = list[this.focusIndex];
+                    const menuTabId = focused && focused.getAttribute && focused.getAttribute('data-menu-tab');
+                    const shownMenuTab = (this.tab === 'menu' && typeof startScreenManager !== 'undefined')
+                        ? startScreenManager.embeddedMenuTab : null;
+                    // Menu tab row: ENTER goes into the shown section (unless a
+                    // different, not-yet-shown menu tab is focused).
+                    if (level === 'tabs' && this.tab === 'menu' && (!menuTabId || menuTabId === shownMenuTab)) {
+                        this.enterMenuContent();
+                        return;
+                    }
+                    if (level === 'tabs' && menuTabId) {
+                        this.openMainMenuOverlay({ tab: menuTabId });
+                        this.focusActiveTab();
+                        return;
+                    }
                     if (level === 'tabs' && this.isMenuChrome(focused)) {
                         this.openMainMenuOverlay();
                         return;

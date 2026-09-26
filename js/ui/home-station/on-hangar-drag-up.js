@@ -5,7 +5,35 @@ extendClass(HomeStationUI, {
     /** pointerup: commit the drag, or treat a still click as a selection. */
     onHangarDragUp(h, e) {
         if (!h.drag) return;
+        if (h.drag.jointScale) {
+            // Resizing a joint keeps it selected; no panel churn.
+            h.drag = null;
+            this._hangarWingDragState = null;
+            if (this._hangarLiveDrawRaf) {
+                cancelAnimationFrame(this._hangarLiveDrawRaf);
+                this._hangarLiveDrawRaf = 0;
+            }
+            h.canvas.classList.remove('is-wing-scaling');
+            if (h.canvas.hasPointerCapture(e.pointerId)) h.canvas.releasePointerCapture(e.pointerId);
+            this.drawHangarBay();
+            return;
+        }
+        if (h.drag.rotateHandle) {
+            // Rotating keeps the wing selected; just settle the drag.
+            h.drag = null;
+            this._hangarWingDragState = null;
+            if (this._hangarLiveDrawRaf) {
+                cancelAnimationFrame(this._hangarLiveDrawRaf);
+                this._hangarLiveDrawRaf = 0;
+            }
+            h.canvas.classList.remove('is-wing-dragging');
+            if (h.canvas.hasPointerCapture(e.pointerId)) h.canvas.releasePointerCapture(e.pointerId);
+            h.canvas.style.cursor = 'grab';
+            this.drawHangarBay();
+            return;
+        }
         const wasPanning = !!h.drag.pan;
+        const stillClick = Math.abs(e.clientX - h.drag.startX) < 4 && Math.abs(e.clientY - h.drag.startY) < 4;
         const movingModule = !!h.drag.module;
         const clickedModule = movingModule && !h.drag.moved ? h.drag.module : null;
         const clickedSegment = !movingModule && !wasPanning && !h.drag.moved
@@ -13,6 +41,7 @@ extendClass(HomeStationUI, {
             : null;
         const clickedConnector = !!h.drag.connector && !movingModule && !wasPanning && !h.drag.moved;
         const clickedSegmentSide = clickedSegment ? h.drag.side : null;
+        const clickedSpine = clickedConnector ? h.drag.spine || null : null;
         this.applyHangarDrag(h, e);
         h.drag = null;
         this._hangarWingDragState = null;
@@ -25,6 +54,14 @@ extendClass(HomeStationUI, {
         h.canvas.classList.remove('is-module-dragging');
         h.canvas.classList.remove('is-panning');
         if (h.canvas.hasPointerCapture(e.pointerId)) h.canvas.releasePointerCapture(e.pointerId);
+        if (wasPanning && stillClick) {
+            // A still click on empty space deselects part and joint.
+            this._hangarSelectedArea = null;
+            this._hangarSelectedConnection = null;
+            if (this.overlay) {
+                this.overlay.querySelectorAll('.hs-floating-area-style').forEach((el) => el.remove());
+            }
+        }
         if (wasPanning) {
             // Panning ended — resync the dropdown cards/pins/links now,
             // rather than on every frame while dragging.
@@ -40,7 +77,12 @@ extendClass(HomeStationUI, {
         let floatingArea = null;
         let floatingConnection = null;
         this._hangarSelectedConnection = null;
-        if (clickedConnector) {
+        this._hangarSelectedArea = null;
+        let floatingSpine = null;
+        if (clickedSpine) {
+            floatingSpine = clickedSpine;
+            this._hangarSuppressNextOutsideClick = true;
+        } else if (clickedConnector) {
             floatingConnection = clickedSegmentSide === 'left' ? 'wingLeft' : 'wingRight';
             this._hangarSuppressNextOutsideClick = true;
         } else if (clickedSegment) {
@@ -54,7 +96,13 @@ extendClass(HomeStationUI, {
             floatingArea = area;
             if (typeof window.componentTree !== 'undefined'
                 && window.componentTree.setNodeExpanded) {
-                window.componentTree.setNodeExpanded(`hs-tree-area-${area}`, true);
+                // Symmetric wings live in one merged WINGS branch.
+                const treeArea = (area === 'wingLeft' || area === 'wingRight')
+                    && typeof profileManager !== 'undefined'
+                    && profileManager.getWingStyleSymmetry(this.hangarShipId || 'player_scrap')
+                    ? 'wings'
+                    : area;
+                window.componentTree.setNodeExpanded(`hs-tree-area-${treeArea}`, true);
             }
             this._hangarOpenSlot = null;
             this._hangarSuppressNextOutsideClick = true;
@@ -83,11 +131,51 @@ extendClass(HomeStationUI, {
         if (moduleToSelect) {
             this.updateComponentDetails(moduleToSelect.kind, moduleToSelect.index, false);
         }
-        if (floatingConnection) {
+        // With the ship sidebar open, its tree already holds every setting:
+        // open the matching section there instead of a second panel on top
+        // of the bay.
+        if (!this._hangarLeftCollapsed && (floatingSpine || floatingConnection || floatingArea)) {
+            let nodeId;
+            if (floatingSpine) {
+                this._hangarSelectedConnection = floatingSpine;
+                nodeId = 'hs-tree-conn-hull';
+            } else if (floatingConnection) {
+                this._hangarSelectedConnection = floatingConnection;
+                nodeId = 'hs-tree-conn-wing';
+            } else {
+                this._hangarSelectedArea = floatingArea;
+                const wing = floatingArea === 'wingLeft' || floatingArea === 'wingRight';
+                const merged = wing && typeof profileManager !== 'undefined'
+                    && profileManager.getWingStyleSymmetry(this.hangarShipId || 'player_scrap');
+                nodeId = `hs-tree-area-${merged ? 'wings' : floatingArea}`;
+            }
+            this.focusTreeSection(nodeId);
+            return;
+        }
+        if (floatingSpine) {
+            this.showFloatingSpineConnectionStyle(floatingSpine === 'spineBack' ? 'back' : 'front', floatingSpine);
+        } else if (floatingConnection) {
             this.showFloatingConnectionStyle(floatingConnection);
         } else if (floatingArea) {
             this.showFloatingAreaStyle(floatingArea);
         }
+    },
+
+    /** Expand one sidebar tree section, collapse its sibling sections, and scroll it into view. */
+    focusTreeSection(nodeId) {
+        if (!this.overlay) return;
+        const node = this.overlay.querySelector(`#${nodeId}`);
+        if (!node) return;
+        node.parentElement.querySelectorAll(':scope > .hs-tree-branch').forEach((branch) => {
+            branch.open = branch === node;
+            if (window.componentTree && window.componentTree.setNodeExpanded) {
+                window.componentTree.setNodeExpanded(branch.id, branch.open);
+            }
+        });
+        node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        node.classList.add('is-focused');
+        setTimeout(() => node.classList.remove('is-focused'), 900);
+        this.drawHangarBay();
     },
 
     cancelHangarDrag(h) {

@@ -124,6 +124,7 @@ extendClass(HomeStationUI, {
         stage.querySelectorAll('.hs-floating-area-style, .hs-floating-connection-style')
             .forEach((el) => el.remove());
         this._hangarSelectedConnection = null;
+        this._hangarSelectedArea = area;
 
         const shipId = this.hangarShipId || 'player_scrap';
         const isWing = area === 'wingLeft' || area === 'wingRight';
@@ -142,51 +143,56 @@ extendClass(HomeStationUI, {
         const panel = document.createElement('div');
         panel.className = 'hs-floating-area-style'
             + (area === 'wingLeft' ? ' is-right' : '');
+        const wingStyles = isWing ? loader.wingShapeVariants : [];
+        // Outer parts own the joint that attaches them: nose → front joint,
+        // aft → back joint, wings → wing bridge. The core has none of its own.
+        const joint = isWing ? 'wing' : ({ front: 'spineFront', back: 'spineBack' }[area] || null);
+        const jointLoadout = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager.getLoadout(shipId) : {};
+        const hiddenJoint = joint && jointLoadout[{ wing: 'hideWingConnection', spineFront: 'hideSpineFront', spineBack: 'hideSpineBack' }[joint]];
         panel.innerHTML = `<strong>${isWing ? 'WING STYLE' : 'AREA STYLE'}</strong>` +
-            (isWing ? `<canvas class="hs-floating-wing-preview" width="240" height="120" aria-label="Wing crop preview"></canvas>
-                <span class="hs-floating-preview-caption">VISIBLE CROP</span>` : '') +
-            `<label class="hs-floating-style-select-label"><span>STYLE</span>
-                <select class="hs-floating-style-select" data-style-select>
-                    ${Array.from({ length: count }, (_, index) =>
-                        `<option value="${index}"${index === active ? ' selected' : ''}>STYLE ${index + 1}</option>`
-                    ).join('')}
-                </select>
-            </label>` +
+            (isWing ? `<canvas class="hs-floating-wing-preview" width="240" height="120" aria-label="Wing preview"></canvas>` : '') +
+            `<div class="hs-floating-style-carousel" data-ship-tree="${shipId}">${window.componentTree.renderStyleCarousel(
+                Array.from({ length: count }, (_, index) => ({
+                    active: index === active,
+                    label: isWing ? wingStyles[index].label : `STYLE ${index + 1}`,
+                    attrs: `data-panel-style="${index}"`,
+                    thumb: `data-thumb="area" data-thumb-area="${area}" data-thumb-index="${index}"`
+                }))
+            )}</div>` +
             `<label class="hs-floating-style-select-label"><span>VOXEL SIZE</span>
-                <input type="range" data-voxel-scale min="0.1" max="10" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
+                <input type="range" data-voxel-scale min="0.5" max="1.5" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
             </label>` +
             (isWing ? `<div class="hs-floating-area-crop">
-                <label><span>CROP X</span><input type="range" data-crop="x" min="0" max="0.9" step="0.01" value="${this.getWingCropValue(shipId, 'x')}"></label>
-                <label><span>CROP Y</span><input type="range" data-crop="y" min="0" max="0.9" step="0.01" value="${this.getWingCropValue(shipId, 'y')}"></label>
-                <label><span>CROP W</span><input type="range" data-crop="w" min="0.05" max="1" step="0.01" value="${this.getWingCropValue(shipId, 'w')}"></label>
-                <label><span>CROP H</span><input type="range" data-crop="h" min="0.05" max="1" step="0.01" value="${this.getWingCropValue(shipId, 'h')}"></label>
                 <label><span>ROTATION</span><input type="range" data-wing-rotation min="-60" max="60" step="1" value="${this.getWingRotationValue(shipId)}"></label>
             </div>
-            <button type="button" class="hs-floating-panel-link" data-open-connection>EDIT CONNECTION →</button>` : '');
-        panel.querySelectorAll('[data-style-select]').forEach((select) => {
-            select.addEventListener('change', () => {
-                profileManager.setSegmentShapeVariant(
-                    shipId,
-                    segmentId,
-                    Number(select.value)
-                );
-                this.showFloatingAreaStyle(area);
+            <button type="button" class="hs-floating-panel-link" data-open-connection>EDIT CONNECTION →</button>`
+                : `<button type="button" class="hs-floating-panel-link" data-open-spine>EDIT CONNECTION →</button>`);
+        panel.querySelectorAll('[data-show-joint]').forEach((input) => {
+            input.addEventListener('change', () => {
+                shipLoadoutManager.setConnectionHidden(shipId, joint, !input.checked);
                 this.drawHangarBay();
             });
         });
-        panel.querySelectorAll('[data-crop]').forEach((input) => {
-            input.addEventListener('input', () => {
-                if (typeof shipConfigManager === 'undefined') return;
-                const cfg = shipConfigManager.getConfig(shipId);
-                const wingCrop = Object.assign({}, this.getWingCrop(shipId), {
-                    [input.getAttribute('data-crop')]: Number(input.value)
-                });
-                shipConfigManager.setConfig(shipId, {
-                    segmentUv: Object.assign({}, cfg.segmentUv || {}, { wingCrop: wingCrop })
-                });
-                this.renderFloatingWingCropPreview(panel, shipId, area);
+        panel.querySelectorAll('[data-open-spine]').forEach((button) => {
+            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
+        });
+        panel.querySelectorAll('[data-panel-style]').forEach((control) => {
+            control.addEventListener('click', () => {
+                profileManager.setSegmentShapeVariant(shipId, segmentId, Number(control.getAttribute('data-panel-style')));
+                this.showFloatingAreaStyle(area);
+                this.drawHangarBay();
+                this.renderAllComponentTrees();
+                this.bindComponentTreeEvents();
+            });
+        });
+        panel.querySelectorAll('[data-show-joint]').forEach((input) => {
+            input.addEventListener('change', () => {
+                shipLoadoutManager.setConnectionHidden(shipId, joint, !input.checked);
                 this.drawHangarBay();
             });
+        });
+        panel.querySelectorAll('[data-open-spine]').forEach((button) => {
+            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
         });
         panel.querySelectorAll('[data-open-connection]').forEach((button) => {
             button.addEventListener('click', () => this.showFloatingConnectionStyle(area));
@@ -207,8 +213,11 @@ extendClass(HomeStationUI, {
                 this.drawHangarBay();
             });
         });
-        if (isWing) this.renderFloatingWingCropPreview(panel, shipId, area);
+        if (isWing) {
+            this.renderFloatingWingPreview(panel.querySelector('.hs-floating-wing-preview'), shipId, area, active);
+        }
         stage.appendChild(panel);
+        this.renderStyleThumbs(panel);
     },
 
     /**
@@ -222,6 +231,7 @@ extendClass(HomeStationUI, {
         stage.querySelectorAll('.hs-floating-area-style, .hs-floating-connection-style')
             .forEach((el) => el.remove());
         this._hangarSelectedConnection = area === 'wingRight' ? 'wingRight' : 'wingLeft';
+        this._hangarSelectedArea = null;
         this.drawHangarBay();
 
         const shipId = this.hangarShipId || 'player_scrap';
@@ -241,7 +251,10 @@ extendClass(HomeStationUI, {
                 <input type="range" data-wing-connection-voxel min="0" max="10" step="0.01" value="${this.getWingConnectionVoxelScaleValue(shipId)}">
             </label>
             <div class="hs-floating-area-crop">
-                <label><span>STRENGTH</span><input type="range" data-wing-connection-width min="0.02" max="0.5" step="0.01" value="${this.getWingConnectionWidthValue(shipId)}"></label>
+                ${this.connectionStrengthRow('HULL', 'data-wing-connection-width', 0.02, 0.5, this.getWingConnectionWidthValue(shipId))}
+                ${this.connectionStrengthRow('WING', 'data-wing-connection-width-end', 0.02, 0.5,
+                    Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) || this.getWingConnectionWidthValue(shipId))}
+                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
                 <label><span>OFFSET</span><input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
             </div>
             <button type="button" class="hs-floating-panel-link" data-open-wing>← BACK TO WING</button>`;
@@ -252,11 +265,11 @@ extendClass(HomeStationUI, {
                 this.drawHangarBay();
             });
         });
-        panel.querySelectorAll('[data-wing-connection-width]').forEach((input) => {
-            input.addEventListener('input', () => {
-                shipLoadoutManager.setWingConnectionWidth(shipId, Number(input.value));
-                this.drawHangarBay();
-            });
+        this.bindConnectionStrength(panel, {
+            start: '[data-wing-connection-width]',
+            end: '[data-wing-connection-width-end]',
+            setStart: (v) => shipLoadoutManager.setWingConnectionWidth(shipId, v),
+            setEnd: (v) => shipLoadoutManager.setWingConnectionWidthEnd(shipId, v)
         });
         panel.querySelectorAll('[data-wing-connection-style-select]').forEach((select) => {
             select.addEventListener('change', () => {
@@ -274,5 +287,146 @@ extendClass(HomeStationUI, {
             button.addEventListener('click', () => this.showFloatingAreaStyle(area));
         });
         stage.appendChild(panel);
+    },
+
+    /**
+     * Fore/aft spine joint settings (nose→body→aft). One setting covers both
+     * joints so the hull stays consistent, like the mirrored wing joints.
+     */
+    showFloatingSpineConnectionStyle(area, spineId = null) {
+        if (!this.overlay || typeof shipLoadoutManager === 'undefined') return;
+        const stage = this.overlay.querySelector('#hsHangarBayStage');
+        if (!stage) return;
+        stage.querySelectorAll('.hs-floating-area-style, .hs-floating-connection-style')
+            .forEach((el) => el.remove());
+        // Mark the joint this panel edits: the clicked one, or the one next
+        // to the area it was opened from.
+        this._hangarSelectedConnection = spineId || (area === 'back' ? 'spineBack' : 'spineFront');
+        this._hangarSelectedArea = null;
+        this.drawHangarBay();
+
+        const shipId = this.hangarShipId || 'player_scrap';
+        const loadout = shipLoadoutManager.getLoadout(shipId);
+        const activeStyle = loadout.spineConnectionStyle || 'strut';
+        const start = Number(loadout.spineConnectionWidth) || 0.18;
+        const end = Number(loadout.spineConnectionWidthEnd) || start;
+        const panel = document.createElement('div');
+        panel.className = 'hs-floating-area-style hs-floating-connection-style';
+        panel.innerHTML = `<strong>HULL CONNECTION</strong>
+            <label class="hs-floating-style-select-label"><span>STYLE</span>
+                <select class="hs-floating-style-select" data-spine-style-select>
+                    ${['strut', 'plate', 'double', 'hinge'].map((style) =>
+                        `<option value="${style}"${style === activeStyle ? ' selected' : ''}>${style.toUpperCase()}</option>`
+                    ).join('')}
+                </select>
+            </label>
+            <div class="hs-floating-area-crop">
+                ${this.connectionStrengthRow('FRONT', 'data-spine-width', 0.05, 0.6, start)}
+                ${this.connectionStrengthRow('AFT', 'data-spine-width-end', 0.05, 0.6, end)}
+                <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(loadout.spineConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
+                <label><span>OFFSET</span><input type="range" data-spine-offset min="-1" max="1" step="0.01" value="${Number(loadout.spineConnectionX) || 0}"></label>
+            </div>
+            <span class="hs-floating-preview-caption">DRAG THE JOINT'S CORNERS OR SIDES TO SCALE</span>
+            <button type="button" class="hs-floating-panel-link" data-open-area>← BACK TO AREA</button>`;
+
+        panel.querySelectorAll('[data-spine-style-select]').forEach((select) => {
+            select.addEventListener('change', () => {
+                shipLoadoutManager.setSpineConnectionStyle(shipId, select.value);
+                this.drawHangarBay();
+            });
+        });
+        this.bindConnectionStrength(panel, {
+            start: '[data-spine-width]',
+            end: '[data-spine-width-end]',
+            setStart: (v) => shipLoadoutManager.setSpineConnectionWidth(shipId, v),
+            setEnd: (v) => shipLoadoutManager.setSpineConnectionWidthEnd(shipId, v)
+        });
+        panel.querySelectorAll('[data-spine-offset]').forEach((input) => {
+            input.addEventListener('input', () => {
+                shipLoadoutManager.setSpineConnectionX(shipId, Number(input.value));
+                this.drawHangarBay();
+            });
+        });
+        panel.querySelectorAll('[data-open-area]').forEach((button) => {
+            button.addEventListener('click', () => this.showFloatingAreaStyle(area));
+        });
+        stage.appendChild(panel);
+    },
+
+    /** Strength slider with a live % readout and fine −/+ steps. */
+    connectionStrengthRow(label, attr, min, max, value) {
+        const v = Number(value) || min;
+        return `<div class="hs-connection-strength">
+                <span>${label}</span>
+                <button type="button" class="hs-connection-step" data-step="-1" data-for="${attr}" aria-label="${label} weaker">−</button>
+                <input type="range" ${attr} min="${min}" max="${max}" step="0.01" value="${v}">
+                <button type="button" class="hs-connection-step" data-step="1" data-for="${attr}" aria-label="${label} stronger">+</button>
+                <output data-readout-for="${attr}">${Math.round(v * 100)}%</output>
+            </div>`;
+    },
+
+    /**
+     * Wire a start/end strength pair. With "same both ends" ticked the end
+     * follows the start (stored as 0 = inherit); unticking splits them.
+     */
+    bindConnectionStrength(panel, opts) {
+        const startInput = panel.querySelector(opts.start);
+        const endInput = panel.querySelector(opts.end);
+        const link = panel.querySelector('[data-link-ends]');
+        if (!startInput || !endInput) return;
+        const readout = (input) => {
+            const out = panel.querySelector(`[data-readout-for="${input.getAttributeNames().find((n) => n.indexOf('data-') === 0)}"]`);
+            if (out) out.textContent = Math.round(Number(input.value) * 100) + '%';
+        };
+        const linked = () => !link || link.checked;
+        const apply = (source) => {
+            if (linked()) {
+                endInput.value = startInput.value;
+                if (source === endInput) startInput.value = endInput.value;
+            }
+            endInput.disabled = linked();
+            opts.setStart(Number(startInput.value));
+            opts.setEnd(linked() ? 0 : Number(endInput.value));
+            readout(startInput);
+            readout(endInput);
+            this.drawHangarBay();
+        };
+        startInput.addEventListener('input', () => apply(startInput));
+        endInput.addEventListener('input', () => apply(endInput));
+        if (link) link.addEventListener('change', () => apply(startInput));
+        endInput.disabled = linked();
+        panel.querySelectorAll('.hs-connection-step').forEach((button) => {
+            button.addEventListener('click', () => {
+                const input = panel.querySelector(`[${button.getAttribute('data-for')}]`);
+                if (!input || input.disabled) return;
+                input.value = String(Math.round((Number(input.value) + Number(button.getAttribute('data-step')) * 0.01) * 100) / 100);
+                apply(input);
+            });
+        });
+    },
+
+    /** Pull strength values back into an open panel after a wheel nudge. */
+    syncConnectionStrengthInputs(stage) {
+        const loadout = shipLoadoutManager.getLoadout(this.hangarShipId || 'player_scrap');
+        const set = (attr, value) => {
+            const input = stage.querySelector(`[${attr}]`);
+            if (!input) return;
+            input.value = String(value);
+            const out = stage.querySelector(`[data-readout-for="${attr}"]`);
+            if (out) out.textContent = Math.round(Number(value) * 100) + '%';
+        };
+        const wingStart = Number(loadout.wingConnectionWidth) || 0.1;
+        const spineStart = Number(loadout.spineConnectionWidth) || 0.18;
+        set('data-wing-connection-width', wingStart);
+        set('data-wing-connection-width-end', Number(loadout.wingConnectionWidthEnd) || wingStart);
+        set('data-spine-width', spineStart);
+        set('data-spine-width-end', Number(loadout.spineConnectionWidthEnd) || spineStart);
+        const link = stage.querySelector('[data-link-ends]');
+        if (link && link.checked) {
+            const endInput = stage.querySelector('[data-wing-connection-width-end], [data-spine-width-end]');
+            const startInput = stage.querySelector('[data-wing-connection-width], [data-spine-width]');
+            if (startInput && endInput && endInput.value !== startInput.value) link.checked = false;
+            if (endInput) endInput.disabled = link.checked;
+        }
     },
 });

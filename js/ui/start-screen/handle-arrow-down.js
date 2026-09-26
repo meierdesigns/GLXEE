@@ -136,6 +136,11 @@ extendClass(StartScreenManager, {
         }
 
         if (item.type === 'palette') {
+            // App theme is faction-driven; nothing to cycle.
+            return;
+        }
+
+        if (item.type === 'palette-legacy') {
             const palettes = (typeof themeContextManager !== 'undefined')
                 ? themeContextManager.getPresetOptions(false)
                 : (colorManager ? colorManager.getPalettes() : []);

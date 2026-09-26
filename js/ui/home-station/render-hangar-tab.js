@@ -159,14 +159,36 @@ extendClass(HomeStationUI, {
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
                         <div class="hs-hangar-detail-head hs-panel">
-                            <div class="hs-hangar-selected">
+                            <div class="hs-hangar-head-title">
                                 <span class="hs-chip-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
-                                <strong>${this.shipName(shipId)}</strong>
-                                ${shipId === profile.activeShipId ? '<span class="hs-hangar-active-tag">★ ACTIVE</span>' : ''}
+                                <strong class="hs-hangar-head-name">${this.shipName(shipId)}</strong>
+                                ${shipId === profile.activeShipId
+                                    ? '<span class="hs-hangar-active-tag">★ ACTIVE</span>'
+                                    : `<button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>`}
+                                <div class="hs-hangar-fire-inline" role="group" aria-label="Fire mode">
+                                    <button type="button" class="action-button hs-mod ${fireMode === 'auto' ? 'equipped' : ''}" data-fire-mode="auto">AUTO</button>
+                                    <button type="button" class="action-button hs-mod ${fireMode === 'charge' ? 'equipped' : ''}" data-fire-mode="charge" ${ownsChargeShot ? '' : 'disabled'}
+                                        title="${ownsChargeShot ? 'Charge shot' : 'Buy the charge shot in the shop'}">CHARGE${ownsChargeShot ? '' : ' 🔒'}</button>
+                                </div>
                             </div>
-                            <p class="hs-hangar-meta">SIZE ${layout.width}×${layout.height} · FRAME L${frameLevel}/${frameMax} · SLOTS ${filledSlots}/${totalSlots} · W ${loadout.weapons.length}/${caps.weapons} · D ${loadout.defenses.length}/${caps.defenses} · A ${loadout.abilities.length}/${caps.abilities} · E ${(loadout.energy || []).length}/${caps.energy || 1}</p>
-                            <p class="hs-hangar-meta hs-muted">${powerLine}</p>
+                            <div class="hs-hangar-stats">
+                                <span class="hs-hangar-stat"><em>SIZE</em>${layout.width}×${layout.height}</span>
+                                <span class="hs-hangar-stat"><em>FRAME</em>L${frameLevel}/${frameMax}</span>
+                                <span class="hs-hangar-stat" title="Weapons ${loadout.weapons.length}/${caps.weapons} · Defense ${loadout.defenses.length}/${caps.defenses} · Abilities ${loadout.abilities.length}/${caps.abilities} · Energy ${(loadout.energy || []).length}/${caps.energy || 1}">
+                                    <em>SLOTS</em>${filledSlots}/${totalSlots}
+                                    <small>W${loadout.weapons.length} D${loadout.defenses.length} A${loadout.abilities.length} E${(loadout.energy || []).length}</small>
+                                </span>
+                                <span class="hs-hangar-stat${powerBudget.net < 0 ? ' is-negative' : ''}" title="${powerLine}">
+                                    <em>POWER</em>${netSign}${powerBudget.net}/s
+                                    <small>${powerBudget.gen} gen · ${powerBudget.idleDraw} draw</small>
+                                </span>
+                            </div>
                             <div class="hs-hangar-head-bar">
+                                <label class="hs-hangar-voxel" title="Voxel size of the whole ship">
+                                    <span>VOXEL SIZE</span>
+                                    <input type="range" data-voxel-scale data-hangar-voxel min="0.5" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
+                                    <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
+                                </label>
                                 <div class="hs-hangar-frame-up">
                                     ${frameMaxed
                                         ? '<span class="hs-muted hs-line-action">FRAME MAX</span>'
@@ -174,11 +196,6 @@ extendClass(HomeStationUI, {
                                             `<button type="button" class="action-button hs-line-action" data-frame-up="${shipId}" ${frameCheck.ok ? '' : 'disabled'}>` +
                                             `FRAME → L${frameLevel + 1}</button>`)}
                                 </div>
-                                <div class="hs-hangar-fire-inline">
-                                    <button type="button" class="action-button hs-mod ${fireMode === 'auto' ? 'equipped' : ''}" data-fire-mode="auto">AUTO</button>
-                                    <button type="button" class="action-button hs-mod ${fireMode === 'charge' ? 'equipped' : ''}" data-fire-mode="charge" ${ownsChargeShot ? '' : 'disabled'}>CHARGE${ownsChargeShot ? '' : ' · SHOP'}</button>
-                                </div>
-                                <button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>
                             </div>
                         </div>
                         <div class="hs-hangar-bay hs-panel">

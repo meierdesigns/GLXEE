@@ -13,93 +13,42 @@ extendClass(StartScreenManager, {
 
         const hint = document.createElement('div');
         hint.className = 'settings-hint type-text';
-        hint.textContent = 'Menus & UI only';
+        hint.textContent = 'Set by your faction';
         head.appendChild(hint);
         menuItem.appendChild(head);
 
-        const palettes = (typeof themeContextManager !== 'undefined')
-            ? themeContextManager.getPresetOptions(false)
-            : (colorManager ? colorManager.getPalettes() : []);
-        const current = palettes.find((p) => p.id === item.value) || palettes[0] || null;
-
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'theme-dropdown-toggle';
-        toggle.dataset.themeToggle = '1';
-        toggle.appendChild(this.buildThemeSwatchEl(current));
-        const toggleName = document.createElement('span');
-        toggleName.className = 'theme-list-name';
-        toggleName.textContent = current ? current.name : '—';
-        toggle.appendChild(toggleName);
-        const caret = document.createElement('span');
-        caret.className = 'theme-dropdown-caret';
-        caret.textContent = '▾';
-        toggle.appendChild(caret);
-        toggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.settingsIndex = index;
-            this.themeDropdownOpen = !this.themeDropdownOpen;
-            menuItem.classList.toggle('is-open', this.themeDropdownOpen);
-            this.updateMenuSelection();
-        });
-        menuItem.appendChild(toggle);
-
-        const panel = document.createElement('div');
-        panel.className = 'theme-dropdown-panel';
-
-        const list = document.createElement('div');
-        list.className = 'theme-list';
-        list.dataset.themeStrip = '1';
-
-        palettes.forEach((palette) => {
-            const paletteButton = document.createElement('button');
-            paletteButton.type = 'button';
-            paletteButton.className = 'theme-list-item' + (palette.id === item.value ? ' active' : '');
-            paletteButton.dataset.paletteId = palette.id;
-            paletteButton.title = palette.name;
-            paletteButton.appendChild(this.buildThemeSwatchEl(palette));
-
-            const name = document.createElement('span');
-            name.className = 'theme-list-name';
-            name.textContent = palette.name;
-            paletteButton.appendChild(name);
-
-            paletteButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.settingsIndex = index;
-                item.value = palette.id;
-                this.applyPaletteChange();
-                this.syncThemeStripActive(list, palette.id, false);
-                toggleName.textContent = palette.name;
-                toggle.replaceChild(this.buildThemeSwatchEl(palette), toggle.firstChild);
-                this.themeDropdownOpen = false;
-                menuItem.classList.remove('is-open');
-                this.updateMenuSelection();
-            });
-
-            list.appendChild(paletteButton);
-        });
-
-        panel.appendChild(list);
-
-        requestAnimationFrame(() => {
-            this.syncThemeStripActive(list, item.value, true);
-        });
+        // App theme follows the faction — show it, don't offer a picker.
+        // The editor stays for planet / galaxy / stage themes.
+        const colors = (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getCurrentColors)
+            ? colorPaletteSystem.getCurrentColors() : null;
+        const factionId = (typeof themeContextManager !== 'undefined' && themeContextManager.currentFactionId)
+            ? themeContextManager.currentFactionId() : '';
+        const current = {
+            id: item.value,
+            name: String(factionId || 'Faction').toUpperCase(),
+            primary: colors && colors.primary,
+            baseColor: colors && colors.baseColor,
+            secondBaseColor: colors && colors.secondBaseColor
+        };
+        const badge = document.createElement('div');
+        badge.className = 'theme-dropdown-toggle is-readonly';
+        badge.appendChild(this.buildThemeSwatchEl(current));
+        const badgeName = document.createElement('span');
+        badgeName.className = 'theme-list-name';
+        badgeName.textContent = current.name;
+        badge.appendChild(badgeName);
+        menuItem.appendChild(badge);
 
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'theme-edit-btn';
-        editBtn.textContent = 'THEME EDITOR';
+        editBtn.textContent = 'PLANET THEMES';
+        editBtn.title = 'Edit the environment themes used by planets';
         editBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.openThemeEditor(item.value);
+            this.openThemeEditor(null);
         });
-        panel.appendChild(editBtn);
-
-        menuItem.appendChild(panel);
-        menuItem.classList.toggle('is-open', !!this.themeDropdownOpen);
-
-        this.bindThemeDropdownOutsideClick();
+        menuItem.appendChild(editBtn);
     },
 
     syncSecondBaseSettingValue() {

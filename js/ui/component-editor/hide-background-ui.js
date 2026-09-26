@@ -199,6 +199,18 @@ extendClass(ComponentEditorUI, {
                 this.setPaintTool("draw");
             };
         }
+        const showBg = r.querySelector("#ceShowBg");
+        if (showBg) {
+            if (this.showPaintBg == null) {
+                try { this.showPaintBg = localStorage.getItem("vf_ce_show_bg") === "true"; } catch (e) { this.showPaintBg = false; }
+            }
+            showBg.checked = !!this.showPaintBg;
+            showBg.onchange = () => {
+                this.showPaintBg = !!showBg.checked;
+                try { localStorage.setItem("vf_ce_show_bg", String(this.showPaintBg)); } catch (e) {}
+                this.drawCenter();
+            };
+        }
         const sym = r.querySelector("#ceSymmetry");
         if (sym) {
             sym.checked = !!this.symmetric;

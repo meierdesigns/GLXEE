@@ -20,10 +20,24 @@ extendClass(ComponentEditorUI, {
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = this.bgColor || "#FF00FF";
-        ctx.globalAlpha = 0.55;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
+        const generating = this.busy || !!this.stagingId;
+        if (this.showPaintBg || generating) {
+            // Generator key colour — while generating / reviewing a generated
+            // result (until accepted), or when the BG toggle is on.
+            ctx.fillStyle = this.bgColor || "#FF00FF";
+            ctx.globalAlpha = 0.55;
+            ctx.fillRect(0, 0, w, h);
+            ctx.globalAlpha = 1;
+        } else {
+            // Neutral dark checker so transparent pixels stay readable.
+            const cell = 12;
+            for (let y = 0; y < h; y += cell) {
+                for (let x = 0; x < w; x += cell) {
+                    ctx.fillStyle = ((x / cell + y / cell) & 1) ? "#16161c" : "#0e0e12";
+                    ctx.fillRect(x, y, cell, cell);
+                }
+            }
+        }
 
         this.ensureEditBufferSync();
         const edit = this._editCanvas;

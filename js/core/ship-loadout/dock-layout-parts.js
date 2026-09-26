@@ -167,6 +167,22 @@ extendClass(ShipLoadoutManager, {
     },
 
     /** buildLayout phase 6: sync wing panels, normalize to bbox and assemble the result. */
+    /** Rotate a layout point with its wing around the wing root (renderProceduralWing pivot). */
+    rotateOnWing(seg, degrees, x, y) {
+        const deg = Math.max(-60, Math.min(60, Number(degrees) || 0));
+        if (!seg || Math.abs(deg) < 0.001) return { x: x, y: y };
+        const isLeft = seg.id === 'wingLeft';
+        const px = isLeft ? seg.x + seg.width : seg.x;
+        const py = seg.y + seg.height / 2;
+        const a = deg * Math.PI / 180 * (isLeft ? -1 : 1);
+        const dx = x - px;
+        const dy = y - py;
+        return {
+            x: px + dx * Math.cos(a) - dy * Math.sin(a),
+            y: py + dx * Math.sin(a) + dy * Math.cos(a)
+        };
+    },
+
     finalizeLayout(ctx, segments, wingPanels) {
         const { coreWidth, L, parts, segGap, wingGap, armorIds, shieldIds, drives,
             systemPods, expandFront, expandBack, insertH, totalCoreH } = ctx;
@@ -196,6 +212,15 @@ extendClass(ShipLoadoutManager, {
             wingPanels.length = 0;
             syncedWings.forEach((w) => wingPanels.push(w));
         }
+
+        // Wing mounts swing with a rotated wing (same root pivot as the art).
+        parts.forEach((p) => {
+            if (p.mountSegment !== 'wing' || (p.face !== 'left' && p.face !== 'right')) return;
+            const seg = segments.find((sg) => sg.id === (p.face === 'left' ? 'wingLeft' : 'wingRight'));
+            const c = this.rotateOnWing(seg, L.wingRotation, p.x + p.width / 2, p.y + p.height / 2);
+            p.x = c.x - p.width / 2;
+            p.y = c.y - p.height / 2;
+        });
 
         // Hull spans frontY..hullBottom (the body is anchored, so the nose can
         // sit above y=0 or below it) — start the bbox there, not at 0..total.

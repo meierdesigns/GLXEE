@@ -32,13 +32,15 @@ extendClass(ShipLoadoutManager, {
         });
         if (!energy.length) energy.push('energy_core');
         const modelClass = (cfg && cfg.modelClass) || 'starfighter';
-        return this.clampLoadoutToCaps({
+        const base = {
             weapons: weapons,
             defenses: defenses,
             abilities: abilities,
             energy: energy,
             fireMode: 'auto'
-        }, shipId, modelClass);
+        };
+        if (this.applyFactionLayoutDefaults) this.applyFactionLayoutDefaults(base, faction);
+        return this.clampLoadoutToCaps(base, shipId, modelClass);
     },
 
     setFireMode(shipId, fireMode) {
@@ -83,13 +85,8 @@ extendClass(ShipLoadoutManager, {
                 profile.shipLoadouts[id] = this.defaultLoadoutFromShip(id);
                 profileManager.save();
             }
-            const L = this.clampLoadoutToCaps(profile.shipLoadouts[id], id, modelClass);
-            if (!L.energy || !L.energy.length) {
-                L.energy = ['energy_core'];
-                profile.shipLoadouts[id] = L;
-                profileManager.save();
-            }
-            return L;
+            // An emptied energy slot stays empty — the player chose that.
+            return this.clampLoadoutToCaps(profile.shipLoadouts[id], id, modelClass);
         }
         return this.defaultLoadoutFromShip(id);
     },

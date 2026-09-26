@@ -179,6 +179,15 @@ class ShipLoadoutManager {
         const energy = uniq(energyFromSrc.concat(energyFromAbilities));
         return {
             weapons: compact(src.weapons),
+            // Positional weapon slots (null = empty): slot 0 is the nose
+            // mount, slot 1+ are wing pairs (one weapon mirrored on both
+            // wings). Older loadouts without it use the weapons list as-is.
+            weaponSlots: (Array.isArray(src.weaponSlots) ? src.weaponSlots : compact(src.weapons))
+                .map((id) => (id ? String(id) : null)),
+            // Where a lone weapon sits: null = nose tip (default), or the
+            // wing the player dragged it onto.
+            singleWeaponSide: src.singleWeaponSide === 'left' || src.singleWeaponSide === 'right'
+                ? src.singleWeaponSide : null,
             defenses: uniq(src.defenses).filter((id) => !this.isEnergyId(id)),
             abilities: abilities,
             energy: energy,
@@ -212,6 +221,12 @@ class ShipLoadoutManager {
             hideWingConnection: src.hideWingConnection === true,
             hideSpineFront: src.hideSpineFront === true,
             hideSpineBack: src.hideSpineBack === true,
+            // Hull areas switched off entirely (the core always stays).
+            disabledAreas: {
+                front: !!(src.disabledAreas && src.disabledAreas.front === true),
+                back: !!(src.disabledAreas && src.disabledAreas.back === true),
+                wing: !!(src.disabledAreas && src.disabledAreas.wing === true)
+            },
             // Per-side wing joint extents {up0, down0, up1, down1} (0 = hull
             // end, 1 = wing end), in the same units as the strength values.
             // null = symmetric, taken from the two strength values.

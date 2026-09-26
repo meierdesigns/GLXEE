@@ -165,10 +165,14 @@ extendClass(ShipLoadoutManager, {
         const L = this.normalizeLoadout(loadout);
         const caps = this.getSlotCaps(shipId, modelClass);
         L.weapons = L.weapons.slice(0, Math.max(1, caps.weapons));
+        L.weaponSlots = (L.weaponSlots || []).slice(0, Math.max(1, this.weaponMountSlots(caps.weapons)));
+        while (L.weaponSlots.length && !L.weaponSlots[L.weaponSlots.length - 1]) L.weaponSlots.pop();
+        L.weapons = L.weaponSlots.filter(Boolean);
         L.defenses = L.defenses.slice(0, Math.max(0, caps.defenses));
         L.abilities = L.abilities.slice(0, Math.max(0, caps.abilities));
         L.energy = L.energy.slice(0, Math.max(0, caps.energy != null ? caps.energy : 1));
-        if (!L.weapons.length) L.weapons.push('laser');
+        // An emptied weapon list stays empty (the ship still flies the basic
+        // laser via applyLayoutToModel's fallback).
         return L;
     },
 

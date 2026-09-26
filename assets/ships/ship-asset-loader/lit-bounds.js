@@ -147,11 +147,7 @@ extendClass(ShipAssetLoader, {
         const factionStyle = this.resolvePlayerFactionStyle(shipModel);
         const shapeSeed = this.resolveHullShapeSeed(shipModel);
         const override = this.resolveSegmentVariantOverride(shipModel, seg.id);
-        const shapeVariant = override != null ? override : this.hullShapeVariantIndex(
-            shapeSeed,
-            seg.id === 'wingRight' ? 'wingLeft' : seg.id,
-            this.wingShapeVariants.length
-        );
+        const shapeVariant = override != null ? override : this.defaultWingVariant(shapeSeed, factionStyle);
         const key = [seg.id, resW, resH, shapeVariant, shapeSeed,
             factionStyle ? factionStyle.silhouette : '',
             crop.x, crop.y, crop.w, crop.h].join('|');
@@ -225,6 +221,22 @@ extendClass(ShipAssetLoader, {
      * 1 = tip) to the row band(s) [lead, trail] the wing covers, as fractions
      * of the wing frame (0 = front, 1 = aft). Return null for no wing there.
      */
+    /**
+     * Seeded default wing shape. A faction may restrict the pool
+     * (style.wingVariants, by id) — e.g. Voidborn wings always sweep back.
+     * A shape the player picks in the hangar still overrides this.
+     */
+    defaultWingVariant(shapeSeed, factionStyle) {
+        const variants = this.wingShapeVariants;
+        const allowed = factionStyle && Array.isArray(factionStyle.wingVariants)
+            ? factionStyle.wingVariants.map((id) => variants.findIndex((v) => v.id === id)).filter((i) => i >= 0)
+            : [];
+        if (allowed.length && typeof factionShipStyles !== 'undefined' && factionShipStyles.hash) {
+            return allowed[factionShipStyles.hash(String(shapeSeed) + '|wingLeft') % allowed.length];
+        }
+        return this.hullShapeVariantIndex(shapeSeed, 'wingLeft', variants.length);
+    },
+
     get wingShapeVariants() {
         return [
             { id: 'delta', label: 'DELTA', planform: (u) => [0.1 + 0.7 * u, 1] },
@@ -260,6 +272,21 @@ extendClass(ShipAssetLoader, {
      * row. Returns a width multiplier and a sideways center offset.
      */
     factionRowProfile(silhouette, t, seedIndex) {
+        // factionShipStyles.styleStrength exaggerates (or flattens) the bend.
+        const k = this.factionStyleStrength();
+        const p = this.baseFactionRowProfile(silhouette, t, seedIndex);
+        return {
+            widthMul: Math.max(0.18, Math.min(1.25, 1 + (p.widthMul - 1) * k)),
+            offsetMul: p.offsetMul * Math.min(k, 1)
+        };
+    },
+
+    factionStyleStrength() {
+        return (typeof factionShipStyles !== 'undefined' && factionShipStyles.getStyleStrength)
+            ? factionShipStyles.getStyleStrength() : 1;
+    },
+
+    baseFactionRowProfile(silhouette, t, seedIndex) {
         const tt = Math.max(0, Math.min(1, t));
         if (silhouette === 'modular') {
             // Few, deep terraces — a blocky stepped tower, widest at the base.

@@ -282,7 +282,7 @@ extendClass(ShipAssetLoader, {
         // Modules use the hull's voxel size and lattice, not their own.
         this.withShipVoxelRaster(shipModel, x, y, scale, () => {
             (layout.modules || []).forEach((mod) => {
-                if (mod.integrate === 'replace') return;
+                if (mod.integrate === 'replace' || mod.kind !== 'weapon') return;
                 const mx = Math.round(x + mod.x * scale);
                 const my = Math.round(y + mod.y * scale);
                 const mw = Math.max(1, Math.round(mod.width * scale));
@@ -302,9 +302,8 @@ extendClass(ShipAssetLoader, {
             });
         });
 
-        if (!skipFx && renderOptions && renderOptions.showThrusterGlow === true) {
-            this.renderModularThrusterGlow(ctx, shipModel, x, y, scale);
-        }
+        // No modular thruster glow: drive modules are no longer drawn on the
+        // ship, so their glow floated as a stray bar below the hull.
 
         ctx.restore();
     },

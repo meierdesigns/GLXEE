@@ -244,8 +244,12 @@ extendClass(GalaxyMapManager, {
                 .map((k) => eco.sells[k] + ' ' + kindShort[k]).join(' · ');
             set('gmDiffLabel', 'Economy');
             set('gmDiff', eco.wealth + ' · ' + eco.stockValue.toLocaleString('en-US') + ' CR');
-            set('gmStagesLabel', 'Sells');
-            set('gmStages', sells || '—');
+            const cats = (post.categories || []).filter((c) => c !== 'resources')
+                .map((c) => c.toUpperCase()).join(' · ');
+            const known = profileManager.getActiveProfile && (profileManager.getActiveProfile().unlockedTraders || [])
+                .indexOf(post.id) !== -1;
+            set('gmStagesLabel', 'Trades');
+            set('gmStages', (cats || 'RESOURCES') + (sells && cats.indexOf('PARTS') !== -1 ? ' (' + sells + ')' : '') + (known ? ' ✓' : ''));
             set('gmEnemiesLabel', 'Seeks');
             set('gmEnemies', eco.seeks.map((id) => (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
                 ? economyConfig.getResourceLabel(id) : String(id).toUpperCase()).join(' · '));

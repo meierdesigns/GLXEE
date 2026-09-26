@@ -173,6 +173,11 @@ extendClass(BulletManager, {
             this.lastShotTime = currentTime;
 
             const cfg = Object.assign({}, weaponConfig);
+            // Mount strength: a nose weapon is one concentrated gun (+25%);
+            // a wing weapon is split across both wings and weaker: 45% per
+            // side (90% for the pair) — the nose gun always hits hardest.
+            const mountMul = slot.mount === 'wing' ? 0.45 : 1.25;
+            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
                 const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);

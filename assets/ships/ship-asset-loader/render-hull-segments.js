@@ -486,7 +486,7 @@ extendClass(ShipAssetLoader, {
             const sh = Math.max(1, renderSeg.height * scale);
 
             // Module replace: draw mount art stretched into the segment box
-            if (seg.replace && seg.replace.id) {
+            if (seg.replace && seg.replace.id && seg.replace.kind === 'weapon') {
                 const replaceModule = (layout.modules || []).find(
                     (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
                 );

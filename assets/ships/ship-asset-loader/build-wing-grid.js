@@ -14,6 +14,7 @@ extendClass(ShipAssetLoader, {
         // rail — so nothing needs cropping away.
         const variants = this.wingShapeVariants;
         const planform = (variants[shapeVariant || 0] || variants[0]).planform;
+        const k = this.factionStyleStrength();
         for (let c = 0; c < cols; c++) {
             const u = cols <= 1 ? 0 : c / (cols - 1);
             const bands = planform(u);
@@ -22,23 +23,34 @@ extendClass(ShipAssetLoader, {
                 let lead = lead0;
                 let trail = trail0;
                 if (silhouette === 'spikes') {
-                    // Blade tips: the outer span narrows to a sharp point.
-                    lead += 0.14 * u * u;
-                    trail -= 0.08 * u * u;
+                    // Blade tips: swept back and narrowing to a sharp point.
+                    lead += 0.1 * k * u * u;
+                    trail -= 0.02 * k * u * u;
+                    const sweep = 0.16 * k * u;
+                    lead += sweep;
+                    trail += sweep;
                 } else if (silhouette === 'scrap') {
                     // Welded-on salvage: ragged, uneven trailing edge.
                     const h = (Math.imul(c * 31 + 7, 2654435761) >>> 0) % 3;
-                    trail -= h * 0.05 * u;
+                    trail -= h * 0.05 * k * u;
                 } else if (silhouette === 'rings') {
-                    // Rounded pod-like tip.
-                    const round = Math.sqrt(Math.max(0, 1 - Math.pow(u, 4)));
-                    const mid = (lead + trail) / 2;
+                    // Rounded crescent: pod-like tip, curving forward.
+                    const round = Math.sqrt(Math.max(0, 1 - Math.pow(u, 4 / Math.max(0.5, k))));
+                    const mid = (lead + trail) / 2 - 0.1 * k * u * u;
                     const half = (trail - lead) / 2 * round;
                     lead = mid - half;
                     trail = mid + half;
                 } else if (silhouette === 'circuit') {
-                    // Clipped, squared-off tip.
-                    if (u > 0.88) trail = Math.min(trail, lead + 0.22);
+                    // Rectangular machined slab (no sweep) with square
+                    // notches cut into the trailing edge.
+                    const mix = Math.min(1, 0.45 * k);
+                    lead = lead * (1 - mix) + 0.2 * mix;
+                    trail = trail * (1 - mix) + 0.8 * mix;
+                    if (Math.floor(u * 6) % 2 === 1) trail = lead + (trail - lead) * 0.6;
+                } else if (silhouette === 'modular') {
+                    // Stepped terraces along the trailing edge — a blocky plate wing.
+                    const step = Math.floor(u * 3) / 3;
+                    trail -= step * 0.12 * k;
                 }
                 const r0 = Math.max(0, Math.round(lead * rows));
                 const r1 = Math.min(rows, Math.round(trail * rows));
@@ -49,7 +61,7 @@ extendClass(ShipAssetLoader, {
         // The root side joins the hull or its connection: leave it open so
         // no dark seam line runs across the joint (worst on a turned wing).
         this.outlineGridEdges(g, left ? 'right' : 'left');
-        this.applyFactionPlating(g, silhouette, left ? 1 : 2);
+        this.applyFactionPlating(g, silhouette, 1, left);
         // Accent trim follows the leading edge: the first interior voxel of
         // each column, so it always sits on the wing and never off it.
         for (let c = 0; c < cols; c++) {
@@ -173,6 +185,8 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, cols * 0.5, rows * 0.5, cols * 0.42, Math.max(1, rows * 0.34), 3);
             this.gridFillRect(g, cols * 0.12, rows * 0.74, cols * 0.22, Math.max(1, rows * 0.16), 1);
         }
+        // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },
 
@@ -249,6 +263,8 @@ extendClass(ShipAssetLoader, {
                 this.gridFillRect(g, cols * 0.6, r0, w, h, 3);
             }
         }
+        // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },
 });

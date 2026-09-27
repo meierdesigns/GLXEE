@@ -72,6 +72,8 @@ extendClass(GalaxyMapManager, {
             ? { kind: 'post', id: this.selectedPostId }
             : (this.selectedPlanetId ? { kind: 'planet', id: this.selectedPlanetId } : null);
         if (!current || !target || (current.kind === target.kind && current.id === target.id)) return '';
+        // No route to a planet the ship can't reach.
+        if (target.kind === 'planet' && !this.isUnlocked(target.id)) return '';
         const from = this.locationPoint(current);
         const to = this.locationPoint(target);
         if (!from || !to) return '';

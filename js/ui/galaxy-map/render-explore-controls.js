@@ -73,7 +73,8 @@ extendClass(GalaxyMapManager, {
             const y1 = ay + uy * inset;
             const x2 = bx - ux * inset;
             const y2 = by - uy * inset;
-            const lit = this.isUnlocked(edge[0]) || this.isUnlocked(edge[1]);
+            // Only paths between two reachable planets read as active.
+            const lit = this.isUnlocked(edge[0]) && this.isUnlocked(edge[1]);
             edgesHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="gm-edge ${lit ? 'lit' : 'dim'}"/>`;
         });
 
@@ -317,30 +318,51 @@ extendClass(GalaxyMapManager, {
         const svg = this.overlay.querySelector('.galaxy-map-svg');
         if (!svg) return;
         const apply = () => {
+            const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!cur) return;
             const html = this.renderMapSvg();
             const vb = /viewBox="([^"]+)"/.exec(html);
-            if (vb) svg.setAttribute('viewBox', vb[1]);
+            if (vb) cur.setAttribute('viewBox', vb[1]);
         };
+        // Zoom out below the snug fit (0.35) to see the surroundings, in up to 4x.
         svg.addEventListener('wheel', (e) => {
             e.preventDefault();
             const z = (this.mapZoom || 1) * (e.deltaY < 0 ? 1.15 : 1 / 1.15);
-            this.mapZoom = Math.min(4, Math.max(1, z));
-            if (this.mapZoom === 1) this.mapPan = null;
+            this.mapZoom = Math.min(4, Math.max(0.35, z));
             apply();
         }, { passive: false });
-        let drag = null;
+        // Drag pans at any zoom; a real drag swallows the click that follows
+        // so releasing over a planet doesn't select it.
         svg.addEventListener('pointerdown', (e) => {
-            if ((this.mapZoom || 1) <= 1 || e.button !== 0) return;
-            drag = { x: e.clientX, y: e.clientY, moved: false };
+            if (e.button !== 0) return;
+            this._mapDrag = { x: e.clientX, y: e.clientY, moved: false };
         });
+        svg.addEventListener('click', (e) => {
+            if (!this._mapDragSwallow) return;
+            this._mapDragSwallow = false;
+            e.stopPropagation();
+            e.preventDefault();
+        }, true);
+        svg.addEventListener('dblclick', (e) => {
+            if (e.target.closest('.gm-node, .gm-post-node')) return;
+            this.mapZoom = 1;
+            this.mapPan = null;
+            apply();
+        });
+        // The map SVG is re-rendered often: bind the window handlers once.
+        if (this._mapDragBound) return;
+        this._mapDragBound = true;
         window.addEventListener('pointermove', (e) => {
-            if (!drag || !svg.isConnected) return;
-            const vb = svg.viewBox.baseVal;
-            const rect = svg.getBoundingClientRect();
-            const scale = Math.max(vb.width / rect.width, vb.height / rect.height);
+            const drag = this._mapDrag;
+            const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!drag || !cur || !cur.isConnected) return;
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
             if (!drag.moved && Math.hypot(dx, dy) < 4) return;
             drag.moved = true;
+            cur.classList.add('is-panning');
+            const vb = cur.viewBox.baseVal;
+            const rect = cur.getBoundingClientRect();
+            const scale = Math.max(vb.width / rect.width, vb.height / rect.height);
             this.mapPan = this.mapPan || { x: 0, y: 0 };
             this.mapPan.x -= dx * scale;
             this.mapPan.y -= dy * scale;
@@ -348,12 +370,16 @@ extendClass(GalaxyMapManager, {
             drag.y = e.clientY;
             apply();
         });
-        window.addEventListener('pointerup', () => { drag = null; });
-        svg.addEventListener('dblclick', (e) => {
-            if (e.target.closest('.gm-node, .gm-post-node')) return;
-            this.mapZoom = 1;
-            this.mapPan = null;
-            apply();
+        window.addEventListener('pointerup', () => {
+            const drag = this._mapDrag;
+            this._mapDrag = null;
+            const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (cur) cur.classList.remove('is-panning');
+            if (drag && drag.moved) {
+                this._mapDragSwallow = true;
+                // Clear if no click follows (released outside the map).
+                setTimeout(() => { this._mapDragSwallow = false; }, 0);
+            }
         });
     },
 
@@ -475,6 +501,18 @@ extendClass(GalaxyMapManager, {
         this.bindMapZoom();
         if (this.selectedPostId) this.updateDetails();
 
+        // Jump to the station's galaxy travel (teleport) tab.
+        const teleportBtn = this.overlay.querySelector('#gmTeleport');
+        if (teleportBtn) {
+            teleportBtn.addEventListener('click', () => {
+                if (typeof homeStationUI === 'undefined') return;
+                homeStationUI.tab = 'travel';
+                homeStationUI.statusMsg = '';
+                homeStationUI._navLevel = 'tabs';
+                homeStationUI.persistTab();
+                homeStationUI.createUI();
+            });
+        }
         const exploreBtn = this.overlay.querySelector('#gmExplore');
         this.bindConfirmActions();
         if (exploreBtn) {

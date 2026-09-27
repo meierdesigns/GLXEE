@@ -41,6 +41,22 @@ extendClass(AbilityConfigManager, {
             if (!raw) return;
             const parsed = JSON.parse(raw);
             const defaults = this.createDefaults();
+            // Renamed defaults: a saved copy of the OLD default text must not
+            // override the new one (player-edited text is kept).
+            const OLD_DEFAULTS = {
+                player_control: {
+                    name: 'Player Control',
+                    description: 'Direct player control with enhanced responsiveness',
+                    uiDescription: 'Enhanced player control and responsiveness'
+                }
+            };
+            Object.keys(OLD_DEFAULTS).forEach((id) => {
+                const saved = parsed[id];
+                if (!saved) return;
+                Object.keys(OLD_DEFAULTS[id]).forEach((field) => {
+                    if (saved[field] === OLD_DEFAULTS[id][field]) delete saved[field];
+                });
+            });
             Object.keys(defaults).forEach((id) => {
                 if (parsed[id]) {
                     this.configs[id] = this.makeAbility(Object.assign({}, defaults[id], parsed[id], { id: id }));

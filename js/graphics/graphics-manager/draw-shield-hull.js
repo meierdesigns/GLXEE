@@ -32,7 +32,12 @@ extendClass(GraphicsManager, {
         const padY = gap + thick + 1 + overY + bleed;
         const w = ew + padX * 2;
         const h = eh + padY * 2;
-        const modelId = (shipModel && (shipModel.id || shipModel.name)) || 'ship';
+        // Faction enemies are drawn from the entity's faction/class, not from
+        // the legacy model: key the cache on that so each keeps its own rim.
+        const factionSig = flip && entity.faction
+            ? '|' + entity.faction + ':' + (entity.enemyClass || '') + ':' + (entity.tier || entity.level || '') + ':' + (entity.type || '')
+            : '';
+        const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
         const cacheKey = modelId + '|' + ew + 'x' + eh + '|g' + gap + 't' + thick
             + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig;
@@ -46,7 +51,13 @@ extendClass(GraphicsManager, {
             if (!octx) return;
             octx.imageSmoothingEnabled = false;
 
-            const ghost = { x: padX, y: padY, width: entity.width, height: entity.height };
+            // Carry faction / class / tier so the baked silhouette is the ship
+            // actually drawn (without them every enemy baked as the default hull).
+            const ghost = {
+                x: padX, y: padY, width: entity.width, height: entity.height,
+                faction: entity.faction, enemyClass: entity.enemyClass,
+                tier: entity.tier, level: entity.level, type: entity.type
+            };
             const prevPlayer = this.currentPlayerModel;
             const prevEnemy = this.currentEnemyModel;
             const prevBake = this._shieldSilhouetteBake;

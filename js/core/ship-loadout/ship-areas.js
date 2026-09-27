@@ -169,13 +169,6 @@ extendClass(ShipLoadoutManager, {
 (function wrapMirroredWingMoves() {
     const proto = ShipLoadoutManager.prototype;
 
-    /** Partner of a wing weapon slot index: 1↔2, 3↔4, … (0 is the nose). */
-    proto.mirrorWeaponSlotIndex = function (index) {
-        const i = Number(index) || 0;
-        if (i <= 0) return -1;
-        return i % 2 === 1 ? i + 1 : i - 1;
-    };
-
     const baseOffset = proto.setModuleOffset;
     proto.setModuleOffset = function (shipId, kind, moduleId, offsetX, offsetY, face) {
         const res = baseOffset.call(this, shipId, kind, moduleId, offsetX, offsetY, face);
@@ -196,16 +189,6 @@ extendClass(ShipLoadoutManager, {
         return baseOffset.call(this, shipId, kind, other.id, -(Number(offsetX) || 0), offsetY, other.face);
     };
 
-    const baseAnchor = proto.setEmptySlotAnchor;
-    proto.setEmptySlotAnchor = function (shipId, kind, index, nx, ny) {
-        const res = baseAnchor.call(this, shipId, kind, index, nx, ny);
-        if (kind !== 'weapon') return res;
-        const partner = this.mirrorWeaponSlotIndex(index);
-        if (partner < 0) return res;
-        const L = this.getLoadout(shipId);
-        // An equipped partner keeps its module offset; only empty slots mirror here.
-        if ((L.weapons || [])[partner]) return res;
-        return baseAnchor.call(this, shipId, kind, partner,
-            nx == null ? null : 1 - Number(nx), ny == null ? null : ny);
-    };
+    // Empty wing slots need no partner handling: each wing slot is one
+    // mirrored pair and buildHangarSlots derives its right-wing marker.
 })();

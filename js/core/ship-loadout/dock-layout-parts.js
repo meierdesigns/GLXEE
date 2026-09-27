@@ -56,7 +56,14 @@ extendClass(ShipLoadoutManager, {
                 part.face
             );
             part.x = docked.x;
-            if (docked.y != null) part.y = docked.y;
+            // Wing mounts keep their stacked row (one per wing pair); docking
+            // them to the wing's vertical centre put every pair on top of
+            // each other, so each wing showed only one weapon.
+            const onWing = part.face === 'left' || part.face === 'right';
+            if (docked.y != null && !onWing) part.y = docked.y;
+            if (onWing) {
+                part.y = Math.max(segment.y, Math.min(segment.y + segment.height - part.height, part.y));
+            }
             // Defense / center mounts stay on the hull midline.
             if (part.kind === 'defense' || part.face === 'center') {
                 part.x = segment.x + Math.floor((segment.width - part.width) / 2);
@@ -213,6 +220,63 @@ extendClass(ShipLoadoutManager, {
             syncedWings.forEach((w) => wingPanels.push(w));
         }
 
+        // Nose/core weapon mounts: single on the centreline or a mirrored
+        // pair, placed from the final area frame (same formula as the
+        // hangar marker, see weaponBodySpot).
+        parts.forEach((p) => {
+            if (!p.bodyMount || !this.getBodyWeaponMount) return;
+            const m = this.getBodyWeaponMount(L, p.slotIndex);
+            const spot = m && this.weaponBodySpot(segments, m);
+            if (!spot) return;
+            const cx = p.side === 'right' ? spot.mx : spot.x;
+            p.x = Math.round(cx - p.width / 2);
+            p.y = Math.round(spot.y - p.height / 2);
+        });
+
+        // Each wing weapon slot is one mirrored pair (both halves carry the
+        // slot's index): the right wing always shows the mirror of its left
+        // half, so stored per-side offsets can't make the wings drift apart.
+        const segL = segments.find((sg) => sg.id === 'wingLeft');
+        const segR = segments.find((sg) => sg.id === 'wingRight');
+        if (segL && segR) {
+            const wingWeapons = parts.filter((p) => p.kind === 'weapon' && p.mountSegment === 'wing');
+            // Every wing slot owns a fixed row (same rule as the hangar's
+            // empty-slot markers), so empty and filled slots never overlap.
+            const slotList = (L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [];
+            const rows = Math.max(1, slotList.length - 1, Number(L.wingSlotRows) || 0);
+            const offs = (L.moduleOffsets && L.moduleOffsets.weapon) || {};
+            wingWeapons.filter((p) => p.face === 'left').forEach((l) => {
+                const wm = this.getWingWeaponMount ? this.getWingWeaponMount(L, l.slotIndex) : null;
+                if (!wm && !(l.slotIndex >= 1)) return;
+                if (wm) {
+                    // Slot moved by the player: its stored spot on the wing.
+                    const sx = segL.x + segL.width * wm.fx;
+                    const sy = segL.y + segL.height * wm.ny;
+                    l.x = Math.round(Math.max(segL.x, Math.min(segL.x + segL.width - l.width, sx - l.width / 2)));
+                    l.y = Math.round(Math.max(segL.y, Math.min(segL.y + segL.height - l.height, sy - l.height / 2)));
+                    return;
+                }
+                if (offs[this.moduleOffsetKey(l.id, l.face)] || offs[l.id]) return;
+                const cy = segL.y + segL.height * (l.slotIndex - 0.5) / rows;
+                l.y = Math.round(Math.max(segL.y, Math.min(segL.y + segL.height - l.height, cy - l.height / 2)));
+                // About a third out from the hull root (the hangar slot spot,
+                // see buildHangarSlots), so the gun sits on its socket.
+                const cx = segL.x + segL.width * (1 - 0.36);
+                l.x = Math.round(Math.max(segL.x, Math.min(segL.x + segL.width - l.width, cx - l.width / 2)));
+            });
+            wingWeapons.filter((p) => p.face === 'left').forEach((l) => {
+                const r = wingWeapons.find((p) => p.face === 'right' && p.slotIndex === l.slotIndex && !p._mirrored)
+                    || wingWeapons.find((p) => p.face === 'right' && p.id === l.id && !p._mirrored);
+                if (!r) return;
+                r._mirrored = true;
+                r.width = l.width;
+                r.height = l.height;
+                r.x = segR.x + (segL.x + segL.width) - (l.x + l.width);
+                r.y = segR.y + (l.y - segL.y);
+            });
+            wingWeapons.forEach((p) => { delete p._mirrored; });
+        }
+
         // Wing mounts swing with a rotated wing (same root pivot as the art).
         parts.forEach((p) => {
             if (p.mountSegment !== 'wing' || (p.face !== 'left' && p.face !== 'right')) return;
@@ -246,6 +310,10 @@ extendClass(ShipLoadoutManager, {
         const modules = parts.map((p) => ({
             id: p.id,
             kind: p.kind,
+            slotIndex: p.slotIndex,
+            split: !!p.split,
+            side: p.side || null,
+            bodyMount: !!p.bodyMount,
             role: p.role || this.getModuleVisualRole(p.kind, p.id),
             x: p.x + ox,
             y: p.y + oy,
@@ -307,6 +375,7 @@ extendClass(ShipLoadoutManager, {
                 height: wing.height
             })),
             modules: modules,
+            mountSizes: ctx.mountSizes || null,
             loadout: L,
             moduleCount: this.moduleCount(L),
             appearance: appearance

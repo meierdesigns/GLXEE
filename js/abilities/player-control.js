@@ -1,9 +1,10 @@
 "use strict";
 
-// Player Control Ability - Starfighter
+// Flight Assist (id: player_control) - Starfighter
+// Sharper steering: more sensitive, more precise, no input lag.
 export const playerControlAbility = {
-    name: "Player Control",
-    description: "Direct player control with enhanced responsiveness",
+    name: "Flight Assist",
+    description: "Flight computer that sharpens steering response",
     type: "passive",
     tier: 1,
     
@@ -38,6 +39,6 @@ export const playerControlAbility = {
     },
     
     // Description for UI
-    uiDescription: "Enhanced player control and responsiveness",
-    detailedDescription: "Provides perfect player control with enhanced responsiveness and precision. This ability ensures the ship responds exactly to player input with maximum accuracy."
+    uiDescription: "+20% steering sensitivity, +15% precision",
+    detailedDescription: "A flight computer that removes input lag and sharpens steering: controls are 20% more sensitive and 15% more precise."
 };

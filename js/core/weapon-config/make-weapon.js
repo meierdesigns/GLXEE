@@ -74,6 +74,24 @@ extendClass(WeaponConfigManager, {
         return this.configs[key] || this.configs.laser;
     },
 
+    /**
+     * Ship class → weapon families it is built around. Weapons in the
+     * list deal +20% damage on that hull; everything else is unchanged.
+     */
+    getShipClassWeaponAffinity(modelClass) {
+        return ({
+            starfighter: ['laser', 'laser_twin', 'burst'],
+            interceptor: ['rapid', 'spread', 'ion', 'wave'],
+            heavy_fighter: ['plasma', 'missile', 'railgun'],
+            assault: ['pierce', 'nova', 'spike_burst', 'claw_beam']
+        })[String(modelClass || '').toLowerCase()] || [];
+    },
+
+    /** Damage multiplier for a weapon fired from a hull of this class. */
+    getShipClassWeaponMul(modelClass, weaponId) {
+        return this.getShipClassWeaponAffinity(modelClass).indexOf(String(weaponId || '')) !== -1 ? 1.2 : 1;
+    },
+
     getDefaultsForShip(weaponId) {
         const w = this.getWeapon(weaponId);
         const cfg = {

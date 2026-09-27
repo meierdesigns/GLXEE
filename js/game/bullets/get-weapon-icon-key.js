@@ -177,7 +177,10 @@ extendClass(BulletManager, {
             // a wing weapon is split across both wings and weaker: 45% per
             // side (90% for the pair) — the nose gun always hits hardest.
             const mountMul = slot.mount === 'wing' ? 0.45 : 1.25;
-            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul));
+            // Hull class: weapons the ship type is built around hit harder.
+            const classMul = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getShipClassWeaponMul
+                ? weaponConfigManager.getShipClassWeaponMul(this.currentShipModel.modelClass, slot.id) : 1;
+            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
                 const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);

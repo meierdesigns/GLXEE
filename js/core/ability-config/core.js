@@ -31,13 +31,15 @@ class AbilityConfigManager {
         return {
             player_control: this.makeAbility({
                 id: 'player_control',
-                name: 'Player Control',
-                description: 'Direct player control with enhanced responsiveness',
+                // Id kept for saves; the ship is always player-flown, so the
+                // name says what it adds: sharper steering.
+                name: 'Flight Assist',
+                description: 'Flight computer that sharpens steering response',
                 icon: 'ability_player_control',
                 cluster: 'core',
                 type: 'passive',
                 tier: 1,
-                uiDescription: 'Enhanced player control and responsiveness'
+                uiDescription: '+20% steering sensitivity, +15% precision'
             }),
             weapon_systems: this.makeAbility({
                 id: 'weapon_systems',

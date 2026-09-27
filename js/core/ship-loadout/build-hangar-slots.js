@@ -3,7 +3,8 @@
 // ShipLoadoutManager methods, split from ship-loadout.js.
 // Which hull areas each slot type may sit in.
 const SLOT_AREAS = {
-    weapon: ['front', 'wingLeft', 'wingRight'],
+    // Weapons: nose and core (single on the centreline or split), wings (split).
+    weapon: ['front', 'center', 'wingLeft', 'wingRight'],
     defense: ['center'],
     energy: ['center'],
     ability: ['back', 'center']
@@ -61,8 +62,11 @@ extendClass(ShipLoadoutManager, {
      */
     buildHangarSlots(shipId, modelClass, model) {
         const cls = modelClass || this.resolveModelClass(shipId);
-        const loadout = this.getLoadout(shipId);
         const caps = this.getSlotCaps(shipId, cls);
+        // Wing rows follow the ship's wing slot count, so the layout puts each
+        // wing weapon on the same row as its hangar marker.
+        const loadout = Object.assign({}, this.getLoadout(shipId),
+            { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) });
         const core = this.getCoreSize(cls, model || null);
         const layout = this.buildLayout(core.width, core.height, loadout);
         const lw = Math.max(1, layout.width || 1);
@@ -124,20 +128,51 @@ extendClass(ShipLoadoutManager, {
                     weaponSpotFor[i] = { nx: weaponSpotFor[0].nx, ny: weaponSpotFor[0].ny + i * 0.05 };
                     continue;
                 }
-                // About a third out from the hull root, where the wing is broadest.
-                const fromRoot = 0.36;
-                const row = i - 1;
+                // About a third out from the hull root, where the wing is
+                // broadest — or the spot the player moved this slot to.
+                const wm = this.getWingWeaponMount ? this.getWingWeaponMount(loadout, i) : null;
+                const fx = wm ? wm.fx : 1 - 0.36;
+                const fy = wm ? wm.ny : (i - 0.5) / pairs;
                 // Follow the wing when it is rotated.
                 const pl = this.rotateOnWing(wingL, loadout.wingRotation,
-                    wingL.x + wingL.width * (1 - fromRoot), wingL.y + wingL.height * (row + 0.5) / pairs);
+                    wingL.x + wingL.width * fx, wingL.y + wingL.height * fy);
                 const pr = this.rotateOnWing(wingR, loadout.wingRotation,
-                    wingR.x + wingR.width * fromRoot, wingR.y + wingR.height * (row + 0.5) / pairs);
+                    wingR.x + wingR.width * (1 - fx), wingR.y + wingR.height * fy);
                 weaponSpotFor[i] = {
                     nx: pl.x / lw,
                     ny: pl.y / lh,
                     mirrorNx: pr.x / lw,
                     mirrorNy: pr.y / lh,
-                    area: 'wingLeft'
+                    area: 'wingLeft',
+                    stored: !!wm
+                };
+            }
+            // Nose slot moved onto the wings: a wing pair at its stored spot.
+            const wm0 = this.getWingWeaponMount ? this.getWingWeaponMount(loadout, 0) : null;
+            if (wm0 && wingL && wingR) {
+                const pl = this.rotateOnWing(wingL, loadout.wingRotation,
+                    wingL.x + wingL.width * wm0.fx, wingL.y + wingL.height * wm0.ny);
+                const pr = this.rotateOnWing(wingR, loadout.wingRotation,
+                    wingR.x + wingR.width * (1 - wm0.fx), wingR.y + wingR.height * wm0.ny);
+                weaponSpotFor[0] = {
+                    nx: pl.x / lw, ny: pl.y / lh, mirrorNx: pr.x / lw, mirrorNy: pr.y / lh,
+                    area: 'wingLeft', stored: true
+                };
+            }
+            // Nose/core mounts: single on the centreline or a mirrored pair
+            // (same spot the layout puts the weapon, see weaponBodySpot).
+            for (let i = 0; i < cap; i++) {
+                const m = this.getBodyWeaponMount ? this.getBodyWeaponMount(loadout, i) : null;
+                const b = m ? this.weaponBodySpot(segs, m) : null;
+                if (!b) continue;
+                weaponSpotFor[i] = {
+                    nx: b.x / lw,
+                    ny: b.y / lh,
+                    mirrorNx: b.split ? b.mx / lw : null,
+                    mirrorNy: b.split ? b.my / lh : null,
+                    area: b.area,
+                    split: b.split,
+                    body: true
                 };
             }
         })();
@@ -157,7 +192,10 @@ extendClass(ShipLoadoutManager, {
                 const id = equipped[i] || null;
                 let mod = null;
                 if (id) {
-                    const matchIdx = placed.findIndex((m) => m && m.id === id);
+                    // Same weapon in nose and wing: match by slot first.
+                    let matchIdx = placed.findIndex((m) => m && m.id === id && m.slotIndex === i
+                        && (kind !== 'weapon' || m.face !== 'right'));
+                    if (matchIdx === -1) matchIdx = placed.findIndex((m) => m && m.id === id);
                     if (matchIdx !== -1) {
                         mod = placed[matchIdx];
                         placed.splice(matchIdx, 1);
@@ -169,7 +207,7 @@ extendClass(ShipLoadoutManager, {
                 let spot = kind === 'weapon' ? weaponSpotFor[i] : null;
                 // An empty weapon slot can be dragged to a custom spot; wing
                 // slots keep their mirror marker on the other wing.
-                const weaponAnchor = kind === 'weapon' && !id && loadout.slotAnchors
+                const weaponAnchor = kind === 'weapon' && !id && !(spot && (spot.body || spot.stored)) && loadout.slotAnchors
                     && loadout.slotAnchors.weapon && loadout.slotAnchors.weapon[String(i)];
                 if (weaponAnchor) {
                     const c = this.clampToSlotArea('weapon', weaponAnchor.nx, weaponAnchor.ny, layout);
@@ -183,7 +221,19 @@ extendClass(ShipLoadoutManager, {
                         mirrorNy: onWing ? c.ny : null
                     };
                 }
-                if (spot) {
+                if (spot && mod && kind === 'weapon') {
+                    // Equipped: the marker sits on the gun itself (and its
+                    // mirror on the other half), not on the planned spot.
+                    nx = (mod.x + (mod.width || 0) * 0.5) / lw;
+                    ny = (mod.y + (mod.height || 0) * 0.5) / lh;
+                    side = 'left';
+                    const twin = (layout.modules || []).find((m) => m !== mod && m.kind === 'weapon'
+                        && m.id === mod.id && m.slotIndex === mod.slotIndex);
+                    spot = Object.assign({}, spot, twin ? {
+                        mirrorNx: (twin.x + twin.width * 0.5) / lw,
+                        mirrorNy: (twin.y + twin.height * 0.5) / lh
+                    } : { mirrorNx: null, mirrorNy: null });
+                } else if (spot) {
                     nx = spot.nx;
                     ny = spot.ny;
                     side = 'left';
@@ -219,7 +269,12 @@ extendClass(ShipLoadoutManager, {
                 slots.push({
                     mirrorNx: spot && spot.mirrorNx != null ? spot.mirrorNx : null,
                     mirrorNy: spot && spot.mirrorNy != null ? spot.mirrorNy : null,
-                    mount: kind === 'weapon' ? (i === 0 ? 'front' : 'wing') : null,
+                    mount: kind === 'weapon'
+                        ? (spot && spot.body ? spot.area
+                            : (spot && spot.area === 'wingLeft' ? 'wing' : (i === 0 ? 'front' : 'wing'))) : null,
+                    // Split mounts (wing pairs, nose/core pairs) are half size.
+                    split: kind === 'weapon' && (spot && spot.body ? !!spot.split
+                        : (i > 0 || (spot && spot.area === 'wingLeft'))),
                     area: spot ? (spot.area || (i === 0 ? 'front' : 'wingLeft')) : null,
                     kind: kind,
                     key: key,

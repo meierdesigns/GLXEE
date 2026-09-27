@@ -268,7 +268,8 @@ extendClass(ShipLoadoutManager, {
             moduleOffset, frontH, backH, centerH, wingSpan, wingH, scaledFrontW,
             scaledCenterW, scaledBackW, scaledFrontX, scaledCenterX, scaledBackX, armorIds,
             shieldIds, drives, systemPods, zoneReplace, centerInserts, expandFront,
-            expandBack, insertH, totalCoreH, baseCoreH, hullBottom, frontY, centerY, backY, wingY, wingShiftX
+            expandBack, insertH, totalCoreH, baseCoreH, hullBottom, frontY, centerY, backY, wingY, wingShiftX,
+            segmentScale
         };
     },
 });

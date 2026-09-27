@@ -85,8 +85,10 @@ extendClass(ShipLoadoutManager, {
             ? Object.assign(this.defaultLoadoutFromShip(id, model.faction), { faction: model.faction })
             : this.getLoadout(id);
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
-        const layout = this.buildLayout(coreSize.width, coreSize.height, loadout);
         const caps = this.getSlotCaps(id, model.modelClass);
+        // Same wing rows as the hangar markers (see buildHangarSlots).
+        const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign({}, loadout,
+            { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const hullBonus = this.getFrameHullBonus(id);
 
         model.coreWidth = coreSize.width;

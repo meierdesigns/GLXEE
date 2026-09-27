@@ -129,7 +129,9 @@ class ProfileManager {
         }
         (profile.ownedShipIds || []).forEach((shipId) => {
             if (!profile.shipLoadouts[shipId] && typeof shipLoadoutManager !== 'undefined') {
-                profile.shipLoadouts[shipId] = shipLoadoutManager.defaultLoadoutFromShip(shipId);
+                // Pass the profile's own faction: a new profile isn't active yet
+                // here, so the active-pilot fallback would give the wrong weapon.
+                profile.shipLoadouts[shipId] = shipLoadoutManager.defaultLoadoutFromShip(shipId, profile.faction);
             }
         });
         if (!profile.homeStation || typeof profile.homeStation !== 'object') {

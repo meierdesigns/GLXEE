@@ -364,17 +364,35 @@ extendClass(ShipAssetLoader, {
         const colors = [null];
         const colorIndex = new Map();
         const grid = [];
+        // Weapons keep their template's proportions: the art is fitted and
+        // centred in the frame instead of stretched to the frame's aspect.
+        let fitRows = rows;
+        let fitCols = cols;
+        if (kind === 'weapon') {
+            const aspect = tCols / tRows;
+            if (cols / rows > aspect) fitCols = Math.max(1, Math.min(cols, Math.round(rows * aspect)));
+            else fitRows = Math.max(1, Math.min(rows, Math.round(cols / aspect)));
+        }
+        const offR = Math.floor((rows - fitRows) / 2);
+        const offC = Math.floor((cols - fitCols) / 2);
         for (let row = 0; row < rows; row++) {
             const line = new Array(cols).fill(0);
-            const sy = Math.min(tRows - 1, Math.floor(((row + 0.5) * tRows) / rows));
+            const r = row - offR;
+            if (r < 0 || r >= fitRows) {
+                grid.push(line);
+                continue;
+            }
+            const sy = Math.min(tRows - 1, Math.floor(((r + 0.5) * tRows) / fitRows));
             for (let col = 0; col < cols; col++) {
-                if (!factionWeapon && !this.isFactionModuleCell(col, row, cols, rows, factionStyle)) continue;
+                const c = col - offC;
+                if (c < 0 || c >= fitCols) continue;
+                if (!factionWeapon && !this.isFactionModuleCell(c, r, fitCols, fitRows, factionStyle)) continue;
                 // Sample the right half as the mirror of the left: plain
                 // floor() lands on different template columns per side
                 // whenever cols is not a multiple of the template width.
-                const lc = col < cols / 2 ? col : cols - 1 - col;
-                const lsx = Math.min(tCols - 1, Math.floor(((lc + 0.5) * tCols) / cols));
-                const sx = col < cols / 2 ? lsx : tCols - 1 - lsx;
+                const lc = c < fitCols / 2 ? c : fitCols - 1 - c;
+                const lsx = Math.min(tCols - 1, Math.floor(((lc + 0.5) * tCols) / fitCols));
+                const sx = c < fitCols / 2 ? lsx : tCols - 1 - lsx;
                 const idx = template[sy][sx];
                 if (!idx) continue;
                 let color = this.getFactionModuleShade(idx, factionStyle)

@@ -8,10 +8,12 @@ class UIAppearanceManager {
     constructor() {
         this.storageKey = 'vf_uiAppearance';
         this.borderWeights = {
-            THIN: { width: '1px', thin: '1px', thick: '2px' },
-            NORMAL: { width: '2px', thin: '1px', thick: '3px' },
-            THICK: { width: '3px', thin: '2px', thick: '4px' },
-            HEAVY: { width: '4px', thin: '2px', thick: '5px' }
+            // Pixel look: every line sits on the 2px grid (even widths, never
+            // a hairline) so edges stay crisp instead of smearing.
+            THIN: { width: '2px', thin: '2px', thick: '2px' },
+            NORMAL: { width: '2px', thin: '2px', thick: '4px' },
+            THICK: { width: '4px', thin: '2px', thick: '4px' },
+            HEAVY: { width: '4px', thin: '4px', thick: '6px' }
         };
         this.indicatorWeights = {
             '1': '1px',

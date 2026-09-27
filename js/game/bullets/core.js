@@ -230,8 +230,10 @@ class BulletManager {
         const scaleY = playerPosition.height / lh;
         return weaponModules.map((m) => ({
             id: m.id,
-            mount: m.mountSegment === 'wing' ? 'wing' : 'front',
-            key: String(m.id || '') + '@' + String(m.face || 'up'),
+            // Split halves (wings, or a nose/core pair) are the weaker mount.
+            mount: (m.mountSegment === 'wing' || m.split) ? 'wing' : 'front',
+            key: String(m.id || '') + '@' + String(m.face || 'up')
+                + (m.slotIndex != null ? '#' + m.slotIndex : '') + (m.side ? ':' + m.side : ''),
             position: {
                 x: playerPosition.x + m.x * scaleX,
                 y: playerPosition.y + m.y * scaleY,

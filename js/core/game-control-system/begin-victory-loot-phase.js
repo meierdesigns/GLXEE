@@ -35,6 +35,12 @@ extendClass(GameControlSystem, {
                     || (currentLevel.isBoss ? 'boss' : String(currentLevel.stageIndex || 1));
                 if (planetId) {
                     profileManager.markStageCleared(planetId, stageKey);
+                    // Active mission on this planet: pay its bounty.
+                    const paid = profileManager.completeMissionFor
+                        ? profileManager.completeMissionFor(planetId) : null;
+                    if (paid && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                        levelInfoManager.showLootNotice('MISSION COMPLETE — BOUNTY PAID');
+                    }
                     if (profileManager.discover) profileManager.discover('planets', planetId);
                     this._victoryStageMarked = true;
                     profileManager.save();

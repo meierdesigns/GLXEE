@@ -119,38 +119,35 @@ class ComponentTree {
     }
 
     /**
-     * Horizontal style picker: ‹ / › step to the neighbouring style, and the
-     * strip in between shows every style as a thumbnail. Each control carries
-     * the same data attributes as the old text buttons, so the existing
-     * click handlers apply the choice unchanged. Thumbnails are canvases
-     * painted after render (see renderStyleThumbs).
+     * Style picker as a dropdown: the closed control shows the active style
+     * as a large thumbnail; opening it lists every unlocked style with its
+     * thumbnail and name. Options carry the same data attributes as before,
+     * so the existing click handlers apply the choice unchanged (the tree is
+     * rebuilt afterwards, which closes the dropdown). Thumbnails are
+     * canvases painted after render (see renderStyleThumbs).
      */
     renderStyleCarousel(allOptions) {
         // Only unlocked styles are offered; buying more happens in the shop.
         const options = allOptions.filter((opt) => !opt.locked);
         if (!options.length) return '';
         const activeIndex = Math.max(0, options.findIndex((opt) => opt.active));
-        // ‹ / › step to the nearest unlocked neighbour; locked styles are
-        // shown (so players see what the shop offers) but not selectable.
-        const step = (dir) => {
-            for (let i = 1; i < options.length; i++) {
-                const opt = options[(activeIndex + dir * i + options.length * i) % options.length];
-                if (!opt.locked) return opt;
-            }
-            return options[activeIndex];
-        };
-        const prev = step(-1);
-        const next = step(1);
-        return `<div class="hs-style-carousel">
-                <button type="button" class="hs-style-carousel-step" ${prev.attrs} aria-label="Previous style">‹</button>
-                <div class="hs-style-carousel-track">
-                    ${options.map((opt) => `<button type="button" class="hs-style-thumb${opt.active ? ' is-active' : ''}${opt.locked ? ' is-locked' : ''}" ${opt.locked ? 'disabled' : opt.attrs} title="${opt.label}${opt.locked ? ' · LOCKED (SHOP → STYLES)' : ''}" aria-label="${opt.label}${opt.locked ? ' (locked)' : ''}" aria-pressed="${!!opt.active}">
-                        <canvas width="48" height="36" ${opt.thumb}></canvas>
+        const active = options[activeIndex];
+        return `<details class="hs-style-dropdown">
+                <summary class="hs-style-dropdown-current" title="${active.label}">
+                    <span class="hs-style-dropdown-thumb"><canvas width="96" height="72" ${active.thumb}></canvas></span>
+                    <span class="hs-style-dropdown-text">
+                        <strong>${active.label}</strong>
+                        <small>${activeIndex + 1}/${options.length}</small>
+                    </span>
+                    <span class="hs-style-dropdown-caret" aria-hidden="true">▾</span>
+                </summary>
+                <div class="hs-style-dropdown-list" role="listbox">
+                    ${options.map((opt) => `<button type="button" class="hs-style-option${opt.active ? ' is-active' : ''}" ${opt.attrs} role="option" aria-selected="${!!opt.active}" title="${opt.label}">
+                        <span class="hs-style-dropdown-thumb"><canvas width="96" height="72" ${opt.thumb}></canvas></span>
+                        <span class="hs-style-option-label">${opt.label}</span>
                     </button>`).join('')}
                 </div>
-                <button type="button" class="hs-style-carousel-step" ${next.attrs} aria-label="Next style">›</button>
-                <span class="hs-style-carousel-count">${activeIndex + 1}/${options.length}</span>
-            </div>`;
+            </details>`;
     }
 
     /**
@@ -178,7 +175,7 @@ class ComponentTree {
                         active: skin.active,
                         locked: skin.locked,
                         label: skin.label,
-                        attrs: `data-tree-skin-set="${kind}" data-slot-index="${slotIndex}" data-mod-face="${slot.face || ''}" data-skin-id="${skin.id}"`,
+                        attrs: `data-tree-skin-set="${kind}" data-slot-index="${slotIndex}" data-mod-id="${equipped}" data-mod-face="${slot.face || ''}" data-skin-id="${skin.id}"`,
                         thumb: `data-thumb="skin" data-thumb-kind="${kind}" data-thumb-module="${equipped}" data-thumb-skin="${skin.id}" data-thumb-face="${slot.face || ''}"`
                     })))}
                 </div>`

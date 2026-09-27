@@ -119,7 +119,16 @@ extendClass(HomeStationUI, {
     },
 
     hangarModuleLabel(id) {
-        return String(id || 'EMPTY').replace(/_/g, ' ').toUpperCase();
+        const key = String(id || '');
+        // Configured display name (read without creating entries), else the id.
+        const cfg = (typeof abilityConfigManager !== 'undefined' && abilityConfigManager.configs
+                && abilityConfigManager.configs[key])
+            || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.configs
+                && weaponConfigManager.configs[key]);
+        if (cfg && cfg.name && String(cfg.name).toUpperCase() !== key.toUpperCase()) {
+            return String(cfg.name).toUpperCase();
+        }
+        return String(key || 'EMPTY').replace(/_/g, ' ').toUpperCase();
     },
 
     /**
@@ -211,6 +220,7 @@ extendClass(HomeStationUI, {
             `<span class="hs-hangar-slot-caret">▾</span>` +
             `</button>` +
             `<div class="hs-hangar-slot-menu" role="listbox">` +
+            (this.renderSlotUpgradeRow ? this.renderSlotUpgradeRow(kind, slot.index) : '') +
             `<label class="hs-hangar-slot-select-wrap">` +
             `<select class="hs-hangar-slot-select" data-hangar-slot-select="${kind}" data-slot-index="${slot.index}" aria-label="${slot.label}">` +
             options.join('') +

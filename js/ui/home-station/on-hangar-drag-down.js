@@ -38,7 +38,9 @@ extendClass(HomeStationUI, {
         // An empty slot near the pointer wins over the part underneath it:
         // pressing just beside its small marker must move the slot, not pull
         // out the installed part it happens to sit on.
-        const emptyPin = this.hangarEmptyPinNear(e.clientX, e.clientY, 18);
+        // Same resolver as the hover, so the click grabs what is highlighted.
+        const target = this.hangarPointerTarget(h, e);
+        const emptyPin = target.type === 'slot' ? target.pin : null;
         if (emptyPin) {
             emptyPin.dispatchEvent(new PointerEvent('pointerdown', {
                 clientX: e.clientX,
@@ -54,7 +56,7 @@ extendClass(HomeStationUI, {
             e.preventDefault();
             return;
         }
-        const grabModule = this.hangarNearestModuleAt(h, e);
+        const grabModule = target.type === 'module' ? target.module : null;
         if (grabModule && this.startHangarModuleGrab(grabModule, e)) {
             e.preventDefault();
             return;

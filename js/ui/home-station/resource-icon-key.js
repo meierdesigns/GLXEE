@@ -21,7 +21,76 @@ extendClass(HomeStationUI, {
             `</h3>`;
     },
 
+    /** The MENU_AREAS entry that holds a tab, or null. */
+    getTabArea(tabId) {
+        if (typeof MENU_AREAS === 'undefined') return null;
+        return MENU_AREAS.find((area) => area.tabs.indexOf(tabId) !== -1) || null;
+    },
+
     renderTabs() {
+        if (typeof MENU_AREAS !== 'undefined') return this.renderAreaTabs();
+        return this.renderOrderedTabs();
+    },
+
+    /** Coarse area buttons; the active area expands into its icon tabs. */
+    renderAreaTabs() {
+        const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
+        const activeArea = this.getTabArea(this.tab);
+        if (!this._areaLastTab) this._areaLastTab = {};
+        if (activeArea) this._areaLastTab[activeArea.id] = this.tab;
+        // The header is rebuilt on every switch, so CSS transitions can't run:
+        // mark what just changed and let keyframes animate it (read again by
+        // renderAreaSubnav, which renders right after this).
+        const prev = this._navAnimPrev || null;
+        const areaIdx = MENU_AREAS.indexOf(activeArea);
+        const tabIdx = activeArea ? activeArea.tabs.indexOf(this.tab) : -1;
+        this._navAnim = {
+            area: !!prev && prev.area !== areaIdx,
+            tab: !!prev && prev.tab !== this.tab,
+            dir: !prev ? 0 : (prev.area !== areaIdx ? Math.sign(areaIdx - prev.area) : Math.sign(tabIdx - prev.tabIdx))
+        };
+        this._navAnimPrev = { area: areaIdx, tab: this.tab, tabIdx: tabIdx };
+        const anim = this._navAnim;
+        const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
+        return MENU_AREAS.map((area, n) => {
+            const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
+            if (!tabs.length) return '';
+            const active = activeArea === area;
+            const last = this._areaLastTab[area.id];
+            const target = tabs.indexOf(last) !== -1 ? last : tabs[0];
+            const divider = n > 0 ? '<span class="hs-tab-divider" aria-hidden="true"></span>' : '';
+            // Reuse .hs-tab so the area buttons get the faction chrome of the
+            // station tabs.
+            return divider + `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-nav-item title="${area.label}">` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(area.icon)}</span>` +
+                `<span class="hs-tab-label">${area.label}</span>` +
+                `</button>`;
+        }).join('');
+    },
+
+    /** Sub navbar under the top bar: the tabs of the active area. */
+    renderAreaSubnav() {
+        if (typeof MENU_AREAS === 'undefined' || this.isMenuRowTab()) return '';
+        const area = this.getTabArea(this.tab);
+        const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
+        const tabs = area ? area.tabs.filter((id) => mainTabs.indexOf(id) !== -1) : [];
+        if (tabs.length < 2) return '';
+        const anim = this._navAnim || {};
+        const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
+        const items = tabs.map((id) => {
+            const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
+            const on = this.tab === id;
+            const label = id === 'station' ? 'STORAGE' : meta.label;
+            const pop = on && anim.tab && !anim.area ? ' hs-anim-activate' + dirClass : '';
+            return `<button type="button" class="hs-tab hs-subnav-tab ${on ? 'active' : ''}${pop}" data-tab="${id}" data-nav-item title="${label}">` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(id === 'station' ? 'hsStores' : meta.icon)}</span>` +
+                `<span class="hs-tab-label">${label}</span>` +
+                `</button>`;
+        }).join('');
+        return `<nav class="hs-subnav${anim.area ? ' hs-subnav-enter' : ''}" aria-label="${area.label}">${items}</nav>`;
+    },
+
+    renderOrderedTabs() {
         const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
         const order = (typeof MENU_ORDER !== 'undefined') ? MENU_ORDER.main.slice() : mainTabs;
         if (order.indexOf('station') === -1) order.unshift('station');

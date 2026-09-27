@@ -109,9 +109,13 @@ class HomeStationUI {
             hangar: { label: 'HANGAR', icon: 'hsHangar' },
             components: { label: 'COMPONENTS', icon: 'hsComponents' },
             shop: { label: 'SHOP', icon: 'hsShop' },
+            missions: { label: 'MISSIONS', icon: 'hsExplore' },
             craft: { label: 'CRAFT', icon: 'hsCraft' },
             travel: { label: 'TRAVEL', icon: 'hsTeleport' },
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },
+            factions: { label: 'RELATIONS', icon: 'menuPeoples' },
+            ftrade: { label: 'TRADE', icon: 'hsShop' },
+            fcontracts: { label: 'CONTRACTS', icon: 'hsExplore' },
             play: { label: 'PLAY', icon: 'menuStart' }
         };
         // Initialize HangarUI module — DISABLED TEMPORARILY for debugging
@@ -291,12 +295,19 @@ class HomeStationUI {
 
     /** Build the tab rows from MENU_ORDER (js/ui/menu-order.js). */
     applyMenuOrder() {
-        const stationTabs = ['play', 'travel', 'explorations', 'upgrade', 'hangar', 'components', 'craft', 'shop'];
+        const stationTabs = ['play', 'travel', 'explorations', 'factions', 'ftrade', 'fcontracts', 'upgrade', 'hangar', 'components', 'missions', 'craft', 'shop'];
         const order = (typeof MENU_ORDER !== 'undefined') ? MENU_ORDER : { main: stationTabs, esc: [] };
         const isStationTab = (id) => stationTabs.indexOf(id) !== -1;
         // Tabs reachable from the ESC/menu tab row instead of the main row.
         this._menuOnlyTabs = order.esc.filter(isStationTab);
-        const main = order.main.filter((id) => id === 'station' || isStationTab(id));
+        let main = order.main.filter((id) => id === 'station' || isStationTab(id));
+        if (typeof MENU_AREAS !== 'undefined') {
+            // Areas define the main row order so ←/→ walks area by area.
+            main = [];
+            MENU_AREAS.forEach((area) => area.tabs.forEach((id) => {
+                if (this._menuOnlyTabs.indexOf(id) === -1 && main.indexOf(id) === -1) main.push(id);
+            }));
+        }
         if (main.indexOf('station') === -1) main.unshift('station');
         this._tabs = main.concat(this._menuOnlyTabs);
     }

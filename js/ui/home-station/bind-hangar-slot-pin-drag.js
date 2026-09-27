@@ -32,11 +32,14 @@ extendClass(HomeStationUI, {
                     if (!shipLoadoutManager.setEmptySlotAnchor) return;
                     const container = pin.closest('.hs-hangar-slot');
                     const index = Number(pin.getAttribute('data-slot-index') || 0);
+                    // A mirror marker starts from its own (mirrored) spot;
+                    // the mount is symmetric, so both halves follow.
+                    const isMirror = pin.classList.contains('is-mirror') || !!this._hangarMirrorGrab;
                     const startNx = container
-                        ? parseFloat(container.style.getPropertyValue('--pin-x')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-mx' : '--pin-x')) || 0.5
                         : 0.5;
                     const startNy = container
-                        ? parseFloat(container.style.getPropertyValue('--pin-y')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-my' : '--pin-y')) || 0.5
                         : 0.5;
                     drag = {
                         emptySlot: true,
@@ -109,6 +112,10 @@ extendClass(HomeStationUI, {
                     drag.moved = true;
                     pin._hsJustDragged = true;
                 }
+                if (drag.moved && this.showHangarSlotsInArea) {
+                    // Reveal the slots already in the area it is moved into.
+                    this.showHangarSlotsInArea(this.hangarAreaAtClient(e.clientX, e.clientY));
+                }
                 if (drag.emptySlot) {
                     const dxCanvas = (e.clientX - drag.startX) * sx;
                     const dyCanvas = (e.clientY - drag.startY) * sy;
@@ -128,13 +135,20 @@ extendClass(HomeStationUI, {
                         snappedNx = c.nx;
                         ny = c.ny;
                     }
-                    shipLoadoutManager.setEmptySlotAnchor(
+                    const res = shipLoadoutManager.setEmptySlotAnchor(
                         this.hangarShipId,
                         drag.kind,
                         drag.index,
                         snappedNx,
                         ny
                     );
+                    // Say why the slot does not follow into a full area.
+                    const reason = res && res.ok === false ? res.reason : null;
+                    if (reason !== drag.lastReason) {
+                        drag.lastReason = reason;
+                        if (reason === 'SLOT_OCCUPIED') this.setStatus('NO ROOM THERE — SLOTS CAN\'T OVERLAP');
+                        else if (reason === 'NOSE_SLOT_ON_BODY') this.setStatus('THE NOSE SLOT STAYS ON NOSE OR CORE');
+                    }
                 } else {
                     const dx = (e.clientX - drag.startX) * sx / Math.max(1, scale);
                     const dy = (e.clientY - drag.startY) * sy / Math.max(1, scale);
@@ -161,6 +175,7 @@ extendClass(HomeStationUI, {
             const end = (e) => {
                 if (!drag) return;
                 drag = null;
+                if (this.showHangarSlotsInArea) this.showHangarSlotsInArea(null);
                 this._hangarSnapCenter = null;
                 if (pin.hasPointerCapture && pin.hasPointerCapture(e.pointerId)) {
                     pin.releasePointerCapture(e.pointerId);

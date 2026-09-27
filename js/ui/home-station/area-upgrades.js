@@ -14,7 +14,7 @@ extendClass(HomeStationUI, {
         const kindsIn = { front: 'NOSE WEAPON', center: 'DEFENSE · ENERGY', back: 'ABILITY', wing: 'WING WEAPONS (PAIRS)' };
         return slm.getShipAreas().map((area) => {
             const lv = levels[area.id] || 0;
-            const size = slm.slotSizeLabel(lv);
+            const size = 'LV' + lv;
             const maxed = lv >= max;
             const check = profileManager.canPurchaseShipAreaUpgrade(shipId, area.id, profile);
             const cost = check.cost || (!maxed ? economyConfig.getShipAreaUpgradeCost(area.id, lv + 1) : null);
@@ -25,9 +25,11 @@ extendClass(HomeStationUI, {
             const action = maxed
                 ? '<span class="hs-muted hs-line-action">MAX</span>'
                 : `<button type="button" class="action-button hs-line-action" data-area-up="${shipId}|${area.id}" ${lockAttr}` +
-                    ` title="${area.label}: ${size} → ${slm.slotSizeLabel(lv + 1)}${bonusText}">` +
-                    `${size} → ${slm.slotSizeLabel(lv + 1)}</button>`;
+                    ` title="${area.label}: ${size} → ${('LV' + (lv + 1))}${bonusText}">` +
+                    `${size} → ${('LV' + (lv + 1))}</button>`;
             return `<div class="hs-area-row${compact ? ' is-compact' : ''}" data-area="${area.id}">` +
+                (compact ? '' : `<canvas class="hs-area-thumb" width="72" height="48" data-area-thumb="${shipId}|${area.id}"` +
+                    ` aria-label="${area.label} on ${this.shipName(shipId)}"></canvas>`) +
                 `<span class="hs-area-name"><span class="hs-slot-size is-${size}">${size}</span>` +
                 `<strong>${area.label}</strong>` +
                 (compact ? '' : `<small>${kindsIn[area.id]}${bonusText ? ' · NEXT' + bonusText : ''}</small>`) +
@@ -68,7 +70,7 @@ extendClass(HomeStationUI, {
                     `</div>`;
             }
             const lv = levels[area.id] || 0;
-            const size = slm.slotSizeLabel(lv);
+            const size = 'LV' + lv;
             const maxed = lv >= max;
             const check = profileManager.canPurchaseShipAreaUpgrade(shipId, area.id, profile);
             const cost = check.cost || (!maxed ? economyConfig.getShipAreaUpgradeCost(area.id, lv + 1) : null);
@@ -76,11 +78,11 @@ extendClass(HomeStationUI, {
             const bonusText = bonus.length ? ' · +' + bonus.length + ' ' + this.slotKindName(bonus[0]) + (bonus.length > 1 ? ' SLOTS' : ' SLOT') : '';
             const lockAttr = check.ok ? '' : (check.reason === 'RESOURCES' ? 'data-short="1"' : 'disabled');
             return `<div class="hs-area-tile" data-area="${area.id}">` +
-                `<span class="hs-area-name"><strong>${area.label}</strong><span class="hs-slot-size is-${size}">${size}</span>${switchHtml(area.id, true)}</span>` +
+                `<span class="hs-area-name"><strong>${area.label}</strong>${switchHtml(area.id, true)}<span class="hs-slot-size is-${size}">${size}</span></span>` +
                 (maxed
                     ? '<span class="hs-muted hs-area-max">MAX</span>'
                     : `<button type="button" class="action-button hs-area-btn" data-area-up="${shipId}|${area.id}"` +
-                      ` title="${area.label}: ${size} → ${slm.slotSizeLabel(lv + 1)}${bonusText}">→ ${slm.slotSizeLabel(lv + 1)}</button>`) +
+                      ` title="${area.label}: ${size} → ${('LV' + (lv + 1))}${bonusText}">→ ${('LV' + (lv + 1))}</button>`) +
                 `</div>`;
         }).join('');
         return `<div class="hs-hangar-areas" aria-label="Hull areas">${tiles}</div>`;
@@ -101,18 +103,70 @@ extendClass(HomeStationUI, {
             return `<div class="hs-area-ship">` +
                 `<div class="hs-line hs-shop-line">` +
                 `<span class="hs-line-name">` +
-                `<span class="hs-chip-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>` +
+                `<canvas class="hs-area-thumb is-ship" width="72" height="48" data-area-thumb="${id}|"></canvas>` +
                 `<span class="hs-line-text">` +
                 `<strong>${this.shipName(id)}</strong>` +
                 `<span class="hs-line-meta">AREAS ${level}/${max} · SLOTS W${caps.weapons}/D${caps.defenses}/A${caps.abilities}/E${caps.energy || 1}</span>` +
+                this.renderShipClassAffinity(id) +
                 `</span></span></div>` +
                 this.renderAreaUpgradeRows(id, profile, false) +
                 `</div>`;
         }).join('');
     },
 
+    /** "+20% LASER · BURST" — the weapon families this hull type favours. */
+    renderShipClassAffinity(shipId) {
+        if (typeof weaponConfigManager === 'undefined' || !weaponConfigManager.getShipClassWeaponAffinity) return '';
+        const cls = this.shipModelClass(shipId, typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null);
+        const ids = weaponConfigManager.getShipClassWeaponAffinity(cls);
+        if (!ids.length) return '';
+        const names = ids.map((w) => (weaponConfigManager.getWeapon(w).name || w).toUpperCase());
+        return `<span class="hs-line-meta hs-class-affinity">${this.shipClassLabel(cls)} · +20% DMG: ${names.join(' · ')}</span>`;
+    },
+
+    /**
+     * Small ship render per area row with that area outlined, so the row
+     * shows where on the hull the upgrade lands. Empty area = whole ship.
+     */
+    drawAreaThumbs() {
+        if (!this.overlay || typeof graphicsManager === 'undefined' || !graphicsManager.shipAssetLoader
+            || typeof shipLoadoutManager === 'undefined') return;
+        const loader = graphicsManager.shipAssetLoader;
+        const accent = this.getHangarPreviewAccent ? this.getHangarPreviewAccent() : '#ffffff';
+        const models = {};
+        this.overlay.querySelectorAll('canvas[data-area-thumb]').forEach((c) => {
+            const [shipId, areaId] = (c.getAttribute('data-area-thumb') || '').split('|');
+            let model = models[shipId];
+            if (!model) {
+                model = Object.assign({}, this.getHangarShipModel(shipId));
+                if (shipLoadoutManager.applyLayoutToModel) shipLoadoutManager.applyLayoutToModel(model, shipId);
+                models[shipId] = model;
+            }
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0, 0, c.width, c.height);
+            ctx.imageSmoothingEnabled = false;
+            const mw = Math.max(8, model.width || 20);
+            const mh = Math.max(8, model.height || 16);
+            const scale = Math.max(1, Math.floor(Math.min((c.width - 4) / mw, (c.height - 4) / mh)));
+            const ox = Math.round((c.width - mw * scale) / 2);
+            const oy = Math.round((c.height - mh * scale) / 2);
+            try {
+                loader.renderShip(ctx, model, ox, oy, scale, null, 0, { allowColorMountSprites: true });
+            } catch (e) { return; }
+            if (!areaId || !model.layout) return;
+            const ids = areaId === 'wing' ? ['wingLeft', 'wingRight'] : [areaId];
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 1;
+            (model.layout.segments || []).filter((seg) => ids.indexOf(seg.id) !== -1).forEach((seg) => {
+                ctx.strokeRect(Math.round(ox + seg.x * scale) + 0.5, Math.round(oy + seg.y * scale) + 0.5,
+                    Math.max(1, Math.round(seg.width * scale) - 1), Math.max(1, Math.round(seg.height * scale) - 1));
+            });
+        });
+    },
+
     bindAreaUpgradeButtons() {
         if (!this.overlay) return;
+        this.drawAreaThumbs();
         this.overlay.querySelectorAll('[data-area-toggle]').forEach((input) => {
             input.addEventListener('change', () => {
                 const [id, area] = (input.getAttribute('data-area-toggle') || '').split('|');
@@ -136,12 +190,12 @@ extendClass(HomeStationUI, {
         const btn = this.overlay && this.overlay.querySelector(`[data-area-up="${id}|${area}"]`);
         const res = profileManager.purchaseShipAreaUpgrade(id, area);
         if (res.ok) {
-            const msg = label + ' → ' + shipLoadoutManager.slotSizeLabel(res.level);
+            const msg = label + ' → ' + ('LV' + res.level);
             if (btn) this.playButtonResult(btn, true, msg);
             else this.setStatus(msg);
         } else if (res.reason === 'RESOURCES') {
             this.openResourceBuyModal({
-                title: label + ' → ' + shipLoadoutManager.slotSizeLabel(res.nextLevel || 1),
+                title: label + ' → ' + ('LV' + (res.nextLevel || 1)),
                 cost: res.cost,
                 action: { type: 'area-upgrade', id: id, area: area }
             });
@@ -163,14 +217,14 @@ extendClass(HomeStationUI, {
         const lv = profileManager.getShipAreaLevels(shipId, profile)[areaId] || 0;
         const check = profileManager.canPurchaseShipAreaUpgrade(shipId, areaId, profile);
         const cost = check.cost || economyConfig.getShipAreaUpgradeCost(areaId, lv + 1);
-        const from = slm.slotSizeLabel(lv);
-        const to = slm.slotSizeLabel(lv + 1);
+        const from = 'LV' + lv;
+        const to = ('LV' + (lv + 1));
         const bonus = slm.getAreaSlotBonusAt(areaId, lv + 1);
         // Every area level is one frame level: +8 HP, +1 armor (getFrameHullBonus).
         const hull = { hp: 8, armor: 1 };
         const holds = { front: 'the nose weapon', center: 'defense and energy parts', back: 'ability parts', wing: 'the wing weapons' }[areaId] || '';
         const lines = [
-            `<li>Slots in the ${this.areaLabel(areaId)} (${holds}): <strong>${from} → ${to}</strong> — parts up to size ${to} fit</li>`,
+            `<li>${this.areaLabel(areaId)} (${holds}): <strong>${from} → ${to}</strong> — slot sizes are upgraded per slot in the hangar</li>`,
             bonus.length ? `<li>New: <strong>+${bonus.length} ${this.slotKindName(bonus[0])} slot${bonus.length > 1 ? 's' : ''}</strong></li>` : '',
             hull ? `<li>Hull: <strong>+${hull.hp} HP, +${hull.armor} armor</strong></li>` : ''
         ].join('');

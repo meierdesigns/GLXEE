@@ -13,13 +13,74 @@ extendClass(HomeStationUI, {
         };
     },
 
+    /**
+     * Single source of truth for what the pointer is over. Hover feedback
+     * and pointerdown both use it, so what lights up is exactly what a
+     * click grabs. Priority: empty slot > installed part > hull area.
+     */
+    hangarPointerTarget(h, e) {
+        const pin = this.hangarEmptyPinNear(e.clientX, e.clientY, 18);
+        if (pin) return { type: 'slot', pin: pin };
+        const mod = h.model && h.model.layout ? this.hangarNearestModuleAt(h, e) : null;
+        if (mod) return { type: 'module', module: mod };
+        const hit = this.hangarDragAreaHit(h, e);
+        return hit ? { type: 'area', hit: hit } : { type: 'none' };
+    },
+
+    /** Mark the one slot the pointer targets (null clears it). */
+    setHangarTargetPin(pin) {
+        const slot = pin ? pin.closest('.hs-hangar-slot') : null;
+        if (slot === this._hangarTargetSlot) return;
+        if (this._hangarTargetSlot) this._hangarTargetSlot.classList.remove('is-pointer-target');
+        this._hangarTargetSlot = slot;
+        if (slot) slot.classList.add('is-pointer-target');
+        const stage = this.overlay && this.overlay.querySelector('.hs-hangar-bay-stage');
+        if (stage) stage.classList.toggle('is-slot-targeted', !!slot);
+    },
+
+    /** Hull segment a layout module is mounted on (wing modules by face). */
+    hangarModuleSegment(layout, mod) {
+        const segs = (layout && layout.segments) || [];
+        const id = mod.mountSegment === 'wing'
+            ? (mod.face === 'left' ? 'wingLeft' : 'wingRight')
+            : mod.mountSegment;
+        return segs.find((seg) => seg.id === id)
+            || segs.find((seg) => seg.id === this.hangarAreaAt(layout, mod.x + mod.width / 2, mod.y + mod.height / 2))
+            || null;
+    },
+
+    /**
+     * Hover / grab box of a part, in layout units. Parts are drawn larger
+     * than their area, so the box is clamped into the area and, when the
+     * area holds several parts, cut to one cell each along the area's long
+     * axis — every slot of an area fits inside it without overlapping.
+     */
+    hangarModuleHitBox(layout, mod) {
+        const seg = this.hangarModuleSegment(layout, mod);
+        const cx = mod.x + mod.width / 2;
+        const cy = mod.y + mod.height / 2;
+        if (!seg) return { x: mod.x, y: mod.y, width: mod.width, height: mod.height };
+        const mates = ((layout && layout.modules) || []).filter((m) => m.kind === 'weapon'
+            && this.hangarModuleSegment(layout, m) === seg);
+        const n = Math.max(1, mates.length);
+        const tall = seg.height >= seg.width;
+        const maxW = tall ? seg.width : seg.width / n;
+        const maxH = tall ? seg.height / n : seg.height;
+        const w = Math.min(mod.width, maxW);
+        const hgt = Math.min(mod.height, maxH);
+        const x = Math.max(seg.x, Math.min(seg.x + seg.width - w, cx - w / 2));
+        const y = Math.max(seg.y, Math.min(seg.y + seg.height - hgt, cy - hgt / 2));
+        return { x: x, y: y, width: w, height: hgt };
+    },
+
     /** Nearest visible empty-slot marker within radius (screen px), or null. */
     hangarEmptyPinNear(clientX, clientY, radius) {
         if (!this.overlay) return null;
         let best = null;
         let bestD = radius;
-        // Weapon slots sit on fixed mounts and aren't moved.
-        this.overlay.querySelectorAll('.hs-hangar-slot.is-empty:not([data-slot-kind="weapon"]) .hs-hangar-slot-pin:not(.is-mirror)').forEach((pin) => {
+        // Every empty socket can be moved — weapon slots too, and either
+        // half of a split pair (its mirror marker included).
+        this.overlay.querySelectorAll('.hs-hangar-slot.is-empty .hs-hangar-slot-pin').forEach((pin) => {
             if (getComputedStyle(pin).opacity === '0') return;
             const r = pin.getBoundingClientRect();
             const d = Math.hypot(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2));
@@ -44,11 +105,12 @@ extendClass(HomeStationUI, {
         let bestD = Infinity;
         (h.model.layout.modules || []).forEach((mod) => {
             if (mod.kind !== 'weapon') return;
-            const padX = Math.max(0, (minUnits - mod.width) / 2);
-            const padY = Math.max(0, (minUnits - mod.height) / 2);
-            if (pt.lx < mod.x - padX || pt.lx > mod.x + mod.width + padX
-                || pt.ly < mod.y - padY || pt.ly > mod.y + mod.height + padY) return;
-            const d = Math.hypot(pt.lx - (mod.x + mod.width / 2), pt.ly - (mod.y + mod.height / 2));
+            const b = this.hangarModuleHitBox(h.model.layout, mod);
+            const padX = Math.max(0, (minUnits - b.width) / 2);
+            const padY = Math.max(0, (minUnits - b.height) / 2);
+            if (pt.lx < b.x - padX || pt.lx > b.x + b.width + padX
+                || pt.ly < b.y - padY || pt.ly > b.y + b.height + padY) return;
+            const d = Math.hypot(pt.lx - (b.x + b.width / 2), pt.ly - (b.y + b.height / 2));
             if (d < bestD) {
                 bestD = d;
                 best = mod;
@@ -65,8 +127,9 @@ extendClass(HomeStationUI, {
         for (let i = modules.length - 1; i >= 0; i--) {
             const mod = modules[i];
             if (mod.kind !== 'weapon') continue;
-            if (pt.lx >= mod.x && pt.lx <= mod.x + mod.width
-                && pt.ly >= mod.y && pt.ly <= mod.y + mod.height) {
+            const b = this.hangarModuleHitBox(h.model.layout, mod);
+            if (pt.lx >= b.x && pt.lx <= b.x + b.width
+                && pt.ly >= b.y && pt.ly <= b.y + b.height) {
                 return mod;
             }
         }
@@ -232,7 +295,8 @@ extendClass(HomeStationUI, {
         const x = pivot.x + dx * Math.cos(angle) - dy * Math.sin(angle);
         const y = pivot.y + dx * Math.sin(angle) + dy * Math.cos(angle);
         const len = Math.max(0.0001, Math.hypot(x - pivot.x, y - pivot.y));
-        const push = 16 / Math.max(1, scale);
+        // Far enough out that the (large) knob clears the wing tip.
+        const push = 28 / Math.max(1, scale);
         return {
             x: x + (x - pivot.x) / len * push,
             y: y + (y - pivot.y) / len * push,
@@ -289,7 +353,8 @@ extendClass(HomeStationUI, {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         for (const wingId of this.hangarRotatableWings()) {
             const knob = this.hangarWingRotateHandle(wingId, h.model, h.scale);
-            if (knob && Math.hypot(pt.lx - knob.x, pt.ly - knob.y) <= reach * 1.2) {
+            // Grab radius matches the drawn knob (~16 screen px).
+            if (knob && Math.hypot(pt.lx - knob.x, pt.ly - knob.y) <= Math.max(reach * 1.2, 16 / Math.max(1, h.scale))) {
                 const seg = (h.model.layout.segments || []).find((s) => s.id === wingId);
                 return {
                     segment: 'wing',
@@ -456,7 +521,19 @@ extendClass(HomeStationUI, {
     updateHangarDragHover(h, e) {
         h.lastPointerEvent = { clientX: e.clientX, clientY: e.clientY };
         const layout = h.model && h.model.layout;
-        const hovMod = this.hangarDragModuleHit(h, e);
+        const target = this.hangarPointerTarget(h, e);
+        this.setHangarTargetPin(target.type === 'slot' ? target.pin : null);
+        if (target.type === 'slot') {
+            // A slot is targeted: no part frame, no area edges competing with it.
+            h.canvas.style.cursor = 'grab';
+            const hadOther = this._hangarHoverModule || this._hangarSegmentHover;
+            this._hangarHoverModule = null;
+            this._hangarSegmentHover = null;
+            if (hadOther) this.drawHangarBay();
+            return;
+        }
+        const hovMod = target.type === 'module' ? target.module : null;
+
         const prevHov = this._hangarHoverModule;
         const nextHov = hovMod ? { kind: hovMod.kind, id: hovMod.id, face: hovMod.face } : null;
         const hovChanged = !!prevHov !== !!nextHov || (prevHov && nextHov
@@ -482,7 +559,7 @@ extendClass(HomeStationUI, {
             }
             return;
         }
-        const hit = this.hangarDragAreaHit(h, e);
+        const hit = target.type === 'area' ? target.hit : null;
         h.canvas.style.cursor = this.hangarDragCursor(hit);
         const next = hit
             ? {

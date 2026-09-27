@@ -8,7 +8,7 @@
 // that order is saved in the browser and overrides the lists below.
 // '|' is a cluster divider (a line between tab groups) and can be moved like a tab.
 // Available ids: play, travel, explorations, upgrade, hangar, components,
-// craft, shop, profiles, settings, assets, credits
+// missions, craft, shop, factions, profiles, settings, assets, credits
 const MENU_ORDER = {
     main: [
         'station',
@@ -18,6 +18,7 @@ const MENU_ORDER = {
         '|',
         'upgrade',
         'hangar',
+        'missions',
         'craft',
         '|',
         'shop'
@@ -31,6 +32,16 @@ const MENU_ORDER = {
     ]
 };
 
+// Coarse navigation areas of the top bar. Each area is one big button; the
+// tabs of the active area show up next to it as small icon tabs.
+// The first tab of an area is where a click on the area lands first.
+const MENU_AREAS = [
+    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['play', 'hangar', 'upgrade', 'missions', 'craft'] },
+    { id: 'station', label: 'HOME STATION', icon: 'hsStation', tabs: ['station', 'shop'] },
+    { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ftrade', 'fcontracts'] },
+    { id: 'explore', label: 'EXPLORATIONS', icon: 'hsExplore', tabs: ['travel', 'explorations'] }
+];
+
 const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
 
 (function loadSavedMenuOrder() {
@@ -40,7 +51,12 @@ const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
         // Ids added to the defaults later still show up at the end of their row.
         const known = saved.main.concat(saved.esc);
         const isNew = (id) => id !== '|' && known.indexOf(id) === -1;
-        const main = saved.main.concat(MENU_ORDER.main.filter((id) => isNew(id) && id !== 'station'));
+        // The mission board belongs right before CRAFT, not at the row's end.
+        const savedMain = saved.main.slice();
+        if (known.indexOf('missions') === -1 && savedMain.indexOf('craft') !== -1) {
+            savedMain.splice(savedMain.indexOf('craft'), 0, 'missions');
+        }
+        const main = savedMain.concat(MENU_ORDER.main.filter((id) => isNew(id) && id !== 'station' && savedMain.indexOf(id) === -1));
         // Home Station became movable later: older saves get it back at the front.
         if (main.indexOf('station') === -1) main.unshift('station');
         // Orders saved before dividers existed: put the default dividers back

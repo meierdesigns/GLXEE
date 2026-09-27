@@ -8,6 +8,7 @@ extendClass(HomeStationUI, {
         this.bindHangarSlotPinDrag();
         this.bindHangarSlotHoverLink();
         this.bindHangarSlotCardDrag();
+        if (this.bindSlotUpgradeEvents) this.bindSlotUpgradeEvents();
 
         // Close button for component details
         const closeBtn = this.overlay.querySelector('[data-close-component]');
@@ -22,6 +23,41 @@ extendClass(HomeStationUI, {
             });
         }
 
+        // The mirrored half of a split pair (also ones added live while
+        // dragging): pan to it and act like the main marker. Delegated once.
+        if (this._mirrorPinClickRoot !== this.overlay) {
+            this._mirrorPinClickRoot = this.overlay;
+            // Grabbing the mirror half of an empty split slot drags the slot
+            // from the mirror's spot (the main marker runs the drag).
+            this.overlay.addEventListener('pointerdown', (e) => {
+                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+                const slot = m && m.closest('.hs-hangar-slot.is-empty');
+                const main = slot && slot.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+                if (!main || e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this._hangarMirrorGrab = true;
+                try {
+                    main.dispatchEvent(new PointerEvent('pointerdown', {
+                        clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 1,
+                        pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
+                        bubbles: true, cancelable: true
+                    }));
+                } finally {
+                    this._hangarMirrorGrab = false;
+                }
+            });
+            this.overlay.addEventListener('click', (e) => {
+                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+                if (!m) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const main = m.closest('.hs-hangar-slot').querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+                if (!main) return;
+                this._hsPanTarget = m;
+                main.click();
+            });
+        }
         this.overlay.querySelectorAll('[data-hangar-slot-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 if (btn._hsJustDragged) {
@@ -34,6 +70,8 @@ extendClass(HomeStationUI, {
                 e.stopPropagation();
                 const kind = btn.getAttribute('data-hangar-slot-toggle');
                 const index = Number(btn.getAttribute('data-slot-index') || 0);
+                // A slot placed on the ship is already in view: no re-centring.
+                this._hsPanTarget = null;
                 // Sidebar open: go to the slot's container in the tree; the
                 // slot stays selected instead of toggling open/closed.
                 if (!this._hangarLeftCollapsed && this.focusTreeSlot(kind, index)) {
@@ -236,8 +274,10 @@ extendClass(HomeStationUI, {
             if (targetSlot) targetSlot.classList.add('is-hover-linked');
             this.updateHangarSlotLinks();
         };
-        const HOVER_RADIUS_PX = 22;
+        const HOVER_RADIUS_PX = 18; // matches hangarPointerTarget
         stage.addEventListener('pointermove', (e) => {
+            // Move handle of equipped weapon slots (see trackHangarSlotMoveHandle).
+            if (this.trackHangarSlotMoveHandle) this.trackHangarSlotMoveHandle(e.clientX, e.clientY);
             if (e.target && e.target.closest && e.target.closest('.hs-hangar-slot-card')) return;
             let closestSlot = null;
             let closestDist = HOVER_RADIUS_PX;
@@ -255,6 +295,8 @@ extendClass(HomeStationUI, {
         });
         stage.addEventListener('pointerleave', () => {
             setLinked(null);
+            if (this.setHangarTargetPin) this.setHangarTargetPin(null);
+            if (this.showHangarSlotMoveHandle) this.showHangarSlotMoveHandle(null);
             if (this.setHangarHoverArea) this.setHangarHoverArea(null);
             if (this._hangarHoverModule) {
                 this._hangarHoverModule = null;
@@ -286,7 +328,8 @@ extendClass(HomeStationUI, {
      * range, which keeps the snap feeling the same at every zoom level.
      */
     snapOffsetToCenter(offset, spanLayoutUnits, scale) {
-        const tolerance = 10 / Math.max(1, scale) / Math.max(1, spanLayoutUnits);
+        // ~24 screen px either side: the centreline catches easily.
+        const tolerance = 24 / Math.max(1, scale) / Math.max(1, spanLayoutUnits);
         return Math.abs(offset) <= tolerance ? 0 : offset;
     },
 });

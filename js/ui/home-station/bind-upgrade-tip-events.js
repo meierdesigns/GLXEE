@@ -25,32 +25,55 @@ extendClass(HomeStationUI, {
             scroll.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
             });
+            // Left drag on empty space or right drag anywhere pans. A left
+            // press on a node only pans once it moves a few px, so clicks
+            // still buy/select.
             scroll.addEventListener('pointerdown', (e) => {
-                if (e.button !== 2) return;
+                if (e.button !== 0 && e.button !== 2) return;
+                const onNode = !!(e.target.closest && e.target.closest('.hs-upg-node, button, .hs-upg-dock'));
                 pan = {
                     x: e.clientX,
                     y: e.clientY,
                     left: scroll.scrollLeft,
-                    top: scroll.scrollTop
+                    top: scroll.scrollTop,
+                    active: e.button === 2 || !onNode,
+                    pointerId: e.pointerId
                 };
-                scroll.classList.add('is-panning');
-                scroll.setPointerCapture(e.pointerId);
-                e.preventDefault();
+                if (pan.active) {
+                    scroll.classList.add('is-panning');
+                    scroll.setPointerCapture(e.pointerId);
+                    e.preventDefault();
+                }
             });
             scroll.addEventListener('pointermove', (e) => {
                 if (!pan) return;
+                if (!pan.active) {
+                    if (Math.hypot(e.clientX - pan.x, e.clientY - pan.y) < 5) return;
+                    pan.active = true;
+                    pan.dragged = true;
+                    scroll.classList.add('is-panning');
+                    scroll.setPointerCapture(e.pointerId);
+                }
                 scroll.scrollLeft = pan.left - (e.clientX - pan.x);
                 scroll.scrollTop = pan.top - (e.clientY - pan.y);
                 e.preventDefault();
             });
             const stopPan = (e) => {
                 if (!pan) return;
+                this._upgPanSwallowClick = !!pan.dragged;
                 pan = null;
                 scroll.classList.remove('is-panning');
                 if (e && scroll.hasPointerCapture(e.pointerId)) {
                     scroll.releasePointerCapture(e.pointerId);
                 }
             };
+            // A drag that started on a node must not also click it.
+            scroll.addEventListener('click', (e) => {
+                if (!this._upgPanSwallowClick) return;
+                this._upgPanSwallowClick = false;
+                e.stopPropagation();
+                e.preventDefault();
+            }, true);
             scroll.addEventListener('pointerup', stopPan);
             scroll.addEventListener('pointercancel', stopPan);
         }
@@ -211,7 +234,7 @@ extendClass(HomeStationUI, {
 
         return summary +
             `<div class="hs-upg-tree-scroll">` +
-            `<div class="hs-upg-tree" style="width:100%;height:${treeH}px">` +
+            `<div class="hs-upg-tree" style="width:100%;min-width:${treeW}px;height:${treeH}px">` +
             `<svg class="hs-upg-links" width="100%" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="none" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
             nodeButtons +
             `</div></div>` +

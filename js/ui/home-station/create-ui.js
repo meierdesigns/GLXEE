@@ -73,6 +73,8 @@ extendClass(HomeStationUI, {
             body = `<div class="hs-menu-host" id="hsMenuHost"></div>`;
         } else if (this.tab === 'shop') {
             body = this.renderShopTab(profile);
+        } else if (this.tab === 'missions') {
+            body = this.renderMissionsTab(profile);
         } else if (this.tab === 'craft') {
             body = this.renderCraftTab(profile);
         } else if (this.tab === 'hangar') {
@@ -99,6 +101,12 @@ extendClass(HomeStationUI, {
             body = this.renderTravelTab(profile);
         } else if (this.tab === 'explorations') {
             body = this.renderExplorationsTab(profile);
+        } else if (this.tab === 'factions') {
+            body = this.renderFactionsTab(profile);
+        } else if (this.tab === 'ftrade') {
+            body = this.renderFactionTradeTab(profile);
+        } else if (this.tab === 'fcontracts') {
+            body = this.renderFactionContractsTab(profile);
         } else if (this.tab === 'play') {
             body = this.renderPlayTab(profile);
         } else {
@@ -110,8 +118,8 @@ extendClass(HomeStationUI, {
                         <div class="hs-station-cover-scanline"></div>
                         <div class="hs-station-cover-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'banner')}</div>
                         <div class="hs-station-cover-caption">
-                            <span class="hs-station-cover-kicker">HOME STATION // DOCK 01</span>
-                            <strong>WELCOME ABOARD</strong>
+                            <span class="hs-station-cover-kicker">HOME STATION // STORAGE</span>
+                            <strong>STATION STORAGE</strong>
                         </div>
                     </div>
                     <div class="hs-panel hs-panel-stores">
@@ -136,7 +144,6 @@ extendClass(HomeStationUI, {
                 </div>`;
         }
 
-        const creditsBar = `<div class="hs-credits-bar">${this.renderCreditsBar(profile.resources, profile)}</div>`;
         const statusClass = this.statusMsg ? 'hs-status' : 'hs-status is-empty';
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
@@ -154,29 +161,35 @@ extendClass(HomeStationUI, {
         this.unmountPlayTab();
         this.unmountComponentsTab();
         const isComp = this.tab === 'components';
-        const hideHeaderCredits = isPlay || isMenu || this.tab === 'shop';
         // Tabs with no separate "tabs vs content" browsing step land directly on
         // interactive content (mouse clicks work regardless of nav level), so they
         // must never sit dimmed at the default .hs-nav-tabs opacity like station.
-        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'craft', 'travel', 'explorations'];
+        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ftrade', 'fcontracts'];
         const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
             <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
-                <div class="hs-header">
-                    <div class="hs-topbar">
-                        <span class="hs-topbar-emblem" aria-hidden="true">${this.factionCrestHtml(profile, 'topbar')}</span>
-                        <div class="hs-tabs">
-                            ${this.isMenuRowTab() ? this.renderMenuTabs() : this.renderTabs()}
-                        </div>
-                        <p class="hs-profile"><span class="hs-profile-emblem">${this.factionEmblemHtml(profile, 16)}</span><span class="hs-profile-tag">PILOT</span> ${profile.name}</p>
-                        <div class="hs-topbar-actions">
-                            <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
-                                <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
-                            </button>
+                <div class="hs-header hs-header-split">
+                    <div class="hs-pilot-card">
+                        <span class="hs-pilot-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'card')}</span>
+                        <div class="hs-pilot-info">
+                            <p class="hs-profile hs-pilot-name">${profile.name}</p>
+                            <div class="hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
                         </div>
                     </div>
-                    ${hideHeaderCredits ? '' : creditsBar}
-                    ${isPlay || isMenu ? '' : `<p class="${statusClass}">${this.statusMsg || '\u00A0'}</p>`}
+                    <div class="hs-header-main">
+                        <div class="hs-topbar">
+                            <div class="hs-tabs">
+                                ${this.isMenuRowTab() ? this.renderMenuTabs() : this.renderTabs()}
+                            </div>
+                            <div class="hs-topbar-actions">
+                                <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
+                                    <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
+                                </button>
+                            </div>
+                        </div>
+                        ${this.renderAreaSubnav()}
+                        ${isPlay || isMenu ? '' : `<p class="${statusClass}">${this.statusMsg || '\u00A0'}</p>`}
+                    </div>
                 </div>
                 <div class="${bodyClass}">${body}</div>
                 <div class="hs-footer ui-controls-hint">
@@ -192,6 +205,7 @@ extendClass(HomeStationUI, {
         }
         this.bindEvents();
         this.bindControlsToggle();
+        if (['factions', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
         this.restoreNavFocus();
         if (this._focusExplore) {
             this.focusExploreItem(this._focusExplore);
@@ -218,6 +232,7 @@ extendClass(HomeStationUI, {
                 this._hangarBayResizeObs = null;
             }
         }
+        if (this.tab === 'missions') this.bindMissionEvents();
         if (this.tab === 'play') {
             this.mountPlayTab();
         }

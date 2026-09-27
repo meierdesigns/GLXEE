@@ -233,11 +233,13 @@ extendClass(HomeStationUI, {
     alignCreditsBarToTabs() {
         const header = this.overlay && this.overlay.querySelector('.hs-header');
         const tabs = header && header.querySelector('.hs-tabs');
-        const bar = header && header.querySelector('.hs-credits-bar');
-        if (!tabs || !bar) return;
+        // Set on the whole station box: tabs without a resource row (PLAY)
+        // indent their first content row by the same amount.
+        const root = header && header.closest('.home-station-content');
+        if (!tabs || !root) return;
         const measure = () => {
             const offset = tabs.getBoundingClientRect().left - header.getBoundingClientRect().left;
-            header.style.setProperty('--hs-tabs-offset', Math.max(0, Math.round(offset)) + 'px');
+            root.style.setProperty('--hs-tabs-offset', Math.max(0, Math.round(offset)) + 'px');
         };
         measure();
         requestAnimationFrame(measure);

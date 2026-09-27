@@ -294,10 +294,32 @@ extendClass(HomeStationUI, {
             const pinX = Math.round((slot.nx != null ? slot.nx : 0.5) * 1000) / 1000;
             const pinY = Math.round((slot.ny != null ? slot.ny : 0.5) * 1000) / 1000;
             el.style.setProperty('--pin-x', String(pinX));
+            if (shipLoadoutManager.getSlotSizeLevel && shipLoadoutManager.slotSizeLabel) {
+                el.setAttribute('data-slot-size', shipLoadoutManager.slotSizeLabel(
+                    shipLoadoutManager.getSlotSizeLevel(shipId, slot.kind, slot.index)));
+            }
             el.style.setProperty('--pin-y', String(pinY));
+            // Wing slots are a mirrored pair: add / drop the second marker
+            // live, so a slot dragged onto a wing splits right away (and
+            // merges back when dragged off it) instead of after a rebuild.
+            let mirrorPin = el.querySelector('.hs-hangar-slot-pin.is-mirror');
             if (slot.mirrorNx != null) {
                 el.style.setProperty('--pin-mx', String(Math.round(slot.mirrorNx * 1000) / 1000));
                 el.style.setProperty('--pin-my', String(Math.round(slot.mirrorNy * 1000) / 1000));
+                if (!mirrorPin) {
+                    mirrorPin = document.createElement('span');
+                    mirrorPin.className = 'hs-hangar-slot-pin is-mirror';
+                    mirrorPin.setAttribute('aria-hidden', 'true');
+                    mirrorPin.innerHTML = '<span class="hs-hangar-slot-dot"></span>';
+                    const pin = el.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+                    if (pin) pin.after(mirrorPin); else el.prepend(mirrorPin);
+                }
+                el.classList.add('is-wing-pair');
+            } else {
+                if (mirrorPin) mirrorPin.remove();
+                el.classList.remove('is-wing-pair');
+                el.style.removeProperty('--pin-mx');
+                el.style.removeProperty('--pin-my');
             }
             // A filled slot's grab frame covers the whole installed part.
             const mi = slot.id ? modsLeft.findIndex((m) => m.kind === slot.kind && m.id === slot.id) : -1;
@@ -308,6 +330,24 @@ extendClass(HomeStationUI, {
             } else {
                 el.style.removeProperty('--pin-w');
                 el.style.removeProperty('--pin-h');
+            }
+            // Empty socket = the size a part mounted here would have in game,
+            // by the area it sits in: big on the nose, half size on a wing.
+            const ms = layout && layout.mountSizes;
+            if (!slot.id && ms && pxPerUnit) {
+                const at = slot.area
+                    || this.hangarAreaAt(layout, pinX * layout.width, pinY * layout.height) || '';
+                const area = at.indexOf('wing') === 0 ? 'wing'
+                    : (at === 'front' || at === 'back' ? at : 'center');
+                // Socket size follows the slot size: S (split pairs by default)
+                // ≈ 0.7 of the centred M socket, L 1.3×.
+                const sizeLv = shipLoadoutManager.getSlotSizeLevel
+                    ? shipLoadoutManager.getSlotSizeLevel(shipId, slot.kind, slot.index) : 1;
+                const base = (ms.front || ms.center || ms[area] || 4) * [Math.SQRT1_2, 1, 1.3][sizeLv];
+                const px = Math.max(12, Math.round(base * pxPerUnit));
+                el.style.setProperty('--socket-size', px + 'px');
+            } else {
+                el.style.removeProperty('--socket-size');
             }
             // Ship part the pin sits on — pins show while that part is hovered.
             if (layout) {
@@ -321,6 +361,7 @@ extendClass(HomeStationUI, {
             }
         });
         this.updateHangarSlotLinks();
+        if (this.renderHangarSlotBar) this.renderHangarSlotBar(slots);
         this.setHangarHoverArea(this._hangarHoverArea || null);
     },
 
@@ -390,10 +431,12 @@ extendClass(HomeStationUI, {
         const ctx = canvas.getContext('2d');
         const accent = (getComputedStyle(this.overlay || document.documentElement)
             .getPropertyValue('--faction-accent') || '').trim() || '#ffffff';
-        const x = Math.round(ox + mod.x * scale) - 2;
-        const y = Math.round(oy + mod.y * scale) - 2;
-        const w = Math.round(mod.width * scale) + 4;
-        const h = Math.round(mod.height * scale) + 4;
+        // Same box the pointer hits: clamped into the part's area.
+        const b = this.hangarModuleHitBox(model.layout, mod);
+        const x = Math.round(ox + b.x * scale) - 1;
+        const y = Math.round(oy + b.y * scale) - 1;
+        const w = Math.round(b.width * scale) + 2;
+        const h = Math.round(b.height * scale) + 2;
         ctx.save();
         ctx.fillStyle = accent;
         ctx.globalAlpha = 0.18;
@@ -402,7 +445,7 @@ extendClass(HomeStationUI, {
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
         ctx.shadowColor = accent;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 4;
         ctx.strokeRect(x, y, w, h);
         ctx.restore();
     },
@@ -432,8 +475,13 @@ extendClass(HomeStationUI, {
             this._hangarHoverAreaSyncing = true;
             try { this.drawHangarBay(true); } finally { this._hangarHoverAreaSyncing = false; }
         }
+        // A slot drag reveals its target area's slots; redraws keep that.
+        const reveal = this._hangarDragRevealArea;
+        const revealWing = reveal && reveal.indexOf('wing') === 0;
         this.overlay.querySelectorAll('.hs-hangar-slot').forEach((el) => {
-            el.classList.toggle('is-area-hover', !!areaId && el.getAttribute('data-slot-area') === areaId);
+            const at = el.getAttribute('data-slot-area') || '';
+            const revealed = !!reveal && (revealWing ? at.indexOf('wing') === 0 : at === reveal);
+            el.classList.toggle('is-area-hover', revealed || (!!areaId && at === areaId));
         });
     },
 

@@ -6,9 +6,9 @@
     <title>GLXEE - Gameboy Style</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@700&display=swap">
-    <link rel="stylesheet" href="styles.css?v=mount-1">
+    <link rel="stylesheet" href="styles.css?v=stats-1">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
-    <link rel="stylesheet" href="css/asset-gen-ui.css">
+    <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
     <script src="js/graphics/pixel-cursors.js?v=pull-1"></script>
 </head>
 <body>
@@ -197,7 +197,7 @@
     <script src="js/core/planet-config/ambush-encounter.js?v=ambush-1"></script>
     <script src="js/core/planet-config/galaxy-control.js?v=control-1"></script>
     <script src="js/core/planet-config.js"></script>
-    <script src="js/core/profile-manager/core.js?v=faction-gui-4"></script>
+    <script src="js/core/profile-manager/core.js?v=mount-4"></script>
     <script src="js/core/profile-manager/owns-portal.js?v=faction-gui-4"></script>
     <script src="js/core/profile-manager/get-module-upgrade-bonuses.js?v=faction-gui-4"></script>
     <script src="js/core/profile-manager/has-discovered-galaxy.js?v=faction-gui-4"></script>
@@ -207,11 +207,13 @@
     <script src="js/core/profile-manager/get-resume-level-id.js?v=faction-gui-4"></script>
     <script src="js/core/profile-manager/style-unlocks.js?v=sell-1"></script>
     <script src="js/core/profile-manager/trading-posts.js?v=pull-1"></script>
+    <script src="js/core/profile-manager/missions.js?v=missions-2"></script>
     <script src="js/core/profile-manager/ship-location.js?v=reach-1"></script>
     <script src="js/core/profile-manager/sell-items.js?v=sell-1"></script>
     <script src="js/core/profile-manager/ship-areas.js?v=areas-1"></script>
     <script src="js/core/profile-manager.js?v=faction-gui-4"></script>
     <script src="js/core/faction-manager.js"></script>
+    <script src="js/core/faction-relations.js?v=frel-1"></script>
     <script src="js/core/flight-profiles.js"></script>
     <script src="js/core/weapon-config/core.js"></script>
     <script src="js/core/weapon-config/make-weapon.js"></script>
@@ -244,6 +246,8 @@
     <script src="js/core/ship-loadout/ship-areas.js?v=nose-1"></script>
     <script src="js/core/ship-loadout/area-toggles.js?v=toggle-5"></script>
     <script src="js/core/ship-loadout/faction-layout-defaults.js?v=1"></script>
+    <script src="js/core/ship-loadout/weapon-mounts.js?v=1"></script>
+    <script src="js/core/ship-loadout/slot-sizes.js?v=1"></script>
     <script src="js/core/ship-loadout.js"></script>
     <script src="js/core/objective-manager.js"></script>
     <script src="js/core/daily-tracker.js"></script>
@@ -252,7 +256,7 @@
     <script src="js/core/level-manager.js"></script>
     <script src="js/core/system-manager.js"></script>
     <script src="js/core/game-control-system/core.js"></script>
-    <script src="js/core/game-control-system/begin-victory-loot-phase.js"></script>
+    <script src="js/core/game-control-system/begin-victory-loot-phase.js?v=missions-1"></script>
     <script src="js/core/game-control-system/show-victory-overlay.js"></script>
     <script src="js/core/game-control-system/leave-game-session.js"></script>
     <script src="js/core/game-control-system.js"></script>
@@ -339,7 +343,8 @@
     <script src="js/graphics/faction-ship-styles/core.js?v=pull-2"></script>
     <script src="js/graphics/faction-ship-styles/paint-class-topology.js?v=pull-1"></script>
     <script src="js/graphics/faction-ship-styles/build-all-pixel-sprites.js?v=pull-1"></script>
-    <script src="js/graphics/faction-ship-styles.js?v=pull-1"></script>
+    <script src="js/graphics/faction-ship-styles/faction-hull-builders.js?v=hull-1"></script>
+    <script src="js/graphics/faction-ship-styles.js?v=hull-1"></script>
     <script src="js/graphics/asset-gen-registry/core.js?v=pull-1"></script>
     <script src="js/graphics/asset-gen-registry/find-from-element.js?v=pull-1"></script>
     <script src="js/graphics/asset-gen-registry/faction-ids.js?v=pull-1"></script>
@@ -350,7 +355,7 @@
     <script src="js/graphics/color-palette.js?v=pull-1"></script>
     <script src="js/graphics/lighting-system.js?v=pull-1"></script>
     <script src="js/graphics/graphics-manager/core.js?v=pull-1"></script>
-    <script src="js/graphics/graphics-manager/draw-shield-hull.js?v=pull-1"></script>
+    <script src="js/graphics/graphics-manager/draw-shield-hull.js?v=hull-1"></script>
     <script src="js/graphics/graphics-manager.js?v=pull-1"></script>
     <script src="js/graphics/graphics.js?v=pull-1"></script>
     <script src="js/graphics/color-palette-system/core.js?v=pull-1"></script>
@@ -359,7 +364,7 @@
     <script src="js/graphics/color-palette-system.js?v=pull-1"></script>
     <script src="js/graphics/performance-optimizer.js?v=pull-1"></script>
     <script src="js/graphics/theme-context.js?v=pull-1"></script>
-    <script src="js/graphics/ui-appearance.js?v=pull-1"></script>
+    <script src="js/graphics/ui-appearance.js?v=pixel-1"></script>
     <script src="js/ui/enhanced-palette-ui/core.js"></script>
     <script src="js/ui/enhanced-palette-ui/create-palette-history.js"></script>
     <script src="js/ui/enhanced-palette-ui.js"></script>
@@ -510,8 +515,8 @@
     <script src="js/ui/combined-selection.js"></script>
     <script src="js/ui/galaxy-selection.js"></script>
     <script src="js/ui/galaxy-map/core.js?v=control-1"></script>
-    <script src="js/ui/galaxy-map/create-ui.js?v=eco-1"></script>
-    <script src="js/ui/galaxy-map/render-explore-controls.js?v=select-1"></script>
+    <script src="js/ui/galaxy-map/create-ui.js?v=tp-1"></script>
+    <script src="js/ui/galaxy-map/render-explore-controls.js?v=tp-1"></script>
     <script src="js/ui/galaxy-map/navigate-by-arrow.js?v=pull-1"></script>
     <script src="js/ui/galaxy-map/flight-travel.js?v=ambush-2"></script>
     <script src="js/ui/galaxy-map.js"></script>
@@ -528,42 +533,46 @@
     <script src="js/ui/hangar-ui/core.js"></script>
     <script src="js/ui/hangar-ui/on-slot-equipment-change.js"></script>
     <script src="js/ui/hangar-ui.js"></script>
-    <script src="js/ui/component-tree.js?v=styles-1"></script>
-    <script src="js/ui/menu-order.js?v=pull-1"></script>
-    <script src="js/ui/home-station/core.js?v=pull-1"></script>
-    <script src="js/ui/home-station/resource-icon-key.js?v=pull-1"></script>
+    <script src="js/ui/component-tree.js?v=sdrop-2"></script>
+    <script src="js/ui/menu-order.js?v=frel-1"></script>
+    <script src="js/ui/home-station/core.js?v=frel-1"></script>
+    <script src="js/ui/home-station/resource-icon-key.js?v=navanim-1"></script>
     <script src="js/ui/home-station/open-main-menu-overlay.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-missing-materials.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-portal-faction-filters.js?v=pull-1"></script>
-    <script src="js/ui/home-station/create-ui.js?v=pull-1"></script>
+    <script src="js/ui/home-station/create-ui.js?v=pname-1"></script>
     <script src="js/ui/home-station/mount-play-tab.js?v=pull-1"></script>
     <script src="js/ui/home-station/switch-sub-tab.js?v=pull-1"></script>
     <script src="js/ui/home-station/bind-upgrade-tip-events.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-module-type-upgrades.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-parts-list.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-shop-part-rows.js?v=pull-1"></script>
-    <script src="js/ui/home-station/render-shop-tab.js?v=mount-1"></script>
+    <script src="js/ui/home-station/render-shop-tab.js?v=slotsz-1"></script>
     <script src="js/ui/home-station/render-shop-style-rows.js?v=pull-1"></script>
     <script src="js/ui/home-station/trading-post-shop.js?v=pull-1"></script>
+    <script src="js/ui/home-station/render-missions-tab.js?v=missions-1"></script>
     <script src="js/ui/home-station/shop-sell.js?v=pull-1"></script>
-    <script src="js/ui/home-station/render-hangar-tab.js?v=pull-1"></script>
-    <script src="js/ui/home-station/draw-hangar-bay.js?v=mount-1"></script>
+    <script src="js/ui/home-station/render-hangar-tab.js?v=stats-1"></script>
+    <script src="js/ui/home-station/render-factions-tab.js?v=ftabs-1"></script>
+    <script src="js/ui/home-station/draw-hangar-bay.js?v=slotsz-1"></script>
     <script src="js/ui/home-station/update-component-details.js?v=pull-1"></script>
     <script src="js/ui/home-station/wing-preview-pixel-zoom.js?v=pull-1"></script>
     <script src="js/ui/home-station/draw-hangar-connection-marker.js?v=pull-1"></script>
     <script src="js/ui/home-station/hangar-drag-layout-point.js?v=mount-1"></script>
     <script src="js/ui/home-station/on-hangar-drag-down.js?v=pull-2"></script>
     <script src="js/ui/home-station/on-hangar-drag-up.js?v=nose-1"></script>
-    <script src="js/ui/home-station/bind-hangar-slot-events.js?v=pull-2"></script>
+    <script src="js/ui/home-station/bind-hangar-slot-events.js?v=span-3"></script>
     <script src="js/ui/home-station/hangar-parts-grid.js?v=pull-2"></script>
+    <script src="js/ui/home-station/hangar-slot-bar.js?v=bar-1"></script>
     <script src="js/ui/home-station/bind-hangar-slot-pin-drag.js?v=mount-1"></script>
     <script src="js/ui/home-station/reset-hangar-preview-sim.js?v=pull-3"></script>
     <script src="js/ui/home-station/update-hangar-preview-sim.js?v=pull-1"></script>
     <script src="js/ui/home-station/bind-controls-toggle.js?v=pull-1"></script>
-    <script src="js/ui/home-station/bind-navigation-events.js?v=pull-1"></script>
+    <script src="js/ui/home-station/bind-navigation-events.js?v=crest-1"></script>
     <script src="js/ui/home-station/bind-station-events.js?v=pull-1"></script>
-    <script src="js/ui/home-station/render-component-tree.js?v=toggle-1"></script>
-    <script src="js/ui/home-station/area-upgrades.js?v=modal-1"></script>
+    <script src="js/ui/home-station/render-component-tree.js?v=sdrop-2"></script>
+    <script src="js/ui/home-station/area-upgrades.js?v=slotsz-1"></script>
+    <script src="js/ui/home-station/slot-upgrades.js?v=stats-1"></script>
     <script src="js/ui/home-station.js?v=faction-gui-4"></script>
     <script src="js/ui/player-selection/core.js"></script>
     <script src="js/ui/player-selection/create-fallback-player-ships.js"></script>

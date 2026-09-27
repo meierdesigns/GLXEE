@@ -24,8 +24,8 @@
 
     /* Global UI appearance (independent of color themes) */
     --ui-border-width: 2px;
-    --ui-border-width-thin: 1px;
-    --ui-border-width-thick: 3px;
+    --ui-border-width-thin: 2px;
+    --ui-border-width-thick: 4px;
     --ui-indicator-width: 2px;
     --ui-font-family: 'Courier New', Courier, monospace;
 
@@ -640,7 +640,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     font-size: var(--font-text);
     line-height: 1.1;
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent),
         0 0 18px color-mix(in srgb, var(--color-primary) 22%, transparent);
     display: flex;
     flex-direction: column;
@@ -727,7 +727,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .gi-cluster {
     min-width: 0;
     padding: 3px 5px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
     background: color-mix(in srgb, var(--color-background) 72%, transparent);
     box-shadow: inset 0 0 14px color-mix(in srgb, var(--color-primary) 8%, transparent);
     flex: 0 0 auto;
@@ -742,7 +742,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .gi-cluster-title {
     margin: 0 0 2px;
     padding-bottom: 1px;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
     font-size: 0.72em;
     font-weight: bold;
     letter-spacing: 0.1em;
@@ -770,7 +770,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .gi-metric {
     min-width: 0;
     padding: 2px 3px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
     background: color-mix(in srgb, var(--color-primary) 6%, transparent);
     display: flex;
     flex-direction: column;
@@ -886,7 +886,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     width: 42px;
     max-width: 100%;
     padding: 2px 1px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
 }
@@ -1281,7 +1281,7 @@ html[data-vf-arcade="on"] .settings-row-value {
         linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent),
         color-mix(in srgb, var(--color-background) 88%, transparent);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 22%, transparent),
         0 0 18px color-mix(in srgb, var(--color-primary) 28%, transparent);
     text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 75%, transparent);
     -webkit-font-smoothing: none;
@@ -1398,7 +1398,7 @@ html[data-vf-arcade="on"] .settings-row-value {
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent),
         0 0 14px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
@@ -1448,7 +1448,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border);
     width: var(--canvas-w);
     height: var(--canvas-h);
@@ -1497,7 +1497,7 @@ html[data-vf-arcade="on"] .settings-row-value {
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent),
         0 0 14px color-mix(in srgb, var(--color-primary) 18%, transparent);
     --enemy-bar-h: 14px;
     --enemy-icon-size: 20px;
@@ -1515,7 +1515,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     padding: 6px 4px;
     gap: 5px;
     flex: 0 0 auto;
-    border: var(--ui-border-width-thin, 1px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
@@ -1548,7 +1548,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     width: auto;
     min-width: 0;
     height: var(--enemy-bar-h, 14px);
-    border-width: var(--ui-border-width-thin, 1px);
+    border-width: var(--ui-border-width-thin, 2px);
 }
 
 .enemy-vitals-side .health-ship-icon {
@@ -1603,7 +1603,7 @@ html[data-vf-arcade="on"] .settings-row-value {
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent),
         0 0 14px color-mix(in srgb, var(--color-primary) 18%, transparent);
     font-family: var(--ui-font-family);
     font-size: var(--font-text);
@@ -2318,7 +2318,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     align-items: center;
     gap: 10px;
     padding: 6px 8px;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     background: rgba(0, 0, 0, 0.25);
 }
 
@@ -2389,7 +2389,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     justify-content: flex-start;
     text-transform: uppercase;
     letter-spacing: 2px;
-    box-shadow: inset 0 0 0 1px var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
     position: relative;
 }
 
@@ -2397,7 +2397,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--color-primary);
     color: var(--color-background);
     border-color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px var(--color-background), 0 0 15px var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-background), 0 0 15px var(--color-primary);
 }
 
 .victory-button.selected {
@@ -2776,7 +2776,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     border-color: var(--color-border);
     transform: scale(1.05);
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
 }
@@ -2848,7 +2848,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     align-items: center;
     text-align: center;
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border);
 }
 
@@ -2872,7 +2872,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: var(--ui-surface);
     transform: scale(1.05);
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px rgba(155, 188, 15, 0.6);
 }
@@ -3069,7 +3069,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     border-color: var(--color-border);
     transform: scale(1.02);
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
 }
@@ -3312,7 +3312,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     border-color: var(--color-border);
     transform: scale(1.02);
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
 }
@@ -3442,7 +3442,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     border-color: var(--color-primary);
     transform: scale(1.05);
     box-shadow:
-        inset 0 0 0 1px var(--color-primary),
+        inset 0 0 0 2px var(--color-primary),
         0 0 0 1px var(--color-primary),
         0 0 15px var(--color-primary);
 }
@@ -3512,7 +3512,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     border-color: var(--color-border);
     transform: scale(1.05);
     box-shadow:
-        inset 0 0 0 1px var(--ui-border),
+        inset 0 0 0 2px var(--ui-border),
         0 0 0 1px var(--ui-border),
         0 0 15px var(--color-primary);
 }
@@ -4045,7 +4045,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .menu-cluster + .menu-cluster {
     margin-top: 6px;
     padding-top: 10px;
-    border-top: var(--ui-border-width-thin, 1px) solid var(--ui-border, var(--color-primary));
+    border-top: var(--ui-border-width-thin, 2px) solid var(--ui-border, var(--color-primary));
 }
 
 .menu-cluster + .menu-cluster:has(.menu-cluster-title) {
@@ -4059,7 +4059,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     color: var(--color-primary, var(--color-text-secondary));
     opacity: 0.9;
     padding: 2px 8px 4px;
-    border-bottom: var(--ui-border-width-thin, 1px) solid var(--ui-border, var(--color-primary));
+    border-bottom: var(--ui-border-width-thin, 2px) solid var(--ui-border, var(--color-primary));
     margin-bottom: 4px;
     font-family: var(--ui-font-family);
     font-weight: bold;
@@ -4319,7 +4319,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     color: var(--color-background, #0a0a0a);
     background: var(--color-primary, #e07028);
     border-color: var(--color-primary, #e07028);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35);
 }
 .planet-editor-tabs {
     display: flex;
@@ -4572,7 +4572,7 @@ body.pe-resizing * {
     display: block;
     width: 100%;
     background: transparent;
-    border: 1px dashed transparent;
+    border: 2px dashed transparent;
     color: var(--color-text-secondary, #b09070);
     font-family: inherit;
     font-size: var(--font-text);
@@ -4854,7 +4854,7 @@ body.pe-resizing * {
     width: 36px;
     height: 28px;
     padding: 0;
-    border: var(--ui-border-width-thin, 1px) solid var(--color-border, #4a3820);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, #4a3820);
     background: transparent;
     cursor: pointer;
 }
@@ -4880,7 +4880,7 @@ body.pe-resizing * {
     width: 100%;
     background: #0a0a0a;
     color: var(--color-text-primary, #e8dcc8);
-    border: 1px solid var(--color-border, #3a3028);
+    border: 2px solid var(--color-border, #3a3028);
     padding: 6px 8px;
     font-family: inherit;
     font-size: var(--font-text);
@@ -5095,7 +5095,7 @@ body.pe-resizing * {
 .pe-pattern-item.active {
     border-color: var(--color-primary, #e07028);
     color: var(--color-text, #e8dcc8);
-    box-shadow: inset 0 0 0 1px var(--color-primary, #e07028);
+    box-shadow: inset 0 0 0 2px var(--color-primary, #e07028);
 }
 .pe-pattern-item .pe-pattern-thumb {
     width: 56px;
@@ -5111,7 +5111,7 @@ body.pe-resizing * {
 }
 .pe-pattern-item-wrap.active .pe-pattern-item {
     border-color: var(--color-primary, #e07028);
-    box-shadow: inset 0 0 0 1px var(--color-primary, #e07028);
+    box-shadow: inset 0 0 0 2px var(--color-primary, #e07028);
 }
 .pe-pattern-item-edit {
     position: absolute;
@@ -5334,7 +5334,7 @@ body.pe-resizing * {
     border: var(--ui-border-width-thick) solid var(--ui-border, #c47a2a);
     padding: clamp(14px, 2.5vh, 24px) clamp(14px, 2.5vw, 28px) clamp(12px, 2vh, 18px);
     color: var(--color-text, #e8a040);
-    box-shadow: inset 0 0 0 1px var(--ui-border, #c47a2a);
+    box-shadow: inset 0 0 0 2px var(--ui-border, #c47a2a);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -5419,7 +5419,7 @@ body.pe-resizing * {
 }
 .content-viewer-list::-webkit-scrollbar-thumb {
     background: var(--color-primary, #808080);
-    border: 1px solid var(--color-background, #0a0a0a);
+    border: 2px solid var(--color-background, #0a0a0a);
 }
 .content-viewer-item {
     background: transparent;
@@ -5477,7 +5477,7 @@ body.pe-resizing * {
 }
 .content-viewer-detail::-webkit-scrollbar-thumb {
     background: var(--color-primary, #808080);
-    border: 1px solid var(--color-background, #0a0a0a);
+    border: 2px solid var(--color-background, #0a0a0a);
 }
 .content-viewer-name {
     margin: 0 0 8px;
@@ -5690,7 +5690,7 @@ body.pe-resizing * {
     font-size: var(--font-text);
     letter-spacing: 0.08em;
     padding: 1px 5px;
-    border: 1px solid var(--ui-border, #3a2a18);
+    border: 2px solid var(--ui-border, #3a2a18);
     opacity: 0.55;
 }
 .cv-dev-badge.on {
@@ -5732,7 +5732,7 @@ body.pe-resizing * {
     min-width: 1.1em;
     padding: 0 4px;
     margin-right: 4px;
-    border: 1px solid currentColor;
+    border: 2px solid currentColor;
     font-family: inherit;
     font-size: var(--font-text);
     letter-spacing: 0.06em;
@@ -6010,7 +6010,7 @@ body.pe-resizing * {
     margin-bottom: 0;
     min-width: 0;
     padding: clamp(4px, 0.8vh, 8px) clamp(4px, 0.8vw, 8px) clamp(6px, 1vh, 10px);
-    border: var(--ui-border-width-thin, 1px) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border, #333));
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border, #333));
     background: color-mix(in srgb, var(--color-primary) 4%, rgba(0, 0, 0, 0.35));
     box-sizing: border-box;
 }
@@ -6021,7 +6021,7 @@ body.pe-resizing * {
     font-size: var(--font-text);
     letter-spacing: 0.16em;
     color: var(--color-primary, var(--color-text-secondary));
-    border-bottom: var(--ui-border-width-thin, 1px) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    border-bottom: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
     font-family: var(--ui-font-family);
     font-weight: bold;
     opacity: 0.95;
@@ -6076,7 +6076,7 @@ body.pe-resizing * {
     width: 28px;
     height: 28px;
     padding: 0;
-    border: var(--ui-border-width-thin, 1px) solid var(--color-border, var(--color-primary));
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
     background: #ffffff;
     cursor: pointer;
     flex: 0 0 auto;
@@ -6093,7 +6093,7 @@ body.pe-resizing * {
     padding: 10px;
     box-sizing: border-box;
     background: color-mix(in srgb, var(--color-primary, #c44) 6%, rgba(6, 4, 8, 0.96));
-    border: var(--ui-border-width-thin, 1px) solid var(--color-primary, #c44);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-primary, #c44);
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--color-primary, #c44) 35%, transparent),
         0 12px 28px rgba(0, 0, 0, 0.65);
@@ -6106,7 +6106,7 @@ body.pe-resizing * {
     position: relative;
     width: 100%;
     aspect-ratio: 1 / 0.72;
-    border: var(--ui-border-width-thin, 1px) solid var(--color-primary, #c44);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-primary, #c44);
     cursor: crosshair;
     overflow: hidden;
     background: #f00;
@@ -6149,16 +6149,16 @@ body.pe-resizing * {
     width: 28px;
     height: 28px;
     flex: 0 0 auto;
-    border: var(--ui-border-width-thin, 1px) solid var(--color-primary, #c44);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-primary, #c44);
     border-radius: 50%;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.45);
 }
 
 .vf-cp-hue {
     position: relative;
     flex: 1 1 auto;
     height: 14px;
-    border: var(--ui-border-width-thin, 1px) solid var(--color-primary, #c44);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-primary, #c44);
     cursor: pointer;
     background: linear-gradient(
         to right,
@@ -6214,7 +6214,7 @@ body.pe-resizing * {
     box-sizing: border-box;
     background: rgba(0, 0, 0, 0.55);
     color: var(--color-text-primary, #9ec8e8);
-    border: var(--ui-border-width-thin, 1px) solid var(--color-primary, #c44);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-primary, #c44);
     padding: 4px 2px;
     text-align: center;
     font-family: inherit;
@@ -6272,7 +6272,7 @@ body.pe-resizing * {
     min-width: 0;
     background: rgba(0, 0, 0, 0.45);
     color: var(--color-text-primary, #e8dcc8);
-    border: 1px solid var(--color-border, #3a3028);
+    border: 2px solid var(--color-border, #3a3028);
     padding: 6px 8px;
     font-family: inherit;
     font-size: var(--font-text);
@@ -6465,7 +6465,7 @@ body.pe-resizing * {
 }
 .settings-row-theme.is-open .theme-dropdown-toggle {
     border-color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 .theme-dropdown-caret {
     flex: 0 0 auto;
@@ -6527,7 +6527,7 @@ body.pe-resizing * {
 
 .theme-list-item.active {
     border-color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px var(--color-primary), 0 0 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    box-shadow: inset 0 0 0 2px var(--color-primary), 0 0 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
     background: color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
@@ -6535,8 +6535,8 @@ body.pe-resizing * {
     flex: 0 0 auto;
     width: 14px;
     height: 14px;
-    border: 1px solid var(--color-border, #000);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    border: 2px solid var(--color-border, #000);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 .theme-list-name {
@@ -6811,7 +6811,7 @@ body.pe-resizing * {
 }
 .theme-editor-swatch.te-swatch-base {
     border-color: var(--color-basecolor, var(--color-primary));
-    box-shadow: inset 0 0 0 1px var(--color-basecolor, var(--color-primary));
+    box-shadow: inset 0 0 0 2px var(--color-basecolor, var(--color-primary));
 }
 .theme-editor-gfx {
     display: flex;
@@ -7206,7 +7206,7 @@ body.pe-resizing * {
     letter-spacing: 2px;
     text-transform: uppercase;
     padding-bottom: 6px;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 2px solid var(--color-border);
 }
 
 .profile-details-section {
@@ -7240,7 +7240,7 @@ body.pe-resizing * {
     align-items: baseline;
     gap: 10px;
     padding: 3px 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-border) 55%, transparent);
     font-size: var(--font-text);
     letter-spacing: 1px;
 }
@@ -7547,6 +7547,8 @@ body.pe-resizing * {
 }
 .gm-node.locked {
     opacity: 0.45;
+    /* Unreachable, like closed trading posts. */
+    cursor: not-allowed;
 }
 .gm-node.locked.selected,
 .gm-node.locked.hovered {
@@ -7606,7 +7608,7 @@ body.pe-resizing * {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     font-size: var(--font-h2);
     font-weight: bold;
 }
@@ -7719,7 +7721,7 @@ body.pe-resizing * {
     justify-content: space-between;
     gap: 12px;
     padding: 4px 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 2px solid var(--color-border);
     font-size: var(--font-h2);
 }
 .gm-detail .stat-row:last-child {
@@ -7760,7 +7762,7 @@ body.pe-resizing * {
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 2px solid var(--color-border);
     cursor: pointer;
     letter-spacing: 2px;
 }
@@ -7965,7 +7967,7 @@ body.pe-resizing * {
     position: absolute;
     inset: 6px;
     z-index: 0;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     clip-path: polygon(
         12px 0, calc(100% - 12px) 0, 100% 12px,
         100% calc(100% - 12px), calc(100% - 12px) 100%,
@@ -8027,7 +8029,7 @@ body.pe-resizing * {
     margin-bottom: 4px;
     min-width: 0;
     box-sizing: border-box;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     transition:
         opacity 0.18s ease,
         filter 0.18s ease,
@@ -8377,7 +8379,7 @@ button.hs-logout-btn.nav-focused {
     font-size: var(--font-h2);
     letter-spacing: 2px;
     color: var(--color-text);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     padding-bottom: 6px;
 }
 .hs-menu-panel-copy {
@@ -8568,7 +8570,7 @@ button.hs-logout-btn.nav-focused {
     color: var(--color-primary);
     margin-right: 0;
     padding: 2px 6px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 50%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 50%, transparent);
     font-size: var(--font-text);
 }
 .hs-pixel {
@@ -8589,7 +8591,7 @@ button.hs-logout-btn.nav-focused {
     font-size: var(--font-text);
     letter-spacing: 2px;
     color: var(--color-text);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     padding-bottom: 6px;
     position: relative;
 }
@@ -8623,7 +8625,7 @@ button.hs-logout-btn.nav-focused {
     width: 24px;
     height: 24px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
     background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     color: var(--color-primary);
     font: inherit;
@@ -8647,7 +8649,7 @@ button.hs-logout-btn.nav-focused {
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-border) 80%, var(--color-primary));
+    border: 2px solid color-mix(in srgb, var(--color-border) 80%, var(--color-primary));
     background:
         linear-gradient(135deg,
             color-mix(in srgb, var(--color-background) 70%, transparent) 0%,
@@ -8721,7 +8723,7 @@ button.hs-logout-btn.nav-focused {
     box-sizing: border-box;
     min-height: 34px;
     padding: 8px 10px;
-    border: 1px dashed color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px dashed color-mix(in srgb, var(--color-primary) 45%, transparent);
     background:
         repeating-linear-gradient(
             -45deg,
@@ -8807,7 +8809,7 @@ button.hs-line-action.action-button {
     gap: 4px;
     min-height: 24px;
     padding: 2px 4px;
-    border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-border) 55%, transparent);
     background: color-mix(in srgb, var(--color-background) 55%, transparent);
     box-sizing: border-box;
 }
@@ -8897,7 +8899,7 @@ button.hs-line-action.action-button {
     align-items: flex-start;
     margin: 0 0 10px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-border) 70%, transparent);
     background: color-mix(in srgb, var(--color-background) 40%, transparent);
 }
 .hs-shop-ctrl-group {
@@ -8924,7 +8926,7 @@ button.hs-line-action.action-button {
     gap: 6px;
     padding: 4px 8px;
     background: var(--color-background);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     color: var(--color-text-secondary);
     cursor: pointer;
     letter-spacing: 1px;
@@ -8980,7 +8982,7 @@ button.hs-line-action.action-button {
     border-width: 2px;
     background: color-mix(in srgb, var(--color-primary) 48%, var(--color-surface, #1a1a1a));
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 55%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent),
         0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
     text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 50%, transparent);
 }
@@ -9208,7 +9210,7 @@ button.hs-tab.active.nav-focused {
     display: flex;
     flex-direction: column;
     position: relative;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
     background:
         linear-gradient(160deg,
             color-mix(in srgb, var(--color-surface) 55%, transparent) 0%,
@@ -9218,7 +9220,7 @@ button.hs-tab.active.nav-focused {
 }
 .hs-play-shell.is-map-active {
     border-color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 55%, transparent),
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent),
         0 0 18px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 .galaxy-map-embedded {
@@ -9324,7 +9326,7 @@ button.hs-tab.active.nav-focused {
     scrollbar-width: thin;
     scrollbar-color: var(--color-primary) var(--color-background);
     box-sizing: border-box;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     border-radius: 2px;
     transition:
         opacity 0.18s ease,
@@ -9339,10 +9341,10 @@ button.hs-tab.active.nav-focused {
     position: relative;
     padding: 6px 6px 4px;
     margin: 2px -2px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 75%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 75%, transparent);
     background: color-mix(in srgb, var(--color-primary) 12%, transparent);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent),
         0 0 18px color-mix(in srgb, var(--color-primary) 35%, transparent),
         0 0 2px color-mix(in srgb, var(--color-primary) 80%, transparent);
 }
@@ -9358,7 +9360,7 @@ button.hs-tab.active.nav-focused {
     line-height: 1.2;
     color: var(--color-primary);
     background: color-mix(in srgb, var(--color-background) 88%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     pointer-events: none;
     z-index: 2;
 }
@@ -9390,7 +9392,7 @@ button.hs-tab.active.nav-focused {
     border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
     background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent),
         0 0 16px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 .home-station-content.hs-nav-sub .hs-body::before {
@@ -9406,7 +9408,7 @@ button.hs-tab.active.nav-focused {
     line-height: 1.2;
     color: var(--color-primary);
     background: color-mix(in srgb, var(--color-background) 88%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     pointer-events: none;
 }
 .home-station-content.hs-nav-sub .hs-shop-cats {
@@ -9414,10 +9416,10 @@ button.hs-tab.active.nav-focused {
     z-index: 2;
     padding: 8px 8px 6px;
     margin: 4px 0 12px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 80%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 80%, transparent);
     background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 40%, transparent),
         0 0 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .home-station-content.hs-nav-sub .hs-shop-root > :not(.hs-shop-cats),
@@ -9462,7 +9464,7 @@ button.hs-tab.active.nav-focused {
     border-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
     background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 45%, transparent),
         0 0 24px color-mix(in srgb, var(--color-primary) 32%, transparent),
         inset 0 0 32px color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
@@ -9479,7 +9481,7 @@ button.hs-tab.active.nav-focused {
     line-height: 1.2;
     color: var(--color-primary);
     background: color-mix(in srgb, var(--color-background) 88%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     pointer-events: none;
 }
 .home-station-content.hs-nav-content.hs-mode-play .hs-body::before {
@@ -9548,7 +9550,7 @@ button.hs-tab.active.nav-focused {
 }
 .hs-body::-webkit-scrollbar-thumb {
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
 }
 .hs-body > .hs-station-grid,
 .hs-body > .hs-section,
@@ -9584,7 +9586,7 @@ button.hs-tab.active.nav-focused {
     grid-area: cover;
     min-height: 110px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, var(--color-border));
     background: #020306;
     box-shadow:
         inset 0 0 24px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent),
@@ -9773,7 +9775,7 @@ button.hs-tab.active.nav-focused {
     color: var(--color-primary, var(--color-text-secondary));
     opacity: 0.9;
     padding: 2px 4px 6px;
-    border-bottom: var(--ui-border-width-thin, 1px) solid var(--ui-border, var(--color-primary));
+    border-bottom: var(--ui-border-width-thin, 2px) solid var(--ui-border, var(--color-primary));
     margin-bottom: 8px;
     font-family: var(--ui-font-family);
     font-weight: bold;
@@ -9806,7 +9808,7 @@ button.hs-tab.active.nav-focused {
 .hs-section {
     margin: 0;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
     background:
         linear-gradient(160deg,
             color-mix(in srgb, var(--color-surface) 70%, transparent) 0%,
@@ -9843,7 +9845,7 @@ button.hs-tab.active.nav-focused {
     font-size: var(--font-text);
     letter-spacing: 2px;
     color: var(--color-text);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     padding-bottom: 6px;
 }
 .hs-panel-action {
@@ -9871,7 +9873,7 @@ button.hs-tab.active.nav-focused {
     font-size: var(--font-h2);
     letter-spacing: 1px;
     padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-border) 65%, transparent);
     background: color-mix(in srgb, var(--color-background) 45%, transparent);
 }
 .hs-line-name {
@@ -9898,7 +9900,7 @@ button.hs-tab.active.nav-focused {
     width: 100%;
     margin: 0 0 6px;
     padding: 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
     background: color-mix(in srgb, var(--color-background) 50%, transparent);
     max-width: none;
     overflow-x: auto;
@@ -9929,7 +9931,7 @@ button.hs-tab.active.nav-focused {
     gap: 10px;
     min-width: 108px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
     background: color-mix(in srgb, var(--color-background) 55%, transparent);
 }
 .hs-shop-wallet-item.hs-res-empty {
@@ -10065,7 +10067,7 @@ button.hs-play.nav-focused {
     border-color: var(--color-primary);
     background: color-mix(in srgb, var(--color-primary) 48%, var(--color-surface, #1a1a1a));
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 55%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent),
         0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
     text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 50%, transparent);
 }
@@ -10172,7 +10174,7 @@ button.hs-shop-cat.active.nav-focused {
     flex-direction: column;
 }
 .hs-hangar-ship-tree {
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
     background: color-mix(in srgb, var(--color-surface) 72%, transparent);
 }
 .hs-hangar-ship-tree > summary {
@@ -10197,7 +10199,7 @@ button.hs-shop-cat.active.nav-focused {
     min-width: 0;
     max-height: 420px;
     padding: 6px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .hs-hangar-ship-tree .hs-component-tree-header {
     display: none;
@@ -10214,7 +10216,7 @@ button.hs-shop-cat.active.nav-focused {
     flex: 1 1 auto;
     padding: 16px;
     gap: 12px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
     background: color-mix(in srgb, var(--color-surface) 60%, transparent);
     min-height: 250px;
     max-height: none;
@@ -10253,7 +10255,7 @@ button.hs-shop-cat.active.nav-focused {
     flex: 1;
 }
 .hs-component-settings {
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
     padding-top: 12px;
     margin-top: 12px;
 }
@@ -10282,7 +10284,7 @@ button.hs-shop-cat.active.nav-focused {
     text-transform: uppercase;
     letter-spacing: 1px;
     background: color-mix(in srgb, var(--color-surface) 80%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
     color: var(--color-text);
     cursor: pointer;
     transition: all 0.15s ease-out;
@@ -10329,7 +10331,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-detail::-webkit-scrollbar-thumb {
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
 }
 .hs-hangar-bay {
     flex: 1 1 auto;
@@ -10351,7 +10353,7 @@ button.hs-shop-cat.active.nav-focused {
             color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
             transparent 62%),
         #050508;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
 }
 
 .hs-floating-area-style {
@@ -10385,7 +10387,7 @@ button.hs-shop-cat.active.nav-focused {
     height: auto;
     aspect-ratio: 2 / 1;
     margin: 0 0 3px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     background: #09090d;
     image-rendering: pixelated;
 }
@@ -10402,7 +10404,7 @@ button.hs-shop-cat.active.nav-focused {
     align-items: stretch;
     gap: 2px;
     padding: 3px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
     background: #09090d;
     color: var(--color-text-dim, var(--color-text));
     font: inherit;
@@ -10426,7 +10428,7 @@ button.hs-shop-cat.active.nav-focused {
     box-shadow: inset 0 0 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .hs-wing-style-tile:focus-visible {
-    outline: 1px solid var(--color-primary);
+    outline: 2px solid var(--color-primary);
     outline-offset: 1px;
 }
 .hs-floating-preview-caption {
@@ -10452,7 +10454,7 @@ button.hs-shop-cat.active.nav-focused {
     width: 100%;
     min-width: 0;
     padding: 3px 5px;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     background: var(--color-surface);
     color: var(--color-text);
     cursor: pointer;
@@ -10471,7 +10473,7 @@ button.hs-shop-cat.active.nav-focused {
     gap: 4px;
     margin-top: 5px;
     padding-top: 5px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     font-size: 9px;
     letter-spacing: 1px;
     color: var(--color-primary);
@@ -10505,7 +10507,7 @@ button.hs-shop-cat.active.nav-focused {
     width: 100%;
     margin-top: 8px;
     padding: 4px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     background: transparent;
     color: var(--color-primary);
     cursor: pointer;
@@ -10733,7 +10735,7 @@ button.hs-shop-cat.active.nav-focused {
     padding: 6px 8px;
     text-align: left;
     background: color-mix(in srgb, var(--color-surface) 92%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
     color: var(--color-text);
     cursor: pointer;
     font-size: var(--font-text);
@@ -10779,7 +10781,7 @@ button.hs-shop-cat.active.nav-focused {
     overflow-y: visible;
     overscroll-behavior: contain;
     background: color-mix(in srgb, var(--color-background) 96%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
     scrollbar-width: thin;
     scrollbar-color: var(--color-primary) var(--color-background);
 }
@@ -10794,18 +10796,18 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-slot-menu::-webkit-scrollbar-thumb {
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
 }
 .hs-hangar-slot-select-wrap {
     display: block;
     padding: 4px;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .hs-hangar-slot-select {
     width: 100%;
     background: color-mix(in srgb, var(--color-surface) 80%, transparent);
     color: var(--color-text);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     padding: 4px 6px;
     font: inherit;
     letter-spacing: 1px;
@@ -10824,7 +10826,7 @@ button.hs-shop-cat.active.nav-focused {
     flex-direction: column;
     gap: 5px;
     padding: 6px 4px 8px;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .hs-hangar-slot-skin-label {
     font-size: 10px;
@@ -10840,7 +10842,7 @@ button.hs-shop-cat.active.nav-focused {
     flex: 1 1 auto;
     padding: 8px 10px;
     background: color-mix(in srgb, var(--color-surface) 85%, transparent);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     color: var(--color-text);
     font: inherit;
     font-size: var(--font-text);
@@ -10868,7 +10870,7 @@ button.hs-shop-cat.active.nav-focused {
     width: 100%;
     padding: 5px 6px;
     background: transparent;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     color: var(--color-text);
     cursor: pointer;
     text-align: left;
@@ -10972,14 +10974,14 @@ button.hs-shop-cat.active.nav-focused {
     width: 12px;
     height: 12px;
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
     cursor: pointer;
 }
 .hs-hangar-zoom-slider::-moz-range-thumb {
     width: 12px;
     height: 12px;
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
     border-radius: 0;
     cursor: pointer;
 }
@@ -11169,7 +11171,7 @@ button.hs-shop-cat.active.nav-focused {
     column-gap: 8px;
     align-items: center;
     padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
     background: color-mix(in srgb, var(--color-background) 55%, transparent);
     cursor: pointer;
     font-size: var(--font-text);
@@ -11258,7 +11260,7 @@ button.hs-shop-cat.active.nav-focused {
     border-color: var(--color-primary);
     color: var(--color-text);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 50%, transparent),
         0 0 14px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .hta-overlay .action-button:not(.secondary) {
@@ -11274,7 +11276,7 @@ button.hs-shop-cat.active.nav-focused {
 .hta-overlay .action-button:not(.secondary):hover:not(:disabled) {
     color: var(--color-background);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, #fff 25%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, #fff 25%, transparent),
         0 0 16px color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 .hta-overlay .action-button.secondary {
@@ -11300,7 +11302,7 @@ button.hs-shop-cat.active.nav-focused {
     gap: 2px;
     margin-top: auto;
     padding-top: 8px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     font-size: var(--font-text);
     font-variant-numeric: tabular-nums;
     color: var(--color-text);
@@ -11449,7 +11451,7 @@ button.hs-shop-cat.active.nav-focused {
             color-mix(in srgb, var(--color-primary) 18%, var(--color-surface)) 0%,
             color-mix(in srgb, var(--color-background) 80%, transparent) 100%);
     box-shadow:
-        inset 0 0 0 1px var(--color-primary),
+        inset 0 0 0 2px var(--color-primary),
         0 0 12px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 .hs-hangar-frame-up {
@@ -11530,7 +11532,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-grid .hs-actions-col::-webkit-scrollbar-thumb {
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
 }
 .hs-hangar-grid .hs-fire-mode {
     gap: 6px;
@@ -11627,7 +11629,7 @@ button.hs-shop-cat.active.nav-focused {
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: auto;
 }
 .hs-upgrade-root .hs-upg-dock {
@@ -11664,7 +11666,7 @@ button.hs-shop-cat.active.nav-focused {
     padding: 6px 10px;
 }
 .hs-upg-tree-scroll {
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: auto;
     max-width: 100%;
     padding: 16px 8px 20px;
@@ -11684,13 +11686,12 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-upg-tree-scroll::-webkit-scrollbar-thumb {
     background: var(--color-primary);
-    border: 1px solid var(--color-background);
+    border: 2px solid var(--color-background);
 }
 .hs-upg-tree {
     position: relative;
     margin: 0 auto;
     min-width: 0;
-    max-width: 100%;
 }
 .hs-upg-links {
     position: absolute;
@@ -11927,7 +11928,7 @@ button.hs-upg-node.nav-focused {
     max-width: min(280px, calc(100vw - 16px));
     padding: 8px 12px;
     background: #0a0612;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 85%, #fff);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 85%, #fff);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.85);
     color: #fff;
     font-family: inherit;
@@ -12026,7 +12027,7 @@ button.hs-upg-node.nav-focused {
     border-color: var(--color-primary);
     color: var(--color-text);
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent),
+        inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 50%, transparent),
         0 0 14px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .home-station-content .action-button.secondary {
@@ -12091,7 +12092,7 @@ button.hs-upg-node.nav-focused {
         border-color: var(--status-success);
         color: var(--status-success);
         box-shadow:
-            inset 0 0 0 1px color-mix(in srgb, var(--status-success) 50%, transparent),
+            inset 0 0 0 2px color-mix(in srgb, var(--status-success) 50%, transparent),
             0 0 22px color-mix(in srgb, var(--status-success) 55%, transparent);
     }
     100% {
@@ -12258,7 +12259,7 @@ input[type="checkbox"].nav-focused {
     letter-spacing: 0.08em;
     color: var(--color-text-secondary);
     background: color-mix(in srgb, var(--color-background) 70%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     padding: 2px 6px;
     cursor: pointer;
     line-height: 1.2;
@@ -12309,7 +12310,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     letter-spacing: 2px;
     font-size: var(--font-text);
     font-weight: bold;
-    border: 1px solid var(--color-primary);
+    border: 2px solid var(--color-primary);
     padding: 3px 8px;
 }
 .dev-mode-hint {
@@ -12396,7 +12397,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     width: 12px;
     height: 12px;
     margin-right: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.35);
     vertical-align: middle;
     flex-shrink: 0;
 }
@@ -12502,7 +12503,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .hs-comp-right-col .hs-comp-sidebar-content::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--color-primary, #808080) 40%, #333);
-    border: 1px solid var(--color-border, #333);
+    border: 2px solid var(--color-border, #333);
 }
 .hs-comp-sidebar.is-collapsed .hs-comp-sidebar-content {
     display: none;
@@ -12571,7 +12572,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     letter-spacing: 0.06em;
     padding: 4px 6px;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(160, 160, 160, 0.4);
+    border: 2px solid rgba(160, 160, 160, 0.4);
     color: #c8c8c8;
     cursor: pointer;
 }
@@ -12597,7 +12598,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     font-size: 11px;
     padding: 4px 6px;
     background: transparent;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     color: #d0d0d0;
     cursor: pointer;
 }
@@ -12632,7 +12633,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     overflow: hidden;
     background:
         repeating-conic-gradient(#1a1a1a 0% 25%, #101010 0% 50%) 0 0 / 16px 16px;
-    border: 1px solid rgba(120, 120, 120, 0.35);
+    border: 2px solid rgba(120, 120, 120, 0.35);
 }
 .hs-comp-canvas-wrap.is-panning,
 .hs-comp-canvas-wrap.is-panning #ceCanvas {
@@ -12670,7 +12671,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-comp-swatch {
     width: 15px;
     height: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     background: #000;
     cursor: pointer;
     padding: 0;
@@ -12684,7 +12685,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     z-index: 2;
 }
 .hs-comp-swatch.active {
-    border: 1px solid #ffffff;
+    border: 2px solid #ffffff;
     outline: 2px solid var(--color-primary, #e07028);
     outline-offset: 1px;
     z-index: 3;
@@ -12723,7 +12724,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     width: 14px;
     height: 14px;
     margin: 0;
-    border: 1px solid var(--color-primary, #e07028);
+    border: 2px solid var(--color-primary, #e07028);
     background: #0a0a0a;
     border-radius: 0;
     cursor: pointer;
@@ -12749,7 +12750,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     appearance: none;
     height: 6px;
     background: #111111;
-    border: 1px solid rgba(160, 160, 160, 0.4);
+    border: 2px solid rgba(160, 160, 160, 0.4);
     border-radius: 0;
     outline: none;
     margin: 0;
@@ -12760,7 +12761,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     width: 12px;
     height: 12px;
     background: var(--color-primary, #e07028);
-    border: 1px solid #000000;
+    border: 2px solid #000000;
     border-radius: 0;
     cursor: pointer;
     box-shadow: none;
@@ -12769,7 +12770,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     width: 12px;
     height: 12px;
     background: var(--color-primary, #e07028);
-    border: 1px solid #000000;
+    border: 2px solid #000000;
     border-radius: 0;
     cursor: pointer;
 }
@@ -12791,7 +12792,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(120, 120, 120, 0.35);
+    border: 2px solid rgba(120, 120, 120, 0.35);
     margin-bottom: 8px;
     z-index: 2;
 }
@@ -12823,7 +12824,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(120, 120, 120, 0.35);
+    border: 2px solid rgba(120, 120, 120, 0.35);
 }
 .hs-comp-thumb canvas,
 .hs-comp-thumb img {
@@ -12852,7 +12853,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     font-size: 11px;
     line-height: 1.35;
     background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(120, 120, 120, 0.4);
+    border: 2px solid rgba(120, 120, 120, 0.4);
     color: #e0e0e0;
     padding: 6px;
     margin-bottom: 8px;
@@ -12883,7 +12884,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     font-family: inherit;
     font-size: 11px;
     background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(120, 120, 120, 0.4);
+    border: 2px solid rgba(120, 120, 120, 0.4);
     color: #e0e0e0;
     padding: 4px;
 }
@@ -12894,7 +12895,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .hs-comp-swatch-bg {
     position: relative;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 .hs-comp-swatch-bg::after {
     content: "";
@@ -12930,7 +12931,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-comp-component-props {
     margin: 12px 0;
     padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     background-color: rgba(0, 0, 0, 0.2);
 }
@@ -12945,7 +12946,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .hs-comp-component-props select {
     width: 100%;
     padding: 4px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 3px;
     background-color: rgba(0, 0, 0, 0.3);
     color: inherit;
@@ -13041,7 +13042,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: center;
     gap: 12px;
     padding: 14px 18px;
-    border-bottom: 1px solid var(--current-primary, #00ffcc);
+    border-bottom: 2px solid var(--current-primary, #00ffcc);
 }
 .difficulty-editor-header { justify-content: space-between; }
 .difficulty-editor-header h2 { margin: 0; font-size: 1.1rem; }
@@ -13060,7 +13061,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .difficulty-editor-nav {
     padding: 16px;
-    border-right: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-right: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .de-section-title {
     margin: 8px 0;
@@ -13075,7 +13076,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     padding: 9px;
     color: inherit;
     background: transparent;
-    border: 1px solid rgba(255,255,255,.25);
+    border: 2px solid rgba(255,255,255,.25);
     cursor: pointer;
     text-align: left;
 }
@@ -13096,7 +13097,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     padding: 6px;
     color: inherit;
     background: var(--gray-900, #202828);
-    border: 1px solid rgba(255,255,255,.3);
+    border: 2px solid rgba(255,255,255,.3);
 }
 .difficulty-editor-controls {
     overflow: auto;
@@ -13111,7 +13112,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .de-ai-controls {
     margin-top: 28px;
     padding-top: 20px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .de-slider-row {
     display: grid;
@@ -13125,12 +13126,12 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 .de-slider-row output { color: var(--current-primary, #00ffcc); text-align: right; }
 .difficulty-editor-footer {
     justify-content: flex-end;
-    border-top: 1px solid var(--current-primary, #00ffcc);
+    border-top: 2px solid var(--current-primary, #00ffcc);
     border-bottom: 0;
 }
 @media (max-width: 650px) {
     .difficulty-editor-body { grid-template-columns: 1fr; overflow: auto; }
-    .difficulty-editor-nav { border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+    .difficulty-editor-nav { border-right: 0; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
     .difficulty-editor-controls { min-height: 360px; }
 }
 
@@ -13158,7 +13159,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: center;
     justify-content: space-between;
     padding: 14px 18px;
-    border-bottom: 1px solid var(--current-primary, #00ffcc);
+    border-bottom: 2px solid var(--current-primary, #00ffcc);
 }
 .faction-command-header h2 { margin: 0; font-size: 1.1rem; }
 .faction-command-grid {
@@ -13169,7 +13170,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .faction-command-list {
     padding: 18px;
-    border-right: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-right: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .faction-command-list h3,
 .faction-command-detail h3 {
@@ -13185,7 +13186,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     color: inherit;
     text-align: left;
     background: transparent;
-    border: 1px solid rgba(255,255,255,.25);
+    border: 2px solid rgba(255,255,255,.25);
     cursor: pointer;
 }
 .fc-faction.active,
@@ -13230,7 +13231,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
-    border-bottom: 1px solid var(--current-primary, #00ffcc);
+    border-bottom: 2px solid var(--current-primary, #00ffcc);
     color: var(--current-text, #d8fff5);
     font-size: 0.75rem;
     font-weight: bold;
@@ -13263,7 +13264,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-branch,
 .hs-tree-item {
-    border: 1px solid var(--current-primary, #00ffcc);
+    border: 2px solid var(--current-primary, #00ffcc);
     border-radius: 2px;
     background: var(--gray-900, #0a0e14);
 }
@@ -13314,7 +13315,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     flex-direction: column;
     gap: 2px;
     padding: 4px 8px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .hs-tree-area-style {
@@ -13322,13 +13323,13 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     align-items: flex-start;
     gap: 6px;
     padding: 2px 0 6px;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .hs-tree-wing-symmetry {
     align-self: flex-start;
     padding: 4px 6px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     background: var(--gray-900, #0a0e14);
     color: var(--current-text, #d8fff5);
     cursor: pointer;
@@ -13370,7 +13371,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-slot-content {
     padding: 6px 8px;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .hs-tree-skin-controls {
@@ -13397,7 +13398,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 .hs-tree-skin-option {
     padding: 4px 6px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     background: var(--gray-900, #0a0e14);
     color: var(--current-text, #d8fff5);
     cursor: pointer;
@@ -13421,7 +13422,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     letter-spacing: 0.04em;
     background-color: var(--color-surface, var(--gray-900, #0a0e14));
     color: var(--color-text, var(--current-text, #d8fff5));
-    border: 1px solid var(--color-border, var(--current-primary, #00ffcc));
+    border: 2px solid var(--color-border, var(--current-primary, #00ffcc));
     border-radius: 2px;
     cursor: pointer;
     appearance: none;
@@ -13494,7 +13495,7 @@ html[data-faction="terran"] {
 /* Kronax — deep stair-stepped blade cuts, pixel diagonal banding. */
 html[data-faction="kronax"] {
     --faction-clip: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, 100% 0, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 0 100%);
-    --faction-border-width: calc(var(--ui-border-width) + 1px);
+    --faction-border-width: calc(var(--ui-border-width) + 2px);
     --faction-surface:
         conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 0px 0px / 16px 16px,
         conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 4px 4px / 16px 16px,
@@ -13721,7 +13722,7 @@ html[data-faction] .enemy-vitals-side,
     width: 18px;
     height: 18px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     background: #09090d;
     color: var(--color-primary);
     font: inherit;
@@ -13781,7 +13782,7 @@ html[data-faction] .enemy-vitals-side,
 .hs-style-thumb {
     flex: 0 0 auto;
     padding: 2px;
-    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, transparent);
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, transparent);
     background: #09090d;
     cursor: pointer;
     scroll-snap-align: center;
@@ -13802,14 +13803,14 @@ html[data-faction] .enemy-vitals-side,
 }
 .hs-style-thumb:focus-visible,
 .hs-style-carousel-step:focus-visible {
-    outline: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    outline: 2px solid var(--current-primary, var(--color-primary, #00ffcc));
     outline-offset: 1px;
 }
 .hs-style-carousel-step {
     width: 20px;
     height: 40px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
     background: #09090d;
     color: var(--current-primary, var(--color-primary, #00ffcc));
     font: inherit;
@@ -13853,7 +13854,7 @@ html[data-faction] .enemy-vitals-side,
 
 /* Brief flash on a tree section opened from a click on the ship. */
 .hs-tree-branch.is-focused > .hs-tree-branch-label {
-    box-shadow: inset 0 0 0 1px var(--current-primary, var(--color-primary, #00ffcc)),
+    box-shadow: inset 0 0 0 2px var(--current-primary, var(--color-primary, #00ffcc)),
         0 0 10px color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
     transition: box-shadow 0.3s ease-out;
 }
@@ -13873,13 +13874,13 @@ html[data-faction] .enemy-vitals-side,
 .hs-floating-area-style input[type="range"]::-webkit-slider-runnable-track {
     height: 4px;
     background: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, #09090d);
-    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
 }
 .hs-hangar-list input[type="range"]::-moz-range-track,
 .hs-floating-area-style input[type="range"]::-moz-range-track {
     height: 4px;
     background: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, #09090d);
-    border: 1px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
 }
 .hs-hangar-list input[type="range"]::-moz-range-progress,
 .hs-floating-area-style input[type="range"]::-moz-range-progress {
@@ -13892,7 +13893,7 @@ html[data-faction] .enemy-vitals-side,
     width: 10px;
     height: 14px;
     margin-top: -6px;
-    border: 1px solid #ffffff;
+    border: 2px solid #ffffff;
     border-radius: 0;
     background: var(--current-primary, var(--color-primary, #00ffcc));
 }
@@ -13900,7 +13901,7 @@ html[data-faction] .enemy-vitals-side,
 .hs-floating-area-style input[type="range"]::-moz-range-thumb {
     width: 10px;
     height: 14px;
-    border: 1px solid #ffffff;
+    border: 2px solid #ffffff;
     border-radius: 0;
     background: var(--current-primary, var(--color-primary, #00ffcc));
 }
@@ -13917,7 +13918,7 @@ html[data-faction] .enemy-vitals-side,
     width: 14px;
     height: 14px;
     margin: 0;
-    border: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    border: 2px solid var(--current-primary, var(--color-primary, #00ffcc));
     background: #09090d;
     display: inline-grid;
     place-content: center;
@@ -13940,7 +13941,7 @@ html[data-faction] .enemy-vitals-side,
 .hs-floating-area-style input[type="checkbox"]:focus-visible,
 .hs-hangar-list input[type="range"]:focus-visible,
 .hs-floating-area-style input[type="range"]:focus-visible {
-    outline: 1px solid var(--current-primary, var(--color-primary, #00ffcc));
+    outline: 2px solid var(--current-primary, var(--color-primary, #00ffcc));
     outline-offset: 2px;
 }
 
@@ -13985,7 +13986,7 @@ html[data-faction] .enemy-vitals-side,
     align-items: baseline;
     gap: 6px;
     padding: 3px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
     background: color-mix(in srgb, var(--color-primary) 6%, transparent);
     font-size: var(--font-text);
     letter-spacing: 1px;
@@ -14060,7 +14061,7 @@ html[data-faction] .enemy-vitals-side,
     margin: 4px auto 14px;
     padding: 8px 12px;
     width: min(360px, 92%);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background:
         radial-gradient(circle at 35% 50%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 70%),
         #050508;
@@ -14389,7 +14390,7 @@ html[data-faction] .enemy-vitals-side,
     text-align: left;
     color: var(--color-text);
     background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 45%, transparent);
     cursor: pointer;
     clip-path: var(--faction-ctl-clip, none);
 }
@@ -14586,7 +14587,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     flex: 0 0 auto;
     display: inline-flex;
     margin-right: 10px;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
     image-rendering: pixelated;
 }
 .hs-style-shop-thumb canvas {
@@ -14642,7 +14643,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     z-index: 4;
     margin-bottom: 0;
     background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
 }
 
 /* Style shop clusters: section (hull / components / connections) and a
@@ -14672,7 +14673,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     padding: 4px 8px;
     letter-spacing: 2px;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, var(--color-surface));
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
 }
 .hs-style-shop-count {
     margin-left: auto;
@@ -14732,7 +14733,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .hs-part-faction {
     display: inline-block;
     padding: 0 4px;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
     color: var(--faction-accent, var(--color-primary));
     font-weight: bold;
 }
@@ -15121,12 +15122,12 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 .enemy-vitals-side .health-bar.enemy-health.is-champion {
     padding: 6px;
     gap: 6px;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #000);
 }
 .enemy-vitals-side .health-bar.enemy-health.is-champion {
     border-color: var(--faction-accent, var(--color-primary));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
 }
 .enemy-vitals-side .enemy-head {
     display: flex;
@@ -15139,7 +15140,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     box-sizing: content-box;
     padding: 3px;
     background: #000;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
     image-rendering: pixelated;
 }
 .enemy-vitals-side .enemy-text {
@@ -15173,7 +15174,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     height: 12px;
     align-self: stretch;
     background: #000;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
 }
 .enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
     height: 16px;
@@ -15395,7 +15396,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     letter-spacing: 2px;
     color: var(--row-accent);
     background: transparent;
-    border: 1px solid color-mix(in srgb, var(--row-accent) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--row-accent) 55%, transparent);
     cursor: pointer;
 }
 .hs-menu-profile-filter:hover,
@@ -15444,7 +15445,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     max-height: 60vh;
     overflow-y: auto;
     scrollbar-width: thin;
-    border: 1px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 55%, transparent);
+    border: 2px solid color-mix(in srgb, var(--row-accent, var(--color-primary)) 55%, transparent);
     background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 6%, transparent);
 }
 @media (max-width: 760px) {
@@ -15479,17 +15480,17 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     color: color-mix(in srgb, var(--faction-color) 75%, #fff);
     border-color: color-mix(in srgb, var(--faction-color) 55%, transparent);
     background: color-mix(in srgb, var(--faction-color) 8%, #050508);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-color) 45%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--faction-color) 45%, transparent);
 }
 .profile-selection-content .profile-faction-swatch:hover {
     background: color-mix(in srgb, var(--faction-color) 18%, #050508);
-    box-shadow: inset 0 0 0 1px var(--faction-color);
+    box-shadow: inset 0 0 0 2px var(--faction-color);
 }
 .profile-selection-content .profile-faction-swatch.selected {
     color: #050508;
     background: var(--faction-color);
     border-color: var(--faction-color);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-color) 60%, #fff),
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--faction-color) 60%, #fff),
         0 0 12px color-mix(in srgb, var(--faction-color) 45%, transparent);
 }
 .profile-faction-swatch-emblem {
@@ -15536,7 +15537,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     width: min(360px, 92%);
     padding: 8px 12px;
     text-align: left;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     border-left-width: 3px;
     border-left-color: var(--color-primary);
     background: color-mix(in srgb, var(--color-primary) 6%, #050508);
@@ -15703,7 +15704,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 }
 .hs-tabs.hs-tabs-editing [draggable="true"] {
     cursor: grab;
-    outline: 1px dashed color-mix(in srgb, var(--color-primary) 60%, transparent);
+    outline: 2px dashed color-mix(in srgb, var(--color-primary) 60%, transparent);
     outline-offset: -3px;
 }
 .hs-tabs.hs-tabs-editing .hs-tab-dragging {
@@ -15752,7 +15753,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     align-items: center;
     margin-left: 10px;
     padding: 0 8px;
-    border: 1px dashed var(--color-primary);
+    border: 2px dashed var(--color-primary);
     color: var(--color-primary);
     font-weight: bold;
     font-size: var(--font-text);
@@ -15933,7 +15934,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     letter-spacing: 1px;
     color: var(--color-text-secondary);
     background: transparent;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
     cursor: pointer;
 }
 .hs-hangar-view-btn.is-active {
@@ -15957,7 +15958,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     font-size: 11px;
     letter-spacing: 2px;
     color: var(--color-primary);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     padding-bottom: 3px;
 }
 .hs-hangar-parts-title small {
@@ -15979,7 +15980,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     font: inherit;
     color: var(--color-text);
     background: color-mix(in srgb, var(--color-surface) 85%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
     cursor: grab;
 }
 .hs-hangar-part:hover,
@@ -15993,7 +15994,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 }
 .hs-hangar-part.is-equipped {
     border-color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 .hs-hangar-part-icon {
     width: 32px;
@@ -16009,7 +16010,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 }
 /* While a part is dragged, show every slot of that type as a drop target. */
 .hs-hangar-bay-stage.is-part-dragging {
-    outline: 1px dashed var(--color-primary);
+    outline: 2px dashed var(--color-primary);
     outline-offset: -4px;
 }
 .hs-hangar-bay-stage[data-drag-kind="weapon"] .hs-hangar-slot[data-slot-kind="weapon"] .hs-hangar-slot-pin,
@@ -16060,6 +16061,19 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 }
 .hs-hangar-slot-pin {
     transition: opacity 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+
+/* --- The one slot a click would grab (see hangarPointerTarget): ring +
+   fill, so it reads as a slot, not as the hull area around it. */
+.hs-hangar-slot.is-pointer-target .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    transform: scale(1.5);
+    border-style: solid;
+    border-color: var(--color-text, #fff);
+    background: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent),
+        0 0 16px var(--faction-accent, var(--color-primary));
+    z-index: 5;
 }
 
 /* --- Part drag: only the icon follows the cursor and snaps onto slots. */
@@ -16296,7 +16310,7 @@ body.hs-part-grabbing * {
     color: var(--color-background);
     background: var(--faction-accent, var(--color-primary));
 }
-.hs-slot-size.is-M { outline: 1px solid var(--faction-accent, var(--color-primary)); outline-offset: 1px; }
+.hs-slot-size.is-M { outline: 2px solid var(--faction-accent, var(--color-primary)); outline-offset: 1px; }
 .hs-slot-size.is-L { outline: 2px double var(--faction-accent, var(--color-primary)); outline-offset: 1px; }
 
 /* Slot pins grow with slot size: S small, M medium, L large. */
@@ -16351,7 +16365,7 @@ body.hs-part-grabbing * {
     gap: 2px 6px;
     min-width: 0;
     padding: 4px 6px;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, transparent);
 }
 .hs-area-tile .hs-area-name { grid-area: name; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
@@ -16475,7 +16489,7 @@ body.hs-part-grabbing * {
     letter-spacing: 1px;
     padding: 0 4px;
     color: var(--color-text-secondary);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .hs-hangar-part.is-equipped .hs-hangar-part-state {
     color: var(--color-background);
@@ -16527,7 +16541,7 @@ body.hs-part-grabbing * {
     font-size: 9px;
     font-weight: bold;
     letter-spacing: 1px;
-    border: 1px solid var(--faction-accent, var(--color-primary));
+    border: 2px solid var(--faction-accent, var(--color-primary));
     background: var(--faction-accent, var(--color-primary));
     color: var(--color-background);
 }
@@ -16603,4 +16617,1112 @@ body.hs-part-grabbing * {
     font-size: var(--font-text);
     letter-spacing: 1px;
     color: #ff7a7a;
+}
+
+/* --- PLAY has no resource row, so the map toolbar is the second row: it
+   starts right of the hanging faction crest instead of running under it. */
+.home-station-content.hs-mode-play .galaxy-map-toolbar {
+    margin-left: var(--hs-tabs-offset, 0px);
+}
+
+/* --- The hanging faction crest always stays on top: the header sits above
+   the body (whose frames/panels would otherwise paint over the crest). */
+.home-station-content > .hs-header {
+    position: relative;
+    z-index: 30;
+}
+.hs-topbar-emblem > .hs-crest {
+    z-index: 31;
+}
+
+/* --- Pixel look: UI lines sit on a 2px grid. The hangar connector lines
+   are drawn with hard edges and a 2px stroke instead of anti-aliased
+   hairlines (planet art SVGs keep their smooth curves). */
+.hs-hangar-link-svg,
+.hs-hangar-link-svg * {
+    shape-rendering: crispEdges;
+}
+.hs-hangar-link-svg path,
+.hs-hangar-link-svg line,
+.hs-hangar-link-svg polyline {
+    stroke-width: 2px;
+}
+
+/* Top bar areas: HANGAR | HOME STATION | FACTIONS | EXPLORATIONS.
+   Area buttons and sub navbar tabs are .hs-tab buttons with visible labels. */
+.home-station-overlay .hs-tabs .hs-area-btn .hs-tab-label,
+.home-station-overlay .hs-subnav .hs-tab-label {
+    display: inline;
+}
+.hs-subnav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0 2px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.home-station-overlay .hs-subnav .hs-tab {
+    padding: 4px 8px;
+}
+.home-station-overlay .hs-subnav .hs-tab-icon,
+.home-station-overlay .hs-subnav .hs-tab-pixel {
+    width: 24px;
+    height: 24px;
+}
+
+/* Faction relations dashboard */
+.hs-factions { display: flex; flex-direction: column; gap: 10px; }
+.hs-faction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+.hs-faction-card { display: flex; flex-direction: column; gap: 8px; }
+.hs-faction-head { display: flex; align-items: center; gap: 8px; }
+.hs-faction-crest { width: 48px; height: 48px; flex-shrink: 0; }
+.hs-faction-crest img { width: 48px; height: 48px; image-rendering: pixelated; }
+.hs-faction-name { flex: 1; font-weight: bold; letter-spacing: 1px; }
+.hs-faction-status {
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+}
+.hs-faction-meter {
+    height: 8px;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+}
+.hs-faction-meter span { display: block; height: 100%; background: var(--color-text-secondary); }
+.hs-faction-card.is-ally .hs-faction-meter span,
+.hs-faction-card.is-friend .hs-faction-meter span { background: var(--color-primary); }
+.hs-faction-card.is-hostile .hs-faction-meter span { background: #d04848; }
+.hs-faction-card.is-ally .hs-faction-status { border-color: var(--color-primary); color: var(--color-text); }
+.hs-faction-card.is-hostile .hs-faction-status { border-color: #d04848; color: #ff8080; }
+.hs-faction-stats { display: flex; justify-content: space-between; font-size: 0.85em; color: var(--color-text-secondary); }
+.hs-faction-goal { margin: 0; font-size: 0.85em; color: var(--color-text-secondary); line-height: 1.4; }
+.hs-faction-pact { align-self: flex-start; }
+
+/* --- AREAS/PARTS switch gets its own row under the sidebar heading so it
+   never covers the label in the narrow sidebar. */
+.hs-hangar-list > .hs-panel-title {
+    flex-wrap: wrap;
+}
+.hs-hangar-list > .hs-panel-title > .hs-hangar-view-toggle {
+    order: 10;
+    flex: 1 0 100%;
+    margin: 4px 0 0;
+}
+.hs-hangar-list > .hs-panel-title > .hs-hangar-view-toggle > .hs-hangar-view-btn {
+    flex: 1 1 0;
+}
+
+/* --- Station header: pilot card in the top-left corner (crest, name,
+   resources) next to the area navbar + sub navbar. */
+.hs-header-split {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.hs-crest-card { --crest-size: 64px; }
+.hs-pilot-card {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 6px 8px;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    background: color-mix(in srgb, var(--color-background, #050508) 70%, transparent);
+    clip-path: var(--faction-ctl-clip, none);
+    max-width: 46%;
+    min-width: 0;
+}
+.hs-pilot-crest {
+    flex: 0 0 auto;
+    display: inline-flex;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent));
+}
+.hs-pilot-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.hs-pilot-card .hs-profile {
+    margin: 0;
+    color: var(--color-text);
+}
+.hs-pilot-res {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    align-items: center;
+}
+.hs-header-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.hs-header-main .hs-topbar {
+    margin-bottom: 0;
+}
+
+/* --- Mission board (hangar area, before CRAFT). */
+.hs-mission-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hs-mission {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+}
+.hs-mission .hs-line-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.hs-mission-type {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: var(--color-primary);
+}
+.hs-mission.is-patrol .hs-mission-type {
+    color: var(--color-text-secondary);
+}
+.hs-mission-meta {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--color-text-secondary);
+}
+.hs-mission-actions {
+    display: flex;
+    gap: 6px;
+}
+.hs-mission.is-locked {
+    opacity: 0.45;
+}
+.hs-mission.is-active {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: inset 0 0 0 2px var(--faction-accent, var(--color-primary));
+}
+.hs-mission .hs-line-name {
+    align-items: flex-start;
+    text-align: left;
+}
+.hs-mission .hs-line-action {
+    white-space: nowrap;
+}
+.hs-mission.is-locked .hs-mission-reward {
+    min-width: 0;
+}
+
+/* --- Station window fills the screen (small margin) and lets the area's
+   background image (hs-bg-<tab>, set on the overlay) show through instead
+   of its own opaque gradient; panels keep their own backing for text. */
+.home-station-overlay .home-station-content {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.34) 100%);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent),
+        0 0 28px color-mix(in srgb, var(--color-primary) 25%, transparent),
+        inset 0 0 60px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 640px) {
+    .home-station-overlay .home-station-content {
+        width: calc(100vw - 8px);
+        max-width: calc(100vw - 8px);
+        height: calc(100vh - 8px);
+        max-height: calc(100vh - 8px);
+    }
+}
+.home-station-overlay[data-hs-tab="missions"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%),
+        url('assets/ui/hs-bg-hangar.png');
+}
+/* Panels are translucent too, so the area image reads through everywhere;
+   the hangar bay stays dark so the ship keeps its contrast. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section) {
+    background-color: rgba(4, 3, 10, 0.6) !important;
+    background-image: none !important;
+}
+.home-station-overlay .home-station-content .hs-hangar-bay-stage {
+    background-color: rgba(3, 3, 8, 0.86);
+}
+.hs-mission .hs-line-action {
+    width: auto !important;
+    min-width: max-content;
+    padding-left: 14px;
+    padding-right: 14px;
+}
+.home-station-overlay .hs-mission {
+    background: rgba(4, 3, 10, 0.5);
+}
+
+/* --- FACTIONS area: clickable relation cards, detail view, trade. */
+button.hs-faction-card {
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+}
+button.hs-faction-card:hover,
+button.hs-faction-card.nav-focused {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent);
+}
+.hs-faction-detail { overflow-y: auto; }
+.hs-faction-detail-head { display: flex; gap: 14px; align-items: center; }
+.hs-faction-crest-lg, .hs-faction-crest-lg img { width: 96px; height: 96px; }
+.hs-faction-detail-info { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hs-faction-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hs-faction-picker { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.home-station-overlay .hs-faction-picker .hs-tab-label { display: inline; }
+.hs-faction-picker .hs-tab-icon img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-trade-line { display: flex; align-items: center; gap: 10px; }
+.hs-trade-line .hs-line-name { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hs-trade-quote { white-space: nowrap; color: var(--color-text-secondary); }
+.hs-trade-actions { display: flex; gap: 6px; }
+.hs-trade-tag {
+    padding: 1px 5px;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+}
+.hs-trade-tag.is-demand { border-color: #e0b040; color: #f0c860; }
+.hs-contract-emblem { display: inline-flex; vertical-align: middle; margin-right: 6px; }
+.hs-contract-emblem img { width: 16px; height: 16px; image-rendering: pixelated; }
+.hs-mission.is-bounty .hs-mission-type { color: #ff8060; }
+.hs-mission.is-remote .hs-mission-meta { color: var(--color-primary); }
+.hs-fcontract-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Faction panels paint their fill in ::after (the frame is ::before) —
+   that fill must be translucent too, or it hides the area image. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section)::after {
+    background-color: rgba(4, 3, 10, 0.6) !important;
+    background-image: none !important;
+}
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section) {
+    background-color: transparent !important;
+}
+/* The frame layer (::before) is a full faction-coloured plate under the
+   fill; with a see-through fill that tints the whole panel. Mask it down to
+   a ring of --frame-w so only the outline stays coloured. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    padding: var(--frame-w, 2px);
+    box-sizing: border-box;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+/* Galaxy map: drag to pan, wheel to zoom. */
+.galaxy-map-svg { cursor: grab; touch-action: none; }
+.galaxy-map-svg.is-panning { cursor: grabbing; }
+
+/* --- Navbar switch animations (header is re-rendered, so keyframes). */
+@keyframes hs-nav-activate-left {
+    0% { transform: translateX(-10px) scale(0.92); filter: brightness(1.8); }
+    60% { transform: translateX(1px) scale(1.04); }
+    100% { transform: none; filter: none; }
+}
+@keyframes hs-nav-activate-right {
+    0% { transform: translateX(10px) scale(0.92); filter: brightness(1.8); }
+    60% { transform: translateX(-1px) scale(1.04); }
+    100% { transform: none; filter: none; }
+}
+@keyframes hs-subnav-enter {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: none; }
+}
+.home-station-overlay .hs-tab.hs-anim-activate.hs-anim-from-left {
+    animation: hs-nav-activate-left 0.28s steps(7, end);
+}
+.home-station-overlay .hs-tab.hs-anim-activate.hs-anim-from-right {
+    animation: hs-nav-activate-right 0.28s steps(7, end);
+}
+.hs-subnav.hs-subnav-enter > .hs-tab {
+    animation: hs-subnav-enter 0.24s steps(6, end) both;
+}
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(2) { animation-delay: 0.04s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(3) { animation-delay: 0.08s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(4) { animation-delay: 0.12s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(5) { animation-delay: 0.16s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(n+6) { animation-delay: 0.2s; }
+@media (prefers-reduced-motion: reduce) {
+    .home-station-overlay .hs-tab.hs-anim-activate,
+    .hs-subnav.hs-subnav-enter > .hs-tab { animation: none; }
+}
+
+/* Faction detail: faction tab row on top, content below. */
+.hs-faction-tabs {
+    flex: 0 0 auto;
+    padding-bottom: 6px;
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.home-station-overlay .hs-faction-detail .hs-faction-detail-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+}
+.hs-faction-detail .hs-faction-detail-info { max-width: 720px; }
+
+/* Upgrade tab → SHIPS: ship render per row, the upgraded area outlined. */
+.hs-area-thumb {
+    width: 72px;
+    height: 48px;
+    flex: none;
+    image-rendering: pixelated;
+    background: color-mix(in srgb, var(--color-background) 70%, transparent);
+    border: 1px solid var(--color-border);
+    margin-right: 10px;
+}
+.hs-class-affinity {
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-area-row:not(.is-compact) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+.hs-area-row .hs-area-thumb {
+    margin-right: 0;
+}
+.hs-area-ship > .hs-area-row:not(.is-compact) {
+    padding-left: 12px;
+}
+
+/* --- PARTS sidebar as a list: one row per part
+   (size · icon · name · type glyph · ON/OFF). */
+.hs-hangar-parts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.hs-hangar-part {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 6px;
+    text-align: left;
+}
+.hs-hangar-part > .hs-slot-size {
+    position: static;
+    order: 0;
+    flex: 0 0 auto;
+}
+.hs-hangar-part-icon {
+    order: 1;
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+}
+.hs-hangar-part-icon img {
+    width: 24px;
+    height: 24px;
+}
+.hs-hangar-part-name {
+    order: 2;
+    flex: 1 1 auto;
+    font-size: 10px;
+}
+.hs-hangar-part > .hs-hangar-part-glyph {
+    position: static;
+    order: 3;
+    flex: 0 0 auto;
+}
+.hs-hangar-part-state {
+    order: 4;
+    flex: 0 0 auto;
+    min-width: 30px;
+    text-align: center;
+}
+
+/* PARTS sidebar: fill the panel height like the ships list does, and
+   larger rows whose icon stays inside its own box. */
+.hs-hangar-list .hs-hangar-parts {
+    flex: 1 1 0;
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+.hs-hangar-part {
+    min-height: 44px;
+    gap: 10px;
+    padding: 6px 10px 6px 8px;
+}
+.hs-hangar-part-icon {
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-hangar-part-icon img,
+.hs-hangar-part-icon canvas,
+.hs-hangar-part-icon svg {
+    width: 32px;
+    height: 32px;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+.hs-hangar-part-name {
+    font-size: 11px;
+}
+
+/* --- Style picker dropdown (hull / module styles in the component tree). */
+.hs-style-dropdown {
+    position: relative;
+    min-width: 0;
+}
+.hs-style-dropdown-current {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 4px 4px;
+    list-style: none;
+    cursor: pointer;
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    background: #09090d;
+}
+.hs-style-dropdown-current::-webkit-details-marker { display: none; }
+.hs-style-dropdown-current:hover,
+.hs-style-dropdown[open] > .hs-style-dropdown-current {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-style-dropdown-thumb {
+    flex: 0 0 auto;
+    line-height: 0;
+    border: 2px solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, transparent);
+}
+.hs-style-dropdown-thumb canvas {
+    display: block;
+    width: 96px;
+    height: 72px;
+    image-rendering: pixelated;
+}
+.hs-style-dropdown-text {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    letter-spacing: 1px;
+}
+.hs-style-dropdown-text strong {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-style-dropdown-text small {
+    font-size: 10px;
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    font-variant-numeric: tabular-nums;
+}
+.hs-style-dropdown-caret {
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    transition: transform 0.15s steps(3, end);
+}
+.hs-style-dropdown[open] .hs-style-dropdown-caret { transform: rotate(180deg); }
+.hs-style-dropdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 4px;
+    max-height: 340px;
+    overflow-y: auto;
+    border: 2px solid var(--current-primary, var(--color-primary, #00ffcc));
+    background: #09090d;
+}
+.hs-style-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 8px 3px 3px;
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-align: left;
+    color: var(--color-text);
+    background: transparent;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+.hs-style-option:hover,
+.hs-style-option:focus-visible {
+    border-color: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 70%, transparent);
+    outline: none;
+}
+.hs-style-option.is-active {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+    box-shadow: inset 0 0 8px color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent);
+}
+.hs-style-option.is-active .hs-style-dropdown-thumb {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+
+/* Hangar sidebar AREAS | PARTS tabs: readable text + icon. */
+.hs-hangar-list > .hs-panel-title > .hs-hangar-view-toggle > .hs-hangar-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: 12px;
+    letter-spacing: 2px;
+}
+.hs-hangar-view-btn img,
+.hs-hangar-view-btn .hs-pixel {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
+/* Planet map toolbar: jump to galaxy travel. */
+.galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    margin-left: 12px;
+    padding: 6px 16px;
+    min-height: 0;
+    font-size: 13px;
+    letter-spacing: 2px;
+    flex: 0 0 auto;
+}
+
+/* --- Empty weapon slots are always visible (both markers of a wing pair):
+   a slow pulse so free mounts read at a glance without hovering. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    pointer-events: auto;
+    animation: hs-empty-weapon-slot 1.6s ease-in-out infinite !important;
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin.is-mirror {
+    pointer-events: none;
+}
+@keyframes hs-empty-weapon-slot {
+    0%, 100% { filter: drop-shadow(0 0 2px var(--slot-shape-color)); transform: scale(1); }
+    50% { filter: drop-shadow(0 0 8px var(--slot-shape-color)); transform: scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin {
+        animation: none !important;
+    }
+}
+
+/* Area tiles: ON/OFF switch right behind the label, taller row. */
+.hs-area-tile {
+    min-height: 44px;
+    padding: 8px 8px;
+    gap: 4px 8px;
+}
+.hs-area-tile .hs-area-name {
+    gap: 8px;
+}
+.hs-area-tile .hs-area-name .hs-area-switch {
+    margin-left: 0;
+}
+.hs-area-tile .hs-area-btn {
+    padding: 6px 10px;
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"].is-pointer-target .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"].is-drop-target .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin:hover {
+    animation: none !important;
+}
+
+/* --- Area ON/OFF as a real pixel toggle switch: a track with a square knob
+   that snaps right (ON, lit) or left (OFF, dark). Label sits opposite the knob. */
+.hs-area-switch {
+    cursor: pointer;
+}
+.hs-area-switch .hs-area-switch-track {
+    position: relative;
+    box-sizing: border-box;
+    width: 46px;
+    min-width: 46px;
+    height: 20px;
+    padding: 0 20px 0 5px;
+    justify-content: flex-start;
+    font-size: 9px;
+    line-height: 1;
+    border: 2px solid var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, var(--color-background, #050508));
+    color: var(--color-text, #fff);
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, #000 35%, transparent);
+    transition: background 0.12s steps(2, end), border-color 0.12s steps(2, end);
+}
+/* Knob */
+.hs-area-switch .hs-area-switch-track::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: calc(100% - 16px);
+    width: 12px;
+    height: 12px;
+    background: var(--faction-accent, var(--color-primary));
+    box-shadow:
+        inset -2px -2px 0 color-mix(in srgb, #000 35%, transparent),
+        inset 2px 2px 0 color-mix(in srgb, #fff 45%, transparent);
+    transition: left 0.12s steps(3, end);
+}
+.hs-area-switch input:not(:checked) + .hs-area-switch-track {
+    padding: 0 4px 0 18px;
+    justify-content: flex-end;
+    border-color: var(--color-border);
+    background: color-mix(in srgb, var(--color-background, #050508) 85%, transparent);
+    color: var(--color-text-secondary);
+}
+.hs-area-switch input:not(:checked) + .hs-area-switch-track::before {
+    left: 2px;
+    background: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+}
+.hs-area-switch:hover .hs-area-switch-track {
+    border-color: var(--faction-accent, var(--color-primary));
+    filter: brightness(1.15);
+}
+.hs-area-switch:active .hs-area-switch-track::before {
+    transform: translateY(1px);
+}
+
+/* --- Empty slots drawn as mount sockets instead of type icons: a square
+   base plate with a raised rim, a dark recessed bore and four corner bolts.
+   The slot type only tints the rim (--slot-shape-color). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10) !important;
+    border: 2px solid color-mix(in srgb, var(--slot-shape-color) 70%, #000) !important;
+    box-shadow:
+        inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.6),
+        0 0 6px color-mix(in srgb, var(--slot-shape-color) 45%, transparent) !important;
+    filter: none;
+    image-rendering: pixelated;
+}
+/* Recessed bore in the middle. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::before {
+    inset: 4px;
+    clip-path: none;
+    background: #050508;
+    box-shadow:
+        inset 2px 2px 0 rgba(0, 0, 0, 0.85),
+        inset -1px -1px 0 color-mix(in srgb, var(--slot-shape-color) 40%, transparent);
+}
+/* Four corner bolts (one 2px pixel + three shadows). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::after {
+    inset: auto;
+    left: 0;
+    top: 0;
+    width: 2px;
+    height: 2px;
+    clip-path: none;
+    background: color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+    box-shadow:
+        12px 0 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff),
+        0 12px 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff),
+        12px 12px 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-dot {
+    display: none;
+}
+/* Drop target / pointer target: the bore lights up — "part goes in here". */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin::before,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin::before {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin {
+    border-color: var(--slot-shape-color) !important;
+}
+@keyframes hs-empty-weapon-slot {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+/* Socket size = the mount size of a part in that area (set per slot in JS). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    width: var(--socket-size, 18px);
+    height: var(--socket-size, 18px);
+    margin: calc(var(--socket-size, 18px) / -2) 0 0 calc(var(--socket-size, 18px) / -2);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::before {
+    inset: max(3px, calc(var(--socket-size, 18px) * 0.22));
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::after {
+    box-shadow:
+        calc(var(--socket-size, 18px) - 6px) 0 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff),
+        0 calc(var(--socket-size, 18px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff),
+        calc(var(--socket-size, 18px) - 6px) calc(var(--socket-size, 18px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+}
+
+/* Narrow component-tree rows: knob-only switch so area names stay readable. */
+.hs-tree-branch > summary .hs-area-switch .hs-area-switch-track {
+    width: 30px;
+    min-width: 30px;
+    height: 16px;
+    padding: 0;
+    font-size: 0;
+}
+.hs-tree-branch > summary .hs-area-switch .hs-area-switch-track::before {
+    top: 1px;
+    width: 10px;
+    height: 10px;
+    left: calc(100% - 13px);
+}
+.hs-tree-branch > summary .hs-area-switch input:not(:checked) + .hs-area-switch-track {
+    padding: 0;
+}
+.hs-tree-branch > summary .hs-area-switch input:not(:checked) + .hs-area-switch-track::before {
+    left: 1px;
+}
+
+/* Empty sockets keep their socket look in every state (hover, linked
+   hover, pointer target, drop target): no zoom, no restyle — only the bore
+   lights up. Both markers of a wing pair react the same way. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin:hover,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-hover-linked[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-bay-stage[data-drag-kind] .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    transform: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10) !important;
+    border: 2px solid var(--slot-shape-color) !important;
+    box-shadow:
+        inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.6),
+        0 0 10px var(--slot-shape-color) !important;
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin:hover::before,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-hover-linked[data-slot-kind] .hs-hangar-slot-pin::before {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* --- Weapon slot bar: top centre of the hangar bay. Drop weapons on a
+   tile, drag an empty tile onto the ship to place its socket. */
+.hs-slot-bar {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+    padding: 4px 6px;
+    background: color-mix(in srgb, var(--color-background) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    pointer-events: auto;
+}
+.hs-slot-bar:empty {
+    display: none;
+}
+.hs-slot-tile {
+    --slot-shape-color: var(--faction-accent, var(--color-primary));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 6px 5px;
+    font: inherit;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: grab;
+    touch-action: none;
+}
+.hs-slot-tile:hover,
+.hs-slot-tile:focus-visible,
+.hs-slot-tile.is-drop-target {
+    border-color: var(--slot-shape-color);
+    outline: none;
+}
+.hs-slot-tile.is-dragging {
+    opacity: 0.4;
+}
+.hs-slot-tile-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+.hs-slot-tile-label small {
+    color: var(--slot-shape-color);
+}
+/* Socket: nose tile full size, wing tiles half (a split gun is half size). */
+.hs-slot-tile-socket {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10);
+    border: 2px solid color-mix(in srgb, var(--slot-shape-color) 70%, #000);
+    box-shadow:
+        inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.6);
+}
+.hs-slot-tile.is-wing .hs-slot-tile-socket {
+    width: 24px;
+    height: 24px;
+}
+.hs-slot-tile-socket img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.hs-slot-tile-bore {
+    position: absolute;
+    inset: 25%;
+    background: #050508;
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.85);
+}
+.hs-slot-tile.is-empty:hover .hs-slot-tile-bore,
+.hs-slot-tile.is-drop-target .hs-slot-tile-bore {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+}
+.hs-slot-tile.is-drop-target .hs-slot-tile-socket {
+    border-color: var(--slot-shape-color);
+    box-shadow: 0 0 10px var(--slot-shape-color);
+}
+/* Socket following the cursor while placing a slot on the ship. */
+.hs-slot-socket-ghost {
+    position: fixed;
+    left: -14px;
+    top: -14px;
+    width: 28px;
+    height: 28px;
+    z-index: 10000;
+    pointer-events: none;
+    background: #050508;
+    border: 2px dashed var(--faction-accent, var(--color-primary));
+}
+.hs-slot-socket-ghost.is-wing {
+    left: -9px;
+    top: -9px;
+    width: 18px;
+    height: 18px;
+}
+.hs-slot-socket-ghost.is-valid {
+    border-style: solid;
+    box-shadow: 0 0 10px var(--faction-accent, var(--color-primary));
+}
+.hs-slot-socket-ghost.is-invalid {
+    border-color: #ff5a3c;
+    opacity: 0.7;
+}
+
+/* Slot menu: per-slot size upgrade row. */
+.hs-slot-upgrade {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: 2px dashed color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+.hs-slot-upgrade-label { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; }
+.hs-slot-upgrade-cost { display: inline-flex; gap: 6px; }
+.hs-slot-upgrade .hs-slot-upgrade-btn { padding: 4px 10px; font-size: 10px; }
+.hs-slot-upgrade.is-max { border-style: solid; opacity: 0.8; }
+
+/* Hover-only move handle on an equipped slot's corner: drag = move the
+   slot with its weapon (grabbing the weapon itself still unslots it). */
+.hs-slot-move-handle {
+    position: absolute;
+    z-index: 7;
+    width: 24px;
+    height: 24px;
+    padding: 2px;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-background);
+    background: var(--faction-accent, var(--color-primary));
+    border: 2px solid var(--color-background);
+    box-shadow: 0 0 8px var(--faction-accent, var(--color-primary));
+    cursor: move;
+    touch-action: none;
+}
+.hs-slot-move-handle[hidden] {
+    display: none;
+}
+.hs-slot-move-handle svg {
+    fill: currentColor;
+}
+.hs-slot-move-handle:hover,
+.hs-slot-move-handle.is-dragging {
+    background: var(--color-text);
+}
+.hs-slot-move-handle.is-invalid {
+    background: #ff5a3c;
+    cursor: not-allowed;
+}
+
+/* Pilot card: just the name, a bit larger. */
+.hs-pilot-card .hs-pilot-name {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: var(--color-text);
+}
+
+/* The mirrored half of a split slot is clickable too (pans to it). */
+.hs-hangar-slot-layer .hs-hangar-slot-pin.is-mirror {
+    pointer-events: auto !important;
+    cursor: pointer;
+}
+/* Both halves of an empty split slot can be grabbed and moved. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin.is-mirror {
+    pointer-events: auto;
+    cursor: grab;
+}
+
+/* Empty weapon slots stay visible and grabbable in every area, also after
+   being moved out of the hovered area (beats the "hidden until the area is
+   hovered" rule on specificity). */
+.hs-hangar-bay-stage .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"]:not(.is-pulling) .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+/* Slot focused from the slot bar: every marker of it (both halves of a
+   split slot) lights up, visible in any area. */
+.hs-hangar-bay-stage .hs-hangar-slot-layer .hs-hangar-slot.is-focused .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    outline: 2px solid var(--color-text);
+    outline-offset: 3px;
+    box-shadow: 0 0 14px var(--faction-accent, var(--color-primary)) !important;
+    animation: none !important;
+}
+.hs-slot-tile.is-focused {
+    border-color: var(--color-text);
+}
+
+/* --- Hangar header stats: four equal tiles across the full width. */
+.hs-hangar-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+.hs-hangar-stats .hs-hangar-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 10px 6px 6px;
+    white-space: normal;
+}
+.hs-stat-icon {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.hs-stat-icon img { width: 20px; height: 20px; image-rendering: pixelated; }
+.hs-stat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.hs-hangar-stats .hs-hangar-stat em {
+    font-size: 9px;
+    letter-spacing: 2px;
+    line-height: 1;
+}
+.hs-stat-value {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: 16px;
+    line-height: 16px;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+.hs-stat-of, .hs-stat-x {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+.hs-stat-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.hs-stat-detail small {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hs-stat-bar {
+    display: block;
+    height: 4px;
+    background: color-mix(in srgb, var(--color-text-secondary) 25%, transparent);
+}
+.hs-stat-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--faction-accent, var(--color-primary));
+}
+.hs-hangar-stat.is-negative .hs-stat-bar > span { background: var(--color-danger, #ff4d4d); }
+.hs-stat-chips { display: flex; flex-wrap: wrap; gap: 3px 6px; }
+.hs-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 9px;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.hs-stat-chip img { width: 12px; height: 12px; image-rendering: pixelated; }
+.hs-stat-chip.is-full { color: var(--color-text); }
+@media (max-width: 900px) {
+    .hs-hangar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- Left HUD column: the info panel only takes the height its content
+   needs; the vitals panel (health / energy / shield) fills the rest, so
+   the bars are tall instead of leaving an empty info box. */
+.game-left-cluster > .game-info-panel {
+    flex: 0 1 auto;
+}
+.game-left-cluster > .player-vitals-side {
+    --vitals-h: clamp(180px, 34vh, 520px);
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: var(--vitals-h);
+}
+.player-vitals-side .health-fill {
+    width: 26px;
 }

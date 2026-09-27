@@ -488,9 +488,11 @@ extendClass(HomeStationUI, {
                 const shipTree = button.closest('[data-ship-tree]');
                 const shipId = shipTree ? shipTree.getAttribute('data-ship-tree') : this.hangarShipId;
                 const loadoutKey = shipLoadoutManager.kindToLoadoutKey(kind);
-                const moduleId = loadoutKey
-                    ? shipLoadoutManager.getLoadout(shipId)[loadoutKey][slotIndex]
-                    : null;
+                // The tree renders the equipped id on the option; the slot
+                // index can drift from the loadout list (toggle-only parts
+                // like abilities), which made the pick a silent no-op.
+                const list = loadoutKey ? (shipLoadoutManager.getLoadout(shipId)[loadoutKey] || []) : [];
+                const moduleId = button.getAttribute('data-mod-id') || list[slotIndex] || null;
                 if (!moduleId) return;
 
                 shipLoadoutManager.setModuleSkin(

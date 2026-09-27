@@ -175,16 +175,20 @@ extendClass(HomeStationUI, {
                                 </div>
                             </div>
                             <div class="hs-hangar-stats">
-                                <span class="hs-hangar-stat"><em>SIZE</em>${layout.width}×${layout.height}</span>
-                                <span class="hs-hangar-stat" title="Hull area levels (each S → M → L)"><em>AREAS</em>${frameLevel}/${frameMax}</span>
-                                <span class="hs-hangar-stat" title="Weapons ${loadout.weapons.length}/${caps.weapons} · Defense ${loadout.defenses.length}/${caps.defenses} · Abilities ${loadout.abilities.length}/${caps.abilities} · Energy ${(loadout.energy || []).length}/${caps.energy || 1}">
-                                    <em>SLOTS</em>${filledSlots}/${totalSlots}
-                                    <small>W${loadout.weapons.length} D${loadout.defenses.length} A${loadout.abilities.length} E${(loadout.energy || []).length}</small>
-                                </span>
-                                <span class="hs-hangar-stat${powerBudget.net < 0 ? ' is-negative' : ''}" title="${powerLine}">
-                                    <em>POWER</em>${netSign}${powerBudget.net}/s
-                                    <small>${powerBudget.gen} gen · ${powerBudget.idleDraw} draw</small>
-                                </span>
+                                ${this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '')}
+                                ${this.hangarStatTile('hsUpgrade', 'AREAS', `${frameLevel}<span class="hs-stat-of">/${frameMax}</span>`, 'Hull area levels (open new slots, add hull HP)',
+                                    `<span class="hs-stat-bar"><span style="width:${Math.round(100 * frameLevel / Math.max(1, frameMax))}%"></span></span>`)}
+                                ${this.hangarStatTile('hsComponents', 'SLOTS', `${filledSlots}<span class="hs-stat-of">/${totalSlots}</span>`,
+                                    `Weapons ${loadout.weapons.length}/${caps.weapons} · Defense ${loadout.defenses.length}/${caps.defenses} · Abilities ${loadout.abilities.length}/${caps.abilities} · Energy ${(loadout.energy || []).length}/${caps.energy || 1}`,
+                                    `<span class="hs-stat-chips">` +
+                                    [['statWeapon', loadout.weapons.length, caps.weapons], ['statArmor', loadout.defenses.length, caps.defenses],
+                                        ['statAbilities', loadout.abilities.length, caps.abilities], ['statEnergy', (loadout.energy || []).length, caps.energy || 1]]
+                                        .map(([ic, n, cap]) => `<span class="hs-stat-chip${n >= cap ? ' is-full' : ''}">${this.iconHtml(ic, 12, 'hs-pixel')}${n}/${cap}</span>`).join('') +
+                                    `</span>`)}
+                                ${this.hangarStatTile('statEnergy', 'POWER', `${netSign}${powerBudget.net}<span class="hs-stat-of">/s</span>`, powerLine,
+                                    `<span class="hs-stat-bar is-power"><span style="width:${Math.round(100 * Math.min(1, powerBudget.idleDraw / Math.max(0.1, powerBudget.gen)))}%"></span></span>` +
+                                    `<small>${powerBudget.gen} GEN · ${powerBudget.idleDraw} DRAW</small>`,
+                                    powerBudget.net < 0 ? ' is-negative' : '')}
                             </div>
                             <div class="hs-hangar-head-bar">
                                 <label class="hs-hangar-voxel" title="Voxel size of the whole ship">
@@ -198,6 +202,13 @@ extendClass(HomeStationUI, {
                         <div class="hs-hangar-bay hs-panel">
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
+                                <div class="hs-slot-bar" id="hsSlotBar" role="group" aria-label="Weapon slots"></div>
+                                <button type="button" class="hs-slot-move-handle" id="hsSlotMoveHandle" hidden
+                                    aria-label="Move slot" title="Drag to move this slot (keeps the weapon)">
+                                    <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true">
+                                        <path d="M4 0h1v1h1v1H3V1h1zM4 2h1v5H4zM0 4h7v1H0zM1 3h1v3H1zM7 3h1v3H7zM8 4h1v1H8zM3 7h3v1H5v1H4V8H3zM2 4h5v1H2z"/>
+                                    </svg>
+                                </button>
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
                                     <svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>
                                     ${slotHtml}

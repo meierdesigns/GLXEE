@@ -19,9 +19,10 @@ extendClass(HomeStationUI, {
 
     renderHangarLeftViewToggle() {
         const view = this._hangarLeftView === 'parts' ? 'parts' : 'areas';
-        const btn = (id, label) =>
-            `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">${label}</button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS')}${btn('parts', 'PARTS')}</div>`;
+        const btn = (id, label, icon) =>
+            `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
+            `${this.iconHtml(icon, 16, 'hs-pixel hs-pixel-16')}<span>${label}</span></button>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
 
     renderHangarPartsGrid(inventory, loadout) {
@@ -227,9 +228,25 @@ extendClass(HomeStationUI, {
     },
 
     /** Move/swap/unequip after a pull from an equipped slot. */
-    finishHangarSlotPull(opts, targetEl, offShip) {
+    finishHangarSlotPull(opts, targetEl, offShip, e) {
         const kind = opts.kind;
         const src = opts.sourceIndex;
+        // Dropped on the hull but not on a slot: a weapon moves its slot
+        // (with the weapon) to that spot; a spot it can't use changes
+        // nothing. Only a drop off the hull unequips.
+        if (!targetEl && kind === 'weapon' && e && this.hangarSocketSpotAt) {
+            const spot = this.hangarSocketSpotAt(src, e.clientX, e.clientY);
+            if (spot) {
+                if (spot.ok) {
+                    const res = shipLoadoutManager.setEmptySlotAnchor(this.hangarShipId, 'weapon', src, spot.nx, spot.ny);
+                    if (res && res.ok === false && res.reason === 'SLOT_OCCUPIED') {
+                        this.setStatus('NO ROOM THERE — SLOTS CAN\'T OVERLAP');
+                    }
+                }
+                this.drawHangarBay();
+                return;
+            }
+        }
         if (targetEl) {
             const dst = Number(targetEl.getAttribute('data-slot-index') || 0);
             if (dst === src) return;
@@ -263,11 +280,17 @@ extendClass(HomeStationUI, {
             // Oversized part: slots show a "too small" state instead of pulsing.
             stage.classList.toggle('is-part-too-big', !pull && !fit.ok);
         }
-        const slots = () => Array.from(this.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`))
+        // Ship markers plus the tiles of the slot bar at the top of the bay.
+        const slots = () => Array.from(this.overlay.querySelectorAll(
+            `.hs-hangar-slot[data-slot-kind="${kind}"], .hs-slot-tile[data-slot-kind="${kind}"]`))
             .filter((el) => !pull || el !== pull.sourceSlot);
         if (pull && pull.sourceSlot) pull.sourceSlot.classList.add('is-pulling');
         // Nearest of a slot's markers (wing pairs have one on each wing).
         const pinCenter = (el, px, py) => {
+            if (el.classList.contains('hs-slot-tile')) {
+                const r = el.getBoundingClientRect();
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            }
             let best = null;
             let bestD = Infinity;
             el.querySelectorAll('.hs-hangar-slot-pin').forEach((pin) => {
@@ -323,8 +346,15 @@ extendClass(HomeStationUI, {
             ghost.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
             ghost.classList.toggle('is-snapped', !!best);
             if (pull) {
-                ghost.classList.toggle('is-removing', !best
+                // Over the hull a weapon's slot moves along; only off the hull it comes out.
+                const onHull = kind === 'weapon' && this.hangarSocketSpotAt
+                    && !!this.hangarSocketSpotAt(pull.sourceIndex, e.clientX, e.clientY);
+                ghost.classList.toggle('is-removing', !best && !onHull
                     && Math.hypot(e.clientX - startX, e.clientY - startY) >= 24);
+                if (kind === 'weapon' && this.showHangarSlotsInArea) {
+                    const spot = !best && this.hangarSocketSpotAt(pull.sourceIndex, e.clientX, e.clientY);
+                    this.showHangarSlotsInArea(spot ? spot.area : null);
+                }
             }
         };
         const finish = (e, cancelled) => {
@@ -341,10 +371,11 @@ extendClass(HomeStationUI, {
             const slotEl = target;
             setTarget(null);
             if (pull && pull.sourceSlot) pull.sourceSlot.classList.remove('is-pulling');
+            if (pull && this.showHangarSlotsInArea) this.showHangarSlotsInArea(null);
             if (cancelled) return;
             if (pull) {
                 const back = Math.hypot(e.clientX - startX, e.clientY - startY) < 24;
-                if (moved && !back) this.finishHangarSlotPull(pull, slotEl, !slotEl);
+                if (moved && !back) this.finishHangarSlotPull(pull, slotEl, !slotEl, e);
                 return;
             }
             if (!moved) {

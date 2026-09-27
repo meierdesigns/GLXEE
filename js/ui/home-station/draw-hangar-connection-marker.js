@@ -28,7 +28,9 @@ extendClass(HomeStationUI, {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
-        ctx.setLineDash(hovered ? [] : [5, 4]);
+        // Pixel dashes in the accent's shade; solid accent when hovered.
+        ctx.strokeStyle = hovered ? accent : this.hangarHandleColors(accent).lineSoft;
+        if (hovered) ctx.setLineDash([]); else this.hangarMarchingDash(ctx);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.font = 'bold 11px monospace';
@@ -69,7 +71,9 @@ extendClass(HomeStationUI, {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
-        ctx.setLineDash(hovered ? [] : [5, 4]);
+        // Pixel dashes in the accent's shade; solid accent when hovered.
+        ctx.strokeStyle = hovered ? accent : this.hangarHandleColors(accent).lineSoft;
+        ctx.setLineDash(hovered ? [] : [4, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.font = 'bold 11px monospace';
@@ -89,6 +93,83 @@ extendClass(HomeStationUI, {
      * (one end each) and bars mid-way along both long sides (both ends).
      * The hovered handle is filled white.
      */
+    /**
+     * Theme colours for canvas handles, derived from the faction accent
+     * (canvas can't use color-mix): resting = dark accent-tinted fill with
+     * an accent rim, hot = solid accent with a light accent rim.
+     */
+    hangarHandleColors(accent) {
+        // Any CSS colour → #rrggbb via a canvas context.
+        if (!this._handleColorCtx) this._handleColorCtx = document.createElement('canvas').getContext('2d');
+        const cc = this._handleColorCtx;
+        cc.fillStyle = '#ff7a45';
+        cc.fillStyle = String(accent || '').trim() || '#ff7a45';
+        const m = /^#([0-9a-f]{6})$/i.exec(cc.fillStyle);
+        const n = m ? parseInt(m[1], 16) : 0xff7a45;
+        const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        const mix = (t, k) => '#' + rgb.map((c) => Math.round(c + (t - c) * k)
+            .toString(16).padStart(2, '0')).join('');
+        return {
+            fill: mix(8, 0.78),      // dark, slightly tinted
+            stroke: accent,
+            hotFill: accent,
+            hotStroke: mix(255, 0.55), // light accent, not white
+            line: accent,
+            lineSoft: mix(8, 0.35)
+        };
+    },
+
+    /**
+     * Stepped animation clock (~8 fps, pixel-art feel) for handles and
+     * boundary lines. Each call keeps one redraw queued, so the loop runs
+     * only while something animated is drawn and stops on its own.
+     */
+    hangarAnimStep() {
+        const step = Math.floor(performance.now() / 125);
+        if (!this._hangarAnimTimer) {
+            this._hangarAnimTimer = setTimeout(() => {
+                this._hangarAnimTimer = 0;
+                if (this.isVisible && this.tab === 'hangar' && !this._hangarLiveDrawRaf) this.drawHangarBay();
+            }, 125);
+        }
+        return step;
+    },
+
+    /** Marching-ants dashes: chunky pixel dashes that crawl along the line. */
+    hangarMarchingDash(ctx) {
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -(this.hangarAnimStep() % 8);
+        ctx.lineCap = 'butt';
+    },
+
+    /**
+     * Chunky pixel handle: dark tinted block, accent rim, bevel (light
+     * top-left, dark bottom-right). Hot handles fill with the accent and
+     * pulse one pixel on alternate animation steps.
+     */
+    drawHangarPixelHandle(ctx, cx, cy, w, h, hot, accent) {
+        const c = this.hangarHandleColors(accent);
+        const grow = hot && (this.hangarAnimStep() % 2) ? 2 : 0;
+        const W = Math.round(w + grow);
+        const H = Math.round(h + grow);
+        const x = Math.round(cx - W / 2);
+        const y = Math.round(cy - H / 2);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        // Dark outline block (1px pixel frame around everything).
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(x - 2, y - 2, W + 4, H + 4);
+        ctx.fillStyle = hot ? c.hotStroke : c.stroke;
+        ctx.fillRect(x, y, W, H);
+        ctx.fillStyle = hot ? c.hotFill : c.fill;
+        ctx.fillRect(x + 2, y + 2, W - 4, H - 4);
+        // Bevel pixels.
+        ctx.fillStyle = c.hotStroke;
+        ctx.fillRect(x + 2, y + 2, Math.max(1, W - 6), 2);
+        ctx.fillRect(x + 2, y + 2, 2, Math.max(1, H - 6));
+        ctx.restore();
+    },
+
     drawHangarJointHandles(ctx, model, ox, oy, scale, accent, hoverHandle) {
         const band = this.hangarSelectedJointBand(model, scale);
         if (!band) return;
@@ -96,22 +177,17 @@ extendClass(HomeStationUI, {
         const px = (p) => [ox + p[0] * scale, oy + p[1] * scale];
         const handle = (key, p, w, hgt) => {
             const [x, y] = px(p);
-            const hot = hoverHandle === key;
-            ctx.fillStyle = hot ? '#ffffff' : '#09090d';
-            ctx.strokeStyle = hot ? accent : '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.fillRect(Math.round(x - w / 2), Math.round(y - hgt / 2), w, hgt);
-            ctx.strokeRect(Math.round(x - w / 2), Math.round(y - hgt / 2), w, hgt);
+            this.drawHangarPixelHandle(ctx, x, y, w, hgt, hoverHandle === key, accent);
         };
         ctx.save();
-        handle('start-1', k.s0, 8, 8);
-        handle('start1', k.s1, 8, 8);
-        handle('end-1', k.e0, 8, 8);
-        handle('end1', k.e1, 8, 8);
+        handle('start-1', k.s0, 12, 12);
+        handle('start1', k.s1, 12, 12);
+        handle('end-1', k.e0, 12, 12);
+        handle('end1', k.e1, 12, 12);
         const a = this.hangarJointAxes(band);
         const flat = Math.abs(a.ux) > Math.abs(a.uy);
-        handle('both-1', k.side0, flat ? 14 : 6, flat ? 6 : 14);
-        handle('both1', k.side1, flat ? 14 : 6, flat ? 6 : 14);
+        handle('both-1', k.side0, flat ? 18 : 8, flat ? 8 : 18);
+        handle('both1', k.side1, flat ? 18 : 8, flat ? 8 : 18);
         ctx.restore();
     },
 
@@ -161,26 +237,46 @@ extendClass(HomeStationUI, {
             const hot = hover.handle === 'rotate' && (hover.side === 'left') === (wingId === 'wingLeft');
             ctx.save();
             ctx.strokeStyle = accent;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
+            ctx.lineWidth = 2;
+            // Animated only while hovered, so an idle hangar doesn't redraw.
+            if (hot) this.hangarMarchingDash(ctx); else ctx.setLineDash([4, 4]);
             ctx.beginPath();
-            ctx.moveTo(ox + knob.tipX * scale, oy + knob.tipY * scale);
-            ctx.lineTo(kx, ky);
+            ctx.moveTo(Math.round(ox + knob.tipX * scale), Math.round(oy + knob.tipY * scale));
+            ctx.lineTo(Math.round(kx), Math.round(ky));
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = hot ? '#ffffff' : '#09090d';
-            ctx.strokeStyle = hot ? accent : '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(kx, ky, 7, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            // Curved arrow glyph: this knob turns the wing.
-            ctx.strokeStyle = hot ? accent : '#ffffff';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(kx, ky, 3.5, -Math.PI * 0.9, Math.PI * 0.4);
-            ctx.stroke();
+            // Big pixel octagon knob (square with stepped, notched corners).
+            const c = this.hangarHandleColors(accent);
+            const R = 14 + (hot && (this.hangarAnimStep() % 2) ? 2 : 0);
+            const bx = Math.round(kx);
+            const by = Math.round(ky);
+            const oct = (r, color) => {
+                const n = Math.max(2, Math.round(r * 0.4));
+                ctx.fillStyle = color;
+                ctx.fillRect(bx - r + n, by - r, 2 * r - 2 * n, 2 * r);
+                ctx.fillRect(bx - r, by - r + n, 2 * r, 2 * r - 2 * n);
+                ctx.fillRect(bx - r + Math.ceil(n / 2), by - r + Math.ceil(n / 2),
+                    2 * r - 2 * Math.ceil(n / 2), 2 * r - 2 * Math.ceil(n / 2));
+            };
+            oct(R + 3, c.fill);
+            oct(R, hot ? c.hotStroke : c.stroke);
+            oct(R - 3, hot ? c.hotFill : c.fill);
+            // Bevel: light pixels along the upper-left inner edge.
+            ctx.fillStyle = c.hotStroke;
+            ctx.fillRect(bx - R + 5, by - R + 3, R, 3);
+            ctx.fillRect(bx - R + 3, by - R + 5, 3, R);
+            // Chunky pixel turn-arrow (3px cells), turning in 4 steps on hover.
+            const g = hot ? c.fill : c.hotStroke;
+            const q = hot ? this.hangarAnimStep() % 4 : 0;
+            const cells = [[-2, -1], [-1, -2], [0, -2], [1, -2], [2, -1], [2, 0], [2, 1],
+                [1, 1], [3, 1], [2, 2]]; // arc + arrowhead
+            ctx.fillStyle = g;
+            cells.forEach(([cx0, cy0]) => {
+                let px1 = cx0;
+                let py1 = cy0;
+                for (let i = 0; i < q; i++) { const t = px1; px1 = -py1; py1 = t; }
+                ctx.fillRect(bx + px1 * 3 - 1, by + py1 * 3 - 1, 3, 3);
+            });
             ctx.restore();
         });
         if (selectedConnection) {
@@ -208,17 +304,7 @@ extendClass(HomeStationUI, {
             draw();
             ctx.restore();
         };
-        ctx.globalAlpha = 0.18;
-        ctx.fillStyle = accent;
-        selected.forEach((seg) => withRotation(seg, () => {
-            ctx.fillRect(
-                Math.round(ox + seg.x * scale),
-                Math.round(oy + seg.y * scale),
-                Math.max(1, Math.round(seg.width * scale)),
-                Math.max(1, Math.round(seg.height * scale))
-            );
-        }));
-        ctx.globalAlpha = 1;
+        // No fill: the area is outlined only, so its slots stay readable.
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
         selected.forEach((seg) => withRotation(seg, () => {
@@ -248,15 +334,7 @@ extendClass(HomeStationUI, {
                 const cx = hover.edge.indexOf('right') !== -1 ? right : left;
                 const cy = hover.edge.indexOf('bottom') !== -1 ? bottom : top;
                 const r = Math.max(3, Math.min(7, corner * 0.5));
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath();
-                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = accent;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.stroke();
+                this.drawHangarPixelHandle(ctx, cx, cy, Math.max(10, r * 2), Math.max(10, r * 2), true, accent);
             }
         }));
         if (selectedModule && model.layout.modules) {
@@ -268,16 +346,16 @@ extendClass(HomeStationUI, {
                 const top = Math.round(oy + mod.y * scale);
                 const right = Math.round(ox + (mod.x + mod.width) * scale);
                 const bottom = Math.round(oy + (mod.y + mod.height) * scale);
-                ctx.strokeStyle = '#ffffff';
+                ctx.strokeStyle = this.hangarHandleColors(accent).hotStroke;
                 ctx.lineWidth = 2;
                 ctx.strokeRect(left, top, Math.max(2, right - left), Math.max(2, bottom - top));
                 // Centre line, shown only while the drag is actually snapped,
                 // so the snap is visible rather than just felt.
                 if (this._hangarSnapCenter === selectedModule.kind) {
                     const cx = Math.round((left + right) / 2);
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1;
-                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = this.hangarHandleColors(accent).hotStroke;
+                    ctx.lineWidth = 2;
+                    this.hangarMarchingDash(ctx);
                     ctx.beginPath();
                     ctx.moveTo(cx, Math.round(oy));
                     ctx.lineTo(cx, Math.round(oy + (model.height || 0) * scale));

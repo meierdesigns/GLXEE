@@ -40,6 +40,7 @@ extendClass(GalaxyMapManager, {
                 <div class="galaxy-map-toolbar">
                     <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                     <div class="galaxy-map-progress-bar">${progressLabel}</div>
+                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="Travel to another galaxy">TELEPORT</button>` : ''}
                 </div>
                 ${emptyHint}
                 <div class="galaxy-map-area" id="gmMapArea">

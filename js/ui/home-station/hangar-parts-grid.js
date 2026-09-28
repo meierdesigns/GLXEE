@@ -25,6 +25,60 @@ extendClass(HomeStationUI, {
         return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
 
+    /** Compact DMG / SPD / fire-rate line for a weapon row. */
+    hangarWeaponStatsHtml(id) {
+        if (typeof weaponConfigManager === 'undefined') return '';
+        const w = weaponConfigManager.getWeapon(id);
+        if (!w) return '';
+        const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) : '—';
+        return `<span class="hs-hangar-weapon-stats">` +
+            `<span data-ui-tip="DAMAGE">DMG ${w.damage}</span>` +
+            `<span data-ui-tip="SHOT SPEED">SPD ${w.speed}</span>` +
+            `<span data-ui-tip="SHOTS PER SECOND">${rate}/S</span>` +
+            `</span>`;
+    },
+
+    /** The weapon's on-ship hardware sprite, shown on the row when it is slotted. */
+    hangarWeaponMountHtml(id) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getModuleShipSprite
+            || typeof iconRenderer === 'undefined' || !iconRenderer.spriteToSvgUrl) return '';
+        // Same gun art as on the ship in game (weapon barrel on faction breech).
+        const loader = (typeof graphicsManager !== 'undefined') ? graphicsManager.shipAssetLoader : null;
+        // Same faction style the hull renderer picks for this ship.
+        const style = (loader && loader.resolvePlayerFactionStyle && this.getHangarPreviewModel)
+            ? loader.resolvePlayerFactionStyle(this.getHangarPreviewModel(this.hangarShipId || 'player_scrap'))
+            : (this.currentFactionStyle ? this.currentFactionStyle() : null);
+        let sprite = null;
+        if (loader && loader.generateWeaponGrid) {
+            // Same generated gun as on the ship, laid on its side (muzzle
+            // right) so the long barrel fits the row.
+            const up = loader.generateWeaponGrid(id, 12, 28);
+            sprite = up[0].map((_, c) => up.map((row, r) => up[up.length - 1 - r][c]));
+        } else {
+            sprite = (loader && loader.getWeaponTemplate)
+                ? loader.getWeaponTemplate(id, style, false)
+                : shipLoadoutManager.getModuleShipSprite({ kind: 'weapon', id: id });
+        }
+        if (!sprite) return '';
+        // Exactly the faction colours the gun has on the hull (same shade ramp).
+        const ramp = loader && loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, id) : null;
+        let url;
+        if (ramp) {
+            let rects = '';
+            sprite.forEach((row, r) => row.forEach((idx, c) => {
+                const col = idx && ramp[idx];
+                if (col) rects += `<rect x="${c}" y="${r}" width="1" height="1" fill="${col}"/>`;
+            }));
+            url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+                `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sprite[0].length} ${sprite.length}" shape-rendering="crispEdges">${rects}</svg>`);
+        } else {
+            const tint = (style && (style.hull || style.accent)) || null;
+            url = iconRenderer.spriteToSvgUrl(sprite, tint, false, false, false);
+        }
+        return `<span class="hs-hangar-part-mount" data-ui-tip="SLOTTED">` +
+            `<img src="${url}" alt="" draggable="false"></span>`;
+    },
+
     renderHangarPartsGrid(inventory, loadout) {
         return `<div class="hs-hangar-parts">` + HANGAR_PART_SECTIONS.map((sec) => {
             const ids = (inventory && inventory[sec.key]) || [];
@@ -41,10 +95,12 @@ extendClass(HomeStationUI, {
                     (isToggle ? ` aria-pressed="${on}"` : '') +
                     ` data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
                     ` title="${label} · SIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
-                    `<span class="hs-slot-size is-${size}">${size}</span>` +
                     this.slotGlyphHtml(sec.kind, 'hs-hangar-part-glyph') +
-                    `<span class="hs-hangar-part-icon">${this.iconHtml(this.hangarModuleIconKey(sec.kind, id), 32, 'hs-pixel', false)}</span>` +
-                    `<span class="hs-hangar-part-name">${label}</span>` + state +
+                    `<span class="hs-hangar-part-icon">${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
+                    `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
+                    `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
+                    (sec.kind === 'weapon' ? this.hangarWeaponStatsHtml(id) : '') + `</span>` +
+                    (sec.kind === 'weapon' && on ? this.hangarWeaponMountHtml(id) : '') + state +
                     `</button>`;
             }).join('');
             return `<section class="hs-hangar-parts-section" data-part-section="${sec.kind}">` +
@@ -173,7 +229,7 @@ extendClass(HomeStationUI, {
         const id = this.hangarSlotModuleId(kind, index);
         if (!id) return;
         const holder = document.createElement('span');
-        holder.innerHTML = this.iconHtml(this.hangarModuleIconKey(kind, id), 32, 'hs-pixel', false);
+        holder.innerHTML = this.moduleIconHtml(kind, id, 32, 'hs-pixel', false);
         this.startHangarPartDrag(null, downEvent, {
             kind: kind,
             id: id,
@@ -227,36 +283,40 @@ extendClass(HomeStationUI, {
         return true;
     },
 
+    hangarWeaponSlotLabel(index) {
+        return Number(index) === 0 ? 'NOSE SLOT' : 'WING SLOT ' + index;
+    },
+
     /** Move/swap/unequip after a pull from an equipped slot. */
     finishHangarSlotPull(opts, targetEl, offShip, e) {
         const kind = opts.kind;
         const src = opts.sourceIndex;
-        // Dropped on the hull but not on a slot: a weapon moves its slot
-        // (with the weapon) to that spot; a spot it can't use changes
-        // nothing. Only a drop off the hull unequips.
-        if (!targetEl && kind === 'weapon' && e && this.hangarSocketSpotAt) {
-            const spot = this.hangarSocketSpotAt(src, e.clientX, e.clientY);
-            if (spot) {
-                if (spot.ok) {
-                    const res = shipLoadoutManager.setEmptySlotAnchor(this.hangarShipId, 'weapon', src, spot.nx, spot.ny);
-                    if (res && res.ok === false && res.reason === 'SLOT_OCCUPIED') {
-                        this.setStatus('NO ROOM THERE — SLOTS CAN\'T OVERLAP');
-                    }
-                }
-                this.drawHangarBay();
-                return;
-            }
-        }
+        // Pulling a part only takes the part out: the slot stays where it is
+        // (move an empty slot by dragging its marker instead).
         if (targetEl) {
             const dst = Number(targetEl.getAttribute('data-slot-index') || 0);
             if (dst === src) return;
             const prev = this.hangarSlotModuleId(kind, dst) || '';
-            const a = shipLoadoutManager.setSlotModule(this.hangarShipId, kind, dst, opts.id);
-            if (a && a.ok) shipLoadoutManager.setSlotModule(this.hangarShipId, kind, src, prev);
+            // Check both directions first: a half-done swap used to drop the
+            // other part out of the loadout when it didn't fit back.
+            const slm = shipLoadoutManager;
+            const fits = (id, idx) => !slm.partFitsSlot || slm.partFitsSlot(this.hangarShipId, kind, id, idx);
+            const fitDst = fits(opts.id, dst);
+            const fitSrc = prev ? fits(prev, src) : { ok: true };
+            const bad = (fitDst && fitDst.ok === false) ? [opts.id, dst, fitDst]
+                : ((fitSrc && fitSrc.ok === false) ? [prev, src, fitSrc] : null);
+            if (bad) {
+                this.showStatusToast(this.hangarModuleLabel(bad[0]) + ' (' + slm.slotSizeLabel(bad[2].need) + ')'
+                    + ' DOESN\'T FIT ' + this.hangarWeaponSlotLabel(bad[1]) + ' (' + slm.slotSizeLabel(bad[2].have) + ')');
+                this.drawHangarBay();
+                return;
+            }
+            slm.setSlotModule(this.hangarShipId, kind, dst, opts.id);
+            if (prev) slm.setSlotModule(this.hangarShipId, kind, src, prev);
             this.applyHangarSlotChoice(kind, dst, opts.id, null);
             return;
         }
-        if (offShip) this.applyHangarSlotChoice(kind, src, '', null);
+        this.applyHangarSlotChoice(kind, src, '', null);
     },
 
     startHangarPartDrag(cell, downEvent, pull) {
@@ -285,6 +345,15 @@ extendClass(HomeStationUI, {
             `.hs-hangar-slot[data-slot-kind="${kind}"], .hs-slot-tile[data-slot-kind="${kind}"]`))
             .filter((el) => !pull || el !== pull.sourceSlot);
         if (pull && pull.sourceSlot) pull.sourceSlot.classList.add('is-pulling');
+        // Slots too small for the dragged part turn red and don't snap.
+        const dragPartId = pull ? pull.id : cell.getAttribute('data-part-id');
+        const tooSmall = (el) => {
+            if (!shipLoadoutManager.partFitsSlot) return false;
+            const idx = Number(el.getAttribute('data-slot-index') || 0);
+            return !shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, dragPartId, idx).ok;
+        };
+        const smallEls = slots().filter(tooSmall);
+        smallEls.forEach((el) => el.classList.add('is-too-small'));
         // Nearest of a slot's markers (wing pairs have one on each wing).
         const pinCenter = (el, px, py) => {
             if (el.classList.contains('hs-slot-tile')) {
@@ -330,7 +399,7 @@ extendClass(HomeStationUI, {
             let bestPt = null;
             let bestDist = SNAP_PX;
             if (onStage(e.clientX, e.clientY)) {
-                slots().forEach((el) => {
+                slots().filter((el) => smallEls.indexOf(el) === -1).forEach((el) => {
                     const c = pinCenter(el, e.clientX, e.clientY);
                     if (!c) return;
                     const d = Math.hypot(e.clientX - c.x, e.clientY - c.y);
@@ -346,15 +415,9 @@ extendClass(HomeStationUI, {
             ghost.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
             ghost.classList.toggle('is-snapped', !!best);
             if (pull) {
-                // Over the hull a weapon's slot moves along; only off the hull it comes out.
-                const onHull = kind === 'weapon' && this.hangarSocketSpotAt
-                    && !!this.hangarSocketSpotAt(pull.sourceIndex, e.clientX, e.clientY);
-                ghost.classList.toggle('is-removing', !best && !onHull
+                // Anywhere but another slot the part comes out; its slot stays put.
+                ghost.classList.toggle('is-removing', !best
                     && Math.hypot(e.clientX - startX, e.clientY - startY) >= 24);
-                if (kind === 'weapon' && this.showHangarSlotsInArea) {
-                    const spot = !best && this.hangarSocketSpotAt(pull.sourceIndex, e.clientX, e.clientY);
-                    this.showHangarSlotsInArea(spot ? spot.area : null);
-                }
             }
         };
         const finish = (e, cancelled) => {
@@ -370,6 +433,7 @@ extendClass(HomeStationUI, {
             }
             const slotEl = target;
             setTarget(null);
+            smallEls.forEach((el) => el.classList.remove('is-too-small'));
             if (pull && pull.sourceSlot) pull.sourceSlot.classList.remove('is-pulling');
             if (pull && this.showHangarSlotsInArea) this.showHangarSlotsInArea(null);
             if (cancelled) return;
@@ -382,6 +446,10 @@ extendClass(HomeStationUI, {
                 this.equipHangarPart(cell, null); // plain click
             } else if (slotEl) {
                 this.equipHangarPart(cell, slotEl);
+            } else if (smallEls.length && onStage(e.clientX, e.clientY)) {
+                // Dropped near slots it can't use: say why instead of nothing.
+                const idx = Number(smallEls[0].getAttribute('data-slot-index') || 0);
+                this.applyHangarSlotChoice(kind, idx, dragPartId, null);
             }
         };
         const up = (e) => finish(e, false);

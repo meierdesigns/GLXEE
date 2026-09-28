@@ -197,9 +197,8 @@ extendClass(StartScreenManager, {
             '<div class="hs-credits-crawl-text">' +
             '<div class="hs-credits-crawl-line hs-credits-crawl-role">CREATOR</div>' +
             '<div class="hs-credits-crawl-line">LANCE MEIER / MEIERDESIGNS</div>' +
-            '<div class="hs-credits-crawl-line">GLXEE</div>' +
-            '<div class="hs-credits-crawl-line">RETRO SPACE SHOOTER</div>' +
-            '<div class="hs-credits-crawl-line">GAME BOY STYLE</div>' +
+            '<div class="hs-credits-crawl-line hs-credits-crawl-title">GLXEE</div>' +
+            '<div class="hs-credits-crawl-line">A RETRO SPACE SHOOTER</div>' +
             '</div>' +
             '</div>';
 

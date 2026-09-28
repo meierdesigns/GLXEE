@@ -266,6 +266,10 @@ extendClass(HomeStationUI, {
         if (level === 'content' || level === 'sub') {
             this._navLevel = 'tabs';
             this.focusActiveTab();
+            // Content → the area's sub-nav row (one level up), not the area row.
+            if (this.overlay && this.overlay.querySelector('.hs-subnav-tab') && this.focusNavRow) {
+                this.focusNavRow('subnav');
+            }
             this.syncNavHint();
             return true;
         }

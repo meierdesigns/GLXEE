@@ -197,7 +197,7 @@ extendClass(LevelInfoManager, {
                 'font-size:var(--font-text)',
                 'letter-spacing:0.04em',
                 'pointer-events:none',
-                'border:1px solid rgba(184,240,192,0.4)'
+                'border:var(--ui-border-width) solid rgba(184,240,192,0.4)'
             ].join(';');
             document.body.appendChild(el);
         }

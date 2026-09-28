@@ -183,13 +183,14 @@ extendClass(HomeStationUI, {
             if (node.id === selectedId) stateClass += ' selected';
 
             const c = centerOf(node);
-            const left = c.x - half;
             const top = c.y - half;
             const canBuy = !maxed && !locked && check.ok;
             const tip = this.buildUpgradeTooltip(node, level, maxed, locked, check, cost, false);
 
-            const leftPercent = (left / treeW) * 100;
-            return `<button type="button" class="${stateClass}" style="left:${leftPercent}%;top:${top}px;width:${nodeSize}px;height:${nodeSize}px"` +
+            // Anchor on the node centre (in %) so it stays on its link line
+            // when the tree is squeezed to the panel width.
+            const centerPercent = (c.x / treeW) * 100;
+            return `<button type="button" class="${stateClass}" style="left:calc(${centerPercent}% - ${half}px);top:${top}px;width:${nodeSize}px;height:${nodeSize}px"` +
                 ` data-nav-item data-upgrade-node="${node.id}"` +
                 (canBuy ? ` data-upgrade="${node.id}"` : '') +
                 ` aria-label="${node.label} ${level}/${node.maxLevel}">` +
@@ -234,7 +235,8 @@ extendClass(HomeStationUI, {
 
         return summary +
             `<div class="hs-upg-tree-scroll">` +
-            `<div class="hs-upg-tree" style="width:100%;min-width:${treeW}px;height:${treeH}px">` +
+            // Fits the panel width (no horizontal scroll); only vertical scrolls.
+            `<div class="hs-upg-tree" style="width:100%;height:${treeH}px">` +
             `<svg class="hs-upg-links" width="100%" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="none" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
             nodeButtons +
             `</div></div>` +

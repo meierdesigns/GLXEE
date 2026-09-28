@@ -130,12 +130,20 @@ extendClass(HomeStationUI, {
                     <span class="hs-panel-label">HANGAR — OPEN BAY</span>
                     <span class="hs-panel-scan" aria-hidden="true"></span>
                     <span class="hs-hangar-sidebar-actions">
-                        <button type="button" class="hs-sidebar-toggle" data-hangar-sidebar="left"
+                        <button type="button" class="hs-sidebar-toggle hs-sidebar-toggle-wide" data-hangar-sidebar="left"
                             aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
-                            aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
-                        <button type="button" class="hs-sidebar-toggle" data-hangar-sidebar="right"
+                            aria-expanded="${!this._hangarLeftCollapsed}">
+                            <span class="hs-sidebar-toggle-arrow">${this._hangarLeftCollapsed ? '›' : '‹'}</span>
+                            ${this.iconHtml('hsShip', 20, 'hs-pixel')}
+                            <span class="hs-sidebar-toggle-text">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'}</span>
+                        </button>
+                        <button type="button" class="hs-sidebar-toggle hs-sidebar-toggle-wide" data-hangar-sidebar="right"
                             aria-label="${this._hangarRightCollapsed ? 'Expand' : 'Collapse'} live preview"
-                            aria-expanded="${!this._hangarRightCollapsed}">${this._hangarRightCollapsed ? '‹' : '›'}</button>
+                            aria-expanded="${!this._hangarRightCollapsed}">
+                            ${this.iconHtml('hsShip', 20, 'hs-pixel')}
+                            <span class="hs-sidebar-toggle-text">LIVE PREVIEW</span>
+                            <span class="hs-sidebar-toggle-arrow">${this._hangarRightCollapsed ? '‹' : '›'}</span>
+                        </button>
                     </span>
                 </h3>
                 <div class="hs-hangar-split${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}">

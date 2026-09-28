@@ -48,6 +48,10 @@ extendClass(StartScreenManager, {
                 const idx = Number(item.dataset.settingsIndex);
                 item.classList.toggle('selected', idx === currentIndex);
             });
+            // Keyboard focus moving into a collapsed section opens it.
+            const sel = scope.querySelector('.settings-row.selected');
+            const sec = sel && sel.closest('details.settings-section');
+            if (sec && !sec.open) sec.open = true;
             scope.querySelectorAll('.settings-cluster').forEach((cluster) => {
                 cluster.classList.toggle('active', !!cluster.querySelector('.settings-row.selected'));
             });

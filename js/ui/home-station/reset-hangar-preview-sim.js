@@ -6,13 +6,14 @@ extendClass(HomeStationUI, {
         const canvas = this._hangarPreviewCanvas;
         if (!canvas) return;
         const shipId = this.hangarShipId || 'player_scrap';
-        const model = this.getHangarShipModel(shipId);
+        // Layout-applied model: its size is what gets drawn and where mounts fire from.
+        const model = this.getHangarPreviewModel(shipId);
         const size = this.hangarCloseupSize(model, canvas.width, canvas.height);
         this._hangarPreviewShipId = shipId;
         this._hangarPreviewSim = {
             player: {
                 x: (canvas.width - size.width) / 2,
-                y: canvas.height * 0.42,
+                y: canvas.height * 0.68,
                 width: size.width,
                 height: size.height,
                 dir: 1
@@ -177,6 +178,23 @@ extendClass(HomeStationUI, {
         if (!canvas) return;
         this._hangarPreviewCanvas = canvas;
         this._hangarPreviewCtx = canvas.getContext('2d');
+        // Fill the whole viewport (it is much taller than the old fixed
+        // 240×360 canvas); refit when the panel resizes.
+        const viewport = canvas.parentElement;
+        const fit = () => {
+            if (!viewport) return;
+            const w = Math.max(120, Math.floor(viewport.clientWidth));
+            const h = Math.max(160, Math.floor(viewport.clientHeight));
+            if (canvas.width === w && canvas.height === h) return;
+            canvas.width = w;
+            canvas.height = h;
+            this.resetHangarPreviewSim();
+        };
+        fit();
+        if (viewport && typeof ResizeObserver !== 'undefined') {
+            this._hangarPreviewResizeObs = new ResizeObserver(fit);
+            this._hangarPreviewResizeObs.observe(viewport);
+        }
         this.resetHangarPreviewSim();
         this.bindHangarPreviewZoom();
         const loop = (ts) => {
@@ -192,6 +210,10 @@ extendClass(HomeStationUI, {
     },
 
     stopHangarPreview() {
+        if (this._hangarPreviewResizeObs) {
+            this._hangarPreviewResizeObs.disconnect();
+            this._hangarPreviewResizeObs = null;
+        }
         if (this._hangarPreviewWheelBound) {
             const viewport = this.overlay && this.overlay.querySelector('#hsHangarPreviewViewport');
             if (viewport) viewport.removeEventListener('wheel', this._hangarPreviewWheelBound);

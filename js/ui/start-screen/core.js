@@ -12,7 +12,6 @@ class StartScreenManager {
         this.embeddedMenuTabs = [
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
-            { id: 'assets', label: 'ASSETS', icon: 'menuAssets' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
         ];
         this.title = "GLXEE";
@@ -22,23 +21,20 @@ class StartScreenManager {
                 id: 'play',
                 label: '',
                 items: [
-                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true }
+                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true, desc: 'Launch to your home station' }
                 ]
             },
             {
                 id: 'account',
-                label: 'ACCOUNT',
                 items: [
-                    { id: 'PROFILES', icon: 'menuProfiles' },
-                    { id: 'SETTINGS', icon: 'menuSettings' }
+                    { id: 'PROFILES', icon: 'menuProfiles', desc: 'Create, switch or rename pilots' },
+                    { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display, audio and controls' }
                 ]
             },
             {
                 id: 'info',
-                label: 'INFO',
                 items: [
-                    { id: 'ASSETS', icon: 'menuAssets' },
-                    { id: 'CREDITS', icon: 'menuCredits' }
+                    { id: 'CREDITS', icon: 'menuCredits', desc: 'Who made this game' }
                 ]
             }
         ];

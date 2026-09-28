@@ -65,7 +65,13 @@ extendClass(HomeStationUI, {
                 `<span class="hs-tab-icon">${this.tabIconHtml(area.icon)}</span>` +
                 `<span class="hs-tab-label">${area.label}</span>` +
                 `</button>`;
-        }).join('');
+        }).join('') +
+            // 5th area: the ESC menu (profiles, settings, assets, components, credits).
+            '<span class="hs-tab-divider" aria-hidden="true"></span>' +
+            `<button type="button" class="hs-tab hs-area-btn" data-open-menu="1" data-nav-item title="MENU (ESC)">` +
+            `<span class="hs-tab-icon">${this.tabIconHtml('menuSettings')}</span>` +
+            `<span class="hs-tab-label">MENU</span>` +
+            `</button>`;
     },
 
     /** Sub navbar under the top bar: the tabs of the active area. */

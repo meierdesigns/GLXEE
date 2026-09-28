@@ -90,7 +90,14 @@
                 crossfadeTo(host, base, img, bgColor);
                 return;
             }
-            fadeInBase(host, base, img, bgColor);
+            // First paint (page load / refresh): the CSS ::before already shows
+            // this exact image, and adding .vf-bg-parallax-ready above removed
+            // it — take over instantly instead of fading in from black, which
+            // made the background blink and jump on every refresh.
+            clearIncoming(host);
+            paintBaseInstant(base, img, bgColor);
+            host.setAttribute('data-vf-bg-image', img);
+            rememberBg(img, bgColor);
             return;
         }
 

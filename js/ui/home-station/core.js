@@ -288,7 +288,7 @@ class HomeStationUI {
             return `
             <button type="button" class="hs-menu-tab-btn${active ? ' active' : ''}" data-menu-tab="${tab.id}" title="${tab.label}" data-nav-item>
                 <span class="hs-menu-tab-icon">${icon}</span>
-                ${active ? `<span class="hs-menu-tab-label">${tab.label}</span>` : ''}
+                <span class="hs-menu-tab-label">${tab.label}</span>
             </button>`;
         }).join('');
     }

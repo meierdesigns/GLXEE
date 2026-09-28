@@ -105,6 +105,14 @@ extendClass(HomeStationUI, {
             `<div class="hs-tab-fill">${rows.join('')}</div></div>`;
     },
 
+    /** Module icon HTML; weapons use the shared tilted, per-weapon tinted look. */
+    moduleIconHtml(kind, id, size, className, tipLabel, tint) {
+        if (kind === 'weapon' && id && typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+            return iconRenderer.weaponImgHtml(id, size, className, tipLabel === false ? false : undefined);
+        }
+        return this.iconHtml(this.hangarModuleIconKey(kind, id), size, className, tipLabel, tint);
+    },
+
     hangarModuleIconKey(kind, id) {
         if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
             const key = shipLoadoutManager.resolveModuleIcon({ kind: kind, id: id });
@@ -212,7 +220,9 @@ extendClass(HomeStationUI, {
             (mirror ? `<span class="hs-hangar-slot-pin is-mirror" aria-hidden="true"><span class="hs-hangar-slot-dot"></span></span>` : '') +
             `<div class="hs-hangar-slot-card">` +
             `<button type="button" class="hs-hangar-slot-btn" data-nav-item data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}">` +
-            `<span class="hs-btn-icon">${this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20', null, factionAccent)}</span>` +
+            `<span class="hs-btn-icon">${current && kind === 'weapon'
+                ? this.moduleIconHtml(kind, current, 20, 'hs-pixel hs-pixel-20')
+                : this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20', null, factionAccent)}</span>` +
             `<span class="hs-hangar-slot-meta">` +
             `<span class="hs-hangar-slot-kind">${this.slotGlyphHtml(kind)}${slot.label} <span class="hs-slot-size" title="Slot size">${slotSize}</span></span>` +
             `<span class="hs-hangar-slot-name" title="${name}"><span class="hs-hangar-slot-mark">${mark}</span> ${name}</span>` +
@@ -237,7 +247,7 @@ extendClass(HomeStationUI, {
                 const disabled = blocked ? ' disabled' : '';
                 const blockedCls = blocked ? ' is-blocked' : '';
                 return `<button type="button" class="hs-hangar-slot-option${on ? ' is-active' : ''}${usedElsewhere ? ' is-used' : ''}${blockedCls}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="${id}"${disabled}>` +
-                    `<span class="hs-btn-icon">${this.iconHtml(this.hangarModuleIconKey(kind, id), 18, 'hs-pixel hs-pixel-18', null, factionAccent)}</span>` +
+                    `<span class="hs-btn-icon">${this.moduleIconHtml(kind, id, 18, 'hs-pixel hs-pixel-18', null, factionAccent)}</span>` +
                     `<span class="hs-slot-size" title="Part size">${partSize(id)}</span>` +
                     `<span>${this.hangarModuleLabel(id)}${blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CS' : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CD' : (blocked === 'TOO_BIG' ? ' · NEEDS ' + partSize(id) : ''))}</span>` +
                     `<span class="hs-hangar-slot-mark">${on ? '●' : (blocked ? '✕' : (usedElsewhere ? '◇' : '○'))}</span>` +

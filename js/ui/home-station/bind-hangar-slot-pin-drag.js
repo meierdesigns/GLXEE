@@ -200,7 +200,11 @@ extendClass(HomeStationUI, {
         const closeupZoom = 1.65;
         const userZoom = Math.max(0.5, Math.min(3, this._hangarPreviewZoom || 1));
         let scale = ingameScale * closeupZoom;
-        const maxFit = Math.min((canvasW * 0.44) / mw, (canvasH * 0.38) / mh);
+        // Fit against the reference hull, not this layout: moving areas must
+        // not change the ship's scale.
+        const refW = typeof PLAYER_REF_W !== 'undefined' ? PLAYER_REF_W : 36;
+        const refH = typeof PLAYER_REF_H !== 'undefined' ? PLAYER_REF_H : 28;
+        const maxFit = Math.min((canvasW * 0.44) / refW, (canvasH * 0.38) / refH);
         scale = Math.min(scale, maxFit);
         scale = Math.max(ingameScale, scale);
         scale *= userZoom;
@@ -229,7 +233,8 @@ extendClass(HomeStationUI, {
         const sim = this._hangarPreviewSim;
         if (!canvas || !sim || !sim.player) return;
         const shipId = this.hangarShipId || 'player_scrap';
-        const model = this.getHangarShipModel(shipId);
+        // Layout-applied model: its size is what gets drawn and where mounts fire from.
+        const model = this.getHangarPreviewModel(shipId);
         const size = this.hangarCloseupSize(model, canvas.width, canvas.height);
         const cx = sim.player.x + sim.player.width / 2;
         const cy = sim.player.y + sim.player.height / 2;

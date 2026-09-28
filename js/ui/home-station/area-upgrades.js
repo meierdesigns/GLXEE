@@ -129,9 +129,11 @@ extendClass(HomeStationUI, {
      * shows where on the hull the upgrade lands. Empty area = whole ship.
      */
     drawAreaThumbs() {
-        if (!this.overlay || typeof graphicsManager === 'undefined' || !graphicsManager.shipAssetLoader
-            || typeof shipLoadoutManager === 'undefined') return;
-        const loader = graphicsManager.shipAssetLoader;
+        if (!this.overlay || typeof shipLoadoutManager === 'undefined') return;
+        const loader = (typeof graphicsManager !== 'undefined') ? graphicsManager.shipAssetLoader : null;
+        // Until ship assets are loaded the renderers only produce a stand-in shape;
+        // keep the placeholder icon instead (scheduleShipThumbs retries).
+        if (!loader || !loader.loaded) return;
         const accent = this.getHangarPreviewAccent ? this.getHangarPreviewAccent() : '#ffffff';
         const models = {};
         this.overlay.querySelectorAll('canvas[data-area-thumb]').forEach((c) => {
@@ -153,6 +155,15 @@ extendClass(HomeStationUI, {
             try {
                 loader.renderShip(ctx, model, ox, oy, scale, null, 0, { allowColorMountSprites: true });
             } catch (e) { return; }
+            // Hide the placeholder icon once the canvas actually has ship pixels.
+            if (c.parentNode && c.parentNode.classList) {
+                let drawn = false;
+                try {
+                    const px = ctx.getImageData(0, 0, c.width, c.height).data;
+                    for (let i = 3; i < px.length; i += 4) { if (px[i]) { drawn = true; break; } }
+                } catch (e) { drawn = true; }
+                c.parentNode.classList.toggle('is-drawn', drawn);
+            }
             if (!areaId || !model.layout) return;
             const ids = areaId === 'wing' ? ['wingLeft', 'wingRight'] : [areaId];
             ctx.strokeStyle = accent;
@@ -173,6 +184,7 @@ extendClass(HomeStationUI, {
                 const res = shipLoadoutManager.setAreaEnabled(id, area, input.checked);
                 if (!res.ok) return;
                 this.statusMsg = this.areaLabel(area) + (input.checked ? ' ON' : ' OFF');
+                this._hangarRecenter = true;
                 this.createUI();
             });
         });
@@ -314,6 +326,7 @@ extendClass(HomeStationUI, {
                 const res = shipLoadoutManager.setAreaEnabled(shipId, area, e.target.checked);
                 if (!res.ok) return;
                 this.statusMsg = this.areaLabel(area) + (e.target.checked ? ' ON' : ' OFF');
+                this._hangarRecenter = true;
                 this.createUI();
             });
             summary.appendChild(sw);

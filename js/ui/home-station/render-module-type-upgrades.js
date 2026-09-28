@@ -272,11 +272,67 @@ extendClass(HomeStationUI, {
     renderBlueprintList(map) {
         const keys = Object.keys(map || {}).filter((k) => (map[k] || 0) > 0);
         if (!keys.length) return '<span class="hs-muted hs-empty-slot">NONE</span>';
-        return keys.map((id) =>
-            `<span class="hs-chip hs-chip-bp">` +
-            `<span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-            `<span class="hs-chip-text">${this.shipName(id)} ×${map[id]}</span>` +
-            `</span>`
-        ).join('');
+        const rows = keys.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-bp', 'BLUEPRINT ×' + map[id])).join('');
+        return this.shipTableHtml(rows);
+    },
+
+    /** Header + body for a ship table (thumb, name/class, core stats). */
+    shipTableHtml(rowsHtml, withAction) {
+        return `<table class="hs-ship-table">` +
+            `<thead><tr><th></th><th>SHIP</th><th>TIER</th><th>HP</th><th>ARM</th><th>DMG</th><th>SPD</th>${withAction ? '<th>WEAPONS</th><th></th>' : ''}</tr></thead>` +
+            `<tbody>${rowsHtml}</tbody></table>`;
+    },
+
+    /** Names of the weapons currently equipped in this ship's loadout. */
+    equippedWeaponsLabel(id) {
+        if (typeof shipLoadoutManager === 'undefined') return '—';
+        const ids = (shipLoadoutManager.getLoadout(id).weapons || []).filter(Boolean);
+        if (!ids.length) return '—';
+        const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : null;
+        const profile = this.getProfile();
+        const faction = (cfg && cfg.faction) || (profile && profile.faction) || '';
+        return ids.map((w) => {
+            const bonus = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponMul
+                && weaponConfigManager.getFactionWeaponMul(faction, w) > 1;
+            return this.weaponIconHtml(w, 24, bonus ? '+20% DMG · ' + faction.toUpperCase() : '');
+        }).join('');
+    },
+
+    /**
+     * Weapon icon tilted 45° and tinted per weapon, name in the tooltip.
+     * `bonusNote` marks a faction-affinity weapon (glow + tooltip suffix).
+     */
+    weaponIconHtml(weaponId, size, bonusNote) {
+        const color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+            ? weaponConfigManager.getWeaponUiColor(weaponId) : null;
+        const name = (typeof iconRenderer !== 'undefined') ? iconRenderer.weaponIconInfo(weaponId).name : String(weaponId);
+        const tip = bonusNote ? name + ' · ' + bonusNote : name;
+        return `<span class="hs-weapon-icon${bonusNote ? ' is-affinity' : ''}"` +
+            (color ? ` style="--weapon-color:${color}"` : '') + `>` +
+            this.moduleIconHtml('weapon', weaponId, size, 'hs-pixel hs-pixel-' + size, tip) +
+            `</span>`;
+    },
+
+    /** One ship row; the thumb canvas is filled later by drawAreaThumbs(). */
+    renderShipTableRow(id, thumbClass, note, actionHtml) {
+        const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
+        const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
+        const val = (v) => (v != null ? v : '—');
+        return `<tr>` +
+            `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
+            (thumbClass === 'hs-ship-thumb-bp'
+                ? `<span class="hs-ship-thumb-type">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>`
+                : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
+                  `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
+            `</span></td>` +
+            `<td class="hs-ship-table-name"><strong>${this.shipName(id)}</strong>` +
+            `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
+            `<td>${val(cfg.tier)}</td><td>${val(cfg.maxHealth)}</td><td>${val(cfg.armor)}</td>` +
+            `<td>${val(cfg.damage)}</td><td>${val(cfg.speed)}</td>` +
+            (actionHtml != null
+                ? `<td><span class="hs-ship-table-weapons">${this.equippedWeaponsLabel(id)}</span></td>` +
+                  `<td class="hs-ship-table-action">${actionHtml}</td>`
+                : '') +
+            `</tr>`;
     },
 });

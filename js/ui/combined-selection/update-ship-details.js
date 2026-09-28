@@ -145,7 +145,7 @@ extendClass(CombinedSelectionManager, {
             color: var(--enemy-color);
             padding: 20px 30px;
             border-radius: 10px;
-            border: 2px solid var(--enemy-color);
+            border: var(--ui-border-width) solid var(--enemy-color);
             font-family: 'Courier New', monospace;
             font-size: var(--font-h2);
             font-weight: bold;

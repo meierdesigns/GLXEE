@@ -148,7 +148,20 @@ extendClass(HomeStationUI, {
             }
         }
         if (typeof menuNavHelper !== 'undefined') {
-            return menuNavHelper.collectFocusables(this.overlay);
+            const list = menuNavHelper.collectFocusables(this.overlay);
+            // Disabled buttons in the content (e.g. BUY you can't afford yet)
+            // stay reachable, so ↓ can walk the whole list; ENTER on them is
+            // a no-op (a disabled button ignores click()).
+            if (this.overlay) {
+                const extra = Array.prototype.slice.call(this.overlay.querySelectorAll('.hs-body button[disabled]'))
+                    .filter((el) => list.indexOf(el) === -1 && el.getClientRects().length > 0
+                        && !(el.closest && el.closest('[data-nav-skip], [inert], [aria-hidden="true"]')));
+                if (extra.length) {
+                    return list.concat(extra).sort((a, b) =>
+                        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+                }
+            }
+            return list;
         }
         if (!this.overlay) return [];
         return Array.prototype.slice.call(this.overlay.querySelectorAll('button.action-button:not([disabled])'));

@@ -78,6 +78,15 @@ extendClass(GalaxyMapManager, {
             edgesHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="gm-edge ${lit ? 'lit' : 'dim'}"/>`;
         });
 
+        // Ruling faction's base planet (faction-holdings.js).
+        const holdings = (typeof profileManager !== 'undefined' && profileManager.getFactionHoldings)
+            ? profileManager.getFactionHoldings(this.galaxyId) : null;
+        // Hidden until the base planet is reachable.
+        const baseId = holdings && !holdings.baseLost && profileManager.isHoldingBaseRevealed(this.galaxyId)
+            ? holdings.base : null;
+        const rulerStyle = holdings && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(holdings.ruler) : null;
+        const rulerAccent = (rulerStyle && rulerStyle.accent) || 'var(--color-primary)';
         let nodesHtml = '';
         nodes.forEach(n => {
             const x = pad + n.x * (W - pad * 2);
@@ -111,6 +120,15 @@ extendClass(GalaxyMapManager, {
                             <path class="gm-cleared-check" d="M-3.5 0 L-1 2.5 L3.5 -2.5" fill="none"/>
                         </g>
                     ` : ''}
+                    ${this.planetFactionsSvg(n.planetId, size)}
+                    ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
+                    ${n.planetId === baseId ? `
+                        <g class="gm-base-marker" style="--fac:${rulerAccent}">
+                            <title>${String(holdings.ruler).toUpperCase()} BASE${holdings.stations.length ? ' · DESTROY ITS STATIONS TO ASSAULT IT' : ' · OPEN TO ASSAULT'}</title>
+                            <rect class="gm-base-ring" x="${-size / 2 - 8}" y="${-size / 2 - 8}" width="${size + 16}" height="${size + 16}"/>
+                            <text class="gm-base-label" x="0" y="${-size / 2 - 32}">BASE</text>
+                        </g>
+                    ` : ''}
                     ${stageProgress ? `
                         <text class="gm-stage-progress" x="0" y="${size / 2 + 12}">${stageProgress}</text>
                     ` : ''}
@@ -126,10 +144,11 @@ extendClass(GalaxyMapManager, {
             const anchor = this.getPlanetInfo(post.planetId);
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
-                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}" data-post="${post.id}" transform="translate(${x},${y})">
+                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.factionStation ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
                     <rect class="gm-post-hit" x="-16" y="-16" width="32" height="32"/>
                     ${this.selectionFrameSvg(17, 7, 2)}
-                    <title>${post.name} TRADING POST · ${hint}</title>
+                    <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
+                    ${post.factionStation ? '<rect class="gm-faction-station-ring" x="-14" y="-14" width="28" height="28"/>' : ''}
                     <g transform="scale(1.1)">${this.stationPixelsSvg(post)}</g>
                 </g>
             `;
@@ -146,24 +165,26 @@ extendClass(GalaxyMapManager, {
         if (at) {
             const x = pad + at.x * (W - pad * 2);
             const y = pad + at.y * (H - pad * 2);
-            // Ship icon orbiting the location (SMIL rotate around the node).
+            // Ship centred on the location, nose down, gently hovering up and
+            // down instead of orbiting.
             const r = loc.kind === 'post' ? 18 : 32;
             const icon = this.getShipIconUrl();
+            // Sized to the ring: ~22×30 on a planet, smaller on a trading post.
+            // Whole-pixel magnification of the 13×17 icon, so every pixel is the same size.
+            const px = Math.max(1, Math.round(r * 0.7 / 13));
+            const sw = 13 * px;
+            const sh = 17 * px;
+            const k = sw / 11;
             const shipSvg = icon
-                ? `<image href="${icon}" x="-5.5" y="-7.5" width="11" height="15" class="gm-ship-marker-img" transform="rotate(180)"/>`
-                : '<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body"/>';
+                ? `<image href="${icon}" x="${-Math.round(sw / 2)}" y="${-Math.round(sh / 2)}" width="${sw}" height="${sh}" class="gm-ship-marker-img" transform="rotate(180)"/>`
+                : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${x},${y})">
                     <title>YOUR SHIP</title>
                     <circle r="${r}" class="gm-ship-orbit-ring"/>
                     <g>
-                        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="9s" repeatCount="indefinite"/>
-                        <g transform="translate(${r},0)">
-                            <g>
-                                <animateTransform attributeName="transform" type="translate" values="0 0; 1.5 0; 0 0; -1 0; 0 0" dur="1.6s" repeatCount="indefinite"/>
-                                ${shipSvg}
-                            </g>
-                        </g>
+                        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>
+                        ${shipSvg}
                     </g>
                 </g>
             `;
@@ -171,13 +192,157 @@ extendClass(GalaxyMapManager, {
 
         return `
             <svg class="galaxy-map-svg" viewBox="${this.getMapViewBox(W, H, pad).join(' ')}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                ${this.galaxyStarsSvg ? this.galaxyStarsSvg(W, H) : ''}
+                ${this.galaxySunsSvg ? this.galaxySunsSvg(W, H, pad) : ''}
                 ${edgesHtml}
-                <g class="gm-route-layer">${this.routePreviewSvg ? this.routePreviewSvg() : ''}</g>
+                ${this.postLanesSvg ? this.postLanesSvg() : ''}
                 ${nodesHtml}
                 ${postsHtml}
+                <g class="gm-route-layer">${this.routePreviewSvg ? this.routePreviewSvg() : ''}</g>
                 ${shipHtml}
             </svg>
         `;
+    },
+
+    /**
+     * Black space + seeded pixel starfield behind the map (a few stars twinkle).
+     * Oversized so it still fills the view when the map is zoomed / panned.
+     */
+    galaxyStarsSvg(W, H) {
+        let rnd = 0;
+        const gid = String(this.galaxyId || '');
+        for (let i = 0; i < gid.length; i++) rnd = (Math.imul(rnd, 31) + gid.charCodeAt(i)) >>> 0;
+        rnd = rnd || 1;
+        const next = () => {
+            rnd = (Math.imul(rnd, 1664525) + 1013904223) >>> 0;
+            return rnd / 4294967296;
+        };
+        const x0 = -W;
+        const y0 = -H;
+        let stars = '';
+        for (let i = 0; i < 420; i++) {
+            const x = Math.round(x0 + next() * W * 3);
+            const y = Math.round(y0 + next() * H * 3);
+            const big = next() < 0.08;
+            const a = (0.25 + next() * 0.75).toFixed(2);
+            const tw = next() < 0.12 ? ` class="gm-star-twinkle" style="animation-delay:${(-next() * 4).toFixed(2)}s"` : '';
+            stars += `<rect x="${x}" y="${y}" width="${big ? 2 : 1}" height="${big ? 2 : 1}" opacity="${a}"${tw}/>`;
+        }
+        return `<g class="gm-space" aria-hidden="true">` +
+            `<rect class="gm-space-bg" x="${x0}" y="${y0}" width="${W * 3}" height="${H * 3}"/>` +
+            `<g class="gm-stars">${stars}</g></g>`;
+    },
+
+    /**
+     * Pixel suns behind the map (planetConfigManager.getGalaxySuns): stepped
+     * glow squares, a pixel disc and a bright core, gently pulsing.
+     */
+    galaxySunsSvg(W, H, pad) {
+        if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxySuns) return '';
+        const suns = planetConfigManager.getGalaxySuns(this.galaxyId) || [];
+        return suns.map((s, i) => {
+            const x = Math.round(pad + s.x * (W - pad * 2));
+            const y = Math.round(pad + s.y * (H - pad * 2));
+            const r = Math.max(24, Math.round(s.r * (W - pad * 2) / 1.3));
+            // Circle quantised to square pixels of size p, as row strips.
+            const pixelCircle = (radius, p) => {
+                let out = '';
+                for (let dy = -radius; dy < radius; dy += p) {
+                    const mid = dy + p / 2;
+                    const half = Math.floor(Math.sqrt(Math.max(0, radius * radius - mid * mid)) / p) * p;
+                    if (half > 0) out += `<rect x="${-half}" y="${dy}" width="${half * 2}" height="${p}"/>`;
+                }
+                return out;
+            };
+            // Fine pixels for the star itself (higher resolution)…
+            const px = Math.max(2, Math.round(r / 14));
+            // …chunky steps for the glow rings around it.
+            const gp = Math.max(4, Math.round(r / 4));
+            const disc = pixelCircle(r, px);
+            // Limb darkening: a slightly smaller, brighter inner disc.
+            const inner = pixelCircle(Math.round(r * 0.72), px);
+            const core = pixelCircle(Math.round(r * 0.38), px);
+            // No rays: the star itself animates (breathing body, flickering
+            // surface, pulsing glow) — see .gm-sun-body in styles.css.
+            const delay = `animation-delay:${(-i * 1.7).toFixed(1)}s`;
+            return `
+                <g class="gm-sun gm-sun-${s.kind}" transform="translate(${x},${y})" style="--sun:${s.color};--sun-glow:${s.glow}">
+                    <title>${s.kind.toUpperCase()} STAR</title>
+                    <g class="gm-sun-glow gm-sun-glow-outer" style="${delay}">${pixelCircle(Math.round(r * 2.6 / gp) * gp, gp)}</g>
+                    <g class="gm-sun-glow gm-sun-glow-inner" style="${delay}">${pixelCircle(Math.round(r * 1.7 / gp) * gp, gp)}</g>
+                    <g class="gm-sun-body" style="${delay}">
+                        <g class="gm-sun-disc">${disc}</g>
+                        <g class="gm-sun-inner" style="${delay}">${inner}</g>
+                        <g class="gm-sun-core" style="${delay}">${core}</g>
+                    </g>
+                </g>`;
+        }).join('');
+    },
+
+    /**
+     * Lanes from each station / trading post to its anchor planet(s), routed
+     * around other bodies (routePath); lit when the station is open.
+     */
+    postLanesSvg() {
+        if (!this.routePath || typeof profileManager === 'undefined') return '';
+        let out = '';
+        (this.getTradingPosts() || []).forEach((post) => {
+            const open = profileManager.isTradingPostUnlocked ? profileManager.isTradingPostUnlocked(post) : true;
+            (post.anchors || [post.planetId]).forEach((pid) => {
+                if (!this.nodeById || !this.nodeById[pid]) return;
+                const pts = this.routePath({ kind: 'post', id: post.id }, { kind: 'planet', id: pid });
+                if (!pts || pts.length < 2) return;
+                // Start / end outside the station icon and the planet disc.
+                const trim = (a, b, by) => {
+                    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+                    return { x: a.x + (b.x - a.x) / l * by, y: a.y + (b.y - a.y) / l * by };
+                };
+                const p = pts.slice();
+                p[0] = trim(p[0], p[1], 16);
+                p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], 30);
+                out += `<polyline class="gm-edge gm-post-lane ${open ? 'lit' : 'dim'}" fill="none" points="${p.map((q) => q.x.toFixed(1) + ',' + q.y.toFixed(1)).join(' ')}"/>`;
+            });
+        });
+        return out;
+    },
+
+    /** "UNDER ATTACK" marker on the planet of an active invasion (invasion-scenario.js). */
+    invasionMarkerSvg(planetId, size) {
+        if (typeof profileManager === 'undefined' || !profileManager.getInvadedPlanetId) return '';
+        if (profileManager.getInvadedPlanetId(this.galaxyId) !== planetId) return '';
+        const inv = profileManager.getActiveInvasion();
+        const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(inv.attacker) : null;
+        const accent = (st && st.accent) || '#ff4a3a';
+        const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+            ? profileSelectionManager.getFactionEmblemHtml(inv.attacker, 14) : '';
+        const f = size / 2 + 12;
+        return `<g class="gm-invasion" style="--fac:${accent}">` +
+            `<title>${String(inv.attacker).toUpperCase()} INVASION · WIN A STAGE HERE TO REPEL IT</title>` +
+            `<rect class="gm-invasion-ring" x="${-f}" y="${-f}" width="${f * 2}" height="${f * 2}"/>` +
+            `<rect class="gm-invasion-ring gm-invasion-ring-2" x="${-f - 6}" y="${-f - 6}" width="${f * 2 + 12}" height="${f * 2 + 12}"/>` +
+            `<text class="gm-invasion-label" x="0" y="${f + 14}">UNDER ATTACK</text>` +
+            `<foreignObject x="${f - 10}" y="${-f - 10}" width="20" height="20">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem">${emblem}</div></foreignObject>` +
+            `</g>`;
+    },
+
+    /** Emblems of the factions fighting on a planet, in a row above it. */
+    planetFactionsSvg(planetId, size) {
+        if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getPlanetFactions) return '';
+        // Factions are only known on reachable planets.
+        if (this.isUnlocked && !this.isUnlocked(planetId)) return '';
+        const factions = planetConfigManager.getPlanetFactions(planetId);
+        if (!factions.length) return '';
+        if (typeof profileSelectionManager === 'undefined' || !profileSelectionManager.getFactionEmblemHtml) return '';
+        // Bare faction icons — no boxes around them.
+        const names = factions.map((f) =>
+            `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16)}</span>`
+        ).join('');
+        const w = 80;
+        const h = 18;
+        return `<foreignObject x="${-w / 2}" y="${-size / 2 - h - 8}" width="${w}" height="${h}">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-factions">${names}</div></foreignObject>`;
     },
 
     /** Player's active ship rendered once to a small PNG data URL (cached per model). */
@@ -187,11 +352,35 @@ extendClass(GalaxyMapManager, {
         const key = (model.id || model.name || 'ship') + '|' + (model.layout ? JSON.stringify(model.layout).length : 0);
         if (this._shipIconKey === key && this._shipIconUrl) return this._shipIconUrl;
         try {
-            const c = document.createElement('canvas');
+            const inner = document.createElement('canvas');
             // Tiny render → coarse voxels when scaled up pixelated on the map.
-            c.width = 11;
-            c.height = 15;
-            shipRenderer.renderShipPreview(c, model, 1);
+            inner.width = 11;
+            inner.height = 15;
+            shipRenderer.renderShipPreview(inner, model, 1);
+            // 1 px dark outline, pixel-exact: every empty pixel touching the
+            // ship becomes dark (a blur/dilate filter smeared it into a blob).
+            const c = document.createElement('canvas');
+            c.width = 13;
+            c.height = 17;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(inner, 1, 1);
+            const img = ctx.getImageData(0, 0, c.width, c.height);
+            const d = img.data;
+            const solid = (x, y) => x >= 0 && y >= 0 && x < c.width && y < c.height && d[(y * c.width + x) * 4 + 3] > 96;
+            // Hard alpha: faint anti-aliased pixels made a ragged fringe.
+            for (let o = 0; o < d.length; o += 4) d[o + 3] = d[o + 3] > 96 ? 255 : 0;
+            const edge = [];
+            for (let y = 0; y < c.height; y++) {
+                for (let x = 0; x < c.width; x++) {
+                    if (solid(x, y)) continue;
+                    if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) edge.push(x, y);
+                }
+            }
+            for (let i = 0; i < edge.length; i += 2) {
+                const o = (edge[i + 1] * c.width + edge[i]) * 4;
+                d[o] = 5; d[o + 1] = 5; d[o + 2] = 8; d[o + 3] = 255;
+            }
+            ctx.putImageData(img, 0, 0);
             this._shipIconUrl = c.toDataURL();
             // Only cache once ship art is loaded; before that it's a placeholder.
             const ready = typeof spriteLoader === 'undefined' || spriteLoader.loaded;
@@ -276,6 +465,7 @@ extendClass(GalaxyMapManager, {
             node.addEventListener('click', () => {
                 const pid = node.getAttribute('data-planet');
                 if (!pid) return;
+                this.markUserPicked();
                 this.selectPlanet(pid);
             });
             node.addEventListener('dblclick', () => {
@@ -296,14 +486,17 @@ extendClass(GalaxyMapManager, {
             .map(n => [pad + n.x * (W - pad * 2), pad + n.y * (H - pad * 2)]);
         let x0 = 0, y0 = 0, x1 = W, y1 = H;
         if (pts.length) {
-            const m = 44;
-            x0 = Math.min(...pts.map(p => p[0])) - m;
-            x1 = Math.max(...pts.map(p => p[0])) + m;
-            y0 = Math.min(...pts.map(p => p[1])) - m;
-            y1 = Math.max(...pts.map(p => p[1])) + m;
+            // Room for the faction emblems above each planet, the stage
+            // label below, and the galaxy badges in the top-right corner.
+            x0 = Math.min(...pts.map(p => p[0])) - 70;
+            x1 = Math.max(...pts.map(p => p[0])) + 110;
+            y0 = Math.min(...pts.map(p => p[1])) - 80;
+            y1 = Math.max(...pts.map(p => p[1])) + 60;
         }
-        // Keep the map's aspect so meet-scaling fills the area.
-        const aspect = W / H;
+        // Match the on-screen area's aspect so meet-scaling fills it.
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const aspect = area && area.clientWidth > 0 && area.clientHeight > 0
+            ? area.clientWidth / area.clientHeight : W / H;
         let w = x1 - x0, h = y1 - y0;
         if (w / h < aspect) w = h * aspect; else h = w / aspect;
         const cx = (x0 + x1) / 2 + (this.mapPan ? this.mapPan.x : 0);
@@ -388,12 +581,21 @@ extendClass(GalaxyMapManager, {
             const id = node.getAttribute('data-post');
             node.addEventListener('pointerenter', () => node.classList.add('hovered'));
             node.addEventListener('pointerleave', () => node.classList.remove('hovered'));
-            node.addEventListener('click', () => this.selectPost(id));
+            node.addEventListener('click', () => {
+                this.markUserPicked();
+                this.selectPost(id);
+            });
             node.addEventListener('dblclick', () => {
                 this.selectPost(id);
                 this.confirm();
             });
         });
+    },
+
+    /** A click picked a planet / post: show its selection frame even without map focus. */
+    markUserPicked() {
+        this._picked = true;
+        if (this.overlay) this.overlay.classList.add('is-picked');
     },
 
     setHoveredPlanet(planetId) {
@@ -489,6 +691,21 @@ extendClass(GalaxyMapManager, {
             node.classList.toggle('hovered', pid === this.hoveredPlanetId);
         });
         if (this.syncRoutePreview) this.syncRoutePreview();
+        this.raiseSelectedMarker();
+    },
+
+    /**
+     * SVG has no z-index: move the selected planet / post (with its frame)
+     * to the top, just under the player ship, so markings are never covered.
+     */
+    raiseSelectedMarker() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        const sel = svg.querySelector('.gm-post-node.selected') || svg.querySelector('.gm-node.selected');
+        if (!sel || sel.parentNode !== svg) return;
+        const ship = svg.querySelector(':scope > .gm-ship-marker');
+        if (sel.nextSibling === ship) return;
+        svg.insertBefore(sel, ship || null);
     },
 
     bindEvents() {
@@ -499,6 +716,7 @@ extendClass(GalaxyMapManager, {
         this.bindNodeClicks();
         this.bindPostClicks();
         this.bindMapZoom();
+        this.raiseSelectedMarker();
         if (this.selectedPostId) this.updateDetails();
 
         // Jump to the station's galaxy travel (teleport) tab.

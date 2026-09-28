@@ -17,6 +17,8 @@ extendClass(PlanetConfigManager, {
                     title: 'Commodore of the Concord Escort Wing',
                     lore: 'Ada Voss never lost a freighter she was assigned to. She flies the lanes her own charts made safe, and every Terran pilot learns her rule before their first launch: the convoy comes home, or you do not.'
                 },
+                playstyle: 'Balanced all-rounder: steady fire, sturdy hulls, forgiving to learn.',
+                weaponNote: 'Precise and energy-cheap — one clean beam that never misses its lane.',
                 icon: 'factionTerran',
                 homeGalaxy: 'milky_way',
                 traits: ['Engineers', 'Colony fleets', 'Safe lanes'],
@@ -32,6 +34,8 @@ extendClass(PlanetConfigManager, {
                     title: 'Clawmaster of the Ash Belt',
                     lore: 'Skarr Velkhar carries forty interception scars and refuses to let a medic close a single one. He took the Clawmaster banner in a war-season ambush and has not handed it back since; the packs follow the loudest engines, and his are the loudest.'
                 },
+                playstyle: 'Aggressive close-range brawler: fast strikes, burst damage, high risk.',
+                weaponNote: 'Twin claw lances that shred targets up close, built for ambush runs.',
                 icon: 'factionKronax',
                 homeGalaxy: 'andromeda',
                 traits: ['Raiders', 'Spike hulls', 'Ambush doctrine'],
@@ -47,6 +51,8 @@ extendClass(PlanetConfigManager, {
                     title: 'The Voice Between Folds',
                     lore: 'Echo Six is the only Voidborn who has ever answered a hail. Nobody knows if the name is a rank, a count, or a joke. When the rings open and a single silent hull slips through first, archivists log it simply as: Six was here.'
                 },
+                playstyle: 'Evasive trickster: odd firing angles, hit from where the enemy isn’t looking.',
+                weaponNote: 'A wavering arc that curls around cover and is hard to dodge.',
                 icon: 'factionVoidborn',
                 homeGalaxy: 'void_reach',
                 traits: ['Fold-space', 'Silent fleets', 'Cold rings'],
@@ -62,6 +68,8 @@ extendClass(PlanetConfigManager, {
                     title: 'Captain of the Black Dock',
                     lore: 'Magpie Renn has survived eleven mutinies by starting nine of them. Her hull is welded from the wrecks of everyone who crossed her, and the Scrap Belt knows the sign: a shine of stolen chrome, then nothing where your cargo used to be.'
                 },
+                playstyle: 'Opportunist: wide coverage, salvage bonuses, chaos over precision.',
+                weaponNote: 'A fan of scrap slugs — hits something, every time.',
                 icon: 'factionPirate',
                 homeGalaxy: 'scrap_belt',
                 traits: ['Salvage kings', 'Black docks', 'No lasting banner'],
@@ -77,6 +85,8 @@ extendClass(PlanetConfigManager, {
                     title: 'First Forge of the Synth Grid',
                     lore: 'Node Zero is the hull the Collective copies when a copy must not fail. It keeps no memory it cannot use and no loyalty it cannot compute — yet every Machine war-line routes its first signal through Node Zero before it moves.'
                 },
+                playstyle: 'Sustained-fire grinder: constant pressure, efficient systems.',
+                weaponNote: 'Guided missile salvos — the forge calculates, the warheads never argue.',
                 icon: 'factionMachine',
                 homeGalaxy: 'synth_grid',
                 traits: ['Forge nodes', 'Logic doctrine', 'Self-replicate'],
@@ -226,6 +236,11 @@ extendClass(PlanetConfigManager, {
         } else {
             g.map = this.normalizeGalaxyMap(g.id, g.map);
         }
+        // One-time: old grid layouts become organic (then saved, so it only runs once).
+        if (!this._relayingOut && this.relayoutGridGalaxyMap && this.relayoutGridGalaxyMap(g.id, g.map)) {
+            this._relayingOut = true;
+            try { this.saveGalaxies(); } finally { this._relayingOut = false; }
+        }
         return g.map;
     },
 
@@ -234,8 +249,8 @@ extendClass(PlanetConfigManager, {
         const pid = String(planetId || '').toLowerCase();
         const neighbors = [];
         (map.edges || []).forEach(edge => {
-            const a = edge[0];
-            const b = edge[1];
+            const a = String(edge[0] || '').toLowerCase();
+            const b = String(edge[1] || '').toLowerCase();
             if (a === pid && neighbors.indexOf(b) === -1) neighbors.push(b);
             if (b === pid && neighbors.indexOf(a) === -1) neighbors.push(a);
         });

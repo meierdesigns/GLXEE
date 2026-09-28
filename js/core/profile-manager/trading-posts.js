@@ -56,7 +56,9 @@ extendClass(ProfileManager, {
                 .filter((e) => e[0] === n.planetId || e[1] === n.planetId)
                 .map((e) => byId[e[0] === n.planetId ? e[1] : e[0]])
                 .filter(Boolean);
-            const deep = links.length > 0 && (h >>> 3) % 2 === 0;
+            // Every station belongs to exactly one planet (no deep-space
+            // stations between two planets) and sits close to it.
+            const deep = false && links.length > 0 && (h >>> 3) % 2 === 0;
             let pos;
             let anchors = [n.planetId];
             if (deep) {
@@ -120,7 +122,7 @@ extendClass(ProfileManager, {
     placeTradingPost(nodes, anchor, placed, seed) {
         const SX = 544;
         const SY = 224;
-        const radius = 62;
+        const radius = 44; // just outside the planet icon: clearly its station
         const others = nodes.map((o) => ({ x: o.x, y: o.y })).concat(placed);
         let best = null;
         let bestScore = -Infinity;

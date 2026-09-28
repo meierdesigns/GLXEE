@@ -167,18 +167,69 @@ extendClass(PlanetConfigManager, {
         const map = this.getGalaxyMap(galaxyId);
         const pid = String(planetId).toLowerCase();
         if ((map.nodes || []).some(n => n.planetId === pid)) return;
-        const count = (map.nodes || []).length;
-        const col = count % 3;
-        const row = Math.floor(count / 3);
-        const x = 0.2 + col * 0.3;
-        const y = 0.22 + row * 0.28;
-        map.nodes.push({
-            planetId: pid,
-            x: Math.max(0.08, Math.min(0.92, x)),
-            y: Math.max(0.12, Math.min(0.88, y))
-        });
+        // Organic spot: best of 40 seeded random tries (furthest from every
+        // other planet) — no tidy 3-column grid.
+        const spot = this.pickOrganicMapSpot(map.nodes || [], 'place|' + galaxyId + '|' + pid);
+        map.nodes.push({ planetId: pid, x: spot.x, y: spot.y });
         if (!map.startPlanetId) map.startPlanetId = pid;
         g.map = map;
+    },
+
+    /** Spot for a new map node: seeded random tries, furthest from `others`. */
+    pickOrganicMapSpot(others, seedKey) {
+        const rng = this.seededRandom(seedKey);
+        let best = { x: 0.5, y: 0.5 };
+        let bestScore = -1;
+        for (let i = 0; i < 40; i++) {
+            const x = 0.1 + rng() * 0.8;
+            const y = 0.12 + rng() * 0.76;
+            let score = others.length ? Infinity : 1 - Math.hypot(x - 0.5, y - 0.5);
+            others.forEach((o) => { score = Math.min(score, Math.hypot((o.x - x) * 2.4, o.y - y)); });
+            if (score > bestScore) { bestScore = score; best = { x: x, y: y }; }
+        }
+        return { x: Math.round(best.x * 1000) / 1000, y: Math.round(best.y * 1000) / 1000 };
+    },
+
+    /**
+     * Maps laid out on the old 3-column grid (most nodes exactly on its
+     * points) are re-scattered once, with fresh links: a nearest-neighbour
+     * spanning tree plus a few extra short lanes. Hand-built maps untouched.
+     */
+    relayoutGridGalaxyMap(galaxyId, map) {
+        const nodes = map.nodes || [];
+        if (galaxyId === 'milky_way' || nodes.length < 3) return false;
+        const onGrid = (n) => [0.2, 0.5, 0.8].some((gx) => Math.abs(n.x - gx) < 0.002)
+            && Array.from({ length: 4 }, (_, r) => Math.min(0.88, 0.22 + r * 0.28))
+                .some((gy) => Math.abs(n.y - gy) < 0.002);
+        if (nodes.filter(onGrid).length < Math.ceil(nodes.length * 0.6)) return false;
+        const placed = [];
+        nodes.forEach((n) => {
+            const spot = this.pickOrganicMapSpot(placed, 'relayout|' + galaxyId + '|' + n.planetId);
+            n.x = spot.x;
+            n.y = spot.y;
+            placed.push(n);
+        });
+        const d = (a, b) => Math.hypot((a.x - b.x) * 2.4, a.y - b.y);
+        const edges = [];
+        const inTree = [nodes[0]];
+        while (inTree.length < nodes.length) {
+            let best = null;
+            inTree.forEach((a) => nodes.forEach((b) => {
+                if (inTree.indexOf(b) !== -1) return;
+                const dist = d(a, b);
+                if (!best || dist < best.dist) best = { a: a, b: b, dist: dist };
+            }));
+            edges.push([best.a.planetId, best.b.planetId]);
+            inTree.push(best.b);
+        }
+        // A few extra short lanes so there are loops, not just a tree.
+        const has = (a, b) => edges.some((e) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a));
+        const pairs = [];
+        nodes.forEach((a, i) => nodes.slice(i + 1).forEach((b) => { if (!has(a.planetId, b.planetId)) pairs.push({ a, b, dist: d(a, b) }); }));
+        pairs.sort((p, q) => p.dist - q.dist).slice(0, Math.max(1, Math.floor(nodes.length / 3)))
+            .forEach((p) => edges.push([p.a.planetId, p.b.planetId]));
+        map.edges = edges;
+        return true;
     },
 
     hashSeed(str) {

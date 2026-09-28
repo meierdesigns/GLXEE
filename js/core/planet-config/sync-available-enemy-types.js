@@ -28,10 +28,42 @@ extendClass(PlanetConfigManager, {
         return types;
     },
 
-    getPlanetFactions(planetId) {
+    /**
+     * Factions fighting on a planet — one owner from its galaxy (ruler or a
+     * rival) plus, at most, factions allied with that owner. A configured
+     * owner outside the galaxy is replaced by a seeded pick weighted by the
+     * galaxy's shares, so contested galaxies spread their planets between
+     * the sides instead of mixing enemies everywhere. `raw` = as stored.
+     */
+    getPlanetFactions(planetId, raw) {
         const cfg = this.getConfig(planetId);
         if (!cfg || !Array.isArray(cfg.factions)) return [];
-        return cfg.factions.map(String).filter(Boolean);
+        const list = cfg.factions.map(String).filter(Boolean);
+        if (raw || !cfg.galaxyId || !this.getGalaxyControl) return list;
+        const control = this.getGalaxyControl(cfg.galaxyId);
+        const allowed = control.factions.map((f) => f.id);
+        if (!allowed.length) return list;
+        // Pirates are raiders: they hold a planet only where they rule the
+        // galaxy, or on a seeded ~1 in 3 of planets — not on every planet
+        // that happens to list them.
+        const pirateHere = control.main === 'pirate'
+            || ((this.hashSeed('pirates|' + planetId) >>> 0) % 100) < 33;
+        const ok = (f) => allowed.indexOf(f) !== -1 && (f !== 'pirate' || pirateHere);
+        let owner = list.find(ok);
+        if (!owner) {
+            let roll = ((this.hashSeed('owner|' + planetId) >>> 0) % 1000) / 1000;
+            owner = allowed[0];
+            for (const f of control.factions) {
+                if (roll < f.share) { owner = f.id; break; }
+                roll -= f.share;
+            }
+            if (!ok(owner)) owner = control.main;
+        }
+        const out = [owner];
+        list.concat(allowed).forEach((f) => {
+            if (out.indexOf(f) === -1 && ok(f) && this.areFactionsAllied(owner, f)) out.push(f);
+        });
+        return out;
     },
 
     /**

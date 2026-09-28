@@ -161,9 +161,20 @@ extendClass(GalaxyMapManager, {
             this.bindNodeClicks();
             this.bindPostClicks();
             this.bindMapZoom();
+            this.raiseSelectedMarker();
         }
         this.updateDetails();
         this.syncConfirmButton();
+    },
+
+    /** Pixel padlock over an unreachable planet / station in the card. */
+    lockBadgeHtml() {
+        return '<span class="gm-lock-badge" title="LOCKED" aria-label="Locked">' +
+            '<svg viewBox="0 0 12 14" width="48" height="56" shape-rendering="crispEdges" aria-hidden="true">' +
+            '<path class="gm-lock-shackle" d="M3 6V3h1V2h1V1h2v1h1v1h1v3H8V3H7V2H5v1H4v3z"/>' +
+            '<rect class="gm-lock-body" x="1" y="6" width="10" height="7"/>' +
+            '<rect class="gm-lock-hole" x="5" y="8" width="2" height="3"/>' +
+            '</svg></span>';
     },
 
     renderConfirmActionsHtml(info) {
@@ -175,6 +186,11 @@ extendClass(GalaxyMapManager, {
             if (!this.isShipAt('post', post.id)) {
                 return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">FLY TO ${post.name}</button>`;
             }
+            // Faction stations can also be raided (faction-holdings.js).
+            if (post.factionStation) {
+                return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="raid">RAID</button>` +
+                    `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">DOCK · ${post.name}</button>`;
+            }
             return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">DOCK · ${post.name}</button>`;
         }
         const unlocked = !!(info && info.unlocked);
@@ -183,6 +199,13 @@ extendClass(GalaxyMapManager, {
         }
         if (!this.isShipAt('planet', info.id)) {
             return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">FLY TO ${String(info.name || info.id).toUpperCase()}</button>`;
+        }
+        // The ruler's base, once all its stations are gone, can be assaulted.
+        const hold = profileManager.getFactionHoldings ? profileManager.getFactionHoldings(this.galaxyId) : null;
+        if (hold && !hold.baseLost && hold.base === info.id && !hold.stations.length
+            && profileManager.isHoldingBaseRevealed(this.galaxyId)) {
+            return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">ASSAULT BASE</button>` +
+                `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="resume">START MISSION</button>`;
         }
         const opts = this.getStartOptions(info && info.id);
         if (opts.canChoose) {
@@ -211,7 +234,7 @@ extendClass(GalaxyMapManager, {
         const confirmBtn = this.overlay.querySelector('#gmConfirm');
         const backBtn = this.overlay.querySelector('#gmBack');
         if (startBtn) {
-            startBtn.addEventListener('click', () => this.confirm('start'));
+            startBtn.addEventListener('click', () => this.confirm(startBtn.getAttribute('data-start-mode') || 'start'));
         }
         if (confirmBtn) {
             confirmBtn.addEventListener('click', () => {
@@ -235,7 +258,7 @@ extendClass(GalaxyMapManager, {
             const open = profileManager.isTradingPostUnlocked(post);
             set('gmSectorName', post.name);
             const bg = this.overlay.querySelector('.gm-sector-planet-bg');
-            if (bg) bg.innerHTML = this.postIconSvg(open, post);
+            if (bg) bg.innerHTML = this.postIconSvg(open, post) + (open ? '' : this.lockBadgeHtml());
             // Trading posts: economic profile instead of combat stats.
             const eco = profileManager.getTradingPostEconomy(post);
             const kindShort = { weapon: 'WPN', defense: 'DEF', ability: 'ABL', energy: 'NRG' };
@@ -263,7 +286,7 @@ extendClass(GalaxyMapManager, {
         set('gmStatusLabel', 'Status');
         set('gmSectorName', info.name || '—');
         const planetBg = this.overlay.querySelector('.gm-sector-planet-bg');
-        if (planetBg) planetBg.innerHTML = this.planetIconHtml(info.id, 240);
+        if (planetBg) planetBg.innerHTML = this.planetIconHtml(info.id, 240) + (info.unlocked ? '' : this.lockBadgeHtml());
         set('gmDiff', info.unlocked ? (info.difficulty || '—') : '???');
         set('gmStages', info.unlocked
             ? (info.cleared
@@ -283,6 +306,17 @@ extendClass(GalaxyMapManager, {
         if (this._ambush) { this.resolveAmbush('fight'); return; }
         if (this._flight) return;
         const post = this.getSelectedPost();
+        if (post && startMode === 'raid' && post.factionStation) {
+            // Raid: fight at the station's planet; winning destroys the station.
+            profileManager.beginHoldingRaid(this.galaxyId, post.id, post.planetId);
+            profileManager._suppressHoldingTick = true;
+            profileManager.setShipLocation(this.galaxyId, 'planet', post.planetId);
+            profileManager._suppressHoldingTick = false;
+            this.selectedPostId = null;
+            this.selectedPlanetId = post.planetId;
+            this.confirm('start');
+            return;
+        }
         if (post) {
             if (!profileManager.isTradingPostUnlocked(post)) return;
             if (!this.isShipAt('post', post.id)) this.flyTo('post', post.id);
@@ -294,6 +328,10 @@ extendClass(GalaxyMapManager, {
         if (!this.isShipAt('planet', info.id)) {
             this.flyTo('planet', info.id);
             return;
+        }
+        if (startMode === 'assault') {
+            profileManager.beginHoldingRaid(this.galaxyId, 'base', info.id);
+            startMode = 'start';
         }
         const mode = startMode === 'start' ? 'start' : 'resume';
         const opts = this.getStartOptions(info.id);

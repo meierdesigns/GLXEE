@@ -55,11 +55,12 @@ extendClass(PlanetConfigManager, {
         const rivalPool = (rivalTheme && rivalTheme.enemyPool && rivalTheme.enemyPool.length)
             ? rivalTheme.enemyPool
             : enemyPool;
-        // Frontline planets field one extra wave; ~40% of it is the rival.
+        // Frontline planets field one extra wave; ~20% of it is the rival
+        // (factions shouldn't blend into a mixed bag every fight).
         const enemyCount = 2 + Math.min(4, Math.floor(idx / 2)) + (contested ? 1 : 0);
         const enemies = [];
         for (let i = 0; i < enemyCount; i++) {
-            const isRival = contested && rng() < 0.4;
+            const isRival = contested && rng() < 0.2;
             const type = this.pickSeeded(rng, isRival ? rivalPool : enemyPool) || 'fighter';
             enemies.push({
                 id: 'gen_' + id + '_' + i,
@@ -121,7 +122,7 @@ extendClass(PlanetConfigManager, {
             galaxyId: gid,
             difficulty: difficulty,
             description: origin + ' · ' + (contested
-                ? 'FRONTLINE ' + faction.toUpperCase() + ' vs ' + rival.toUpperCase()
+                ? 'ALLIED ' + faction.toUpperCase() + ' + ' + rival.toUpperCase()
                 : faction.toUpperCase()) + ' · seed ' +
                 this.hashSeed(seed).toString(16).slice(0, 6),
             factions: planetFactions,
@@ -144,6 +145,7 @@ extendClass(PlanetConfigManager, {
         this.configs[id] = cfg;
         this.syncGalaxyMembership();
         this.placePlanetOnGalaxyMap(gid, id);
+        this.scatterGeneratedPlanet(gid, id, seed);
         this.registerPlanetGraphic(id);
 
         const map = this.getGalaxyMap(gid);
@@ -180,6 +182,84 @@ extendClass(PlanetConfigManager, {
             this.applyToRuntime(id);
         }
         return { ok: true, planetId: id, name: name, faction: faction, config: cfg };
+    },
+
+    /**
+     * Organic placement for a generated planet: best of 40 seeded random
+     * spots (furthest from every other planet), instead of the tidy grid.
+     */
+    scatterGeneratedPlanet(galaxyId, planetId, seed) {
+        const map = this.getGalaxyMap(galaxyId);
+        const node = (map.nodes || []).find((n) => n.planetId === planetId);
+        if (!node) return;
+        const others = (map.nodes || []).filter((n) => n !== node);
+        let rnd = (this.hashSeed('scatter|' + seed) >>> 0) || 1;
+        const next = () => {
+            rnd = (Math.imul(rnd, 1664525) + 1013904223) >>> 0;
+            return rnd / 4294967296;
+        };
+        let best = { x: node.x, y: node.y };
+        let bestScore = -1;
+        for (let i = 0; i < 40; i++) {
+            const x = 0.1 + next() * 0.8;
+            const y = 0.12 + next() * 0.76;
+            let score = Infinity;
+            others.forEach((o) => { score = Math.min(score, Math.hypot((o.x - x) * 2.4, o.y - y)); });
+            if (!others.length) score = 1 - Math.hypot(x - 0.5, y - 0.5);
+            if (score > bestScore) { bestScore = score; best = { x: x, y: y }; }
+        }
+        node.x = Math.round(best.x * 1000) / 1000;
+        node.y = Math.round(best.y * 1000) / 1000;
+    },
+
+    /** Planets a charted galaxy gets on arrival: 7–9, seeded per galaxy. */
+    getArrivalPlanetTarget(galaxyId) {
+        return 7 + ((this.hashSeed('size|' + String(galaxyId || '')) >>> 0) % 3);
+    },
+
+    /**
+     * Suns of a galaxy for the map: 1 (2 in larger galaxies), a seeded star
+     * type each, placed in the emptiest part of the map (normalized coords).
+     */
+    getGalaxySuns(galaxyId) {
+        const gid = String(galaxyId || '').toLowerCase();
+        const map = this.getGalaxyMap(gid) || {};
+        const nodes = map.nodes || [];
+        const h = (s) => (this.hashSeed(s) >>> 0);
+        // Large stars; r is a share of the map width.
+        const kinds = [
+            { kind: 'yellow', color: '#ffd24a', glow: '#ffb020', r: 0.13 },
+            { kind: 'orange', color: '#ff9a3d', glow: '#ff6a1a', r: 0.15 },
+            { kind: 'blue', color: '#cfe8ff', glow: '#6fb0ff', r: 0.11 },
+            { kind: 'red', color: '#ff6a4a', glow: '#c0301a', r: 0.19 }
+        ];
+        const count = nodes.length >= 7 ? 2 : 1;
+        const suns = [];
+        // Candidate spots on the map border (centre just outside the edge, so
+        // only part of the star reaches into the map).
+        const edgeSpots = [];
+        for (let t = 0; t <= 10; t++) {
+            const f = t / 10;
+            // Well outside the border: only the outer part of the star shows,
+            // keeping clear of the planets.
+            edgeSpots.push({ x: -0.1, y: f }, { x: 1.1, y: f });
+            edgeSpots.push({ x: f, y: -0.24 }, { x: f, y: 1.24 });
+        }
+        for (let i = 0; i < count; i++) {
+            let best = null;
+            let bestScore = -1;
+            edgeSpots.forEach((spot, si) => {
+                const others = nodes.map((n) => ({ x: n.x, y: n.y })).concat(suns);
+                let score = Infinity;
+                others.forEach((o) => { score = Math.min(score, Math.hypot((o.x - spot.x) * 2.4, o.y - spot.y)); });
+                // Seeded jitter so equal spots differ per galaxy.
+                score += (h(gid + '|sunpos|' + i + '|' + si) % 100) / 600;
+                if (score > bestScore) { bestScore = score; best = { x: spot.x, y: spot.y }; }
+            });
+            const k = kinds[h(gid + '|sun|' + i) % kinds.length];
+            suns.push(Object.assign({ id: gid + ':sun' + i }, k, best));
+        }
+        return suns;
     },
 
     registerPlanetGraphic(planetId) {
@@ -229,6 +309,17 @@ extendClass(PlanetConfigManager, {
             (map.nodes || []).length
         );
 
+        // Galaxies charted with the old, small arrival set (4 planets) are
+        // topped up to the full size.
+        const target = this.getArrivalPlanetTarget(gid);
+        if (existingCount > 0 && existingCount < target) {
+            const topSeed = String(seedBase || ('arrival|' + gid));
+            for (let i = existingCount + 1; i <= target; i++) {
+                this.generateExploredPlanet(gid, topSeed + '|arrival|' + i, i, { arrival: true, skipSave: true });
+            }
+            this.syncGalaxyMembership();
+            this.save();
+        }
         if (existingCount > 0) {
             if (opts.firstVisit && typeof planetSVGManager !== 'undefined' &&
                 planetSVGManager.invalidateGalaxy) {
@@ -246,7 +337,7 @@ extendClass(PlanetConfigManager, {
 
         // Unknown / empty foreign galaxy → always generative arrival set
         const seedRoot = String(seedBase || ('arrival|' + gid));
-        const count = 4;
+        const count = target;
         const planetIds = [];
         let startPlanetId = null;
         for (let i = 1; i <= count; i++) {

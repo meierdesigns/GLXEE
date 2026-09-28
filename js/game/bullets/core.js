@@ -93,18 +93,25 @@ class BulletManager {
         return this.minChargeMult + (this.maxChargeMult - this.minChargeMult) * t;
     }
 
+    /** 'all' when this key is the ship's fire-all key, else the key itself. */
+    fireGroupFor(key) {
+        const L = this.currentShipModel && this.currentShipModel.loadout;
+        const allKey = (L && L.allFireKey) || 'space';
+        return key === allKey ? 'all' : key;
+    }
+
     releaseChargeShot(playerPosition) {
         if (typeof chargeSystem !== 'undefined') {
             if (!chargeSystem.isWeaponCharging()) return false;
             const mult = chargeSystem.releaseWeaponCharge();
             this.resetCharge();
-            return this.shoot(playerPosition, { chargeMult: mult });
+            return this.shoot(playerPosition, { chargeMult: mult, fireKey: this.fireGroupFor('space') });
         }
         if (!this.isCharging) return false;
         this.updateCharge();
         const mult = this.getChargeMultiplier();
         this.resetCharge();
-        return this.shoot(playerPosition, { chargeMult: mult });
+        return this.shoot(playerPosition, { chargeMult: mult, fireKey: this.fireGroupFor('space') });
     }
 
     update(deltaTime = 16.67, keys = null) { // Default to ~60 FPS if no deltaTime provided
@@ -115,8 +122,13 @@ class BulletManager {
         if (keys && typeof playerManager !== 'undefined') {
             const spaceHeld = !!(keys[' '] || keys['Space']);
             const mode = this.getFireMode();
+            // A / S / D fire their assigned slots — or every weapon when that
+            // key is the ALL key (hangar slot bar).
+            ['a', 's', 'd'].forEach((k) => {
+                if (keys[k] || keys[k.toUpperCase()]) this.shoot(playerManager.getPosition(), { fireKey: this.fireGroupFor(k) });
+            });
             if (mode === 'auto' && spaceHeld) {
-                this.shoot(playerManager.getPosition());
+                this.shoot(playerManager.getPosition(), { fireKey: this.fireGroupFor('space') });
             } else if (mode === 'charge' && spaceHeld && this.isCharging) {
                 this.updateCharge();
                 const chargeDrain = playerManager.getChargeEnergyPerSec
@@ -226,17 +238,38 @@ class BulletManager {
         }
         const lw = Math.max(1, layout.width || playerPosition.width);
         const lh = Math.max(1, layout.height || playerPosition.height);
-        const scaleX = playerPosition.width / lw;
-        const scaleY = playerPosition.height / lh;
+        // Same fit as GraphicsManager.renderPlayerShip: one uniform scale,
+        // ship centred in the footprint. Separate x / y scales stretched the
+        // mounts away from where the guns are drawn.
+        const mw = Math.max(1, model.width || lw);
+        const mh = Math.max(1, model.height || lh);
+        const fit = Math.min(playerPosition.width / mw, playerPosition.height / mh);
+        const drawScale = Math.max(0.25, fit);
+        const scaleX = drawScale * (mw / lw);
+        const scaleY = drawScale * (mh / lh);
+        playerPosition = {
+            x: playerPosition.x - (mw * drawScale - playerPosition.width) / 2,
+            y: playerPosition.y - (mh * drawScale - playerPosition.height) / 2,
+            width: playerPosition.width,
+            height: playerPosition.height
+        };
+        const muzzleUp = (m) => (m.face === 'left' || m.face === 'right' ? 3.2 : 1.4);
+        const fireKeys = (model.loadout && model.loadout.weaponKeys) || {};
         return weaponModules.map((m) => ({
             id: m.id,
+            // Trigger of this slot: 'space' (default) or 'a' / 's' / 'd'.
+            fireKey: (m.slotIndex != null && fireKeys[String(m.slotIndex)]) || 'space',
             // Split halves (wings, or a nose/core pair) are the weaker mount.
             mount: (m.mountSegment === 'wing' || m.split) ? 'wing' : 'front',
             key: String(m.id || '') + '@' + String(m.face || 'up')
                 + (m.slotIndex != null ? '#' + m.slotIndex : '') + (m.side ? ':' + m.side : ''),
+            // Muzzle in layout units (top centre of the mount) for the flash.
+            muzzle: { lx: m.x + (m.width || 0) / 2, ly: m.y - (m.height || 0) * muzzleUp(m), lw: m.width || 4, lh: m.height || 4 },
             position: {
                 x: playerPosition.x + m.x * scaleX,
-                y: playerPosition.y + m.y * scaleY,
+                // Weapon art is drawn taller than its frame, seated on the base
+                // (ShipAssetLoader.WEAPON_DRAW_SCALE y − 1 frames above the mount).
+                y: playerPosition.y + (m.y - (m.height || 0) * muzzleUp(m)) * scaleY,
                 width: Math.max(1, (m.width || 0) * scaleX),
                 height: Math.max(1, (m.height || 0) * scaleY)
             }

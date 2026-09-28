@@ -2,6 +2,109 @@
 
 // BulletManager methods, split from bullets.js.
 extendClass(BulletManager, {
+    /** Remember a mount's shot so drawMuzzleFlashes can light it for a few frames. */
+    addMuzzleFlash(slot, cfg) {
+        if (!this.muzzleFlashes) this.muzzleFlashes = {};
+        this.muzzleFlashes[slot.key] = {
+            t: performance.now(),
+            id: slot.id,
+            muzzle: slot.muzzle,
+            charged: !!(cfg && cfg._charged)
+        };
+    },
+
+    /**
+     * Muzzle flash + short barrel streak per weapon mount, in the weapon's UI
+     * colour and a per-family shape. Drawn over the player ship, positioned
+     * like getWeaponFirePositions so it lines up with the bullets.
+     */
+    drawMuzzleFlashes(ctx, player) {
+        const flashes = this.muzzleFlashes;
+        const layout = this.currentShipModel && this.currentShipModel.layout;
+        if (!flashes || !layout || !player) return;
+        const now = performance.now();
+        // Same uniform fit + centring as renderPlayerShip / getWeaponFirePositions.
+        const lw = Math.max(1, layout.width || player.width);
+        const lh = Math.max(1, layout.height || player.height);
+        const mw = Math.max(1, this.currentShipModel.width || lw);
+        const mh = Math.max(1, this.currentShipModel.height || lh);
+        const fit = Math.max(0.25, Math.min(player.width / mw, player.height / mh));
+        const sx = fit * (mw / lw);
+        const sy = fit * (mh / lh);
+        player = {
+            x: player.x - (mw * fit - player.width) / 2,
+            y: player.y - (mh * fit - player.height) / 2,
+            width: player.width,
+            height: player.height
+        };
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.imageSmoothingEnabled = false;
+        Object.keys(flashes).forEach((key) => {
+            const f = flashes[key];
+            const DUR = f.charged ? 260 : 140;
+            const age = now - f.t;
+            if (age > DUR) { delete flashes[key]; return; }
+            const k = 1 - age / DUR;
+            const color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
+                && weaponConfigManager.getWeaponUiColor(f.id)) || '#ffffff';
+            const x = Math.round(player.x + f.muzzle.lx * sx);
+            const y = Math.round(player.y + f.muzzle.ly * sy);
+            // Sized for readability at game scale (was 2–3 px and easy to miss).
+            const w = Math.max(4, f.muzzle.lw * sx);
+            // Capped relative to the ship so large previews don't blow it up.
+            const sMax = Math.max(3, Math.round(player.width * 0.07 * (f.charged ? 1.6 : 1)));
+            const s = Math.min(sMax, Math.max(3, Math.round(w * 1.1 * (f.charged ? 1.6 : 1) * (0.6 + 0.4 * k))));
+            const px = Math.max(2, Math.round(s / 3));
+            // Soft glow behind the shape.
+            ctx.globalAlpha = k * 0.25;
+            ctx.fillStyle = color;
+            ctx.fillRect(x - s * 0.7, y - s, s * 1.4, s * 1.4);
+            ctx.globalAlpha = k;
+            ctx.fillStyle = color;
+            const fam = String(f.id);
+            if (fam === 'spread' || fam === 'spike_burst' || fam === 'claw_beam') {
+                // Fan of three sparks.
+                [-1, 0, 1].forEach((d) => ctx.fillRect(x + d * s - px / 2, y - s - Math.abs(d) * px, px, s));
+            } else if (fam === 'ion') {
+                // Triple ion stream: three parallel streaks, one per bolt.
+                const gap = Math.max(px + 1, Math.round(s * 0.6));
+                [-1, 0, 1].forEach((d) => ctx.fillRect(x + d * gap - px / 2, y - s * 1.8, px, s * 1.8));
+                ctx.fillRect(x - gap - px / 2, y - px / 2, gap * 2 + px, px);
+            } else if (fam === 'plasma' || fam === 'nova' || fam === 'wave') {
+                // Round bloom / ring.
+                ctx.fillRect(x - s, y - px, s * 2, px * 2);
+                ctx.fillRect(x - px, y - s, px * 2, s * 2);
+                ctx.fillRect(x - s * 0.7, y - s * 0.7, s * 1.4, s * 1.4);
+            } else if (fam === 'missile') {
+                // Launch smoke puff going back down.
+                ctx.fillRect(x - s * 0.6, y, s * 1.2, s * 1.4);
+            } else {
+                // Beam / kinetic: tall cross flash with a barrel streak.
+                ctx.fillRect(x - px / 2, y - s * 2, px, s * 2);
+                ctx.fillRect(x - s * 0.6, y - px / 2, s * 1.2, px);
+            }
+            // White-hot core.
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = k * 0.9;
+            ctx.fillRect(x - px / 2, y - px / 2, px, px);
+        });
+        ctx.restore();
+    },
+
+    /** Faction whose weapon affinity applies: the ship's own, else the pilot's profile. */
+    getShipFactionId() {
+        const m = this.currentShipModel;
+        if (m && m.faction) return m.faction;
+        if (m && m.id && typeof shipConfigManager !== 'undefined') {
+            const cfg = shipConfigManager.getConfig(m.id);
+            if (cfg && cfg.faction) return cfg.faction;
+        }
+        const p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
+            ? profileManager.getActiveProfile() : null;
+        return (p && p.faction) || null;
+    },
+
     getWeaponIconKey(weaponType) {
         const map = {
             normal: 'shotLaser',
@@ -27,6 +130,10 @@ extendClass(BulletManager, {
         const canvas = document.getElementById('weaponIcon');
         if (!canvas) return;
         const key = this.getWeaponIconKey(weaponType);
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.drawWeaponToCanvas) {
+            iconRenderer.drawWeaponToCanvas(canvas, weaponType);
+            return;
+        }
         if (typeof iconRenderer !== 'undefined') {
             let tint = null;
             try {
@@ -117,8 +224,8 @@ extendClass(BulletManager, {
         // Use ship-specific weapon system if available
         if (this.currentShipModel && this.currentShipModel.weaponConfig) {
             shotFired = this.shootWithShipWeapon(playerPosition, currentTime, opts);
-        } else {
-            // Fallback to old system
+        } else if (!opts.fireKey || opts.fireKey === 'all' || opts.fireKey === 'space') {
+            // Fallback to old system (no weapon slots, so Space only)
             shotFired = this.shootWithLegacySystem(playerPosition, opts);
         }
 
@@ -159,7 +266,14 @@ extendClass(BulletManager, {
         // fires both guns independently rather than cycling one at a time.
         let firedAny = false;
         this.getWeaponFirePositions(playerPosition).forEach((slot) => {
-            const weaponConfig = this.currentShipModel.weaponConfig[slot.id];
+            // The ALL key (default Space) fires every slot; any other key fires
+            // only the slots assigned to it. Calls without a key fire all.
+            if (opts.fireKey && opts.fireKey !== 'all' && (slot.fireKey || 'space') !== opts.fireKey) return;
+            // Weapons slotted later aren't in the ship's own weaponConfig
+            // (built from its stock weapons): use the weapon's defaults.
+            const weaponConfig = this.currentShipModel.weaponConfig[slot.id]
+                || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip
+                    ? weaponConfigManager.getDefaultsForShip(slot.id) : null);
             if (!weaponConfig) return;
             let cooldown = weaponConfig.cooldown * jammerMul;
             if (opts.cooldownMul && opts.cooldownMul > 0 && opts.cooldownMul < 1) {
@@ -180,7 +294,10 @@ extendClass(BulletManager, {
             // Hull class: weapons the ship type is built around hit harder.
             const classMul = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getShipClassWeaponMul
                 ? weaponConfigManager.getShipClassWeaponMul(this.currentShipModel.modelClass, slot.id) : 1;
-            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul));
+            // Faction: each faction fights best with one weapon family.
+            const factionMul = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponMul
+                ? weaponConfigManager.getFactionWeaponMul(this.getShipFactionId(), slot.id) : 1;
+            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
                 const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
@@ -193,7 +310,13 @@ extendClass(BulletManager, {
             if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
                 weaponConfigManager.clampWeaponShot(cfg);
             }
+            const firstNew = this.bullets.length;
             this.fireWeaponByType(slot.id, slot.position, cfg, false);
+            // Tag shots with their weapon so they render in its type colour.
+            for (let i = firstNew; i < this.bullets.length; i++) this.bullets[i].weaponId = slot.id;
+            // Shots leave the barrel: match their width to this mount's gun.
+            if (slot.muzzle) this.fitBulletsToBarrel(this.bullets, firstNew, slot.position.width, slot.id);
+            if (slot.muzzle) this.addMuzzleFlash(slot, cfg);
             firedAny = true;
         });
         return firedAny;
@@ -229,7 +352,7 @@ extendClass(BulletManager, {
                     this.enemyShootLaser(position, Object.assign({}, cfg, { typeHint: 'enemy_wave' }));
                     break;
                 case 'pierce':
-                    this.enemyShootLaser(position, Object.assign({}, cfg, { width: 2, height: 10 }));
+                    this.enemyShootLaser(position, Object.assign({ width: 2, height: 10 }, cfg));
                     break;
                 default:
                     this.enemyShootLaser(position, cfg);
@@ -237,6 +360,9 @@ extendClass(BulletManager, {
             return;
         }
         switch (id) {
+            case 'claw_beam':
+                this.shootClawBeam(position, cfg);
+                break;
             case 'spread':
                 this.shootSpreadWeapon(position, cfg);
                 break;

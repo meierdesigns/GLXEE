@@ -98,6 +98,12 @@ class EnemyManager {
             const champ = raw.find((e) => e && e.champion);
             if (champ) allowed = [champ].concat(allowed);
         }
+        // The level's factions (main first): enemies without their own faction
+        // belong to the level, not to their ship type's default (mostly
+        // pirate) — otherwise pirates leaked into every level.
+        const levelFactions = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions)
+            ? (planetConfigManager.getPlanetFactions(planetId) || []) : [];
+        this.levelFactions = levelFactions.slice();
         this.schedule = allowed.map((e, i) => {
             const type = e.type || 'enemyBasic';
             let tax = { faction: 'pirate', enemyClass: 'assault' };
@@ -106,7 +112,15 @@ class EnemyManager {
             } else if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getDefaultFaction) {
                 tax.faction = enemyConfigManager.getDefaultFaction(type);
             }
-            const faction = e.faction || tax.faction || 'pirate';
+            const typeFaction = tax.faction || 'pirate';
+            // Only the level's (= galaxy's) factions fight here: a foreign
+            // explicit or type faction becomes the level's main faction.
+            const wanted = e.faction || typeFaction;
+            let faction = levelFactions.length && levelFactions.indexOf(wanted) === -1 ? levelFactions[0] : wanted;
+            // Invaded planet (invasion-scenario.js): everyone here is the attacker.
+            const invader = (typeof profileManager !== 'undefined' && profileManager.getActiveInvasion)
+                ? profileManager.getActiveInvasion() : null;
+            if (invader && invader.planetId === planetId) faction = invader.attacker;
             const enemyClass = e.enemyClass || tax.enemyClass || 'assault';
             const tier = e.tier != null
                 ? Math.max(1, Math.round(Number(e.tier)))
@@ -128,6 +142,28 @@ class EnemyManager {
                 spawned: false
             };
         });
+        // Faction holdings: stations add ruler defenders; the ruler's base
+        // planet adds its garrison and tougher hulls (faction-holdings.js).
+        const hold = (typeof profileManager !== 'undefined' && profileManager.getPlanetHoldingInfo && planetId)
+            ? profileManager.getPlanetHoldingInfo(planetId) : null;
+        if (hold && hold.defenders > 0) {
+            const template = this.schedule.find((e) => !e.champion);
+            if (template) {
+                for (let i = 0; i < hold.defenders; i++) {
+                    this.schedule.push(Object.assign({}, template, {
+                        id: 'holding_def_' + i,
+                        faction: hold.ruler,
+                        role: 'assault',
+                        combatEvents: [],
+                        spawnAt: template.spawnAt + 1500 * (i + 1),
+                        spawned: false
+                    }));
+                }
+            }
+        }
+        if (hold && hold.isBase) {
+            this.levelMods.enemyHealth = Math.round((Number(this.levelMods.enemyHealth) || 100) * 1.35);
+        }
         this.scheduleElapsedMs = 0;
         this.sideEnemies = [];
         this.sideFleeing = false;
@@ -139,6 +175,7 @@ class EnemyManager {
         this.sideDebuffs = { jammer: false, tether: false };
         this.sideEnemyPool = this.schedule.filter(e => !e.champion).map(e => ({
             type: e.type,
+            faction: e.faction,
             weight: 1,
             chance: 0.2,
             role: e.role || 'assault'

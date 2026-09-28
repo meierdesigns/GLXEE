@@ -92,6 +92,53 @@ extendClass(WeaponConfigManager, {
         return this.getShipClassWeaponAffinity(modelClass).indexOf(String(weaponId || '')) !== -1 ? 1.2 : 1;
     },
 
+    /**
+     * Faction → weapon family it fights best with. Matching weapons deal +20%
+     * damage (stacks with the hull-class bonus).
+     */
+    getFactionWeaponAffinity(factionId) {
+        return ({
+            terran: ['laser', 'laser_twin', 'railgun'],
+            kronax: ['plasma', 'claw_beam', 'spike_burst'],
+            voidborn: ['ion', 'wave', 'nova'],
+            pirate: ['spread', 'rapid', 'burst'],
+            machine: ['missile', 'pierce']
+        })[String(factionId || '').toLowerCase()] || [];
+    },
+
+    /** Damage multiplier for a weapon fired by a ship of this faction. */
+    getFactionWeaponMul(factionId, weaponId) {
+        return this.getFactionWeaponAffinity(factionId).indexOf(String(weaponId || '')) !== -1 ? 1.2 : 1;
+    },
+
+    /**
+     * UI / shot tint per weapon: shades of the faction colour that fights
+     * best with it (getFactionWeaponAffinity), distinct within the family.
+     */
+    getWeaponUiColor(weaponId) {
+        return ({
+            // Terran — blue
+            laser: '#4da6ff',
+            laser_twin: '#7ec8ff',
+            railgun: '#d8ecff',
+            // Kronax — orange / red
+            plasma: '#ff7a3d',
+            claw_beam: '#ff4a2a',
+            spike_burst: '#ffab5c',
+            // Voidborn — pink / magenta
+            ion: '#ff7ae6',
+            wave: '#d65cff',
+            nova: '#ffb3f2',
+            // Pirate — gold / amber
+            spread: '#ffd84a',
+            rapid: '#e8b43a',
+            burst: '#ffa640',
+            // Machine — green
+            missile: '#3dff9c',
+            pierce: '#a8ffd8'
+        })[String(weaponId || '')] || null;
+    },
+
     getDefaultsForShip(weaponId) {
         const w = this.getWeapon(weaponId);
         const cfg = {

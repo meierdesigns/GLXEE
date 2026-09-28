@@ -25,6 +25,39 @@ extendClass(BulletManager, {
         }
     },
 
+    /**
+     * Claw Beam: two lances from the outer edges of the mount, angled inwards
+     * so they cross a short way ahead (a pincer), then fan out again. Laser
+     * by contrast is one straight centred beam.
+     */
+    shootClawBeam(playerPosition, config) {
+        const w = config.width || 3;
+        const h = config.height || 14;
+        const speed = config.speed || 13;
+        // Lances start this far apart and meet ~5 bullet-lengths ahead.
+        const half = Math.max(4, (config.bulletSpacing || 6) + playerPosition.width * 0.25);
+        const meet = h * 5;
+        const angle = Math.atan2(half, meet);
+        [-1, 1].forEach((side) => {
+            this.bullets.push({
+                x: playerPosition.x + playerPosition.width / 2 + side * half - w / 2,
+                y: playerPosition.y,
+                width: w,
+                height: h,
+                speed: speed,
+                damage: config.damage || 11,
+                // Negative side (left) steers right and vice versa.
+                angle: -side * angle,
+                color: '#808080',
+                type: 'pierce_beam',
+                charged: !!config._charged,
+                lightRadius: config.lightRadius || 40,
+                lightIntensity: config.lightIntensity || 1.1,
+                lightColor: '#808080'
+            });
+        });
+    },
+
     shootPierce(playerPosition, config) {
         this.bullets.push({
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 2) / 2,
@@ -65,6 +98,62 @@ extendClass(BulletManager, {
         }
     },
 
+    /**
+     * Share of the gun's width that is barrel, per weapon (from the gun art):
+     * shots come out of the barrel, so their width follows it.
+     */
+    getBarrelFraction(weaponId) {
+        return ({
+            laser: 0.25, laser_twin: 0.14, railgun: 0.25, spread: 0.2, rapid: 0.14,
+            burst: 0.25, plasma: 0.5, claw_beam: 0.2, spike_burst: 0.2, ion: 0.25,
+            wave: 0.4, nova: 0.4, missile: 0.3, pierce: 0.2
+        })[String(weaponId || '')] || 0.3;
+    },
+
+    /**
+     * Shrink bullets added since `from` so their width matches the barrel of
+     * a gun `gunWidth` wide (never enlarged; proportions kept, centre kept).
+     */
+    fitBulletsToBarrel(list, from, gunWidth, weaponId) {
+        if (!(gunWidth > 0)) return;
+        const target = Math.max(1, gunWidth * this.getBarrelFraction(weaponId));
+        for (let i = from; i < list.length; i++) {
+            const b = list[i];
+            const bw = b.width != null ? b.width : b.w;
+            if (!(bw > target)) continue;
+            const s = Math.max(0.3, target / bw);
+            const cx = b.x + bw / 2;
+            const nw = Math.max(1, bw * s);
+            if (b.width != null) {
+                b.width = nw;
+                b.height = Math.max(3, (b.height || 8) * s);
+            } else {
+                b.w = nw;
+                b.h = Math.max(3, (b.h || 8) * s);
+            }
+            b.x = cx - nw / 2;
+        }
+    },
+
+    /** Weapon an enemy carries (drawn on its hull and fired). */
+    getEnemyWeaponId(enemy) {
+        if (enemy && enemy.weaponId) return enemy.weaponId;
+        const m = (typeof enemyManager !== 'undefined' && enemyManager.currentEnemyModel) || null;
+        return (m && m.weaponConfig && m.defaultWeapon) || 'laser';
+    },
+
+    /**
+     * Enemy gun width in game px, by the weapon's size class on the same scale
+     * as player guns (an S mount is ~3 px on the player ship): S 3, M 4.5, L 6.
+     */
+    getEnemyGunWidth(enemy) {
+        const id = this.getEnemyWeaponId(enemy);
+        const lv = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getPartSizeLevel)
+            ? shipLoadoutManager.getPartSizeLevel('weapon', id) : 0;
+        const cs = (typeof game !== 'undefined' && game && game.contentScale) ? Number(game.contentScale) || 1 : 1;
+        return [3, 4.5, 6][Math.max(0, Math.min(2, lv))] * cs;
+    },
+
     enemyShoot(enemy) {
         const currentTime = Date.now();
 
@@ -84,14 +173,17 @@ extendClass(BulletManager, {
             enemyModel = enemyManager.currentEnemyModel;
         }
 
-        let weaponId = 'laser';
-        // Use ship-specific weapon if available
-        if (enemyModel && enemyModel.weaponConfig) {
-            weaponId = enemyModel.defaultWeapon || 'laser';
-            this.enemyShootWithWeapon(enemy, enemyModel);
+        // The weapon this enemy carries (drawn on its hull), else the model's.
+        let weaponId = this.getEnemyWeaponId(enemy);
+        const hasCfg = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[weaponId])
+            || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip);
+        if (hasCfg) {
+            this.enemyShootWithWeapon(enemy, enemyModel, weaponId);
         } else {
             // Fallback to default enemy weapon
+            const before = this.enemyBullets.length;
             this.enemyShootDefault(enemy);
+            this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
         }
 
         if (typeof soundManager !== 'undefined') {
@@ -109,9 +201,12 @@ extendClass(BulletManager, {
         this.lastEnemyShotTime = currentTime;
     },
 
-    enemyShootWithWeapon(enemy, enemyModel) {
-        const defaultWeapon = enemyModel.defaultWeapon || 'laser';
-        const weaponConfig = enemyModel.weaponConfig[defaultWeapon];
+    enemyShootWithWeapon(enemy, enemyModel, weaponId) {
+        const defaultWeapon = weaponId || (enemyModel && enemyModel.defaultWeapon) || 'laser';
+        // The model's tuning for this weapon, else the weapon's own defaults.
+        const weaponConfig = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[defaultWeapon])
+            || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip
+                ? weaponConfigManager.getDefaultsForShip(defaultWeapon) : null);
 
         if (!weaponConfig) {
             this.enemyShootDefault(enemy);
@@ -124,7 +219,14 @@ extendClass(BulletManager, {
         if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
             weaponConfigManager.clampWeaponShot(cfg);
         }
+        const before = this.enemyBullets.length;
         this.fireWeaponByType(defaultWeapon, enemy, cfg, true);
+        // Tag with the weapon: drawn in its type colour and shape, like player shots.
+        for (let i = before; i < this.enemyBullets.length; i++) {
+            this.enemyBullets[i].weaponId = defaultWeapon;
+            this.enemyBullets[i].isEnemyShot = true;
+        }
+        this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), defaultWeapon);
     },
 
     enemyShootDefault(enemy) {
@@ -148,11 +250,13 @@ extendClass(BulletManager, {
     },
 
     enemyShootLaser(enemy, config) {
+        // Shot size from the weapon config, like the player's shots.
+        const bw = config.width || 2;
         const bullet = {
-            x: enemy.x + enemy.width / 2 - 1.5,
+            x: enemy.x + enemy.width / 2 - bw / 2,
             y: enemy.y + enemy.height,
-            width: 2,
-            height: 8,
+            width: bw,
+            height: config.height || 8,
             speed: config.speed,
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
@@ -178,11 +282,12 @@ extendClass(BulletManager, {
         }
 
         angles.forEach(angle => {
+            const bw = config.width || 2;
             const bullet = {
-                x: enemy.x + enemy.width / 2 - 1.5,
+                x: enemy.x + enemy.width / 2 - bw / 2,
                 y: enemy.y + enemy.height,
-                width: 2,
-                height: 8,
+                width: bw,
+                height: config.height || 8,
                 speed: config.speed,
                 damage: config.damage,
                 angle: angle,
@@ -202,11 +307,12 @@ extendClass(BulletManager, {
         const bulletCount = Math.min(config.bulletCount || 2, 2);
 
         for (let i = 0; i < bulletCount; i++) {
+            const bw = config.width || 2;
             const bullet = {
-                x: enemy.x + enemy.width / 2 - 1.5 + (i * 3),
+                x: enemy.x + enemy.width / 2 - bw / 2 + (i - (bulletCount - 1) / 2) * (bw + 1),
                 y: enemy.y + enemy.height,
-                width: 2,
-                height: 8,
+                width: bw,
+                height: config.height || 8,
                 speed: config.speed,
                 damage: config.damage,
                 color: '#808080', // Grayscale base - will be colored by render system

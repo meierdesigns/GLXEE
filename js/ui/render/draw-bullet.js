@@ -21,6 +21,13 @@ extendClass(RenderManager, {
         const w = Math.max(1, Math.ceil(bullet.width));
         const h = Math.max(1, Math.ceil(bullet.height));
 
+        // Shots that know their weapon get its shape, so the type reads at a glance.
+        if (bullet.weaponId) {
+            this.drawTypedBullet(ctx, bullet, bulletColor, x, y, w, h);
+            ctx.restore();
+            return;
+        }
+
         // Outer glow then bright core — keep glow thin so shots stay small
         const glow = this.themeColor(['--color-highlight', '--color-text', '--current-text'], '#ffffff');
         ctx.globalAlpha = 0.35;
@@ -37,8 +44,120 @@ extendClass(RenderManager, {
         ctx.restore();
     },
 
+    /**
+     * Per-weapon shot silhouette inside the bullet's w×h box, in the weapon's
+     * colour with a white-hot core. The leading end faces the travel
+     * direction (up for the player, down for enemies).
+     */
+    drawTypedBullet(ctx, bullet, color, x, y, w, h) {
+        const id = String(bullet.weaponId);
+        const down = !!(bullet.isEnemyShot || String(bullet.type || '').indexOf('enemy') === 0);
+        const cx = x + w / 2;
+        const lead = down ? y + h : y;           // tip end
+        const dir = down ? 1 : -1;               // towards the tip
+        const hot = '#ffffff';
+        const rect = (rx, ry, rw, rh, c, a) => {
+            ctx.globalAlpha = a == null ? 1 : a;
+            ctx.fillStyle = c;
+            ctx.fillRect(Math.round(rx), Math.round(ry), Math.max(1, Math.round(rw)), Math.max(1, Math.round(rh)));
+        };
+        // Soft halo in the type colour behind every shape.
+        rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
+        const tipY = (len) => (down ? lead - len : lead);
+        switch (id) {
+            case 'plasma':
+            case 'nova': {
+                // Orb: round body, bright centre (nova adds star spikes).
+                const r = Math.max(2, Math.min(w, h) / 2 + 1);
+                const cy = y + h / 2;
+                rect(cx - r, cy - r / 2, r * 2, r, color);
+                rect(cx - r / 2, cy - r, r, r * 2, color);
+                rect(cx - r / 3, cy - r / 3, r / 1.5, r / 1.5, hot);
+                if (id === 'nova') {
+                    rect(cx - 0.5, cy - r - 2, 1, r * 2 + 4, color, 0.8);
+                    rect(cx - r - 2, cy - 0.5, r * 2 + 4, 1, color, 0.8);
+                }
+                break;
+            }
+            case 'missile': {
+                // Body + nose + flickering exhaust at the tail.
+                const bw = Math.max(2, w);
+                rect(cx - bw / 2, y, bw, h, color);
+                rect(cx - bw / 4, tipY(2), bw / 2, 2, hot);
+                const tail = down ? y - 3 : y + h;
+                rect(cx - bw / 4, tail, bw / 2, 3, '#ffb03d', 0.5 + 0.5 * Math.random());
+                break;
+            }
+            case 'wave': {
+                // Sine wiggle: offset segments down the length.
+                const seg = Math.max(2, Math.round(h / 4));
+                for (let i = 0; i < h; i += seg) {
+                    const off = Math.sin((i / h) * Math.PI * 2 + (bullet.wavePhase || 0)) * Math.max(1, w / 2);
+                    rect(cx - w / 2 + off, y + i, w, seg, color);
+                }
+                rect(cx - 0.5, tipY(2), 1, 2, hot);
+                break;
+            }
+            case 'ion': {
+                // Core with bright ring bands.
+                rect(cx - w / 2, y, w, h, color, 0.8);
+                for (let i = 1; i < h - 1; i += 3) rect(cx - w / 2 - 1, y + i, w + 2, 1, hot, 0.85);
+                break;
+            }
+            case 'spread':
+            case 'spike_burst': {
+                // Diamond / arrowhead pointing along travel.
+                const half = Math.max(1, w / 2 + 1);
+                const len = Math.max(3, h);
+                for (let i = 0; i < len; i++) {
+                    const t = i / len;
+                    const ww = Math.max(1, half * 2 * (t < 0.4 ? t / 0.4 : (1 - t) / 0.6));
+                    const ry = down ? lead - 1 - i : lead + i;
+                    rect(cx - ww / 2, ry, ww, 1, color);
+                }
+                rect(cx - 0.5, tipY(2), 1, 2, hot);
+                break;
+            }
+            case 'rapid':
+            case 'burst': {
+                // Short dashes in a row.
+                const seg = Math.max(2, Math.round(h / 3));
+                for (let i = 0; i < h; i += seg + 1) rect(cx - w / 2, y + i, w, seg, color);
+                rect(cx - w / 4, tipY(2), w / 2, 2, hot);
+                break;
+            }
+            case 'pierce':
+            case 'railgun': {
+                // Thin needle with a long bright tip.
+                const nw = Math.max(1, w - 1);
+                rect(cx - nw / 2, y, nw, h, color);
+                rect(cx - 0.5, tipY(Math.max(3, h / 2)), 1, Math.max(3, h / 2), hot);
+                break;
+            }
+            case 'claw_beam': {
+                // Two prongs with a beam between them.
+                rect(cx - w / 2 - 1, y, 1, h, color);
+                rect(cx + w / 2, y, 1, h, color);
+                rect(cx - Math.max(0.5, w / 4), y, Math.max(1, w / 2), h, hot, 0.9);
+                break;
+            }
+            default: {
+                // Laser: solid beam with a hot core line.
+                rect(x, y, w, h, color);
+                if (w >= 2) rect(cx - Math.max(0.5, w / 4), y + 1, Math.max(1, w / 2), Math.max(1, h - 2), hot, 0.85);
+                else rect(x, tipY(2), w, 2, hot);
+            }
+        }
+        ctx.globalAlpha = 1;
+    },
+
     // Get bullet color based on type and current color scheme
     getBulletColor(bullet) {
+        // Shots tagged with a weapon (player and enemy) take its type colour (same as its icon).
+        if (bullet.weaponId && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor) {
+            const typeColor = weaponConfigManager.getWeaponUiColor(bullet.weaponId);
+            if (typeColor) return typeColor;
+        }
         const isLaserType = bullet.type && (
             bullet.type.includes('laser') ||
             bullet.type.includes('beam') ||
@@ -198,6 +317,10 @@ extendClass(RenderManager, {
 
     drawShotTypeIcon(ctx) {
         const currentType = bulletManager.getCurrentShotType();
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.drawWeapon) {
+            iconRenderer.drawWeapon(ctx, currentType, 400 - 32 - 10, 10, 32);
+            return;
+        }
         let iconName = 'shotLaser';
         if (typeof bulletManager.getWeaponIconKey === 'function') {
             iconName = bulletManager.getWeaponIconKey(currentType);

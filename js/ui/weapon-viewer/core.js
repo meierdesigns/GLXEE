@@ -81,6 +81,14 @@ class WeaponViewerUI {
         this.previewSim = null;
     }
 
+    /** Weapon icon in the shared tilted, per-weapon tinted look. */
+    weaponIconHtml(weapon, size) {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml && weapon.id) {
+            return iconRenderer.weaponImgHtml(weapon.id, size, 'cv-ability-icon-img', weapon.name);
+        }
+        return this.iconHtml(weapon.iconKey, size, weapon.name);
+    }
+
     iconHtml(key, size, tipLabel) {
         if (typeof iconRenderer !== 'undefined') {
             const html = iconRenderer.imgHtml(key, size || 16, 'cv-ability-icon-img', undefined, tipLabel);

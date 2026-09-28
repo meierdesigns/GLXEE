@@ -176,7 +176,7 @@ class WeaponConfigManager {
                 id: 'claw_beam',
                 name: 'Claw Beam',
                 description: 'Kronax twin claw lances',
-                iconKey: 'shotPierce',
+                iconKey: 'shotClawBeam',
                 damage: 11,
                 speed: 13,
                 cooldown: 220,

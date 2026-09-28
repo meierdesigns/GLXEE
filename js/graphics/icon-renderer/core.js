@@ -250,6 +250,34 @@ class IconRenderer {
         }
     }
 
+    /**
+     * Vector version of drawSprite: one <rect> per sprite cell with crispEdges,
+     * so the icon stays sharp at any CSS size / devicePixelRatio.
+     */
+    spriteToSvgUrl(sprite, tint, contrast, brightness, saturation) {
+        if (!sprite || !sprite.length) return '';
+        const cols = sprite[0].length;
+        const rows = sprite.length;
+        const raw = contrast === false;
+        const ic = raw ? 50 : (Number.isFinite(Number(contrast)) ? Number(contrast) : this.getIconContrast());
+        const ib = raw ? 50 : (Number.isFinite(Number(brightness)) ? Number(brightness) : this.getIconBrightness());
+        const is = raw ? 50 : (Number.isFinite(Number(saturation)) ? Number(saturation) : this.getIconSaturation());
+        let rects = '';
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const idx = sprite[r][c];
+                if (!idx) continue;
+                let color = this.getGray(idx);
+                if (!color) continue;
+                if (tint) color = this.tintColor(color, tint);
+                if (!raw) color = this.applyIconLook(color, ic, ib, is);
+                rects += `<rect x="${c}" y="${r}" width="1" height="1" fill="${color}"/>`;
+            }
+        }
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cols} ${rows}" shape-rendering="crispEdges">${rects}</svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
     tintColor(hex, tint) {
         const key = hex + '|' + tint;
         if (this._colorCache[key]) return this._colorCache[key];

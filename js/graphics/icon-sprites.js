@@ -31,6 +31,7 @@ const IconLabels = {
     shotWave: 'WAVE',
     shotBurst: 'BURST',
     shotPierce: 'PIERCE',
+    shotClawBeam: 'CLAW BEAM',
     shotNova: 'NOVA',
     statHealth: 'HEALTH',
     statArmor: 'DEFENSE',

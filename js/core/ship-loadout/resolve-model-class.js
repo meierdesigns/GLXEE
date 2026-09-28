@@ -40,7 +40,20 @@ extendClass(ShipLoadoutManager, {
             fireMode: 'auto'
         };
         if (this.applyFactionLayoutDefaults) this.applyFactionLayoutDefaults(base, faction);
-        return this.clampLoadoutToCaps(base, shipId, modelClass);
+        // A faction anatomy with the nose switched off would drop the
+        // starter weapon (slot 0 = nose): move it onto the wings instead.
+        const off = base.disabledAreas || {};
+        const gun = weapons[0] || 'laser';
+        if (off.front && !off.wing) base.weaponSlots = [null, gun];
+        let L = this.clampLoadoutToCaps(base, shipId, modelClass);
+        // A new ship always keeps one usable, filled weapon slot.
+        const usable = (L.weaponSlots || []).some((id, i) => id && !(i === 0 ? off.front : off.wing));
+        if (!usable) {
+            base.disabledAreas = Object.assign({}, off, { front: false });
+            base.weaponSlots = [gun];
+            L = this.clampLoadoutToCaps(base, shipId, modelClass);
+        }
+        return L;
     },
 
     setFireMode(shipId, fireMode) {

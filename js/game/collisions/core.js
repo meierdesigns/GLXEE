@@ -190,13 +190,34 @@ class CollisionManager {
         }
     }
 
+    /**
+     * Shot vs shot, swept over this frame: thin fast shots move further per
+     * frame than their own length and used to pass through each other
+     * without ever overlapping, so clashes/reflections rarely triggered.
+     * Player shots move up, enemy shots down; stretch each box back along
+     * its path by one frame of travel, and give thin shots a 2 px minimum.
+     */
+    shotsCrossed(pb, eb) {
+        const minW = 2;
+        const pw = Math.max(minW, pb.width || 0);
+        const ew = Math.max(minW, eb.width || 0);
+        const px = pb.x + (pb.width || 0) / 2 - pw / 2;
+        const ex = eb.x + (eb.width || 0) / 2 - ew / 2;
+        if (!(px < ex + ew && px + pw > ex)) return false;
+        const pTop = pb.y;
+        const pBot = pb.y + (pb.height || 0) + Math.abs(pb.speed || 0);
+        const eTop = eb.y - Math.abs(eb.speed || 0);
+        const eBot = eb.y + (eb.height || 0);
+        return pTop < eBot && pBot > eTop;
+    }
+
     checkPlayerBulletEnemyBulletCollisions(gameState) {
         const playerBullets = bulletManager.getBullets();
         const enemyBullets = bulletManager.getEnemyBullets();
 
         for (let i = playerBullets.length - 1; i >= 0; i--) {
             for (let j = enemyBullets.length - 1; j >= 0; j--) {
-                if (this.isColliding(playerBullets[i], enemyBullets[j])) {
+                if (this.shotsCrossed(playerBullets[i], enemyBullets[j])) {
                     const pb = playerBullets[i];
                     const eb = enemyBullets[j];
                     const playerBulletX = pb.x + pb.width / 2;

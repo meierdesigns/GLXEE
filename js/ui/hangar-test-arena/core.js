@@ -27,6 +27,8 @@ class HangarTestArena {
         // Match main playfield (gameStateManager: 240×300)
         this.W = 240;
         this.H = 300;
+        // Bottom HUD strip (bars + key caps); the ship stays above it.
+        this.HUD_H = 60;
         this.SHIP_DRAW_SCALE = 1;
         this.ENEMY_HIT_SCALE = 1;
         this.RESPAWN_MS = 2000;
@@ -157,9 +159,10 @@ class HangarTestArena {
 
         return {
             model: model || { width: w, height: h, name: shipId, type: 'player', id: shipId },
-            // In-game: collision box = model size, draw scale 1 (see render.js)
-            width: Math.max(8, Math.round(w)),
-            height: Math.max(8, Math.round(h)),
+            // Same fixed footprint as in game (player applyFixedFootprint):
+            // 28 wide, aspect kept — so ship and shots keep in-game proportions.
+            width: Math.max(8, Math.round(w * (typeof PLAYER_UNIT_SCALE !== 'undefined' ? PLAYER_UNIT_SCALE : 0.78))),
+            height: Math.max(8, Math.round(h * (typeof PLAYER_UNIT_SCALE !== 'undefined' ? PLAYER_UNIT_SCALE : 0.78))),
             speed: Number((cfg && cfg.speed) || (model && model.speed) || 4),
             maxHealth: Number((cfg && cfg.maxHealth) || (model && model.maxHealth) || 100),
             armor: Number((cfg && cfg.armor) || (model && model.armor) || 0),
@@ -211,7 +214,7 @@ class HangarTestArena {
                         <div class="hta-enemy-list">${enemyList}</div>
                         <p class="hta-hint">SELECT TO SWAP · AUTO RESPAWN 2s</p>
                         <div class="hta-stats" id="htaStats"></div>
-                        <p class="hta-hint">WASD / ARROWS MOVE · SPACE FIRE · ESC CLOSE</p>
+                        <p class="hta-hint">ARROWS MOVE · SPACE FIRE ALL · A / S / D SOLO · ESC CLOSE</p>
                     </aside>
                     <div class="hta-stage">
                         <canvas id="htaCanvas" class="hta-canvas" width="${this.W}" height="${this.H}"

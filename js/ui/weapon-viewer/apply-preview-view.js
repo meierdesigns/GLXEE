@@ -182,7 +182,9 @@ extendClass(WeaponViewerUI, {
         ctx.fillRect(sx + 2, sy + 14, 4, 4);
         ctx.fillRect(sx + 14, sy + 14, 4, 4);
 
-        if (typeof iconRenderer !== 'undefined' && wpn.iconKey) {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.drawWeapon && wpn.id) {
+            iconRenderer.drawWeapon(ctx, wpn.id, w / 2 - 16, 12, 32);
+        } else if (typeof iconRenderer !== 'undefined' && wpn.iconKey) {
             const tmp = document.createElement('canvas');
             tmp.width = 32;
             tmp.height = 32;
@@ -210,7 +212,7 @@ extendClass(WeaponViewerUI, {
             btn.type = 'button';
             btn.className = 'content-viewer-item' + (index === this.selectedIndex ? ' selected' : '');
             btn.innerHTML =
-                `<span class="cv-ability-icon cv-list-ability-icon">${this.iconHtml(weapon.iconKey, 32, weapon.name)}</span>` +
+                `<span class="cv-ability-icon cv-list-ability-icon">${this.weaponIconHtml(weapon, 32)}</span>` +
                 `<span class="cv-item-label">${weapon.name}` +
                 (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
                     ? devProfileToggles.badgesHtml({
@@ -240,7 +242,7 @@ extendClass(WeaponViewerUI, {
         const pierce = w.pierce ? 'yes' : 'no';
         root.innerHTML = `
             <div class="content-viewer-hero">
-                <div class="cv-ability-hero-icon">${this.iconHtml(w.iconKey, 48, w.name)}</div>
+                <div class="cv-ability-hero-icon">${this.weaponIconHtml(w, 48)}</div>
                 <div>
                     <h3 class="content-viewer-name">${w.name}</h3>
                     <p class="content-viewer-desc">${w.description || 'No description.'}</p>

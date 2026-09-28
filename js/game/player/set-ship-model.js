@@ -2,6 +2,13 @@
 
 // Fixed in-game player ship width (internal pixels, before contentScale).
 const PLAYER_FOOTPRINT_WIDTH = 28;
+// Fixed scale: in-game pixels per layout unit (28 px for the 36-unit default
+// hull). The ship and its guns keep their size however areas are moved —
+// a wider layout makes the ship wider, it no longer shrinks to fit.
+const PLAYER_UNIT_SCALE = PLAYER_FOOTPRINT_WIDTH / 36;
+// Reference hull size the hangar views fit to (not the edited layout).
+const PLAYER_REF_W = 36;
+const PLAYER_REF_H = 28;
 
 // PlayerManager methods, split from player.js.
 extendClass(PlayerManager, {
@@ -101,9 +108,58 @@ extendClass(PlayerManager, {
         const model = this.currentShipModel || {};
         const mw = Math.max(1, Number(model.width || model.nativeWidth) || 20);
         const mh = Math.max(1, Number(model.height || model.nativeHeight) || 16);
-        const aspect = Math.max(0.6, Math.min(1.6, mh / mw));
-        this.player.width = Math.round(PLAYER_FOOTPRINT_WIDTH * contentScale);
-        this.player.height = Math.round(PLAYER_FOOTPRINT_WIDTH * aspect * contentScale);
+        this.player.width = Math.max(8, Math.round(mw * PLAYER_UNIT_SCALE * contentScale));
+        this.player.height = Math.max(8, Math.round(mh * PLAYER_UNIT_SCALE * contentScale));
+        this.refreshPlayerHitMask();
+    },
+
+    /**
+     * Pixel hit mask of the player ship: the model rendered offscreen exactly
+     * as GraphicsManager.renderPlayerShip fits it into the footprint, so hits
+     * need real hull pixels (not the empty box between the wings).
+     * Retries on later frames while the ship art is still loading.
+     */
+    refreshPlayerHitMask() {
+        const p = this.player;
+        const model = (typeof graphicsManager !== 'undefined' && graphicsManager.currentPlayerModel) || this.currentShipModel;
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!p || !model || !loader || !loader.renderShip || (loader.isLoaded && !loader.isLoaded())
+            || typeof document === 'undefined') {
+            p && (p.collision = null);
+            return;
+        }
+        const W = Math.max(1, Math.round(p.width));
+        const H = Math.max(1, Math.round(p.height));
+        const key = [model.id || model.name, model.width, model.height, W, H, model.moduleCount || 0].join('|');
+        if (this._hitMaskKey === key && p.collision) return;
+        const k = 3; // sub-pixel resolution
+        const mw = Math.max(1, model.width || W);
+        const mh = Math.max(1, model.height || H);
+        const fit = Math.max(0.25, Math.min(W / mw, H / mh));
+        try {
+            const c = document.createElement('canvas');
+            c.width = W * k;
+            c.height = H * k;
+            const ctx = c.getContext('2d', { willReadFrequently: true });
+            loader.renderShip(ctx, model, ((W - mw * fit) / 2) * k, ((H - mh * fit) / 2) * k, fit * k, null, 0, {});
+            const data = ctx.getImageData(0, 0, c.width, c.height).data;
+            const grid = [];
+            let solid = 0;
+            for (let r = 0; r < c.height; r++) {
+                const row = new Array(c.width);
+                for (let q = 0; q < c.width; q++) {
+                    const on = data[(r * c.width + q) * 4 + 3] > 110 ? 1 : 0;
+                    row[q] = on;
+                    solid += on;
+                }
+                grid.push(row);
+            }
+            if (solid < 4) { p.collision = null; return; } // art not ready yet
+            p.collision = { sprite: grid, colors: {}, drawW: W, drawH: H, insetL: 0, insetT: 0, insetR: 0, insetB: 0 };
+            this._hitMaskKey = key;
+        } catch (e) {
+            p.collision = null;
+        }
     },
 
     getCurrentShipModel() {

@@ -247,13 +247,20 @@ extendClass(HomeStationUI, {
             if (res.reason === 'NEED_CHARGE_DRIVE') msg = 'NEED CHARGE DRIVE FIRST';
             if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
             if (res.reason === 'TOO_BIG') {
-                msg = 'PART NEEDS A ' + shipLoadoutManager.slotSizeLabel(res.need)
-                    + ' SLOT · UPGRADE THE ' + this.areaLabel(shipLoadoutManager.getSlotArea(kind, slotIndex));
+                // Size is per slot: split pairs (wings) are S, single centre
+                // slots M, each can be upgraded — say which applies here.
+                const slm = shipLoadoutManager;
+                const split = slm.isSplitSlot && slm.isSplitSlot(this.hangarShipId, kind, slotIndex);
+                msg = this.hangarModuleLabel(moduleId) + ' (' + slm.slotSizeLabel(res.need) + ')'
+                    + ' DOESN\'T FIT · SLOT IS ' + slm.slotSizeLabel(res.have)
+                    + (split ? ' (SPLIT) · MOVE IT TO THE CENTRE OR UPGRADE THE SLOT' : ' · UPGRADE THE SLOT');
             }
+            if (res.reason === 'AREA_OFF') msg = 'THAT AREA IS OFF';
             if (sourceEl) this.playButtonResult(sourceEl, false, msg);
             else {
-                this.statusMsg = msg;
-                this.createUI();
+                // The hangar has no status line: show it as a toast.
+                if (this.showStatusToast) this.showStatusToast(msg);
+                if (this.drawHangarBay) this.drawHangarBay();
             }
             return;
         }
@@ -271,7 +278,7 @@ extendClass(HomeStationUI, {
             : 'SLOT CLEARED';
         if (sourceEl) this.playButtonResult(sourceEl, true, label);
         else {
-            this.statusMsg = label;
+            if (this.showStatusToast) this.showStatusToast(label);
             this.createUI();
         }
     },

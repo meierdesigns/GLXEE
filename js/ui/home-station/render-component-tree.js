@@ -68,8 +68,10 @@ extendClass(HomeStationUI, {
                 if (key && key.id) trackScroll[key.id] = track.scrollLeft;
             });
             this._styleTrackScroll = trackScroll;
+            // Weapons are set only in the centre bay (slot bar / ship markers),
+            // not in the area tree.
             treeContainer.innerHTML = window.componentTree.render(
-                { ...hangarSlots, slots: slotsWithAreas },
+                { ...hangarSlots, slots: slotsWithAreas.filter((s) => s.kind !== 'weapon') },
                 loadout,
                 inventory,
                 (kind, slot, moduleId) => {

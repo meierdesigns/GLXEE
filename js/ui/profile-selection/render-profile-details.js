@@ -145,7 +145,8 @@ extendClass(ProfileSelectionManager, {
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
                 this.moveActionFocus(1);
-            } else if (e.key === 'Enter') {
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                // Space confirms like Enter (keyboard/gamepad-style menus).
                 e.preventDefault();
                 const actions = this.getActionButtons();
                 if (actions[this.actionFocusIndex]) {
@@ -193,6 +194,59 @@ extendClass(ProfileSelectionManager, {
         this.refreshDetails();
     },
 
+    /** Apply the name step's start options to a freshly created profile. */
+    applyStartOptions(p) {
+        const o = this._startOpts || {};
+        if (!p) return;
+        // Start galaxy: current station galaxy, discovered, ship at its start planet.
+        const gid = String(o.galaxy || '').toLowerCase();
+        if (gid && typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy && planetConfigManager.getGalaxy(gid)) {
+            p.homeStation.currentGalaxyId = gid;
+            // Uncharted galaxies get their arrival sector now (same as the
+            // first teleport there): planets + an unlocked start planet.
+            let map = planetConfigManager.getGalaxyMap(gid) || {};
+            if (!(map.nodes && map.nodes.length) && planetConfigManager.ensureGalaxyArrivalContent) {
+                const arrival = planetConfigManager.ensureGalaxyArrivalContent(gid, String(p.id) + '|' + gid, { firstVisit: true });
+                if (arrival && arrival.faction && profileManager.discoverFaction) profileManager.discoverFaction(arrival.faction);
+                map = planetConfigManager.getGalaxyMap(gid) || {};
+            }
+            const startId = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            if (startId) {
+                if (profileManager.ensureGalaxyProgress) profileManager.ensureGalaxyProgress(p, gid);
+                if (profileManager.unlockPlanet) profileManager.unlockPlanet(startId);
+            }
+            if (profileManager.discoverGalaxy) profileManager.discoverGalaxy(gid);
+            // Home galaxy start: it is under attack (invasion-scenario.js).
+            const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(p.faction) : null;
+            if (meta && meta.homeGalaxy === gid && profileManager.startInvasionScenario) {
+                profileManager.startInvasionScenario(p, gid);
+            }
+            const start = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            if (start && profileManager.setShipLocation) {
+                profileManager._suppressHoldingTick = true;
+                profileManager.setShipLocation(gid, 'planet', start);
+                profileManager._suppressHoldingTick = false;
+            }
+        }
+        // Difficulty: the game-wide setting, remembered on the profile too.
+        if (o.difficulty && typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.setDifficulty) {
+            difficultyConfigManager.setDifficulty(o.difficulty);
+            p.difficulty = o.difficulty;
+        }
+        // Starter kit.
+        if (!p.resources || typeof p.resources !== 'object') p.resources = {};
+        const addRes = (id, n) => { p.resources[id] = (Number(p.resources[id]) || 0) + n; };
+        if (o.kit === 'credits') p.credits = (Number(p.credits) || 0) + 200;
+        if (o.kit === 'salvage') { addRes('scrap', 120); addRes('ore', 40); addRes('crystal', 15); }
+        if (o.kit === 'gunsmith') {
+            const ship = p.activeShipId;
+            if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+            p.shipUpgrades[ship].weaponSlotsBought = (Number(p.shipUpgrades[ship].weaponSlotsBought) || 0) + 1;
+        }
+        p.startKit = o.kit || 'balanced';
+        profileManager.save();
+    },
+
     saveName() {
         const input = this.overlay.querySelector('#profileNameInput');
         const name = input ? input.value : '';
@@ -202,6 +256,7 @@ extendClass(ProfileSelectionManager, {
             if (!p) return;
             profileManager.setActive(p.id);
             profileManager.ensureEconomyDefaults(p);
+            this.applyStartOptions(p);
             this.hide();
             if (typeof homeStationUI !== 'undefined') {
                 homeStationUI.show({

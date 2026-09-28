@@ -172,7 +172,10 @@
         var dt = Math.min(48, now - parallax.lastFrameTs) / 1000;
         parallax.lastFrameTs = now;
 
-        var kParallax = 1 - Math.exp(-14 * dt);
+        // Warm-up after load: the first pointer position (browsers fire a
+        // mousemove right after refresh) glides in slowly instead of snapping.
+        var warm = Math.min(1, (now - (parallax.startMs || now)) / 1500);
+        var kParallax = 1 - Math.exp(-14 * dt * (0.12 + 0.88 * warm * warm));
         var kPtr = 1 - Math.exp(-22 * dt);
 
         parallax.curX += (parallax.targetX - parallax.curX) * kParallax;

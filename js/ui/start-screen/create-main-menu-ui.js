@@ -16,15 +16,7 @@ extendClass(StartScreenManager, {
         subtitle.textContent = 'RETRO SPACE SHOOTER';
         subtitle.className = 'start-screen-subtitle';
 
-        const profileLine = document.createElement('p');
-        profileLine.className = 'start-screen-profile';
-        if (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
-            const p = profileManager.getActiveProfile();
-            profileLine.textContent = `PROFILE: ${p.name}`;
-        } else {
-            profileLine.textContent = 'PROFILE: NONE';
-            profileLine.classList.add('no-profile');
-        }
+        const profileLine = this.buildStartProfileCard();
 
         const menu = document.createElement('div');
         menu.className = 'start-screen-menu start-screen-menu-clustered';
@@ -59,12 +51,21 @@ extendClass(StartScreenManager, {
                     iconWrap.innerHTML = iconRenderer.imgHtml(iconKey, 32, 'menu-pixel-icon');
                 }
 
+                const text = document.createElement('span');
+                text.className = 'menu-item-text';
                 const label = document.createElement('span');
                 label.className = 'menu-item-label';
                 label.textContent = entry.label || itemId;
+                text.appendChild(label);
+                if (entry.desc) {
+                    const desc = document.createElement('span');
+                    desc.className = 'menu-item-desc';
+                    desc.textContent = entry.desc;
+                    text.appendChild(desc);
+                }
 
                 menuItem.appendChild(iconWrap);
-                menuItem.appendChild(label);
+                menuItem.appendChild(text);
                 menuItem.addEventListener('mouseenter', () => {
                     this.selectedIndex = index;
                     this.updateMenuSelection();
@@ -105,6 +106,33 @@ extendClass(StartScreenManager, {
         content.appendChild(instructions);
         content.appendChild(this.buildControlsShowBtn());
         content.appendChild(footer);
+    },
+
+    /** Active pilot at a glance: emblem, name, faction and wallet. */
+    buildStartProfileCard() {
+        const card = document.createElement('div');
+        card.className = 'start-screen-profile';
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        if (!pm || !pm.hasActiveProfile()) {
+            card.classList.add('no-profile');
+            card.textContent = 'NO PILOT — PICK OR CREATE A PROFILE';
+            return card;
+        }
+        const p = pm.getActiveProfile();
+        const faction = String(p.faction || 'terran');
+        const emblemKey = 'faction' + faction.charAt(0).toUpperCase() + faction.slice(1);
+        const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const emblem = typeof iconRenderer !== 'undefined' ? iconRenderer.imgHtml(emblemKey, 40, 'menu-pixel-icon', undefined, false) : '';
+        const credits = Math.round(Number(p.credits) || 0).toLocaleString('en-US');
+        card.classList.add('has-profile');
+        card.innerHTML =
+            `<span class="start-profile-emblem">${emblem}</span>` +
+            '<span class="start-profile-text">' +
+            '<span class="start-profile-label">PILOT</span>' +
+            `<strong class="start-profile-name">${esc(p.name)}</strong>` +
+            `<span class="start-profile-meta">${esc(faction.toUpperCase())} · ${credits} CR</span>` +
+            '</span>';
+        return card;
     },
 
     createEmbeddedMenuUI(content) {
@@ -160,7 +188,7 @@ extendClass(StartScreenManager, {
         body.className = 'hs-menu-panel-body';
         if (this.embeddedMenuTab === 'profiles') {
             this.fillEmbeddedProfiles(body);
-        } else if (this.embeddedMenuTab === 'settings') {
+        } else if (this.embeddedMenuTab === 'settings' || this.embeddedMenuTab === 'assets') {
             this.createSettingsUI(body, { bare: true });
         } else if (this.embeddedMenuTab === 'assets') {
             this.fillEmbeddedAssets(body);
@@ -236,7 +264,11 @@ extendClass(StartScreenManager, {
                 b.className = 'hs-menu-profile-filter';
                 b.setAttribute('data-profile-filter', f);
                 const count = f ? profiles.filter((p) => (p.faction || 'pirate') === f).length : profiles.length;
-                b.textContent = (f ? f.toUpperCase() : 'ALL') + ' ' + count;
+                const emblem = f && typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                    ? profileSelectionManager.getFactionEmblemHtml(f, 24)
+                    : '';
+                b.innerHTML = emblem ? `<span class="hs-menu-profile-filter-ico">${emblem}</span>` : '';
+                b.appendChild(document.createTextNode(f ? f.toUpperCase() : 'ALL'));
                 if (!count) b.classList.add('is-empty');
                 if (f && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
                     const st = factionShipStyles.getFactionStyle(f);
@@ -251,14 +283,32 @@ extendClass(StartScreenManager, {
             const createBtn = document.createElement('button');
             createBtn.type = 'button';
             createBtn.className = 'hs-menu-profile-filter hs-menu-profile-create';
-            createBtn.textContent = '+ CREATE PROFILE';
+            createBtn.innerHTML = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg>CREATE PROFILE';
             createBtn.addEventListener('click', () => this.openProfileCreate(this._profileFactionFilter));
             filterBar.appendChild(createBtn);
             panel.appendChild(filterBar);
+            let pinned = null;
+            // Redraw after switch / delete; with no pilot left, back to the start menu.
+            const rerender = () => {
+                if (!profileManager.hasActiveProfile()) {
+                    if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.hide();
+                    if (this.hideEmbedded) this.hideEmbedded();
+                    this.show({ forceMenu: true });
+                    return;
+                }
+                if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+                    homeStationUI.createUI();
+                    if (homeStationUI._menuArmed && this.focusEmbeddedButtons) this.focusEmbeddedButtons();
+                } else {
+                    this.createStartScreenUI();
+                }
+            };
             profiles.forEach((p) => {
                 const faction = p.faction || 'pirate';
-                const row = document.createElement('button');
-                row.type = 'button';
+                // Row = div (it holds its own SWITCH / DELETE buttons).
+                const row = document.createElement('div');
+                row.tabIndex = 0;
+                row.setAttribute('role', 'button');
                 row.className = 'hs-menu-profile-row' + (p.id === activeId ? ' is-active' : '');
                 row.setAttribute('data-faction', faction);
                 if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
@@ -267,21 +317,52 @@ extendClass(StartScreenManager, {
                 }
                 const emblem = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
                     ? profileSelectionManager.getFactionEmblemHtml(faction, 32) : '';
+                const icoSwitch = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5h10M9 2l3 3-3 3M14 11H4M7 8l-3 3 3 3"/></svg>';
+                const icoDelete = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 7v4M9 7v4"/></svg>';
                 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 row.innerHTML =
                     `<span class="hs-menu-profile-emblem">${emblem}</span>` +
                     `<span class="hs-menu-profile-name">${esc(p.name)}</span>` +
                     `<span class="hs-menu-profile-faction">${esc(faction.toUpperCase())}</span>` +
-                    (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '');
-                row.addEventListener('click', () => {
-                    if (p.id === activeId) return;
-                    profileManager.setActive(p.id);
-                    if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
-                        homeStationUI.createUI();
-                        if (homeStationUI._menuArmed && this.focusEmbeddedButtons) this.focusEmbeddedButtons();
-                    } else {
-                        this.createStartScreenUI();
+                    (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '') +
+                    `<span class="hs-menu-profile-actions">` +
+                    (p.id === activeId ? '' : `<button type="button" class="hs-menu-profile-act" data-profile-switch="${esc(p.id)}">${icoSwitch}<span class="hs-menu-profile-act-label">SWITCH</span></button>`) +
+                    `<button type="button" class="hs-menu-profile-act is-danger" data-profile-delete="${esc(p.id)}">${icoDelete}<span class="hs-menu-profile-act-label">DELETE</span></button>` +
+                    `</span>`;
+                row.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && e.target === row) row.click();
+                });
+                // Row click only shows this pilot's details; switching is explicit.
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('.hs-menu-profile-act')) return;
+                    pinned = p;
+                    renderStats(p);
+                });
+                const switchBtn = row.querySelector('[data-profile-switch]');
+                if (switchBtn) {
+                    switchBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        profileManager.setActive(p.id);
+                        rerender();
+                    });
+                }
+                const delBtn = row.querySelector('[data-profile-delete]');
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Two-step: first click arms, second (within 3 s) deletes.
+                    if (!delBtn.classList.contains('is-armed')) {
+                        delBtn.classList.add('is-armed');
+                        delBtn.querySelector('.hs-menu-profile-act-label').textContent = 'CONFIRM?';
+                        clearTimeout(delBtn._disarm);
+                        delBtn._disarm = setTimeout(() => {
+                            delBtn.classList.remove('is-armed');
+                            delBtn.querySelector('.hs-menu-profile-act-label').textContent = 'DELETE';
+                        }, 3000);
+                        return;
                     }
+                    clearTimeout(delBtn._disarm);
+                    profileManager.delete(p.id);
+                    rerender();
                 });
                 list.appendChild(row);
             });
@@ -299,7 +380,7 @@ extendClass(StartScreenManager, {
                 row.addEventListener('mouseenter', show);
                 row.addEventListener('focus', show);
             });
-            list.addEventListener('mouseleave', () => renderStats(activeProfile));
+            list.addEventListener('mouseleave', () => renderStats(pinned || activeProfile));
             const split = document.createElement('div');
             split.className = 'hs-menu-profile-split';
             const left = document.createElement('div');

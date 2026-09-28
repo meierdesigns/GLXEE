@@ -1,6 +1,17 @@
 "use strict";
 
 // StartScreenManager methods, split from start-screen.js.
+// Line icons (16×16 path data) shown before each settings section title.
+const SETTINGS_SECTION_ICONS = {
+    theme: 'M8 2a6 6 0 1 0 0 12c1 0 1-1 .5-2s0-2 1.5-2h2a2 2 0 0 0 2-2c0-3.3-2.7-6-6-6zM5 7h1M7 4.5h1M10 5h1',
+    look: 'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 6a2 2 0 1 0 0 4 2 2 0 1 0 0-4',
+    style: 'M2 14l3-1 8-8-2-2-8 8-1 3zM10 4l2 2',
+    fx: 'M1.5 3h13v9h-13zM1.5 5.5h13M1.5 8h13M1.5 10.5h13M6 14h4',
+    sound: 'M2 6h3l4-3v10l-4-3H2zM11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9',
+    game: 'M3 5h10a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM4 7.5v2M3 8.5h2M11 8h.5M12.5 9.5h.5',
+    assets: 'M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6'
+};
+
 extendClass(StartScreenManager, {
     fillEmbeddedCredits(body) {
         const panel = document.createElement('div');
@@ -12,9 +23,8 @@ extendClass(StartScreenManager, {
             '<div class="hs-credits-crawl-text">' +
             '<div class="hs-credits-crawl-line hs-credits-crawl-role">CREATOR</div>' +
             '<div class="hs-credits-crawl-line">LANCE MEIER / MEIERDESIGNS</div>' +
-            '<div class="hs-credits-crawl-line">GLXEE</div>' +
-            '<div class="hs-credits-crawl-line">RETRO SPACE SHOOTER</div>' +
-            '<div class="hs-credits-crawl-line">GAME BOY STYLE</div>' +
+            '<div class="hs-credits-crawl-line hs-credits-crawl-title">GLXEE</div>' +
+            '<div class="hs-credits-crawl-line">A RETRO SPACE SHOOTER</div>' +
             '</div>' +
             '</div>' +
             '</div>';
@@ -197,9 +207,17 @@ extendClass(StartScreenManager, {
         left.className = 'settings-cluster';
         left.dataset.cluster = 'appearance';
 
+        const middle = document.createElement('div');
+        middle.className = 'settings-cluster';
+        middle.dataset.cluster = 'style-fx';
+
         const right = document.createElement('div');
         right.className = 'settings-cluster';
         right.dataset.cluster = 'audio-game';
+
+        // Accordion: only one section open at a time, remembered across opens.
+        let openSection = 'theme';
+        try { openSection = localStorage.getItem('vf_settings_open_section') || 'theme'; } catch (e) { /* optional */ }
 
         const addSection = (parent, sectionId, sectionTitle, predicate) => {
             const items = this.settingsItems
@@ -207,13 +225,24 @@ extendClass(StartScreenManager, {
                 .filter(({ item }) => predicate(item));
             if (!items.length) return;
 
-            const sectionEl = document.createElement('section');
+            const sectionEl = document.createElement('details');
             sectionEl.className = 'settings-section';
             sectionEl.dataset.section = sectionId;
+            sectionEl.open = sectionId === openSection;
+            sectionEl.addEventListener('toggle', () => {
+                if (!sectionEl.open) return;
+                panel.querySelectorAll('details.settings-section[open]').forEach((d) => {
+                    if (d !== sectionEl) d.open = false;
+                });
+                try { localStorage.setItem('vf_settings_open_section', sectionId); } catch (e) { /* optional */ }
+            });
 
-            const heading = document.createElement('h3');
+            const heading = document.createElement('summary');
             heading.className = 'settings-section-title';
-            heading.textContent = sectionTitle;
+            const icon = SETTINGS_SECTION_ICONS[sectionId];
+            heading.innerHTML = (icon ? `<svg class="settings-section-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="${icon}"/></svg>` : '') +
+                `<span class="settings-section-name"></span>`;
+            heading.querySelector('.settings-section-name').textContent = sectionTitle;
             sectionEl.appendChild(heading);
 
             const list = document.createElement('div');
@@ -232,7 +261,7 @@ extendClass(StartScreenManager, {
         addSection(left, 'look', 'LOOK', (item) =>
             item.type === 'globalLook' || item.type === 'grayscale'
         );
-        addSection(left, 'style', 'STYLE', (item) =>
+        addSection(bare ? left : middle, 'style', 'STYLE', (item) =>
             item.type === 'borderWeight' ||
             item.type === 'indicatorWeight' ||
             item.type === 'fontMenu' ||
@@ -240,7 +269,7 @@ extendClass(StartScreenManager, {
             item.type === 'controlsHints' ||
             item.type === 'shipRenderStyle'
         );
-        addSection(left, 'fx', 'RETRO FX', (item) => item.type === 'uiFx');
+        addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx');
         addSection(right, 'sound', 'SOUND', (item) =>
             item.type === 'volume' ||
             item.name === 'Sound' ||
@@ -251,14 +280,17 @@ extendClass(StartScreenManager, {
             item.name === 'Difficulty' || item.action === 'difficultyEditor'
                 || item.action === 'factionCommand'
         );
-        if (!bare) {
-            addSection(right, 'assets', 'ASSETS', (item) =>
-                (item.type === 'action' && item.action !== 'difficultyEditor'
-                    && item.action !== 'factionCommand') || item.type === 'assetStatus'
-            );
-        }
+        // Asset editor lives here only (no main-menu entry).
+        addSection(right, 'assets', 'ASSETS', (item) =>
+            (item.type === 'action' && item.action !== 'difficultyEditor'
+                && item.action !== 'factionCommand') || item.type === 'assetStatus'
+        );
 
         panel.appendChild(left);
+        if (!bare) {
+            panel.classList.add('settings-panel-3col');
+            panel.appendChild(middle);
+        }
         panel.appendChild(right);
         content.appendChild(panel);
 

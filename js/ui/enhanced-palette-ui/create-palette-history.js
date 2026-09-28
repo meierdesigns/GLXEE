@@ -10,7 +10,7 @@ extendClass(EnhancedPaletteUI, {
             bottom: 20px;
             left: 20px;
             background: var(--color-background);
-            border: 2px solid var(--color-border);
+            border: var(--ui-border-width) solid var(--color-border);
             border-radius: var(--radius-md);
             padding: var(--spacing-sm);
             box-shadow: var(--shadow-lg);
@@ -30,7 +30,7 @@ extendClass(EnhancedPaletteUI, {
                     width: 24px;
                     height: 24px;
                     background: ${palette.primary};
-                    border: 1px solid var(--color-border);
+                    border: var(--ui-border-width) solid var(--color-border);
                     border-radius: var(--radius-sm);
                     cursor: pointer;
                     transition: var(--transition-fast);
@@ -60,7 +60,7 @@ extendClass(EnhancedPaletteUI, {
             bottom: 20px;
             right: 20px;
             background: var(--color-background);
-            border: 2px solid var(--color-border);
+            border: var(--ui-border-width) solid var(--color-border);
             border-radius: var(--radius-md);
             padding: var(--spacing-sm);
             box-shadow: var(--shadow-lg);

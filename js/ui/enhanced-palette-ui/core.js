@@ -134,7 +134,7 @@ class EnhancedPaletteUI {
             right: 20px;
             background: var(--color-surface);
             color: var(--color-text);
-            border: 2px solid var(--color-border);
+            border: var(--ui-border-width) solid var(--color-border);
             border-radius: var(--radius-md);
             padding: var(--spacing-sm) var(--spacing-md);
             font-size: var(--font-size-sm);
@@ -176,7 +176,7 @@ class EnhancedPaletteUI {
             left: 0;
             right: 0;
             background: var(--color-background);
-            border: 2px solid var(--color-border);
+            border: var(--ui-border-width) solid var(--color-border);
             border-radius: var(--radius-md);
             padding: var(--spacing-md);
             margin-top: var(--spacing-xs);
@@ -196,7 +196,7 @@ class EnhancedPaletteUI {
                     width: 100%;
                     height: 20px;
                     background: ${palette[key]};
-                    border: 1px solid var(--color-border);
+                    border: var(--ui-border-width) solid var(--color-border);
                     border-radius: var(--radius-sm);
                 `;
                 swatch.title = `${key}: ${palette[key]}`;

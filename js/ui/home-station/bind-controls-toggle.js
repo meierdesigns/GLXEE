@@ -138,11 +138,36 @@ extendClass(HomeStationUI, {
     activateFocused() {
         const list = this.getFocusables();
         const el = list[this.focusIndex];
-        if (el) el.click();
+        if (!el) return;
+        // Reachable but not usable (e.g. BUY you can't afford): clear deny.
+        if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
+            this.denyFocused(el);
+            return;
+        }
+        el.click();
+    },
+
+    /** Deny feedback: shake + red flash on the element, reason toast, low beep. */
+    denyFocused(el) {
+        el.classList.remove('hs-deny');
+        void el.offsetWidth;
+        el.classList.add('hs-deny');
+        setTimeout(() => el.classList.remove('hs-deny'), 450);
+        const reason = el.getAttribute('data-deny-reason') || el.getAttribute('title') || 'NOT AVAILABLE';
+        if (this.showStatusToast) {
+            this.showStatusToast(String(reason).toUpperCase());
+            const toast = document.getElementById('hsStatusToast');
+            if (toast) toast.classList.add('hs-status-fail');
+        }
+        if (typeof soundManager !== 'undefined' && soundManager.createBeep) {
+            soundManager.createBeep(140, 0.12, 'square', 0.25);
+        }
     },
 
     isMainTabChrome(el) {
-        return !!(el && el.hasAttribute && el.hasAttribute('data-tab'));
+        // The MENU area button has no data-tab but is tab-row chrome too
+        // (otherwise ↓ into content landed on it as the "first content" item).
+        return !!(el && el.hasAttribute && (el.hasAttribute('data-tab') || el.hasAttribute('data-open-menu')));
     },
 
     findFirstBodyFocusable(list) {
@@ -179,15 +204,111 @@ extendClass(HomeStationUI, {
                 this.syncNavHint();
                 return;
             }
+            // Nothing above at the top edge of the content: one level up
+            // (content → section tabs → sub-nav → area row).
+            if (direction === 'up' && this.getNavLevel() !== 'tabs') this.exitTabContent();
             return;
         }
 
         const delta = (direction === 'up' || direction === 'left') ? -1 : 1;
+        if (direction === 'up' && zoneIdx === 0 && this.getNavLevel() !== 'tabs') {
+            this.exitTabContent();
+            return;
+        }
         const nextZone = Math.max(0, Math.min(zone.length - 1, zoneIdx + delta));
         this.focusIndex = all.indexOf(zone[nextZone]);
         this.refreshFocus();
         this.scrollFocusedIntoView();
         this.syncNavHint();
+    },
+
+    /** 'area' (top area buttons), 'subnav' (area sub-tabs) or null for the focused element. */
+    getFocusedNavRow() {
+        const el = this.getFocusables()[this.focusIndex];
+        if (!el || !el.classList) return null;
+        if (el.classList.contains('hs-subnav-tab')) return 'subnav';
+        if (el.classList.contains('hs-area-btn')) return 'area';
+        return null;
+    },
+
+    /** Focus the active (or first) button of a nav row. */
+    focusNavRow(row) {
+        if (!this.overlay) return false;
+        const sel = row === 'subnav' ? '.hs-subnav-tab' : '.hs-area-btn';
+        const els = Array.from(this.overlay.querySelectorAll(sel));
+        const target = els.find((el) => el.classList.contains('active')) || els[0];
+        const list = this.getFocusables();
+        const i = target ? list.indexOf(target) : -1;
+        if (i < 0) return false;
+        this._navLevel = 'tabs';
+        this.focusIndex = i;
+        this.refreshFocus();
+        this.syncNavHint && this.syncNavHint();
+        return true;
+    },
+
+    /**
+     * Arrows between the two tab rows. Area row: ←/→ switch area, ↓ into
+     * its sub-nav. Sub-nav: ←/→ switch sub-tab (focus stays in the row),
+     * ↑ back to the area row, ↓ into the content. Returns true if handled.
+     */
+    handleNavRowArrow(key) {
+        const row = this.getFocusedNavRow();
+        if (!row) return false;
+        const hasSub = !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
+        if (row === 'area') {
+            const focused = this.getFocusables()[this.focusIndex];
+            const isMenuBtn = !!(focused && focused.hasAttribute('data-open-menu'));
+            if (key === 'ArrowDown') {
+                // MENU button: ↓ opens the menu (same as ENTER / ESC).
+                if (isMenuBtn) {
+                    this.openMainMenuOverlay({ force: true });
+                    return true;
+                }
+                if (hasSub) return this.focusNavRow('subnav');
+                this.enterTabContent();
+                return true;
+            }
+            if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                // Walk every area button from the focused one (MENU included):
+                // a real area switches right away, MENU is only focused.
+                const btns = Array.from(this.overlay.querySelectorAll('.hs-area-btn'));
+                const cur = Math.max(0, btns.indexOf(focused));
+                const next = btns[(cur + (key === 'ArrowLeft' ? -1 : 1) + btns.length) % btns.length];
+                if (!next) return true;
+                if (next.hasAttribute('data-tab')) {
+                    next.click();
+                    this.focusNavRow('area');
+                } else {
+                    const list = this.getFocusables();
+                    const i = list.indexOf(next);
+                    if (i >= 0) {
+                        this.focusIndex = i;
+                        this.refreshFocus();
+                        this.syncNavHint && this.syncNavHint();
+                    }
+                }
+                return true;
+            }
+            return key === 'ArrowUp';
+        }
+        // subnav
+        if (key === 'ArrowUp') return this.focusNavRow('area');
+        if (key === 'ArrowDown') {
+            this.enterTabContent();
+            return true;
+        }
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            const subs = Array.from(this.overlay.querySelectorAll('.hs-subnav-tab'));
+            const cur = subs.findIndex((el) => el.classList.contains('active'));
+            const next = subs[((cur < 0 ? 0 : cur) + (key === 'ArrowLeft' ? -1 : 1) + subs.length) % subs.length];
+            if (next) {
+                next.click();
+                this.focusNavRow('subnav');
+            }
+            return true;
+        }
+        return false;
     },
 
     bindKeyNav() {
@@ -285,6 +406,13 @@ extendClass(HomeStationUI, {
                     this.exitTabContent();
                     return;
                 }
+                // In the area sub-nav row: ESC climbs to the area row first.
+                if (this.getFocusedNavRow() === 'subnav') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.focusNavRow('area');
+                    return;
+                }
                 // On tab bar: ESC swaps the left (game) tab row for the right
                 // (menu) tab row and back — nothing else.
                 e.preventDefault();
@@ -332,6 +460,8 @@ extendClass(HomeStationUI, {
                 e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault();
                 const level = this.getNavLevel();
+                // Area row ↔ sub-nav row ↔ content (see handleNavRowArrow).
+                if (!this._resBuyModal && level === 'tabs' && this.handleNavRowArrow(e.key)) return;
                 // Main tabs: ←/→ switch sections
                 if (!this._resBuyModal && level === 'tabs' &&
                     (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -342,6 +472,16 @@ extendClass(HomeStationUI, {
                 if (!this._resBuyModal && level === 'sub' &&
                     (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                     this.switchSubTab(e.key === 'ArrowLeft' ? -1 : 1);
+                    return;
+                }
+                // Section tabs (e.g. RESOURCES / PARTS / PORTALS): ↓ into the
+                // content, ↑ back up to the tab rows.
+                if (!this._resBuyModal && level === 'sub' && e.key === 'ArrowDown') {
+                    this.enterTabContent();
+                    return;
+                }
+                if (!this._resBuyModal && level === 'sub' && e.key === 'ArrowUp') {
+                    this.exitTabContent();
                     return;
                 }
                 const dir = e.key === 'ArrowLeft' ? 'left'
@@ -362,6 +502,10 @@ extendClass(HomeStationUI, {
                         ? startScreenManager.embeddedMenuTab : null;
                     // Menu tab row: ENTER goes into the shown section (unless a
                     // different, not-yet-shown menu tab is focused).
+                    if (level === 'tabs' && focused && focused.hasAttribute && focused.hasAttribute('data-open-menu')) {
+                        this.openMainMenuOverlay({ force: true });
+                        return;
+                    }
                     if (level === 'tabs' && focused && focused.id === 'hsLogout') {
                         this.logout();
                         return;

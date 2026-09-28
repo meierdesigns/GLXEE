@@ -15,16 +15,40 @@ extendClass(HomeStationUI, {
         // big on the nose, half size on a wing.
         const onWing = (s) => !!s.split
             || String(s.area || (s.index > 0 ? 'wingLeft' : 'front')).indexOf('wing') === 0;
-        const sig = weapons.map((s) => s.index + ':' + (s.id || '') + ':' + (onWing(s) ? 'w' : 'n')).join('|');
+        const L = shipLoadoutManager.getLoadout(this.hangarShipId);
+        const fireKey = (i) => (shipLoadoutManager.getWeaponFireKey ? shipLoadoutManager.getWeaponFireKey(L, i) : 'space');
+        const allKey = shipLoadoutManager.getAllFireKey ? shipLoadoutManager.getAllFireKey(L) : 'space';
+        const keyLabel = (k) => (k === 'space' ? 'SPC' : String(k).toUpperCase());
+        // Buy tile: next weapon slot (new-profile purchase model only).
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const buy = pm && pm.usesWeaponSlotPurchase && pm.usesWeaponSlotPurchase()
+            ? pm.canPurchaseWeaponSlot(this.hangarShipId) : null;
+        const costLabel = (c) => Object.keys(c || {}).map((k) => c[k] + ' ' + k.toUpperCase()).join(' · ');
+        const buyTile = !buy || buy.reason === 'MAX SLOTS' || buy.reason === 'N/A' ? ''
+            : `<button type="button" class="hs-slot-tile hs-slot-tile-buy${buy.ok ? '' : ' is-locked'}" data-buy-weapon-slot="1"` +
+              ` title="BUY WEAPON SLOT — ${costLabel(buy.cost)}${buy.ok ? '' : ' · NOT ENOUGH RESOURCES'}">` +
+              `<span class="hs-slot-tile-key hs-slot-tile-buy-cost">BUY</span>` +
+              `<span class="hs-slot-tile-socket hs-slot-tile-all-label">+</span>` +
+              `</button>`;
+        const sig = 'buy:' + (buy ? (buy.ok ? 1 : 0) + costLabel(buy.cost) : '-') + '|all:' + allKey + '|' + weapons.map((s) => s.index + ':' + (s.id || '') + ':' + (onWing(s) ? 'w' : 'n') + ':' + fireKey(s.index)).join('|');
         if (bar.dataset.sig !== sig) {
             bar.dataset.sig = sig;
-            bar.innerHTML = weapons.map((s) => {
+            // ALL tile: the key that fires every weapon at once.
+            // As tall as the biggest slot: wing size only when every slot is a wing slot.
+            const allSmall = weapons.length > 0 && weapons.every(onWing);
+            const allTile = `<div class="hs-slot-tile hs-slot-tile-all is-filled${allSmall ? ' is-wing' : ''}" aria-label="ALL WEAPONS · ${keyLabel(allKey)}"` +
+                ` title="ALL WEAPONS — this key fires every gun at once">` +
+                `<span class="hs-slot-tile-socket hs-slot-tile-all-label">ALL</span>` +
+                `<span class="hs-slot-tile-key is-${allKey}" data-fire-key-all="1"` +
+                ` title="FIRE-ALL KEY — click to cycle SPACE · A · S · D">${keyLabel(allKey)}</span>` +
+                `</div>`;
+            bar.innerHTML = allTile + weapons.map((s) => {
                 const wing = s.index > 0;
                 const label = wing ? 'WING ' + s.index : 'NOSE';
                 const small = onWing(s);
                 const name = s.id ? this.hangarModuleLabel(s.id) : 'EMPTY';
                 const body = s.id
-                    ? this.iconHtml(this.hangarModuleIconKey('weapon', s.id), 32, 'hs-pixel', false)
+                    ? this.moduleIconHtml('weapon', s.id, 32, 'hs-pixel', false)
                     : '<span class="hs-slot-tile-bore" aria-hidden="true"></span>';
                 const hint = s.id
                     ? 'drag to move or remove'
@@ -34,8 +58,12 @@ extendClass(HomeStationUI, {
                     ` title="${label} · ${name}${wing ? ' · SPLIT ONTO BOTH WINGS' : ''} — ${hint}">` +
 
                     `<span class="hs-slot-tile-socket">${body}</span>` +
+                    (s.id
+                        ? `<span class="hs-slot-tile-key is-${fireKey(s.index)}" data-fire-key-slot="${s.index}"` +
+                          ` title="SOLO FIRE KEY — click to cycle SPACE · A · S · D">${keyLabel(fireKey(s.index))}</span>`
+                        : '') +
                     `</button>`;
-            }).join('');
+            }).join('') + buyTile;
         }
         if (bar.dataset.bound !== '1') {
             bar.dataset.bound = '1';
@@ -45,6 +73,35 @@ extendClass(HomeStationUI, {
 
     onHangarSlotTileDown(e) {
         if (e.button !== 0) return;
+        // ALL tile: its badge cycles the fire-all key; the tile itself is inert.
+        if (e.target.closest && e.target.closest('[data-fire-key-all]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            // No status line: the badge itself shows the new key.
+            shipLoadoutManager.cycleAllFireKey(this.hangarShipId);
+            this.drawHangarBay();
+            return;
+        }
+        if (e.target.closest && e.target.closest('.hs-slot-tile-all')) return;
+        // Buy tile: purchase the next weapon slot for this ship.
+        if (e.target.closest && e.target.closest('[data-buy-weapon-slot]')) {
+            e.preventDefault();
+            const res = profileManager.purchaseWeaponSlot(this.hangarShipId);
+            this.setStatus(res.ok ? 'WEAPON SLOT BOUGHT — DRAG IT ONTO THE SHIP'
+                : (res.reason === 'RESOURCES' ? 'NOT ENOUGH RESOURCES FOR A WEAPON SLOT' : 'CANNOT BUY SLOT: ' + res.reason));
+            return;
+        }
+        // Key badge: cycle this slot's fire key instead of dragging.
+        const keyBadge = e.target.closest && e.target.closest('[data-fire-key-slot]');
+        if (keyBadge) {
+            e.preventDefault();
+            e.stopPropagation();
+            const idx = Number(keyBadge.getAttribute('data-fire-key-slot') || 0);
+            shipLoadoutManager.cycleWeaponFireKey(this.hangarShipId, idx);
+            // The key badge itself shows the new key; no status line needed.
+            this.drawHangarBay();
+            return;
+        }
         const tile = e.target.closest && e.target.closest('.hs-slot-tile');
         if (!tile) return;
         e.preventDefault();
@@ -221,9 +278,12 @@ extendClass(HomeStationUI, {
                 return inside({
                     left: Math.min(a.left, b.left), right: Math.max(a.right, b.right),
                     top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom)
-                }, 6);
+                }, 12);
             });
-            if (keep) return;
+            if (keep) {
+                this.cancelHangarMoveHandleHide();
+                return;
+            }
         }
         let found = null;
         // Any marker of the slot counts (wing pairs have one per wing).
@@ -231,10 +291,29 @@ extendClass(HomeStationUI, {
             if (found) return;
             el.querySelectorAll('.hs-hangar-slot-pin').forEach((pin) => {
                 const r = pin.getBoundingClientRect();
-                if (!found && r.width > 0 && inside(r, 4)) found = el;
+                if (!found && r.width > 0 && inside(r, 6)) found = el;
             });
         });
-        this.showHangarSlotMoveHandle(found);
+        if (found) {
+            this.cancelHangarMoveHandleHide();
+            this.showHangarSlotMoveHandle(found);
+            return;
+        }
+        // Leaving the zone: hide after a short grace period, so crossing the
+        // gap to the handle or grazing the edge doesn't make it flicker.
+        if (!this._hangarMoveHandleHideTimer && this._hangarMoveHandleSlot) {
+            this._hangarMoveHandleHideTimer = setTimeout(() => {
+                this._hangarMoveHandleHideTimer = null;
+                if (!this._hangarSlotMoveDrag) this.showHangarSlotMoveHandle(null);
+            }, 220);
+        }
+    },
+
+    cancelHangarMoveHandleHide() {
+        if (this._hangarMoveHandleHideTimer) {
+            clearTimeout(this._hangarMoveHandleHideTimer);
+            this._hangarMoveHandleHideTimer = null;
+        }
     },
 
     /** Drag the move handle: the slot (with its weapon) follows the pointer. */
@@ -244,6 +323,7 @@ extendClass(HomeStationUI, {
         downEvent.stopPropagation();
         const index = Number(handle.getAttribute('data-slot-index') || 0);
         const stage = this.overlay.querySelector('#hsHangarBayStage');
+        this.cancelHangarMoveHandleHide();
         this._hangarSlotMoveDrag = { handle: handle };
         this.overlay.querySelectorAll('.hs-slot-move-handle').forEach((h) => {
             if (h !== handle) h.hidden = true;

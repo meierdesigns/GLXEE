@@ -2,6 +2,38 @@
 
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
+    /** Opaque pixel bounds of the ship rendered at `scale`, relative to its bbox origin. */
+    measureHangarShipVisible(model, scale) {
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!loader || !loader.renderShip) return null;
+        try {
+            const mw = Math.max(8, model.width || 20);
+            const mh = Math.max(8, model.height || 16);
+            const pad = Math.ceil(scale * 12);
+            const c = document.createElement('canvas');
+            c.width = Math.ceil(mw * scale) + pad * 2;
+            c.height = Math.ceil(mh * scale) + pad * 2;
+            const cctx = c.getContext('2d');
+            loader.renderShip(cctx, model, pad, pad, scale, null, 0, { allowColorMountSprites: true });
+            const data = cctx.getImageData(0, 0, c.width, c.height).data;
+            let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+            for (let y = 0; y < c.height; y++) {
+                for (let x = 0; x < c.width; x++) {
+                    if (data[(y * c.width + x) * 4 + 3] > 16) {
+                        if (x < x0) x0 = x;
+                        if (x > x1) x1 = x;
+                        if (y < y0) y0 = y;
+                        if (y > y1) y1 = y;
+                    }
+                }
+            }
+            if (x1 < 0) return null;
+            return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+        } catch (e) {
+            return null;
+        }
+    },
+
     drawHangarBay(deferSlotSync) {
         if (!this.overlay) return;
         const canvas = this.overlay.querySelector('#hsHangarBayCanvas');
@@ -10,8 +42,10 @@ extendClass(HomeStationUI, {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const cssW = Math.max(280, Math.floor((stage && stage.clientWidth) || 420));
-        const cssH = Math.max(220, Math.floor((stage && stage.clientHeight) || 320));
+        // Size the backing store to the canvas's own box (CSS 100% of the
+        // stage) so the drawing — grid included — fills it edge to edge.
+        const cssW = Math.max(280, Math.floor(canvas.clientWidth || (stage && stage.clientWidth) || 420));
+        const cssH = Math.max(220, Math.floor(canvas.clientHeight || (stage && stage.clientHeight) || 320));
         if (canvas.width !== cssW || canvas.height !== cssH) {
             canvas.width = cssW;
             canvas.height = cssH;
@@ -33,32 +67,20 @@ extendClass(HomeStationUI, {
         ctx.fillStyle = '#050508';
         ctx.fillRect(0, 0, w, h);
 
-        // Dock grid
-        ctx.strokeStyle = accent;
-        ctx.globalAlpha = 0.12;
-        const grid = 16;
-        for (let x = 0; x <= w; x += grid) {
-            ctx.beginPath();
-            ctx.moveTo(x + 0.5, 0);
-            ctx.lineTo(x + 0.5, h);
-            ctx.stroke();
-        }
-        for (let y = 0; y <= h; y += grid) {
-            ctx.beginPath();
-            ctx.moveTo(0, y + 0.5);
-            ctx.lineTo(w, y + 0.5);
-            ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
 
         const mw = Math.max(8, model.width || 20);
         const mh = Math.max(8, model.height || 16);
         // Leave side gutters for slot cards; ship stays centered and clickable
-        const padX = Math.max(150, Math.floor(w * 0.28));
-        const padY = Math.max(28, Math.floor(h * 0.1));
+        // (smaller gutters → a bigger default zoom; the wheel still zooms out)
+        const padX = Math.max(48, Math.floor(w * 0.12));
+        const padY = Math.max(20, Math.floor(h * 0.06));
+        // Fit the reference hull, not this layout, so moving areas never
+        // rescales the ship (it grows/shrinks in place instead).
+        const refW = typeof PLAYER_REF_W !== 'undefined' ? PLAYER_REF_W : 36;
+        const refH = typeof PLAYER_REF_H !== 'undefined' ? PLAYER_REF_H : 28;
         const fitScale = Math.max(2, Math.min(
-            Math.floor((w - padX * 2) / mw),
-            Math.floor((h - padY * 2) / mh),
+            Math.floor((w - padX * 2) / refW),
+            Math.floor((h - padY * 2) / refH),
             10
         ));
         // The fit scale is sticky per ship and bay size: editing a part
@@ -66,9 +88,49 @@ extendClass(HomeStationUI, {
         // popped the whole ship to a new size.
         const fitKey = shipId + '|' + w + '|' + h;
         if (!this._hangarFit || this._hangarFit.key !== fitKey) {
+            // Default view: fit and centre the ship's visible pixels (the
+            // bbox has empty rows), with margin on every side and extra room
+            // at the top for the slot bar. Pan/zoom start fresh.
             this._hangarFit = { key: fitKey, scale: fitScale };
+            const vis = this.measureHangarShipVisible(model, fitScale);
+            if (vis) {
+                const padTop = Math.max(90, Math.floor(h * 0.16));
+                const padBottom = Math.max(24, Math.floor(h * 0.1));
+                const padSide = Math.max(48, Math.floor(w * 0.15));
+                const bw = vis.w / fitScale;
+                const bh = vis.h / fitScale;
+                const s = Math.max(2, Math.min(
+                    Math.floor((w - padSide * 2) / bw),
+                    Math.floor((h - padTop - padBottom) / bh),
+                    10
+                ));
+                this._hangarFit.scale = s;
+                const ox0 = Math.floor((w - mw * s) / 2);
+                const oy0 = Math.floor((h - mh * s) / 2);
+                const cx = (vis.x + vis.w / 2) / fitScale * s;
+                const cy = (vis.y + vis.h / 2) / fitScale * s;
+                this._hangarBayZoom = 1;
+                this._hangarBayPanX = Math.round(w / 2 - (ox0 + cx));
+                this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (oy0 + cy));
+            }
         }
         const baseScale = this._hangarFit.scale;
+        // Area switched on/off: keep scale and zoom, re-centre the visible ship.
+        if (this._hangarRecenter) {
+            this._hangarRecenter = false;
+            const vis = this.measureHangarShipVisible(model, baseScale);
+            if (vis) {
+                const padTop = Math.max(90, Math.floor(h * 0.16));
+                const padBottom = Math.max(24, Math.floor(h * 0.1));
+                const z = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
+                const s = baseScale * z;
+                const cx = (vis.x + vis.w / 2) / baseScale * s;
+                const cy = (vis.y + vis.h / 2) / baseScale * s;
+                this._hangarBayPanX = Math.round(w / 2 - (Math.floor((w - mw * s) / 2) + cx));
+                this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (Math.floor((h - mh * s) / 2) + cy));
+                this._hangarLastOx = null;
+            }
+        }
         // Scroll-wheel zoom (bindHangarWingDrag) multiplies the auto-fit
         // scale; drag-to-pan on empty canvas space offsets the centered
         // origin on top of that. Both persist per ship until reset.
@@ -145,6 +207,33 @@ extendClass(HomeStationUI, {
         this._hangarLastShipId = shipId;
         const sw = mw * scale;
         const sh = mh * scale;
+
+        // Dock grid: a whole number of ship voxels per cell (~16px at zoom 1),
+        // anchored on the bay centre: it zooms with the ship but stays put
+        // while the ship is panned or dragged.
+        const gridVoxels = Math.max(1, Math.round(16 / refCell));
+        const grid = Math.max(4, cellPx * gridVoxels);
+        // Lines as filled rects, 2 *displayed* px thick: when the canvas is
+        // shown scaled down (UI scale), 1–2 backing px lines dropped out and
+        // looked dotted.
+        const shown = canvas.getBoundingClientRect();
+        const ratio = shown.width > 0 ? w / shown.width : 1;
+        const lw = Math.max(3, Math.ceil(3 * ratio));
+        ctx.fillStyle = accent;
+        // Zooming out packs the fixed-width lines tighter: fade them with the
+        // grid spacing (relative to zoom 1) so the bay doesn't turn solid.
+        const gridAtFit = Math.max(4, refCell * gridVoxels);
+        const density = Math.max(0.12, Math.min(1, grid / gridAtFit));
+        ctx.globalAlpha = 0.12 * density * density;
+        const gx = Math.round(w / 2);
+        const gy = Math.round(h / 2);
+        for (let x = ((gx % grid) + grid) % grid; x <= w; x += grid) {
+            ctx.fillRect(Math.round(x), 0, lw, h);
+        }
+        for (let y = ((gy % grid) + grid) % grid; y <= h; y += grid) {
+            ctx.fillRect(0, Math.round(y), w, lw);
+        }
+        ctx.globalAlpha = 1;
         // Cache the current ship-bbox geometry so the HTML slot-pin buttons
         // (which sit on top of the canvas and intercept its pointer events)
         // can convert their own drag deltas into the same layout-unit space
@@ -158,12 +247,6 @@ extendClass(HomeStationUI, {
             graphicsManager.shipAssetLoader._voxelRef = { model, scale: baseScale };
         }
         this._hangarLastModel = model;
-
-        // Soft pedestal
-        ctx.fillStyle = accent;
-        ctx.globalAlpha = 0.08;
-        ctx.fillRect(ox - 10, oy + sh - 4, sw + 20, 10);
-        ctx.globalAlpha = 1;
 
         try {
             if (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader
@@ -325,8 +408,8 @@ extendClass(HomeStationUI, {
             const mi = slot.id ? modsLeft.findIndex((m) => m.kind === slot.kind && m.id === slot.id) : -1;
             if (mi !== -1 && pxPerUnit) {
                 const m = modsLeft.splice(mi, 1)[0];
-                el.style.setProperty('--pin-w', Math.max(18, Math.round(m.width * pxPerUnit) + 6) + 'px');
-                el.style.setProperty('--pin-h', Math.max(18, Math.round(m.height * pxPerUnit) + 6) + 'px');
+                el.style.setProperty('--pin-w', Math.max(28, Math.round(m.width * pxPerUnit) + 6) + 'px');
+                el.style.setProperty('--pin-h', Math.max(28, Math.round(m.height * pxPerUnit) + 6) + 'px');
             } else {
                 el.style.removeProperty('--pin-w');
                 el.style.removeProperty('--pin-h');
@@ -344,7 +427,8 @@ extendClass(HomeStationUI, {
                 const sizeLv = shipLoadoutManager.getSlotSizeLevel
                     ? shipLoadoutManager.getSlotSizeLevel(shipId, slot.kind, slot.index) : 1;
                 const base = (ms.front || ms.center || ms[area] || 4) * [Math.SQRT1_2, 1, 1.3][sizeLv];
-                const px = Math.max(12, Math.round(base * pxPerUnit));
+                // Floor keeps sockets easy to see and grab at low zoom.
+                const px = Math.max(28, Math.round(base * pxPerUnit));
                 el.style.setProperty('--socket-size', px + 'px');
             } else {
                 el.style.removeProperty('--socket-size');
@@ -415,7 +499,11 @@ extendClass(HomeStationUI, {
                 const y = Math.round(cy - total / 2 + i * (size + gap));
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
                 ctx.fillRect(x - 1, y - 1, size + 2, size + 2);
-                iconRenderer.drawKey(ctx, this.hangarModuleIconKey(it.mod.kind, it.mod.id), x, y, size, tint);
+                if (it.mod.kind === 'weapon' && iconRenderer.drawWeapon) {
+                    iconRenderer.drawWeapon(ctx, it.mod.id, x, y, size);
+                } else {
+                    iconRenderer.drawKey(ctx, this.hangarModuleIconKey(it.mod.kind, it.mod.id), x, y, size, tint);
+                }
             });
         });
         ctx.restore();

@@ -60,12 +60,16 @@ extendClass(HomeStationUI, {
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
-        const ownedHtml = owned.map((id) =>
-            `<span class="hs-chip hs-chip-ship">` +
-            `<span class="hs-chip-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>` +
-            `<span class="hs-chip-text">${this.shipName(id)}</span>` +
-            `</span>`
-        ).join('') || '<span class="hs-muted hs-empty-slot">NONE</span>';
+        const ownedHtml = owned.length
+            ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
+                (id === profile.activeShipId
+                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">★</span>`
+                    : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
+                      `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
+                `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
+            )).join(''), true)
+            : '<span class="hs-muted hs-empty-slot">NONE</span>';
         const slotsLabel = `${owned.length}/${stats.shipSlots}`;
 
         let body = '';
@@ -144,7 +148,6 @@ extendClass(HomeStationUI, {
                 </div>`;
         }
 
-        const statusClass = this.statusMsg ? 'hs-status' : 'hs-status is-empty';
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const bodyClass = isPlay
@@ -188,7 +191,6 @@ extendClass(HomeStationUI, {
                             </div>
                         </div>
                         ${this.renderAreaSubnav()}
-                        ${isPlay || isMenu ? '' : `<p class="${statusClass}">${this.statusMsg || '\u00A0'}</p>`}
                     </div>
                 </div>
                 <div class="${bodyClass}">${body}</div>
@@ -205,6 +207,21 @@ extendClass(HomeStationUI, {
         }
         this.bindEvents();
         this.bindControlsToggle();
+        // MENU area button = same as pressing ESC.
+        const menuBtn = this.overlay.querySelector('[data-open-menu]');
+        if (menuBtn) {
+            menuBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openMainMenuOverlay({ force: true });
+            });
+        }
+        // Status messages show once as a toast (bottom centre), not as a line
+        // under the tabs; consume it so re-renders don't repeat it.
+        if (this.statusMsg) {
+            this.showStatusToast(this.statusMsg);
+            this.statusMsg = '';
+        }
         if (['factions', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
         this.restoreNavFocus();
         if (this._focusExplore) {
@@ -242,9 +259,66 @@ extendClass(HomeStationUI, {
         if (this.tab === 'components') {
             this.mountComponentsTab();
         }
+        this.scheduleShipThumbs();
+        this.bindShipSelectButtons();
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }
+    },
+
+    /**
+     * Ship thumbs need graphicsManager.shipAssetLoader, which loads async and
+     * may still be missing (or its part images still decoding) on first render.
+     * Draw now and redraw a few times until the loader is ready.
+     */
+    scheduleShipThumbs() {
+        clearTimeout(this._shipThumbTimer);
+        let tries = 0;
+        const run = () => {
+            this.drawAreaThumbs();
+            const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            const ready = !!(loader && loader.loaded);
+            tries += 1;
+            if (tries < (ready ? 3 : 40)) this._shipThumbTimer = setTimeout(run, ready ? 400 : 250);
+        };
+        run();
+    },
+
+    /** SELECT buttons in the owned-ships table: make that ship the active one. */
+    bindShipSelectButtons() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('[data-select-ship]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-select-ship');
+                if (typeof profileManager === 'undefined') return;
+                if (profileManager.setActiveShip) {
+                    profileManager.setActiveShip(id);
+                } else {
+                    const p = profileManager.getActiveProfile();
+                    if (!p) return;
+                    p.activeShipId = id;
+                    profileManager.save();
+                }
+                if (typeof shipConfigManager !== 'undefined') shipConfigManager.applyToRuntime(id);
+                this.statusMsg = 'ACTIVE: ' + this.shipName(id);
+                this.createUI();
+            });
+        });
+        this.overlay.querySelectorAll('[data-open-hangar]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (this.tab === 'menu') {
+                    this.unmountMenuTab();
+                    this._menuOpts = null;
+                    this._prevTab = null;
+                }
+                this.hangarShipId = btn.getAttribute('data-open-hangar');
+                this.statusMsg = '';
+                this.focusIndex = 0;
+                this.tab = 'hangar';
+                this.persistTab();
+                this.createUI();
+            });
+        });
     },
 
     focusExploreItem(kind) {

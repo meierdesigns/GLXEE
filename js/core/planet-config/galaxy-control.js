@@ -14,7 +14,32 @@ const GALAXY_CONTROL_DEFAULTS = {
     synth_grid: { control: 'held', rivals: [] }
 };
 
+// Factions that fight side by side. Only allies share a planet against the
+// player; enemies of each other never spawn together.
+const FACTION_ALLIANCES = [
+    ['kronax', 'machine'],
+    ['voidborn', 'pirate']
+];
+
 extendClass(PlanetConfigManager, {
+    /** Partner factions of a faction (from FACTION_ALLIANCES), without itself. */
+    getFactionAllies(id) {
+        const key = String(id || '').toLowerCase();
+        const out = [];
+        FACTION_ALLIANCES.forEach((pair) => {
+            if (pair.indexOf(key) === -1) return;
+            pair.forEach((f) => { if (f !== key && out.indexOf(f) === -1) out.push(f); });
+        });
+        return out;
+    },
+
+    areFactionsAllied(a, b) {
+        if (!a || !b) return false;
+        if (a === b) return true;
+        return FACTION_ALLIANCES.some((pair) => pair.indexOf(a) !== -1 && pair.indexOf(b) !== -1);
+    },
+
+
     /** Fills galaxy.control / galaxy.rivals (saved galaxies predate them). */
     ensureGalaxyControl(galaxy) {
         if (!galaxy || typeof galaxy !== 'object') return null;
@@ -94,7 +119,12 @@ extendClass(PlanetConfigManager, {
             if (roll < f.share) { owner = f.id; break; }
             roll -= f.share;
         }
-        const opponents = c.factions.map((f) => f.id).filter((id) => id !== owner);
-        return [owner, opponents[Math.floor(rng() * opponents.length) % opponents.length]];
+        // A planet is held by one side; an allied faction in the galaxy may
+        // fight alongside it, never an enemy of the owner.
+        const allies = c.factions.map((f) => f.id)
+            .filter((id) => id !== owner && this.areFactionsAllied(owner, id));
+        return allies.length && rng() < 0.5
+            ? [owner, allies[Math.floor(rng() * allies.length) % allies.length]]
+            : [owner];
     },
 });

@@ -64,6 +64,94 @@ extendClass(GalaxyMapManager, {
         return this.isRouteRisky(fromLoc, toLoc) ? 0.5 : 0;
     },
 
+    /**
+     * Route polyline from one location to another that bends around every
+     * other planet / station instead of cutting through them: while a leg
+     * passes within an obstacle's radius, a waypoint is inserted beside that
+     * obstacle (on the side the leg already passes). SVG coords.
+     */
+    routePath(fromLoc, toLoc) {
+        const from = this.locationPoint(fromLoc);
+        const to = this.locationPoint(toLoc);
+        if (!from || !to) return null;
+        const skip = (kind, id) => (fromLoc.kind === kind && fromLoc.id === id) || (toLoc.kind === kind && toLoc.id === id);
+        const obstacles = [];
+        (this.nodes || Object.values(this.nodeById || {})).forEach((n) => {
+            if (skip('planet', n.planetId)) return;
+            const p = this.locationPoint({ kind: 'planet', id: n.planetId });
+            if (p) obstacles.push({ x: p.x, y: p.y, r: 34 });
+        });
+        (this.getTradingPosts() || []).forEach((post) => {
+            if (skip('post', post.id)) return;
+            const p = this.locationPoint({ kind: 'post', id: post.id });
+            if (p) obstacles.push({ x: p.x, y: p.y, r: 22 });
+        });
+        const pts = [from, to];
+        for (let iter = 0; iter < 12; iter++) {
+            let hit = null;
+            for (let i = 0; i < pts.length - 1 && !hit; i++) {
+                const a = pts[i];
+                const b = pts[i + 1];
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const len2 = dx * dx + dy * dy || 1;
+                let best = null;
+                obstacles.forEach((o) => {
+                    const t = ((o.x - a.x) * dx + (o.y - a.y) * dy) / len2;
+                    if (t <= 0.02 || t >= 0.98) return;
+                    const px = a.x + dx * t;
+                    const py = a.y + dy * t;
+                    const d = Math.hypot(o.x - px, o.y - py);
+                    if (d < o.r && (!best || t < best.t)) best = { o, t, px, py, d };
+                });
+                if (best) hit = { i, best, dx, dy };
+            }
+            if (!hit) break;
+            const { o, px, py, d } = hit.best;
+            // Push out from the obstacle centre towards where the leg passes;
+            // dead-centre hits go sideways (perpendicular to the leg).
+            let nx = px - o.x;
+            let ny = py - o.y;
+            if (d < 0.5) {
+                const l = Math.hypot(hit.dx, hit.dy) || 1;
+                nx = -hit.dy / l;
+                ny = hit.dx / l;
+            } else {
+                nx /= d;
+                ny /= d;
+            }
+            pts.splice(hit.i + 1, 0, { x: o.x + nx * (o.r + 8), y: o.y + ny * (o.r + 8) });
+        }
+        return pts;
+    },
+
+    /** Point + heading at progress e (0..1) along a polyline, by arc length. */
+    pointOnPath(pts, e) {
+        const lens = [];
+        let total = 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+            lens.push(l);
+            total += l;
+        }
+        let dist = Math.max(0, Math.min(1, e)) * total;
+        for (let i = 0; i < lens.length; i++) {
+            if (dist <= lens[i] || i === lens.length - 1) {
+                const k = lens[i] ? Math.min(1, dist / lens[i]) : 0;
+                const a = pts[i];
+                const b = pts[i + 1];
+                return {
+                    x: a.x + (b.x - a.x) * k,
+                    y: a.y + (b.y - a.y) * k,
+                    angle: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI + 90,
+                    seg: i
+                };
+            }
+            dist -= lens[i];
+        }
+        return { x: pts[0].x, y: pts[0].y, angle: 0, seg: 0 };
+    },
+
     /** Dashed route from the ship to the selected target, "!" if pirates prowl it. */
     routePreviewSvg() {
         const current = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
@@ -74,13 +162,18 @@ extendClass(GalaxyMapManager, {
         if (!current || !target || (current.kind === target.kind && current.id === target.id)) return '';
         // No route to a planet the ship can't reach.
         if (target.kind === 'planet' && !this.isUnlocked(target.id)) return '';
-        const from = this.locationPoint(current);
-        const to = this.locationPoint(target);
-        if (!from || !to) return '';
+        // …or to a station / trading post that is still locked.
+        if (target.kind === 'post') {
+            const post = this.getTradingPosts().find((p) => p.id === target.id);
+            if (!post || !profileManager.isTradingPostUnlocked(post)) return '';
+        }
+        const pts = this.routePath(current, target);
+        if (!pts) return '';
         const risky = this.isRouteRisky(current, target);
-        const mx = (from.x + to.x) / 2;
-        const my = (from.y + to.y) / 2;
-        return `<line class="gm-route ${risky ? 'risky' : ''}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}"/>` +
+        const mid = this.pointOnPath(pts, 0.5);
+        const mx = mid.x;
+        const my = mid.y;
+        return `<polyline class="gm-route ${risky ? 'risky' : ''}" fill="none" points="${pts.map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ')}"/>` +
             (risky ? `<g class="gm-route-warn" transform="translate(${mx},${my})">` +
                 `<title>PIRATE ROUTE · AMBUSH POSSIBLE</title>` +
                 `<path d="M0 -9 L9 7 L-9 7 Z"/><text x="0" y="5">!</text></g>` : '');
@@ -104,10 +197,11 @@ extendClass(GalaxyMapManager, {
             this.commitFlight(kind, id);
             return;
         }
-        const dx = to.x - from.x;
-        const dy = to.y - from.y;
-        const dist = Math.hypot(dx, dy);
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI + 90; // ship art points up
+        // Same obstacle-avoiding path as the route preview.
+        const path = this.routePath(current, { kind: kind, id: id }) || [from, to];
+        let dist = 0;
+        for (let i = 0; i < path.length - 1; i++) dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+        const angle = this.pointOnPath(path, 0).angle; // ship art points up
         const icon = this.getShipIconUrl && this.getShipIconUrl();
         const shipSvg = icon
             ? `<image href="${icon}" x="-5.5" y="-7.5" width="11" height="15" class="gm-ship-marker-img"/>`
@@ -115,8 +209,8 @@ extendClass(GalaxyMapManager, {
         const ns = 'http://www.w3.org/2000/svg';
         const g = document.createElementNS(ns, 'g');
         g.setAttribute('class', 'gm-ship-travel');
-        g.innerHTML = `<line class="gm-travel-trail" x1="${from.x}" y1="${from.y}" x2="${from.x}" y2="${from.y}"/>` +
-            `<g class="gm-travel-ship"><g transform="rotate(${angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
+        g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${from.x},${from.y}"/>` +
+            `<g class="gm-travel-ship"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
         svg.appendChild(g);
         const layer = svg.querySelector('.gm-route-layer');
         if (layer) layer.innerHTML = '';
@@ -127,7 +221,8 @@ extendClass(GalaxyMapManager, {
         const ambush = Math.random() < this.ambushChance(current, { kind: kind, id: id });
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
         const duration = Math.max(700, Math.min(1800, dist * 5));
-        this._flight = { kind: kind, id: id, from: from, to: to, g: g, trail: trail, ship: ship, duration: duration, t: 0 };
+        this._flight = { kind: kind, id: id, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
+            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0 };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -147,12 +242,15 @@ extendClass(GalaxyMapManager, {
             const local = Math.min(1, (now - start) / span);
             const t = t0 + (t1 - t0) * local;
             const e = ease(t);
-            const x = f.from.x + (f.to.x - f.from.x) * e;
-            const y = f.from.y + (f.to.y - f.from.y) * e;
+            const path = f.path || [f.from, f.to];
+            const at = this.pointOnPath(path, e);
             f.t = t;
-            f.ship.setAttribute('transform', `translate(${x},${y})`);
-            f.trail.setAttribute('x2', x);
-            f.trail.setAttribute('y2', y);
+            f.ship.setAttribute('transform', `translate(${at.x},${at.y})`);
+            if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
+            // Trail: the path's corners passed so far, then the ship.
+            const trailPoints = path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
+            trailPoints.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));
+            f.trail.setAttribute('points', trailPoints.join(' '));
             if (local < 1) requestAnimationFrame(step);
             else done();
         };

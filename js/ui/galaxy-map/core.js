@@ -183,8 +183,9 @@ class GalaxyMapManager {
                 difficulty = cfg.difficulty || '';
                 description = cfg.description || description;
                 enemyCount = (cfg.enemies && cfg.enemies.length) || enemyCount;
-                if (Array.isArray(cfg.factions) && cfg.factions.length > 1) {
-                    description = 'FRONTLINE: ' + cfg.factions.map((f) => String(f).toUpperCase()).join(' vs ')
+                const pf = planetConfigManager.getPlanetFactions ? planetConfigManager.getPlanetFactions(pid) : (cfg.factions || []);
+                if (Array.isArray(pf) && pf.length > 1) {
+                    description = 'ALLIED: ' + pf.map((f) => String(f).toUpperCase()).join(' + ')
                         + ' · ' + description;
                 }
             }
@@ -228,6 +229,97 @@ class GalaxyMapManager {
             }
         }
         return String(this.galaxyId || '').toUpperCase();
+    }
+
+    /** Top-right badge: the faction that rules this galaxy (its main faction). */
+    renderGalaxyRulerBadge() {
+        if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxyControl) return '';
+        const c = planetConfigManager.getGalaxyControl(this.galaxyId);
+        if (!c || !c.main) return '';
+        const styleOf = (f) => (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(f) : null);
+        const emblemOf = (f, size) => (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+            ? profileSelectionManager.getFactionEmblemHtml(f, size) : '');
+        const style = styleOf(c.main);
+        const accent = (style && style.accent) || 'var(--color-primary)';
+        const emblem = emblemOf(c.main, 48);
+        const state = c.control === 'contested' ? 'CONTESTED' : 'HELD';
+        const g = planetConfigManager.getGalaxy ? planetConfigManager.getGalaxy(this.galaxyId) : null;
+        const galaxyName = (g && g.name) || String(this.galaxyId || '').toUpperCase();
+        // Ruler card: emblem + galaxy name + control state (faction reads from the emblem).
+        const ruler = `<div class="galaxy-map-ruler-card" style="--ruler-accent:${accent}" title="Ruled by ${String(c.main).toUpperCase()}">` +
+            (emblem ? `<span class="galaxy-map-ruler-emblem">${emblem}</span>` : '') +
+            `<span class="galaxy-map-ruler-text"><span class="galaxy-map-ruler-galaxy">${galaxyName}</span>` +
+            `<span class="galaxy-map-ruler-label">${state}</span>${this.renderHoldingsLine()}</span></div>`;
+        return `<div class="galaxy-map-ruler">${ruler}${this.renderGalaxySituationCard(c, emblemOf, styleOf)}</div>`;
+    }
+
+    /** "BASE MARS · 2 WARCAMPS" (or "BASE DESTROYED") under the ruler state. */
+    renderHoldingsLine() {
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const h = pm && pm.getFactionHoldings ? pm.getFactionHoldings(this.galaxyId) : null;
+        if (!h || !h.base) return '';
+        if (h.baseLost) return '<span class="galaxy-map-ruler-holdings">BASE DESTROYED</span>';
+        const cfg = planetConfigManager.getConfig ? planetConfigManager.getConfig(h.base) : null;
+        const baseName = pm.isHoldingBaseRevealed(this.galaxyId)
+            ? String((cfg && cfg.name) || h.base).toUpperCase() : 'UNKNOWN';
+        const label = pm.getFactionExpansion(h.ruler).label;
+        const n = h.stations.length;
+        return `<span class="galaxy-map-ruler-holdings">BASE ${baseName}${n ? ' · ' + n + ' ' + label + (n === 1 ? '' : 'S') : ''}</span>`;
+    }
+
+    /** Card under the ruler: active mission here, else the galaxy's conflict, else a hint. */
+    renderGalaxySituationCard(c, emblemOf, styleOf) {
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null;
+        // Invasion of this galaxy comes first (invasion-scenario.js).
+        const inv = (typeof profileManager !== 'undefined' && profileManager.getActiveInvasion)
+            ? profileManager.getActiveInvasion(p) : null;
+        if (inv && inv.galaxyId === this.galaxyId) {
+            const icfg = planetConfigManager.getConfig ? planetConfigManager.getConfig(inv.planetId) : null;
+            const iplanet = String((icfg && icfg.name) || inv.planetId).toUpperCase();
+            const ist = styleOf(inv.attacker);
+            return `<div class="galaxy-map-situation is-invasion" style="--ruler-accent:${(ist && ist.accent) || '#ff4a3a'}">` +
+                `<span class="galaxy-map-situation-kind">INVASION</span>` +
+                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 24)}</span>` +
+                `<span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span></span>` +
+                `<span class="galaxy-map-situation-sub">FLY THERE AND WIN A STAGE TO REPEL IT</span>` +
+                `</div>`;
+        }
+        const m = p && p.activeMission;
+        if (m && m.galaxyId === this.galaxyId) {
+            const cfg = planetConfigManager.getConfig ? planetConfigManager.getConfig(m.planetId) : null;
+            const planet = String((cfg && cfg.name) || m.planetId || '').toUpperCase();
+            const reward = Object.keys(m.reward || {}).map((k) => m.reward[k] + ' ' + (k === 'credits' ? 'CR' : k.toUpperCase())).join(' · ');
+            const fStyle = m.factionId ? styleOf(m.factionId) : null;
+            const accent = (fStyle && fStyle.accent) || 'var(--color-primary)';
+            return `<div class="galaxy-map-situation is-mission" style="--ruler-accent:${accent}">` +
+                `<span class="galaxy-map-situation-kind">ACTIVE MISSION</span>` +
+                `<span class="galaxy-map-situation-title">${esc(String(m.type || 'MISSION').toUpperCase())} · ${esc(planet)}</span>` +
+                (reward ? `<span class="galaxy-map-situation-sub">REWARD ${esc(reward)}</span>` : '') +
+                `</div>`;
+        }
+        if (c.control === 'contested' && c.rivals && c.rivals.length) {
+            const map = planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(this.galaxyId) || {}) : {};
+            const front = (map.nodes || []).filter((n) => {
+                const f = planetConfigManager.getPlanetFactions ? planetConfigManager.getPlanetFactions(n.planetId) : [];
+                // Frontline = a planet held by an invading rival.
+                return f && f.length && c.rivals.indexOf(f[0]) !== -1;
+            }).length;
+            const rivalStyle = styleOf(c.rivals[0]);
+            const accent = (rivalStyle && rivalStyle.accent) || 'var(--color-primary)';
+            const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 24)}</span>`).join('');
+            return `<div class="galaxy-map-situation is-conflict" style="--ruler-accent:${accent}">` +
+                `<span class="galaxy-map-situation-kind">CONFLICT</span>` +
+                `<span class="galaxy-map-situation-row">${emblems}` +
+                `<span class="galaxy-map-situation-title">${esc(c.rivals.map((f) => String(f).toUpperCase()).join(' · '))} INVASION</span></span>` +
+                `<span class="galaxy-map-situation-sub">${front ? front + ' FRONTLINE PLANET' + (front === 1 ? '' : 'S') : 'RAIDS ON THE BORDER'}</span>` +
+                `</div>`;
+        }
+        return `<div class="galaxy-map-situation is-calm">` +
+            `<span class="galaxy-map-situation-kind">NO ACTIVE MISSION</span>` +
+            `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
+            `</div>`;
     }
 
     planetIconHtml(planetId, size) {

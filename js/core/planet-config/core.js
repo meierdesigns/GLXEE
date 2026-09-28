@@ -136,7 +136,7 @@ class PlanetConfigManager {
                 id: 'void_reach',
                 name: 'VOID REACH',
                 faction: 'voidborn',
-                baseColor: '#5B2C8A',
+                baseColor: '#7B2E86',
                 planetIds: [],
                 map: this.createDefaultGalaxyMap('void_reach')
             },
@@ -186,7 +186,7 @@ class PlanetConfigManager {
                 iconStyle: 'cragged'
             },
             voidborn: {
-                baseColor: '#5B2C8A',
+                baseColor: '#7B2E86',
                 patterns: ['neptune_deep', 'neptune_storms', 'neptune_ice', 'dots', 'grid'],
                 names: ['VOID NEST', 'ECHO HOLLOW', 'NULL RING', 'SHADE GATE', 'DRIFT TOMB', 'ABYSS KEY'],
                 enemyPool: ['enemyBoss', 'battleship', 'cruiser', 'enemyFast'],

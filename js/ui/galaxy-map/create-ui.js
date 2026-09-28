@@ -37,6 +37,7 @@ extendClass(GalaxyMapManager, {
         this.overlay.className = embedded ? 'galaxy-map-embedded' : 'galaxy-map-overlay';
         if (embedded) {
             this.overlay.innerHTML = `
+                ${this.renderGalaxyRulerBadge()}
                 <div class="galaxy-map-toolbar">
                     <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                     <div class="galaxy-map-progress-bar">${progressLabel}</div>
@@ -48,9 +49,6 @@ extendClass(GalaxyMapManager, {
                 </div>
                 ${panelsHtml}
                 ${exploreUi}
-                <div class="galaxy-map-actions gm-actions-row" id="gmActions">
-                    ${this.renderConfirmActionsHtml(this.getPlanetInfo(this.selectedPlanetId))}
-                </div>
                 <div class="galaxy-map-instructions">
                     ${instructions}
                     ${this.statusMsg ? `<p class="gm-status-msg">${this.statusMsg}</p>` : ''}
@@ -59,6 +57,7 @@ extendClass(GalaxyMapManager, {
         } else {
             this.overlay.innerHTML = `
                 <div class="galaxy-map-content">
+                    ${this.renderGalaxyRulerBadge()}
                     <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                     <div class="galaxy-map-progress-bar">${progressLabel}</div>
                     ${emptyHint}
@@ -67,10 +66,7 @@ extendClass(GalaxyMapManager, {
                     </div>
                     ${panelsHtml}
                     ${exploreUi}
-                    <div class="galaxy-map-actions gm-actions-row" id="gmActions">
-                        ${this.renderConfirmActionsHtml(this.getPlanetInfo(this.selectedPlanetId))}
-                        ${backBtn}
-                    </div>
+                    ${backBtn ? `<div class="galaxy-map-actions gm-actions-row">${backBtn}</div>` : ''}
                     <div class="galaxy-map-instructions">
                         ${instructions}
                         ${this.statusMsg ? `<p class="gm-status-msg">${this.statusMsg}</p>` : ''}
@@ -82,6 +78,7 @@ extendClass(GalaxyMapManager, {
         if (mountEl) {
             mountEl.appendChild(this.overlay);
             this.overlay.classList.toggle('is-input-active', this._inputActive);
+            this.overlay.classList.toggle('is-picked', !!this._picked);
             mountEl.classList.toggle('is-map-active', this._inputActive);
         } else {
             document.body.appendChild(this.overlay);
@@ -190,16 +187,19 @@ extendClass(GalaxyMapManager, {
                 <div class="galaxy-map-panel galaxy-map-panel-select">
                     <div class="gm-sector-planet-col">
                         <div class="gm-sector-heading">
-                            <span class="gm-panel-label">SECTOR</span>
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
                         </div>
-                        <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}</div>
+                        <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
                     </div>
                     <div class="gm-detail">
                         <div class="stat-row"><span class="stat-label" id="gmDiffLabel">Difficulty</span><span class="stat-value" id="gmDiff">${diff}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmStagesLabel">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmEnemiesLabel">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmStatusLabel">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
+                        <!-- Start / continue / fly / dock live inside the planet card. -->
+                        <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
+                            ${this.renderConfirmActionsHtml(info)}
+                        </div>
                     </div>
                 </div>
                 <div class="galaxy-map-panel galaxy-map-panel-ship">

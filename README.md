@@ -122,6 +122,18 @@ The Home Station Factions area has three focused views:
 Contracts pay credits and materials when the target planet stage is cleared and
 raise reputation with the issuing faction.
 
+### Galactic control
+
+Each galaxy has a faction ruler, a hidden base, and a faction-specific expansion
+pattern. Flights and cleared battles advance the control simulation:
+
+- factions found outposts, war camps, sanctums, hideouts, or relays;
+- holdings add defenders and faction-specific parts to their trading stations;
+- stations can be raided, and destroying every station exposes the base;
+- destroying the base changes a held galaxy to contested control;
+- a new profile begins with a seeded home-galaxy invasion that can be repelled
+  for an opening reward.
+
 ## Home Station and hangar
 
 The station is the progression hub:
@@ -177,8 +189,13 @@ sprites where segmented rendering would distort a faction silhouette.
 - Home Station progression: shop, craft, upgrade, hangar, travel, missions, and archives.
 - Persistent profile progression with resources, credits, discoveries, missions, and loadouts.
 - Four upgradeable hull areas plus individual S/M/L slot upgrades.
+- Weapon slots can be purchased per ship, mounted in the nose, core, or wings,
+  and protected from overlapping through bounded drag placement.
 - Drag-and-drop hangar Parts workspace and movable weapon sockets.
 - Mirrored wing placement, faction weapon mounts, visual module integration, and cosmetic skins.
+- Faction-specific weapon mount art and full-sprite fallback rendering for
+  procedural ships.
+- Resizable station sidebars with remembered widths and responsive hangar panels.
 - Procedural planet SVGs, parallax station decks, palette editors, and global look persistence.
 - Combat events, champion escorts, patterned obstacles, pickups, loot, and Web Audio SFX.
 - Optional YouTube soundtrack / beat-sync layer.
@@ -244,6 +261,9 @@ be reviewed or reverted independently.
 | 43A | Loadout integration | Slot sizes, weapon mounts, ability integration, faction hull builders |
 | 43B | Missions and relations | Mission board, faction reputation, contracts, bounty hunts, trade terms |
 | 43C | Station mission UI | Missions, faction relations, faction trade, contract tabs, hangar slot bar |
+| 44A | Galactic control | Faction holdings, expanding stations, base raids, invasions, contested galaxies |
+| 44B | Combat presentation | Weapon slot purchases, bounded mounts, full-sprite weapons, collision-safe placement |
+| 44C | Station UX | Resizable sidebars, hangar layout polish, profile flow, palette and menu refinements |
 
 The wave commit convention is:
 

@@ -41,7 +41,7 @@ extendClass(HangarTestArena, {
         this.sim = {
             player: {
                 x: (this.W - pw) / 2,
-                y: this.H - ph - 24,
+                y: this.H - (this.HUD_H || 0) - ph - 8,
                 width: pw,
                 height: ph,
                 speed: stats.speed,
@@ -133,7 +133,7 @@ extendClass(HangarTestArena, {
         p.energyStats = stats.energyStats;
         p.invuln = 1500;
         p.x = (this.W - p.width) / 2;
-        p.y = this.H - p.height - 24;
+        p.y = this.H - (this.HUD_H || 0) - p.height - 8;
         this._respawnMs = 0;
         if (this.sim) {
             this.sim.enemyBullets = [];

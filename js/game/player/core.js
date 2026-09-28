@@ -42,6 +42,9 @@ class PlayerManager {
 
     update(keys, deltaTime = 16.67) {
         const dt = deltaTime / 1000;
+        // Pixel hit mask (set-ship-model.js): built once the art is loaded,
+        // rebuilt when ship / size change; a cheap key check otherwise.
+        if (this.refreshPlayerHitMask) this.refreshPlayerHitMask();
 
         // Energy regen net of idle draw (idle pauses when offline / empty)
         if (this.maxEnergy > 0) {
@@ -100,25 +103,26 @@ class PlayerManager {
             // The ship's centre (its guns) may reach either edge, so enemies
             // bouncing along the walls stay hittable.
             const halfW = this.player.width / 2;
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+            // Arrow keys only: A / S / D fire assigned weapon groups.
+            if (keys['ArrowLeft']) {
                 this.player.x = Math.max(-halfW, this.player.x - moveSpeed);
             }
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+            if (keys['ArrowRight']) {
                 this.player.x = Math.min(canvasWidth - halfW, this.player.x + moveSpeed);
             }
         } else {
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+            if (keys['ArrowLeft']) {
                 this.player.x = Math.max(0, this.player.x - moveSpeed);
             }
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+            if (keys['ArrowRight']) {
                 this.player.x = Math.min(200 - this.player.width, this.player.x + moveSpeed);
             }
         }
 
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+        if (keys['ArrowUp']) {
             this.player.y = Math.max(this.player.minY, this.player.y - moveSpeed);
         }
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+        if (keys['ArrowDown']) {
             this.player.y = Math.min(this.player.maxY, this.player.y + moveSpeed);
         }
 

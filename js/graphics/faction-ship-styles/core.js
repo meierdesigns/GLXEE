@@ -69,9 +69,9 @@ class FactionShipStyles {
             },
             voidborn: {
                 id: 'voidborn',
-                hull: fromTheme('voidborn', '#5B2C8A'),
-                edge: '#2a1040',
-                accent: '#c090ff',
+                hull: fromTheme('voidborn', '#7B2E86'),
+                edge: '#3a1238',
+                accent: '#f09cff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
                 // Default wings sweep back (tips aft), never forward.
@@ -102,7 +102,8 @@ class FactionShipStyles {
                 silhouette: 'circuit',
                 // Forge drone: blocky, wide at every band.
                 anatomy: { front: { x: 1.2, y: 0.9 }, center: { x: 1.2, y: 1.1 }, back: { x: 1.2, y: 1 }, wing: { x: 1.1, y: 1.1 } },
-                defaultWeapons: ['ion'],
+                // Machine family (see getFactionWeaponAffinity): missile / pierce.
+                defaultWeapons: ['missile'],
                 prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels'
             }
         };

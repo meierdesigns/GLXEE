@@ -143,10 +143,17 @@ extendClass(EnemyManager, {
         const tier = (typeof factionShipStyles !== 'undefined' && factionShipStyles.classTier)
             ? (factionShipStyles.classTier[enemyClass] || 2)
             : 1;
+        // Fly-bys keep the faction of the scheduled entry they come from
+        // (else the level's main faction), not their ship type's default.
+        const poolEntry = (this.sideEnemyPool || []).find(e => e.type === type);
+        const levelMain = (this.levelFactions && this.levelFactions[0]) || null;
+        const faction = (poolEntry && poolEntry.faction)
+            || (levelMain && (this.levelFactions.indexOf(tax.faction) === -1) ? levelMain : tax.faction)
+            || 'pirate';
         return this.spawnScheduledNormal({
             id: 'legacy_' + Date.now(),
             type: type,
-            faction: tax.faction || 'pirate',
+            faction: faction,
             enemyClass: enemyClass,
             tier: tier,
             level: 1,

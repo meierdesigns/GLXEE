@@ -53,14 +53,15 @@ extendClass(HangarTestArena, {
             p.driveCharging = false;
         }
         const moveSpeed = p.speed * frame * moveMul;
-        if (this.keyDown('ArrowLeft') || this.keyDown('a')) p.x -= moveSpeed;
-        if (this.keyDown('ArrowRight') || this.keyDown('d')) p.x += moveSpeed;
-        if (this.keyDown('ArrowUp') || this.keyDown('w')) p.y -= moveSpeed;
-        if (this.keyDown('ArrowDown') || this.keyDown('s')) p.y += moveSpeed;
+        // Arrows only: A / S / D are weapon fire keys.
+        if (this.keyDown('ArrowLeft')) p.x -= moveSpeed;
+        if (this.keyDown('ArrowRight')) p.x += moveSpeed;
+        if (this.keyDown('ArrowUp')) p.y -= moveSpeed;
+        if (this.keyDown('ArrowDown')) p.y += moveSpeed;
 
         const minY = this.H * 0.33;
         p.x = Math.max(0, Math.min(this.W - p.width, p.x));
-        p.y = Math.max(minY, Math.min(this.H - p.height, p.y));
+        p.y = Math.max(minY, Math.min(this.H - (this.HUD_H || 0) - p.height, p.y));
 
         if (p.invuln > 0) p.invuln -= dtMs;
 
@@ -70,6 +71,8 @@ extendClass(HangarTestArena, {
         }
 
         p.cooldown = Math.max(0, p.cooldown - dtMs);
+        // Charge mode still charges on Space; auto fire goes per key through
+        // the game's own per-mount weapon logic (fireArenaKey).
         const space = this.keyDown(' ') || this.keyDown('Space');
         const systemsOnline = (p.maxEnergy || 0) > 0 && (p.energy || 0) > 0;
         if (p.fireMode === 'charge') {
@@ -94,20 +97,23 @@ extendClass(HangarTestArena, {
             } else if (!space && p.charging) {
                 this.releaseChargeShot();
             }
-        } else if (space && p.cooldown <= 0 && systemsOnline) {
-            const shotCost = p.shotEnergyCost || 0;
-            if (shotCost <= 0 || p.energy >= shotCost) {
-                if (shotCost > 0) p.energy -= shotCost;
-                p.cooldown = p.weaponCooldown;
-                this.fireBullet(p, p.weaponDamage, false);
-            }
+        } else if (systemsOnline) {
+            ['space', 'a', 's', 'd'].forEach((k) => {
+                const down = k === 'space' ? space : (this.keyDown(k) || this.keyDown(k.toUpperCase()));
+                if (down) this.fireArenaKey(p, k);
+            });
         }
 
         this.updateEnemies(dtMs, frame, true);
 
-        // Player bullets — straight up (same as bulletManager default path)
+        // Player bullets — up, or along their angle (spread shots), like bulletManager
         sim.bullets = sim.bullets.filter((b) => {
-            b.y -= b.speed * frame;
+            if (b.angle !== undefined) {
+                b.x += Math.sin(b.angle) * b.speed * frame;
+                b.y -= Math.cos(b.angle) * b.speed * frame;
+            } else {
+                b.y -= b.speed * frame;
+            }
             b.life -= dtMs;
             if (b.life <= 0 || b.y + b.h < 0 || b.x < 0 || b.x > this.W) return false;
             for (let i = sim.enemies.length - 1; i >= 0; i--) {
@@ -161,6 +167,81 @@ extendClass(HangarTestArena, {
         });
     },
 
+    /** Ship model with the hangar layout applied — what the game flies (mount positions, weaponKeys). */
+    getArenaFireModel() {
+        const base = this.sim && this.sim.player && this.sim.player.model;
+        if (!base) return null;
+        if (!this._arenaFireModel || this._arenaFireModelBase !== base) {
+            let m = Object.assign({}, base);
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+                shipLoadoutManager.applyLayoutToModel(m, this.shipId);
+            }
+            if (!m.weaponConfig && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip) {
+                m.weaponConfig = {};
+                (m.availableWeapons || []).forEach((id) => { m.weaponConfig[id] = weaponConfigManager.getDefaultsForShip(id); });
+            }
+            this._arenaFireModel = m;
+            this._arenaFireModelBase = base;
+        }
+        return this._arenaFireModel;
+    },
+
+    /** Detached BulletManager: per-mount cooldowns without touching the live game. */
+    getArenaBulletManager() {
+        if (!this._arenaBm) {
+            const bm = (typeof BulletManager !== 'undefined') ? Object.create(BulletManager.prototype) : null;
+            if (!bm) return null;
+            bm.bullets = [];
+            bm.enemyBullets = [];
+            bm.weaponCooldowns = {};
+            bm.muzzleFlashes = {};
+            bm.lastShotTime = 0;
+            this._arenaBm = bm;
+        }
+        return this._arenaBm;
+    },
+
+    /** Fire what `key` is bound to: every gun for the ALL key, else its assigned slots. */
+    fireArenaKey(p, key) {
+        const sim = this.sim;
+        const model = this.getArenaFireModel();
+        const bm = this.getArenaBulletManager();
+        const allKey = (model && model.loadout && model.loadout.allFireKey) || 'space';
+        const group = key === allKey ? 'all' : key;
+        const shotCost = p.shotEnergyCost || 0;
+        if ((p.maxEnergy || 0) > 0 && shotCost > 0 && p.energy < shotCost) return;
+        if (!model || !bm || !model.weaponConfig) {
+            // No weapon slots: the single centre gun on the ALL key.
+            if (group !== 'all' || p.cooldown > 0) return;
+            if (shotCost > 0) p.energy -= shotCost;
+            p.cooldown = p.weaponCooldown;
+            this.fireBullet(p, p.weaponDamage, false);
+            return;
+        }
+        bm.currentShipModel = model;
+        bm.currentWeapon = model.defaultWeapon || 'laser';
+        bm.bullets = [];
+        const fired = bm.shootWithShipWeapon(p, Date.now(), { fireKey: group });
+        if (!fired) return;
+        if (shotCost > 0) p.energy -= shotCost;
+        bm.bullets.forEach((b) => {
+            this._stats.shots += 1;
+            sim.bullets.push({
+                x: b.x,
+                y: b.y,
+                w: b.width,
+                h: b.height,
+                speed: b.speed,
+                angle: b.angle,
+                damage: b.damage != null ? b.damage : p.weaponDamage,
+                type: b.type,
+                weaponId: b.weaponId,
+                life: 2000
+            });
+        });
+        bm.bullets = [];
+    },
+
     updateEnemies(dtMs, frame, allowShoot) {
         const sim = this.sim;
         if (!sim) return;
@@ -189,8 +270,12 @@ extendClass(HangarTestArena, {
             e.shootAcc -= dtMs;
             if (e.shootAcc <= 0) {
                 e.shootAcc = e.shootInterval;
-                const bw = 3;
-                const bh = 12;
+                // Shot size of the enemy's weapon (same config as in game).
+                const wid = e.weaponId || (e.model && e.model.defaultWeapon) || 'laser';
+                const wc = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip)
+                    ? weaponConfigManager.getDefaultsForShip(wid) : null;
+                const bw = (wc && wc.width) || 2;
+                const bh = (wc && wc.height) || 8;
                 sim.enemyBullets.push({
                     x: e.x + e.width / 2 - bw / 2,
                     y: e.y + e.height,
@@ -198,6 +283,7 @@ extendClass(HangarTestArena, {
                     w: bw,
                     h: bh,
                     damage: e.damage,
+                    weaponId: wid,
                     life: 2500
                 });
             }

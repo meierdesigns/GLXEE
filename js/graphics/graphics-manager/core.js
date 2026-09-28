@@ -205,6 +205,52 @@ class GraphicsManager {
         } else if (this.shipModels) {
             this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         }
+        this.drawEnemyGun(ctx, enemy);
+    }
+
+    /**
+     * The enemy's weapon on its hull: same per-weapon gun art as the player's,
+     * in the enemy faction's colours, muzzle pointing down at the bottom
+     * centre where its shots spawn (bulletManager.enemyShoot).
+     */
+    drawEnemyGun(ctx, enemy) {
+        const loader = this.shipAssetLoader;
+        if (!loader || !loader.getWeaponTemplate || typeof bulletManager === 'undefined'
+            || !bulletManager.getEnemyWeaponId) return;
+        const weaponId = bulletManager.getEnemyWeaponId(enemy);
+        const style = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+            ? factionShipStyles.getFactionStyle(enemy.faction || 'pirate') : null;
+        // Same generated gun and faction shade ramp as ships in the hangar,
+        // at its S/M/L size on the player's scale (one grid cell = one px).
+        const gunW = bulletManager.getEnemyGunWidth(enemy);
+        const cols = Math.max(4, Math.round(gunW));
+        const rows = Math.max(8, Math.round(cols * 2.2));
+        const tpl = loader.generateWeaponGrid
+            ? loader.generateWeaponGrid(weaponId, cols, rows)
+            : loader.getWeaponTemplate(weaponId, style, false);
+        if (!tpl || !tpl.length) return;
+        const ramp = loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, weaponId) : null;
+        const px = 1;
+        const gw = cols * px;
+        const gh = rows * px;
+        const gx = Math.round(enemy.x + enemy.width / 2 - gw / 2);
+        // Breech tucked under the hull, barrel sticking out below it.
+        const gy = Math.round(enemy.y + enemy.height - gh * 0.45);
+        ctx.save();
+        for (let r = 0; r < tpl.length; r++) {
+            for (let c = 0; c < tpl[r].length; c++) {
+                const idx = tpl[r][c];
+                if (!idx) continue;
+                const color = (ramp && ramp[idx])
+                    || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
+                    || (loader.getHullMountShade && loader.getHullMountShade(idx));
+                if (!color) continue;
+                ctx.fillStyle = color;
+                // Flip vertically: template muzzle is at the top, enemy guns face down.
+                ctx.fillRect(gx + c * px, gy + (tpl.length - 1 - r) * px, px, px);
+            }
+        }
+        ctx.restore();
 
     }
 

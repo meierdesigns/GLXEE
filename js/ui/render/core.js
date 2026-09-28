@@ -316,6 +316,7 @@ class RenderManager {
         // Player + HUD on top (always visible)
         if (player) {
             graphicsManager.renderPlayerShip(ctx, player, 1);
+            if (bulletManager.drawMuzzleFlashes) bulletManager.drawMuzzleFlashes(ctx, player);
             if (playerManager.shieldMax > 0 && playerManager.shield > 0
                 && graphicsManager.drawShieldHull) {
                 const threat = this.getShieldThreatProximity(player);

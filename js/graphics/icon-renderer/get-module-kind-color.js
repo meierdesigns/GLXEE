@@ -120,6 +120,16 @@ extendClass(IconRenderer, {
         if (!Number.isFinite(dpr) || dpr < 1) dpr = 1;
         const scale = Math.max(2, Math.ceil(dpr));
         const canvasSize = logical * scale;
+        if (!png) {
+            // Procedural sprites: emit SVG so the browser rasterizes at the final size (no blur).
+            const svgKey = key + '|svg|' + (tint || '') + (raw ? '|raw' : ('|ic' + Math.round(ic) + '|ib' + Math.round(ib) + '|is' + Math.round(is)));
+            if (this._cache[svgKey]) return { url: this._cache[svgKey], cssSize: logical };
+            const sprite = this.getSprite(key);
+            if (!sprite) return { url: '', cssSize: logical };
+            const svgUrl = this.spriteToSvgUrl(sprite, tint, raw ? false : ic, raw ? false : ib, raw ? false : is);
+            this._cache[svgKey] = svgUrl;
+            return { url: svgUrl, cssSize: logical };
+        }
         const cacheKey = key + '|' + canvasSize + '|' + (tint || '') + (raw ? '|raw' : ('|ic' + Math.round(ic) + '|ib' + Math.round(ib) + '|is' + Math.round(is))) + (png ? '|png' : '') + '|nn2';
         if (this._cache[cacheKey]) return { url: this._cache[cacheKey], cssSize: logical };
         const canvas = document.createElement('canvas');
@@ -168,5 +178,46 @@ extendClass(IconRenderer, {
         const size = Math.min(canvas.width, canvas.height);
         this.drawKey(ctx, key, 0, 0, size, tint, contrast, brightness, saturation);
         this.applyTip(canvas, key);
+    },
+
+    /** Icon key + UI tint for a weapon id (weapons share shot sprites, the tint tells them apart). */
+    weaponIconInfo(weaponId) {
+        const id = String(weaponId || 'laser');
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        const w = wcm && wcm.getWeapon ? wcm.getWeapon(id) : null;
+        const key = (w && w.iconKey) || ('shot' + id.charAt(0).toUpperCase() + id.slice(1));
+        const tint = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(id) : null;
+        const name = String((w && w.name) || id).toUpperCase();
+        return { key, tint, name };
+    },
+
+    /** HTML weapon icon: tinted per weapon and tilted 45° (see .ui-weapon-tilt). */
+    weaponImgHtml(weaponId, size, className, tipLabel) {
+        const info = this.weaponIconInfo(weaponId);
+        const tip = tipLabel === undefined ? info.name : tipLabel;
+        return `<span class="ui-weapon-tilt">${this.imgHtml(info.key, size, className, info.tint, tip)}</span>`;
+    },
+
+    /** Canvas weapon icon, same look as weaponImgHtml. */
+    drawWeapon(ctx, weaponId, x, y, size, tintOverride) {
+        const info = this.weaponIconInfo(weaponId);
+        const cx = x + size / 2;
+        const cy = y + size / 2;
+        // Rotated square must fit the box: shrink by 1/√2.
+        const inner = Math.max(8, Math.round(size / Math.SQRT2));
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.PI / 4);
+        this.drawKey(ctx, info.key, -inner / 2, -inner / 2, inner, tintOverride || info.tint);
+        ctx.restore();
+    },
+
+    drawWeaponToCanvas(canvas, weaponId) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        this.drawWeapon(ctx, weaponId, 0, 0, Math.min(canvas.width, canvas.height));
+        this.applyTip(canvas, this.weaponIconInfo(weaponId).key, this.weaponIconInfo(weaponId).name);
     },
 });

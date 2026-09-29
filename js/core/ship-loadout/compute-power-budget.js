@@ -30,7 +30,7 @@ extendClass(ShipLoadoutManager, {
             }
             return {
                 hasCore: hasCore,
-                gen: hasCore ? (12 + regenBonus) : 0
+                gen: hasCore ? (8 + regenBonus) : 0
             };
         })();
         const perModule = [];
@@ -96,7 +96,10 @@ extendClass(ShipLoadoutManager, {
         // Hold-Shift boost (no charge/burst/slowdown)
         let driveBoostMul = driveCharge ? 1.55 : 1;
         driveBoostMul += driveCharge ? output * 0.05 : 0;
-        let driveBoostDrainPerSec = driveCharge ? 22 : 0;
+        // Boost should be a tactical resource, not an almost-free permanent
+        // speed mode. Drive modules and output upgrades can still reduce the
+        // cost or increase the boost multiplier.
+        let driveBoostDrainPerSec = driveCharge ? 32 : 0;
         if (driveCharge && driveDampen) driveBoostDrainPerSec *= 0.7;
 
         return {
@@ -187,7 +190,10 @@ extendClass(ShipLoadoutManager, {
             return { ok: false, reason: 'NEED_CHARGE_DRIVE' };
         }
         const caps = this.getSlotCaps(shipId, this.resolveModelClass(shipId));
-        if (L[key].length >= caps[key]) {
+        const capacity = key === 'weapons' && this.weaponMountSlots
+            ? this.weaponMountSlots(caps.weapons)
+            : caps[key];
+        if (L[key].length >= capacity) {
             return { ok: false, reason: 'FULL', caps: caps };
         }
         return { ok: true, removing: false, caps: caps };

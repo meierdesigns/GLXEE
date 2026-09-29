@@ -176,7 +176,8 @@ extendClass(HomeStationUI, {
                 ? shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, id, slot.index) : { ok: true };
             if (!fit.ok) return 'TOO_BIG';
             const check = shipLoadoutManager.canInstallModule(this.hangarShipId, kind, id);
-            if (check.ok || check.removing || check.reason === 'FULL') return null;
+            if (check.ok || check.removing || check.reason === 'FULL'
+                || check.reason === 'TOO_BIG') return null;
             return check.reason || 'BLOCKED';
         };
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
@@ -214,7 +215,7 @@ extendClass(HomeStationUI, {
         const mirror = slot.mirrorNx != null;
         const mirrorVars = mirror ? `--pin-mx:${Math.round(slot.mirrorNx * 1000) / 1000};--pin-my:${Math.round(slot.mirrorNy * 1000) / 1000};` : '';
         return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}${mirror ? ' is-wing-pair' : ''}" data-slot-kind="${kind}" data-slot-size="${slotSize}" data-slot-index="${slot.index}" data-slot-side="${side}" data-slot-mount="${slot.mount || ''}" style="--pin-x:${pinX};--pin-y:${pinY};${mirrorVars}--rail-i:${railI};--rail-n:${railN};">` +
-            `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label}">` +
+            `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label} · SLOT SIZE ${slotSize}">` +
             `<span class="hs-hangar-slot-dot"></span>` +
             `</button>` +
             (mirror ? `<span class="hs-hangar-slot-pin is-mirror" aria-hidden="true"><span class="hs-hangar-slot-dot"></span></span>` : '') +

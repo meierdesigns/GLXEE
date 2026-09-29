@@ -111,18 +111,12 @@ extendClass(ShipLoadoutManager, {
         return res;
     };
 
-    // Hangar slots: no nose weapon slot while the nose is off.
+    // Keep the slot in the hangar's available-slot list when its area is
+    // disabled. The area disappears from the ship layout, but the slot must
+    // remain visible and reusable when the area is enabled again.
     const baseSlots = proto.buildHangarSlots;
     proto.buildHangarSlots = function (shipId, modelClass, model) {
         const res = baseSlots.call(this, shipId, modelClass, model);
-        const off = (res.loadout && res.loadout.disabledAreas) || {};
-        if (off.front || off.wing) {
-            res.slots = res.slots.filter((s) => {
-                if (s.kind !== 'weapon') return true;
-                const nose = Number(s.index) === 0;
-                return nose ? !off.front : !off.wing;
-            });
-        }
         return res;
     };
 
@@ -130,9 +124,22 @@ extendClass(ShipLoadoutManager, {
     const baseSet = proto.setSlotModule;
     proto.setSlotModule = function (shipId, kind, slotIndex, moduleId) {
         const nose = (Number(slotIndex) || 0) === 0;
-        if (moduleId && kind === 'weapon'
-            && !this.isAreaEnabled(shipId, nose ? 'front' : 'wing')) {
-            return { ok: false, reason: 'AREA_OFF', loadout: this.getLoadout(shipId) };
+        if (moduleId && kind === 'weapon') {
+            const loadout = this.getLoadout(shipId);
+            const mount = this.getStoredWeaponMount
+                ? this.getStoredWeaponMount(loadout, Number(slotIndex) || 0)
+                : null;
+            const mountArea = mount && String(mount.area || '').toLowerCase();
+            // When the nose is disabled, the remaining wing mount can be
+            // compacted to slot index 0 by the hangar UI.
+            const area = mountArea === 'center' ? 'center'
+                : (mountArea === 'front' ? 'front'
+                    : (mountArea === 'wing'
+                        ? 'wing'
+                        : (nose && this.isAreaEnabled(shipId, 'front') ? 'front' : 'wing')));
+            if (area !== 'center' && !this.isAreaEnabled(shipId, area)) {
+                return { ok: false, reason: 'AREA_OFF', loadout: loadout };
+            }
         }
         return baseSet.call(this, shipId, kind, slotIndex, moduleId);
     };

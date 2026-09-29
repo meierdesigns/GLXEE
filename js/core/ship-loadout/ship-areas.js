@@ -126,7 +126,14 @@ extendClass(ShipLoadoutManager, {
     /** Does this part fit this ship's slots of its kind? */
     partFitsSlot(shipId, kind, moduleId, index) {
         const need = this.getPartSizeLevel(kind, moduleId);
-        const have = this.getSlotSizeLevel(shipId, kind, index);
+        let have = this.getSlotSizeLevel(shipId, kind, index);
+        // A split weapon mount represents two mirrored sockets. Its displayed
+        // mount size is the size of the complete mount, not the half-width
+        // geometry of either mirrored socket.
+        if (kind === 'weapon' && need <= 1 && this.isSplitSlot
+            && this.isSplitSlot(shipId, kind, index)) {
+            have = Math.max(have, 1);
+        }
         return { ok: need <= have, need: need, have: have };
     },
 });

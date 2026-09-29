@@ -489,8 +489,9 @@ textarea,
 .font-menu-preview {
     text-align: center;
     margin: 0 0 16px;
-    display: flex;
-    flex-direction: column;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
+    grid-auto-flow: row;
     gap: 6px;
 }
 
@@ -7640,11 +7641,35 @@ body.pe-resizing * {
 }
 .gm-node {
     cursor: pointer;
+    pointer-events: all;
+}
+.gm-node .gm-selection-frame,
+.gm-node .gm-base-marker,
+.gm-node .gm-cleared-ring,
+.gm-node .gm-cleared-badge,
+.gm-node .gm-node-factions,
+.gm-node .gm-invasion-marker {
+    pointer-events: none;
 }
 .gm-node.locked {
     opacity: 1;
     /* Unreachable, like closed trading posts. */
     cursor: not-allowed;
+}
+.gm-locked-label {
+    fill: #ff9b54;
+    font: bold 9px monospace;
+    letter-spacing: 1px;
+    paint-order: stroke;
+    stroke: #050508;
+    stroke-width: 3px;
+    text-anchor: middle;
+}
+.gm-unlock-hint {
+    margin-top: 8px;
+    color: #ff9b54;
+    font: bold 11px monospace;
+    letter-spacing: 1px;
 }
 .gm-node.locked.selected,
 .gm-node.locked.hovered {
@@ -9340,8 +9365,8 @@ button.hs-tab.active.nav-focused {
     width: 100%;
     min-height: 0;
     height: auto;
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
     gap: 8px;
     padding: 10px 12px;
     box-sizing: border-box;
@@ -9353,37 +9378,162 @@ button.hs-tab.active.nav-focused {
     opacity: 0.72;
     transition: opacity 0.15s ease;
 }
+.galaxy-map-embedded > .galaxy-map-area,
+.galaxy-map-embedded > .galaxy-map-panels,
+.galaxy-map-embedded > .galaxy-map-explore,
+.galaxy-map-embedded > .galaxy-map-instructions {
+    position: relative;
+    width: 100%;
+    grid-column: auto;
+    grid-row: auto;
+}
+.galaxy-map-embedded .galaxy-map-ruler {
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: start;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(60%, 640px);
+    min-width: 0;
+    flex-direction: initial;
+    justify-content: flex-end;
+    align-items: stretch;
+    gap: 8px;
+    pointer-events: none;
+}
+.galaxy-map-embedded .galaxy-map-ruler-card,
+.galaxy-map-embedded .galaxy-map-situation {
+    min-width: 0;
+    width: 100%;
+}
+.galaxy-map-embedded .galaxy-map-ruler-card {
+    grid-column: 1;
+}
+.galaxy-map-embedded .galaxy-map-situation {
+    grid-column: 2;
+    min-width: 0;
+}
+.galaxy-map-embedded .galaxy-map-ruler-card {
+    padding: 8px 12px;
+}
+.galaxy-map-embedded .galaxy-map-situation {
+    justify-content: center;
+    padding: 8px 12px;
+}
 .galaxy-map-embedded.is-input-active {
     opacity: 1;
 }
 .galaxy-map-embedded .galaxy-map-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    margin-left: 0 !important;
+    min-width: 0;
+    width: 100%;
+    padding-right: 0;
+    box-sizing: border-box;
     flex: 0 0 auto;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: baseline;
-    justify-content: space-between;
+    justify-content: stretch;
     gap: 8px 16px;
+}
+.galaxy-map-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
+    align-items: start;
+}
+.galaxy-map-embedded > .galaxy-map-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+.galaxy-map-header .galaxy-map-toolbar {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+}
+.galaxy-map-header > .galaxy-map-title {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    white-space: nowrap;
+    text-align: left;
+    justify-self: start;
+}
+.galaxy-map-header > .galaxy-map-progress-bar {
+    grid-column: 2 !important;
+    grid-row: 1;
+    align-self: end;
+    justify-self: end;
+    margin: 0;
+}
+.galaxy-map-header .galaxy-map-ruler {
+    position: static;
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    max-width: 640px;
+    justify-self: start;
+}
+.galaxy-map-header .galaxy-map-ruler-card,
+.galaxy-map-header .galaxy-map-situation {
+    flex: 1 1 0;
+}
+.galaxy-map-content .galaxy-map-header {
+    margin-bottom: 8px;
 }
 .galaxy-map-embedded .galaxy-map-title {
     margin: 0;
     text-align: left;
+    justify-self: start;
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    grid-column: 1 / -1;
+    white-space: nowrap;
+    font-size: clamp(13px, 1.45vw, 22px);
     font-size: calc(var(--font-h1, 2rem) * 0.7);
     letter-spacing: 3px;
 }
 .galaxy-map-embedded .galaxy-map-progress-bar {
     margin: 0;
+    grid-column: 1;
 }
 .galaxy-map-embedded .galaxy-map-area {
+    grid-column: 1 / -1;
+    grid-row: 3;
     flex: 0 1 auto;
     min-height: 160px;
     height: min(34vh, 280px);
     margin-bottom: 0;
 }
+@media (max-width: 720px) {
+    .galaxy-map-embedded {
+        grid-template-columns: 1fr;
+    }
+    .galaxy-map-embedded .galaxy-map-toolbar,
+    .galaxy-map-embedded .galaxy-map-ruler {
+        grid-column: 1;
+    }
+    .galaxy-map-embedded .galaxy-map-ruler {
+        grid-row: 2;
+    }
+    .galaxy-map-embedded .galaxy-map-area {
+        grid-row: 3;
+    }
+}
 .galaxy-map-embedded .galaxy-map-panels {
+    grid-column: 1 / -1;
+    grid-row: 4;
     flex: 0 0 auto;
     margin: 0;
 }
 .galaxy-map-embedded .galaxy-map-actions {
+    grid-column: 1 / -1;
     flex: 0 0 auto;
     margin-top: 4px;
     min-height: 0;
@@ -14925,6 +15075,15 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     stroke-width: 1.5;
     filter: drop-shadow(0 0 3px var(--color-primary));
 }
+.gm-ship-location-label {
+    fill: var(--color-primary, #ff9b54);
+    font: bold 9px monospace;
+    letter-spacing: 1px;
+    paint-order: stroke;
+    stroke: #050508;
+    stroke-width: 3px;
+    text-anchor: middle;
+}
 
 /* Explorations: every entry listed with its discovered count; empty dimmed. */
 .hs-explore-item .hs-explore-count {
@@ -17386,11 +17545,23 @@ button.hs-faction-card.nav-focused {
 
 /* Planet map toolbar: jump to galaxy travel. */
 .galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
-    margin-left: 12px;
-    padding: 6px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-left: 0;
+    grid-column: 2;
+    padding: 11px 26px;
     min-height: 0;
-    font-size: 13px;
+    font-size: 16px;
     letter-spacing: 2px;
+    flex: 0 0 auto;
+}
+.gm-teleport-icon {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
     flex: 0 0 auto;
 }
 
@@ -18315,6 +18486,31 @@ button.hs-faction-card.nav-focused {
     display: none;
 }
 
+/* Keep the station navigation usable at tablet/desktop widths where the
+   pilot card and the full area row do not fit beside each other. */
+@media (max-width: 1100px) {
+    .home-station-content {
+        box-sizing: border-box;
+    }
+
+    .hs-header-split {
+        flex-direction: column;
+    }
+
+    .hs-pilot-card {
+        max-width: none;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .hs-header-main,
+    .hs-header-main .hs-topbar,
+    .hs-header-main .hs-subnav {
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
 /* Enemy HUD rows: no frames — use the space for portrait, name and bar. */
 .enemy-vitals-side .health-bar.enemy-health,
 .enemy-vitals-side .health-bar.enemy-health.is-champion {
@@ -18619,8 +18815,8 @@ button.hs-faction-card.nav-focused {
 }
 .galaxy-map-situation-emblem {
     display: inline-flex;
-    width: 24px;
-    height: 24px;
+    width: 14px;
+    height: 14px;
     flex: 0 0 auto;
 }
 .galaxy-map-situation-emblem > * {
@@ -18632,11 +18828,19 @@ button.hs-faction-card.nav-focused {
 }
 
 /* Faction holdings on the galaxy map: base planet + faction stations. */
-.gm-base-marker .gm-base-ring {
+.gm-base-marker .gm-base-graphic rect {
+    fill: color-mix(in srgb, var(--fac) 35%, #181818);
+    stroke: color-mix(in srgb, var(--fac) 70%, #555);
+    stroke-width: .8;
+    shape-rendering: crispEdges;
+}
+.gm-base-marker .gm-base-graphic .gm-base-core {
+    fill: color-mix(in srgb, var(--fac) 80%, #fff);
+}
+.gm-base-marker .gm-base-graphic .gm-base-outline {
     fill: none;
-    stroke: var(--fac);
+    stroke: #17120d;
     stroke-width: 2;
-    stroke-dasharray: 6 4;
 }
 .gm-base-marker .gm-base-label {
     fill: var(--fac);
@@ -18646,9 +18850,7 @@ button.hs-faction-card.nav-focused {
     text-anchor: middle;
 }
 .gm-post-node.is-faction .gm-faction-station-ring {
-    fill: color-mix(in srgb, var(--fac) 18%, transparent);
-    stroke: var(--fac);
-    stroke-width: 2;
+    display: none;
 }
 .galaxy-map-ruler-holdings {
     font-size: 10px;
@@ -19397,7 +19599,7 @@ details.settings-section[open] > .settings-section-list {
 .gm-node-factions {
     justify-content: center;
     align-items: flex-end;
-    gap: 3px;
+    gap: 8px;
     width: 100%;
     height: 100%;
     font-size: 9px;

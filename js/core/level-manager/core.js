@@ -35,7 +35,7 @@ class CoreLevelManager {
                 ],
                 obstacleSpawnRate: 1000,
                 background: 'mars',
-                bossEnemyType: 'enemyBoss'
+                bossEnemyType: 'battleship'
             },
             jupiter: {
                 id: 'jupiter',
@@ -52,7 +52,7 @@ class CoreLevelManager {
                 ],
                 obstacleSpawnRate: 800,
                 background: 'jupiter',
-                bossEnemyType: 'enemyBoss'
+                bossEnemyType: 'cruiser'
             },
             saturn: {
                 id: 'saturn',
@@ -69,7 +69,7 @@ class CoreLevelManager {
                 ],
                 obstacleSpawnRate: 600,
                 background: 'saturn',
-                bossEnemyType: 'enemyBoss'
+                bossEnemyType: 'enemyHeavy'
             },
             neptune: {
                 id: 'neptune',
@@ -86,7 +86,7 @@ class CoreLevelManager {
                 ],
                 obstacleSpawnRate: 500,
                 background: 'neptune',
-                bossEnemyType: 'enemyBoss'
+                bossEnemyType: 'enemyFast'
             },
             pluto: {
                 id: 'pluto',

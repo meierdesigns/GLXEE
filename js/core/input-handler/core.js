@@ -66,6 +66,47 @@ class InputHandler {
             }
         }
 
+        // Victory and game-over screens must receive the initial key directly.
+        // The generic overlay guard below would otherwise consume it first.
+        const gameOverOverlay = document.getElementById('gameOver');
+        if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) {
+            if (typeof uiManager !== 'undefined') uiManager.handleGameOverInput(event);
+            return;
+        }
+
+        const victoryOverlay = document.getElementById('victoryOverlay');
+        if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) {
+            if (typeof uiManager !== 'undefined') uiManager.handleVictoryInput(event);
+            return;
+        }
+
+        // Generic modal navigation: every modal exposing data-nav-item can be
+        // navigated without requiring a mouse click first.
+        const modal = (event.target && event.target.closest
+            ? event.target.closest('.gm-ambush, [role="dialog"], .modal, .hs-res-buy-modal')
+            : null) || document.querySelector(
+                '.gm-ambush, [role="dialog"]:not(.hidden), .modal:not(.hidden), .hs-res-buy-modal'
+            );
+        if (modal && !modal.classList.contains('hidden')) {
+            const items = Array.from(modal.querySelectorAll(
+                '[data-nav-item]:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter((el, i, list) => list.indexOf(el) === i);
+            if (items.length && (event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+                || event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault();
+                const current = document.activeElement;
+                let index = items.indexOf(current);
+                if (index < 0) index = 0;
+                const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+                const step = (event.key === 'ArrowLeft' || event.key === 'ArrowUp') ? -1 : 1;
+                const next = horizontal || items.length < 3
+                    ? (index + step + items.length) % items.length
+                    : Math.max(0, Math.min(items.length - 1, index + step));
+                items[next].focus();
+                return;
+            }
+        }
+
         // Any other menu / archive / station overlay owns input (not ship)
         if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) {
             if (typeof startScreenManager === 'undefined' || !startScreenManager.isVisible()) {
@@ -97,24 +138,6 @@ class InputHandler {
         if (typeof planetSelectionManager !== 'undefined' && planetSelectionManager.isVisible) {
             planetSelectionManager.handleKeyDown(event);
             return; // Planet selection consumed the key
-        }
-
-        // Handle game over screen
-        const gameOverOverlay = document.getElementById('gameOver');
-        if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) {
-            if (typeof uiManager !== 'undefined') {
-                uiManager.handleGameOverInput(event);
-            }
-            return; // Game over consumed the key
-        }
-
-        // Handle victory screen
-        const victoryOverlay = document.getElementById('victoryOverlay');
-        if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) {
-            if (typeof uiManager !== 'undefined') {
-                uiManager.handleVictoryInput(event);
-            }
-            return; // Victory screen consumed the key
         }
 
         // Handle ESC key for pause/unpause and settings close

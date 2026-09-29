@@ -54,6 +54,10 @@ extendClass(LevelInfoManager, {
                     const daily = this.getDailyBits();
                     dailyVal.textContent = daily.active ? daily.progress : '—';
                 }
+                if (this.levelData) {
+                    this.levelData.resources = this.collectRunResources();
+                    this.updateDisplay();
+                }
             }
         }, 1000);
     },
@@ -101,6 +105,22 @@ extendClass(LevelInfoManager, {
         });
     },
 
+    collectRunResources() {
+        const bag = (typeof pickupManager !== 'undefined' && pickupManager.collectedThisRun)
+            ? pickupManager.collectedThisRun
+            : {};
+        const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds)
+            ? economyConfig.resourceIds
+            : Object.keys(bag);
+        return ids.filter((id) => (Number(bag[id]) || 0) > 0).map((id) => ({
+            id: id,
+            name: (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
+                ? economyConfig.getResourceLabel(id)
+                : String(id).toUpperCase(),
+            amount: Number(bag[id]) || 0
+        }));
+    },
+
     collectLevelData() {
         const levelData = {
             name: 'MARS — STAGE 1/3',
@@ -115,7 +135,8 @@ extendClass(LevelInfoManager, {
             playerSpeed: '1.0',
             playerMaxHealth: '100',
             currentWeapon: 'Laser',
-            weapons: []
+            weapons: [],
+            resources: []
         };
 
         const coreLM = (typeof game !== 'undefined' && (game.coreLevelManager || game.levelManager))
@@ -141,6 +162,7 @@ extendClass(LevelInfoManager, {
         // types and the weapons equipped on the flying ship.
         levelData.obstacles = this.collectPlanetObstacles(levelData.planetId);
         levelData.weapons = this.collectEquippedWeapons();
+        levelData.resources = this.collectRunResources();
 
         if (typeof enemyManager !== 'undefined' && enemyManager.getEnemy()) {
             const enemy = enemyManager.getEnemy();

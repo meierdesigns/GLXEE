@@ -151,7 +151,12 @@ extendClass(BulletManager, {
         const lv = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getPartSizeLevel)
             ? shipLoadoutManager.getPartSizeLevel('weapon', id) : 0;
         const cs = (typeof game !== 'undefined' && game && game.contentScale) ? Number(game.contentScale) || 1 : 1;
-        return [3, 4.5, 6][Math.max(0, Math.min(2, lv))] * cs;
+        const base = [3, 4.5, 6][Math.max(0, Math.min(2, lv))] * cs;
+        // Side craft use the same visual scale as their hull. This keeps guns
+        // and shots from reading larger than the ship carrying them.
+        const scale = enemy && enemy.weaponScale != null
+            ? Math.max(0.45, Math.min(1, Number(enemy.weaponScale) || 1)) : 1;
+        return base * scale;
     },
 
     enemyShoot(enemy) {
@@ -214,6 +219,12 @@ extendClass(BulletManager, {
         }
 
         const cfg = Object.assign({}, weaponConfig);
+        const sideScale = enemy && enemy.weaponScale != null
+            ? Math.max(0.45, Math.min(1, Number(enemy.weaponScale) || 1)) : 1;
+        if (enemy && enemy.isSideEnemy) {
+            if (cfg.width != null) cfg.width *= sideScale;
+            if (cfg.height != null) cfg.height *= sideScale;
+        }
         const damageMul = enemy && enemy.damageMul != null ? enemy.damageMul : 1;
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
         if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
@@ -234,7 +245,7 @@ extendClass(BulletManager, {
             x: enemy.x + enemy.width / 2 - 1.5,
             y: enemy.y + enemy.height,
             width: 2,
-            height: 8,
+            height: enemy && enemy.isSideEnemy ? Math.max(3, 8 * (enemy.weaponScale || 1)) : 8,
             speed: 2.5,
             damage: Math.max(1, Math.round(8 * (
                 enemy && enemy.damageMul != null ? enemy.damageMul : 1

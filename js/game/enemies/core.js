@@ -27,7 +27,7 @@ class EnemyManager {
         this.sideEnemyPool = [];
         this.sideEnemySpawnTimer = 0;
         this.sideEnemySpawnInterval = 8000;
-        this.sideEnemyCap = 5;
+        this.sideEnemyCap = 3;
         this.schedule = [];
         this.scheduleElapsedMs = 0;
         this.levelMods = { enemySpeed: 1, enemyHealth: 100, isBoss: false, planetId: 'mars' };
@@ -182,7 +182,8 @@ class EnemyManager {
         }));
         if (typeof difficultyConfigManager !== 'undefined') {
             const profile = difficultyConfigManager.getProfile();
-            this.sideEnemyCap = Math.max(1, Math.round(profile.enemyMaxActive * profile.enemyCountMul));
+            this.sideEnemyCap = Math.max(1, Math.min(3,
+                Math.round(profile.enemyMaxActive * profile.enemyCountMul)));
             if (profile.enemyCountMul < 1) {
                 const normalEntries = this.schedule.filter(e => !e.champion);
                 normalEntries.slice(Math.max(1, Math.ceil(normalEntries.length * profile.enemyCountMul)))
@@ -261,8 +262,10 @@ class EnemyManager {
         const preferredSide = (i % 2 === 0) ? -1 : 1;
         const side = Math.random() < 0.72 ? preferredSide : -preferredSide;
         const rank = Math.floor(i / 2);
-        const distX = 14 + rank * 10 + Math.random() * 24;
-        const distY = 6 + rank * 8 + Math.random() * 22;
+        // Keep escorts clearly separated from the champion and from each
+        // other; the rendered ship sprites are larger than their hitboxes.
+        const distX = 30 + rank * 22 + Math.random() * 20;
+        const distY = 24 + rank * 18 + Math.random() * 18;
         const ySign = Math.random() < 0.5 ? -1 : 1;
         return {
             x: side * distX,

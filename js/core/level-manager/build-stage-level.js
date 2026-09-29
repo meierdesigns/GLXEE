@@ -6,7 +6,8 @@ extendClass(CoreLevelManager, {
         const base = this.getPlanetBase(parsed.planetId);
         if (!base) return null;
 
-        const stageCount = this.stagesPerPlanet;
+        const isAmbush = String(parsed.planetId || '').indexOf('ambush_') === 0;
+        const stageCount = isAmbush ? 1 : this.stagesPerPlanet;
         const stageMult = parsed.isBoss
             ? 1.0 + stageCount * 0.35
             : 0.75 + (parsed.stageIndex - 1) * 0.2;
@@ -15,7 +16,9 @@ extendClass(CoreLevelManager, {
         const speedMult = parsed.isBoss ? 1.25 : (0.9 + (parsed.stageIndex - 1) * 0.12);
         const spawnMult = parsed.isBoss ? 0.7 : (1.15 - (parsed.stageIndex - 1) * 0.12);
 
-        const stageLabel = parsed.isBoss
+        const stageLabel = isAmbush
+            ? 'STAGE 1/1'
+            : parsed.isBoss
             ? 'BOSS'
             : `STAGE ${parsed.stageIndex}/${stageCount}`;
 
@@ -26,7 +29,7 @@ extendClass(CoreLevelManager, {
         }
 
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
-        const enemyType = parsed.isBoss && !champion
+        const enemyType = parsed.isBoss
             ? (base.bossEnemyType || 'enemyBoss')
             : (champion && champion.type) || base.enemyType;
 
@@ -202,6 +205,12 @@ extendClass(CoreLevelManager, {
     getNextLevel(currentLevelId) {
         const parsed = this.parseLevelId(currentLevelId);
         if (!parsed) return null;
+
+        // Custom/explored planets are not necessarily in the legacy
+        // planetOrder list, but their local stage progression still applies.
+        if (!parsed.isBoss && parsed.stageIndex < this.stagesPerPlanet) {
+            return `${parsed.planetId}-${parsed.stageIndex + 1}`;
+        }
 
         const all = this.getAllStageIds();
         const idx = all.indexOf(parsed.id);

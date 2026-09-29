@@ -240,6 +240,10 @@ extendClass(BulletManager, {
             }
         }
 
+        if (shotFired && typeof playerManager !== 'undefined' && playerManager.registerShot) {
+            playerManager.registerShot();
+        }
+
         // Play shooting sound only if a shot was actually fired
         if (shotFired && typeof soundManager !== 'undefined') {
             soundManager.playWeaponShoot(this.currentWeapon || 'laser');

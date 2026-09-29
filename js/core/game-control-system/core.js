@@ -153,7 +153,13 @@ class GameControlSystem {
 
         const currentLevel = this.coreLevelManager.getCurrentLevel();
         const levelId = currentLevel
-            ? (currentLevel.id || currentLevel.planetId || 'mars-1')
+            ? (currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
+                ? `${currentLevel.planetId}-${currentLevel.stageIndex}`
+                : (currentLevel.id
+                || currentLevel.levelId
+                || currentLevel.stageId
+                || currentLevel.planetId
+                || 'mars-1'))
             : 'mars-1';
 
         return this.startGame(levelId);
@@ -191,12 +197,52 @@ class GameControlSystem {
 
     // Level transitions
     nextLevel() {
+        if (typeof galaxyMapManager !== 'undefined'
+            && galaxyMapManager._postAmbushFlight
+            && galaxyMapManager.continueAfterAmbush) {
+            const interrupted = galaxyMapManager._postAmbushFlight;
+            this.stopGame();
+            this.hideVictoryOverlay();
+            galaxyMapManager._postAmbushFlight = null;
+            this.showLevelSelection();
+            if (interrupted && galaxyMapManager.flyTo) {
+                galaxyMapManager._skipAmbushOnce = true;
+                galaxyMapManager.flyTo(interrupted.kind, interrupted.id);
+            }
+            return true;
+        }
         const currentLevel = this.coreLevelManager.getCurrentLevel();
         if (!currentLevel) {
             return false;
         }
 
-        const currentId = currentLevel.id || currentLevel.planetId || currentLevel.background || currentLevel.name;
+        const isAmbushLevel = [
+            currentLevel.id,
+            currentLevel.levelId,
+            currentLevel.stageId,
+            currentLevel.planetId
+        ].some((value) => String(value || '').toLowerCase().indexOf('ambush_') === 0);
+        if (isAmbushLevel) {
+            if (typeof galaxyMapManager !== 'undefined' &&
+                galaxyMapManager.continueAfterAmbush &&
+                galaxyMapManager.continueAfterAmbush()) {
+                this.hideVictoryOverlay();
+                if (this.gameState && this.gameState.resumeGame) this.gameState.resumeGame();
+                if (this.systemManager && this.systemManager.resumeAll) this.systemManager.resumeAll();
+                return true;
+            }
+            this.showLevelSelection();
+            return false;
+        }
+
+        const currentId = currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
+            ? `${currentLevel.planetId}-${currentLevel.stageIndex}`
+            : (currentLevel.id
+                || currentLevel.levelId
+                || currentLevel.stageId
+                || currentLevel.planetId
+                || currentLevel.background
+                || currentLevel.name);
         const nextLevelId = this.coreLevelManager.getNextLevel(currentId);
         if (!nextLevelId) {
             this.showLevelSelection();

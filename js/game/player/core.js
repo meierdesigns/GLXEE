@@ -25,9 +25,11 @@ class PlayerManager {
         this.energyIdleDraw = 0;
         this.energyDrainMul = 1;
         this.shotEnergyCost = 4;
+        this.lastShotAt = 0;
+        this.continuousFireLevel = 0;
         this.chargeEnergyPerSec = 12;
         this.shieldAbsorbEnergyPerDmg = 0.5;
-        this.boostEnergyPerSec = 22;
+        this.boostEnergyPerSec = 32;
         this.boostSpeedMul = 1.55;
         this.armor = 0;
         this.damageReduction = 0;
@@ -50,7 +52,7 @@ class PlayerManager {
         if (this.maxEnergy > 0) {
             let net = this.energyRegen || 0;
             if (this.energy > 0) {
-                net -= (this.energyIdleDraw || 0);
+                net -= (this.energyIdleDraw || 0) * 0.85;
             }
             this.energy = Math.max(0, Math.min(this.maxEnergy, this.energy + net * dt));
         }
@@ -64,7 +66,7 @@ class PlayerManager {
                 else chargeSystem.updateDriveCharge();
                 const boostDrain = (this.boostEnergyPerSec != null)
                     ? this.boostEnergyPerSec
-                    : (chargeSystem.getBoostDrainPerSec ? chargeSystem.getBoostDrainPerSec() : 22);
+                    : (chargeSystem.getBoostDrainPerSec ? chargeSystem.getBoostDrainPerSec() : 32);
                 this.energy = Math.max(0, this.energy - boostDrain * dt);
                 if (this.energy <= 0) {
                     chargeSystem.releaseDriveCharge();
@@ -221,13 +223,23 @@ class PlayerManager {
 
     spendEnergy(amount) {
         const cost = Math.max(0, Number(amount) || 0);
-        if (!this.isSystemsOnline() || this.energy < cost) return false;
-        this.energy -= cost;
+        if (!this.isSystemsOnline() || this.energy + 0.000001 < cost) return false;
+        this.energy = Math.max(0, this.energy - cost);
         return true;
     }
 
     getShotEnergyCost() {
-        return Math.max(0, Number(this.shotEnergyCost) || 0);
+        const base = Math.max(0, Number(this.shotEnergyCost) || 0);
+        if (!base) return 0;
+        if (Date.now() - (this.lastShotAt || 0) > 900) this.continuousFireLevel = 0;
+        return base * (1 + Math.min(3, (this.continuousFireLevel || 0) * 0.12));
+    }
+
+    registerShot() {
+        const now = Date.now();
+        if (now - (this.lastShotAt || 0) > 900) this.continuousFireLevel = 0;
+        this.continuousFireLevel = Math.min(25, (this.continuousFireLevel || 0) + 1);
+        this.lastShotAt = now;
     }
 
     getChargeEnergyPerSec() {

@@ -55,11 +55,19 @@ extendClass(ParallaxManager, {
             {x: 160, y: 560}
         ];
 
+        const ox = ((this.horizontalOffset * 0.2) % 400 + 400) % 400;
+        const oy = ((layer.y || 0) % 600 + 600) % 600;
         dots.forEach(dot => {
-            const x = (dot.x + this.horizontalOffset * 0.2) % 400;
-            const y = (dot.y + layer.y) % 600;
-
-            ctx.fillRect(Math.floor(x), Math.floor(y), 5, 5);
+            // Draw neighbouring tiles as well so a wrap never exposes a
+            // one-frame gap or makes the pattern appear to jump.
+            for (let tx = -1; tx <= 1; tx++) {
+                for (let ty = -1; ty <= 1; ty++) {
+                    const x = dot.x + ox + tx * 400;
+                    const y = dot.y + oy + ty * 600;
+                    if (x < -5 || x > 405 || y < -5 || y > 605) continue;
+                    ctx.fillRect(Math.floor(x), Math.floor(y), 5, 5);
+                }
+            }
         });
     },
 

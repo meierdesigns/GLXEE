@@ -130,13 +130,14 @@ class ParallaxManager {
     }
 
     update(deltaTime) {
+        const frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
         // Never hard-reset scroll offsets: draws use modulo, and resets at
         // layer.height (often 300) or horizontalOffset=400 jumped while patterns
         // wrap at 600 / factor*offset (0.1/0.2).
         this.layers.forEach(layer => {
-            layer.y += layer.speed;
+            layer.y += layer.speed * frameScale;
         });
-        this.horizontalOffset += this.horizontalSpeed;
+        this.horizontalOffset += this.horizontalSpeed * frameScale;
         this.updateFlyingStars(deltaTime);
     }
 

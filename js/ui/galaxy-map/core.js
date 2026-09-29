@@ -21,6 +21,8 @@ class GalaxyMapManager {
         this.statusMsg = '';
         this.map = null;
         this.nodeById = {};
+        this.mapZoom = 3;
+        this.mapPan = null;
     }
 
     show(options) {
@@ -32,8 +34,9 @@ class GalaxyMapManager {
         this.onDock = options && options.onDock;
         this.onEscape = options && options.onEscape;
         this._mountEl = (options && options.mount) || null;
-        // Embedded in Home Station: wait for ENTER to arm planet selection.
-        this._inputActive = !this._mountEl;
+        // Embedded maps are interactive immediately; keyboard navigation can
+        // still be used without requiring a separate activation step.
+        this._inputActive = true;
         this.statusMsg = '';
         if (
             typeof planetConfigManager !== 'undefined' &&
@@ -281,7 +284,7 @@ class GalaxyMapManager {
             const ist = styleOf(inv.attacker);
             return `<div class="galaxy-map-situation is-invasion" style="--ruler-accent:${(ist && ist.accent) || '#ff4a3a'}">` +
                 `<span class="galaxy-map-situation-kind">INVASION</span>` +
-                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 24)}</span>` +
+                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 14)}</span>` +
                 `<span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span></span>` +
                 `<span class="galaxy-map-situation-sub">FLY THERE AND WIN A STAGE TO REPEL IT</span>` +
                 `</div>`;
@@ -308,7 +311,7 @@ class GalaxyMapManager {
             }).length;
             const rivalStyle = styleOf(c.rivals[0]);
             const accent = (rivalStyle && rivalStyle.accent) || 'var(--color-primary)';
-            const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 24)}</span>`).join('');
+            const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 14)}</span>`).join('');
             return `<div class="galaxy-map-situation is-conflict" style="--ruler-accent:${accent}">` +
                 `<span class="galaxy-map-situation-kind">CONFLICT</span>` +
                 `<span class="galaxy-map-situation-row">${emblems}` +
@@ -330,7 +333,11 @@ class GalaxyMapManager {
                 planetSVGManager.init();
             }
             // Large views get a finer grid instead of an upscaled icon.
-            const detail = px >= 160 ? 4 : (px >= 80 ? 2 : 1);
+            const zoom = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom))
+                ? this.mapZoom : 1;
+            const detail = px >= 160 || zoom >= 2.5
+                ? 4
+                : (px >= 80 || zoom >= 1.35 ? 2 : 1);
             let svg = planetSVGManager.getPlanetSVGDetailed
                 ? planetSVGManager.getPlanetSVGDetailed(sid, detail)
                 : planetSVGManager.getPlanetSVG(sid);

@@ -185,6 +185,16 @@ extendClass(ShipEditorUI, {
         const weapons = typeof shipConfigManager !== 'undefined'
             ? shipConfigManager.availableWeapons
             : ['laser', 'plasma', 'spread', 'rapid'];
+        if (!this.draft.weaponConfig) this.draft.weaponConfig = {};
+        const ensureWeaponConfig = (id) => {
+            if (!this.draft.weaponConfig[id]) {
+                const defaults = (typeof weaponConfigManager !== 'undefined'
+                    && weaponConfigManager.getDefaultsForShip)
+                    ? weaponConfigManager.getDefaultsForShip(id) : {};
+                this.draft.weaponConfig[id] = Object.assign({}, defaults);
+            }
+            return this.draft.weaponConfig[id];
+        };
 
         root.appendChild(this.makeSelect('Default weapon', this.draft.defaultWeapon || 'laser', weapons, (v) => {
             this.draft.defaultWeapon = v;
@@ -206,6 +216,7 @@ extendClass(ShipEditorUI, {
                     if (this.draft.availableWeapons.indexOf(w) === -1) {
                         this.draft.availableWeapons.push(w);
                     }
+                    ensureWeaponConfig(w);
                 } else {
                     this.draft.availableWeapons = this.draft.availableWeapons.filter((x) => x !== w);
                     if (!this.draft.availableWeapons.length) {
@@ -217,6 +228,22 @@ extendClass(ShipEditorUI, {
                 }
                 this.renderControls();
             }));
+            if (on) {
+                const cfg = ensureWeaponConfig(w);
+                const details = document.createElement('details');
+                details.className = 'pe-weapon-details';
+                details.open = false;
+                const summary = document.createElement('summary');
+                summary.textContent = 'CONFIGURE ' + w.toUpperCase();
+                details.appendChild(summary);
+                details.appendChild(this.makeSlider('Damage', cfg.damage || this.draft.weaponDamage || 1,
+                    1, 150, 1, (v) => { cfg.damage = Math.round(v); }));
+                details.appendChild(this.makeSlider('Speed', cfg.speed || this.draft.weaponSpeed || 1,
+                    1, 20, 0.5, (v) => { cfg.speed = v; }));
+                details.appendChild(this.makeSlider('Cooldown (ms)', cfg.cooldown || this.draft.weaponCooldown || 100,
+                    50, 4000, 10, (v) => { cfg.cooldown = Math.round(v); }));
+                root.appendChild(details);
+            }
         });
 
         root.appendChild(this.makeSlider('Weapon damage', this.draft.weaponDamage, 1, 60, 1, (v) => {

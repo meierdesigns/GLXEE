@@ -41,7 +41,12 @@ extendClass(ShipLoadoutManager, {
             // FULL is allowed because we overwrite a specific index.
             if (current !== nextId) {
                 const check = this.canInstallModule(shipId, kind, nextId);
-                if (!check.ok && !check.removing && check.reason !== 'FULL') {
+                // The exact slot fit is checked by the outer setter wrapper.
+                // A generic canInstallModule check may reject the same part
+                // because another slot is smaller; that must not block this
+                // compatible target slot.
+                if (!check.ok && !check.removing
+                    && check.reason !== 'FULL' && check.reason !== 'TOO_BIG') {
                     return { ok: false, reason: check.reason || 'BLOCKED', need: check.need, have: check.have, loadout: L };
                 }
             }

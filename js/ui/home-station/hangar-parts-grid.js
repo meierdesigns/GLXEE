@@ -197,9 +197,26 @@ extendClass(HomeStationUI, {
     equipHangarPart(cell, slotEl) {
         const kind = cell.getAttribute('data-part-kind');
         const id = cell.getAttribute('data-part-id');
-        const index = slotEl
+        let index = slotEl
             ? Number(slotEl.getAttribute('data-slot-index') || 0)
             : this.hangarSlotForPart(kind);
+        // The first free mount is not necessarily large enough. If the
+        // requested mount cannot hold the part, choose the nearest compatible
+        // empty mount before attempting the install.
+        if (shipLoadoutManager.partFitsSlot) {
+            const fit = shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, id, index);
+            if (!fit.ok) {
+                const slots = Array.from(this.overlay.querySelectorAll(
+                    `.hs-hangar-slot[data-slot-kind="${kind}"]`
+                ));
+                const compatible = slots.find((el) => {
+                    const i = Number(el.getAttribute('data-slot-index') || 0);
+                    return !this.hangarSlotModuleId(kind, i)
+                        && shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, id, i).ok;
+                });
+                if (compatible) index = Number(compatible.getAttribute('data-slot-index') || 0);
+            }
+        }
         if (index < 0) {
             this.playButtonResult(cell, false, 'NO ' + kind.toUpperCase() + ' SLOT');
             return;

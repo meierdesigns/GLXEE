@@ -22,7 +22,15 @@
         const i = Math.max(0, Math.round(Number(index) || 0));
         const L = this.getLoadout(shipId);
         const m = this.getStoredWeaponMount ? this.getStoredWeaponMount(L, i) : null;
-        if (m) return m.area === 'wing' || !!m.split;
+        if (m) {
+            const area = String(m.area || m.kind || '').toLowerCase();
+            return area === 'wing'
+                || !!m.split
+                || m.mx != null
+                || m.my != null
+                || m.mirrorNx != null
+                || m.mirrorNy != null;
+        }
         // Classic layout: slot 0 is the single nose gun, the rest are wing pairs.
         return i > 0;
     };
@@ -33,7 +41,14 @@
 
     slm.getSlotUpgradeLevel = function (shipId, kind, index) {
         if (typeof profileManager === 'undefined' || !profileManager.getSlotUpgradeLevels) return 0;
-        return profileManager.getSlotUpgradeLevels(shipId)[key(kind, index)] || 0;
+        const levels = profileManager.getSlotUpgradeLevels(shipId);
+        const direct = levels[key(kind, index)];
+        if (direct != null) return Number(direct) || 0;
+        // Accept the legacy plural weapon key used by older saved profiles.
+        if (kind === 'weapon' && levels[key('weapons', index)] != null) {
+            return Number(levels[key('weapons', index)]) || 0;
+        }
+        return 0;
     };
 
     /**

@@ -46,7 +46,7 @@ extendClass(HangarTestArena, {
         if (cs.driveCharge && shift && powered) {
             p.driveCharging = true;
             moveMul = cs.driveBoostMul || es.boostSpeedMul || 1.55;
-            const drain = p.boostEnergyPerSec || cs.driveBoostDrainPerSec || 22;
+            const drain = p.boostEnergyPerSec || cs.driveBoostDrainPerSec || 32;
             p.energy = Math.max(0, p.energy - drain * (dtMs / 1000));
             if (p.energy <= 0) p.driveCharging = false;
         } else {

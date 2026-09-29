@@ -198,15 +198,15 @@ extendClass(ShipLoadoutManager, {
     getModuleIdleDraw(kind, id) {
         const s = String(id || '').toLowerCase();
         if (kind === 'weapon') {
-            return this.heavyWeaponIds[s] ? 0.6 : 0.4;
+            return this.heavyWeaponIds[s] ? 1.2 : 0.8;
         }
         if (kind === 'defense') {
-            if (s.indexOf('shield') !== -1) return 0.8;
-            return 0.2;
+            if (s.indexOf('shield') !== -1) return 1.6;
+            return 0.4;
         }
         if (kind === 'ability') {
-            if (s === 'charge_drive') return 0.2;
-            return 0.3;
+            if (s === 'charge_drive') return 0.4;
+            return 0.6;
         }
         if (kind === 'energy') return 0;
         return 0;
@@ -258,13 +258,13 @@ extendClass(ShipLoadoutManager, {
         const primaryWeapon = (L.weapons && L.weapons[0]) || 'laser';
         const hasDrive = (L.abilities || []).indexOf('charge_drive') !== -1;
         const hasDampen = (L.abilities || []).indexOf('drive_charge_dampen') !== -1;
-        let boostPerSec = hasDrive ? 22 : 0;
+        let boostPerSec = hasDrive ? 44 : 0;
         if (hasDrive && hasDampen) boostPerSec *= 0.7;
 
         return {
             hasCore: true,
             maxEnergy: 100 + capBonus,
-            regen: 12 + regenBonus,
+            regen: 8 + regenBonus,
             idleDraw: budget.idleDraw,
             drainMul: drainMul,
             // A volley fires every mounted gun, so it costs all of them: nose
@@ -274,9 +274,9 @@ extendClass(ShipLoadoutManager, {
                 if (!mounts.length) return this.getWeaponShotCost(primaryWeapon) * drainMul;
                 const sum = mounts.reduce((acc, m) =>
                     acc + this.getWeaponShotCost(m.id) * (m.mount === 'wing' ? 0.75 : 1), 0);
-                return Math.round(sum * drainMul * 100) / 100;
+                return Math.round(sum * drainMul * 1.5 * 100) / 100;
             })(),
-            chargePerSec: 12 * drainMul,
+            chargePerSec: 24 * drainMul,
             shieldAbsorbPerDmg: 0.5 * drainMul,
             boostPerSec: boostPerSec * drainMul,
             boostSpeedMul: hasDrive ? 1.55 : 1

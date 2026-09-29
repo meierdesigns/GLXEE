@@ -333,6 +333,7 @@ docs: document <feature> wave <id>
 - [Update notes](docs/UPDATE_NOTES.md) — historical gameplay waves.
 - [Devlog 1](docs/ITCH_DEVLOG_01.md) — faction silhouettes and combat identity.
 - [Devlog 2](docs/ITCH_DEVLOG_02.md) — modular runtime refactor.
+- [Devlog 3](docs/ITCH_DEVLOG_03.md) — living galaxies, hangar engineering, and the new GLXEE README style.
 - [Git deployment strategy](docs/git-deployment-strategy.md) — feature-wave workflow.
 - [Game rules](rules/game-rules.md) — design rules and tactical constraints.
 - [Assets](assets/README.md) — asset database and generation notes.

@@ -60,6 +60,8 @@ language.
 - [Lore](#lore)
 - [Credits](#credits)
 
+<img src="assets/ui/readme-h-boot.svg" alt="CH.01 BOOT" width="960" />
+
 ## Boot
 
 Requirements: **Python 3**. There is no build step and no dependency install.
@@ -85,6 +87,8 @@ npm run icons:preview   # render icon previews
 ```
 
 `npm start` is a static file server. It must be run from the repository root.
+
+<img src="assets/ui/readme-h-controls.svg" alt="CH.02 CONTROLS" width="960" />
 
 ## Controls
 
@@ -119,6 +123,8 @@ Upgrade hull areas and slots · trade · change the loadout · jump again
 A mission is either a **LIBERATE** run on an uncleared planet or a lower-paying
 **PATROL** on a cleared one. One mission can be active at a time. Faction
 contracts can target reachable galaxies and may teleport the pilot before launch.
+
+<img src="assets/ui/readme-h-factions.svg" alt="CH.03 FACTIONS" width="960" />
 
 ## Factions and galaxies
 
@@ -161,6 +167,8 @@ pattern. Flights and cleared battles advance the control simulation:
 - a new profile begins with a seeded home-galaxy invasion that can be repelled
   for an opening reward.
 
+<img src="assets/ui/readme-h-station.svg" alt="CH.06 HOME STATION" width="960" />
+
 ## Home Station and hangar
 
 The station is the progression hub:
@@ -190,6 +198,8 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
 connection settings, and disabled areas.
+
+<img src="assets/ui/readme-h-events.svg" alt="CH.10 COMBAT EVENTS" width="960" />
 
 ## Combat
 
@@ -239,6 +249,8 @@ TRAVEL  ── route preview ── arrival sector ── encounter staging ─�
 COMBAT  ── wave direction ── enemy lanes ── pickups ── victory handoff
 ```
 
+<img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
+
 ## Architecture
 
 GLXEE deliberately remains a script-loaded browser project. Large systems are
@@ -283,6 +295,8 @@ parts.
 Keep new methods near related methods and split a file before it becomes hard
 to review. Runtime data follows the same pattern in config, sprite, and
 profile-manager folders.
+
+<img src="assets/ui/readme-h-docs.svg" alt="CH.13 DEVELOPMENT WAVES" width="960" />
 
 ## Development waves
 

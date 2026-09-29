@@ -8,7 +8,7 @@ extendClass(GameControlSystem, {
             : 10000;
         this._victoryLootPhase = true;
         this._victoryLootTimer = grace;
-        this._victoryLootMinMs = Math.min(2500, grace * 0.25);
+        this._victoryLootMinMs = Math.min(900, grace * 0.2);
         this.lastVictoryLoot = null;
 
         if (typeof enemyManager !== 'undefined') {
@@ -149,7 +149,9 @@ extendClass(GameControlSystem, {
                     }
                     profileManager.save();
                     try {
-                        if (typeof factionManager !== 'undefined' && factionManager.recordMissionVictory) {
+                        if (currentLevel.isBoss
+                            && typeof factionManager !== 'undefined'
+                            && factionManager.recordMissionVictory) {
                             factionManager.recordMissionVictory(planetId);
                         }
                     } catch (factionErr) {

@@ -14,7 +14,6 @@ class CollisionManager {
         this.checkObstaclePlayerCollisions(gameState);
         this.checkObstacleEnemyCollisions(gameState);
         this.checkBulletObstacleCollisions(gameState);
-        this.checkBomberPlayerCollisions(gameState);
     }
 
     checkBomberPlayerCollisions(gameState) {

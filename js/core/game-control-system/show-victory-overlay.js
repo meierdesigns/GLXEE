@@ -91,10 +91,10 @@ extendClass(GameControlSystem, {
         }
 
         this.updateVictoryNextButton();
-        this.scheduleAutoReturnIfPlanetCleared(victoryOverlay);
+        this.cancelVictoryAutoReturn();
 
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuIndex = this._victoryAutoReturn ? 2 : 0;
+            uiManager.victoryMenuIndex = 0;
             uiManager.updateVictoryMenuDisplay();
         }
 
@@ -192,12 +192,19 @@ extendClass(GameControlSystem, {
      * screen briefly (with a countdown) and return to planet selection.
      * Any button pressed meanwhile wins; hiding the overlay cancels the timer.
      */
+    getVictoryCurrentLevelId() {
+        const level = this.coreLevelManager.getCurrentLevel();
+        if (!level) return null;
+        if (level.planetId && Number.isFinite(Number(level.stageIndex))) {
+            return `${level.planetId}-${level.stageIndex}`;
+        }
+        return level.id || level.levelId || level.stageId || level.planetId || level.background || null;
+    },
+
     scheduleAutoReturnIfPlanetCleared(overlay) {
         this.cancelVictoryAutoReturn();
         const currentLevel = this.coreLevelManager.getCurrentLevel();
-        const currentId = currentLevel
-            ? (currentLevel.id || currentLevel.planetId || currentLevel.background)
-            : null;
+        const currentId = this.getVictoryCurrentLevelId();
         const meta = currentId && typeof this.coreLevelManager.getNextLevelMeta === 'function'
             ? this.coreLevelManager.getNextLevelMeta(currentId)
             : null;
@@ -234,9 +241,18 @@ extendClass(GameControlSystem, {
 
     updateVictoryNextButton() {
         const currentLevel = this.coreLevelManager.getCurrentLevel();
-        const currentId = currentLevel
-            ? (currentLevel.id || currentLevel.planetId || currentLevel.background)
-            : null;
+        const hasInterruptedTravel = typeof galaxyMapManager !== 'undefined'
+            && galaxyMapManager
+            && galaxyMapManager._postAmbushFlight;
+        const isAmbush = currentLevel && [
+            currentLevel.id,
+            currentLevel.levelId,
+            currentLevel.stageId,
+            currentLevel.planetId
+        ].some((value) => String(value || '').toLowerCase().indexOf('ambush_') === 0);
+        const currentId = this.getVictoryCurrentLevelId();
+        const ambushVictory = !!hasInterruptedTravel || isAmbush
+            || String(currentId || '').toLowerCase().indexOf('ambush_') === 0;
         const meta = currentId && typeof this.coreLevelManager.getNextLevelMeta === 'function'
             ? this.coreLevelManager.getNextLevelMeta(currentId)
             : null;
@@ -244,13 +260,13 @@ extendClass(GameControlSystem, {
         const button = document.querySelector('#victoryOverlay .victory-button[data-index="0"] .button-text')
             || document.querySelector('#victoryNextButton .button-text');
         if (button) {
-            button.textContent = meta ? meta.label : 'CAMPAIGN COMPLETE';
+            button.textContent = ambushVictory ? 'CONTINUE TRAVEL' : (meta ? meta.label : 'CAMPAIGN COMPLETE');
         }
 
         const nextBtn = document.querySelector('#victoryOverlay .victory-button[data-index="0"]');
         if (nextBtn) {
-            nextBtn.disabled = !meta;
-            nextBtn.classList.toggle('disabled', !meta);
+            nextBtn.disabled = !meta && !ambushVictory;
+            nextBtn.classList.toggle('disabled', !meta && !ambushVictory);
         }
     },
 

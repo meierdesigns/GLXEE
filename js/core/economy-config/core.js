@@ -26,7 +26,9 @@ class EconomyConfig {
             voltex: 'resVoltex'
         };
         /** Extra seconds after objective clear for the player to scoop pickups. */
-        this.victoryLootGraceMs = 10000;
+        // Release the combat area quickly after the last enemy falls while
+        // still leaving a short window to collect nearby drops.
+        this.victoryLootGraceMs = 3500;
         /** Credits-equivalent unit value for the resource market. Credits are uncapped currency. */
         this.resourceTradeValue = {
             scrap: 1,

@@ -10,7 +10,7 @@ extendClass(EnemyManager, {
             this.sideEnemySpawnTimer += deltaTime;
             if (this.sideEnemySpawnTimer >= this.sideEnemySpawnInterval) {
                 this.sideEnemySpawnTimer = 0;
-                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < 0.45) {
+                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < 0.25) {
                     this.spawnSideEnemy(gameState);
                 }
             }
@@ -42,26 +42,18 @@ extendClass(EnemyManager, {
             const role = e.role || 'assault';
             e.repairBeamActive = false;
 
+            if (e.isEscort && e.formationReleaseAt && Date.now() >= e.formationReleaseAt
+                && Math.random() < 0.08) {
+                e.isEscort = false;
+                e.escortSlot = -1;
+                e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.45 + Math.random() * 0.35);
+                e.verticalSpeed = (Math.random() - 0.5) * 0.7;
+                e.lifetimeMs = 12000 + Math.random() * 7000;
+            }
+
             if (e.fleeing) {
                 e.x += (e.speed || 0) * speedMul;
                 e.y += (e.verticalSpeed || -1) * speedMul;
-            } else if (role === 'bomber' && typeof playerManager !== 'undefined') {
-                const player = playerManager.getPosition();
-                if (player) {
-                    const tx = player.x + player.width / 2;
-                    const ty = player.y + player.height / 2;
-                    const cx = e.x + e.width / 2;
-                    const cy = e.y + e.height / 2;
-                    const dx = tx - cx;
-                    const dy = ty - cy;
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const spd = (e.bomberSpeed || 1.2) * speedMul;
-                    e.isEscort = false;
-                    e.x += (dx / dist) * spd;
-                    e.y += (dy / dist) * spd;
-                    e.speed = 0;
-                    e.verticalSpeed = 0;
-                }
             } else if (e.isEscort && (teamWithMain || teamPending)) {
                 const formationTightness = e.flightProfile ? e.flightProfile.formationTightness : 1;
                 const formationPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
@@ -142,7 +134,7 @@ extendClass(EnemyManager, {
             }
 
             // Fire while fighting and while fleeing (even during champion explosion)
-            if (role === 'gunner' || role === 'assault' || role === 'blocker') {
+            if (role === 'gunner' || role === 'assault' || role === 'blocker' || role === 'bomber') {
                 e.shootTimer = (e.shootTimer || 0) + deltaTime;
                 let interval = e.shootInterval || 1900;
                 if (e.fleeing) interval = Math.max(900, interval * 0.75);

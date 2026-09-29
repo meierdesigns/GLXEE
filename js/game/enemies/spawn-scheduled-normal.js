@@ -19,9 +19,15 @@ extendClass(EnemyManager, {
         } else if (role === 'blocker') {
             baseHp = Math.round(baseHp * 2.2);
         } else if (role === 'bomber') {
-            baseHp = Math.max(10, Math.round(baseHp * 0.7));
+            // Bombers are kamikaze threats: dangerous on approach, fragile
+            // when focused by the player.
+            baseHp = Math.max(6, Math.round(baseHp * 0.35));
         }
-        const SIDE_DRAW_SCALE = 1; // same size table as champions (≤ 1.5× player)
+        // Side craft are deliberately smaller than champions, including their
+        // mounted weapons and projectiles. Combat roles get a little more
+        // hull so they can approach and pressure the player autonomously.
+        const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
+            ? 0.64 : 0.52;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;
@@ -69,19 +75,33 @@ extendClass(EnemyManager, {
             role: role,
             isEscort: isEscort,
             escortSlot: escortSlot,
+            formationReleaseAt: isEscort
+                ? Date.now() + 2200 + Math.random() * 3200
+                : 0,
             formOffsetX: form ? form.x : 0,
             formOffsetY: form ? form.y : 0,
             lifetimeMs: isEscort ? 0 : 18000 + Math.random() * 8000,
             shootTimer: 0,
             shootInterval: role === 'gunner' ? 1400
-                : (role === 'assault' || role === 'blocker' ? 1900 : 0),
+                : (role === 'assault' || role === 'blocker' || role === 'bomber' ? 1900 : 0),
             repairRate: role === 'repair' ? 6 : 0,
             shieldBatteryRate: role === 'shieldBattery' ? 8 : 0,
             repairRange: 70,
             repairBeamActive: false,
             bomberDamage: role === 'bomber' ? 18 : 0,
-            bomberSpeed: role === 'bomber' ? 1.35 : 0
+            bomberSpeed: role === 'bomber' ? 1.35 : 0,
+            weaponScale: SIDE_DRAW_SCALE
         };
+        // Give escorts distinct attack profiles instead of making the whole
+        // formation fire the champion's weapon in unison.
+        const factionWeapons = (typeof factionShipStyles !== 'undefined'
+            && factionShipStyles.getFactionDefaultWeapons)
+            ? factionShipStyles.getFactionDefaultWeapons(side.faction)
+            : ['laser'];
+        if (factionWeapons.length) {
+            side.weaponId = factionWeapons[(escortSlot >= 0 ? escortSlot : Math.floor(Math.random() * factionWeapons.length))
+                % factionWeapons.length];
+        }
         this.applyEnemyHitProfile(side, {
             faction: side.faction,
             enemyClass: side.enemyClass,

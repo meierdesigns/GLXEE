@@ -180,9 +180,12 @@ extendClass(PlanetConfigManager, {
         const rng = this.seededRandom(seedKey);
         let best = { x: 0.5, y: 0.5 };
         let bestScore = -1;
-        for (let i = 0; i < 40; i++) {
-            const x = 0.1 + rng() * 0.8;
-            const y = 0.12 + rng() * 0.76;
+        const count = Array.isArray(others) ? others.length : 0;
+        const margin = Math.max(0.07, Math.min(0.16, 0.08 + count * 0.002));
+        const attempts = Math.max(100, Math.min(600, 100 + count * 30));
+        for (let i = 0; i < attempts; i++) {
+            const x = margin + rng() * (1 - margin * 2);
+            const y = margin + rng() * (1 - margin * 2);
             let score = others.length ? Infinity : 1 - Math.hypot(x - 0.5, y - 0.5);
             others.forEach((o) => { score = Math.min(score, Math.hypot((o.x - x) * 2.4, o.y - y)); });
             if (score > bestScore) { bestScore = score; best = { x: x, y: y }; }
@@ -201,7 +204,11 @@ extendClass(PlanetConfigManager, {
         const onGrid = (n) => [0.2, 0.5, 0.8].some((gx) => Math.abs(n.x - gx) < 0.002)
             && Array.from({ length: 4 }, (_, r) => Math.min(0.88, 0.22 + r * 0.28))
                 .some((gy) => Math.abs(n.y - gy) < 0.002);
-        if (nodes.filter(onGrid).length < Math.ceil(nodes.length * 0.6)) return false;
+        let closest = Infinity;
+        nodes.forEach((a, i) => nodes.slice(i + 1).forEach((b) => {
+            closest = Math.min(closest, Math.hypot((a.x - b.x) * 2.4, a.y - b.y));
+        }));
+        if (nodes.filter(onGrid).length < Math.ceil(nodes.length * 0.6) && closest >= 0.16) return false;
         const placed = [];
         nodes.forEach((n) => {
             const spot = this.pickOrganicMapSpot(placed, 'relayout|' + galaxyId + '|' + n.planetId);

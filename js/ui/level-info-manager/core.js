@@ -243,27 +243,19 @@ class LevelInfoManager {
         );
 
         // Only this run's real content: planet obstacles, equipped weapons.
-        const obstacles = d.obstacles || [];
-        const obstacleChips = obstacles.map((o) => {
-            const name = (o && o.name) || 'Obstacle';
-            const key = /shield/i.test(name) ? 'menuDefense' : 'hsCargo';
-            return this.chipHtml(key, name);
-        }).join('');
-
-        const weapons = d.weapons || [];
-        const weaponChips = weapons.map((w) => {
-            const name = (w && w.name) || 'Weapon';
-            return this.chipHtml(this.weaponIconKey(name), name + (w && w.count > 1 ? ' ×' + w.count : ''));
-        }).join('');
+        const resources = d.resources || [];
+        const resourceChips = resources.map((r) =>
+            this.chipHtml('hsCargo', `${r.name} ×${r.amount}`)
+        ).join('');
 
         const chipRow = (label, chips) => chips
             ? `<div class="gi-chip-row"><span class="gi-chip-row-label">${label}</span>` +
                 `<div class="gi-chips">${chips}</div></div>`
             : '';
         const field = this.clusterHtml('FIELD',
-            (obstacles.length ? this.rowHtml('hsCargo', 'SPAWN', `${d.obstacleSpawnRate || 3000}ms`) : '') +
-            chipRow('OBS', obstacleChips) +
-            chipRow('WPN', weaponChips),
+            chipRow('LOOT', resourceChips) ||
+            `<div class="gi-chip-row"><span class="gi-chip-row-label">LOOT</span>` +
+            `<div class="gi-chips"><span class="gi-chip-label">NONE</span></div></div>`,
             'gi-cluster-field'
         );
 

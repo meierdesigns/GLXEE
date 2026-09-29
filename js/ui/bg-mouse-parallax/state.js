@@ -7,7 +7,6 @@
     var BG = global.VFBgMouseParallaxParts = global.VFBgMouseParallaxParts || {};
 
     var HOST_SELECTOR = [
-        '.game-container',
         '.start-screen',
         '.start-screen-overlay',
         '.home-station-overlay',

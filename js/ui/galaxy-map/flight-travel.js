@@ -16,8 +16,8 @@ extendClass(GalaxyMapManager, {
             : this.nodeById[loc.id];
         if (!at) return null;
         return {
-            x: GM_MAP_PAD + at.x * (GM_MAP_W - GM_MAP_PAD * 2),
-            y: GM_MAP_PAD + at.y * (GM_MAP_H - GM_MAP_PAD * 2)
+            x: GM_MAP_W / 2 + (at.x - 0.5) * (GM_MAP_W - GM_MAP_PAD * 2) * 2.0,
+            y: GM_MAP_H / 2 + (at.y - 0.5) * (GM_MAP_H - GM_MAP_PAD * 2) * 2.0
         };
     },
 
@@ -169,7 +169,8 @@ extendClass(GalaxyMapManager, {
         }
         const pts = this.routePath(current, target);
         if (!pts) return '';
-        const risky = this.isRouteRisky(current, target);
+        // Ambushes are hidden events; route appearance must not reveal them.
+        const risky = false;
         const mid = this.pointOnPath(pts, 0.5);
         const mx = mid.x;
         const my = mid.y;
@@ -192,6 +193,7 @@ extendClass(GalaxyMapManager, {
         const from = this.locationPoint(current);
         const to = this.locationPoint({ kind: kind, id: id });
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        const originalViewBox = svg && svg.getAttribute('viewBox');
         const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!from || !to || !svg || reduced) {
             this.commitFlight(kind, id);
@@ -210,7 +212,7 @@ extendClass(GalaxyMapManager, {
         const g = document.createElementNS(ns, 'g');
         g.setAttribute('class', 'gm-ship-travel');
         g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${from.x},${from.y}"/>` +
-            `<g class="gm-travel-ship"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
+            `<g class="gm-travel-ship" transform="scale(1.8)"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
         svg.appendChild(g);
         const layer = svg.querySelector('.gm-route-layer');
         if (layer) layer.innerHTML = '';
@@ -218,11 +220,13 @@ extendClass(GalaxyMapManager, {
         if (marker) marker.style.display = 'none';
         const trail = g.querySelector('.gm-travel-trail');
         const ship = g.querySelector('.gm-travel-ship');
-        const ambush = Math.random() < this.ambushChance(current, { kind: kind, id: id });
+        const ambush = !this._skipAmbushOnce
+            && Math.random() < this.ambushChance(current, { kind: kind, id: id });
+        this._skipAmbushOnce = false;
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
-        const duration = Math.max(700, Math.min(1800, dist * 5));
+        const duration = Math.max(1800, Math.min(5000, dist * 12));
         this._flight = { kind: kind, id: id, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
-            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0 };
+            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -246,6 +250,10 @@ extendClass(GalaxyMapManager, {
             const at = this.pointOnPath(path, e);
             f.t = t;
             f.ship.setAttribute('transform', `translate(${at.x},${at.y})`);
+            const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
+            if (vb.length === 4 && vb.every(Number.isFinite)) {
+                f.svg.setAttribute('viewBox', `${at.x - vb[2] / 2} ${at.y - vb[3] / 2} ${vb[2]} ${vb[3]}`);
+            }
             if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
             // Trail: the path's corners passed so far, then the ship.
             const trailPoints = path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
@@ -260,6 +268,23 @@ extendClass(GalaxyMapManager, {
     finishFlight() {
         const f = this._flight;
         this._flight = null;
+        if (f && f.svg) {
+            const vb = f.svg.viewBox && f.svg.viewBox.baseVal;
+            if (f.to && Number.isFinite(f.to.x) && Number.isFinite(f.to.y)
+                && vb && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
+                this._panAnchor = { x: f.to.x, y: f.to.y };
+                this.mapPan = null;
+            } else if (vb && Number.isFinite(vb.x) && Number.isFinite(vb.y)
+                && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
+                // Keep the camera at the destination when commitFlight rebuilds
+                // the map instead of restoring the pre-flight viewBox.
+                this._panAnchor = {
+                    x: vb.x + vb.width / 2,
+                    y: vb.y + vb.height / 2
+                };
+                this.mapPan = null;
+            }
+        }
         if (f && f.g && f.g.parentNode) f.g.parentNode.removeChild(f.g);
         if (f) this.commitFlight(f.kind, f.id);
     },
@@ -299,10 +324,15 @@ extendClass(GalaxyMapManager, {
             this._flight = null;
             if (f && f.g && f.g.parentNode) f.g.parentNode.removeChild(f.g);
             // You arrive afterwards either way; the fight happens en route.
-            profileManager.setShipLocation(this.galaxyId, amb.kind, amb.id);
             const dest = amb.kind === 'planet' ? amb.id
                 : ((profileManager.getTradingPost(amb.id) || {}).planetId || null);
+            // The ambush is temporary; keep the real destination as the
+            // return focus so planet selection opens on the same location.
+            if (dest) {
+                profileManager.setShipLocation(this.galaxyId, 'planet', dest);
+            }
             const cfg = planetConfigManager.createAmbushEncounter(this.galaxyId, dest, Date.now());
+            this._postAmbushFlight = f;
             const cb = this.onConfirm;
             if (!this._mountEl) this.hide();
             if (typeof cb === 'function') {
@@ -330,6 +360,15 @@ extendClass(GalaxyMapManager, {
             const msg = this.overlay && this.overlay.querySelector('.gm-status-msg');
             if (msg) msg.textContent = this.statusMsg;
         });
+    },
+
+    continueAfterAmbush() {
+        const f = this._postAmbushFlight;
+        if (!f) return false;
+        this._postAmbushFlight = null;
+        this._flight = f;
+        this.runFlight(f.t, 1, () => this.finishFlight());
+        return true;
     },
 
     /** Remove `share` of every station material; returns a short summary. */

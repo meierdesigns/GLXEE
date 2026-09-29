@@ -37,11 +37,13 @@ extendClass(GalaxyMapManager, {
         this.overlay.className = embedded ? 'galaxy-map-embedded' : 'galaxy-map-overlay';
         if (embedded) {
             this.overlay.innerHTML = `
-                ${this.renderGalaxyRulerBadge()}
+                <div class="galaxy-map-header">
+                <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
+                <div class="galaxy-map-progress-bar">${progressLabel}</div>
                 <div class="galaxy-map-toolbar">
-                    <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
-                    <div class="galaxy-map-progress-bar">${progressLabel}</div>
-                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="Travel to another galaxy">TELEPORT</button>` : ''}
+                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="Travel to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('hsTeleport', 18, 'gm-teleport-icon', '#ffb347', false) : ''}<span>TELEPORT</span></button>` : ''}
+                </div>
+                ${this.renderGalaxyRulerBadge()}
                 </div>
                 ${emptyHint}
                 <div class="galaxy-map-area" id="gmMapArea">
@@ -57,9 +59,13 @@ extendClass(GalaxyMapManager, {
         } else {
             this.overlay.innerHTML = `
                 <div class="galaxy-map-content">
-                    ${this.renderGalaxyRulerBadge()}
+                    <div class="galaxy-map-header">
                     <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                     <div class="galaxy-map-progress-bar">${progressLabel}</div>
+                    <div class="galaxy-map-toolbar">
+                    </div>
+                    ${this.renderGalaxyRulerBadge()}
+                    </div>
                     ${emptyHint}
                     <div class="galaxy-map-area" id="gmMapArea">
                         ${this.renderMapSvg()}
@@ -182,6 +188,13 @@ extendClass(GalaxyMapManager, {
         const diff = info.unlocked ? (info.difficulty || '—') : '???';
         const enemies = info.unlocked ? String(info.enemyCount) : '???';
         const status = info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED';
+        const unlockFrom = !info.unlocked
+            ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
+                .find((pid) => pid && this.isUnlocked(pid))
+            : null;
+        const unlockHint = unlockFrom
+            ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
+            : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
         return `
             <div class="galaxy-map-panels">
                 <div class="galaxy-map-panel galaxy-map-panel-select">
@@ -196,6 +209,7 @@ extendClass(GalaxyMapManager, {
                         <div class="stat-row"><span class="stat-label" id="gmStagesLabel">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmEnemiesLabel">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmStatusLabel">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
+                        <div class="gm-unlock-hint" id="gmUnlockHint">${unlockHint}</div>
                         <!-- Start / continue / fly / dock live inside the planet card. -->
                         <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
                             ${this.renderConfirmActionsHtml(info)}

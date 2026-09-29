@@ -51,28 +51,33 @@ extendClass(GalaxyMapManager, {
         const H = 320;
         const pad = 48;
 
-        const nodeRadius = 24;
         const edgeGap = 2;
+        const mapSpread = 2.0;
+        const planetRadius = (planetId) => {
+            const seed = String(planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+            return (32 + (seed % 7) * 10) / 2;
+        };
         let edgesHtml = '';
         edges.forEach(edge => {
             const a = this.nodeById[edge[0]];
             const b = this.nodeById[edge[1]];
             if (!a || !b) return;
-            const ax = pad + a.x * (W - pad * 2);
-            const ay = pad + a.y * (H - pad * 2);
-            const bx = pad + b.x * (W - pad * 2);
-            const by = pad + b.y * (H - pad * 2);
+            const ax = W / 2 + (a.x - 0.5) * (W - pad * 2) * mapSpread;
+            const ay = H / 2 + (a.y - 0.5) * (H - pad * 2) * mapSpread;
+            const bx = W / 2 + (b.x - 0.5) * (W - pad * 2) * mapSpread;
+            const by = H / 2 + (b.y - 0.5) * (H - pad * 2) * mapSpread;
             const dx = bx - ax;
             const dy = by - ay;
             const dist = Math.hypot(dx, dy);
-            if (dist < nodeRadius * 2 + edgeGap * 2) return;
+            if (dist < planetRadius(a.planetId) + planetRadius(b.planetId) + edgeGap * 2) return;
             const ux = dx / dist;
             const uy = dy / dist;
-            const inset = nodeRadius + edgeGap;
-            const x1 = ax + ux * inset;
-            const y1 = ay + uy * inset;
-            const x2 = bx - ux * inset;
-            const y2 = by - uy * inset;
+            const insetA = planetRadius(a.planetId) + edgeGap;
+            const insetB = planetRadius(b.planetId) + edgeGap;
+            const x1 = ax + ux * insetA;
+            const y1 = ay + uy * insetA;
+            const x2 = bx - ux * insetB;
+            const y2 = by - uy * insetB;
             // Only paths between two reachable planets read as active.
             const lit = this.isUnlocked(edge[0]) && this.isUnlocked(edge[1]);
             edgesHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="gm-edge ${lit ? 'lit' : 'dim'}"/>`;
@@ -89,14 +94,15 @@ extendClass(GalaxyMapManager, {
         const rulerAccent = (rulerStyle && rulerStyle.accent) || 'var(--color-primary)';
         let nodesHtml = '';
         nodes.forEach(n => {
-            const x = pad + n.x * (W - pad * 2);
-            const y = pad + n.y * (H - pad * 2);
+            const x = W / 2 + (n.x - 0.5) * (W - pad * 2) * mapSpread;
+            const y = H / 2 + (n.y - 0.5) * (H - pad * 2) * mapSpread;
             const unlocked = this.isUnlocked(n.planetId);
             const cleared = this.isCleared(n.planetId);
             const selected = !this.selectedPostId && n.planetId === this.selectedPlanetId;
             const hovered = n.planetId === this.hoveredPlanetId;
             const stageProgress = this.getPlanetStageProgressLabel(n.planetId);
-            const size = 48;
+            const sizeSeed = String(n.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+            const size = 32 + (sizeSeed % 7) * 10;
             const frame = size / 2 + 10;
             const stateClass = [
                 unlocked ? 'unlocked' : 'locked',
@@ -107,6 +113,7 @@ extendClass(GalaxyMapManager, {
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
                    data-planet="${n.planetId}" transform="translate(${x},${y})">
+                    <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     ${this.selectionFrameSvg(frame, 12, 3)}
                     <foreignObject x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked ? '' : 'dimmed'}">
@@ -114,7 +121,6 @@ extendClass(GalaxyMapManager, {
                         </div>
                     </foreignObject>
                     ${cleared ? `
-                        <circle class="gm-cleared-ring" cx="0" cy="0" r="${size / 2 + 6}" fill="none"/>
                         <g class="gm-cleared-badge" transform="translate(${size / 2 - 2},${-size / 2 + 2})">
                             <circle cx="0" cy="0" r="8" class="gm-cleared-badge-bg"/>
                             <path class="gm-cleared-check" d="M-3.5 0 L-1 2.5 L3.5 -2.5" fill="none"/>
@@ -125,12 +131,20 @@ extendClass(GalaxyMapManager, {
                     ${n.planetId === baseId ? `
                         <g class="gm-base-marker" style="--fac:${rulerAccent}">
                             <title>${String(holdings.ruler).toUpperCase()} BASE${holdings.stations.length ? ' · DESTROY ITS STATIONS TO ASSAULT IT' : ' · OPEN TO ASSAULT'}</title>
-                            <rect class="gm-base-ring" x="${-size / 2 - 8}" y="${-size / 2 - 8}" width="${size + 16}" height="${size + 16}"/>
-                            <text class="gm-base-label" x="0" y="${-size / 2 - 32}">BASE</text>
+                            <g class="gm-base-graphic" transform="translate(0 2) scale(.7)">
+                                <rect class="gm-base-outline" x="-11" y="-10" width="22" height="16"/>
+                                <rect x="-9" y="-5" width="18" height="10"/>
+                                <rect x="-6" y="-8" width="3" height="3"/>
+                                <rect x="3" y="-8" width="3" height="3"/>
+                                <rect class="gm-base-core" x="-2" y="-2" width="4" height="4"/>
+                            </g>
                         </g>
                     ` : ''}
                     ${stageProgress ? `
                         <text class="gm-stage-progress" x="0" y="${size / 2 + 12}">${stageProgress}</text>
+                    ` : ''}
+                    ${!unlocked ? `
+                        <text class="gm-locked-label" x="0" y="${size / 2 + 14}">LOCKED</text>
                     ` : ''}
                 </g>
             `;
@@ -138,8 +152,8 @@ extendClass(GalaxyMapManager, {
 
         let postsHtml = '';
         this.getTradingPosts().forEach(post => {
-            const x = pad + post.x * (W - pad * 2);
-            const y = pad + post.y * (H - pad * 2);
+            const x = W / 2 + (post.x - 0.5) * (W - pad * 2) * mapSpread;
+            const y = H / 2 + (post.y - 0.5) * (H - pad * 2) * mapSpread;
             const open = profileManager.isTradingPostUnlocked(post);
             const anchor = this.getPlanetInfo(post.planetId);
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
@@ -163,8 +177,8 @@ extendClass(GalaxyMapManager, {
             ? this.getTradingPosts().find(p => p.id === loc.id)
             : this.nodeById[loc.id]);
         if (at) {
-            const x = pad + at.x * (W - pad * 2);
-            const y = pad + at.y * (H - pad * 2);
+            const x = W / 2 + (at.x - 0.5) * (W - pad * 2) * mapSpread;
+            const y = H / 2 + (at.y - 0.5) * (H - pad * 2) * mapSpread;
             // Ship centred on the location, nose down, gently hovering up and
             // down instead of orbiting.
             const r = loc.kind === 'post' ? 18 : 32;
@@ -178,10 +192,18 @@ extendClass(GalaxyMapManager, {
             const shipSvg = icon
                 ? `<image href="${icon}" x="${-Math.round(sw / 2)}" y="${-Math.round(sh / 2)}" width="${sw}" height="${sh}" class="gm-ship-marker-img" transform="rotate(180)"/>`
                 : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
+            const view = this.getMapViewBox(W, H, pad);
+            const centered = Math.hypot(
+                x - (view[0] + view[2] / 2),
+                y - (view[1] + view[3] / 2)
+            ) < Math.min(view[2], view[3]) * 0.12;
+            const showShipLabel = (this.mapZoom || 1) < 1.1 &&
+                !centered &&
+                this._shipLabelReady;
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${x},${y})">
                     <title>YOUR SHIP</title>
-                    <circle r="${r}" class="gm-ship-orbit-ring"/>
+                    ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
                     <g>
                         <animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>
                         ${shipSvg}
@@ -225,7 +247,7 @@ extendClass(GalaxyMapManager, {
             const y = Math.round(y0 + next() * H * 3);
             const big = next() < 0.08;
             const a = (0.25 + next() * 0.75).toFixed(2);
-            const tw = next() < 0.12 ? ` class="gm-star-twinkle" style="animation-delay:${(-next() * 4).toFixed(2)}s"` : '';
+            const tw = next() < 0.35 ? ` class="gm-star-twinkle" style="animation-delay:${(-next() * 4).toFixed(2)}s"` : '';
             stars += `<rect x="${x}" y="${y}" width="${big ? 2 : 1}" height="${big ? 2 : 1}" opacity="${a}"${tw}/>`;
         }
         return `<g class="gm-space" aria-hidden="true">` +
@@ -241,8 +263,9 @@ extendClass(GalaxyMapManager, {
         if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxySuns) return '';
         const suns = planetConfigManager.getGalaxySuns(this.galaxyId) || [];
         return suns.map((s, i) => {
-            const x = Math.round(pad + s.x * (W - pad * 2));
-            const y = Math.round(pad + s.y * (H - pad * 2));
+            const sunSpread = 2.0;
+            const x = Math.round(W / 2 + (s.x - 0.5) * (W - pad * 2) * sunSpread);
+            const y = Math.round(H / 2 + (s.y - 0.5) * (H - pad * 2) * sunSpread);
             const r = Math.max(24, Math.round(s.r * (W - pad * 2) / 1.3));
             // Circle quantised to square pixels of size p, as row strips.
             const pixelCircle = (radius, p) => {
@@ -299,7 +322,9 @@ extendClass(GalaxyMapManager, {
                 };
                 const p = pts.slice();
                 p[0] = trim(p[0], p[1], 16);
-                p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], 30);
+                const planetSeed = String(pid).split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+                const planetInset = (32 + (planetSeed % 7) * 10) / 2 + 2;
+                p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], planetInset);
                 out += `<polyline class="gm-edge gm-post-lane ${open ? 'lit' : 'dim'}" fill="none" points="${p.map((q) => q.x.toFixed(1) + ',' + q.y.toFixed(1)).join(' ')}"/>`;
             });
         });
@@ -483,15 +508,28 @@ extendClass(GalaxyMapManager, {
      */
     getMapViewBox(W, H, pad) {
         const pts = (this.map.nodes || []).concat(this.getTradingPosts())
-            .map(n => [pad + n.x * (W - pad * 2), pad + n.y * (H - pad * 2)]);
+            .map(n => [
+                W / 2 + (n.x - 0.5) * (W - pad * 2) * 2.0,
+                H / 2 + (n.y - 0.5) * (H - pad * 2) * 2.0
+            ]);
+        const suns = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxySuns
+            ? planetConfigManager.getGalaxySuns(this.galaxyId) || [] : [];
+        suns.forEach((s) => {
+            pts.push([
+                W / 2 + (s.x - 0.5) * (W - pad * 2) * 2.0,
+                H / 2 + (s.y - 0.5) * (H - pad * 2) * 2.0
+            ]);
+        });
         let x0 = 0, y0 = 0, x1 = W, y1 = H;
         if (pts.length) {
             // Room for the faction emblems above each planet, the stage
             // label below, and the galaxy badges in the top-right corner.
-            x0 = Math.min(...pts.map(p => p[0])) - 70;
-            x1 = Math.max(...pts.map(p => p[0])) + 110;
-            y0 = Math.min(...pts.map(p => p[1])) - 80;
-            y1 = Math.max(...pts.map(p => p[1])) + 60;
+            // Keep a generous orbit around the nodes so the galaxy does not
+            // look cramped when the map opens.
+            x0 = Math.min(...pts.map(p => p[0])) - 150;
+            x1 = Math.max(...pts.map(p => p[0])) + 190;
+            y0 = Math.min(...pts.map(p => p[1])) - 140;
+            y1 = Math.max(...pts.map(p => p[1])) + 120;
         }
         // Match the on-screen area's aspect so meet-scaling fills it.
         const area = this.overlay && this.overlay.querySelector('#gmMapArea');
@@ -499,8 +537,23 @@ extendClass(GalaxyMapManager, {
             ? area.clientWidth / area.clientHeight : W / H;
         let w = x1 - x0, h = y1 - y0;
         if (w / h < aspect) w = h * aspect; else h = w / aspect;
-        const cx = (x0 + x1) / 2 + (this.mapPan ? this.mapPan.x : 0);
-        const cy = (y0 + y1) / 2 + (this.mapPan ? this.mapPan.y : 0);
+        let cx = (x0 + x1) / 2;
+        let cy = (y0 + y1) / 2;
+        if (this._panAnchor) {
+            cx = this._panAnchor.x;
+            cy = this._panAnchor.y;
+        } else if (!this.mapPan && typeof profileManager !== 'undefined' && profileManager.getShipLocation) {
+            const loc = profileManager.getShipLocation(this.galaxyId);
+            const target = loc && loc.kind === 'post'
+                ? this.getTradingPosts().find((p) => p.id === loc.id)
+                : (loc && this.nodeById[loc.id]);
+            if (target) {
+                cx = W / 2 + (target.x - 0.5) * (W - pad * 2) * 2.0;
+                cy = H / 2 + (target.y - 0.5) * (H - pad * 2) * 2.0;
+            }
+        }
+        cx += this.mapPan ? this.mapPan.x : 0;
+        cy += this.mapPan ? this.mapPan.y : 0;
         const z = this.mapZoom || 1;
         w /= z;
         h /= z;
@@ -516,30 +569,75 @@ extendClass(GalaxyMapManager, {
             const html = this.renderMapSvg();
             const vb = /viewBox="([^"]+)"/.exec(html);
             if (vb) cur.setAttribute('viewBox', vb[1]);
+            cur.querySelectorAll('.gm-node[data-planet]').forEach((node) => {
+                const pid = node.getAttribute('data-planet');
+                const icon = node.querySelector('.gm-node-icon-wrap');
+                if (pid && icon) icon.innerHTML = this.planetIconHtml(pid, 48);
+            });
+        };
+        const delayShipLabel = () => {
+            this._shipLabelReady = false;
+            clearTimeout(this._shipLabelTimer);
+            this._shipLabelTimer = setTimeout(() => {
+                this._shipLabelReady = true;
+                apply();
+            }, 1500);
         };
         // Zoom out below the snug fit (0.35) to see the surroundings, in up to 4x.
         svg.addEventListener('wheel', (e) => {
             e.preventDefault();
             const z = (this.mapZoom || 1) * (e.deltaY < 0 ? 1.15 : 1 / 1.15);
             this.mapZoom = Math.min(4, Math.max(0.35, z));
+            delayShipLabel();
             apply();
         }, { passive: false });
         // Drag pans at any zoom; a real drag swallows the click that follows
         // so releasing over a planet doesn't select it.
         svg.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
-            this._mapDrag = { x: e.clientX, y: e.clientY, moved: false };
+            this._mapDrag = null;
+            svg.classList.remove('is-panning');
+            if (!this.mapPan) {
+                const vb = svg.viewBox.baseVal;
+                this._panAnchor = { x: vb.x + vb.width / 2, y: vb.y + vb.height / 2 };
+                this.mapPan = { x: 0, y: 0 };
+            }
+            this._mapDrag = { x: e.clientX, y: e.clientY, moved: false, pointerId: e.pointerId };
         });
+        const endDrag = (e) => {
+            if (!this._mapDrag || (e.pointerId != null && e.pointerId !== this._mapDrag.pointerId)) return;
+            const drag = this._mapDrag;
+            this._mapDrag = null;
+            if (svg.hasPointerCapture?.(drag.pointerId)) svg.releasePointerCapture(drag.pointerId);
+            svg.classList.remove('is-panning');
+            if (drag.moved) {
+                this._mapDragSwallow = true;
+                setTimeout(() => { this._mapDragSwallow = false; }, 0);
+            }
+        };
+        svg.addEventListener('pointerup', endDrag);
+        svg.addEventListener('pointercancel', endDrag);
         svg.addEventListener('click', (e) => {
-            if (!this._mapDragSwallow) return;
+            this._mapDrag = null;
+            svg.classList.remove('is-panning');
             this._mapDragSwallow = false;
-            e.stopPropagation();
-            e.preventDefault();
         }, true);
+        svg.addEventListener('click', (e) => {
+            if (this._mapDragSwallow) return;
+            const target = e.composedPath().find((el) => el && el.classList
+                && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
+            if (!target) return;
+            const pid = target.getAttribute('data-planet');
+            const postId = target.getAttribute('data-post');
+            this.markUserPicked();
+            if (pid) this.selectPlanet(pid);
+            else if (postId) this.selectPost(postId);
+        });
         svg.addEventListener('dblclick', (e) => {
             if (e.target.closest('.gm-node, .gm-post-node')) return;
             this.mapZoom = 1;
             this.mapPan = null;
+            this._panAnchor = null;
             apply();
         });
         // The map SVG is re-rendered often: bind the window handlers once.
@@ -548,17 +646,19 @@ extendClass(GalaxyMapManager, {
         window.addEventListener('pointermove', (e) => {
             const drag = this._mapDrag;
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
-            if (!drag || !cur || !cur.isConnected) return;
+            if (!drag || e.pointerId !== drag.pointerId || !cur || !cur.isConnected) return;
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
             if (!drag.moved && Math.hypot(dx, dy) < 4) return;
             drag.moved = true;
             cur.classList.add('is-panning');
             const vb = cur.viewBox.baseVal;
             const rect = cur.getBoundingClientRect();
-            const scale = Math.max(vb.width / rect.width, vb.height / rect.height);
+            const scaleX = vb.width / Math.max(1, rect.width);
+            const scaleY = vb.height / Math.max(1, rect.height);
             this.mapPan = this.mapPan || { x: 0, y: 0 };
-            this.mapPan.x -= dx * scale;
-            this.mapPan.y -= dy * scale;
+            this.mapPan.x -= dx * scaleX;
+            this.mapPan.y -= dy * scaleY;
+            delayShipLabel();
             drag.x = e.clientX;
             drag.y = e.clientY;
             apply();

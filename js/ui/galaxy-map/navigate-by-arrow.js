@@ -248,6 +248,7 @@ extendClass(GalaxyMapManager, {
     },
 
     updateDetails() {
+        if (!this.overlay) return;
         const info = this.getPlanetInfo(this.selectedPlanetId);
         const set = (id, text) => {
             const el = this.overlay.querySelector('#' + id);
@@ -297,6 +298,16 @@ extendClass(GalaxyMapManager, {
             : 'LOCKED');
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
         set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED');
+        const unlockHint = this.overlay.querySelector('#gmUnlockHint');
+        if (unlockHint) {
+            const unlockFrom = !info.unlocked
+                ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
+                    .find((pid) => pid && this.isUnlocked(pid))
+                : null;
+            unlockHint.textContent = unlockFrom
+                ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
+                : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
+        }
         const progressBar = this.overlay.querySelector('.galaxy-map-progress-bar');
         if (progressBar) progressBar.textContent = this.getGalaxyProgressLabel();
     },

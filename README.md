@@ -18,6 +18,33 @@ through five faction-themed galaxies. Its identity is carried by pixel shapes,
 not just color: every faction has its own silhouette, doctrine, and visual
 language.
 
+```text
+╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
+│  PILOT STATUS   READY                                                       │
+│  THEATER         MILKY WAY · MARS                                           │
+│  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
+│  OBJECTIVE       CLEAR THE STAGE · CLAIM THE LOOT                           │
+│  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
+╰─────────────────────────────────────────────────────────────────────────────╯
+```
+
+<div align="center">
+
+<img src="assets/ships/sprites/player-starfighter.png" alt="GLXEE player starfighter" width="128" />
+<img src="assets/ships/sprites/player-interceptor.png" alt="GLXEE interceptor" width="128" />
+<img src="assets/levels/sprites/mars-surface.png" alt="Mars combat theater" width="128" />
+<img src="assets/levels/sprites/pluto-surface.png" alt="Pluto combat theater" width="128" />
+
+<br/>
+
+`STARFIGHTER` · `INTERCEPTOR` · `MARS` · `PLUTO`
+
+</div>
+
+> **Design rule:** the README follows the game loop. Boot and controls come
+> first, systems are described once in their owning section, and development
+> history stays at the end.
+
 ## Contents
 
 - [Boot](#boot)
@@ -202,6 +229,16 @@ sprites where segmented rendering would distort a faction silhouette.
 - Optional ComfyUI and asset-generation bridge.
 - Cursed IDE packages under `packages/`.
 
+### Current build focus
+
+```text
+HANGAR  ── size-aware slots ── weapon mounts ── power budget ── test arena
+   │
+TRAVEL  ── route preview ── arrival sector ── encounter staging ── mission loot
+   │
+COMBAT  ── wave direction ── enemy lanes ── pickups ── victory handoff
+```
+
 ## Architecture
 
 GLXEE deliberately remains a script-loaded browser project. Large systems are
@@ -264,6 +301,9 @@ be reviewed or reverted independently.
 | 44A | Galactic control | Faction holdings, expanding stations, base raids, invasions, contested galaxies |
 | 44B | Combat presentation | Weapon slot purchases, bounded mounts, full-sprite weapons, collision-safe placement |
 | 44C | Station UX | Resizable sidebars, hangar layout polish, profile flow, palette and menu refinements |
+| 45A | Combat staging | Enemy lanes, victory handoff, loot timing, pickup and collision polish |
+| 45B | Galaxy routing | Arrival sectors, route preview, galaxy state, and parallax handoff refinements |
+| 45C | Hangar presentation | Power budget, slot fit states, parts presentation, and test-arena polish |
 
 The wave commit convention is:
 

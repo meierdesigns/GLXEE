@@ -111,17 +111,22 @@ extendClass(BulletManager, {
     },
 
     /**
-     * Shrink bullets added since `from` so their width matches the barrel of
-     * a gun `gunWidth` wide (never enlarged; proportions kept, centre kept).
+     * Resize bullets added since `from` so their width matches the barrel of
+     * a gun `gunWidth` wide (proportions kept, centre kept). Shots only
+     * shrink to the barrel; `maxGrow` (> 1, from a bigger slot size) lets
+     * them grow up to that factor of their base size, never past the barrel.
      */
-    fitBulletsToBarrel(list, from, gunWidth, weaponId) {
+    fitBulletsToBarrel(list, from, gunWidth, weaponId, maxGrow) {
         if (!(gunWidth > 0)) return;
+        // Never below 1 px wide / 3 px long, so shots stay readable.
         const target = Math.max(1, gunWidth * this.getBarrelFraction(weaponId));
+        const grow = Math.max(1, Number(maxGrow) || 1);
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             const bw = b.width != null ? b.width : b.w;
-            if (!(bw > target)) continue;
-            const s = Math.max(0.3, target / bw);
+            if (!(bw > 0)) continue;
+            const s = Math.max(0.3, Math.min(grow, target / bw));
+            if (s === 1) continue;
             const cx = b.x + bw / 2;
             const nw = Math.max(1, bw * s);
             if (b.width != null) {
@@ -225,7 +230,9 @@ extendClass(BulletManager, {
             if (cfg.width != null) cfg.width *= sideScale;
             if (cfg.height != null) cfg.height *= sideScale;
         }
-        const damageMul = enemy && enemy.damageMul != null ? enemy.damageMul : 1;
+        // Side craft hit at half strength: escorts pressure, the champion is the threat.
+        const damageMul = (enemy && enemy.damageMul != null ? enemy.damageMul : 1)
+            * (enemy && enemy.isSideEnemy ? 0.5 : 1);
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
         if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
             weaponConfigManager.clampWeaponShot(cfg);
@@ -249,7 +256,7 @@ extendClass(BulletManager, {
             speed: 2.5,
             damage: Math.max(1, Math.round(8 * (
                 enemy && enemy.damageMul != null ? enemy.damageMul : 1
-            ))),
+            ) * (enemy && enemy.isSideEnemy ? 0.5 : 1))),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
             // Lighting properties

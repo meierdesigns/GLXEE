@@ -122,10 +122,35 @@ class GameCore {
             themeContextManager.restoreAppTheme();
         }
 
+        // Pixel font must be ready before the menu paints, otherwise the
+        // fallback→Silkscreen swap makes the layout jump under the veil fade
+        if (document.fonts && document.fonts.load) {
+            await Promise.race([
+                document.fonts.load("700 16px 'Silkscreen'").catch(() => {}),
+                new Promise((resolve) => setTimeout(resolve, 800))
+            ]);
+        }
+
         const restored = menuStateManager.restore();
         if (!restored) {
             this.showStartScreen({ skipPersist: true });
             menuStateManager.setScreen('start');
+        }
+        // Boot intro only on a fresh app start (not a refresh of a running session)
+        // and not when we resume straight into the home station
+        const landedScreen = menuStateManager.get() && menuStateManager.get().screen;
+        let alreadyRunning = false;
+        try {
+            alreadyRunning = sessionStorage.getItem('vf_app_running_v1') === '1';
+            sessionStorage.setItem('vf_app_running_v1', '1');
+        } catch (e) { /* storage blocked — treat as fresh start */ }
+        const inStation = landedScreen === 'home-station'
+            || (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible);
+        if (!alreadyRunning && !inStation && typeof VFStartIntro !== 'undefined') {
+            VFStartIntro.play({
+                title: (typeof startScreenManager !== 'undefined' && startScreenManager.title) || 'GLXEE',
+                subtitle: (typeof startScreenManager !== 'undefined' && startScreenManager.subtitle) || ''
+            });
         }
         // Let start-screen / station paint under the veil, then fade
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {

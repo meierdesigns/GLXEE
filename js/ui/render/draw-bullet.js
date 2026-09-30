@@ -8,6 +8,11 @@ extendClass(RenderManager, {
 
         let bulletColor = this.resolveCss(this.getBulletColor(bullet), '#ffffff');
 
+        // Bonus (charged / beat) shots: same size, brighter colour.
+        if (bullet.bonusGlow > 0) {
+            bulletColor = this.blendColors(bulletColor, '#ffffff', 0.25 + 0.45 * bullet.bonusGlow);
+        }
+
         if (lighting && lighting.intensity > 0 && lighting.color) {
             bulletColor = this.blendColors(
                 bulletColor,
@@ -61,14 +66,16 @@ extendClass(RenderManager, {
             ctx.fillStyle = c;
             ctx.fillRect(Math.round(rx), Math.round(ry), Math.max(1, Math.round(rw)), Math.max(1, Math.round(rh)));
         };
-        // Soft halo in the type colour behind every shape.
-        rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
+        // Every shape stays inside the shot's own w×h box, so the drawn
+        // shot is as big as the shot (which is sized to its gun's barrel).
+        // Soft halo only on wide shots — on thin ones it tripled the width.
+        if (w >= 3) rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
         const tipY = (len) => (down ? lead - len : lead);
         switch (id) {
             case 'plasma':
             case 'nova': {
                 // Orb: round body, bright centre (nova adds star spikes).
-                const r = Math.max(2, Math.min(w, h) / 2 + 1);
+                const r = Math.max(1, Math.min(w, h) / 2);
                 const cy = y + h / 2;
                 rect(cx - r, cy - r / 2, r * 2, r, color);
                 rect(cx - r / 2, cy - r, r, r * 2, color);
@@ -81,19 +88,21 @@ extendClass(RenderManager, {
             }
             case 'missile': {
                 // Body + nose + flickering exhaust at the tail.
-                const bw = Math.max(2, w);
-                rect(cx - bw / 2, y, bw, h, color);
-                rect(cx - bw / 4, tipY(2), bw / 2, 2, hot);
-                const tail = down ? y - 3 : y + h;
-                rect(cx - bw / 4, tail, bw / 2, 3, '#ffb03d', 0.5 + 0.5 * Math.random());
+                const bw = w;
+                const tl = Math.max(1, Math.round(h / 4));
+                rect(cx - bw / 2, y, bw, h - tl, color);
+                rect(cx - bw / 4, tipY(1), bw / 2, 1, hot);
+                const tail = down ? y : y + h - tl;
+                rect(cx - bw / 4, tail, bw / 2, tl, '#ffb03d', 0.5 + 0.5 * Math.random());
                 break;
             }
             case 'wave': {
                 // Sine wiggle: offset segments down the length.
                 const seg = Math.max(2, Math.round(h / 4));
                 for (let i = 0; i < h; i += seg) {
-                    const off = Math.sin((i / h) * Math.PI * 2 + (bullet.wavePhase || 0)) * Math.max(1, w / 2);
-                    rect(cx - w / 2 + off, y + i, w, seg, color);
+                    const ww = Math.max(1, w / 2);
+                    const off = Math.sin((i / h) * Math.PI * 2 + (bullet.wavePhase || 0)) * (w - ww) / 2;
+                    rect(cx - ww / 2 + off, y + i, ww, seg, color);
                 }
                 rect(cx - 0.5, tipY(2), 1, 2, hot);
                 break;
@@ -101,14 +110,14 @@ extendClass(RenderManager, {
             case 'ion': {
                 // Core with bright ring bands.
                 rect(cx - w / 2, y, w, h, color, 0.8);
-                for (let i = 1; i < h - 1; i += 3) rect(cx - w / 2 - 1, y + i, w + 2, 1, hot, 0.85);
+                for (let i = 1; i < h - 1; i += 3) rect(cx - w / 2, y + i, w, 1, hot, 0.85);
                 break;
             }
             case 'spread':
             case 'spike_burst': {
                 // Diamond / arrowhead pointing along travel.
-                const half = Math.max(1, w / 2 + 1);
-                const len = Math.max(3, h);
+                const half = Math.max(0.5, w / 2);
+                const len = h;
                 for (let i = 0; i < len; i++) {
                     const t = i / len;
                     const ww = Math.max(1, half * 2 * (t < 0.4 ? t / 0.4 : (1 - t) / 0.6));
@@ -131,13 +140,13 @@ extendClass(RenderManager, {
                 // Thin needle with a long bright tip.
                 const nw = Math.max(1, w - 1);
                 rect(cx - nw / 2, y, nw, h, color);
-                rect(cx - 0.5, tipY(Math.max(3, h / 2)), 1, Math.max(3, h / 2), hot);
+                rect(cx - 0.5, tipY(Math.max(1, h / 2)), 1, Math.max(1, h / 2), hot);
                 break;
             }
             case 'claw_beam': {
                 // Two prongs with a beam between them.
-                rect(cx - w / 2 - 1, y, 1, h, color);
-                rect(cx + w / 2, y, 1, h, color);
+                rect(x, y, 1, h, color);
+                rect(x + w - 1, y, 1, h, color);
                 rect(cx - Math.max(0.5, w / 4), y, Math.max(1, w / 2), h, hot, 0.9);
                 break;
             }

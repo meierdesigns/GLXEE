@@ -23,7 +23,9 @@ extendClass(AbilityConfigManager, {
                 cluster: 'other',
                 type: 'passive',
                 tier: 3,
-                uiDescription: 'Intelligent enemy behavior patterns'
+                uiDescription: 'Intelligent enemy behavior patterns',
+                // Enemy behaviour — the player flies the ship themselves.
+                enemyOnly: true
             }),
             charge_shot: this.makeAbility({
                 id: 'charge_shot',
@@ -140,6 +142,7 @@ extendClass(AbilityConfigManager, {
             tier: data.tier != null ? Math.round(Number(data.tier)) : 1,
             uiDescription: data.uiDescription || data.description || '',
             custom: !!data.custom,
+            enemyOnly: !!data.enemyOnly,
             faction: data.faction ? String(data.faction).toLowerCase() : null,
             // Optional per-id visual/slot overrides — see weapon-config.js's
             // makeWeapon() for the matching mechanism.

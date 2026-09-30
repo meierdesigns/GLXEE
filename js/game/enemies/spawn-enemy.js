@@ -75,7 +75,8 @@ extendClass(EnemyManager, {
             tier: champTier,
             level: champLevel,
             type: (scheduleEntry && scheduleEntry.type) || this.currentShipType,
-            drawScale: 1
+            // Champions a bit smaller than their raw model (ships read too large).
+            drawScale: 0.8
         });
         shipWidth = hitProfile.width;
         shipHeight = hitProfile.height;

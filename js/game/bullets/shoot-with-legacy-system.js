@@ -48,8 +48,10 @@ extendClass(BulletManager, {
         const bullet = {
             x: playerPosition.x + playerPosition.width / 2 - 1.5,
             y: playerPosition.y,
-            width: Math.max(2, Math.round(2 * Math.min(1.75, mult))),
-            height: Math.max(8, Math.round(8 * (1 + (Math.min(1.75, mult) - 1) * 0.25))),
+            // Bonus shots keep the base size and glow brighter instead.
+            width: 2,
+            height: 8,
+            bonusGlow: Math.max(0, Math.min(1, (mult - 1) / 0.75)),
             speed: 6 * (1 + (mult - 1) * 0.15),
             damage: Math.round(10 * mult),
             color: '#808080', // Grayscale base - will be colored by render system

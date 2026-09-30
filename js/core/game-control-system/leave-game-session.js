@@ -89,6 +89,14 @@ extendClass(GameControlSystem, {
                     }
                 }
             });
+            // Ambush lost: show the flight back to the last station.
+            if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._ambushLost
+                && galaxyMapManager._postAmbushFlight && galaxyMapManager.retreatAfterAmbush) {
+                const f = galaxyMapManager._postAmbushFlight;
+                galaxyMapManager._postAmbushFlight = null;
+                galaxyMapManager._ambushLost = false;
+                galaxyMapManager.retreatAfterAmbush(f);
+            }
         } else if (typeof combinedSelectionManager !== 'undefined') {
             combinedSelectionManager.show();
         } else if (typeof planetSelectionManager !== 'undefined') {

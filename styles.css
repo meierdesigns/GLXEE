@@ -254,7 +254,10 @@ body {
 /* Soft page-refresh bridge: destination bg while menus boot */
 .vf-boot-veil {
     position: fixed;
-    inset: 0;
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: auto;
     z-index: 99990;
     pointer-events: none;
     background-color: #000;
@@ -8003,14 +8006,32 @@ body.pe-resizing * {
         linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.30) 40%, rgba(0, 0, 0, 0.56) 100%),
         url('assets/ui/hs-bg-travel.png');
 }
+.vf-browser-shell {
+    position: relative;
+    flex: 1 1 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
 .home-station-content {
     position: relative;
     text-align: left;
-    zoom: var(--gui-zoom, 0.75);
-    width: calc(100% / var(--gui-zoom, 0.75));
-    max-width: calc(100% / var(--gui-zoom, 0.75));
-    height: calc(100% / var(--gui-zoom, 0.75));
-    max-height: calc(100% / var(--gui-zoom, 0.75));
+    /* Fill the shell exactly; no zoom so GUI elements keep their proportions. */
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
     padding: clamp(10px, 1.6vh, 16px) clamp(12px, 1.8vw, 18px);
     display: flex;
     flex-direction: column;
@@ -8021,6 +8042,11 @@ body.pe-resizing * {
             color-mix(in srgb, var(--color-background) 90%, transparent) 100%);
     box-shadow: 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 72%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 48%, transparent), 0 0 0 26px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 30%, transparent), 0 0 0 38px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 16%, transparent), 0 16px 56px rgba(0, 0, 0, 0.75), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 72%, transparent), inset 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 48%, transparent), inset 0 0 0 38px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 30%, transparent), inset 0 0 0 54px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 16%, transparent);
     backdrop-filter: none;
+}
+.home-station-overlay {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: hidden;
 }
 .home-station-content::before {
     content: "";
@@ -21349,15 +21375,19 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
     font-size: 10px;
 }
 .home-station-overlay .home-station-content {
-    width: calc(100vw - 2 * (var(--hs-frame-gap) + var(--bezel))) !important;
-    max-width: calc(100vw - 2 * (var(--hs-frame-gap) + var(--bezel))) !important;
+    /* Uniform GUI scale: zoom shrinks every element proportionally; the
+       frame geometry is divided by the zoom so it still fills the viewport. */
+    zoom: var(--gui-zoom, 0.75);
+    --hs-z: var(--gui-zoom, 0.75);
     --hs-pad-y: clamp(8px, 1.6vh, 16px);
-    height: calc(100vh - 2 * (var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y))) !important;
-    max-height: calc(100vh - 2 * (var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y))) !important;
+    width: calc((var(--vw, 100vw) - 2 * (var(--hs-frame-gap) + var(--bezel))) / var(--hs-z)) !important;
+    max-width: none !important;
+    height: calc((var(--vh, 100vh) - 2 * (var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y))) / var(--hs-z)) !important;
+    max-height: none !important;
     /* Pinned inside the frame with breathing room above and below. */
     position: fixed !important;
-    top: calc(var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y)) !important;
-    left: calc(var(--hs-frame-gap) + var(--bezel)) !important;
+    top: calc((var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y)) / var(--hs-z)) !important;
+    left: calc((var(--hs-frame-gap) + var(--bezel)) / var(--hs-z)) !important;
     margin: 0 !important;
     transform: none !important;
     box-shadow:
@@ -22763,3 +22793,34 @@ html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-
     color: #fff !important;
 }
 .gm-mission-icon { width: 18px !important; height: 18px !important; image-rendering: pixelated; }
+
+/* Home-station readability and stable wide launch control. */
+.home-station-overlay .hs-play-launch {
+    flex: 0 0 180px;
+    width: 180px;
+    min-width: 180px;
+    min-height: 92px;
+}
+.home-station-overlay .hs-tabs,
+.home-station-overlay .hs-subnav {
+    gap: 8px;
+}
+.home-station-overlay .hs-tab {
+    min-height: 38px;
+    padding: 7px 12px;
+}
+.home-station-overlay .hs-tab-label,
+.home-station-overlay .hs-play-launch-label {
+    font-size: max(var(--font-text), 13px);
+    letter-spacing: 1px;
+}
+.home-station-overlay .hs-header-split {
+    gap: 12px;
+}
+@media (max-width: 700px) {
+    .home-station-overlay .hs-play-launch {
+        flex-basis: 100%;
+        width: 100%;
+        min-width: 0;
+    }
+}

@@ -10,16 +10,6 @@
     const DEFAULT_ASPECT = 0.8; // display width / height (~480x600)
     const DEFAULT_DESIGN_W = 480;
     const DEFAULT_DESIGN_H = 600;
-    const DEFAULT_GUI_ZOOM = 0.75;
-
-    function resetGuiZoom(event) {
-        if (!event.ctrlKey || event.key !== '0') return;
-        event.preventDefault();
-        ROOT.style.setProperty('--gui-zoom', String(DEFAULT_GUI_ZOOM));
-        update();
-    }
-
-    document.addEventListener('keydown', resetGuiZoom, { capture: true });
 
     function clamp(n, min, max) {
         return Math.max(min, Math.min(max, n));

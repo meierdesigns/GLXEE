@@ -31,7 +31,8 @@ extendClass(ShipAssetLoader, {
                     trail += sweep;
                 } else if (silhouette === 'scrap') {
                     // Welded-on salvage: ragged, uneven trailing edge.
-                    const h = (Math.imul(c * 31 + 7, 2654435761) >>> 0) % 3;
+                    // Ragged in a few big steps (per 3-column block), not per column.
+                    const h = (Math.imul(Math.floor(c / 3) * 31 + 7, 2654435761) >>> 0) % 3;
                     trail -= h * 0.05 * k * u;
                 } else if (silhouette === 'rings') {
                     // Rounded crescent: pod-like tip, curving forward.
@@ -46,7 +47,8 @@ extendClass(ShipAssetLoader, {
                     const mix = Math.min(1, 0.45 * k);
                     lead = lead * (1 - mix) + 0.2 * mix;
                     trail = trail * (1 - mix) + 0.8 * mix;
-                    if (Math.floor(u * 6) % 2 === 1) trail = lead + (trail - lead) * 0.6;
+                    // One square notch at mid-span (a comb of them read as a pattern).
+                    if (u > 0.45 && u < 0.62) trail = lead + (trail - lead) * 0.7;
                 } else if (silhouette === 'modular') {
                     // Stepped terraces along the trailing edge — a blocky plate wing.
                     const step = Math.floor(u * 3) / 3;
@@ -62,6 +64,28 @@ extendClass(ShipAssetLoader, {
         // no dark seam line runs across the joint (worst on a turned wing).
         this.outlineGridEdges(g, left ? 'right' : 'left');
         this.applyFactionPlating(g, silhouette, 1, left);
+        // Flap seam: a darker line a couple of voxels in from the trailing
+        // edge over the outer span, where a real wing's control surface is.
+        for (let c = 0; c < cols; c++) {
+            const u = cols <= 1 ? 0 : (left ? cols - 1 - c : c) / (cols - 1);
+            if (u < 0.3 || u > 0.9) continue;
+            let last = -1;
+            let firstRow = -1;
+            for (let r = 0; r < rows; r++) {
+                if (g[r][c] && g[r][c] !== 1) { if (firstRow < 0) firstRow = r; last = r; }
+            }
+            if (last - firstRow >= 4 && g[last - 2][c] !== 1) g[last - 2][c] = 4;
+        }
+        // Navigation light: one accent voxel on the wing tip.
+        {
+            const tipC = left ? g[0].findIndex((_, c) => g.some((row) => row[c] && row[c] !== 1))
+                : (() => { for (let c = cols - 1; c >= 0; c--) if (g.some((row) => row[c] && row[c] !== 1)) return c; return -1; })();
+            if (tipC >= 0) {
+                const rs = [];
+                for (let r = 0; r < rows; r++) if (g[r][tipC] && g[r][tipC] !== 1) rs.push(r);
+                if (rs.length) g[rs[Math.floor(rs.length / 2)]][tipC] = 3;
+            }
+        }
         // Accent trim follows the leading edge: the first interior voxel of
         // each column, so it always sits on the wing and never off it.
         for (let c = 0; c < cols; c++) {
@@ -150,7 +174,9 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 0);
+        this.applyFactionPlating(g, silhouette, 0, false, true);
+        // Hull footprint: accent stamps below may only land on the hull.
+        const hullMask = g.map((row) => row.map((v) => v !== 0));
         const capW = Math.max(1, Math.round(cols * 0.2));
         const capC = Math.round((cols - capW) / 2);
         const capR0 = Math.round(rows * 0.4);
@@ -186,6 +212,9 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, cols * 0.12, rows * 0.74, cols * 0.22, Math.max(1, rows * 0.16), 1);
         }
         // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        // Accent blocks sit at fixed fractions of the frame; clip them to
+        // the hull so none float beside a lopsided or tapered silhouette.
+        this.clipGridToMask(g, hullMask);
         if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },
@@ -196,10 +225,10 @@ extendClass(ShipAssetLoader, {
         case 1: return 1 - 0.45 * t; // tapered tail
         case 2: return 0.62 + 0.38 * Math.pow(Math.abs(t * 2 - 1), 1.5); // skirt
         case 3: return 0.6 + 0.4 * t; // flare: widens into the exhaust
-        case 4: return ((t * 6) | 0) % 2 ? 0.76 : 1; // notched fins
+        case 4: return t > 0.45 && t < 0.62 ? 0.76 : 1; // notched fins: one notch
         case 5: return 1 - 0.32 * Math.sin(t * Math.PI); // pinched waist
         case 6: return t > 0.7 ? 0.5 : 1; // stub nozzle
-        case 7: return 0.7 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2)); // fan
+        case 7: return 0.7 + 0.3 * t * t; // fan: flares into the exhaust
         default: return 1; // block
         }
     },
@@ -223,7 +252,9 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 3);
+        this.applyFactionPlating(g, silhouette, 3, false, true);
+        // Hull footprint: accent stamps below may only land on the hull.
+        const hullMask = g.map((row) => row.map((v) => v !== 0));
         // Engine block layout is a faction trait — the shape variant only
         // nudges it, so a Kronax tail never reads like a Machine tail.
         const r0 = Math.round(rows * 0.4);
@@ -264,6 +295,9 @@ extendClass(ShipAssetLoader, {
             }
         }
         // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        // Accent blocks sit at fixed fractions of the frame; clip them to
+        // the hull so none float beside a lopsided or tapered silhouette.
+        this.clipGridToMask(g, hullMask);
         if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },

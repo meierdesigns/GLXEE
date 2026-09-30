@@ -26,7 +26,67 @@ extendClass(HomeStationUI, {
             onExplored: () => {},
             onDock: (post) => this.openTradingPost(post)
         });
+        this.mountTravelControls(mount);
         this.syncPlayHint();
+    },
+
+    /** Galaxy travel modal over the planet map. */
+    mountTravelControls(mount) {
+        if (!mount) return;
+        // Opened from the map's TELEPORT button or the Travel tab.
+        mount.querySelectorAll(':scope > .hs-travel-modal').forEach((el) => el.remove());
+        if (!this._travelModal) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'hs-travel-modal';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.setAttribute('aria-label', 'Galaxy travel');
+        wrap.innerHTML = `<div class="hs-travel-dialog">` +
+            `<button type="button" class="action-button hs-travel-close" data-travel-close aria-label="Close">✕</button>` +
+            this.renderTravelTab(this.getProfile()) +
+            `</div>`;
+        // Click on the dimmed backdrop closes it too.
+        wrap.addEventListener('click', (e) => { if (e.target === wrap) this.closeTravelModal(); });
+        wrap.querySelector('[data-travel-close]').addEventListener('click', () => this.closeTravelModal());
+        wrap.querySelectorAll('[data-travel]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-travel');
+                const res = profileManager.travelToGalaxy(gid);
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this._travelModal = false;
+                    this.statusMsg = 'TRAVELLED TO ' + name + (res.faction ? ' · ' + String(res.faction).toUpperCase() : '');
+                    this.createUI();
+                } else {
+                    this.playButtonResult(btn, false, res.reason === 'DRIVE'
+                        ? 'NEED WARP L' + (res.requireWarp || 1) + ' OR BUY PORTAL'
+                        : (res.reason || 'FAILED'));
+                }
+            });
+        });
+        this._travelKey = (e) => {
+            if (e.key === 'Escape' && this._travelModal) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                this.closeTravelModal();
+            }
+        };
+        document.addEventListener('keydown', this._travelKey, true);
+        mount.appendChild(wrap);
+    },
+
+    openTravelModal() {
+        this._travelModal = true;
+        const mount = this.overlay && this.overlay.querySelector('#hsPlayMount');
+        if (mount) this.mountTravelControls(mount);
+    },
+
+    closeTravelModal() {
+        this._travelModal = false;
+        if (this._travelKey) document.removeEventListener('keydown', this._travelKey, true);
+        this._travelKey = null;
+        const el = this.overlay && this.overlay.querySelector('.hs-travel-modal');
+        if (el) el.remove();
     },
 
     getActivePlayShipId() {
@@ -111,6 +171,10 @@ extendClass(HomeStationUI, {
         galaxyMapManager.disarmInput();
         this._navLevel = 'tabs';
         this.focusActiveTab();
+        // One level up = the area's sub-nav row (PLAY / HANGAR / …), not the area row.
+        if (this.overlay && this.overlay.querySelector('.hs-subnav-tab') && this.focusNavRow) {
+            this.focusNavRow('subnav');
+        }
         this.syncNavHint();
         return wasActive || true;
     },

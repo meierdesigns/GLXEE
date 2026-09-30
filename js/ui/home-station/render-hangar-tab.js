@@ -67,12 +67,6 @@ extendClass(HomeStationUI, {
         const netSign = powerBudget.net >= 0 ? '+' : '';
         const powerLine = `POWER · GEN ${powerBudget.gen}/s · IDLE DRAW ${powerBudget.idleDraw}/s · NET ${netSign}${powerBudget.net}/s`;
 
-        const fireMode = (loadout.abilities || []).indexOf('charge_shot') !== -1 ? 'charge' : 'auto';
-        const ownsChargeShot = (typeof shipLoadoutManager !== 'undefined'
-            && shipLoadoutManager.ownsChargePart)
-            ? shipLoadoutManager.ownsChargePart('ability', 'charge_shot')
-            : (inventory.abilities || []).indexOf('charge_shot') !== -1;
-
         const equippedByKind = {
             weapon: {},
             defense: {},
@@ -129,6 +123,11 @@ extendClass(HomeStationUI, {
                     <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
                     <span class="hs-panel-label">HANGAR — OPEN BAY</span>
                     <span class="hs-panel-scan" aria-hidden="true"></span>
+                    <label class="hs-hangar-voxel is-in-title" title="Voxel size of the whole ship">
+                        <span>VOXEL SIZE</span>
+                        <input type="range" data-voxel-scale data-hangar-voxel min="0.2" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
+                        <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
+                    </label>
                     <span class="hs-hangar-sidebar-actions">
                         <button type="button" class="hs-sidebar-toggle hs-sidebar-toggle-wide" data-hangar-sidebar="left"
                             aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
@@ -146,6 +145,43 @@ extendClass(HomeStationUI, {
                         </button>
                     </span>
                 </h3>
+                <div class="hs-hangar-detail-head hs-panel">
+                    <div class="hs-hangar-head-title">
+                        <span class="hs-chip-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
+                        <strong class="hs-hangar-head-name">${this.shipName(shipId)}</strong>
+                        ${shipId === profile.activeShipId
+                            ? '<span class="hs-hangar-active-tag">★ ACTIVE</span>'
+                            : `<button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>`}
+                    </div>
+                    <div class="hs-hangar-stats is-row">
+                        <div class="hs-stat-group is-slots" role="group" aria-label="Slots">
+                        ${[['statWeapon', 'weapon', 'WEAPON SLOTS', loadout.weapons.length,
+                            // caps.weapons counts guns (a split pair = 2); a slot is one weapon, split or not.
+                            (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.weaponMountSlots)
+                                ? shipLoadoutManager.weaponMountSlots(caps.weapons) : caps.weapons],
+                            ['statArmor', 'defense', 'DEFENSE SLOTS', loadout.defenses.length, caps.defenses],
+                            ['statAbilities', 'ability', 'ABILITY SLOTS', loadout.abilities.length, caps.abilities],
+                            ['statEnergy', 'energy', 'ENERGY SLOTS', (loadout.energy || []).length, caps.energy || 1]]
+                            // One tile per slot type, in the global category colour code.
+                            .map(([ic, kind, label, n, cap]) => this.hangarStatTile(ic, label, `${n}<span class="hs-stat-of">/${cap}</span>`,
+                                `${label}: ${n} of ${cap} used (${this.shipName(shipId)})`, '', ' is-slot' + (n >= cap ? ' is-full' : ''),
+                                (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor(kind) : null)).join('')}
+                        </div>
+                        ${this.renderHangarAreaUpgrades(shipId, profile)}
+                        <div class="hs-stat-group is-stats" role="group" aria-label="Ship stats">
+                        ${this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '')}
+                        ${this.hangarStatTile('hsUpgrade', 'AREAS', `${frameLevel}<span class="hs-stat-of">/${frameMax}</span>`, 'Hull area levels (open new slots, add hull HP)', '')}
+                        ${(() => {
+                            // Move speed after ability effects; ability hover previews change it (bindHangarAbilityHover).
+                            const pm = this.getHangarPreviewModel(shipId);
+                            return this.hangarStatTile('statSpeed', 'SPEED', `${pm.speed}`, 'Move speed (after abilities)', '', ' is-speed');
+                        })()}
+                        ${this.hangarStatTile('statEnergy', 'POWER', `${netSign}${powerBudget.net}<span class="hs-stat-of">/s</span>`, powerLine, '',
+                            powerBudget.net < 0 ? ' is-negative' : '',
+                            (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor('energy') : null)}
+                        </div>
+                    </div>
+                </div>
                 <div class="hs-hangar-split${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}">
                     <aside class="hs-hangar-list hs-panel">
                         <h3 class="hs-panel-title">
@@ -169,44 +205,6 @@ extendClass(HomeStationUI, {
                     </aside>
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
-                        <div class="hs-hangar-detail-head hs-panel">
-                            <div class="hs-hangar-head-title">
-                                <span class="hs-chip-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
-                                <strong class="hs-hangar-head-name">${this.shipName(shipId)}</strong>
-                                ${shipId === profile.activeShipId
-                                    ? '<span class="hs-hangar-active-tag">★ ACTIVE</span>'
-                                    : `<button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>`}
-                                <div class="hs-hangar-fire-inline" role="group" aria-label="Fire mode">
-                                    <button type="button" class="action-button hs-mod ${fireMode === 'auto' ? 'equipped' : ''}" data-fire-mode="auto">AUTO</button>
-                                    <button type="button" class="action-button hs-mod ${fireMode === 'charge' ? 'equipped' : ''}" data-fire-mode="charge" ${ownsChargeShot ? '' : 'disabled'}
-                                        title="${ownsChargeShot ? 'Charge shot' : 'Buy the charge shot in the shop'}">CHARGE${ownsChargeShot ? '' : ' 🔒'}</button>
-                                </div>
-                            </div>
-                            <div class="hs-hangar-stats">
-                                ${this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '')}
-                                ${this.hangarStatTile('hsUpgrade', 'AREAS', `${frameLevel}<span class="hs-stat-of">/${frameMax}</span>`, 'Hull area levels (open new slots, add hull HP)',
-                                    `<span class="hs-stat-bar"><span style="width:${Math.round(100 * frameLevel / Math.max(1, frameMax))}%"></span></span>`)}
-                                ${this.hangarStatTile('hsComponents', 'SLOTS', `${filledSlots}<span class="hs-stat-of">/${totalSlots}</span>`,
-                                    `Weapons ${loadout.weapons.length}/${caps.weapons} · Defense ${loadout.defenses.length}/${caps.defenses} · Abilities ${loadout.abilities.length}/${caps.abilities} · Energy ${(loadout.energy || []).length}/${caps.energy || 1}`,
-                                    `<span class="hs-stat-chips">` +
-                                    [['statWeapon', loadout.weapons.length, caps.weapons], ['statArmor', loadout.defenses.length, caps.defenses],
-                                        ['statAbilities', loadout.abilities.length, caps.abilities], ['statEnergy', (loadout.energy || []).length, caps.energy || 1]]
-                                        .map(([ic, n, cap]) => `<span class="hs-stat-chip${n >= cap ? ' is-full' : ''}">${this.iconHtml(ic, 12, 'hs-pixel')}${n}/${cap}</span>`).join('') +
-                                    `</span>`)}
-                                ${this.hangarStatTile('statEnergy', 'POWER', `${netSign}${powerBudget.net}<span class="hs-stat-of">/s</span>`, powerLine,
-                                    `<span class="hs-stat-bar is-power"><span style="width:${Math.round(100 * Math.min(1, powerBudget.idleDraw / Math.max(0.1, powerBudget.gen)))}%"></span></span>` +
-                                    `<small>${powerBudget.gen} GEN · ${powerBudget.idleDraw} DRAW</small>`,
-                                    powerBudget.net < 0 ? ' is-negative' : '')}
-                            </div>
-                            <div class="hs-hangar-head-bar">
-                                <label class="hs-hangar-voxel" title="Voxel size of the whole ship">
-                                    <span>VOXEL SIZE</span>
-                                    <input type="range" data-voxel-scale data-hangar-voxel min="0.5" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
-                                    <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
-                                </label>
-                            </div>
-                            ${this.renderHangarAreaUpgrades(shipId, profile)}
-                        </div>
                         <div class="hs-hangar-bay hs-panel">
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>

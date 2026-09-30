@@ -20,17 +20,25 @@ extendClass(ShipLoadoutManager, {
         return out;
     },
 
+    /** Energy recovery (per second) an energy core gives: 20 + upgrade bonus; 0 for non-cores.
+     *  20/s covers 3 base laser volleys per second (6 each) plus idle draw. */
+    getEnergyCoreRegen(id) {
+        if (!this.isEnergyId(id)) return 0;
+        let regenBonus = 0;
+        if (typeof profileManager !== 'undefined' && profileManager.getModuleUpgradeBonuses) {
+            regenBonus = Math.max(0, Number(profileManager.getModuleUpgradeBonuses().energyRegenBonus) || 0);
+        }
+        return 20 + regenBonus;
+    },
+
     computePowerBudget(loadout) {
         const L = this.normalizeLoadout(loadout);
         const energyStatsBase = (() => {
             const hasCore = (L.energy || []).some((id) => this.isEnergyId(id));
-            let regenBonus = 0;
-            if (typeof profileManager !== 'undefined' && profileManager.getModuleUpgradeBonuses) {
-                regenBonus = Math.max(0, Number(profileManager.getModuleUpgradeBonuses().energyRegenBonus) || 0);
-            }
+            const core = (L.energy || []).find((id) => this.isEnergyId(id));
             return {
                 hasCore: hasCore,
-                gen: hasCore ? (8 + regenBonus) : 0
+                gen: hasCore ? this.getEnergyCoreRegen(core) : 0
             };
         })();
         const perModule = [];
@@ -126,6 +134,13 @@ extendClass(ShipLoadoutManager, {
     /**
      * Inventory pools for hangar equip UI.
      */
+    /** Abilities flagged enemyOnly in the ability config (e.g. boss_ai). */
+    isEnemyOnlyAbility(id) {
+        const a = typeof abilityConfigManager !== 'undefined' && abilityConfigManager.getAbility
+            ? abilityConfigManager.getAbility(id) : null;
+        return !!(a && a.enemyOnly) || id === 'boss_ai';
+    },
+
     getInventory(shipId) {
         const defaults = this.defaultLoadoutFromShip(shipId);
         const owned = {
@@ -171,6 +186,8 @@ extendClass(ShipLoadoutManager, {
             (current.energy || []).forEach((id) => add(owned.energy, id));
         }
         add(owned.energy, 'energy_core');
+        // Enemy-only abilities (Boss AI) never reach the player's hangar.
+        owned.abilities = owned.abilities.filter((id) => !this.isEnemyOnlyAbility(id));
         return owned;
     },
 

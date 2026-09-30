@@ -223,6 +223,12 @@ extendClass(HomeStationUI, {
         if (!band) return null;
         const k = this.hangarJointCorners(band);
         const reach = 7 / Math.max(1, h.scale);
+        // End-centre grips (wing joints) slide that end vertically.
+        if (band.kind === 'wing') {
+            for (const [end, c] of [['start', [band.x0, band.y0]], ['end', [band.x1, band.y1]]]) {
+                if (Math.hypot(pt.lx - c[0], pt.ly - c[1]) <= reach) return { band, end, side: 0, shift: true };
+            }
+        }
         const corners = [['start', -1, k.s0], ['start', 1, k.s1], ['end', -1, k.e0], ['end', 1, k.e1]];
         for (const [end, side, c] of corners) {
             if (Math.hypot(pt.lx - c[0], pt.ly - c[1]) <= reach) return { band, end, side };
@@ -246,6 +252,7 @@ extendClass(HomeStationUI, {
 
     /** Resize cursor for a joint handle: perpendicular to the band. */
     hangarJointHandleCursor(hit) {
+        if (hit.shift) return 'ns-resize';
         const band = hit.band;
         // Corners resize along their own end edge; sides across the centreline.
         const n = hit.end === 'start' ? band.n0 : (hit.end === 'end' ? band.n1 : null);
@@ -367,6 +374,49 @@ extendClass(HomeStationUI, {
                 };
             }
         }
+        // Corners first: a generous square around each frame corner (bigger
+        // than the edge bands, matching the drawn corner bracket), so a
+        // corner is easy to hit and never loses to a neighbouring part.
+        // The area whose panel is open, or the one hovered, wins near-ties.
+        const CORNER_PX = 14;
+        const cReach = CORNER_PX / Math.max(1, h.scale);
+        const prefId = this._hangarSelectedArea
+            || (this._hangarSegmentHover && this._hangarSegmentHover.segment) || null;
+        const prefers = (seg) => prefId && (seg.id === prefId
+            || (prefId === 'wing' && (seg.id === 'wingLeft' || seg.id === 'wingRight'))
+            || ((prefId === 'wingLeft' || prefId === 'wingRight') && seg.id === prefId));
+        let bestCorner = null;
+        segments.forEach((seg) => {
+            const q = local(seg);
+            // Inside reach: at most a third of the part, so small parts
+            // keep a move band in the middle.
+            const inX = Math.min(cReach, seg.width / 3);
+            const inY = Math.min(cReach, seg.height / 3);
+            [['left', seg.x, 1], ['right', seg.x + seg.width, -1]].forEach(([xe, cx, sx]) => {
+                [['top', seg.y, 1], ['bottom', seg.y + seg.height, -1]].forEach(([ye, cy, sy]) => {
+                    const dx = (q.lx - cx) * sx; // >0 = inside the frame
+                    const dy = (q.ly - cy) * sy;
+                    if (dx < -cReach || dx > inX || dy < -cReach || dy > inY) return;
+                    // Nearest corner wins, so hull and wing corners next to
+                    // each other stay separately grabbable; the selected
+                    // area only breaks near-ties (within 3 screen px).
+                    const d = Math.hypot(q.lx - cx, q.ly - cy) - (prefers(seg) ? 3 / Math.max(1, h.scale) : 0);
+                    if (!bestCorner || d < bestCorner.d) bestCorner = { seg, edge: ye + '-' + xe, d };
+                });
+            });
+        });
+        if (bestCorner) {
+            const seg = bestCorner.seg;
+            return {
+                segment: seg.id === 'wingLeft' || seg.id === 'wingRight' ? 'wing' : seg.id,
+                left: seg.id === 'wingLeft',
+                right: seg.id === 'wingRight',
+                width: seg.width,
+                height: seg.height,
+                edge: bestCorner.edge,
+                rotation: (this.hangarSegmentRotation(seg.id, h.model, h.scale) || { angle: 0 }).angle
+            };
+        }
         let hit = segments.find((seg) =>
             (seg.id === 'wingLeft' || seg.id === 'wingRight') && inGrip(seg));
         if (!hit) hit = segments.find((seg) => {
@@ -472,6 +522,8 @@ extendClass(HomeStationUI, {
         if (!hit) return 'grab';
         if (hit.jointHandle) return this.hangarJointHandleCursor(hit.jointHandle);
         if (hit.rotateHandle) return 'grab';
+        // Wing bridge slides up/down along the hull.
+        if (hit.connector && !hit.spine && (hit.left || hit.right)) return 'ns-resize';
         if (hit.connector) return 'alias';
         if (hit.edge && hit.rotation) {
             // Turn the edge's direction with the wing, then pick the

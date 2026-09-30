@@ -225,7 +225,7 @@ extendClass(HomeStationUI, {
         this._hangarMoveHandleSlot = slotEl;
         const sr = stage.getBoundingClientRect();
         const index = slotEl.getAttribute('data-slot-index') || '0';
-        // Beside its half, on the inner side (towards the hull), never over it.
+        // Beside its half, on the outer side (away from the hull), never over it.
         const place = (h, p, outward) => {
             if (!p) {
                 h.hidden = true;
@@ -242,8 +242,11 @@ extendClass(HomeStationUI, {
                 h.addEventListener('pointerdown', (e) => this.startHangarSlotMove(h, e));
             }
         };
-        place(handle, pin, 1);
-        place(mirror, mpin, -1);
+        // Outward = away from the other half; a lone pin keeps the right side.
+        const cx = (el) => { const r = el.getBoundingClientRect(); return r.left + r.width / 2; };
+        const pinOut = pin && mpin ? (cx(pin) < cx(mpin) ? -1 : 1) : 1;
+        place(handle, pin, pinOut);
+        place(mirror, mpin, -pinOut);
     },
 
     /**

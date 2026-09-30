@@ -13,6 +13,7 @@ extendClass(StartScreenManager, {
         if (opts.resetPanels) {
             this.showSettings = false;
             this.showCredits = false;
+            this.showProfiles = false;
             this.showFontMenu = false;
             this.showLevels = false;
         }
@@ -220,6 +221,8 @@ extendClass(StartScreenManager, {
             } else {
                 this.createEmbeddedMenuUI(content);
             }
+        } else if (this.showProfiles) {
+            this.createProfilesScreenUI(content);
         } else if (this.showCredits) {
             this.createCreditsUI(content);
         } else if (this.showFontMenu) {
@@ -232,6 +235,9 @@ extendClass(StartScreenManager, {
             this.createMainMenuUI(content);
         }
 
+        // Every start-screen page (menu, settings, credits, profiles) lives
+        // inside the same terminal screen.
+        if (!this.overlayMode && !this.embeddedMode) content.classList.add('start-screen-retro');
         host.appendChild(content);
 
         // Update menu selection

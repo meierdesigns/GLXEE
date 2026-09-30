@@ -188,6 +188,12 @@ extendClass(HomeStationUI, {
         const flat = Math.abs(a.ux) > Math.abs(a.uy);
         handle('both-1', k.side0, flat ? 18 : 8, flat ? 8 : 18);
         handle('both1', k.side1, flat ? 18 : 8, flat ? 8 : 18);
+        // Wing joints: a grip in the middle of each end slides that end up /
+        // down (hull end: wingConnectionY, wing end: wingConnectionYEnd).
+        if (band.kind === 'wing') {
+            handle('start0', [band.x0, band.y0], 10, 14);
+            handle('end0', [band.x1, band.y1], 10, 14);
+        }
         ctx.restore();
     },
 
@@ -313,6 +319,41 @@ extendClass(HomeStationUI, {
             const right = Math.round(ox + (seg.x + seg.width) * scale);
             const bottom = Math.round(oy + (seg.y + seg.height) * scale);
             const corner = Math.max(4, Math.min(14, (right - left) * 0.24, (bottom - top) * 0.24));
+            const colors = this.hangarHandleColors(accent);
+            // Full outline as soft dashes between the corner brackets, so
+            // every edge reads as a grabbable scale border.
+            ctx.save();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = colors.lineSoft;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(left + 0.5, top + 0.5, right - left - 1, bottom - top - 1);
+            ctx.restore();
+            // Edge under the pointer — or being dragged — lights up solid
+            // along its whole length, with a grip block in its middle.
+            const drag = this._hangarWingDragState;
+            const activeEdge = (drag && drag.edge && (drag.segment === hover.segment
+                || (hover.segment === 'wing' && drag.segment === 'wing'))) ? drag.edge : hover.edge;
+            if (activeEdge) {
+                const has = (k) => activeEdge.indexOf(k) !== -1;
+                ctx.save();
+                ctx.strokeStyle = colors.hotStroke;
+                ctx.lineWidth = drag && drag.edge ? 4 : 3;
+                ctx.beginPath();
+                if (has('top')) { ctx.moveTo(left, top); ctx.lineTo(right, top); }
+                if (has('bottom')) { ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); }
+                if (has('left')) { ctx.moveTo(left, top); ctx.lineTo(left, bottom); }
+                if (has('right')) { ctx.moveTo(right, top); ctx.lineTo(right, bottom); }
+                ctx.stroke();
+                ctx.restore();
+                if (activeEdge.indexOf('-') === -1) {
+                    const mx = has('left') ? left : (has('right') ? right : (left + right) / 2);
+                    const my = has('top') ? top : (has('bottom') ? bottom : (top + bottom) / 2);
+                    const horiz = has('top') || has('bottom');
+                    this.drawHangarPixelHandle(ctx, mx, my, horiz ? 14 : 8, horiz ? 8 : 14, true, accent);
+                }
+            }
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(left, top + corner);
             ctx.lineTo(left, top);
@@ -330,9 +371,9 @@ extendClass(HomeStationUI, {
             // Corner drag zones get their own filled hover marker — distinct
             // from a plain edge hover — so the diagonal resize handle is
             // clearly discoverable, not just implied by the cursor shape.
-            if (hover.edge && hover.edge.indexOf('-') !== -1) {
-                const cx = hover.edge.indexOf('right') !== -1 ? right : left;
-                const cy = hover.edge.indexOf('bottom') !== -1 ? bottom : top;
+            if (activeEdge && activeEdge.indexOf('-') !== -1) {
+                const cx = activeEdge.indexOf('right') !== -1 ? right : left;
+                const cy = activeEdge.indexOf('bottom') !== -1 ? bottom : top;
                 const r = Math.max(3, Math.min(7, corner * 0.5));
                 this.drawHangarPixelHandle(ctx, cx, cy, Math.max(10, r * 2), Math.max(10, r * 2), true, accent);
             }
@@ -449,7 +490,6 @@ extendClass(HomeStationUI, {
         canvas.addEventListener('pointerup', up);
         canvas.addEventListener('pointercancel', cancel);
         canvas.addEventListener('wheel', onWheel, { passive: false });
-        canvas.title = 'Mitte ziehen: verschieben · Rand ziehen: skalieren · Leere Fläche: schwenken · Scrollen: zoomen';
         canvas.style.cursor = 'grab';
         this._hangarWingDragCleanup = () => {
             canvas.removeEventListener('pointerdown', down);

@@ -99,7 +99,7 @@ extendClass(HomeStationUI, {
         if (typeof shipLoadoutManager === 'undefined') return 0.5;
         const loadout = shipLoadoutManager.getLoadout(shipId);
         // Max 1.5 — older loadouts may still store larger values.
-        return Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
+        return Math.max(0.2, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
     },
 
     getWingConnectionStyle(shipId) {
@@ -201,13 +201,22 @@ extendClass(HomeStationUI, {
             .map((seg) => {
                 const left = seg.id === 'wingLeft';
                 const attach = graphicsManager.shipAssetLoader.wingAttachPoint(seg, model, scale);
+                // Same wing-end shift as renderHullSegments (along the turned root).
+                const deg = Math.max(-60, Math.min(60, Number(loadout.wingRotation) || 0));
+                const ang = deg * Math.PI / 180 * (left ? -1 : 1);
+                const dX = (left ? -1 : 1) * Math.cos(ang);
+                const dY = (left ? -1 : 1) * Math.sin(ang);
+                const nX = left ? dY : -dY;
+                const nY = left ? -dX : dX;
+                const endShift = Math.max(-1, Math.min(1, Number(loadout.wingConnectionYEnd) || 0))
+                    * loader.wingVisibleRect(seg, model, scale).height * 0.5;
                 return {
                     id: seg.id,
                     left: left,
                     x0: left ? center.x : center.x + center.width,
                     y0: center.y + center.height * (0.5 + connectionY * 0.5),
-                    x1: attach.x,
-                    y1: attach.y,
+                    x1: attach.x + nX * endShift,
+                    y1: attach.y + nY * endShift,
                     // Outer extents exactly as renderHullSegments draws them:
                     // plate widens the band, double splits it into two
                     // struts whose outer edges reach further out.

@@ -178,7 +178,11 @@ extendClass(ShipAssetLoader, {
             // Two extra hull tones carry the faction plating pattern. Without
             // them a part's interior is a single flat fill.
             4: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, -26),
-            5: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 22)
+            5: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 22),
+            // Accent shade / light: accent blocks (cockpit, engines, trim)
+            // get a lit top, shaded sides and bands instead of a flat fill.
+            6: this.applyHullOverlayHex(accentBase, colorOverlay, overlayIntensity, -30),
+            7: this.applyHullOverlayHex(accentBase, colorOverlay, overlayIntensity, 30)
         };
     },
 
@@ -187,38 +191,137 @@ extendClass(ShipAssetLoader, {
      * cells are touched, so the silhouette and its outline survive, and it
      * runs before each part's own accent marks so those stay on top.
      */
-    applyFactionPlating(g, silhouette, seedIndex = 0, flipX = false) {
+    applyFactionPlating(g, silhouette, seedIndex = 0, flipX = false, symmetric = false) {
         const rows = g.length;
         const cols = rows ? g[0].length : 0;
         if (rows < 3 || cols < 3) return;
+        this.applyFactionPlatingPattern(g, silhouette, seedIndex, flipX);
+        this.applySurfaceDetail(g, seedIndex, flipX, symmetric);
+    },
+
+    /**
+     * Breaks up flat hull fills after the faction pattern: a lit top rim and
+     * shaded bottom rim per column (volume), panels a shade lighter / darker
+     * (so big or scaled-up parts don't read as one flat plate), and sparse
+     * vent dots on larger parts. Deterministic per part; `symmetric` parts
+     * (nose, core, aft) hash mirrored columns so they stay left/right
+     * symmetric, and flipX mirrors a left wing onto the right one.
+     */
+    /** Clear every cell outside `mask` (true = keep). */
+    clipGridToMask(g, mask) {
+        for (let r = 0; r < g.length; r++) {
+            for (let c = 0; c < g[r].length; c++) {
+                if (!(mask[r] && mask[r][c])) g[r][c] = 0;
+            }
+        }
+    },
+
+    applySurfaceDetail(g, seedIndex = 0, flipX = false, symmetric = false) {
+        const rows = g.length;
+        const cols = rows ? g[0].length : 0;
+        if (rows < 5 || cols < 5) return;
+        const hull = (v) => v === 2 || v === 4 || v === 5;
+        const solid = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && g[r][c] !== 0 && g[r][c] !== 1;
+        const colKey = (cc) => {
+            const c = flipX ? cols - 1 - cc : cc;
+            return symmetric ? Math.min(c, cols - 1 - c) : c;
+        };
+        const hash = (a, b, k) => (Math.imul((a * 73856093) ^ (b * 19349663) ^ ((seedIndex + k) * 83492791), 2654435761) >>> 0) % 100;
+        // Panels: about a quarter / a fifth of the part, at least 3 voxels.
+        const pw = Math.max(3, Math.round(cols / 4));
+        const ph = Math.max(3, Math.round(rows / 5));
+        const out = g.map((row) => row.slice());
+        for (let r = 0; r < rows; r++) {
+            for (let cc = 0; cc < cols; cc++) {
+                if (!hull(g[r][cc])) continue;
+                const kc = colKey(cc);
+                // Rim light / shade: first hull voxel under the top edge,
+                // last one above the bottom edge.
+                if (!solid(r - 1, cc)) { out[r][cc] = 5; continue; }
+                if (!solid(r + 1, cc)) { out[r][cc] = 4; continue; }
+                // Only plain hull gets panel tints; the faction pattern stays.
+                if (g[r][cc] !== 2) continue;
+                const px = Math.floor(kc / pw);
+                const py = Math.floor(r / ph);
+                const tone = hash(px, py, 1);
+                if (tone < 22) out[r][cc] = 5;
+                else if (tone < 38) out[r][cc] = 4;
+                // Vents / rivets: a sparse dark voxel inside a panel, only on
+                // parts big enough that it reads as detail, not noise.
+                if (cols >= 10 && rows >= 10 && kc % pw === 1 && r % ph === 1 && hash(px, py, 2) < 35
+                    && solid(r - 1, cc) && solid(r + 1, cc)) {
+                    out[r][cc] = 1;
+                }
+            }
+        }
+        for (let r = 0; r < rows; r++) g[r] = out[r];
+    },
+
+    /**
+     * Shade accent blocks (value 3) in a finished part grid: lit top row,
+     * shaded bottom row and side columns, and a darker band every third row
+     * inside tall blocks. Left/right are treated alike, so symmetric parts
+     * stay symmetric. Returns a new grid; needs palette entries 6 and 7.
+     */
+    shadeAccentBlocks(g) {
+        const rows = g.length;
+        const cols = rows ? g[0].length : 0;
+        const acc = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && g[r][c] === 3;
+        const out = g.map((row) => row.slice());
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (g[r][c] !== 3) continue;
+                // Block extent through this voxel (too small → leave flat).
+                let up = 0; while (acc(r - up - 1, c)) up++;
+                let dn = 0; while (acc(r + dn + 1, c)) dn++;
+                let lf = 0; while (acc(r, c - lf - 1)) lf++;
+                let rt = 0; while (acc(r, c + rt + 1)) rt++;
+                const h = up + dn + 1;
+                const w = lf + rt + 1;
+                if (h < 2 || w < 2) continue;
+                if (up === 0) out[r][c] = 7;
+                else if (dn === 0) out[r][c] = 6;
+                else if (w >= 4 && (lf === 0 || rt === 0)) out[r][c] = 6;
+                else if (h >= 5 && up % 3 === 0) out[r][c] = 6;
+            }
+        }
+        return out;
+    },
+
+    applyFactionPlatingPattern(g, silhouette, seedIndex = 0, flipX = false) {
+        const rows = g.length;
+        const cols = rows ? g[0].length : 0;
         for (let r = 0; r < rows; r++) {
             for (let cc = 0; cc < cols; cc++) {
                 if (g[r][cc] !== 2) continue;
                 // flipX runs the pattern mirrored, so a left wing is the exact
                 // mirror image of the right one.
                 const c = flipX ? cols - 1 - cc : cc;
+                // Sparse panel seams only: full-coverage patterns made the
+                // faction read as a texture instead of by its shape.
                 if (silhouette === 'modular') {
-                    // Brick courses with staggered vertical seams.
-                    if (r % 3 === 2) g[r][cc] = 4;
-                    else if ((c + Math.floor(r / 3) * 2) % 5 === 0) g[r][cc] = 4;
+                    // Rectangular plates: a seam every 4 rows, staggered joints.
+                    if (r % 4 === 3) g[r][cc] = 4;
+                    else if ((c + Math.floor(r / 4) * 3) % 7 === 0) g[r][cc] = 4;
                 } else if (silhouette === 'spikes') {
-                    // Diagonal blade banding.
-                    if ((c + r + seedIndex) % 4 < 2) g[r][cc] = 4;
+                    // Single swept seam lines along the blade.
+                    if ((c + r + seedIndex) % 7 === 0) g[r][cc] = 4;
                 } else if (silhouette === 'rings') {
-                    // Concentric shells around the part's centre.
+                    // Thin shell lines around the part's centre.
                     const dy = (r - rows / 2) / Math.max(1, rows / 2);
                     const dx = (c - cols / 2) / Math.max(1, cols / 2);
-                    if (Math.floor(Math.sqrt(dx * dx + dy * dy) * 3.5) % 2 === 1) g[r][cc] = 4;
+                    const d = Math.sqrt(dx * dx + dy * dy) * 3;
+                    if (d % 1 < 0.22 && d > 0.8) g[r][cc] = 4;
                 } else if (silhouette === 'scrap') {
-                    // Mismatched welded panels on an irregular block grid.
-                    const block = Math.floor(r / 2) * 31 + Math.floor(c / 3) * 17 + seedIndex * 7;
-                    const h = (Math.imul(block, 2654435761) >>> 0) % 7;
-                    if (h < 2) g[r][cc] = 4;
-                    else if (h === 2) g[r][cc] = 5;
+                    // A few mismatched welded panels.
+                    const block = Math.floor(r / 3) * 31 + Math.floor(c / 4) * 17 + seedIndex * 7;
+                    const h = (Math.imul(block, 2654435761) >>> 0) % 9;
+                    if (h === 0) g[r][cc] = 4;
+                    else if (h === 1) g[r][cc] = 5;
                 } else if (silhouette === 'circuit') {
-                    // Dark substrate with bright vertical traces.
-                    if (c % 4 === 1) g[r][cc] = 5;
-                    else if (r % 3 === 0) g[r][cc] = 4;
+                    // A few bright traces with right-angle turns.
+                    if (c % 6 === 2 && r % 8 < 5) g[r][cc] = 5;
+                    else if (r % 8 === 5 && c % 6 >= 2 && c % 6 <= 4) g[r][cc] = 5;
                 }
             }
         }
@@ -274,7 +377,7 @@ extendClass(ShipAssetLoader, {
         const layout = shipModel && shipModel.layout;
         const loadout = layout && layout.loadout;
         const zoom = Math.max(0.25, Number(scale) || 1);
-        const factor = Math.max(0.5, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
+        const factor = Math.max(0.2, Math.min(1.5, Number(loadout && loadout.voxelScale) || 0.5));
         // Voxel size depends only on zoom and the ship's voxel setting — not
         // on part sizes. Deriving it from the smallest part made the whole
         // ship's resolution jump whenever one part was resized.
@@ -304,7 +407,7 @@ extendClass(ShipAssetLoader, {
         const d = this.getDeviceScale();
         const cell = this._shipVoxelCell || Math.max(1, Math.round(this.HULL_PIXEL_CELL_PX
             * Math.max(0.25, Number(pixelZoom) || 1)
-            * Math.max(0.5, Math.min(1.5, Number(voxelScale) || 0.5)) * d)) / d;
+            * Math.max(0.2, Math.min(1.5, Number(voxelScale) || 0.5)) * d)) / d;
         return {
             resW: Math.max(6, Math.round(w / cell)),
             resH: Math.max(6, Math.round(h / cell)),

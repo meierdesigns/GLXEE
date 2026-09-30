@@ -8,8 +8,6 @@ extendClass(HomeStationUI, {
         if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getShipAreas
             || typeof profileManager === 'undefined' || !profileManager.getShipAreaLevels) return '';
         const slm = shipLoadoutManager;
-        const levels = profileManager.getShipAreaLevels(shipId, profile);
-        const max = slm.getMaxAreaLevel();
         const wallet = profile.resources || {};
         const kindsIn = { front: 'NOSE WEAPON', center: 'DEFENSE · ENERGY', back: 'ABILITY', wing: 'WING WEAPONS (PAIRS)' };
         return slm.getShipAreas().map((area) => {
@@ -50,13 +48,11 @@ extendClass(HomeStationUI, {
         }).join('');
     },
 
-    /** Hangar: four compact area tiles — name, slot size, next cost, upgrade button. */
+    /** Hangar: four compact area tiles — icon + ON/OFF switch. */
     renderHangarAreaUpgrades(shipId, profile) {
         if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getShipAreas
             || typeof profileManager === 'undefined' || !profileManager.getShipAreaLevels) return '';
         const slm = shipLoadoutManager;
-        const levels = profileManager.getShipAreaLevels(shipId, profile);
-        const max = slm.getMaxAreaLevel();
         const toggleable = slm.getToggleableAreas ? slm.getToggleableAreas() : [];
         // ON/OFF switch for every area except the core.
         const switchHtml = (areaId, on) => toggleable.indexOf(areaId) === -1 ? '' :
@@ -64,28 +60,31 @@ extendClass(HomeStationUI, {
             `<input type="checkbox" data-area-toggle="${shipId}|${areaId}"${on ? ' checked' : ''} aria-label="${this.areaLabel(areaId)} on/off">` +
             `<span class="hs-area-switch-track"><span class="hs-area-switch-label">${on ? 'ON' : 'OFF'}</span></span></label>`;
         const tiles = slm.getShipAreas().map((area) => {
+            // Icon (ship with this area lit) instead of the text label; label in the tooltip.
+            const name = `<strong class="hs-area-icon" data-ui-tip="${area.label}">${this.hangarAreaIconSvg(area.id)}</strong>`;
             if (slm.isAreaEnabled && !slm.isAreaEnabled(shipId, area.id)) {
                 return `<div class="hs-area-tile is-off" data-area="${area.id}">` +
-                    `<span class="hs-area-name"><strong>${area.label}</strong>${switchHtml(area.id, false)}</span>` +
+                    `<span class="hs-area-name">${name}${switchHtml(area.id, false)}</span>` +
                     `</div>`;
             }
-            const lv = levels[area.id] || 0;
-            const size = 'LV' + lv;
-            const maxed = lv >= max;
-            const check = profileManager.canPurchaseShipAreaUpgrade(shipId, area.id, profile);
-            const cost = check.cost || (!maxed ? economyConfig.getShipAreaUpgradeCost(area.id, lv + 1) : null);
-            const bonus = !maxed ? slm.getAreaSlotBonusAt(area.id, lv + 1) : [];
-            const bonusText = bonus.length ? ' · +' + bonus.length + ' ' + this.slotKindName(bonus[0]) + (bonus.length > 1 ? ' SLOTS' : ' SLOT') : '';
-            const lockAttr = check.ok ? '' : (check.reason === 'RESOURCES' ? 'data-short="1"' : 'disabled');
             return `<div class="hs-area-tile" data-area="${area.id}">` +
-                `<span class="hs-area-name"><strong>${area.label}</strong>${switchHtml(area.id, true)}<span class="hs-slot-size is-${size}">${size}</span></span>` +
-                (maxed
-                    ? '<span class="hs-muted hs-area-max">MAX</span>'
-                    : `<button type="button" class="action-button hs-area-btn" data-area-up="${shipId}|${area.id}"` +
-                      ` title="${area.label}: ${size} → ${('LV' + (lv + 1))}${bonusText}">→ ${('LV' + (lv + 1))}</button>`) +
+                `<span class="hs-area-name">${name}${switchHtml(area.id, true)}</span>` +
                 `</div>`;
         }).join('');
         return `<div class="hs-hangar-areas" aria-label="Hull areas">${tiles}</div>`;
+    },
+
+    /** 11×11 pixel ship: every area dim, `areaId` lit (front/center/back/wing). */
+    hangarAreaIconSvg(areaId) {
+        const parts = {
+            front: 'M5 0h1v1h1v3H4V1h1z',
+            center: 'M4 4h3v4H4z',
+            back: 'M4 8h3v1h1v2H3V9h1z',
+            wing: 'M0 5h4v3H1v1H0zM7 5h4v4h-1V8H7z'
+        };
+        return `<svg viewBox="0 0 11 11" width="33" height="33" shape-rendering="crispEdges" aria-hidden="true">` +
+            Object.keys(parts).map((k) => `<path class="${k === areaId ? 'is-lit' : 'is-dim'}" d="${parts[k]}"/>`).join('') +
+            `</svg>`;
     },
 
     /** Upgrade tab → SHIPS: per ship, its four hull areas. */

@@ -22,10 +22,14 @@ class ProfileSelectionManager {
     }
 
     /** Faction emblem as a pixel icon, tinted in the faction accent. */
-    getFactionEmblemHtml(id, size = 16) {
+    getFactionEmblemHtml(id, size = 16, detail) {
         if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
-        const key = factionShipStyles.emblemCamelKey ? factionShipStyles.emblemCamelKey(id) : null;
-        if (!key) return '';
+        const base = factionShipStyles.emblemCamelKey ? factionShipStyles.emblemCamelKey(id) : null;
+        if (!base) return '';
+        // Finer (Scale2x) art for large emblems, or when the caller says the
+        // emblem is magnified (`detail`, e.g. the galaxy map zoom).
+        const mag = Math.max(1, Number(detail) || 1) * size / 16;
+        const key = base + (mag >= 3 ? '@4x' : (mag >= 1.5 ? '@2x' : ''));
         const style = factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(id) : null;
         return iconRenderer.imgHtml(key, size, 'profile-faction-emblem-img', style && style.accent, this.getFactionLabel(id));
     }
@@ -213,6 +217,14 @@ class ProfileSelectionManager {
     show(options) {
         this.isVisible = true;
         this.onClose = options && options.onClose;
+        // Optional host element: render inline (e.g. inside the start-screen
+        // terminal) instead of as a fullscreen overlay.
+        const host = options && options.host;
+        if (this.host !== host && this.overlay) {
+            this.overlay.remove();
+            this.overlay = null;
+        }
+        this.host = host || null;
         this.mode = 'list';
         this.selectedIndex = 0;
         const profiles = this.getProfiles();
@@ -245,6 +257,7 @@ class ProfileSelectionManager {
             this.overlay.remove();
             this.overlay = null;
         }
+        this.host = null;
     }
 
     getProfiles() {
@@ -262,7 +275,7 @@ class ProfileSelectionManager {
         if (!reuse) {
             if (this.overlay) this.overlay.remove();
             this.overlay = document.createElement('div');
-            this.overlay.className = 'profile-selection-overlay';
+            this.overlay.className = 'profile-selection-overlay' + (this.host ? ' is-inline' : '');
         } else if (this._keyHandler) {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;
@@ -318,7 +331,7 @@ class ProfileSelectionManager {
             const sel = profiles[this.selectedIndex] || profiles[0];
             if (listBox && sel) this.applyFactionVars(listBox, sel.faction || 'pirate');
         }
-        if (!reuse) document.body.appendChild(this.overlay);
+        if (!reuse) (this.host || document.body).appendChild(this.overlay);
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }
@@ -560,7 +573,7 @@ class ProfileSelectionManager {
                 <div class="profile-selection-instructions"><p>${hint}</p></div>
             </div>
         `);
-        if (!reuse) document.body.appendChild(this.overlay);
+        if (!reuse) (this.host || document.body).appendChild(this.overlay);
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }

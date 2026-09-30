@@ -65,7 +65,8 @@ extendClass(ShipLoadoutManager, {
         const caps = this.getSlotCaps(shipId, cls);
         // Wing rows follow the ship's wing slot count, so the layout puts each
         // wing weapon on the same row as its hangar marker.
-        const loadout = Object.assign({}, this.getLoadout(shipId),
+        const loadout = Object.assign(this.withWeaponSlotScales
+            ? this.withWeaponSlotScales(shipId, this.getLoadout(shipId)) : Object.assign({}, this.getLoadout(shipId)),
             { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) });
         const core = this.getCoreSize(cls, model || null);
         const layout = this.buildLayout(core.width, core.height, loadout);

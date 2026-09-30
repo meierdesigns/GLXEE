@@ -87,6 +87,14 @@ extendClass(ShipLoadoutManager, {
         return { ok: true, loadout: saved };
     },
 
+    /** Wing-side end of the hull bridge: −1..1 along the wing root. */
+    setWingConnectionEnd(shipId, connectionY) {
+        const loadout = this.getLoadout(shipId);
+        loadout.wingConnectionYEnd = Math.max(-1, Math.min(1, Number(connectionY) || 0));
+        const saved = this.setLoadout(shipId, loadout);
+        return { ok: true, loadout: saved };
+    },
+
     setWingConnection(shipId, connectionY) {
         const loadout = this.getLoadout(shipId);
         loadout.wingConnectionY = Math.max(-1, Math.min(1, Number(connectionY) || 0));
@@ -118,7 +126,7 @@ extendClass(ShipLoadoutManager, {
 
     setVoxelScale(shipId, scale) {
         const loadout = this.getLoadout(shipId);
-        loadout.voxelScale = Math.max(0.5, Math.min(1.5, Number(scale) || 0.5));
+        loadout.voxelScale = Math.max(0.2, Math.min(1.5, Number(scale) || 0.5));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },

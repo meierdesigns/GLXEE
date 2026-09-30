@@ -66,9 +66,14 @@ extendClass(ShipLoadoutManager, {
      * Slot caps: one nose weapon, the class's wing weapons rounded up to a
      * mirrored pair, plus the slots each area level opens.
      */
+    /** Weapon mounts of a class before upgrades: nose gun + wing guns as mirrored pairs. */
+    baseWeaponMounts(base) {
+        return 1 + Math.ceil(Math.max(0, Number(base.weapons) || 0) / 2) * 2;
+    },
+
     getSlotCaps(shipId, modelClass) {
         const caps = this.getBaseSlotCaps(modelClass);
-        caps.weapons = 1 + Math.max(2, Math.ceil((Number(caps.weapons) || 0) / 2) * 2);
+        caps.weapons = this.baseWeaponMounts(caps);
         const lv = this.getAreaLevels(shipId);
         SHIP_AREAS.forEach((a) => {
             this.getAreaSlotBonus(a.id, lv[a.id] || 0).forEach((key) => { caps[key] += 1; });
@@ -181,7 +186,8 @@ extendClass(ShipLoadoutManager, {
         const res = baseOffset.call(this, shipId, kind, moduleId, offsetX, offsetY, face);
         if (!res || !res.ok || kind !== 'weapon' || (face !== 'left' && face !== 'right')) return res;
         // Find the partner: same row on the other wing in the built layout.
-        const loadout = this.getLoadout(shipId);
+        const loadout = this.withWeaponSlotScales
+            ? this.withWeaponSlotScales(shipId, this.getLoadout(shipId)) : this.getLoadout(shipId);
         const cls = this.resolveModelClass(shipId);
         const core = this.getCoreSize(cls, null);
         const layout = this.buildLayout(core.width, core.height, loadout);

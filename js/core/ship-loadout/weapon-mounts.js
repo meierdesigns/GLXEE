@@ -140,9 +140,12 @@
         const ms = layout.mountSizes || {};
         if (mount.area === 'wing') {
             // Wing pairs are mirrors: checking the left wing is enough.
-            return [{ x: spot.x, y: spot.y, s: Math.max(2, ms.wing || 2) }];
+            return [{ x: spot.x, y: spot.y, s: Math.max(2, ms.weaponPair || ms.wing || 2) }];
         }
-        const size = Math.max(2, (mount.area === 'front' ? ms.front : ms.center) || 4) * (mount.split ? 0.5 : 1);
+        // Same gun size on every area (see placeLayoutModules).
+        const size = mount.split
+            ? Math.max(2, ms.weaponPair || ms.wing || 2)
+            : Math.max(2, ms.weapon || ms.front || 4);
         const boxes = [{ x: spot.x, y: spot.y, s: size }];
         if (mount.split) boxes.push({ x: spot.mx, y: spot.my, s: size });
         return boxes;

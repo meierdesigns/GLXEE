@@ -3,6 +3,7 @@
 // StartScreenManager methods, split from start-screen.js.
 extendClass(StartScreenManager, {
     createMainMenuUI(content) {
+        content.classList.add('start-screen-retro');
         this.rebuildVisibleMenu();
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
@@ -15,8 +16,6 @@ extendClass(StartScreenManager, {
         const subtitle = document.createElement('p');
         subtitle.textContent = 'RETRO SPACE SHOOTER';
         subtitle.className = 'start-screen-subtitle';
-
-        const profileLine = this.buildStartProfileCard();
 
         const menu = document.createElement('div');
         menu.className = 'start-screen-menu start-screen-menu-clustered';
@@ -48,7 +47,10 @@ extendClass(StartScreenManager, {
                 iconWrap.className = 'menu-item-icon';
                 const iconKey = entry.icon || this.menuIconById[itemId];
                 if (typeof iconRenderer !== 'undefined' && iconKey) {
-                    iconWrap.innerHTML = iconRenderer.imgHtml(iconKey, 32, 'menu-pixel-icon');
+                    // Big chunky variant where one exists, shown at 64 px.
+                    const hdKey = { hsStation: 'menuStationHd', menuProfiles: 'menuProfilesHd', menuSettings: 'menuSettingsHd', menuCredits: 'menuCreditsHd' }[iconKey];
+                    const hd = hdKey && typeof IconSprites !== 'undefined' && IconSprites[hdKey];
+                    iconWrap.innerHTML = iconRenderer.imgHtml(hd ? hdKey : iconKey, hd ? 64 : 48, 'menu-pixel-icon');
                 }
 
                 const text = document.createElement('span');
@@ -57,12 +59,8 @@ extendClass(StartScreenManager, {
                 label.className = 'menu-item-label';
                 label.textContent = entry.label || itemId;
                 text.appendChild(label);
-                if (entry.desc) {
-                    const desc = document.createElement('span');
-                    desc.className = 'menu-item-desc';
-                    desc.textContent = entry.desc;
-                    text.appendChild(desc);
-                }
+                // Description lives in the tooltip, not as a subline
+                if (entry.desc) menuItem.dataset.uiTip = entry.desc;
 
                 menuItem.appendChild(iconWrap);
                 menuItem.appendChild(text);
@@ -101,38 +99,75 @@ extendClass(StartScreenManager, {
 
         content.appendChild(title);
         content.appendChild(subtitle);
-        content.appendChild(profileLine);
-        content.appendChild(menu);
+        // Menu on the left, recent-pilots scoreboard on the right.
+        const menuRow = document.createElement('div');
+        menuRow.className = 'start-menu-row';
+        menuRow.appendChild(menu);
+        const board = this.buildRecentPilotsBoard();
+        if (board) menuRow.appendChild(board);
+        content.appendChild(menuRow);
         content.appendChild(instructions);
-        content.appendChild(this.buildControlsShowBtn());
-        content.appendChild(footer);
+        const utilRow = document.createElement('div');
+        utilRow.className = 'ui-menu-util-row';
+        utilRow.appendChild(this.buildControlsShowBtn());
+        utilRow.appendChild(this.buildIntroBtn());
+        content.appendChild(utilRow);
+        // Dev hint lives in the hover row; the DEV MODE ON badge stays visible
+        if (this.devMode) content.appendChild(footer);
+        else utilRow.appendChild(footer);
     },
 
-    /** Active pilot at a glance: emblem, name, faction and wallet. */
-    buildStartProfileCard() {
-        const card = document.createElement('div');
-        card.className = 'start-screen-profile';
+    /** Top-5 style scoreboard of the last five played profiles. */
+    buildRecentPilotsBoard() {
         const pm = typeof profileManager !== 'undefined' ? profileManager : null;
-        if (!pm || !pm.hasActiveProfile()) {
-            card.classList.add('no-profile');
-            card.textContent = 'NO PILOT — PICK OR CREATE A PROFILE';
-            return card;
-        }
-        const p = pm.getActiveProfile();
-        const faction = String(p.faction || 'terran');
-        const emblemKey = 'faction' + faction.charAt(0).toUpperCase() + faction.slice(1);
+        if (!pm || !pm.getRecentProfiles) return null;
+        // Last five played, ranked by score like an arcade top 5.
+        const recent = pm.getRecentProfiles(5)
+            .map((p) => ({ p, score: pm.getProfileScore(p) }))
+            .sort((a, b) => b.score - a.score);
         const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        const emblem = typeof iconRenderer !== 'undefined' ? iconRenderer.imgHtml(emblemKey, 40, 'menu-pixel-icon', undefined, false) : '';
-        const credits = Math.round(Number(p.credits) || 0).toLocaleString('en-US');
-        card.classList.add('has-profile');
-        card.innerHTML =
-            `<span class="start-profile-emblem">${emblem}</span>` +
-            '<span class="start-profile-text">' +
-            '<span class="start-profile-label">PILOT</span>' +
-            `<strong class="start-profile-name">${esc(p.name)}</strong>` +
-            `<span class="start-profile-meta">${esc(faction.toUpperCase())} · ${credits} CR</span>` +
-            '</span>';
-        return card;
+        const activeId = pm.hasActiveProfile() ? pm.getActiveProfile().id : null;
+        const board = document.createElement('div');
+        board.className = 'start-scoreboard';
+        const rows = recent.map(({ p, score: raw }, i) => {
+            const faction = String(p.faction || 'pirate');
+            const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+            const score = raw.toLocaleString('en-US');
+            return `<li class="start-scoreboard-row is-pickable${p.id === activeId ? ' is-active' : ''}" data-profile-id="${esc(p.id)}" tabindex="0" role="button" data-ui-tip="${p.id === activeId ? 'Active pilot' : 'Select pilot'}">` +
+                `<span class="start-scoreboard-rank">${i + 1}</span>` +
+                `<span class="start-scoreboard-emblem">${emblem}</span>` +
+                `<span class="start-scoreboard-name">${esc(p.name)}</span>` +
+                `<span class="start-scoreboard-score">${score}</span>` +
+                '</li>';
+        }).join('') + Array.from({ length: Math.max(0, 5 - recent.length) }, (_, k) =>
+            '<li class="start-scoreboard-row is-empty">' +
+            `<span class="start-scoreboard-rank">${recent.length + k + 1}</span>` +
+            '<span class="start-scoreboard-emblem"></span>' +
+            '<span class="start-scoreboard-name">---</span>' +
+            '<span class="start-scoreboard-score">0</span>' +
+            '</li>').join('');
+        board.innerHTML =
+            '<div class="start-scoreboard-title">RECENT PILOTS</div>' +
+            '<div class="start-scoreboard-head"><span>#</span><span></span><span>NAME</span><span>SCORE</span></div>' +
+            `<ol class="start-scoreboard-list">${rows}</ol>`;
+        // Picking a row only selects the pilot; START launches with it.
+        board.querySelectorAll('.start-scoreboard-row.is-pickable').forEach((row) => {
+            const pick = () => {
+                const id = row.getAttribute('data-profile-id');
+                if (id === activeId) return;
+                pm.setActive(id);
+                this.createStartScreenUI();
+            };
+            row.addEventListener('click', pick);
+            row.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                pick();
+            });
+        });
+        return board;
     },
 
     createEmbeddedMenuUI(content) {
@@ -192,6 +227,8 @@ extendClass(StartScreenManager, {
             this.createSettingsUI(body, { bare: true });
         } else if (this.embeddedMenuTab === 'assets') {
             this.fillEmbeddedAssets(body);
+        } else if (this.embeddedMenuTab === 'layout' && this.fillEmbeddedLayout) {
+            this.fillEmbeddedLayout(body);
         } else {
             body.classList.add('hs-menu-panel-body-credits');
             this.fillEmbeddedCredits(body);
@@ -205,8 +242,14 @@ extendClass(StartScreenManager, {
 
         content.appendChild(header);
         content.appendChild(body);
-        content.appendChild(this.buildControlsShowBtn());
-        content.appendChild(footer);
+        const utilRow = document.createElement('div');
+        utilRow.className = 'ui-menu-util-row';
+        utilRow.appendChild(this.buildControlsShowBtn());
+        utilRow.appendChild(this.buildIntroBtn());
+        content.appendChild(utilRow);
+        // Dev hint lives in the hover row; the DEV MODE ON badge stays visible
+        if (this.devMode) content.appendChild(footer);
+        else utilRow.appendChild(footer);
     },
 
     fillEmbeddedProfiles(body) {
@@ -324,7 +367,8 @@ extendClass(StartScreenManager, {
                     `<span class="hs-menu-profile-emblem">${emblem}</span>` +
                     `<span class="hs-menu-profile-name">${esc(p.name)}</span>` +
                     `<span class="hs-menu-profile-faction">${esc(faction.toUpperCase())}</span>` +
-                    (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '') +
+                    // Badge cell always present (empty when inactive) so the actions keep their column.
+                    (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '<span class="hs-menu-profile-badge-slot"></span>') +
                     `<span class="hs-menu-profile-actions">` +
                     (p.id === activeId ? '' : `<button type="button" class="hs-menu-profile-act" data-profile-switch="${esc(p.id)}">${icoSwitch}<span class="hs-menu-profile-act-label">SWITCH</span></button>`) +
                     `<button type="button" class="hs-menu-profile-act is-danger" data-profile-delete="${esc(p.id)}">${icoDelete}<span class="hs-menu-profile-act-label">DELETE</span></button>` +
@@ -374,7 +418,8 @@ extendClass(StartScreenManager, {
                     if (st && st.accent) stats.style.setProperty('--row-accent', st.accent);
                 }
             };
-            const activeProfile = profiles.find((p) => p.id === activeId) || null;
+            // No pilot active yet: preview the first one instead of an empty panel.
+            const activeProfile = profiles.find((p) => p.id === activeId) || profiles[0] || null;
             list.querySelectorAll('.hs-menu-profile-row').forEach((row, i) => {
                 const show = () => renderStats(profiles[i]);
                 row.addEventListener('mouseenter', show);
@@ -407,7 +452,31 @@ extendClass(StartScreenManager, {
         body.appendChild(panel);
     },
 
+    /** Start menu PROFILES page, shown inside the terminal screen. */
+    createProfilesScreenUI(content) {
+        const host = document.createElement('div');
+        host.className = 'start-screen-profiles-host';
+        content.appendChild(host);
+        if (typeof profileSelectionManager === 'undefined') return;
+        // The profile dialog itself, rendered inside the terminal screen.
+        profileSelectionManager.show({
+            host,
+            onClose: () => {
+                this.showProfiles = false;
+                const thenStart = this._profilesThenStart;
+                this._profilesThenStart = false;
+                if (thenStart && this.hasActiveProfile()) {
+                    this.returnToHub();
+                    return;
+                }
+                this.createStartScreenUI();
+                if (typeof menuStateManager !== 'undefined') menuStateManager.setScreen('start');
+            }
+        });
+    },
+
     openProfileCreate(factionId) {
+        this.showProfiles = false;
         if (typeof profileSelectionManager === 'undefined') return;
         this.hideEmbedded();
         profileSelectionManager.show({

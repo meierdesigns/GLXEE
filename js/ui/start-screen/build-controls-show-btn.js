@@ -17,6 +17,23 @@ extendClass(StartScreenManager, {
         return btn;
     },
 
+    buildIntroBtn() {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ui-intro-btn';
+        btn.title = 'Play intro';
+        btn.textContent = 'INTRO';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btn.blur();
+            if (typeof VFStartIntro !== 'undefined') {
+                VFStartIntro.play({ title: this.title, subtitle: this.subtitle });
+            }
+        });
+        return btn;
+    },
+
     setControlsHintsVisible(visible) {
         if (typeof uiAppearanceManager === 'undefined') return;
         uiAppearanceManager.setControlsHints(visible ? 'ON' : 'OFF');
@@ -247,6 +264,10 @@ extendClass(StartScreenManager, {
     },
 
     handleEscape() {
+        // Inline profile dialog handles ESC itself (back / close).
+        if (this.showProfiles && typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+            return true;
+        }
         if (this.showFontMenu) {
             this.showFontMenu = false;
             this.createStartScreenUI();
@@ -265,8 +286,9 @@ extendClass(StartScreenManager, {
             }
             return true;
         }
-        if (this.showCredits || this.showLevels || this.showSettings) {
+        if (this.showCredits || this.showLevels || this.showSettings || this.showProfiles) {
             this.showCredits = false;
+            this.showProfiles = false;
             this.showLevels = false;
             this.showSettings = false;
             this.showFontMenu = false;
@@ -285,6 +307,8 @@ extendClass(StartScreenManager, {
     },
 
     handleArrowUp() {
+        // Profiles screen: its rows handle their own keys.
+        if (this.showProfiles) return false;
         if (this.showLevels) {
             this.levelIndex = Math.max(0, this.levelIndex - 1);
             this.updateMenuSelection();

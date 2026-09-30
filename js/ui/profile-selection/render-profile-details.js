@@ -21,6 +21,18 @@ extendClass(ProfileSelectionManager, {
             ? economyConfig.resourceIds
             : ['scrap', 'ore', 'crystal', 'voltex'];
         const resources = profile.resources || {};
+        // Credits + every resource the profile holds (incl. ones outside the base list), with icons.
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number(profile.credits) || 0));
+        const allRes = ['credits'].concat(resIds,
+            Object.keys(resources).filter((id) => resIds.indexOf(id) === -1 && id !== 'credits'));
+        const resIcon = (id) => {
+            const key = typeof homeStationUI !== 'undefined' && homeStationUI.resourceIconKey
+                ? homeStationUI.resourceIconKey(id) : null;
+            return key && typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
+                ? `<span class="profile-details-res-icon">${iconRenderer.imgHtml(key, 20, 'hs-pixel')}</span>` : '';
+        };
         const ships = profile.ownedShipIds || [];
         const activeShip = profile.activeShipId;
 
@@ -51,10 +63,10 @@ extendClass(ProfileSelectionManager, {
             <div class="profile-details-section">
                 <div class="profile-details-label">RESOURCES</div>
                 <div class="profile-details-list profile-details-resources">
-                    ${resIds.map((id) => `
+                    ${allRes.map((id) => `
                         <div class="profile-details-row hs-res-${id}">
-                            <span>${this.resourceLabel(id)}</span>
-                            <span>${resources[id] || 0}</span>
+                            <span class="profile-details-res-name">${resIcon(id)}${id === 'credits' ? 'CREDITS' : this.resourceLabel(id)}</span>
+                            <span>${id === 'credits' ? credits : (Math.round(Number(resources[id]) || 0))}</span>
                         </div>
                     `).join('')}
                 </div>

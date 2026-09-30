@@ -306,5 +306,49 @@ extendClass(HomeStationUI, {
             viewport.addEventListener('wheel', this._hangarPreviewWheelBound, { passive: false });
         }
         this.setHangarPreviewZoom(this._hangarPreviewZoom || 1);
+        this.bindHangarPreviewPan(viewport);
+    },
+
+    /** Right mouse drag pans the live preview; middle click re-centres it. */
+    bindHangarPreviewPan(viewport) {
+        if (!viewport || viewport._hsPanBound) return;
+        viewport._hsPanBound = true;
+        viewport.addEventListener('contextmenu', (e) => e.preventDefault());
+        viewport.addEventListener('pointerdown', (e) => {
+            if (e.button === 1) {
+                // Middle click: back to centre.
+                e.preventDefault();
+                this._hangarPreviewPanX = 0;
+                this._hangarPreviewPanY = 0;
+                return;
+            }
+            if (e.button !== 2) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const canvas = this._hangarPreviewCanvas;
+            const r = canvas ? canvas.getBoundingClientRect() : null;
+            // Screen px → canvas backing px.
+            const kx = r && r.width ? canvas.width / r.width : 1;
+            const ky = r && r.height ? canvas.height / r.height : 1;
+            const sx = e.clientX;
+            const sy = e.clientY;
+            const bx = this._hangarPreviewPanX || 0;
+            const by = this._hangarPreviewPanY || 0;
+            viewport.classList.add('is-panning');
+            try { viewport.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            const move = (ev) => {
+                this._hangarPreviewPanX = bx + (ev.clientX - sx) * kx;
+                this._hangarPreviewPanY = by + (ev.clientY - sy) * ky;
+            };
+            const up = () => {
+                viewport.classList.remove('is-panning');
+                viewport.removeEventListener('pointermove', move);
+                viewport.removeEventListener('pointerup', up);
+                viewport.removeEventListener('pointercancel', up);
+            };
+            viewport.addEventListener('pointermove', move);
+            viewport.addEventListener('pointerup', up);
+            viewport.addEventListener('pointercancel', up);
+        });
     },
 });

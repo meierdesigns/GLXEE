@@ -39,6 +39,29 @@
         return this.isSplitSlot(shipId, kind, index) ? 0 : 1;
     };
 
+    /**
+     * Size factor per weapon slot for the layout: each size step above the
+     * slot's base (S split / M single) makes the weapon 25% bigger — and its
+     * shots (see shootWithShipWeapon). { slotIndex: factor }, 1 omitted.
+     */
+    slm.getWeaponSlotScales = function (shipId) {
+        const out = {};
+        if (!this.getSlotSizeLevel) return out;
+        const L = this.getLoadout(shipId);
+        const slots = (L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [];
+        slots.forEach((id, i) => {
+            if (!id) return;
+            const step = this.getSlotSizeLevel(shipId, 'weapon', i) - this.getSlotBaseSizeLevel(shipId, 'weapon', i);
+            if (step > 0) out[i] = 1 + 0.25 * step;
+        });
+        return out;
+    };
+
+    /** Loadout copy carrying the weapon slot size factors for buildLayout. */
+    slm.withWeaponSlotScales = function (shipId, loadout) {
+        return Object.assign({}, loadout, { weaponSlotScales: this.getWeaponSlotScales(shipId) });
+    };
+
     slm.getSlotUpgradeLevel = function (shipId, kind, index) {
         if (typeof profileManager === 'undefined' || !profileManager.getSlotUpgradeLevels) return 0;
         const levels = profileManager.getSlotUpgradeLevels(shipId);

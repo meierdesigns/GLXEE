@@ -189,9 +189,19 @@ extendClass(ShipLoadoutManager, {
      */
     buildLayout(coreWidth, coreHeight, loadout) {
         const ctx = this.createLayoutContext(coreWidth, coreHeight, loadout);
+        // Mount (slot + gun) sizes come from the ship with every area at
+        // scale 1, so scaling an area never resizes what is mounted on it.
+        const L0 = loadout && loadout.segmentScale
+            ? Object.assign({}, loadout, { segmentScale: {} }) : null;
+        if (L0) {
+            const base = this.createLayoutContext(coreWidth, coreHeight, L0);
+            this.placeLayoutModules(base);
+            ctx.fixedMountSizes = base.mountSizes;
+        }
         this.placeLayoutModules(ctx);
         const { segments, wingPanels } = this.buildLayoutSegments(ctx);
         this.dockLayoutParts(ctx, segments);
+        this.applyWeaponSlotScales(ctx.parts, loadout && loadout.weaponSlotScales);
         this.applyLayoutModuleScales(ctx.parts, segments);
         return this.finalizeLayout(ctx, segments, wingPanels);
     },

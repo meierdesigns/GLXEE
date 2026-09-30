@@ -3,6 +3,18 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
+        // Galaxy travel is a modal over the planet map, not its own page.
+        if (this.tab === 'travel') {
+            this.tab = 'play';
+            this._travelModal = true;
+        }
+        if (this._travelKey) {
+            document.removeEventListener('keydown', this._travelKey, true);
+            this._travelKey = null;
+        }
+        if (this.tab !== 'play') this._travelModal = false;
+        // A rebuild replaces the body, so an embedded WIKI viewer ends here.
+        if (this._embeddedViewer) this.closeEmbeddedViewer();
         // A trading-post visit ends as soon as another tab is shown.
         if (this.tab !== 'shop' && this.visitPostId) {
             this.visitPostId = null;
@@ -107,6 +119,8 @@ extendClass(HomeStationUI, {
             body = this.renderExplorationsTab(profile);
         } else if (this.tab === 'factions') {
             body = this.renderFactionsTab(profile);
+        } else if (this.tab === 'ffleet') {
+            body = this.renderFactionFleetTab(profile);
         } else if (this.tab === 'ftrade') {
             body = this.renderFactionTradeTab(profile);
         } else if (this.tab === 'fcontracts') {
@@ -167,23 +181,25 @@ extendClass(HomeStationUI, {
         // Tabs with no separate "tabs vs content" browsing step land directly on
         // interactive content (mouse clicks work regardless of nav level), so they
         // must never sit dimmed at the default .hs-nav-tabs opacity like station.
-        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ftrade', 'fcontracts'];
+        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
         const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
-            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
+            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header hs-header-split">
                     <div class="hs-pilot-card">
                         <span class="hs-pilot-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'card')}</span>
                         <div class="hs-pilot-info">
                             <p class="hs-profile hs-pilot-name">${profile.name}</p>
-                            <div class="hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
                         </div>
                     </div>
+                    ${this.renderPlayLaunch()}
                     <div class="hs-header-main">
                         <div class="hs-topbar">
                             <div class="hs-tabs">
-                                ${this.isMenuRowTab() ? this.renderMenuTabs() : this.renderTabs()}
+                                ${this.renderTabs()}
                             </div>
+                            <!-- Resources right of the MENU tab (moved out of the pilot card). -->
+                            <div class="hs-topbar-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
                             <div class="hs-topbar-actions">
                                 <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
                                     <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
@@ -207,6 +223,7 @@ extendClass(HomeStationUI, {
         }
         this.bindEvents();
         this.bindControlsToggle();
+        this.syncTopbarResLayout();
         // MENU area button = same as pressing ESC.
         const menuBtn = this.overlay.querySelector('[data-open-menu]');
         if (menuBtn) {
@@ -222,7 +239,7 @@ extendClass(HomeStationUI, {
             this.showStatusToast(this.statusMsg);
             this.statusMsg = '';
         }
-        if (['factions', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
+        if (['factions', 'ffleet', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
         this.restoreNavFocus();
         if (this._focusExplore) {
             this.focusExploreItem(this._focusExplore);
@@ -261,6 +278,7 @@ extendClass(HomeStationUI, {
         }
         this.scheduleShipThumbs();
         this.bindShipSelectButtons();
+        this.syncTabDrop();
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }
@@ -344,5 +362,92 @@ extendClass(HomeStationUI, {
 
     renderPlayTab(profile) {
         return `<div class="hs-play-shell" id="hsPlayMount" data-nav-section="play"></div>`;
+    },
+
+    /**
+     * Top bar too narrow for tabs + resources: the numbers first fold into a
+     * compact grid, and only when that still doesn't fit move to their own
+     * strip above the nav bar instead of squeezing the tabs.
+     */
+    /**
+     * Index-card tabs: the active main tab's body runs down into the sub-nav.
+     * CSS needs the exact gap between the two (--hs-tab-drop) so the tab's
+     * side lines meet the sub-nav's border and cover it just under the tab.
+     */
+    syncTabDrop() {
+        // The tab rows clip overflow, so the bridge between the active main
+        // tab and the sub-nav is its own element on the station window.
+        const measure = () => {
+            const root = this.overlay && this.overlay.querySelector('.home-station-content');
+            if (!root || !root.isConnected) return;
+            let bridge = root.querySelector(':scope > .hs-tab-bridge');
+            const btn = root.querySelector('.hs-area-btn.active');
+            const sub = root.querySelector('.hs-subnav');
+            if (!btn || !sub) {
+                if (bridge) bridge.remove();
+                return;
+            }
+            if (!bridge) {
+                bridge = document.createElement('div');
+                bridge.className = 'hs-tab-bridge';
+                bridge.setAttribute('aria-hidden', 'true');
+                root.appendChild(bridge);
+            }
+            const r = root.getBoundingClientRect();
+            const b = btn.getBoundingClientRect();
+            const s = sub.getBoundingClientRect();
+            // From the tab's top edge to 2 px into the sub-nav (over its top
+            // line): one outline for tab + bridge; only the part below the
+            // tab is filled, the tab itself stays visible through it.
+            // Breathing room between the tab's label and its outline.
+            const pad = 8;
+            const top = b.top - r.top - pad;
+            bridge.style.setProperty('--tab-h', Math.round(b.height + pad) + 'px');
+            bridge.style.left = Math.round(b.left - r.left - pad) + 'px';
+            bridge.style.width = Math.round(b.width + 2 * pad) + 'px';
+            bridge.style.top = Math.round(top) + 'px';
+            bridge.style.height = Math.max(0, Math.round(s.top - r.top + 2 - top)) + 'px';
+        };
+        measure();
+        requestAnimationFrame(measure);
+        if (!this._tabDropResizeBound) {
+            this._tabDropResizeBound = true;
+            window.addEventListener('resize', () => requestAnimationFrame(measure));
+        }
+    },
+
+    syncTopbarResLayout() {
+        const bar = this.overlay && this.overlay.querySelector('.hs-topbar');
+        if (!bar || !bar.querySelector('.hs-topbar-res')) return;
+        const check = () => {
+            if (!bar.isConnected) return;
+            // 1) one row  2) compact grid (2 rows) beside the tabs  3) own strip above.
+            bar.classList.remove('is-res-stacked', 'is-res-grid');
+            const tabs = bar.querySelector('.hs-tabs');
+            const tight = () => bar.scrollWidth > bar.clientWidth + 1
+                || !!(tabs && tabs.scrollWidth > tabs.clientWidth + 1);
+            if (!tight()) return;
+            bar.classList.add('is-res-grid');
+            if (!tight()) return;
+            bar.classList.remove('is-res-grid');
+            bar.classList.add('is-res-stacked');
+        };
+        check();
+        requestAnimationFrame(check);
+        if (this._topbarResObserver) this._topbarResObserver.disconnect();
+        if (typeof ResizeObserver !== 'undefined') {
+            // React to width changes only: the layout switch itself changes
+            // the height, which must not re-trigger the check (feedback loop).
+            let busy = false;
+            let lastW = -1;
+            this._topbarResObserver = new ResizeObserver((entries) => {
+                const w = Math.round(entries[0] && entries[0].contentRect ? entries[0].contentRect.width : 0);
+                if (busy || w === lastW) return;
+                lastW = w;
+                busy = true;
+                requestAnimationFrame(() => { check(); busy = false; });
+            });
+            this._topbarResObserver.observe(bar.parentElement || bar);
+        }
     },
 });

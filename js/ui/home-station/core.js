@@ -115,6 +115,7 @@ class HomeStationUI {
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },
             factions: { label: 'RELATIONS', icon: 'menuPeoples' },
             ftrade: { label: 'TRADE', icon: 'hsShop' },
+            ffleet: { label: 'FLEETS', icon: 'hsHangar' },
             fcontracts: { label: 'CONTRACTS', icon: 'hsExplore' },
             play: { label: 'PLAY', icon: 'menuStart' }
         };
@@ -254,7 +255,7 @@ class HomeStationUI {
         if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
         const id = factionShipStyles.normalizeFaction(
             (profile && profile.faction) || factionShipStyles.resolveActiveFaction());
-        const key = factionShipStyles.emblemCamelKey(id);
+        const key = factionShipStyles.emblemCamelKey(id) + (size >= 48 ? '@4x' : (size >= 24 ? '@2x' : ''));
         const style = factionShipStyles.getFactionStyle(id);
         const label = id.charAt(0).toUpperCase() + id.slice(1);
         return iconRenderer.imgHtml(key, size, 'hs-faction-emblem', style && style.accent, label);
@@ -284,18 +285,20 @@ class HomeStationUI {
             : (this._menuOnlyTabs.indexOf(this.tab) !== -1 ? this.tab : null);
         return this.getMenuRowTabs().map((tab) => {
             const active = activeTab === tab.id;
-            const icon = tab.icon ? this.iconHtml(tab.icon, 24, 'hs-pixel') : '';
+            const label = this.menuLabelFor(tab.id, tab.label);
+            const iconKey = this.menuIconFor(tab.id, tab.icon);
+            const icon = iconKey ? this.iconHtml(this.tabIconKey(iconKey), 24, 'hs-pixel') : '';
             return `
-            <button type="button" class="hs-menu-tab-btn${active ? ' active' : ''}" data-menu-tab="${tab.id}" title="${tab.label}" data-nav-item>
+            <button type="button" class="hs-menu-tab-btn hs-subnav-tab${active ? ' active' : ''}" data-menu-tab="${tab.id}" title="${label}" data-nav-item>
                 <span class="hs-menu-tab-icon">${icon}</span>
-                <span class="hs-menu-tab-label">${tab.label}</span>
+                <span class="hs-menu-tab-label">${label}</span>
             </button>`;
         }).join('');
     }
 
     /** Build the tab rows from MENU_ORDER (js/ui/menu-order.js). */
     applyMenuOrder() {
-        const stationTabs = ['play', 'travel', 'explorations', 'factions', 'ftrade', 'fcontracts', 'upgrade', 'hangar', 'components', 'missions', 'craft', 'shop'];
+        const stationTabs = ['play', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts', 'upgrade', 'hangar', 'components', 'missions', 'craft', 'shop'];
         const order = (typeof MENU_ORDER !== 'undefined') ? MENU_ORDER : { main: stationTabs, esc: [] };
         const isStationTab = (id) => stationTabs.indexOf(id) !== -1;
         // Tabs reachable from the ESC/menu tab row instead of the main row.
@@ -312,6 +315,16 @@ class HomeStationUI {
         this._tabs = main.concat(this._menuOnlyTabs);
     }
 
+    /** Developer-only tabs (COMPONENTS, LAYOUT) show only in dev mode (Shift+C). */
+    isDevTabVisible(id) {
+        if (id !== 'components' && id !== 'layout') return true;
+        // The dev tab that is open right now stays visible until you leave it.
+        if (id === this.tab) return true;
+        if (id === 'layout' && this.tab === 'menu' && typeof startScreenManager !== 'undefined' &&
+            startScreenManager.embeddedMenuTab === 'layout') return true;
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+
     /** Menu tab row: embedded start-menu tabs plus station menu-only tabs. */
     getMenuRowTabs() {
         const base = (typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTabs) || [];
@@ -319,7 +332,8 @@ class HomeStationUI {
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             return { id: id, label: meta.label, icon: meta.icon };
         });
-        const all = base.concat(extra);
+        // COMPONENTS and LAYOUT are developer tools: only with dev mode (Shift+C).
+        const all = base.concat(extra).filter((t) => this.isDevTabVisible(t.id));
         if (typeof MENU_ORDER === 'undefined') return all;
         const rank = (t) => {
             const i = MENU_ORDER.esc.indexOf(t.id);
@@ -353,6 +367,16 @@ class HomeStationUI {
         const cats = this.getAvailableShopCategories();
         if (cats.indexOf(this.shopCategory) === -1) this.shopCategory = cats[0] || 'resources';
         return this.shopCategory;
+    }
+
+    /** Icon of a tab / area ('area:<id>'), with the player's LAYOUT choice. */
+    menuIconFor(key, fallback) {
+        return typeof getMenuIcon === 'function' ? getMenuIcon(key, fallback) : fallback;
+    }
+
+    /** Name of a tab / area ('area:<id>'), with the player's LAYOUT choice. */
+    menuLabelFor(key, fallback) {
+        return typeof getMenuLabel === 'function' ? getMenuLabel(key, fallback) : fallback;
     }
 
     tabIconHtml(iconKey) {

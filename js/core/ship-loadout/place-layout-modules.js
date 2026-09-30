@@ -12,35 +12,39 @@ extendClass(ShipLoadoutManager, {
         // Slot base size follows the part it mounts on (a share of that
         // part's width and height) instead of one fixed module size, so
         // small parts get small mounts and big parts get big ones.
-        // Fixed size cap: scaling an area up does not grow its slots or
-        // guns (they only shrink when the area gets too small for them).
-        // Sized from the area's unscaled frame (scale ≤ 1 still applies, so
-        // a shrunk area gets smaller mounts).
+        // Sized from the area's unscaled frame: scaling an area (up or
+        // down) never resizes its slots or the guns mounted in them.
         const sc = ctx.segmentScale || {};
         const fitBase = (w, h, id) => {
             const s = sc[id] || { x: 1, y: 1 };
-            const kx = Math.max(1, Number(s.x) || 1);
-            const ky = Math.max(1, Number(s.y) || 1);
+            const kx = Math.max(0.05, Number(s.x) || 1);
+            const ky = Math.max(0.05, Number(s.y) || 1);
             return evenSize(Math.max(4, Math.min(ms * 2, w / kx, h / ky)));
         };
-        const noseMs = fitBase(ctx.scaledFrontW * 0.55, frontH * 0.7, 'front');
+        const fixed = ctx.fixedMountSizes || null;
+        const noseMs = fixed ? fixed.front : fitBase(ctx.scaledFrontW * 0.55, frontH * 0.7, 'front');
         // One weapon per wing-pair slot on each wing (see weapon mounts below).
         // Mounts are sized for every wing slot row, empty ones included.
         const wingPerSide = Math.max(1, ((L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [])
             .slice(1).length, Number(L.wingSlotRows) || 0);
         // A wing slot splits one weapon onto both wings: each half is half
         // the size of the single nose gun (and still fits its wing row).
-        const wingMs = Math.min(
+        const wingMs = fixed ? fixed.wing : Math.min(
             fitBase(ctx.wingSpan * 0.7, (ctx.wingH * 0.8) / wingPerSide, 'wing'),
             evenSize(noseMs / 2)
         );
+        // Weapons have one size on every area: a single gun is always the
+        // nose-gun size, a mirrored pair (wing pair / split) always half of
+        // it — moving a gun onto a bigger or smaller area never resizes it.
+        const weaponMs = noseMs;
+        const weaponPairMs = fixed && fixed.weaponPair ? fixed.weaponPair : wingMs;
         const aftCount = Math.max(1, systemPods.length, drives.length);
         const aftRows = (systemPods.length ? 1 : 0) + (drives.length ? 1 : 0) || 1;
-        const aftMs = fitBase((ctx.scaledBackW * 0.8) / aftCount, (backH * 0.9) / aftRows, 'back');
-        const coreMs = fitBase(ctx.scaledCenterW * 0.6, centerH, 'center');
+        const aftMs = fixed ? fixed.back : fitBase((ctx.scaledBackW * 0.8) / aftCount, (backH * 0.9) / aftRows, 'back');
+        const coreMs = fixed ? fixed.center : fitBase(ctx.scaledCenterW * 0.6, centerH, 'center');
         // Mount size per area, so the hangar draws empty sockets exactly as
         // big as a part installed there would be.
-        ctx.mountSizes = { front: noseMs, wing: wingMs, back: aftMs, center: coreMs };
+        ctx.mountSizes = { front: noseMs, wing: wingMs, back: aftMs, center: coreMs, weapon: weaponMs, weaponPair: weaponPairMs };
 
         const placeRow = (ids, kind, y, centerX, face, size) => {
             if (!ids.length) return;
@@ -131,8 +135,7 @@ extendClass(ShipLoadoutManager, {
         slotList.forEach((id, i) => {
             const m = id ? bodyMount(i) : null;
             if (!m) return;
-            const base = m.area === 'front' ? noseMs : coreMs;
-            const size = m.split ? evenSize(base / 2) : base;
+            const size = m.split ? weaponPairMs : weaponMs;
             const d = resolveDim(id, 'weapon', size);
             const y = m.area === 'front' ? frontY : centerY;
             (m.split ? ['left', 'right'] : [null]).forEach((side) => {
@@ -156,7 +159,7 @@ extendClass(ShipLoadoutManager, {
             .filter((e) => e.id && !bodyMount(e.slot) && (e.slot > 0 || wingMount0));
         const wingWeapons = wingEntries.map((e) => e.id);
         if (noseWeapon) {
-            placeRow([noseWeapon], 'weapon', frontY, hullMid, 'up', noseMs);
+            placeRow([noseWeapon], 'weapon', frontY, hullMid, 'up', weaponMs);
         }
         if (wingWeapons.length) {
             const mirrored = [];
@@ -168,9 +171,9 @@ extendClass(ShipLoadoutManager, {
             placeSideColumns(
                 mirrored,
                 'weapon',
-                Math.floor(wingY + (ctx.wingH - wingMs) / 2),
+                Math.floor(wingY + (ctx.wingH - weaponPairMs) / 2),
                 false,
-                wingMs,
+                weaponPairMs,
                 false,
                 mirroredSlots
             );

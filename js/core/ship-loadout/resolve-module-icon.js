@@ -87,7 +87,8 @@ extendClass(ShipLoadoutManager, {
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const caps = this.getSlotCaps(id, model.modelClass);
         // Same wing rows as the hangar markers (see buildHangarSlots).
-        const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign({}, loadout,
+        const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign(
+            this.withWeaponSlotScales ? this.withWeaponSlotScales(id, loadout) : Object.assign({}, loadout),
             { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const hullBonus = this.getFrameHullBonus(id);
 
@@ -115,6 +116,8 @@ extendClass(ShipLoadoutManager, {
         if (hullBonus.armor) {
             model.armor = (Number(model.armor) || 0) + hullBonus.armor;
         }
+        // Speed / damage / fire rate / armor from equipped abilities (ability-stats.js).
+        if (this.applyAbilityStatsToModel) this.applyAbilityStatsToModel(model, layout.loadout.abilities);
 
         model.availableWeapons = layout.loadout.weapons.length
             ? layout.loadout.weapons.slice()
@@ -264,7 +267,7 @@ extendClass(ShipLoadoutManager, {
         return {
             hasCore: true,
             maxEnergy: 100 + capBonus,
-            regen: 8 + regenBonus,
+            regen: 20 + regenBonus,
             idleDraw: budget.idleDraw,
             drainMul: drainMul,
             // A volley fires every mounted gun, so it costs all of them: nose

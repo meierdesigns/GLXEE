@@ -3,7 +3,7 @@
 // ShipLoadoutManager methods: per-faction default ship anatomy.
 // Fields copied from/onto a loadout; the same set RESET ANATOMY touches.
 const FACTION_LAYOUT_KEYS = [
-    'wingOffsetX', 'wingOffsetY', 'wingConnectionY', 'wingConnectionWidth',
+    'wingOffsetX', 'wingOffsetY', 'wingConnectionY', 'wingConnectionYEnd', 'wingConnectionWidth',
     'wingConnectionWidthEnd', 'wingRotation', 'voxelScale', 'wingConnectionVoxelScale',
     'wingConnectionStyle', 'spineConnectionStyle', 'spineConnectionWidth',
     'spineConnectionWidthEnd', 'spineConnectionX', 'wingJointSides', 'spineJoints',

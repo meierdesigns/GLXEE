@@ -13,7 +13,7 @@ extendClass(ShipAssetLoader, {
         case 4: return 0.72 + 0.28 * Math.sin(t * Math.PI); // barrel
         case 5: return 0.7 + 0.3 * t; // wedge widening aft
         case 6: return 1 - 0.3 * t; // keel narrowing aft
-        case 7: return ((t * 7) | 0) % 2 ? 0.82 : 1; // ribbed
+        case 7: return (t > 0.28 && t < 0.4) || (t > 0.6 && t < 0.72) ? 0.84 : 1; // ribbed: two ribs
         default: return 1; // slab
         }
     },
@@ -35,7 +35,24 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 4);
+        this.applyFactionPlating(g, silhouette, 4, false, true);
+        // Hull footprint: accent stamps below may only land on the hull.
+        const hullMask = g.map((row) => row.map((v) => v !== 0));
+        // Air intakes: a dark slot just inside each flank, upper body —
+        // mirrored, so the core reads as a machined fuselage.
+        if (cols >= 8 && rows >= 8) {
+            const ra = Math.round(rows * 0.3);
+            const rb = Math.round(rows * 0.5);
+            for (let r = ra; r < rb; r++) {
+                const row = g[r];
+                const first = row.findIndex((v) => v && v !== 1);
+                if (first < 0) continue;
+                const c = first + 1;
+                if (c >= cols / 2 - 1) continue;
+                if (row[c] && row[c] !== 1) row[c] = 1;
+                if (row[cols - 1 - c] && row[cols - 1 - c] !== 1) row[cols - 1 - c] = 1;
+            }
+        }
         if (silhouette === 'rings') {
             // Twin hollow ring apertures — the voidborn's hallmark void gap.
             const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.22));
@@ -75,6 +92,9 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, cols * 0.3, rows * 0.28, cols * 0.4, Math.max(1, rows * 0.22), 3);
         }
         // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        // Accent blocks sit at fixed fractions of the frame; clip them to
+        // the hull so none float beside a lopsided or tapered silhouette.
+        this.clipGridToMask(g, hullMask);
         if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;
     },
@@ -224,6 +244,8 @@ extendClass(ShipAssetLoader, {
             ctx.fillRect(x, y, width, height);
             return;
         }
+        // Hull-part palettes carry accent shades: break up flat accent blocks.
+        if (colors && colors[6] && colors[7]) sprite = this.shadeAccentBlocks(sprite);
         const cols = sprite[0].length;
         const rows = sprite.length;
         // Rasterize every generated hull part into equal square 2D voxels.

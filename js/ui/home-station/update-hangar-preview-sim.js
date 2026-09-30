@@ -41,7 +41,10 @@ extendClass(HomeStationUI, {
         const baseX = (canvas.width - size.width) / 2;
         const sway = Math.sin(sim.phase) * Math.min(28, canvas.width * 0.08);
         if (sim.mode === 'fly') {
-            p.x = baseX + sway + Math.sin(sim.phase * 0.55) * 10;
+            // Ease towards the sway path: coming out of 'shoot' the ship is
+            // off the path, and snapping onto it made the ship jump.
+            const target = baseX + sway + Math.sin(sim.phase * 0.55) * 10;
+            p.x += (target - p.x) * Math.min(1, 0.06 * frameScale);
             p.dir = Math.cos(sim.phase) >= 0 ? 1 : -1;
         } else {
             p.x += p.dir * speed * 0.35 * frameScale;
@@ -99,20 +102,16 @@ extendClass(HomeStationUI, {
         const demoKey = this.stepHangarPreviewDemoKey(sim, dtMs);
         // No weapon slotted → nothing to fire (no default-laser fallback).
         if (demoKey && canFire && this.hangarPreviewHasWeapons(shipId)) {
-            const before = bm.bullets.length;
             let fired = false;
             if (bm && fireModel.weaponConfig) {
                 // Same routing as in game: the ALL key fires every slot.
                 const allKey = this.hangarPreviewAllKey(shipId);
-                fired = bm.shootWithShipWeapon(p, Date.now(), { fireKey: demoKey === allKey ? 'all' : demoKey });
-                for (let i = before; i < bm.bullets.length; i++) {
-                    const b = bm.bullets[i];
-                    const cx = b.x + b.width / 2;
-                    b.width = Math.max(2, b.width * k);
-                    b.height = Math.max(4, b.height * k);
-                    b.speed = (b.speed || 6) * k;
-                    b.x = cx - b.width / 2;
-                }
+                // shotScale sizes shots to the close-up before they are
+                // fitted to the (already close-up sized) gun barrels.
+                fired = bm.shootWithShipWeapon(p, Date.now(), {
+                    fireKey: demoKey === allKey ? 'all' : demoKey,
+                    shotScale: k
+                });
             } else {
                 sim.burstGap -= dtMs;
                 if (sim.burstGap <= 0) {
@@ -128,7 +127,53 @@ extendClass(HomeStationUI, {
             if (fired && energy.max > 0) sim.energy = Math.max(0, sim.energy - energy.shotCost);
         }
 
+        // Target enemy at the top: drifts side to side, flashes when hit.
+        const en = sim.enemy;
+        if (en) {
+            // Box with the real model's aspect so the uniform fit fills it.
+            if (!en.aspect) {
+                const vis = typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual
+                    ? factionShipStyles.resolveFactionShipVisual({ faction: en.faction, enemyClass: en.enemyClass,
+                        tier: en.tier, level: en.level, typeId: en.type }) : null;
+                const m = vis && vis.model;
+                en.aspect = m && m.width && m.height ? m.width / m.height : 1;
+            }
+            en.width = Math.round(p.width * 0.75);
+            en.height = Math.round(en.width / en.aspect);
+            en.x = (canvas.width - en.width) / 2 + Math.sin(sim.phase * 0.4) * Math.min(60, canvas.width * 0.2);
+            en.y = canvas.height * 0.12 + Math.sin(sim.phase * 0.9) * 6;
+            en.hitFlash = Math.max(0, (en.hitFlash || 0) - dtMs);
+            en.sinceHit += dtMs;
+            if (en.respawn > 0) {
+                en.respawn -= dtMs;
+                if (en.respawn <= 0) { en.health = en.maxHealth; en.shield = en.shieldMax; }
+            } else if (en.sinceHit > 2000) {
+                // Shield recharges after 2 s without a hit.
+                en.shield = Math.min(en.shieldMax, en.shield + en.shieldMax * 0.5 * dt);
+            }
+        }
+        const texts = sim.damageTexts || (sim.damageTexts = []);
+        sim.damageTexts = texts.filter((t) => {
+            t.y -= 0.6 * frameScale;
+            t.life -= dtMs;
+            return t.life > 0;
+        });
         bm.bullets = bm.bullets.filter((b) => {
+            if (en && en.respawn <= 0 && b.x + b.width > en.x && b.x < en.x + en.width
+                && b.y < en.y + en.height && b.y + b.height > en.y) {
+                const dmg = Math.max(1, Math.round(Number(b.damage) || 10));
+                const absorbed = Math.min(en.shield, dmg);
+                en.shield -= absorbed;
+                en.health = Math.max(0, en.health - (dmg - absorbed));
+                en.hitFlash = 120;
+                en.sinceHit = 0;
+                sim.damageTexts.push({
+                    x: b.x + b.width / 2 + (Math.random() - 0.5) * 10, y: en.y + en.height * 0.4,
+                    text: String(dmg), shield: absorbed >= dmg, life: 700
+                });
+                if (en.health <= 0) en.respawn = 900;
+                return false;
+            }
             if (b.type === 'wave_beam' && b.waveAmp) {
                 b.wavePhase = (b.wavePhase || 0) + 0.25 * frameScale;
                 b.x += Math.sin(b.wavePhase) * b.waveAmp * k * 0.5 * frameScale;
@@ -141,6 +186,78 @@ extendClass(HomeStationUI, {
             }
             return b.y + b.height > 0 && b.x > -20 && b.x < canvas.width + 20;
         });
+    },
+
+    /**
+     * Recharge on the weapon art after each shot: the weapon drops dark and
+     * refills with its colour from the base up to the muzzle in pixel steps
+     * (pulsing, edge flashes per step); a white blink when ready. Drawn 'source-atop' on the
+     * ship-only buffer, so only the weapon's own pixels change.
+     */
+    drawHangarPreviewRecharge(bctx, player, bm) {
+        const shots = bm && bm.lastShots;
+        const model = bm && bm.currentShipModel;
+        const layout = model && model.layout;
+        if (!shots || !layout || !player) return;
+        const now = performance.now();
+        // Same uniform fit + centring as drawMuzzleFlashes / renderPlayerShip.
+        const lw = Math.max(1, layout.width || player.width);
+        const lh = Math.max(1, layout.height || player.height);
+        const mw = Math.max(1, model.width || lw);
+        const mh = Math.max(1, model.height || lh);
+        const fit = Math.max(0.25, Math.min(player.width / mw, player.height / mh));
+        const sx = fit * (mw / lw);
+        const sy = fit * (mh / lh);
+        const px0 = player.x - (mw * fit - player.width) / 2;
+        const py0 = player.y - (mh * fit - player.height) / 2;
+        bctx.save();
+        bctx.globalCompositeOperation = 'source-atop';
+        Object.keys(shots).forEach((key) => {
+            const s = shots[key];
+            const m = s.muzzle;
+            if (!m) return;
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon
+                ? weaponConfigManager.getWeapon(s.id) : null;
+            // Real cooldown, but never shorter than readable.
+            const dur = Math.max(450, Number(w && w.cooldown) || 300);
+            const age = now - s.t;
+            if (age > dur + 160) { delete shots[key]; return; }
+            const color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
+                && weaponConfigManager.getWeaponUiColor(s.id)) || '#ffffff';
+            const x = Math.round(px0 + (m.lx - m.lw / 2) * sx) - 2;
+            const top = Math.round(py0 + m.ly * sy) - 2;
+            const bot = Math.round(py0 + (m.by != null ? m.by : m.ly + m.lh * 2.4) * sy) + 2;
+            const bw = Math.round(m.lw * sx) + 4;
+            const bh = Math.max(2, bot - top);
+            if (age > dur) {
+                // Ready: white blink that shrinks from the muzzle end down.
+                const k = (age - dur) / 160;
+                bctx.globalAlpha = 0.85 * (1 - k);
+                bctx.fillStyle = '#ffffff';
+                bctx.fillRect(x, top, bw, Math.max(2, Math.round(bh * (1 - k))));
+                return;
+            }
+            const r = age / dur;
+            // Refill in 6 visible pixel steps (base → muzzle), not a smooth slide.
+            const STEPS = 6;
+            const step = Math.min(STEPS, Math.floor(r * STEPS) + 1);
+            const filled = Math.round(bh * step / STEPS);
+            // Empty part: dark, fading out as the charge rises.
+            bctx.globalAlpha = 0.75 - 0.35 * r;
+            bctx.fillStyle = '#05060a';
+            bctx.fillRect(x, top, bw, bh - filled);
+            // Charged part: weapon colour, pulsing faster as it fills.
+            const pulse = 0.5 + 0.5 * Math.sin(now / (120 - 70 * r));
+            bctx.globalAlpha = 0.3 + 0.25 * r + 0.15 * pulse;
+            bctx.fillStyle = color;
+            bctx.fillRect(x, bot - filled, bw, filled);
+            // Step edge: bright line, flashes on each new step.
+            const stepAge = (r * STEPS) % 1;
+            bctx.globalAlpha = stepAge < 0.25 ? 1 : 0.7;
+            bctx.fillStyle = stepAge < 0.25 ? '#ffffff' : color;
+            bctx.fillRect(x, bot - filled, bw, Math.max(2, Math.round(bh / 12)));
+        });
+        bctx.restore();
     },
 
     /** Ship model with the current hangar layout applied (what the game flies). */
@@ -361,6 +478,10 @@ extendClass(HomeStationUI, {
         ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
         ctx.globalAlpha = 1;
 
+        // Right-drag pan (bindHangarPreviewPan): moves the scene, not the HUD text.
+        ctx.save();
+        ctx.translate(Math.round(this._hangarPreviewPanX || 0), Math.round(this._hangarPreviewPanY || 0));
+
         // Thrust
         sim.thrust.forEach((t) => {
             ctx.globalAlpha = Math.max(0.15, t.life / 500);
@@ -368,6 +489,52 @@ extendClass(HomeStationUI, {
             ctx.fillRect(t.x, t.y, t.w, t.w + 2);
         });
         ctx.globalAlpha = 1;
+
+        const en = sim.enemy;
+        if (en && en.respawn <= 0 && typeof graphicsManager !== 'undefined' && graphicsManager.renderEnemyShip) {
+            graphicsManager.renderEnemyShip(ctx, en, 1);
+            if (en.hitFlash > 0) {
+                // Flash only the ship's pixels, not its box.
+                if (!this._hangarEnemyBuf) this._hangarEnemyBuf = document.createElement('canvas');
+                const eb = this._hangarEnemyBuf;
+                eb.width = Math.max(1, en.width + 8);
+                eb.height = Math.max(1, en.height + 8);
+                const ectx = eb.getContext('2d');
+                ectx.imageSmoothingEnabled = false;
+                graphicsManager.renderEnemyShip(ectx, Object.assign({}, en, { x: 4, y: 4 }), 1);
+                ectx.globalCompositeOperation = 'source-atop';
+                ectx.fillStyle = '#ffffff';
+                ectx.fillRect(0, 0, eb.width, eb.height);
+                ctx.globalAlpha = 0.6 * en.hitFlash / 120;
+                ctx.drawImage(eb, Math.round(en.x) - 4, Math.round(en.y) - 4);
+                ctx.globalAlpha = 1;
+            }
+            // Shield bar on top, health bar below it, just above the ship.
+            const bw = Math.max(30, en.width);
+            const bx = Math.round(en.x + (en.width - bw) / 2);
+            const bar = (y, frac, color) => {
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(bx - 1, y - 1, bw + 2, 6);
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.fillRect(bx, y, bw, 4);
+                ctx.fillStyle = color;
+                ctx.fillRect(bx, y, Math.round(bw * Math.max(0, Math.min(1, frac))), 4);
+            };
+            const top = Math.round(en.y) - 16;
+            if (en.shieldMax > 0) bar(top, en.shield / en.shieldMax, '#4ad8ff');
+            bar(top + 7, en.health / en.maxHealth, '#ff4d4d');
+        }
+        (sim.damageTexts || []).forEach((t) => {
+            ctx.globalAlpha = Math.min(1, t.life / 300);
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#05060a';
+            ctx.strokeText(t.text, t.x, t.y);
+            ctx.fillStyle = t.shield ? '#4ad8ff' : '#ffd24a';
+            ctx.fillText(t.text, t.x, t.y);
+            ctx.globalAlpha = 1;
+        });
 
         // Bullets — same renderer as in-game shots
         const bullets = (sim.bm && sim.bm.bullets) || [];
@@ -382,12 +549,32 @@ extendClass(HomeStationUI, {
         ctx.globalAlpha = 1;
 
         const p = sim.player;
-        if (typeof graphicsManager !== 'undefined' && graphicsManager.renderPlayerShip) {
-            // Exactly the in-game path (colour overlay, thruster glow, fit).
+        const recharging = !!(sim.bm && sim.bm.lastShots && Object.keys(sim.bm.lastShots).length);
+        if (!recharging && typeof graphicsManager !== 'undefined' && graphicsManager.renderPlayerShip) {
+            // Nothing recharging: draw straight to the preview (no extra buffer pass).
             const prev = graphicsManager.currentPlayerModel;
             graphicsManager.currentPlayerModel = model;
             graphicsManager.renderPlayerShip(ctx, p, 1);
             graphicsManager.currentPlayerModel = prev;
+            if (sim.bm && sim.bm.drawMuzzleFlashes) sim.bm.drawMuzzleFlashes(ctx, p);
+        } else if (typeof graphicsManager !== 'undefined' && graphicsManager.renderPlayerShip) {
+            // Exactly the in-game path (colour overlay, thruster glow, fit),
+            // into a transparent buffer so the recharge tint can be masked to
+            // the weapon pixels.
+            if (!this._hangarPreviewShipBuf) this._hangarPreviewShipBuf = document.createElement('canvas');
+            const buf = this._hangarPreviewShipBuf;
+            if (buf.width !== w) buf.width = w;
+            if (buf.height !== h) buf.height = h;
+            const bctx = buf.getContext('2d');
+            bctx.setTransform(1, 0, 0, 1, 0, 0);
+            bctx.clearRect(0, 0, w, h);
+            bctx.imageSmoothingEnabled = false;
+            const prev = graphicsManager.currentPlayerModel;
+            graphicsManager.currentPlayerModel = model;
+            graphicsManager.renderPlayerShip(bctx, p, 1);
+            graphicsManager.currentPlayerModel = prev;
+            this.drawHangarPreviewRecharge(bctx, p, sim.bm);
+            ctx.drawImage(buf, 0, 0);
             if (sim.bm && sim.bm.drawMuzzleFlashes) sim.bm.drawMuzzleFlashes(ctx, p);
         } else if (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) {
             const scale = Math.min(p.width / (model.width || 20), p.height / (model.height || 16));
@@ -406,6 +593,8 @@ extendClass(HomeStationUI, {
             ctx.fillStyle = accent;
             ctx.fillRect(p.x, p.y, p.width, p.height);
         }
+
+        ctx.restore();
 
         ctx.fillStyle = accent;
         ctx.globalAlpha = 0.9;

@@ -184,7 +184,8 @@ extendClass(HomeStationUI, {
         const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
         const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
-            <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
+            <div class="vf-browser-shell">
+              <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header hs-header-split">
                     <div class="hs-pilot-card">
                         <span class="hs-pilot-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'card')}</span>
@@ -216,6 +217,7 @@ extendClass(HomeStationUI, {
                 </div>
                 <button type="button" class="ui-controls-show-btn" id="hsShowControls" title="Show controls (Shift+H)" aria-label="Show controls">?</button>
                 ${this.renderResourceBuyModal(profile)}
+              </div>
             </div>`);
         if (!reuse) {
             this.overlay.classList.add('vf-menu-enter');

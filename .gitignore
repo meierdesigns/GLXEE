@@ -36,3 +36,6 @@ node_modules/
 # Asset-gen bridge runtime
 tools/asset-gen/bridge.out
 tools/asset-gen/bridge.pid
+
+# Local scratch
+tmp/

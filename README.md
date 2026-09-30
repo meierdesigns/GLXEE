@@ -183,6 +183,20 @@ The station is the progression hub:
 | Travel | Galaxy map and arrival sectors |
 | Explorations | Ships, planets, enemies, factions, and events |
 | Missions | Liberate / patrol board and mission rewards |
+| Factions | Relations, trade quotes, contracts, and fleet previews |
+
+### Browser shell and GUI scale
+
+Home Station renders inside a dedicated `.vf-browser-shell` frame so the
+station content fills the live viewport without double-scaling. The shell uses
+a proportional `--gui-zoom` baseline (default **75%**) so tabs, labels, and the
+PLAY launch control stay readable while still matching the compact Game Boy
+presentation.
+
+- Native browser zoom stays available; GLXEE's shell zoom is separate.
+- Wide and Cursor-hosted viewports keep the same proportional content scale.
+- Header actions stay docked: crest, resources, LOGOUT, and PLAY in one strip.
+- Mobile-narrow layouts allow PLAY to wrap full-width under the header.
 
 ### Hull areas and slots
 
@@ -233,6 +247,7 @@ sprites where segmented rendering would distort a faction silhouette.
 - Faction-specific weapon mount art and full-sprite fallback rendering for
   procedural ships.
 - Resizable station sidebars with remembered widths and responsive hangar panels.
+- Home Station browser shell with proportional 75% GUI zoom and stable PLAY launch control.
 - Profile score and ability-stat readouts for faster loadout decisions.
 - Faction fleet previews in the station and high-definition navigation icons.
 - Animated planet spin frames and extra faction-specific planet treatments.
@@ -246,12 +261,18 @@ sprites where segmented rendering would distort a faction silhouette.
 ### Current build focus
 
 ```text
+STATION ── browser shell ── 75% GUI zoom ── readable tabs ── PLAY launch
+   │
 HANGAR  ── size-aware slots ── weapon mounts ── power budget ── test arena
    │
 TRAVEL  ── route preview ── arrival sector ── encounter staging ── mission loot
    │
 COMBAT  ── wave direction ── enemy lanes ── pickups ── victory handoff
 ```
+
+Recent shell work keeps Home Station proportional across Cursor and desktop
+browsers: one outer shell, one zoom baseline, no double CSS zoom, and stable
+header geometry for the launch control.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -332,6 +353,8 @@ be reviewed or reverted independently.
 | 48G | Wide viewport response | Keep the full responsive shell without changing the proportional GUI baseline |
 | 48H | Cursor viewport fit | Use the full Cursor browser area at its measured responsive width |
 | 48I | Compact viewport baseline | Preserve the proportional 75% station content scale across wide Cursor viewports |
+| 48J | Browser shell frame | Wrap Home Station content in `.vf-browser-shell` so the station fills the live viewport cleanly |
+| 48K | Station readability | Uniform GUI zoom geometry, fixed PLAY launch width, larger tab labels, and mobile wrap |
 
 The wave commit convention is:
 

@@ -10,8 +10,11 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=000000&color=888888)](#credits)
 [![Creator: meierdesigns](https://img.shields.io/badge/creator-meierdesigns-111111?style=flat-square&labelColor=000000&color=3A6EA5)](#credits)
 [![Factions: 5](https://img.shields.io/badge/factions-5-111111?style=flat-square&labelColor=000000&color=C44B2F)](#factions-and-galaxies)
+[![Play on itch.io](https://img.shields.io/badge/play-itch.io-111111?style=flat-square&labelColor=000000&color=FA5C5C)](https://meierdesigns.itch.io/glxee)
 
 </div>
+
+**Play free in the browser:** [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 
 GLXEE is a no-build browser shooter. Choose a faction, assemble a ship from
 area-sized modules, clear planets, earn contracts, trade with allies, and travel
@@ -26,20 +29,25 @@ language.
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
 │  OBJECTIVE       CLEAR THE STAGE · CLAIM THE LOOT                           │
 │  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
+│  PLAY            https://meierdesigns.itch.io/glxee                         │
 ╰─────────────────────────────────────────────────────────────────────────────╯
 ```
 
 <div align="center">
 
-<img src="assets/ui/readme-hero.png" alt="GLXEE hero — terminal banner and live fleet sprites" width="960" />
+<img src="assets/ui/readme-shot-combat.png" alt="GLXEE combat on Mars — live game screenshot" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-ships.png" alt="Player and hostile hull lineup from live game sprites" width="960" />
+`COMBAT  ·  MARS STAGE  ·  FACTION BARS  ·  LOADOUT RAIL`
 
 <br/>
 
-`STARFIGHTER` · `INTERCEPTOR` · `HEAVY` · `ASSAULT` · `GUNSHIP` · `HOSTILES`
+<img src="assets/ui/readme-shot-factions.png" alt="GLXEE Factions relations screen — live screenshot" width="960" />
+
+<br/>
+
+`FACTIONS  ·  RELATIONS  ·  TRADE  ·  CONTRACTS`
 
 </div>
 
@@ -55,6 +63,7 @@ language.
 - [Factions and galaxies](#factions-and-galaxies)
 - [Home Station and hangar](#home-station-and-hangar)
 - [Combat](#combat)
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Development waves](#development-waves)
@@ -265,6 +274,32 @@ The combat renderer uses a shared ship voxel lattice, faction hull builders,
 Scale2x refinement on high-density displays, pixel snapping, and authored full
 sprites where segmented rendering would distort a faction silhouette.
 
+## Screenshots
+
+Live captures from the current build (station shell, factions, travel, combat).
+
+<div align="center">
+
+| Home Station | Galaxy travel |
+|:---:|:---:|
+| <img src="assets/ui/readme-shot-station.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy.png" alt="Galaxy travel map" width="460" /> |
+| Upgrade tree | Combat focus |
+| <img src="assets/ui/readme-shot-upgrade.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus.png" alt="Mars combat focus crop" width="460" /> |
+
+<br/>
+
+<img src="assets/ui/readme-strip-ships.png" alt="Hull lineup from live sprites" width="960" />
+
+<br/>
+
+<img src="assets/ui/readme-strip-planets.png" alt="Planet theater sprites" width="960" />
+
+<br/>
+
+**Play:** [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
+
+</div>
+
 ## Features
 
 - Five faction identities with emblems, lore, relations, pacts, contracts, and trade.
@@ -388,6 +423,7 @@ be reviewed or reverted independently.
 | 48J | Browser shell frame | Wrap Home Station content in `.vf-browser-shell` so the station fills the live viewport cleanly |
 | 48K | Station readability | Uniform GUI zoom geometry, fixed PLAY launch width, larger tab labels, and mobile wrap |
 | 49A | README visual refresh | Live sprite strips for fleet, planets, and weapons plus updated terminal banner chrome |
+| 49B | Live README screenshots | Capture station, factions, galaxy travel, and Mars combat into the GitHub archive |
 
 The wave commit convention is:
 
@@ -428,6 +464,7 @@ notes and the [GLXEE devlogs](docs/).
 
 **GLXEE** — created by Lance Meier / [meierdesigns](https://github.com/meierdesigns)
 
+- Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
 - Runtime: browser
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

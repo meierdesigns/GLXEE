@@ -19965,10 +19965,25 @@ html .home-station-overlay :is(.hs-subnav, .hs-subnav-menu) {
    Top bar, sub-nav row and content body keep the same box in all modes
    (tabs / section / content / menu), so switching never shifts anything. */
 html .home-station-overlay .home-station-content .hs-topbar {
+    position: relative;
     padding: 6px 6px 4px !important;
     margin: 2px -2px 8px !important;
     min-height: 56px;
     box-sizing: border-box;
+}
+
+/* Keep the session action in the resource strip instead of centering it
+   against the taller two-row navigation area. */
+html .home-station-overlay .home-station-content .hs-topbar-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    margin-left: 0;
+    z-index: 2;
+}
+
+html .home-station-overlay .home-station-content .hs-topbar-res {
+    margin-right: 48px;
 }
 html .home-station-overlay .home-station-content .hs-subnav {
     height: 42px !important;

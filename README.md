@@ -327,6 +327,7 @@ be reviewed or reverted independently.
 | 47C | Station presentation | Fleet previews, HD navigation icons, start intro, and hangar shell polish |
 | 48C | GLXEE scale baseline | Proportional 75% shell zoom for the normal browser view and compact HUD presentation |
 | 48D | Browser zoom compatibility | Keep native browser zoom controls while the GLXEE shell uses its compact 75% baseline |
+| 48E | Station header fit | Keep PLAY compact and dock LOGOUT beside the resource strip above the navigation tabs |
 
 The wave commit convention is:
 

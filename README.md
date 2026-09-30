@@ -157,7 +157,11 @@ change whether a faction trades and which prices it offers.
 
 <div align="center">
 
-<img src="assets/ui/readme-strip-planets.png" alt="Mars Jupiter Saturn Neptune Pluto theater sprites" width="960" />
+<img src="assets/ui/readme-strip-emblems.png" alt="Live faction emblems — Terran Kronax Voidborn Pirate Machine" width="960" />
+
+<br/>
+
+<img src="assets/ui/readme-strip-planets.png" alt="Live procedural planets — Mars Jupiter Saturn Neptune Pluto" width="960" />
 
 <br/>
 
@@ -238,7 +242,11 @@ connection settings, and disabled areas.
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
 
-<img src="assets/ui/readme-strip-ships.png" alt="Live hull sprites used in hangar and combat" width="960" />
+<img src="assets/ui/readme-strip-ships.png" alt="Live faction assault hulls from the combat renderer" width="960" />
+
+<br/>
+
+<img src="assets/ui/readme-strip-ship-classes.png" alt="Live Terran class ladder — scout assault heavy elite capital" width="960" />
 
 </div>
 
@@ -246,7 +254,7 @@ connection settings, and disabled areas.
 
 <div align="center">
 
-<img src="assets/ui/readme-strip-weapons.png" alt="Live weapon sprites from the battery registry" width="960" />
+<img src="assets/ui/readme-strip-weapons.png" alt="Live weapon icons from iconRenderer" width="960" />
 
 <br/>
 
@@ -288,11 +296,11 @@ Live captures from the current build (station shell, factions, travel, combat).
 
 <br/>
 
-<img src="assets/ui/readme-strip-ships.png" alt="Hull lineup from live sprites" width="960" />
+<img src="assets/ui/readme-strip-ships.png" alt="Live faction hull lineup" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-planets.png" alt="Planet theater sprites" width="960" />
+<img src="assets/ui/readme-strip-planets.png" alt="Live procedural planet lineup" width="960" />
 
 <br/>
 

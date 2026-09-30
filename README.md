@@ -329,8 +329,9 @@ be reviewed or reverted independently.
 | 48D | Browser zoom compatibility | Keep native browser zoom controls while the GLXEE shell uses its compact 75% baseline |
 | 48E | Station header fit | Keep PLAY compact and dock LOGOUT beside the resource strip above the navigation tabs |
 | 48F | Station content scale | Match the visible Home Station layout to the browser's 75% presentation at normal browser zoom |
-| 48G | Wide viewport response | Prevent double scaling when browser zoom creates a wide responsive viewport |
+| 48G | Wide viewport response | Keep the full responsive shell without changing the proportional GUI baseline |
 | 48H | Cursor viewport fit | Use the full Cursor browser area at its measured responsive width |
+| 48I | Compact viewport baseline | Preserve the proportional 75% station content scale across wide Cursor viewports |
 
 The wave commit convention is:
 

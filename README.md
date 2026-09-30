@@ -9,6 +9,7 @@
 [![Runtime: browser](https://img.shields.io/badge/runtime-browser-111111?style=flat-square&labelColor=000000&color=b0b0b0)](#boot)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=000000&color=888888)](#credits)
 [![Creator: meierdesigns](https://img.shields.io/badge/creator-meierdesigns-111111?style=flat-square&labelColor=000000&color=3A6EA5)](#credits)
+[![Factions: 5](https://img.shields.io/badge/factions-5-111111?style=flat-square&labelColor=000000&color=C44B2F)](#factions-and-galaxies)
 
 </div>
 
@@ -30,14 +31,15 @@ language.
 
 <div align="center">
 
-<img src="assets/ships/sprites/player-starfighter.png" alt="GLXEE player starfighter" width="128" />
-<img src="assets/ships/sprites/player-interceptor.png" alt="GLXEE interceptor" width="128" />
-<img src="assets/levels/sprites/mars-surface.png" alt="Mars combat theater" width="128" />
-<img src="assets/levels/sprites/pluto-surface.png" alt="Pluto combat theater" width="128" />
+<img src="assets/ui/readme-hero.png" alt="GLXEE hero — terminal banner and live fleet sprites" width="960" />
 
 <br/>
 
-`STARFIGHTER` · `INTERCEPTOR` · `MARS` · `PLUTO`
+<img src="assets/ui/readme-strip-ships.png" alt="Player and hostile hull lineup from live game sprites" width="960" />
+
+<br/>
+
+`STARFIGHTER` · `INTERCEPTOR` · `HEAVY` · `ASSAULT` · `GUNSHIP` · `HOSTILES`
 
 </div>
 
@@ -144,6 +146,16 @@ planet names, obstacle doctrine, enemy compositions, icons, and background
 patterns. Reputation ranges from -100 to +100; allegiance, pacts, and contracts
 change whether a faction trades and which prices it offers.
 
+<div align="center">
+
+<img src="assets/ui/readme-strip-planets.png" alt="Mars Jupiter Saturn Neptune Pluto theater sprites" width="960" />
+
+<br/>
+
+`MARS` · `JUPITER` · `SATURN` · `NEPTUNE` · `PLUTO`
+
+</div>
+
 ### Faction relations and contracts
 
 The Home Station Factions area has three focused views:
@@ -212,6 +224,26 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
 connection settings, and disabled areas.
+
+<div align="center">
+
+<img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
+
+<img src="assets/ui/readme-strip-ships.png" alt="Live hull sprites used in hangar and combat" width="960" />
+
+</div>
+
+<img src="assets/ui/readme-h-weapons.svg" alt="CH.08 WEAPONS" width="960" />
+
+<div align="center">
+
+<img src="assets/ui/readme-strip-weapons.png" alt="Live weapon sprites from the battery registry" width="960" />
+
+<br/>
+
+`LASER` · `SPREAD` · `RAPID` · `PLASMA` · `MISSILE` · `ION`
+
+</div>
 
 <img src="assets/ui/readme-h-events.svg" alt="CH.10 COMBAT EVENTS" width="960" />
 
@@ -355,6 +387,7 @@ be reviewed or reverted independently.
 | 48I | Compact viewport baseline | Preserve the proportional 75% station content scale across wide Cursor viewports |
 | 48J | Browser shell frame | Wrap Home Station content in `.vf-browser-shell` so the station fills the live viewport cleanly |
 | 48K | Station readability | Uniform GUI zoom geometry, fixed PLAY launch width, larger tab labels, and mobile wrap |
+| 49A | README visual refresh | Live sprite strips for fleet, planets, and weapons plus updated terminal banner chrome |
 
 The wave commit convention is:
 

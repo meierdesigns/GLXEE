@@ -222,7 +222,7 @@
 
 /* A browser zoom-out already provides the compact presentation. Avoid
    applying the GLXEE baseline a second time on the resulting wide viewport. */
-@media (min-width: 1500px) {
+@media (min-width: 1200px) and (max-width: 1400px) {
     :root {
         --gui-zoom: 1;
     }

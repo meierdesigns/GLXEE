@@ -205,7 +205,8 @@ extendClass(GalaxyMapManager, {
             const hovered = n.planetId === this.hoveredPlanetId;
             const stageProgress = this.getPlanetStageProgress(n.planetId);
             const sizeSeed = String(n.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-            const size = 32 + (sizeSeed % 7) * 10;
+            const baseSize = 32 + (sizeSeed % 7) * 10;
+            const size = baseSize * this.getMapObjectScale();
             const frame = size / 2 + 10;
             const stateClass = [
                 unlocked ? 'unlocked' : 'locked',
@@ -264,7 +265,9 @@ extendClass(GalaxyMapManager, {
             // One station cell = one pixel of its anchor planet.
             // Stations are small next to planets: half a planet pixel per
             // cell for shops, a bit more for faction stations.
-            const pp = this.planetPixelSize(post.planetId) * (post.factionStation ? 0.65 : 0.5);
+            const pp = this.planetPixelSize(post.planetId)
+                * (post.factionStation ? 0.65 : 0.5)
+                * this.getMapObjectScale();
             const half = 6 * pp;
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
@@ -956,6 +959,17 @@ extendClass(GalaxyMapManager, {
     getMapDetail() {
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
         return z >= 6 ? 8 : (z >= 2.5 ? 4 : (z >= 1.35 ? 2 : 1));
+    },
+
+    /**
+     * Keep map objects visually proportional while the camera zooms.
+     * Without this compensation, planets and stations grow linearly with the
+     * viewBox and become oversized pixel blocks before their finer art loads.
+     */
+    getMapObjectScale() {
+        const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom))
+            ? Math.max(1, this.mapZoom) : 1;
+        return 1 / Math.sqrt(z);
     },
 
     /**

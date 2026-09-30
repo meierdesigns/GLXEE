@@ -25,16 +25,103 @@ extendClass(HomeStationUI, {
         return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
 
+    /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */
+    hangarStatColor(type) {
+        return { damage: '#ff6a4a', shotspeed: '#4ad8ff', firerate: '#ffa04a', speed: '#6dff8a', armor: '#7aa8ff', energy: '#ffd24a' }[type] || null;
+    },
+
+    /** Ability row stat line: its stat effects as icon + change (ability-stats.js). */
+    hangarAbilityStatsHtml(id) {
+        const e = shipLoadoutManager.getAbilityStatEffect ? shipLoadoutManager.getAbilityStatEffect(id) : null;
+        if (!e) {
+            // No stat effect (charge, shield, AI …): its short description instead.
+            const a = typeof abilityConfigManager !== 'undefined' ? abilityConfigManager.getAbility(id) : null;
+            const text = a && (a.uiDescription || a.description);
+            return text ? `<span class="hs-hangar-weapon-stats is-desc">${String(text).toUpperCase()}</span>` : '';
+        }
+        const pct = (m) => (m >= 1 ? '+' : '−') + Math.round(Math.abs(m - 1) * 100) + '%';
+        const stat = (icon, tip, value, bad, type) =>
+            `<span class="hs-hangar-weapon-stat${bad ? ' is-bad' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}${value}</span>`;
+        let html = '';
+        if (e.speedMul) html += stat('statSpeed', 'MOVE SPEED', pct(e.speedMul), e.speedMul < 1, 'speed');
+        if (e.damageMul) html += stat('statDamage', 'WEAPON DAMAGE', pct(e.damageMul), e.damageMul < 1, 'damage');
+        if (e.fireRateMul) html += stat('shotRapid', 'FIRE RATE', pct(e.fireRateMul), e.fireRateMul < 1, 'firerate');
+        if (e.armor) html += stat('statArmor', 'ARMOR', (e.armor > 0 ? '+' : '') + e.armor, e.armor < 0, 'armor');
+        return html ? `<span class="hs-hangar-weapon-stats">${html}</span>` : '';
+    },
+
+    /**
+     * Hovering an ability previews the SPEED tile with it toggled (equipped →
+     * without it, not equipped → with it, replacing the old one if it's a
+     * single slot): new value + coloured change.
+     */
+    bindHangarAbilityHover(cell) {
+        const valueEl = () => this.overlay && this.overlay.querySelector('.hs-hangar-stat.is-speed .hs-stat-value');
+        cell.addEventListener('pointerenter', () => {
+            const el = valueEl();
+            const slm = shipLoadoutManager;
+            if (!el || !slm.getAbilityStatMods) return;
+            const id = cell.getAttribute('data-part-id');
+            const L = slm.getLoadout(this.hangarShipId);
+            const cur = (L.abilities || []).slice();
+            const caps = slm.getSlotCaps(this.hangarShipId, slm.resolveModelClass(this.hangarShipId));
+            const cap = Math.max(0, Number(caps.abilities) || 0);
+            let next = cur.filter((a) => a !== id);
+            if (next.length === cur.length) next = (cur.length >= cap && cap > 0 ? cur.slice(0, cap - 1) : cur).concat(id);
+            const model = this.getHangarPreviewModel(this.hangarShipId);
+            const base = Number(model.baseSpeed) || Number(model.speed) || 0;
+            const now = Number(model.speed) || 0;
+            const then = Math.round(base * slm.getAbilityStatMods(next).speedMul * 100) / 100;
+            const d = Math.round((then - now) * 100) / 100;
+            if (!el.hasAttribute('data-orig')) el.setAttribute('data-orig', el.innerHTML);
+            el.innerHTML = `${then}` + (d ? `<span class="hs-stat-delta ${d > 0 ? 'is-up' : 'is-down'}">${d > 0 ? '+' : ''}${d}</span>` : '');
+        });
+        cell.addEventListener('pointerleave', () => {
+            const el = valueEl();
+            if (el && el.hasAttribute('data-orig')) {
+                el.innerHTML = el.getAttribute('data-orig');
+                el.removeAttribute('data-orig');
+            }
+        });
+    },
+
+    /** Energy row stat line: recovery rate (icon label + number), like the weapon stats. */
+    hangarEnergyStatsHtml(id) {
+        const slm = shipLoadoutManager;
+        const regen = slm.getEnergyCoreRegen ? slm.getEnergyCoreRegen(id) : 0;
+        if (!regen) return '';
+        return `<span class="hs-hangar-weapon-stats">` +
+            `<span class="hs-hangar-weapon-stat" data-stat="energy" data-ui-tip="ENERGY RECOVERY PER SECOND">${this.iconHtml('statEnergy', 16, 'hs-pixel', false, this.hangarStatColor('energy'))}+${regen}/S</span>` +
+            `</span>`;
+    },
+
     /** Compact DMG / SPD / fire-rate line for a weapon row. */
     hangarWeaponStatsHtml(id) {
         if (typeof weaponConfigManager === 'undefined') return '';
         const w = weaponConfigManager.getWeapon(id);
         if (!w) return '';
         const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) : '—';
+        // Icon instead of a text label (same icons as the details panel); label stays in the tooltip.
+        const stat = (icon, tip, value, type, boosted) =>
+            `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}${value}${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}</span>`;
+        // Hull-class and faction affinity (+20% each, as in game): show the
+        // boosted damage and name where the bonus comes from.
+        const shipId = this.hangarShipId || 'player_scrap';
+        const model = this.getHangarShipModel ? this.getHangarShipModel(shipId) : null;
+        const cfg = typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null;
+        const profile = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const faction = (model && model.faction) || (cfg && cfg.faction) || (profile && profile.faction) || '';
+        const classMul = weaponConfigManager.getShipClassWeaponMul ? weaponConfigManager.getShipClassWeaponMul(model && model.modelClass, id) : 1;
+        const factionMul = weaponConfigManager.getFactionWeaponMul ? weaponConfigManager.getFactionWeaponMul(faction, id) : 1;
+        const sources = [];
+        if (classMul > 1) sources.push('SHIP +' + Math.round((classMul - 1) * 100) + '%');
+        if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
+        const dmg = Math.round((w.damage || 0) * classMul * factionMul);
+        const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
         return `<span class="hs-hangar-weapon-stats">` +
-            `<span data-ui-tip="DAMAGE">DMG ${w.damage}</span>` +
-            `<span data-ui-tip="SHOT SPEED">SPD ${w.speed}</span>` +
-            `<span data-ui-tip="SHOTS PER SECOND">${rate}/S</span>` +
+            stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0) +
+            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed') +
+            stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate') +
             `</span>`;
     },
 
@@ -84,30 +171,85 @@ extendClass(HomeStationUI, {
             const ids = (inventory && inventory[sec.key]) || [];
             const equipped = (loadout && loadout[sec.key]) || [];
             const slm = shipLoadoutManager;
+            // One slot of this kind → picking a part replaces the other: radio.
+            // Several slots → each part is independently on/off: switch.
+            const caps = slm.getSlotCaps && slm.resolveModelClass
+                ? slm.getSlotCaps(this.hangarShipId, slm.resolveModelClass(this.hangarShipId)) : {};
+            const single = Math.max(0, Number(caps[sec.key]) || 0) <= 1;
             const cells = ids.map((id) => {
                 const on = equipped.indexOf(id) !== -1;
                 const label = this.hangarModuleLabel(id);
                 const size = slm.partSizeLabel ? slm.partSizeLabel(sec.kind, id) : 'S';
                 const fits = !slm.partFitsSlot || slm.partFitsSlot(this.hangarShipId, sec.kind, id).ok;
                 const isToggle = sec.kind !== 'weapon';
-                const state = isToggle ? `<span class="hs-hangar-part-state">${on ? 'ON' : 'OFF'}</span>` : '';
-                return `<button type="button" class="hs-hangar-part${on ? ' is-equipped' : ''}${fits ? '' : ' is-too-big'}${isToggle ? ' is-toggle' : ''}"` +
-                    (isToggle ? ` aria-pressed="${on}"` : '') +
+                // No radio / switch box: the glowing icon and bright name show "on".
+                const state = '';
+                return `<button type="button" class="hs-hangar-part${on ? ' is-equipped' : ''}${on && this._hangarExpandedPart === sec.kind + ':' + id ? ' is-expanded' : ''}${fits ? '' : ' is-too-big'}${isToggle ? ' is-toggle' : ''}"` +
+                    (isToggle ? (single ? ` role="radio" aria-checked="${on}"` : ` role="switch" aria-checked="${on}"`) : '') +
                     ` data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
-                    ` title="${label} · SIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
-                    this.slotGlyphHtml(sec.kind, 'hs-hangar-part-glyph') +
-                    `<span class="hs-hangar-part-icon">${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
+                    ` data-ui-tip="${String(this.hangarModuleTip(sec.kind, id)).replace(/"/g, '&quot;')}\nSIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
+                    // No slot-type glyph per row: the section header already names the type.
+                    // Weapons: the icon is the drag handle (into a slot); a click elsewhere on the row opens it.
+                    `<span class="hs-hangar-part-icon${sec.kind === 'weapon' ? ' is-drag-handle' : ''}"${sec.kind === 'weapon' ? ' data-ui-tip="DRAG INTO A SLOT"' : ''}>` +
+                    `${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
                     `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
                     `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
-                    (sec.kind === 'weapon' ? this.hangarWeaponStatsHtml(id) : '') + `</span>` +
+                    (sec.kind === 'weapon' ? this.hangarWeaponStatsHtml(id) : '') +
+                    (sec.kind === 'energy' ? this.hangarEnergyStatsHtml(id) : '') +
+                    (sec.kind === 'ability' ? this.hangarAbilityStatsHtml(id) : '') + `</span>` +
                     (sec.kind === 'weapon' && on ? this.hangarWeaponMountHtml(id) : '') + state +
-                    `</button>`;
+                    `</button>` +
+                    (on && this._hangarExpandedPart === sec.kind + ':' + id ? this.hangarPartDetailsHtml(sec.kind, id) : '');
             }).join('');
-            return `<section class="hs-hangar-parts-section" data-part-section="${sec.kind}">` +
-                `<h4 class="hs-hangar-parts-title">${this.slotGlyphHtml(sec.kind)}${sec.label} <small>${ids.length}</small></h4>` +
+            const collapsed = !!this.hangarCollapsedSections()[sec.kind];
+            // Pixel sprite + label in the section's category colour.
+            const kindColor = typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor
+                ? iconRenderer.getModuleKindColor(sec.kind) : null;
+            return `<section class="hs-hangar-parts-section${collapsed ? ' is-collapsed' : ''}" data-part-section="${sec.kind}"${kindColor ? ` style="--kind-color:${kindColor}"` : ''}>` +
+                `<h4 class="hs-hangar-parts-title" data-part-section-toggle="${sec.kind}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
+                `<span class="hs-hangar-parts-icon">${this.iconHtml(sec.icon, 32, 'hs-pixel', false, kindColor)}</span>` +
+                `<span class="hs-hangar-parts-label">${sec.label}</span>` +
+                this.hangarSectionSlotStripHtml(sec, sec.kind === 'weapon' && loadout && loadout.weaponSlots && loadout.weaponSlots.length
+                    ? loadout.weaponSlots : equipped, caps) +
+                `<span class="hs-hangar-parts-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span></h4>` +
                 `<div class="hs-hangar-parts-grid">${cells || '<p class="hs-muted hs-empty-slot">NONE OWNED</p>'}</div>` +
                 `</section>`;
         }).join('') + `</div>`;
+    },
+
+    /** Collapsed parts sections { kind: true }, loaded once from localStorage. */
+    hangarCollapsedSections() {
+        if (!this._hangarCollapsedSections) {
+            let map = {};
+            try {
+                const raw = JSON.parse(localStorage.getItem('vf_hs_hangar_collapsed_sections') || '{}');
+                if (raw && typeof raw === 'object') map = raw;
+            } catch (err) { /* ignore */ }
+            this._hangarCollapsedSections = map;
+        }
+        return this._hangarCollapsedSections;
+    },
+
+    /**
+     * Section header slot strip: one box per slot of this kind (weapons count
+     * slots, not guns), filled with the assigned part's icon; empty boxes are
+     * free. Clicking a filled box unequips that part.
+     */
+    hangarSectionSlotStripHtml(sec, equipped, caps) {
+        const slm = shipLoadoutManager;
+        let cap = Math.max(0, Number(caps[sec.key]) || 0);
+        if (sec.kind === 'weapon' && slm.weaponMountSlots) cap = slm.weaponMountSlots(cap);
+        const kc = typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor
+            ? iconRenderer.getModuleKindColor(sec.kind) : null;
+        let boxes = '';
+        for (let i = 0; i < cap; i++) {
+            const id = equipped[i];
+            boxes += id
+                ? `<span class="hs-section-slot is-filled" data-section-slot="${sec.kind}|${i}" data-ui-tip="${this.hangarModuleLabel(id)} — CLICK TO UNEQUIP">` +
+                  `${this.moduleIconHtml(sec.kind, id, 24, 'hs-pixel', false)}</span>`
+                : `<span class="hs-section-slot" data-ui-tip="FREE ${sec.label.replace(/S$/, '')} SLOT"></span>`;
+        }
+        return `<span class="hs-section-slots"${kc ? ` style="--kind-color:${kc}"` : ''}>${boxes}</span>`;
     },
 
     /** Slot index for a part: nearest pin of its kind to the drop point, else first empty, else first. */
@@ -147,12 +289,46 @@ extendClass(HomeStationUI, {
                 this.createUI();
             });
         });
+        this.overlay.querySelectorAll('[data-part-section-toggle]').forEach((head) => {
+            const toggle = () => {
+                const kind = head.getAttribute('data-part-section-toggle');
+                const map = this.hangarCollapsedSections();
+                map[kind] = !map[kind];
+                // Remembered across reloads (like the AREAS / PARTS view).
+                try {
+                    localStorage.setItem('vf_hs_hangar_collapsed_sections', JSON.stringify(map));
+                } catch (err) { /* ignore */ }
+                const sec = head.closest('.hs-hangar-parts-section');
+                const c = this._hangarCollapsedSections[kind];
+                if (sec) sec.classList.toggle('is-collapsed', c);
+                head.setAttribute('aria-expanded', String(!c));
+                const caret = head.querySelector('.hs-hangar-parts-caret');
+                if (caret) caret.textContent = c ? '▼' : '▲';
+            };
+            head.addEventListener('click', (e) => {
+                const box = e.target.closest('[data-section-slot]');
+                if (box) {
+                    // Filled slot box: unequip that part.
+                    e.stopPropagation();
+                    const [kind, idx] = box.getAttribute('data-section-slot').split('|');
+                    this.applyHangarSlotChoice(kind, Number(idx), '', null);
+                    return;
+                }
+                toggle();
+            });
+            head.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                toggle();
+            });
+        });
         this.overlay.querySelectorAll('.hs-hangar-part').forEach((cell) => {
             // Pointer drag instead of native DnD: only the icon follows the cursor.
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
             // Only weapons are placed on the ship; every other part type is
             // a plain on/off switch here in the sidebar.
+            if (cell.getAttribute('data-part-kind') === 'ability') this.bindHangarAbilityHover(cell);
             if (cell.getAttribute('data-part-kind') !== 'weapon') {
                 cell.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -161,13 +337,24 @@ extendClass(HomeStationUI, {
                 return;
             }
             cell.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0) return;
+                if (e.button !== 0 || !e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
                 e.preventDefault();
                 this.startHangarPartDrag(cell, e);
+            });
+            cell.addEventListener('click', (e) => {
+                // The icon's own click is handled when its drag finishes.
+                if (e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
+                e.preventDefault();
+                if (cell.classList.contains('is-equipped')) this.toggleHangarPartDetails(cell);
+                else this.equipHangarPart(cell, null);
             });
             cell.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
+                if (cell.classList.contains('is-equipped')) {
+                    this.toggleHangarPartDetails(cell);
+                    return;
+                }
                 this.equipHangarPart(cell, null);
             });
         });
@@ -190,7 +377,22 @@ extendClass(HomeStationUI, {
             this.playButtonResult(cell, false, 'NO ' + kind.toUpperCase() + ' SLOT');
             return;
         }
-        this.applyHangarSlotChoice(kind, Math.min(list.length, cap - 1), id, null);
+        // Free slot → goes in. One slot → swap (like a radio). Several slots
+        // all taken → no silent replace: say so and point at the slot strip.
+        if (list.length < cap) {
+            this.applyHangarSlotChoice(kind, list.length, id, null);
+        } else if (cap === 1) {
+            this.applyHangarSlotChoice(kind, 0, id, null);
+        } else {
+            const strip = cell.closest('.hs-hangar-parts-section');
+            const slots = strip && strip.querySelector('.hs-section-slots');
+            if (slots) {
+                slots.classList.remove('is-denied');
+                void slots.offsetWidth;
+                slots.classList.add('is-denied');
+            }
+            this.playButtonResult(cell, false, 'ALL ' + cap + ' ' + kind.toUpperCase() + ' SLOTS FULL — UNEQUIP ONE FIRST');
+        }
     },
 
     /** Equip a grid part into a slot (explicit slot element, or the first free one of its kind). */
@@ -300,6 +502,103 @@ extendClass(HomeStationUI, {
         return true;
     },
 
+    /**
+     * Assigned weapon row: expand / collapse a details panel right under it
+     * (slot, size, stats) with SHOW ON SHIP / UNEQUIP. Dragging the row still
+     * pulls the part; only a plain click expands.
+     */
+    toggleHangarPartDetails(cell) {
+        const kind = cell.getAttribute('data-part-kind');
+        const id = cell.getAttribute('data-part-id');
+        const key = kind + ':' + id;
+        const open = this._hangarExpandedPart === key;
+        this.overlay.querySelectorAll('.hs-hangar-part-details').forEach((el) => el.remove());
+        this.overlay.querySelectorAll('.hs-hangar-part.is-expanded').forEach((el) => {
+            el.classList.remove('is-expanded');
+            el.setAttribute('aria-expanded', 'false');
+        });
+        this._hangarExpandedPart = open ? null : key;
+        if (open) return;
+        cell.classList.add('is-expanded');
+        cell.setAttribute('aria-expanded', 'true');
+        cell.insertAdjacentHTML('afterend', this.hangarPartDetailsHtml(kind, id));
+        const panel = cell.nextElementSibling;
+        if (!panel) return;
+        panel.querySelectorAll('[data-part-detail-act]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const act = btn.getAttribute('data-part-detail-act');
+                const index = this.hangarPartSlotIndex(kind, id);
+                if (act === 'show') {
+                    const slotEl = this.overlay.querySelector(`.hs-hangar-slot[data-slot-kind="${kind}"][data-slot-index="${index}"]`);
+                    const pin = slotEl && slotEl.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+                    if (pin) pin.click();
+                } else if (act === 'fire-auto' || act === 'fire-charge') {
+                    // Ship-wide fire mode (setHangarFireMode in bind-station-events.js).
+                    const mode = act === 'fire-auto' ? 'auto' : 'charge';
+                    if (this.setHangarFireMode) this.setHangarFireMode(mode, btn);
+                    const cur = (shipLoadoutManager.getLoadout(this.hangarShipId) || {}).fireMode || 'auto';
+                    this.overlay.querySelectorAll('[data-part-detail-act^="fire-"]').forEach((b) => {
+                        b.classList.toggle('equipped', b.getAttribute('data-part-detail-act').slice(5) === cur);
+                    });
+                } else if (act === 'unequip' && index >= 0) {
+                    this._hangarExpandedPart = null;
+                    this.applyHangarSlotChoice(kind, index, '', null);
+                }
+            });
+        });
+    },
+
+    /** Slot index an equipped part sits in, or -1. */
+    hangarPartSlotIndex(kind, id) {
+        const slots = Array.from(this.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`));
+        const el = slots.find((s) => this.hangarSlotModuleId(kind, Number(s.getAttribute('data-slot-index') || 0)) === id);
+        return el ? Number(el.getAttribute('data-slot-index') || 0) : -1;
+    },
+
+    hangarPartDetailsHtml(kind, id) {
+        const slm = shipLoadoutManager;
+        const size = slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S';
+        const index = this.hangarPartSlotIndex(kind, id);
+        const slot = index < 0 ? '—' : (kind === 'weapon' ? this.hangarWeaponSlotLabel(index) : 'SLOT ' + (index + 1));
+        const ic = (key) => `<span class="hs-hangar-part-detail-icon">${this.iconHtml(key, 16, 'hs-pixel', false)}</span>`;
+        const row = (icon, k, v) => `<div class="hs-hangar-part-detail-row">${ic(icon)}<span class="hs-hangar-part-detail-key">${k}</span><span class="hs-hangar-part-detail-val">${v}</span></div>`;
+        const group = (title, body) => `<div class="hs-hangar-part-detail-group"><div class="hs-hangar-part-detail-head">${title}</div>${body}</div>`;
+        let html = group('MOUNT', row('navTarget', 'SLOT', slot) + row('navGrid', 'SIZE', size));
+        const w = kind === 'weapon' && typeof weaponConfigManager !== 'undefined' ? weaponConfigManager.getWeapon(id) : null;
+        if (w) {
+            html += group('COMBAT',
+                row('statDamage', 'DAMAGE', w.damage != null ? w.damage : '—')
+                + row('statSpeed', 'SHOT SPEED', w.speed != null ? w.speed : '—')
+                + row('shotRapid', 'FIRE RATE', w.cooldown ? (1000 / w.cooldown).toFixed(1) + '/S' : '—')
+                + (w.cooldown ? row('navBolt', 'COOLDOWN', w.cooldown + ' MS') : ''));
+            html += group('FIRE MODE', this.hangarWeaponSettingsHtml());
+        }
+        const iconBtn = (act, icon, tip) =>
+            `<button type="button" class="action-button secondary hs-hangar-part-icon-btn" data-part-detail-act="${act}" aria-label="${tip}" data-ui-tip="${tip}">` +
+            `${this.iconHtml(icon, 16, 'hs-pixel', false)}</button>`;
+        return `<div class="hs-hangar-part-details">${html}` +
+            `<div class="hs-hangar-part-detail-actions">` +
+            iconBtn('show', 'navEye', 'SHOW ON SHIP') +
+            iconBtn('unequip', 'navDoor', 'UNEQUIP') +
+            `</div></div>`;
+    },
+
+    /** Weapon settings (fire mode AUTO / CHARGE) inside the details panel. */
+    hangarWeaponSettingsHtml() {
+        const slm = shipLoadoutManager;
+        const loadout = slm.getLoadout(this.hangarShipId) || {};
+        const mode = loadout.fireMode || ((loadout.abilities || []).indexOf('charge_shot') !== -1 ? 'charge' : 'auto');
+        const ownsCharge = slm.ownsChargePart ? slm.ownsChargePart('ability', 'charge_shot') : false;
+        const ic = (key) => this.iconHtml(key, 16, 'hs-pixel', false);
+        return `<div class="hs-hangar-part-fire-modes">` +
+            `<button type="button" class="action-button hs-mod ${mode === 'auto' ? 'equipped' : ''}" data-part-detail-act="fire-auto">${ic('navCrosshair')}<span>AUTO</span></button>` +
+            `<button type="button" class="action-button hs-mod ${mode === 'charge' ? 'equipped' : ''}" data-part-detail-act="fire-charge" ${ownsCharge ? '' : 'disabled'}` +
+            ` data-ui-tip="${ownsCharge ? 'Charge shot' : 'Buy the charge shot in the shop'}">${ic(ownsCharge ? 'statEnergy' : 'navLock')}<span>CHARGE</span></button>` +
+            `</div>`;
+    },
+
     hangarWeaponSlotLabel(index) {
         return Number(index) === 0 ? 'NOSE SLOT' : 'WING SLOT ' + index;
     },
@@ -401,15 +700,28 @@ extendClass(HomeStationUI, {
             const r = stage.getBoundingClientRect();
             return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
         };
+        // Coalesce pointer moves to one update per frame (the slot search reads layout).
+        let rafId = 0;
+        let lastMove = null;
         const move = (e) => {
+            lastMove = e;
+            if (!rafId) rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                if (lastMove) applyMove(lastMove);
+            });
+        };
+        const applyMove = (e) => {
             if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return;
             if (!moved) {
                 moved = true;
                 ghost = document.createElement('div');
                 ghost.className = 'hs-hangar-part-ghost';
                 if (iconEl) ghost.appendChild(iconEl.cloneNode(true));
+                // Start at the cursor; otherwise the transform transition slides it in from the top-left corner.
+                ghost.style.transform = `translate(${Math.round(e.clientX)}px, ${Math.round(e.clientY)}px)`;
                 document.body.appendChild(ghost);
                 document.body.classList.add('hs-part-grabbing');
+                if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
             }
             // Nearest compatible slot within reach; the icon snaps onto it.
             let best = null;
@@ -438,6 +750,12 @@ extendClass(HomeStationUI, {
             }
         };
         const finish = (e, cancelled) => {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = 0;
+            lastMove = null;
+            try {
+                if (downEvent.target && downEvent.target.releasePointerCapture) downEvent.target.releasePointerCapture(downEvent.pointerId);
+            } catch (err) { /* ignore */ }
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             document.removeEventListener('pointercancel', cancel);
@@ -459,7 +777,9 @@ extendClass(HomeStationUI, {
                 if (moved && !back) this.finishHangarSlotPull(pull, slotEl, !slotEl, e);
                 return;
             }
-            if (!moved) {
+            if (!moved && cell.classList.contains('is-equipped')) {
+                this.toggleHangarPartDetails(cell); // plain click on an assigned part: expand the row
+            } else if (!moved) {
                 this.equipHangarPart(cell, null); // plain click
             } else if (slotEl) {
                 this.equipHangarPart(cell, slotEl);
@@ -477,6 +797,10 @@ extendClass(HomeStationUI, {
                 finish(e, true);
             }
         };
+        // Keep receiving moves even when the pointer leaves the grip or crosses iframes/canvas.
+        try {
+            if (downEvent.target && downEvent.target.setPointerCapture) downEvent.target.setPointerCapture(downEvent.pointerId);
+        } catch (err) { /* ignore */ }
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
         document.addEventListener('pointercancel', cancel);

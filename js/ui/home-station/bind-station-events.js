@@ -247,44 +247,46 @@ extendClass(HomeStationUI, {
             });
         });
 
-        this.overlay.querySelectorAll('[data-fire-mode]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const mode = btn.getAttribute('data-fire-mode');
-                if (typeof shipLoadoutManager === 'undefined') return;
-                if (mode === 'charge' && !shipLoadoutManager.ownsChargePart('ability', 'charge_shot')) {
-                    this.playButtonResult(btn, false, 'BUY CHARGE SHOT IN PARTS SHOP');
-                    return;
-                }
-                const before = shipLoadoutManager.getLoadout(this.hangarShipId);
-                shipLoadoutManager.setFireMode(this.hangarShipId, mode);
-                const after = shipLoadoutManager.getLoadout(this.hangarShipId);
-                if (mode === 'charge' && (after.abilities || []).indexOf('charge_shot') === -1) {
-                    this.playButtonResult(btn, false, 'NO ABILITY SLOT — UPGRADE FRAME');
-                    return;
-                }
-                if (typeof shipConfigManager !== 'undefined') {
-                    const active = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile())
-                        ? profileManager.getActiveProfile().activeShipId
-                        : this.hangarShipId;
-                    if (active === this.hangarShipId) {
-                        shipConfigManager.applyToRuntime(this.hangarShipId);
-                    }
-                }
-                if (typeof bulletManager !== 'undefined' && bulletManager.setFireMode) {
-                    bulletManager.setFireMode(after.fireMode || 'auto');
-                }
-                if (typeof chargeSystem !== 'undefined' && typeof shipConfigManager !== 'undefined') {
-                    const model = shipConfigManager.getMergedModel(this.hangarShipId);
-                    if (model) chargeSystem.syncFromShipModel(model);
-                }
-                void before;
-                this.playButtonResult(btn, true, 'FIRE MODE: ' + String(after.fireMode || 'auto').toUpperCase());
-            });
-        });
-
         const openTest = this.overlay.querySelector('#hsOpenTestArea');
         if (openTest) {
             openTest.addEventListener('click', () => this.openHangarTestArea());
         }
+    },
+
+    /**
+     * Ship fire mode (AUTO / CHARGE), set from the weapon details panel.
+     * Returns true when the mode was applied.
+     */
+    setHangarFireMode(mode, btn) {
+        if (typeof shipLoadoutManager === 'undefined') return false;
+        if (mode === 'charge' && !shipLoadoutManager.ownsChargePart('ability', 'charge_shot')) {
+            this.playButtonResult(btn, false, 'BUY CHARGE SHOT IN PARTS SHOP');
+            return false;
+        }
+        const before = shipLoadoutManager.getLoadout(this.hangarShipId);
+        shipLoadoutManager.setFireMode(this.hangarShipId, mode);
+        const after = shipLoadoutManager.getLoadout(this.hangarShipId);
+        if (mode === 'charge' && (after.abilities || []).indexOf('charge_shot') === -1) {
+            this.playButtonResult(btn, false, 'NO ABILITY SLOT — UPGRADE FRAME');
+            return false;
+        }
+        if (typeof shipConfigManager !== 'undefined') {
+            const active = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile())
+                ? profileManager.getActiveProfile().activeShipId
+                : this.hangarShipId;
+            if (active === this.hangarShipId) {
+                shipConfigManager.applyToRuntime(this.hangarShipId);
+            }
+        }
+        if (typeof bulletManager !== 'undefined' && bulletManager.setFireMode) {
+            bulletManager.setFireMode(after.fireMode || 'auto');
+        }
+        if (typeof chargeSystem !== 'undefined' && typeof shipConfigManager !== 'undefined') {
+            const model = shipConfigManager.getMergedModel(this.hangarShipId);
+            if (model) chargeSystem.syncFromShipModel(model);
+        }
+        void before;
+        this.playButtonResult(btn, true, 'FIRE MODE: ' + String(after.fireMode || 'auto').toUpperCase());
+        return true;
     },
 });

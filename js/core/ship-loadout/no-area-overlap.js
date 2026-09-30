@@ -65,20 +65,45 @@
             if (!this.layoutHasAreaOverlap(shipId)) return res;
             const prev = readPrev(before, args);
             const target = argIdx.map((i) => Number(args[i]) || 0);
-            const at = (t) => {
+            // Each axis is cut back on its own: a corner drag that widens a
+            // part into a wing still applies its full height change, and
+            // the width stops flush against the wing — before, one blocked
+            // axis froze the whole drag.
+            const cur = prev.slice();
+            const at = () => {
                 const a = args.slice();
-                argIdx.forEach((i, k) => { a[i] = prev[k] + (target[k] - prev[k]) * t; });
+                argIdx.forEach((i, k) => { a[i] = cur[k]; });
                 return base.apply(this, a);
             };
-            let lo = 0;
-            let hi = 1;
-            for (let n = 0; n < 8; n++) {
-                const mid = (lo + hi) / 2;
-                at(mid);
-                if (this.layoutHasAreaOverlap(shipId)) hi = mid;
-                else lo = mid;
-            }
-            const out = at(lo);
+            // Unblocked axes first, so they don't wait on a blocked one.
+            const order = argIdx.map((_, k) => k).sort((p, q) => {
+                const free = (k) => {
+                    const save = cur[k];
+                    cur[k] = target[k];
+                    at();
+                    const ok = !this.layoutHasAreaOverlap(shipId);
+                    cur[k] = save;
+                    return ok ? 0 : 1;
+                };
+                return free(p) - free(q);
+            });
+            order.forEach((k) => {
+                const from = cur[k];
+                let lo = 0;
+                let hi = 1;
+                cur[k] = target[k];
+                at();
+                if (!this.layoutHasAreaOverlap(shipId)) return;
+                for (let n = 0; n < 8; n++) {
+                    const mid = (lo + hi) / 2;
+                    cur[k] = from + (target[k] - from) * mid;
+                    at();
+                    if (this.layoutHasAreaOverlap(shipId)) hi = mid;
+                    else lo = mid;
+                }
+                cur[k] = from + (target[k] - from) * lo;
+            });
+            const out = at();
             return Object.assign({}, out, { ok: true, blocked: 'OVERLAP' });
         };
     };

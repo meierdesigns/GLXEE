@@ -380,6 +380,10 @@ extendClass(ShipAssetLoader, {
                 // Normal pointing "down" in the wing's frame for both sides.
                 const nX = isLeft ? dirY : -dirY;
                 const nY = isLeft ? -dirX : dirX;
+                // Bridge end slid along the (turned) wing root; the wing's
+                // attach point stays its rotation pivot.
+                const endShift = Math.max(-1, Math.min(1,
+                    Number(layout.loadout && layout.loadout.wingConnectionYEnd) || 0)) * vis.height * scale * 0.5;
                 // One continuous polygon per strut: the hull end is a vertical
                 // edge tucked into the body, the wing end is the wing root
                 // line turned with the wing and pushed a few voxels into it.
@@ -389,8 +393,8 @@ extendClass(ShipAssetLoader, {
                 // into visible chunks.
                 const wingDepth = voxelSize * 3;
                 const drawBridge = (fromY, wingOffset, upA, downA, upB, downB) => {
-                    const bx = wingEdge + nX * wingOffset + dirX * wingDepth;
-                    const by = wingY + nY * wingOffset + dirY * wingDepth;
+                    const bx = wingEdge + nX * (wingOffset + endShift) + dirX * wingDepth;
+                    const by = wingY + nY * (wingOffset + endShift) + dirY * wingDepth;
                     const ax = bridgeStart;
                     const ay = fromY;
                     // Hull end: vertical edge. Wing end: along the turned root.
@@ -429,7 +433,7 @@ extendClass(ShipAssetLoader, {
                         }
                     };
                     cap(bridgeStart, centerY, centerHalf);
-                    cap(bridgeEnd, wingY, wingHalf);
+                    cap(bridgeEnd + nX * endShift, wingY + nY * endShift, wingHalf);
                 }
                 this.drawJointCells(ctx, cells, wingPalette, ox, oy, voxelSize, factionStyle, isLeft ? 0 : 1, 'x', [{
                     x: x + centerSeg.x * scale,

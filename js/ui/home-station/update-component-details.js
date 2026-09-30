@@ -161,7 +161,7 @@ extendClass(HomeStationUI, {
                 }))
             )}</div>` +
             `<label class="hs-floating-style-select-label"><span>VOXEL SIZE</span>
-                <input type="range" data-voxel-scale min="0.5" max="1.5" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
+                <input type="range" data-voxel-scale min="0.2" max="1.5" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
             </label>` +
             (isWing ? `<div class="hs-floating-area-crop">
                 <label><span>ROTATION</span><input type="range" data-wing-rotation min="-60" max="60" step="1" value="${this.getWingRotationValue(shipId)}"></label>

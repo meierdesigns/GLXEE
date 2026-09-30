@@ -3,6 +3,8 @@
 // StartScreenManager methods, split from start-screen.js.
 extendClass(StartScreenManager, {
     handleArrowDown() {
+        // Profiles screen: its rows handle their own keys.
+        if (this.showProfiles) return false;
         if (this.showLevels) {
             this.levelIndex = Math.min(this.planets.length - 1, this.levelIndex + 1);
             this.updateMenuSelection();
@@ -36,6 +38,8 @@ extendClass(StartScreenManager, {
     },
 
     handleArrowLeft() {
+        // Profiles screen: its rows handle their own keys.
+        if (this.showProfiles) return false;
         if (this.showFontMenu) {
             this.changeFontMenuValue(-1);
             return true;
@@ -55,6 +59,8 @@ extendClass(StartScreenManager, {
     },
 
     handleArrowRight() {
+        // Profiles screen: its rows handle their own keys.
+        if (this.showProfiles) return false;
         if (this.showFontMenu) {
             this.changeFontMenuValue(1);
             return true;
@@ -74,6 +80,8 @@ extendClass(StartScreenManager, {
     },
 
     handleEnter() {
+        // Profiles screen: its rows handle their own keys.
+        if (this.showProfiles) return false;
         if (this.showLevels) {
             if (this.planets[this.levelIndex].unlocked) {
                 this.startGame(this.planets[this.levelIndex]);

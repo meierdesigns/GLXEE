@@ -67,7 +67,8 @@ extendClass(HomeStationUI, {
         const root = this.overlay.querySelector('.home-station-content');
         if (!root) return;
         root.classList.remove('hs-nav-tabs', 'hs-nav-sub', 'hs-nav-content', 'hs-nav-menu');
-        if (this.tab === 'menu') {
+        // Menu-only tabs (COMPONENTS) share the menu's chrome and spacing.
+        if (this.tab === 'menu' || this.isMenuRowTab()) {
             root.classList.add('hs-nav-menu');
             return;
         }
@@ -92,6 +93,9 @@ extendClass(HomeStationUI, {
         const list = this.getFocusables();
         const active = this.overlay && (
             ((this.tab === 'menu' || this._menuOnlyTabs.indexOf(this.tab) !== -1) && this.overlay.querySelector('.hs-menu-tab-btn.active')) ||
+            // The active tab is the area's sub-nav tab (PLAY / HANGAR / …) when
+            // there is one: climbing up lands there first, not on the area row.
+            this.overlay.querySelector('.hs-subnav-tab.active') ||
             this.overlay.querySelector('.hs-tab.active') ||
             this.overlay.querySelector('.hs-home-btn.active')
         );

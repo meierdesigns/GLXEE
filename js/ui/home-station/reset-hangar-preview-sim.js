@@ -18,6 +18,15 @@ extendClass(HomeStationUI, {
                 height: size.height,
                 dir: 1
             },
+            // Target at the top (sized and moved in updateHangarPreviewSim).
+            // Same defaults the game spawns with (spawn-enemy.js).
+            enemy: {
+                x: 0, y: 0, width: 1, height: 1,
+                type: 'spaceship', faction: 'pirate', enemyClass: 'assault', tier: 1, level: 1,
+                maxHealth: 120, health: 120, shieldMax: 40, shield: 40,
+                sinceHit: 0, respawn: 0, hitFlash: 0
+            },
+            damageTexts: [],
             bullets: [],
             thrust: [],
             phase: 0,
@@ -93,6 +102,7 @@ extendClass(HomeStationUI, {
             loadout.wingOffsetX = 0;
             loadout.wingOffsetY = 0;
             loadout.wingConnectionY = 0;
+            loadout.wingConnectionYEnd = 0;
             loadout.wingConnectionWidth = 0.1;
             loadout.wingRotation = 0;
             loadout.voxelScale = 0.5;

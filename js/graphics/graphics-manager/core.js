@@ -222,9 +222,14 @@ class GraphicsManager {
             ? factionShipStyles.getFactionStyle(enemy.faction || 'pirate') : null;
         // Same generated gun and faction shade ramp as ships in the hangar,
         // at its S/M/L size on the player's scale (one grid cell = one px).
+        // Side craft (weaponScale set): a shorter gun sitting mostly
+        // on the hull — the long barrel made them look stretched.
+        const side = enemy.weaponScale != null;
         const gunW = bulletManager.getEnemyGunWidth(enemy);
-        const cols = Math.max(4, Math.round(gunW));
-        const rows = Math.max(8, Math.round(cols * 2.2));
+        const cols = Math.max(side ? 3 : 4, Math.round(gunW));
+        const rows = side
+            ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
+            : Math.max(8, Math.round(cols * 2.2));
         const tpl = loader.generateWeaponGrid
             ? loader.generateWeaponGrid(weaponId, cols, rows)
             : loader.getWeaponTemplate(weaponId, style, false);
@@ -235,7 +240,7 @@ class GraphicsManager {
         const gh = rows * px;
         const gx = Math.round(enemy.x + enemy.width / 2 - gw / 2);
         // Breech tucked under the hull, barrel sticking out below it.
-        const gy = Math.round(enemy.y + enemy.height - gh * 0.45);
+        const gy = Math.round(enemy.y + enemy.height - gh * (side ? 0.8 : 0.45));
         ctx.save();
         for (let r = 0; r < tpl.length; r++) {
             for (let c = 0; c < tpl[r].length; c++) {

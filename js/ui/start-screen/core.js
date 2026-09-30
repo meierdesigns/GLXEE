@@ -12,6 +12,7 @@ class StartScreenManager {
         this.embeddedMenuTabs = [
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
+            { id: 'layout', label: 'LAYOUT', icon: 'menuSettings' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
         ];
         this.title = "GLXEE";
@@ -52,6 +53,7 @@ class StartScreenManager {
         this.blinkTimer = 0;
         this.blinkSpeed = 30; // frames
         this.showCredits = false;
+        this.showProfiles = false;
         this.showSettings = false;
         this.showFontMenu = false;
         this.showLevels = false;

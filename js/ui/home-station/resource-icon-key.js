@@ -53,47 +53,127 @@ extendClass(HomeStationUI, {
         const anim = this._navAnim;
         const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
         return MENU_AREAS.map((area, n) => {
+            const areaLabel = this.menuLabelFor('area:' + area.id, area.label);
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
             const active = activeArea === area;
+            // Last used sub-tab of the area — except PLAY (the map is never
+            // entered just by switching areas) — else the area's default.
             const last = this._areaLastTab[area.id];
-            const target = tabs.indexOf(last) !== -1 ? last : tabs[0];
+            const fallback = area.defaultTab && tabs.indexOf(area.defaultTab) !== -1 ? area.defaultTab : tabs[0];
+            const target = tabs.indexOf(last) !== -1 && last !== 'play' ? last : fallback;
             const divider = n > 0 ? '<span class="hs-tab-divider" aria-hidden="true"></span>' : '';
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
-            return divider + `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-nav-item title="${area.label}">` +
-                `<span class="hs-tab-icon">${this.tabIconHtml(area.icon)}</span>` +
-                `<span class="hs-tab-label">${area.label}</span>` +
+            return divider + `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-nav-item title="${areaLabel}">` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:' + area.id, area.icon))}</span>` +
+                `<span class="hs-tab-label">${areaLabel}</span>` +
                 `</button>`;
         }).join('') +
             // 5th area: the ESC menu (profiles, settings, assets, components, credits).
             '<span class="hs-tab-divider" aria-hidden="true"></span>' +
-            `<button type="button" class="hs-tab hs-area-btn" data-open-menu="1" data-nav-item title="MENU (ESC)">` +
+            `<button type="button" class="hs-tab hs-area-btn${this.isMenuRowTab() ? ' active' : ''}" data-open-menu="1" data-nav-item title="MENU (ESC)">` +
             `<span class="hs-tab-icon">${this.tabIconHtml('menuSettings')}</span>` +
             `<span class="hs-tab-label">MENU</span>` +
             `</button>`;
     },
 
+    /** WIKI sub-nav: one tab per archive category; opens its viewer. */
+    renderExploreSubnav() {
+        const items = (this._exploreClusters || []).reduce((acc, c) => acc.concat(c.items), []);
+        const tabs = items.map((entry) => {
+            const empty = !this.isExploreItemVisible(entry.id);
+            const count = this.getExploreItemCount(entry.id);
+            const tip = count == null ? entry.id : `${entry.id} (${count})`;
+            const on = this._embeddedViewerKind === entry.open;
+            return `<button type="button" class="hs-tab hs-subnav-tab hs-explore-subtab${on ? ' active' : ''}${empty ? ' is-empty' : ''}" data-explore="${entry.open}" data-nav-item title="${tip}"${empty ? ' disabled' : ''}>` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(entry.icon)}</span>` +
+                `<span class="hs-tab-label">${entry.id}</span>` +
+                `</button>`;
+        }).join('');
+        return `<nav class="hs-subnav hs-subnav-explore" aria-label="WIKI">${tabs}</nav>`;
+    },
+
     /** Sub navbar under the top bar: the tabs of the active area. */
     renderAreaSubnav() {
-        if (typeof MENU_AREAS === 'undefined' || this.isMenuRowTab()) return '';
+        if (typeof MENU_AREAS === 'undefined') return '';
+        // Menu: its tabs (profiles / settings / …) are the sub-nav row under
+        // the normal area row, like any other area.
+        if (this.isMenuRowTab()) {
+            return `<nav class="hs-subnav hs-subnav-menu" aria-label="MENU">${this.renderMenuTabs()}</nav>`;
+        }
         const area = this.getTabArea(this.tab);
         const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
-        const tabs = area ? area.tabs.filter((id) => mainTabs.indexOf(id) !== -1) : [];
-        if (tabs.length < 2) return '';
+        // PLAY lives in the big launch button left of the navbars.
+        const tabs = area ? area.tabs.filter((id) => id !== 'play' && mainTabs.indexOf(id) !== -1 && this.isDevTabVisible(id)) : [];
+        if (tabs.length < 2) {
+            // WIKI: its archive categories are the sub-nav tabs.
+            return this.tab === 'explorations' ? this.renderExploreSubnav() : '';
+        }
         const anim = this._navAnim || {};
         const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
         const items = tabs.map((id) => {
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             const on = this.tab === id;
-            const label = id === 'station' ? 'STORAGE' : meta.label;
+            // Sub-tab names that would repeat their area's name.
+            const label = this.menuLabelFor(id, id === 'station' ? 'STORAGE' : (id === 'hangar' ? 'SHIPYARD' : meta.label));
             const pop = on && anim.tab && !anim.area ? ' hs-anim-activate' + dirClass : '';
             return `<button type="button" class="hs-tab hs-subnav-tab ${on ? 'active' : ''}${pop}" data-tab="${id}" data-nav-item title="${label}">` +
-                `<span class="hs-tab-icon">${this.tabIconHtml(id === 'station' ? 'hsStores' : meta.icon)}</span>` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor(id, id === 'station' ? 'hsStores' : meta.icon))}</span>` +
                 `<span class="hs-tab-label">${label}</span>` +
                 `</button>`;
         }).join('');
-        return `<nav class="hs-subnav${anim.area ? ' hs-subnav-enter' : ''}" aria-label="${area.label}">${items}</nav>`;
+        return `<nav class="hs-subnav${anim.area ? ' hs-subnav-enter' : ''}" aria-label="${this.menuLabelFor('area:' + area.id, area.label)}">${items}</nav>`;
+    },
+
+    /** Big PLAY button left of both navbars: planet miniatures + play icon. */
+    renderPlayLaunch() {
+        const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
+        const planets = ids.map((id, i) => {
+            const svg = planetSVGManager.getPlanetSVG(id);
+            return svg ? `<span class="hs-play-launch-planet hs-play-launch-planet-${i}">${svg}</span>` : '';
+        }).join('');
+        const tint = this.factionTintFilter();
+        const label = this.menuLabelFor('play', 'PLAY');
+        return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}" data-tab="play" data-play-launch data-nav-item title="${label}">` +
+            (tint ? this.factionTintSvg(tint) : '') +
+            `<span class="hs-play-launch-planets" aria-hidden="true">${planets}</span>` +
+            `<span class="hs-play-launch-icon" aria-hidden="true"></span>` +
+            `<span class="hs-play-launch-label">${label}</span>` +
+            `</button>`;
+    },
+
+    /** The GUI's faction colour (--color-primary) as [r, g, b] in 0..1, or ''. */
+    factionTintFilter() {
+        // Read the variable from the root (set by the palette system; the
+        // overlay may not be in the DOM yet) and let a canvas normalise any
+        // CSS colour format to #rrggbb.
+        let rgb = null;
+        try {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+            if (!raw) return '';
+            const ctx = document.createElement('canvas').getContext('2d');
+            ctx.fillStyle = '#000';
+            ctx.fillStyle = raw;
+            const hex = String(ctx.fillStyle);
+            const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+            rgb = m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
+                : (hex.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+        } catch (e) { return ''; }
+        if (!rgb || rgb.length < 3) return '';
+        return rgb.map((v) => v / 255);
+    },
+
+    /**
+     * Inline SVG filter #hsPlayTint: maps each pixel's luminance onto the
+     * exact faction colour (brightest planet pixels = the colour itself).
+     */
+    factionTintSvg(rgb) {
+        const k = 1.8;
+        const row = (c) => [0.2126, 0.7152, 0.0722].map((w) => (w * c * k).toFixed(4)).join(' ') + ' 0 0';
+        const values = `${row(rgb[0])} ${row(rgb[1])} ${row(rgb[2])} 0 0 0 1 0`;
+        return `<svg class="hs-play-launch-filter" width="0" height="0" aria-hidden="true" focusable="false">` +
+            `<filter id="hsPlayTint" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${values}"/></filter></svg>`;
     },
 
     renderOrderedTabs() {
@@ -119,9 +199,10 @@ extendClass(HomeStationUI, {
             }
             const meta = this._tabMeta[id] || { label: id.toUpperCase(), icon: '' };
             const playClass = id === 'play' ? ' hs-tab-play' : '';
-            return `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-order-index="${i}" data-nav-item title="${meta.label}">` +
-                `<span class="hs-tab-icon">${this.tabIconHtml(meta.icon)}</span>` +
-                `<span class="hs-tab-label">${meta.label}</span>` +
+            const label = this.menuLabelFor(id, meta.label);
+            return `<button type="button" class="hs-tab${playClass} ${active ? 'active' : ''}" data-tab="${id}" data-order-index="${i}" data-nav-item title="${label}">` +
+                `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor(id, meta.icon))}</span>` +
+                `<span class="hs-tab-label">${label}</span>` +
                 `</button>`;
         }).join('');
     },

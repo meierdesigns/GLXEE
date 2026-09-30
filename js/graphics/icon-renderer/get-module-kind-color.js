@@ -152,13 +152,27 @@ extendClass(IconRenderer, {
         return { url, cssSize: logical };
     },
 
+    /**
+     * CSS size whose real screen pixels are a whole multiple of the 16px
+     * sprite grid. At fractional display scaling (e.g. 125%) 32 CSS px are
+     * 40 device px = 2.5 per sprite pixel, so pixels alternate 2/3 px wide
+     * and look distorted. Snap to 16·k device px instead (k ≥ 1).
+     */
+    devicePixelSnap(cssPx) {
+        let dpr = 1;
+        try { dpr = Number(window.devicePixelRatio) || 1; } catch (e) { dpr = 1; }
+        if (!(dpr > 0)) dpr = 1;
+        const k = Math.max(1, Math.round((cssPx * dpr) / 16));
+        return Math.round((16 * k / dpr) * 1000) / 1000;
+    },
+
     imgHtml(key, size, className, tint, tipLabel) {
         const resolvedTint = tint === undefined ? this.getThemeTint() : tint;
         // HTML UI icons: nearest-neighbor only — no contrast/brightness/saturation remapping
         const packed = this.toDataUrl(key, size || 16, resolvedTint || null, false, false, false);
         const url = packed && packed.url;
         if (!url) return '';
-        const px = (packed && packed.cssSize) || size || 16;
+        const px = this.devicePixelSnap((packed && packed.cssSize) || size || 16);
         const cls = className ? ` class="${className}"` : '';
         const ag = key ? ` data-ag-key="${String(key).replace(/"/g, '')}"` : '';
         const label = tipLabel === false

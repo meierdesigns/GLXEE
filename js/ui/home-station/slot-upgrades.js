@@ -94,9 +94,17 @@ extendClass(HomeStationUI, {
 
 // Hangar header stat tile: icon · label / big value · detail line.
 extendClass(HomeStationUI, {
-    hangarStatTile(icon, label, valueHtml, title, detailHtml, extraClass) {
+    hangarStatTile(icon, label, valueHtml, title, detailHtml, extraClass, tint) {
+        // Icons sit bare in the title bar: tint them (accent by default) so they don't fall back to white.
+        let color = tint || null;
+        if (!color) {
+            try {
+                const v = getComputedStyle(this.overlay || document.documentElement).getPropertyValue('--color-primary').trim();
+                if (v && v.charAt(0) === '#') color = v;
+            } catch (e) { /* ignore */ }
+        }
         return `<div class="hs-hangar-stat${extraClass || ''}" title="${String(title || '').replace(/"/g, '&quot;')}">` +
-            `<span class="hs-stat-icon">${this.iconHtml(icon, 24, 'hs-pixel')}</span>` +
+            `<span class="hs-stat-icon">${this.iconHtml(icon, 16, 'hs-pixel', label, color)}</span>` +
             `<span class="hs-stat-body">` +
                 `<em>${label}</em>` +
                 `<strong class="hs-stat-value">${valueHtml}</strong>` +

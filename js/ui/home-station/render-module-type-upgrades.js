@@ -201,6 +201,8 @@ extendClass(HomeStationUI, {
             });
             return;
         }
+        // Inside the station: show the viewer in the WIKI area itself.
+        if (this.openExplorationInline(kind)) return;
         const openers = {
             ships: () => typeof shipViewerUI !== 'undefined' && shipViewerUI.show({ onClose: returnToExplorations }),
             planets: () => typeof planetViewerUI !== 'undefined' && planetViewerUI.show({ onClose: returnToExplorations }),
@@ -218,6 +220,83 @@ extendClass(HomeStationUI, {
         this.persistTab();
         this.hide();
         open();
+    },
+
+    /** Viewer object per WIKI category (all render a .content-viewer-overlay). */
+    getExploreViewer(kind) {
+        const pick = {
+            ships: () => typeof shipViewerUI !== 'undefined' ? shipViewerUI : null,
+            planets: () => typeof planetViewerUI !== 'undefined' ? planetViewerUI : null,
+            enemies: () => typeof enemyViewerUI !== 'undefined' ? enemyViewerUI : null,
+            factions: () => typeof factionViewerUI !== 'undefined' ? factionViewerUI : null,
+            events: () => typeof eventViewerUI !== 'undefined' ? eventViewerUI : null,
+            weapons: () => typeof weaponViewerUI !== 'undefined' ? weaponViewerUI : null,
+            abilities: () => typeof abilityViewerUI !== 'undefined' ? abilityViewerUI : null,
+            defenses: () => typeof defenseViewerUI !== 'undefined' ? defenseViewerUI : null,
+            explosions: () => typeof explosionViewerUI !== 'undefined' ? explosionViewerUI : null
+        }[kind];
+        return pick ? pick() : null;
+    },
+
+    /**
+     * Mount a WIKI viewer into the station body: the viewer builds its usual
+     * overlay on <body>; an observer moves it into the body host and flags it
+     * embedded. CLOSE / ESC return to the category grid.
+     */
+    openExplorationInline(kind, showOpts) {
+        const viewer = this.getExploreViewer(kind);
+        const body = this.overlay && this.isVisible && this.overlay.querySelector('.home-station-content .hs-body');
+        if (!viewer || !body) return false;
+        this.closeEmbeddedViewer();
+        this.tab = 'explorations';
+        this.persistTab();
+        let host = body.querySelector(':scope > .hs-viewer-host');
+        if (!host) {
+            host = document.createElement('div');
+            host.className = 'hs-viewer-host';
+            body.appendChild(host);
+        }
+        body.classList.add('hs-body-viewer');
+        const adopt = (node) => {
+            if (!(node instanceof HTMLElement) || !node.classList.contains('content-viewer-overlay')) return;
+            node.classList.add('is-embedded');
+            if (node.parentNode !== host) host.appendChild(node);
+        };
+        this._viewerObserver = new MutationObserver((muts) => {
+            muts.forEach((m) => m.addedNodes.forEach(adopt));
+        });
+        this._viewerObserver.observe(document.body, { childList: true });
+        this._embeddedViewer = viewer;
+        this._embeddedViewerKind = kind;
+        viewer.show(Object.assign({}, showOpts || {}, {
+            onClose: () => {
+                this.closeEmbeddedViewer({ keepViewer: true });
+                if (this.isVisible) this.createUI();
+            }
+        }));
+        document.querySelectorAll('body > .content-viewer-overlay').forEach(adopt);
+        // Opening found nothing to show (empty list): back to the grid.
+        if (!viewer.visible && !viewer.isVisible) {
+            this.closeEmbeddedViewer({ keepViewer: true });
+            body.classList.remove('hs-body-viewer');
+            return true;
+        }
+        this.overlay.querySelectorAll('.hs-explore-subtab').forEach((b) => {
+            b.classList.toggle('active', b.getAttribute('data-explore') === kind);
+        });
+        return true;
+    },
+
+    /** Stop the embedded viewer (tab switch / other category / its own close). */
+    closeEmbeddedViewer(opts) {
+        if (this._viewerObserver) {
+            this._viewerObserver.disconnect();
+            this._viewerObserver = null;
+        }
+        const viewer = this._embeddedViewer;
+        this._embeddedViewer = null;
+        this._embeddedViewerKind = null;
+        if (viewer && !(opts && opts.keepViewer) && (viewer.visible || viewer.isVisible) && viewer.hide) viewer.hide();
     },
 
     renderCreditsBar(map, profile) {

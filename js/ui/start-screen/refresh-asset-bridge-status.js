@@ -131,6 +131,12 @@ extendClass(StartScreenManager, {
 
         switch (selectedItem) {
             case 'PROFILES':
+                // Start menu: the pilot list opens inside the terminal screen.
+                if (!this.embeddedMode && !this.overlayMode) {
+                    this.showProfiles = true;
+                    this.createStartScreenUI();
+                    break;
+                }
                 if (typeof profileSelectionManager !== 'undefined') {
                     const reopen = this.isStationMenuContext();
                     if (this.embeddedMode) this.hideEmbedded();
@@ -163,6 +169,13 @@ extendClass(StartScreenManager, {
                 if (typeof profileSelectionManager !== 'undefined'
                     && typeof profileManager !== 'undefined'
                     && !profileManager.hasActiveProfile()) {
+                    // Pick / create a pilot inside the terminal, then launch.
+                    this._profilesThenStart = true;
+                    this.showProfiles = true;
+                    this.createStartScreenUI();
+                    break;
+                }
+                if (false) {
                     profileSelectionManager.show({
                         onClose: () => this.returnToHub()
                     });

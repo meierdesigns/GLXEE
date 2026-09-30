@@ -582,10 +582,11 @@ extendClass(ShipAssetLoader, {
 
     /**
      * Visual size of weapon art relative to its mount frame. Wing mounts are
-     * half the nose size, so they scale up more to end up comparable.
+     * half the nose size and use the same factor, so a wing pair reads as
+     * two half-size guns instead of towering over the wing.
      * Keep in sync with the muzzle offsets in js/game/bullets/core.js.
      */
-    WEAPON_DRAW_SCALE: { wing: { x: 2.4, y: 4.2 }, body: { x: 1.4, y: 2.4 } },
+    WEAPON_DRAW_SCALE: { wing: { x: 1.4, y: 2.4 }, body: { x: 1.4, y: 2.4 } },
 
     /** 15-step module ramp from the ship's faction colours (14–15 = accent glow). */
     getWeaponShadeRamp(factionStyle, weaponId) {

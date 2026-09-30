@@ -12,87 +12,196 @@ extendClass(HomeStationUI, {
     },
 
     factionMeterHtml(rel) {
+        // −100 … 0 (centre mark) … +100, value printed on the bar.
         const pct = Math.round((rel.score + 100) / 2);
-        return `<div class="hs-faction-meter" title="Relation ${rel.score}"><span style="width:${pct}%"></span></div>`;
+        const val = (rel.score > 0 ? '+' : '') + rel.score;
+        return `<div class="hs-faction-meter" title="Relation ${val} (−100 hostile · 0 neutral · +100 allied)">` +
+            `<span class="hs-faction-meter-fill" style="width:${pct}%"></span>` +
+            `<i class="hs-faction-meter-mid" aria-hidden="true"></i>` +
+            `<b class="hs-faction-meter-val">${val}</b></div>`;
     },
 
     renderFactionsTab(profile) {
         const fm = typeof factionManager !== 'undefined' ? factionManager : null;
         if (!fm || !fm.getRelation) return `<div class="hs-section">${this.panelTitle('menuPeoples', 'FACTIONS')}<p class="hs-muted">No faction data.</p></div>`;
-        if (this._factionDetail && fm.factions[this._factionDetail]) {
-            return this.renderFactionDetail(profile, this._factionDetail);
+        const ids = fm.getFactionIds();
+        if (!ids.length) return `<div class="hs-section">${this.panelTitle('menuPeoples', 'FACTIONS')}<p class="hs-muted">No faction data.</p></div>`;
+        // The faction cards are index-card tabs; the selected one's details sit below.
+        if (!fm.factions[this._factionDetail]) {
+            const own = fm.getAllegiance && fm.getAllegiance();
+            this._factionDetail = ids.indexOf(own) !== -1 ? own : ids[0];
         }
+        const id = this._factionDetail;
         const owners = fm.state.controlledPlanets || {};
-        const cards = fm.getFactionIds().map((id) => {
-            const f = fm.getFaction(id);
-            const rel = fm.getRelation(id);
-            const planets = Object.keys(owners).filter((p) => owners[p] === id).length;
-            return `<button type="button" class="hs-panel hs-faction-card is-${rel.tone}" data-faction-open="${id}" data-nav-item>` +
+        const tabs = ids.map((fid) => {
+            const rel = fm.getRelation(fid);
+            const planets = Object.keys(owners).filter((p) => owners[p] === fid).length;
+            return `<button type="button" class="hs-tab hs-subnav-tab hs-faction-card is-${rel.tone}${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
                 `<div class="hs-faction-head">` +
-                    `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: id }, 48)}</span>` +
-                    `<span class="hs-faction-name">${this.factionLabel(id)}</span>` +
+                    `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: fid }, 48)}</span>` +
+                    `<span class="hs-faction-name">${this.factionLabel(fid)}</span>` +
                     `<span class="hs-faction-status">${rel.label}</span>` +
                 `</div>` +
                 this.factionMeterHtml(rel) +
                 `<div class="hs-faction-stats"><span>RELATION ${rel.score > 0 ? '+' : ''}${rel.score}</span><span>PLANETS ${planets}</span>` +
-                `<span>${fm.isAllied(id) ? 'TRADES' : 'NO TRADE'}</span></div>` +
-                (f.goal ? `<p class="hs-faction-goal">${f.goal}</p>` : '') +
+                `<span>${fm.isAllied(fid) ? 'TRADES' : 'NO TRADE'}</span></div>` +
                 `</button>`;
         }).join('');
-        return `<div class="hs-factions">` +
-            `${this.panelTitle('menuPeoples', 'FACTION RELATIONS')}` +
-            `<p class="hs-muted hs-hint">Click a faction for details. Contracts raise your reputation; from +${FACTION_TRADE_REP} or with a pact a faction trades with you.</p>` +
-            `<div class="hs-faction-grid">${cards}</div>` +
+        return `<div class="hs-factions hs-faction-detail is-${fm.getRelation(id).tone}">` +
+            `<p class="hs-muted hs-hint">Contracts raise your reputation; from +${FACTION_TRADE_REP} or with a pact a faction trades with you.</p>` +
+            `<nav class="hs-faction-grid hs-faction-tabs" role="tablist" aria-label="Factions">${tabs}</nav>` +
+            `<div class="hs-faction-tabpanel" role="tabpanel">${this.renderFactionDetail(profile, id)}</div>` +
             `</div>`;
+    },
+
+    /** Faction ship sprite as an image URL: the PNG asset if loaded, else the pixel grid. */
+    factionShipSrc(fid, cls) {
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        if (!fss) return '';
+        const key = fss.spriteKey(fid, cls);
+        const cache = this._factionShipSrc || (this._factionShipSrc = {});
+        if (cache[key]) return cache[key];
+        const png = typeof spriteLoader !== 'undefined' && spriteLoader.getSprite ? spriteLoader.getSprite(key) : null;
+        if (png && png.src) return (cache[key] = png.src);
+        const grid = fss.getPixelSprite(fid, cls);
+        const colors = fss.buildFactionColors(fid);
+        if (!grid || !grid.length) return '';
+        const c = document.createElement('canvas');
+        c.width = grid[0].length;
+        c.height = grid.length;
+        const ctx = c.getContext('2d');
+        grid.forEach((row, y) => row.forEach((v, x) => {
+            if (!v || !colors[v] || colors[v] === 'transparent') return;
+            ctx.fillStyle = colors[v];
+            ctx.fillRect(x, y, 1, 1);
+        }));
+        return (cache[key] = c.toDataURL());
+    },
+
+    factionSectionTabsHtml(sections, active) {
+        return `<nav class="hs-fd-tabs" role="tablist" aria-label="Faction sections">` +
+            sections.map(([sid, label]) =>
+                `<button type="button" class="hs-tab hs-subnav-tab${sid === active ? ' active' : ''}" data-faction-section="${sid}" data-nav-item>` +
+                `<span class="hs-tab-label">${label}</span></button>`).join('') +
+            `</nav>`;
     },
 
     renderFactionDetail(profile, id) {
         const fm = factionManager;
         const f = fm.getFaction(id);
         const rel = fm.getRelation(id);
-        const owners = fm.state.controlledPlanets || {};
-        const planets = Object.keys(owners).filter((p) => owners[p] === id).length;
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const style = fss ? fss.getFactionStyle(id) : {};
+        const up = (v) => String(v || '').replace(/_/g, ' ').toUpperCase();
+        const galaxyName = (gid) => {
+            const g = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy ? planetConfigManager.getGalaxy(gid) : null;
+            return up((g && g.name) || gid);
+        };
         const galaxies = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFactionIds)
             ? planetConfigManager.getGalaxyIds().filter((gid) => planetConfigManager.getGalaxyFactionIds(gid).indexOf(id) !== -1)
             : [];
-        const galaxyNames = galaxies.map((gid) => {
-            const g = planetConfigManager.getGalaxy(gid) || {};
-            return `<span class="hs-chip">${String(g.name || gid).replace(/_/g, ' ').toUpperCase()}</span>`;
-        }).join('') || '<span class="hs-muted">NONE KNOWN</span>';
+        const galaxyChips = galaxies.map((gid) => `<span class="hs-chip">${galaxyName(gid)}</span>`).join('') || '<span class="hs-muted">NONE KNOWN</span>';
         const contracts = (typeof profileManager !== 'undefined' && profileManager.getFactionContracts)
             ? profileManager.getFactionContracts(profile).filter((c) => c.factionId === id).length : 0;
+        const owners = fm.state.controlledPlanets || {};
+        const planets = Object.keys(owners).filter((p) => owners[p] === id).length;
         const canPact = fm.getAllegiance() && fm.getAllegiance() !== id;
         const terms = fm.getTradeTerms(id);
-        const lore = f.loreLong || f.lore || '';
-        return `<div class="hs-factions hs-faction-detail is-${rel.tone}">` +
-            `<nav class="hs-faction-picker hs-faction-tabs" aria-label="Factions">` +
-                `<button type="button" class="hs-tab hs-subnav-tab" data-faction-back data-nav-item title="All factions">` +
-                    `<span class="hs-tab-icon">${this.tabIconHtml('menuPeoples')}</span><span class="hs-tab-label">ALL</span></button>` +
-                fm.getFactionIds().map((fid) =>
-                    `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
-                    `<span class="hs-tab-icon">${this.factionEmblemHtml({ faction: fid }, 32)}</span>` +
-                    `<span class="hs-tab-label">${this.factionLabel(fid)}</span></button>`
-                ).join('') +
-            `</nav>` +
-            `<div class="hs-panel hs-faction-detail-head">` +
+        const weapons = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponAffinity
+            ? weaponConfigManager.getFactionWeaponAffinity(id) : [];
+        const row = (label, value) => `<div class="hs-fd-row"><span>${label}</span><b>${value}</b></div>`;
+        const hero = f.hero || null;
+        const sections = [['overview', 'OVERVIEW']];
+        if (hero) sections.push(['hero', 'HERO']);
+        if (f.loreLong || f.lore) sections.push(['archive', 'ARCHIVE']);
+        const section = sections.some((x) => x[0] === this._factionSection) ? this._factionSection : 'overview';
+        const bodies = {
+            overview: () => `<div class="hs-fd-cols">` +
+                `<section class="hs-panel hs-fd-block"><h4>STANDING</h4>` +
+                    row('RELATION', `${rel.score > 0 ? '+' : ''}${rel.score} · ${rel.label}`) +
+                    row('TRADE', fm.isAllied(id) ? 'OPEN' : `LOCKED · +${FACTION_TRADE_REP} NEEDED`) +
+                    row('PACT', fm.hasPact(id) ? 'ACTIVE' : 'NONE') +
+                    row('CONTRACTS', contracts) +
+                    row('PLANETS HELD', planets) +
+                `</section>` +
+                `<section class="hs-panel hs-fd-block"><h4>TERRITORY</h4>` +
+                    (f.homeGalaxy ? row('HOME', galaxyName(f.homeGalaxy)) : '') +
+                    `<div class="hs-fd-chips">${galaxyChips}</div>` +
+                `</section>` +
+                `<section class="hs-panel hs-fd-block"><h4>TRADE TERMS</h4>` +
+                    row('SPECIALTY', `${up(terms.specialty)} · CHEAP`) +
+                    row('DEMANDS', `${up(terms.demand)} · PAYS WELL`) +
+                    row('DISCOUNT', `${Math.round(terms.discount * 100)}%`) +
+                `</section>` +
+                `<section class="hs-panel hs-fd-block"><h4>WEAPONS</h4>` +
+                    (weapons.length ? `<div class="hs-fd-chips">${weapons.map((w) => `<span class="hs-chip">${up(w)}</span>`).join('')}</div>` : '') +
+                    `<p class="hs-fd-text">+20% damage with these weapons.${f.weaponNote ? ' ' + f.weaponNote : ''}</p>` +
+                `</section>` +
+            `</div>`,
+            hero: () => (hero ? `<section class="hs-panel hs-fd-block"><h4>HERO · ${up(hero.name)}</h4>` +
+                (hero.title ? `<p class="hs-fd-goal">${hero.title}</p>` : '') +
+                (hero.lore ? `<p class="hs-fd-text">${hero.lore}</p>` : '') +
+            `</section>` : ''),
+            archive: () => ((f.loreLong || f.lore) ? `<section class="hs-panel hs-fd-block"><h4>ARCHIVE</h4><p class="hs-fd-text">${f.loreLong || f.lore}</p></section>` : '')
+        };
+        return `<div class="hs-fd">` +
+            `<section class="hs-panel hs-fd-hero">` +
                 `<span class="hs-faction-crest hs-faction-crest-lg">${this.factionEmblemHtml({ faction: id }, 96)}</span>` +
-                `<div class="hs-faction-detail-info">` +
+                `<div class="hs-fd-hero-info">` +
                     `<div class="hs-faction-head"><span class="hs-faction-name">${this.factionLabel(id)}</span><span class="hs-faction-status">${rel.label}</span></div>` +
-                    this.factionMeterHtml(rel) +
-                    `<div class="hs-faction-stats"><span>RELATION ${rel.score > 0 ? '+' : ''}${rel.score}</span><span>PLANETS ${planets}</span><span>CONTRACTS ${contracts}</span></div>` +
-                    (f.goal ? `<p class="hs-faction-goal">${f.goal}</p>` : '') +
+                    (f.goal ? `<p class="hs-fd-goal">${f.goal}</p>` : '') +
+                    (f.playstyle ? `<p class="hs-fd-text">${f.playstyle}</p>` : '') +
+                    ((f.traits || []).length ? `<div class="hs-fd-chips">${f.traits.map((t) => `<span class="hs-chip">${up(t)}</span>`).join('')}</div>` : '') +
                 `</div>` +
-            `</div>` +
-            (lore ? `<div class="hs-panel"><p class="hs-faction-goal">${lore}</p></div>` : '') +
-            `<div class="hs-panel">${this.panelTitle('hsStation', 'PRESENCE')}<div class="hs-row">${galaxyNames}</div></div>` +
-            `<div class="hs-panel">${this.panelTitle('hsShop', 'TRADE TERMS')}` +
-                `<p class="hs-faction-goal">SPECIALTY ${terms.specialty.toUpperCase()} (cheap) · DEMANDS ${terms.demand.toUpperCase()} (pays well) · DISCOUNT ${Math.round(terms.discount * 100)}%</p>` +
-            `</div>` +
+            `</section>` +
+            this.factionSectionTabsHtml(sections, section) +
+            `<div class="hs-fd-section" role="tabpanel">${bodies[section]()}</div>` +
             `<div class="hs-faction-actions">` +
                 (fm.isAllied(id) ? `<button type="button" class="action-button" data-faction-goto="ftrade" data-faction-id="${id}" data-nav-item>TRADE</button>` : '') +
                 `<button type="button" class="action-button" data-faction-goto="fcontracts" data-faction-id="${id}" data-nav-item>CONTRACTS</button>` +
                 (canPact ? `<button type="button" class="action-button secondary" data-faction-pact="${id}" data-nav-item>${fm.hasPact(id) ? 'END PACT' : 'PROPOSE PACT'}</button>` : '') +
             `</div>` +
+            `</div>`;
+    },
+
+    /** FLEETS tab: pick a faction, list its ship classes, live preview on the right. */
+    renderFactionFleetTab(profile) {
+        const fm = typeof factionManager !== 'undefined' ? factionManager : null;
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        if (!fm || !fss) return `<div class="hs-section">${this.panelTitle('hsHangar', 'FLEETS')}<p class="hs-muted">No fleet data.</p></div>`;
+        const ids = fm.getFactionIds();
+        if (ids.indexOf(this._factionDetail) === -1) {
+            const own = fm.getAllegiance && fm.getAllegiance();
+            this._factionDetail = ids.indexOf(own) !== -1 ? own : ids[0];
+        }
+        const id = this._factionDetail;
+        const style = fss.getFactionStyle(id);
+        const up = (v) => String(v || '').replace(/_/g, ' ').toUpperCase();
+        const classes = fss.classes;
+        const sel = classes.indexOf(this._factionFleetShip) !== -1 ? this._factionFleetShip : 'all';
+        const item = (cid, label, img) =>
+            `<button type="button" class="hs-fd-fleet-item${sel === cid ? ' active' : ''}" data-faction-fleet="${cid}" data-nav-item>` +
+            `<span class="hs-fd-fleet-thumb">${img}</span><span>${label}</span></button>`;
+        const list = item('all', 'ALL', '') + classes.map((cls) => {
+            const src = this.factionShipSrc(id, cls);
+            return item(cls, up(cls), src ? `<img src="${src}" alt="">` : '');
+        }).join('');
+        const swatch = (label, color) => color
+            ? `<span class="hs-fd-swatch"><i style="background:${color}"></i>${label}<em>${String(color).toUpperCase()}</em></span>` : '';
+        const picker = ids.map((fid) =>
+            `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
+            `<span class="hs-tab-icon">${this.factionEmblemHtml({ faction: fid }, 32)}</span>` +
+            `<span class="hs-tab-label">${this.factionLabel(fid)}</span></button>`).join('');
+        return `<div class="hs-factions hs-fd hs-faction-fleets">` +
+            `<nav class="hs-fd-tabs hs-fleet-faction-picker" aria-label="Factions">${picker}</nav>` +
+            `<section class="hs-panel hs-fd-block"><h4>${this.factionLabel(id)} FLEET · ${up(style.silhouette || '')} HULLS</h4>` +
+                `<div class="hs-fd-fleet">` +
+                    `<div class="hs-fd-fleet-list" role="listbox">${list}</div>` +
+                    `<div class="hs-fd-fleet-stage"><canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="240" height="135"></canvas></div>` +
+                `</div>` +
+                `<div class="hs-fd-chips">${swatch('HULL', style.hull)}${swatch('EDGE', style.edge)}${swatch('ACCENT', style.accent)}${swatch('ENGINE', style.engine)}</div>` +
+                (style.prompt ? `<p class="hs-fd-text">${style.prompt.charAt(0).toUpperCase() + style.prompt.slice(1)}.</p>` : '') +
+            `</section>` +
             `</div>`;
     },
 
@@ -181,8 +290,15 @@ extendClass(HomeStationUI, {
             this._factionDetail = btn.getAttribute('data-faction-open');
             this.createUI();
         });
-        q('[data-faction-back]', () => {
-            this._factionDetail = null;
+        q('[data-faction-fleet]', (btn) => {
+            this._factionFleetShip = btn.getAttribute('data-faction-fleet');
+            this.createUI();
+        });
+        const fleetCanvas = this.overlay.querySelector('[data-fleet-preview]');
+        if (fleetCanvas) this.startFactionFleetPreview(fleetCanvas.getAttribute('data-faction'), fleetCanvas.getAttribute('data-ship'));
+        else this.stopFactionFleetPreview();
+        q('[data-faction-section]', (btn) => {
+            this._factionSection = btn.getAttribute('data-faction-section');
             this.createUI();
         });
         q('[data-faction-goto]', (btn) => {

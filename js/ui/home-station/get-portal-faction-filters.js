@@ -176,6 +176,13 @@ extendClass(HomeStationUI, {
             list.forEach((el, i) => el.classList.toggle('nav-focused', i === this.focusIndex));
         }
         const focused = list[this.focusIndex];
+        // Mark the nav row that holds the keyboard focus (area row, sub-nav,
+        // section tabs) — exactly one, so it is obvious which bar is active.
+        if (this.overlay) {
+            const rowSel = '.hs-topbar, .hs-subnav, .hs-shop-cats';
+            const row = focused && focused.closest ? focused.closest(rowSel) : null;
+            this.overlay.querySelectorAll(rowSel).forEach((r) => r.classList.toggle('is-nav-row-active', r === row));
+        }
         if (focused && focused.classList && focused.classList.contains('hs-upg-node')) {
             this.showUpgradeTip(focused);
         } else if (this._upgTipBtn) {

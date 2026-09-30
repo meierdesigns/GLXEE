@@ -82,6 +82,37 @@ extendClass(HomeStationUI, {
             e.preventDefault();
             return;
         }
+        if (hit.jointHandle && hit.jointHandle.shift) {
+            // End-centre grip of a wing joint: slide that end up / down.
+            const lo = shipLoadoutManager.getLoadout(this.hangarShipId);
+            const band = hit.jointHandle.band;
+            const isEnd = hit.jointHandle.end === 'end';
+            const centerSeg = (h.model.layout.segments || []).find((seg) => seg.id === 'center');
+            const wingSeg = (h.model.layout.segments || []).find((seg) => seg.id === band.id);
+            const loader = graphicsManager.shipAssetLoader;
+            const unit = isEnd
+                ? (wingSeg ? loader.wingVisibleRect(wingSeg, h.model, h.scale).height : 1)
+                : ((centerSeg && centerSeg.height) || h.core.height || 1);
+            h.drag = {
+                jointScale: true,
+                jointShift: true,
+                connector: true,
+                moved: false,
+                band,
+                end: hit.jointHandle.end,
+                shiftUnit: Math.max(1, unit) * 0.5,
+                startShift: Number(isEnd ? lo.wingConnectionYEnd : lo.wingConnectionY) || 0,
+                startX: e.clientX,
+                startY: e.clientY
+            };
+            this._hangarSelectedModule = null;
+            this._hangarWingDragState = h.drag;
+            h.canvas.classList.add('is-wing-scaling');
+            h.canvas.style.cursor = 'ns-resize';
+            h.canvas.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            return;
+        }
         if (hit.jointHandle) {
             // Corner or side of the selected joint: drag to set its strength.
             const lo = shipLoadoutManager.getLoadout(this.hangarShipId);
@@ -130,14 +161,18 @@ extendClass(HomeStationUI, {
             return;
         }
         if (hit.connector && !hit.rotateHandle) {
-            // Wing bridge body: click to select only — rotation moved to
-            // the knob outside the wing tip, and dragging must not move
-            // the wing from here.
+            // Wing bridge body: click selects it; a vertical drag slides
+            // where the bridge meets the hull (wingConnectionY). Rotation
+            // lives on the knob outside the wing tip.
+            const lo = shipLoadoutManager.getLoadout(this.hangarShipId);
+            const centerSeg = (h.model.layout.segments || []).find((seg) => seg.id === 'center');
             h.drag = {
                 bridgeClick: true,
                 connector: true,
                 segment: 'wing',
                 side: hit.left ? 'left' : 'right',
+                startConnectionY: Number(lo.wingConnectionY) || 0,
+                centerHeight: Math.max(1, (centerSeg && centerSeg.height) || h.core.height || 1),
                 moved: false,
                 startX: e.clientX,
                 startY: e.clientY
@@ -302,6 +337,20 @@ extendClass(HomeStationUI, {
             this.drawHangarBay(true);
             return;
         }
+        if (h.drag.jointShift) {
+            if (Math.abs(e.clientY - h.drag.startY) > 3) h.drag.moved = true;
+            if (!h.drag.moved) return;
+            const v = h.drag.startShift + dy / h.drag.shiftUnit;
+            if (h.drag.end === 'end') shipLoadoutManager.setWingConnectionEnd(this.hangarShipId, v);
+            else shipLoadoutManager.setWingConnection(this.hangarShipId, v);
+            if (!this._hangarLiveDrawRaf) {
+                this._hangarLiveDrawRaf = requestAnimationFrame(() => {
+                    this._hangarLiveDrawRaf = 0;
+                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                });
+            }
+            return;
+        }
         if (h.drag.jointScale) {
             if (Math.abs(e.clientX - h.drag.startX) > 3 || Math.abs(e.clientY - h.drag.startY) > 3) {
                 h.drag.moved = true;
@@ -310,7 +359,23 @@ extendClass(HomeStationUI, {
             this.applyHangarJointScale(h, e);
             return;
         }
-        if (h.drag.spine || h.drag.bridgeClick) {
+        if (h.drag.bridgeClick) {
+            if (!h.drag.moved && Math.abs(e.clientY - h.drag.startY) > 4) h.drag.moved = true;
+            if (!h.drag.moved) return;
+            // connectionY −1..1 spans the centre part's height (±half).
+            shipLoadoutManager.setWingConnection(
+                this.hangarShipId,
+                h.drag.startConnectionY + dy / (h.drag.centerHeight * 0.5)
+            );
+            if (!this._hangarLiveDrawRaf) {
+                this._hangarLiveDrawRaf = requestAnimationFrame(() => {
+                    this._hangarLiveDrawRaf = 0;
+                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                });
+            }
+            return;
+        }
+        if (h.drag.spine) {
             if (Math.abs(e.clientX - h.drag.startX) > 6 || Math.abs(e.clientY - h.drag.startY) > 6) {
                 h.drag.moved = true;
             }
@@ -361,11 +426,13 @@ extendClass(HomeStationUI, {
                 const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
                 const hasY = edge.indexOf('top') !== -1 || edge.indexOf('bottom') !== -1;
                 const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
+                // The frame is already scaled, so grow the scale by the same
+                // ratio the frame grows — the grabbed edge tracks the pointer.
                 shipLoadoutManager.setSegmentScale(
                     this.hangarShipId,
                     'wing',
-                    h.drag.startScaleX + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth),
-                    h.drag.startScaleY + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight)
+                    h.drag.startScaleX * (1 + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth)),
+                    h.drag.startScaleY * (1 + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight))
                 );
             } else {
                 const outward = h.drag.side === 'left' ? -dx : dx;
@@ -379,11 +446,14 @@ extendClass(HomeStationUI, {
             const edge = h.drag.edge;
             const widthSign = edge.indexOf('right') !== -1 ? 1 : (edge.indexOf('left') !== -1 ? -1 : 0);
             const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
+            // Spine parts are centred, so width grows on both sides: the
+            // grabbed edge moves dx → the frame widens by 2·dx. Scale grows
+            // by the frame's ratio since the frame is already scaled.
             shipLoadoutManager.setSegmentScale(
                 this.hangarShipId,
                 h.drag.segment,
-                h.drag.startScaleX + (widthSign * dx) / Math.max(1, h.drag.frameWidth || h.core.width),
-                h.drag.startScaleY + (heightSign * dy) / Math.max(1, h.drag.frameHeight || h.core.height)
+                h.drag.startScaleX * (1 + (2 * widthSign * dx) / Math.max(1, h.drag.frameWidth || h.core.width)),
+                h.drag.startScaleY * (1 + (heightSign * dy) / Math.max(1, h.drag.frameHeight || h.core.height))
             );
         } else {
             shipLoadoutManager.setSegmentOffset(

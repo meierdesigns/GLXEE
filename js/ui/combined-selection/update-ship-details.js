@@ -151,7 +151,7 @@ extendClass(CombinedSelectionManager, {
             font-weight: bold;
             text-align: center;
             z-index: 10000;
-            box-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+            box-shadow: 0 0 0 6px rgba(255, 107, 107, 0.35), 0 0 0 14px rgba(255, 107, 107, 0.19), 0 0 0 20px rgba(255, 107, 107, 0.08);
         `;
         messageOverlay.textContent = '🔒 Level locked! Complete previous levels first.';
 

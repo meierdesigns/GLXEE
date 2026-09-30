@@ -42,6 +42,8 @@ extendClass(HomeStationUI, {
                 this._navLevel = 'tabs';
                 this.persistTab();
                 this.createUI();
+                // The big PLAY button goes straight into the galaxy map.
+                if (btn.hasAttribute('data-play-launch')) requestAnimationFrame(() => this.enterPlayMap());
             });
         });
 
@@ -360,17 +362,7 @@ extendClass(HomeStationUI, {
             if (!row.contains(e.relatedTarget)) hideMarker();
         });
 
-        if (isEsc) return;
-        const source = document.createElement('span');
-        source.className = 'hs-divider-source';
-        source.draggable = true;
-        source.title = 'Drag into the row to add a divider';
-        source.textContent = '+ |';
-        source.addEventListener('dragstart', (e) => {
-            startDrag(source, NEW_DIVIDER, e);
-            e.dataTransfer.effectAllowed = 'copy';
-        });
-        source.addEventListener('dragend', () => endDrag(source));
-        row.appendChild(source);
+        // (The "+ |" divider handle is gone: the area row has its own dividers,
+        // and the menu layout lives in Menu → LAYOUT.)
     },
 });

@@ -67,6 +67,7 @@ const IconLabels = {
     hsBlueprint: 'BLUEPRINT',
     hsShip: 'SHIP',
     hsTeleport: 'TELEPORT',
+    gmWormhole: 'WORMHOLE',
     hsUpgrade: 'UPGRADE',
     hsTravel: 'TRAVEL',
     hsExplore: 'EXPLORE',

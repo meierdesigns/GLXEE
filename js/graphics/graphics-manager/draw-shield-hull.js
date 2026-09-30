@@ -4,7 +4,9 @@
 extendClass(GraphicsManager, {
     /**
      * Draw an energy-shield outline that follows the ship silhouette.
-     * Leaves a few pixels of gap around the hull; color follows --current-primary.
+     * Built on the ship's own voxel grid (detected from its silhouette): one
+     * voxel of gap, rim one voxel thick, so it has the ship's resolution.
+     * Color follows --current-primary.
      * @param {CanvasRenderingContext2D} ctx
      * @param {object} entity - { x, y, width, height }
      * @param {number} ratio - visibility 0..1 (proximity fade × shield strength)
@@ -14,10 +16,13 @@ extendClass(GraphicsManager, {
      */
     drawShieldHull(ctx, entity, ratio, flip = false, model = null, opts = null) {
         if (!ctx || !entity || !(ratio > 0.01)) return;
-        const gap = 3;       // freiraum between hull and shield rim
-        const thick = Math.max(2, Math.round((opts && opts.thick) || 2));
+        // Gap and rim in voxels (px values only size the padding; the ship's
+        // voxel is at most MAX_CELL px here).
+        const MAX_CELL = 8;
+        const gapCells = 1;  // freiraum between hull and shield rim
+        const thickCells = Math.max(1, Math.round(((opts && opts.thick) || 2) / 2));
         const pulse = (opts && opts.pulse != null) ? opts.pulse : 1;
-        const maxR = gap + thick;
+        const maxR = (gapCells + thickCells) * MAX_CELL;
         const ew = Math.max(1, Math.ceil(entity.width));
         const eh = Math.max(1, Math.ceil(entity.height));
         const shipModel = model
@@ -28,8 +33,8 @@ extendClass(GraphicsManager, {
         const bleed = 8;
         const overX = Math.max(0, Math.ceil((mw - ew) / 2));
         const overY = Math.max(0, Math.ceil((mh - eh) / 2));
-        const padX = gap + thick + 1 + overX + bleed;
-        const padY = gap + thick + 1 + overY + bleed;
+        const padX = maxR + 1 + overX + bleed;
+        const padY = maxR + 1 + overY + bleed;
         const w = ew + padX * 2;
         const h = eh + padY * 2;
         // Faction enemies are drawn from the entity's faction/class, not from
@@ -39,7 +44,7 @@ extendClass(GraphicsManager, {
             : '';
         const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
-        const cacheKey = modelId + '|' + ew + 'x' + eh + '|g' + gap + 't' + thick
+        const cacheKey = modelId + '|' + ew + 'x' + eh + '|g' + gapCells + 't' + thickCells
             + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig;
 
         let rim = this._shieldHullCache[cacheKey];
@@ -80,24 +85,51 @@ extendClass(GraphicsManager, {
                 if (x < 0 || y < 0 || x >= w || y >= h) return false;
                 return sd[(y * w + x) * 4 + 3] > 40;
             };
+            // Ship voxel size + grid offset, so the rim uses the same pixels.
+            const grid = this.detectShieldVoxelGrid(sd, w, h, MAX_CELL);
+            const c = grid.cell;
+            const gx0 = grid.ox - Math.ceil(grid.ox / c) * c; // first column start (<= 0)
+            const gy0 = grid.oy - Math.ceil(grid.oy / c) * c;
+            const cols = Math.ceil((w - gx0) / c);
+            const rows = Math.ceil((h - gy0) / c);
+            // Voxel occupied if any of its pixels is.
+            const occ = new Uint8Array(cols * rows);
             for (let y = 0; y < h; y++) {
+                const r = Math.floor((y - gy0) / c);
                 for (let x = 0; x < w; x++) {
-                    if (opaque(x, y)) continue;
-                    let minCheb = maxR + 1;
-                    for (let dy = -maxR; dy <= maxR; dy++) {
-                        for (let dx = -maxR; dx <= maxR; dx++) {
-                            if (!opaque(x + dx, y + dy)) continue;
+                    if (opaque(x, y)) occ[r * cols + Math.floor((x - gx0) / c)] = 1;
+                }
+            }
+            const R = gapCells + thickCells;
+            for (let r = 0; r < rows; r++) {
+                for (let q = 0; q < cols; q++) {
+                    if (occ[r * cols + q]) continue;
+                    let minCheb = R + 1;
+                    for (let dy = -R; dy <= R && minCheb > 1; dy++) {
+                        const rr = r + dy;
+                        if (rr < 0 || rr >= rows) continue;
+                        for (let dx = -R; dx <= R; dx++) {
+                            const qq = q + dx;
+                            if (qq < 0 || qq >= cols || !occ[rr * cols + qq]) continue;
                             const cheb = Math.max(Math.abs(dx), Math.abs(dy));
                             if (cheb < minCheb) minCheb = cheb;
                         }
                     }
-                    // Ring outside the gap band — empty pixels between hull and rim
-                    if (minCheb <= gap || minCheb > maxR) continue;
-                    const i = (y * w + x) * 4;
-                    od[i] = 255;
-                    od[i + 1] = 255;
-                    od[i + 2] = 255;
-                    od[i + 3] = 255;
+                    // Ring outside the gap band — empty voxels between hull and rim
+                    if (minCheb <= gapCells || minCheb > R) continue;
+                    const x0 = Math.max(0, gx0 + q * c);
+                    const y0 = Math.max(0, gy0 + r * c);
+                    const x1 = Math.min(w, gx0 + (q + 1) * c);
+                    const y1 = Math.min(h, gy0 + (r + 1) * c);
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            const i = (y * w + x) * 4;
+                            od[i] = 255;
+                            od[i + 1] = 255;
+                            od[i + 2] = 255;
+                            od[i + 3] = 255;
+                        }
+                    }
                 }
             }
             octx.putImageData(out, 0, 0);
@@ -139,6 +171,55 @@ extendClass(GraphicsManager, {
     },
 
     // Get available enemy ship types
+    /**
+     * Voxel size of a baked ship silhouette: the most common short run of
+     * opaque / empty pixels along rows and columns, plus where the grid
+     * starts (mode of run starts modulo the size). Falls back to 1 px.
+     */
+    detectShieldVoxelGrid(sd, w, h, maxCell) {
+        const a = (x, y) => sd[(y * w + x) * 4 + 3] > 40;
+        const hist = new Array(maxCell + 1).fill(0);
+        const startsX = [];
+        const startsY = [];
+        for (let y = 0; y < h; y++) {
+            let run = 0;
+            for (let x = 0; x <= w; x++) {
+                const on = x < w && a(x, y);
+                const prev = x > 0 && a(x - 1, y);
+                if (x > 0 && (x === w || on !== prev)) {
+                    if (run <= maxCell) hist[run]++;
+                    if (x < w) startsX.push(x);
+                    run = 0;
+                }
+                run++;
+            }
+        }
+        for (let x = 0; x < w; x++) {
+            let run = 0;
+            for (let y = 0; y <= h; y++) {
+                const on = y < h && a(x, y);
+                const prev = y > 0 && a(x, y - 1);
+                if (y > 0 && (y === h || on !== prev)) {
+                    if (run <= maxCell) hist[run]++;
+                    if (y < h) startsY.push(y);
+                    run = 0;
+                }
+                run++;
+            }
+        }
+        const total = hist.reduce((s, n) => s + n, 0);
+        let cell = 1;
+        for (let l = 1; l <= maxCell; l++) {
+            if (hist[l] >= total * 0.12) { cell = l; break; }
+        }
+        const modeMod = (arr) => {
+            const m = new Array(cell).fill(0);
+            arr.forEach((v) => { m[v % cell]++; });
+            return m.indexOf(Math.max.apply(null, m));
+        };
+        return { cell, ox: cell > 1 ? modeMod(startsX) : 0, oy: cell > 1 ? modeMod(startsY) : 0 };
+    },
+
     getAvailableEnemyShips() {
         if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
             return this.shipAssetLoader.getEnemyShips();

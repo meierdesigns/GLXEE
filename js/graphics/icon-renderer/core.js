@@ -11,13 +11,40 @@ class IconRenderer {
 
     getSprite(key) {
         if (typeof IconSprites === 'undefined' || !IconSprites) return null;
-        return IconSprites[key] || null;
+        // "key@2x" / "key@4x": the sprite smoothed up with Scale2x (EPX),
+        // for large or zoomed-in icons that should look finer, not blockier.
+        const m = /^(.+)@([24])x$/.exec(String(key || ''));
+        if (!m) return IconSprites[key] || null;
+        this._hiRes = this._hiRes || {};
+        if (this._hiRes[key]) return this._hiRes[key];
+        let sprite = IconSprites[m[1]] || null;
+        if (!sprite) return null;
+        for (let n = Number(m[2]); n > 1; n /= 2) sprite = this.scale2x(sprite);
+        this._hiRes[key] = sprite;
+        return sprite;
+    }
+
+    /** Scale2x: doubles a pixel matrix, rounding diagonal steps into slopes. */
+    scale2x(src) {
+        const h = src.length, w = src[0].length;
+        const at = (x, y) => (y < 0 || y >= h || x < 0 || x >= w) ? src[Math.max(0, Math.min(h - 1, y))][Math.max(0, Math.min(w - 1, x))] : src[y][x];
+        const out = Array.from({ length: h * 2 }, () => new Array(w * 2).fill(0));
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const P = src[y][x], A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+                out[y * 2][x * 2] = (C === A && C !== D && A !== B) ? A : P;
+                out[y * 2][x * 2 + 1] = (A === B && A !== C && B !== D) ? B : P;
+                out[y * 2 + 1][x * 2] = (D === C && D !== B && C !== A) ? C : P;
+                out[y * 2 + 1][x * 2 + 1] = (B === D && B !== A && D !== C) ? D : P;
+            }
+        }
+        return out;
     }
 
     /** Prefer accepted PNG override from spriteLoader when present. */
     getPngOverride(key) {
         if (typeof spriteLoader === 'undefined' || !spriteLoader || !spriteLoader.getSprite) return null;
-        const k = String(key || '');
+        const k = String(key || '').replace(/@[24]x$/, '');
         let img = spriteLoader.getSprite(k);
         if (img) return img;
         // factionTerran ↔ faction-terran / faction_terran

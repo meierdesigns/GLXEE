@@ -189,7 +189,14 @@ extendClass(HomeStationUI, {
         const all = this.getFocusables();
         if (!all.length) return;
         const zone = this.getZoneFocusables();
-        if (!zone.length) return;
+        if (!zone.length) {
+            // Content with nothing focusable (e.g. the TRAVEL list): ↑ still
+            // climbs one level (to the section tabs / sub-nav row).
+            if (direction === 'up' && this.getNavLevel() !== 'tabs') {
+                if (!this.escapeOneNavLevel()) this.exitTabContent();
+            }
+            return;
+        }
 
         const focused = all[this.focusIndex];
         let zoneIdx = zone.indexOf(focused);
@@ -220,6 +227,86 @@ extendClass(HomeStationUI, {
         this.refreshFocus();
         this.scrollFocusedIntoView();
         this.syncNavHint();
+    },
+
+    /**
+     * ESC one level up from the focused element: content → section tabs
+     * (or sub-nav) → sub-nav → area row. Returns false when already at the
+     * area row (or nothing is focused), so the caller's fallbacks run.
+     */
+    escapeOneNavLevel() {
+        const el = this.getFocusables()[this.focusIndex];
+        if (!el || this.tab === 'menu') return false;
+        const row = this.getFocusedNavRow();
+        const hasSubnav = !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
+        // In the content but nothing there could take the focus (e.g. the
+        // TRAVEL list has no buttons), so the focus still sits on a tab: ESC
+        // leaves the content — to the section tabs, else the sub-nav row.
+        if (this.getNavLevel() === 'content' && row) {
+            if (this.hasSubTabs && this.hasSubTabs() && this.focusActiveSubTab) {
+                this._navLevel = 'sub';
+                this.focusActiveSubTab();
+                this.syncNavHint && this.syncNavHint();
+                return true;
+            }
+            return hasSubnav ? this.focusNavRow('subnav') : this.focusNavRow('area');
+        }
+        if (row === 'area') return false;
+        if (row === 'subnav') return this.focusNavRow('area');
+        if (this.isSubTabEl && this.isSubTabEl(el)) {
+            // Section tab → the area's sub-nav row.
+            return hasSubnav ? this.focusNavRow('subnav') : this.focusNavRow('area');
+        }
+        if (this.isContentFocusable && this.isContentFocusable(el)) {
+            // Content → its section tabs if the tab has them, else the sub-nav.
+            if (this.hasSubTabs && this.hasSubTabs() && this.focusActiveSubTab) {
+                this._navLevel = 'sub';
+                this.focusActiveSubTab();
+                this.syncNavHint && this.syncNavHint();
+                return true;
+            }
+            return hasSubnav ? this.focusNavRow('subnav') : this.focusNavRow('area');
+        }
+        return false;
+    },
+
+    /**
+     * ENTER one level down from the focused nav row. Area row: open that
+     * area (MENU opens the menu), then focus its sub-nav row. Sub-nav: a not
+     * yet active tab is selected (focus stays); the active one goes into its
+     * content (PLAY → galaxy map, menu → menu section). False = not in a row.
+     */
+    enterOneNavLevel() {
+        const el = this.getFocusables()[this.focusIndex];
+        const row = this.getFocusedNavRow();
+        if (!el || !row) return false;
+        const hasSubnav = () => !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
+        if (row === 'area') {
+            if (el.hasAttribute('data-open-menu')) {
+                if (!this.isMenuRowTab()) {
+                    this._lastGameTab = this.tab;
+                    this.openMainMenuOverlay({ force: true });
+                }
+            } else if (!el.classList.contains('active')) {
+                el.click();
+            }
+            if (hasSubnav()) return this.focusNavRow('subnav') || true;
+            if (this.tab !== 'play') this.enterTabContent();
+            return true;
+        }
+        // Sub-nav row.
+        if (!el.classList.contains('active')) {
+            el.click();
+            this.focusNavRow('subnav');
+            return true;
+        }
+        if (this.tab === 'play') return this.enterPlayMap() || true;
+        if (this.tab === 'menu') {
+            this.enterMenuContent();
+            return true;
+        }
+        this.enterTabContent();
+        return true;
     },
 
     /** 'area' (top area buttons), 'subnav' (area sub-tabs) or null for the focused element. */
@@ -266,7 +353,8 @@ extendClass(HomeStationUI, {
                     return true;
                 }
                 if (hasSub) return this.focusNavRow('subnav');
-                this.enterTabContent();
+                // The galaxy map (PLAY) is only entered with ENTER / SPACE.
+                if (this.tab !== 'play') this.enterTabContent();
                 return true;
             }
             if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -279,14 +367,14 @@ extendClass(HomeStationUI, {
                 if (next.hasAttribute('data-tab')) {
                     next.click();
                     this.focusNavRow('area');
-                } else {
-                    const list = this.getFocusables();
-                    const i = list.indexOf(next);
-                    if (i >= 0) {
-                        this.focusIndex = i;
-                        this.refreshFocus();
-                        this.syncNavHint && this.syncNavHint();
+                } else if (next.hasAttribute('data-open-menu')) {
+                    // MENU is an area like the others: switching to it opens
+                    // the menu, its tabs appear in the second row.
+                    if (!this.isMenuRowTab()) {
+                        this._lastGameTab = this.tab;
+                        this.openMainMenuOverlay({ force: true });
                     }
+                    this.focusNavRow('area');
                 }
                 return true;
             }
@@ -295,7 +383,13 @@ extendClass(HomeStationUI, {
         // subnav
         if (key === 'ArrowUp') return this.focusNavRow('area');
         if (key === 'ArrowDown') {
-            this.enterTabContent();
+            // Menu section (profiles / settings / …): hand keys to the menu.
+            if (this.tab === 'menu') {
+                this.enterMenuContent();
+                return true;
+            }
+            // The galaxy map (PLAY) is only entered with ENTER / SPACE.
+            if (this.tab !== 'play') this.enterTabContent();
             return true;
         }
         if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -314,6 +408,8 @@ extendClass(HomeStationUI, {
     bindKeyNav() {
         this._keyHandler = (e) => {
             if (!this.isVisible) return;
+            // Embedded WIKI viewer owns the keyboard (its own ↑↓ / ESC).
+            if (this._embeddedViewer) return;
             if (typeof hangarTestArena !== 'undefined' && hangarTestArena.isVisible) return;
             // Profile overlay on top of the station owns the keyboard.
             if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
@@ -334,6 +430,14 @@ extendClass(HomeStationUI, {
                 galaxyMapManager.isVisible &&
                 galaxyMapManager._mountEl;
             const playMapActive = playMapMounted && this.isPlayMapActive();
+            // ENTER / SPACE in a nav row goes exactly one level deeper
+            // (area row → its sub-nav → content / map / menu section).
+            if ((e.key === 'Enter' || e.key === ' ') && !playMapActive && !this._resBuyModal
+                && this.enterOneNavLevel()) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             if (playMapMounted && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -373,7 +477,10 @@ extendClass(HomeStationUI, {
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
                     startScreenManager.toggleDevMode();
-                    this.statusMsg = startScreenManager.devMode ? 'DEV MODE ON — DRAG TABS TO REORDER' : 'DEV MODE OFF';
+                    this.statusMsg = startScreenManager.devMode
+                        ? 'DEV MODE ON — COMPONENTS + LAYOUT UNLOCKED' : 'DEV MODE OFF';
+                    // Leaving dev mode keeps an open dev tab open; it vanishes
+                    // from the rows once you navigate away.
                     this.createUI();
                 }
                 return;
@@ -399,7 +506,14 @@ extendClass(HomeStationUI, {
                     componentEditorUI.leavePreviewFullscreen();
                     return;
                 }
-                // Esc climbs nav levels: content → section → tabs → menu
+                // Esc climbs exactly one level, decided by what is focused (the
+                // stored nav level can be stale after mouse use).
+                if (this.escapeOneNavLevel()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                // Esc only climbs nav levels: content → section → sub-nav → area row.
                 if (this.isContentNavActive()) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -429,8 +543,16 @@ extendClass(HomeStationUI, {
                     this.persistTab();
                     this.createUI();
                 } else {
+                    // Top of the hierarchy: ESC in the area row opens the menu
+                    // (its tabs appear as the sub-nav row below the areas).
+                    if (this.getFocusedNavRow() !== 'area') {
+                        this._navLevel = 'tabs';
+                        if (!this.focusNavRow || !this.focusNavRow('area')) this.focusActiveTab();
+                        return;
+                    }
                     this._lastGameTab = this.tab;
                     this.openMainMenuOverlay({ force: true });
+                    return;
                 }
                 this._navLevel = 'tabs';
                 this.focusActiveTab();
@@ -477,7 +599,7 @@ extendClass(HomeStationUI, {
                 // Section tabs (e.g. RESOURCES / PARTS / PORTALS): ↓ into the
                 // content, ↑ back up to the tab rows.
                 if (!this._resBuyModal && level === 'sub' && e.key === 'ArrowDown') {
-                    this.enterTabContent();
+                    if (this.tab !== 'play') this.enterTabContent();
                     return;
                 }
                 if (!this._resBuyModal && level === 'sub' && e.key === 'ArrowUp') {

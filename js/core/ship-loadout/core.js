@@ -52,10 +52,12 @@ class ShipLoadoutManager {
         };
         /** Base W/D/A/E slot caps by modelClass before frame upgrades. */
         this.baseSlotCaps = {
-            interceptor: { weapons: 1, defenses: 1, abilities: 1, energy: 1 },
+            // weapons = wing guns (mirrored pairs) on top of the nose gun:
+            // mounts interceptor 1, starfighter 3, assault 3, heavy 5.
+            interceptor: { weapons: 0, defenses: 1, abilities: 1, energy: 1 },
             starfighter: { weapons: 2, defenses: 1, abilities: 1, energy: 1 },
-            assault: { weapons: 2, defenses: 2, abilities: 1, energy: 1 },
-            heavy_fighter: { weapons: 3, defenses: 2, abilities: 2, energy: 1 }
+            assault: { weapons: 2, defenses: 2, abilities: 1, energy: 2 },
+            heavy_fighter: { weapons: 4, defenses: 2, abilities: 2, energy: 2 }
         };
         this.maxFrameLevel = 9;
         /** Frame level → which category gains +1 slot (1-indexed rotation). Energy excluded. */
@@ -173,7 +175,9 @@ class ShipLoadoutManager {
         const compact = (arr) => (Array.isArray(arr) ? arr : [])
             .map((id) => String(id || ''))
             .filter((s) => !!s);
-        const abilities = uniq(src.abilities).filter((id) => !this.isEnergyId(id));
+        // Enemy-only abilities are dropped from player loadouts (old saves too).
+        const abilities = uniq(src.abilities).filter((id) => !this.isEnergyId(id)
+            && !(this.isEnemyOnlyAbility && this.isEnemyOnlyAbility(id)));
         const energyFromSrc = uniq(src.energy).filter((id) => this.isEnergyId(id));
         const energyFromAbilities = uniq(src.abilities).filter((id) => this.isEnergyId(id));
         const energy = uniq(energyFromSrc.concat(energyFromAbilities));
@@ -201,9 +205,11 @@ class ShipLoadoutManager {
             wingOffsetY: Math.max(-1.5, Math.min(1.5, Number(src.wingOffsetY) || 0)),
             wingOffsetX: Math.max(-2, Math.min(2, Number(src.wingOffsetX) || 0)),
             wingConnectionY: Math.max(-1, Math.min(1, Number(src.wingConnectionY) || 0)),
+            // Where the bridge meets the wing root: −1..1 of the wing's height.
+            wingConnectionYEnd: Math.max(-1, Math.min(1, Number(src.wingConnectionYEnd) || 0)),
             wingConnectionWidth: Math.max(0.02, Math.min(0.5, Number(src.wingConnectionWidth) || 0.1)),
             wingRotation: Math.max(-60, Math.min(60, Number(src.wingRotation) || 0)),
-            voxelScale: Math.max(0.5, Math.min(1.5, Number(src.voxelScale) || 0.5)),
+            voxelScale: Math.max(0.2, Math.min(1.5, Number(src.voxelScale) || 0.5)),
             // 0 = follow the hull's voxelScale instead of its own value.
             wingConnectionVoxelScale: Math.max(0, Math.min(10, Number(src.wingConnectionVoxelScale) || 0)),
             wingConnectionStyle: ['strut', 'plate', 'double', 'hinge'].indexOf(src.wingConnectionStyle) !== -1

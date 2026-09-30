@@ -69,6 +69,10 @@ extendClass(StartScreenManager, {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
         }
         this.createStartScreenUI();
+        // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
+            homeStationUI.createUI();
+        }
     },
 
     isMenuItemVisible(itemId) {
@@ -76,15 +80,11 @@ extendClass(StartScreenManager, {
         if (itemId === 'STATION') {
             return !(this.embeddedMode || this.overlayMode);
         }
-        if (itemId === 'SETTINGS' || itemId === 'ASSETS' || itemId === 'CREDITS') {
+        // PROFILES too: it is how a first pilot gets created or picked.
+        if (itemId === 'PROFILES' || itemId === 'SETTINGS' || itemId === 'ASSETS' || itemId === 'CREDITS') {
             return true;
         }
         if (this.devMode) return true;
-
-        const hasProfile = typeof profileManager !== 'undefined' && profileManager.hasActiveProfile();
-        if (itemId === 'PROFILES') {
-            return hasProfile;
-        }
         return false;
     },
 

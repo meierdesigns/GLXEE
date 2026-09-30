@@ -107,8 +107,10 @@ extendClass(HomeStationUI, {
 
     /** Module icon HTML; weapons use the shared tilted, per-weapon tinted look. */
     moduleIconHtml(kind, id, size, className, tipLabel, tint) {
+        // Default tooltip: name plus what the part does.
+        if (tipLabel === undefined && id) tipLabel = this.hangarModuleTip(kind, id);
         if (kind === 'weapon' && id && typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
-            return iconRenderer.weaponImgHtml(id, size, className, tipLabel === false ? false : undefined);
+            return iconRenderer.weaponImgHtml(id, size, className, tipLabel === false ? false : tipLabel);
         }
         return this.iconHtml(this.hangarModuleIconKey(kind, id), size, className, tipLabel, tint);
     },
@@ -124,6 +126,34 @@ extendClass(HomeStationUI, {
         }
         if (kind === 'energy') return 'statEnergy';
         return 'ability_' + String(id || '');
+    },
+
+    /**
+     * Tooltip text for a module: NAME, then what it does (config description
+     * + effect line), for weapons their DMG / SPD / rate. One item per line.
+     */
+    hangarModuleTip(kind, id) {
+        const key = String(id || '');
+        const lines = [this.hangarModuleLabel(key)];
+        if (kind === 'weapon') {
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon
+                ? weaponConfigManager.getWeapon(key) : null;
+            if (w) {
+                if (w.description) lines.push(String(w.description));
+                const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) + '/S' : null;
+                lines.push(['DMG ' + w.damage, 'SPD ' + w.speed, rate].filter(Boolean).join(' · '));
+            }
+        } else {
+            const cfg = typeof abilityConfigManager !== 'undefined' && abilityConfigManager.configs
+                ? abilityConfigManager.configs[key] : null;
+            if (cfg) {
+                if (cfg.description) lines.push(String(cfg.description));
+                if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
+                const type = cfg.type ? String(cfg.type).toUpperCase() : '';
+                if (type) lines.push(type + (cfg.tier ? ' · TIER ' + cfg.tier : ''));
+            }
+        }
+        return lines.join('\n');
     },
 
     hangarModuleLabel(id) {

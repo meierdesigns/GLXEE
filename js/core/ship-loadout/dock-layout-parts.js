@@ -128,6 +128,20 @@ extendClass(ShipLoadoutManager, {
         });
     },
 
+    /** Weapon size follows its slot size (factors from getWeaponSlotScales). */
+    applyWeaponSlotScales(parts, scales) {
+        if (!scales) return;
+        const even = (v) => Math.max(2, Math.round(v / 2) * 2);
+        parts.forEach((part) => {
+            if (part.kind !== 'weapon' || part.slotIndex == null) return;
+            const f = Number(scales[part.slotIndex]) || 1;
+            if (f === 1) return;
+            part.scaleW = even((part.scaleW != null ? part.scaleW : part.width) * f);
+            part.scaleH = even((part.scaleH != null ? part.scaleH : part.height) * f);
+            part.slotSizeScale = f;
+        });
+    },
+
     /** buildLayout phase 5: per-module scale. */
     applyLayoutModuleScales(parts, segments) {
         // Apply per-module scale from the placed center so the hangar slider
@@ -324,7 +338,8 @@ extendClass(ShipLoadoutManager, {
             zone: p.zone || null,
             moduleOffsetKey: String(p.kind || 'module') + ':' + String(p.id || ''),
             mountSegment: p.mountSegment || null,
-            skin: p.skin || null
+            skin: p.skin || null,
+            slotSizeScale: p.slotSizeScale || 1
         }));
 
         const appearance = {

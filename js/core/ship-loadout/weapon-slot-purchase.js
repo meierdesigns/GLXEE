@@ -3,8 +3,8 @@
 // Buyable weapon slots.
 //
 // Profiles created with this system (profile.weaponSlotModel === 'purchase')
-// start every ship with ONE weapon slot — mounted as a single gun on the
-// centreline or split into a mirrored pair off-centre (see weapon-mounts.js).
+// start every ship with its class's weapon mounts (interceptor 1, starfighter
+// and assault 3, heavy 5 — see ShipLoadoutManager.baseWeaponMounts).
 // Further slots are bought per ship; their size (S → M → L) is upgraded with
 // the existing slot size upgrades (slot-sizes.js).
 //
@@ -80,7 +80,7 @@
         return profile;
     };
 
-    // Caps: 1 slot + bought slots (+ area upgrade bonus). caps.weapons counts
+    // Caps: class mounts + bought slots (+ area upgrade bonus). caps.weapons counts
     // physical guns (nose + every wing side): 1 + 2 per extra slot, which
     // weaponMountSlots() turns back into 1 + bought mount slots.
     const baseCaps = slm.getSlotCaps;
@@ -91,10 +91,11 @@
             return caps;
         }
         const base = this.getBaseSlotCaps(modelClass || this.resolveModelClass(shipId));
-        const oldBase = 1 + Math.max(2, Math.ceil((Number(base.weapons) || 0) / 2) * 2);
-        const areaBonus = Math.max(0, (Number(caps.weapons) || 0) - oldBase);
+        const baseMounts = this.baseWeaponMounts(base);
+        const areaBonus = Math.max(0, (Number(caps.weapons) || 0) - baseMounts);
         const bought = profileManager.getWeaponSlotsBought(shipId);
-        caps.weapons = 1 + 2 * bought + areaBonus;
+        // Class mounts (interceptor 1, starfighter/assault 3, heavy 5) + 2 per bought slot.
+        caps.weapons = baseMounts + 2 * bought + areaBonus;
         return caps;
     };
 })();

@@ -295,10 +295,12 @@ extendClass(ShipAssetLoader, {
             return { widthMul: 0.5 + q * 0.5, offsetMul: 0 };
         }
         if (silhouette === 'spikes') {
-            // Deep serrations with a pinched waist — a serrated blade.
-            const saw = Math.abs(((tt * 5 + seedIndex * 0.37) % 1) - 0.5) * 2;
-            const waist = 0.62 + 0.38 * Math.abs(tt * 2 - 1);
-            return { widthMul: waist * (0.68 + saw * 0.52), offsetMul: 0 };
+            // Wedge with one or two big swept barbs — a blade, not a comb.
+            // (Row-by-row serrations read as stripes, not as a shape.)
+            const barbs = seedIndex === 4 ? 1 : 2;
+            const saw = ((tt * barbs + seedIndex * 0.13) % 1);
+            const wedge = 0.55 + 0.45 * tt;
+            return { widthMul: wedge * (0.8 + saw * 0.35), offsetMul: 0 };
         }
         if (silhouette === 'rings') {
             // Strong convex belly pinched hard at both ends — a hollow pod.
@@ -306,14 +308,19 @@ extendClass(ShipAssetLoader, {
         }
         if (silhouette === 'scrap') {
             // Lopsided welded salvage: big irregular steps, shifted off-centre.
-            const jitter = Math.sin((tt * 7 + seedIndex * 1.7) * 6.1) * 0.5 + 0.5;
-            const chunk = Math.round(jitter * 3) / 3;
-            return { widthMul: 0.42 + chunk * 0.78, offsetMul: (chunk - 0.5) * 0.66 };
+            // Two or three large bolted-on blocks per part (low frequency).
+            // Width is held per third of the part, so each block is several
+            // voxel rows tall (single odd rows read as loose stripes).
+            const block = Math.min(2, Math.floor(tt * 3));
+            const jitter = Math.sin((block * 0.9 + seedIndex * 1.7) * 3.1) * 0.5 + 0.5;
+            const chunk = Math.round(jitter * 2) / 2;
+            return { widthMul: 0.62 + chunk * 0.45, offsetMul: (chunk - 0.5) * 0.18 };
         }
         if (silhouette === 'circuit') {
             // Rigid slab with deep rectangular notches cut at fixed intervals —
             // machined, symmetric, nothing organic about the outline.
-            const notch = ((tt * 8 + seedIndex) % 2) < 0.7 ? 0.58 : 1;
+            // One machined notch band per part, not a comb of them.
+            const notch = tt > 0.42 && tt < 0.58 ? 0.72 : 1;
             return { widthMul: notch, offsetMul: 0 };
         }
         return { widthMul: 1, offsetMul: 0 };

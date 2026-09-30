@@ -233,6 +233,10 @@ sprites where segmented rendering would distort a faction silhouette.
 - Faction-specific weapon mount art and full-sprite fallback rendering for
   procedural ships.
 - Resizable station sidebars with remembered widths and responsive hangar panels.
+- Profile score and ability-stat readouts for faster loadout decisions.
+- Faction fleet previews in the station and high-definition navigation icons.
+- Animated planet spin frames and extra faction-specific planet treatments.
+- Guided start intro and embedded menu layouts that keep the station loop intact.
 - Procedural planet SVGs, parallax station decks, palette editors, and global look persistence.
 - Combat events, champion escorts, patterned obstacles, pickups, loot, and Web Audio SFX.
 - Optional YouTube soundtrack / beat-sync layer.
@@ -318,6 +322,9 @@ be reviewed or reverted independently.
 | 45A | Combat staging | Enemy lanes, victory handoff, loot timing, pickup and collision polish |
 | 45B | Galaxy routing | Arrival sectors, route preview, galaxy state, and parallax handoff refinements |
 | 45C | Hangar presentation | Power budget, slot fit states, parts presentation, and test-arena polish |
+| 47A | Pilot readouts | Profile scoring, ability stats, combat progression, and loadout feedback |
+| 47B | Planet theaters | Galaxy navigation, animated planet frames, and faction visual treatments |
+| 47C | Station presentation | Fleet previews, HD navigation icons, start intro, and hangar shell polish |
 
 The wave commit convention is:
 

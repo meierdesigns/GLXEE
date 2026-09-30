@@ -21,11 +21,13 @@ class GalaxyMapManager {
         this.statusMsg = '';
         this.map = null;
         this.nodeById = {};
-        // Zoom level survives reloads (localStorage, written on change).
-        let zoom = 3;
+        // Normal map view starts at the full-theater scale. The versioned key
+        // clears older oversized defaults while preserving later user zoom.
+        const zoomStorageKey = 'vf.galaxyMapZoomV2';
+        let zoom = 1;
         try {
-            const saved = Number(localStorage.getItem('vf.galaxyMapZoom'));
-            if (Number.isFinite(saved) && saved > 0) zoom = saved;
+            const saved = Number(localStorage.getItem(zoomStorageKey));
+            if (Number.isFinite(saved) && saved > 0) zoom = Math.max(0.75, Math.min(2.5, saved));
         } catch (e) {}
         Object.defineProperty(this, 'mapZoom', {
             configurable: true,
@@ -36,7 +38,7 @@ class GalaxyMapManager {
                 if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return;
                 clearTimeout(this._zoomSaveTimer);
                 this._zoomSaveTimer = setTimeout(() => {
-                    try { localStorage.setItem('vf.galaxyMapZoom', String(zoom)); } catch (e) {}
+                    try { localStorage.setItem(zoomStorageKey, String(zoom)); } catch (e) {}
                 }, 300);
             }
         });

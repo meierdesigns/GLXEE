@@ -174,7 +174,20 @@ extendClass(GalaxyMapManager, {
         const mid = this.pointOnPath(pts, 0.5);
         const mx = mid.x;
         const my = mid.y;
-        return `<polyline class="gm-route ${risky ? 'risky' : ''}" fill="none" points="${pts.map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ')}"/>` +
+        // Start / end on the planet surface, not at its centre.
+        const trimEnd = (list, loc) => {
+            if (!loc || loc.kind !== 'planet' || list.length < 2 || !this.planetSurfaceRadius) return;
+            const a = list[list.length - 1], b = list[list.length - 2];
+            const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+            const by = Math.min(l * 0.9, this.planetSurfaceRadius(loc.id));
+            list[list.length - 1] = { x: a.x + (b.x - a.x) / l * by, y: a.y + (b.y - a.y) / l * by };
+        };
+        const line = pts.slice();
+        trimEnd(line, target);
+        line.reverse();
+        trimEnd(line, current);
+        line.reverse();
+        return this.pixelLineSvg(line, 'gm-route' + (risky ? ' risky' : ''), { dash: [1, 2] }) +
             (risky ? `<g class="gm-route-warn" transform="translate(${mx},${my})">` +
                 `<title>PIRATE ROUTE · AMBUSH POSSIBLE</title>` +
                 `<path d="M0 -9 L9 7 L-9 7 Z"/><text x="0" y="5">!</text></g>` : '');
@@ -225,7 +238,7 @@ extendClass(GalaxyMapManager, {
         this._skipAmbushOnce = false;
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
         const duration = Math.max(1800, Math.min(5000, dist * 12));
-        this._flight = { kind: kind, id: id, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
+        this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
             heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
@@ -360,6 +373,62 @@ extendClass(GalaxyMapManager, {
             const msg = this.overlay && this.overlay.querySelector('.gm-status-msg');
             if (msg) msg.textContent = this.statusMsg;
         });
+    },
+
+    /**
+     * Ambush lost: the ship limps back to where the flight started. Shows
+     * the flight from the ambush point back along the same route (the map
+     * may still be mounting, so wait for its SVG first).
+     */
+    retreatAfterAmbush(f) {
+        const origin = f && f.origin;
+        if (!origin || typeof profileManager === 'undefined') return false;
+        // Back at the last station even if the animation can't run.
+        profileManager.setShipLocation(this.galaxyId, origin.kind, origin.id);
+        let tries = 0;
+        const start = () => {
+            const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!svg || this._flight || this._ambush) {
+                if (++tries < 120) { requestAnimationFrame(start); return; }
+                if (!this._flight) this.commitFlight(origin.kind, origin.id);
+                return;
+            }
+            const path = (f.path || [f.from, f.to]).slice().reverse();
+            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (path.length < 2 || reduced) { this.commitFlight(origin.kind, origin.id); return; }
+            const icon = this.getShipIconUrl && this.getShipIconUrl();
+            const shipSvg = icon
+                ? `<image href="${icon}" x="-5.5" y="-7.5" width="11" height="15" class="gm-ship-marker-img"/>`
+                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
+            // Easing is symmetric, so 1 - t on the reversed path is the ambush point.
+            const t0 = Math.max(0, Math.min(1, 1 - (Number(f.t) || 0.5)));
+            const at = this.pointOnPath(path, t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2);
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('class', 'gm-ship-travel gm-ship-retreat');
+            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${at.x},${at.y}"/>` +
+                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
+            svg.appendChild(g);
+            const layer = svg.querySelector('.gm-route-layer');
+            if (layer) layer.innerHTML = '';
+            const marker = svg.querySelector('.gm-ship-marker');
+            if (marker) marker.style.display = 'none';
+            this._flight = {
+                kind: origin.kind, id: origin.id, from: path[0], to: path[path.length - 1], path: path,
+                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
+                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                svg: svg, originalViewBox: svg.getAttribute('viewBox')
+            };
+            this.statusMsg = 'AMBUSH LOST · RETURNING TO LAST STATION';
+            const msg = this.overlay.querySelector('.gm-status-msg');
+            if (msg) msg.textContent = this.statusMsg;
+            this.runFlight(t0, 1, () => {
+                this.finishFlight();
+                const m = this.overlay && this.overlay.querySelector('.gm-status-msg');
+                if (m) m.textContent = 'AMBUSH LOST · BACK AT LAST STATION';
+            });
+        };
+        requestAnimationFrame(start);
+        return true;
     },
 
     continueAfterAmbush() {

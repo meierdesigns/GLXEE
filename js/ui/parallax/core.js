@@ -195,7 +195,7 @@ class ParallaxManager {
             }
             switch (layer.pattern) {
                 case 'grid':
-                    this.drawGrid(ctx, layer);
+                    this.drawGrid(ctx, layer, index);
                     break;
                 case 'dots':
                     this.drawDots(ctx, layer);

@@ -22,7 +22,7 @@ extendClass(GalaxyMapManager, {
 
         const info = this.getPlanetInfo(this.selectedPlanetId);
         const progressLabel = this.getGalaxyProgressLabel();
-        const exploreUi = this.renderExploreControls();
+        const exploreUi = this.renderExploreControls(!!mountEl);
         const panelsHtml = this.renderPanelsHtml(info);
         const emptyHint = (!(this.map.nodes || []).length)
             ? '<p class="galaxy-map-empty-hint">No planets charted yet — travel here from HOME STATION to seed faction sectors, or use EXPLORE.</p>'
@@ -35,22 +35,33 @@ extendClass(GalaxyMapManager, {
 
         this.overlay = document.createElement('div');
         this.overlay.className = embedded ? 'galaxy-map-embedded' : 'galaxy-map-overlay';
+        // Map labels / icons are never text-selected (CSS user-select misses SVG text in some engines).
+        this.overlay.addEventListener('selectstart', (e) => {
+            if (!e.target.closest || !e.target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
+        });
         if (embedded) {
             this.overlay.innerHTML = `
                 <div class="galaxy-map-header">
                 <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
-                <div class="galaxy-map-progress-bar">${progressLabel}</div>
                 <div class="galaxy-map-toolbar">
-                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="Travel to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('hsTeleport', 18, 'gm-teleport-icon', '#ffb347', false) : ''}<span>TELEPORT</span></button>` : ''}
+                    ${this.shipBarHtml()}
+                    <div class="gm-progress-col">
+                    <div class="galaxy-map-progress-bar">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('menuPlanets', 16, 'gm-progress-icon', undefined, false) : ''}<span class="gm-progress-text">${progressLabel}</span></div>
+                    ${this._exploreMetaHtml || ''}
+                    ${exploreUi}
+                    </div>
+                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="TELEPORT · Travel to another galaxy" aria-label="Teleport to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('gmWormhole', 32, 'gm-teleport-icon', '#ffb347', false) : ''}</button>` : ''}
                 </div>
                 ${this.renderGalaxyRulerBadge()}
                 </div>
                 ${emptyHint}
-                <div class="galaxy-map-area" id="gmMapArea">
-                    ${this.renderMapSvg()}
+                <!-- Map + floating corner cards (planet bottom-left, ship bottom-right). -->
+                <div class="gm-map-stage">
+                    <div class="galaxy-map-area" id="gmMapArea">
+                        ${this.renderMapSvg()}
+                    </div>
+                    ${panelsHtml}
                 </div>
-                ${panelsHtml}
-                ${exploreUi}
                 <div class="galaxy-map-instructions">
                     ${instructions}
                     ${this.statusMsg ? `<p class="gm-status-msg">${this.statusMsg}</p>` : ''}
@@ -135,12 +146,37 @@ extendClass(GalaxyMapManager, {
         return this.statChipHtml('hsUpgrade', ship.frameLabel);
     },
 
+    /** Defense + ability slots used / available. */
+    loadoutModulesHtml(ship) {
+        return [
+            this.statChipHtml('statArmor', ship.defensesLabel, 'defense'),
+            this.statChipHtml('statAbilities', ship.abilitiesLabel, 'ability')
+        ].join('');
+    },
+
     loadoutHtml(ship) {
         return [
             this.statChipHtml('statWeapon', ship.weaponsLabel, 'weapon'),
             this.statChipHtml('statArmor', ship.defensesLabel, 'defense'),
             this.statChipHtml('statAbilities', ship.abilitiesLabel, 'ability')
         ].join('<span class="gm-stat-sep" aria-hidden="true">·</span>');
+    },
+
+    /** Equipped weapons: icon + name each, no other module kinds. */
+    weaponsHtml(ship) {
+        const ids = (ship.weapons || []).filter(Boolean);
+        if (!ids.length) return '<span class="gm-muted">NONE</span>';
+        return ids.map((id) => {
+            const info = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
+                ? iconRenderer.weaponIconInfo(id)
+                : { key: 'statWeapon', tint: undefined, name: String(id).toUpperCase() };
+            // Same module icon as the hangar editor's parts grid.
+            const icon = (typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
+                ? homeStationUI.moduleIconHtml('weapon', id, 32, 'hs-pixel gm-stat-icon', false)
+                : this.iconHtml(info.key, 32, info.tint || undefined);
+            const n = (ship.weaponCounts && ship.weaponCounts[id]) || 1;
+            return `<span class="gm-stat-chip" title="${info.name}${n > 1 ? ' ×' + n : ''}">${icon}<span>${n > 1 ? '×' + n : ''}</span></span>`;
+        }).join('');
     },
 
     getShipPanelInfo() {
@@ -153,13 +189,29 @@ extendClass(GalaxyMapManager, {
         const profile = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
             ? profileManager.getActiveProfile()
             : null;
-        const frameLevel = (typeof profileManager !== 'undefined' && profileManager.getShipFrameLevel)
-            ? profileManager.getShipFrameLevel(shipId, profile)
-            : 0;
-        const frameMax = (typeof economyConfig !== 'undefined') ? (economyConfig.maxShipFrameLevel || 9) : 9;
-        const loadout = (typeof shipLoadoutManager !== 'undefined')
+        // Frame = sum of the hull-area levels (front / center / back / wing).
+        const areas = (typeof profileManager !== 'undefined' && profileManager.getShipAreaLevels)
+            ? profileManager.getShipAreaLevels(shipId, profile) : null;
+        const areaMax = (typeof profileManager !== 'undefined' && profileManager.maxShipAreaLevel)
+            ? profileManager.maxShipAreaLevel() : 2;
+        const frameLevel = areas
+            ? Object.values(areas).reduce((sum, v) => sum + v, 0)
+            : ((typeof profileManager !== 'undefined' && profileManager.getShipFrameLevel)
+                ? profileManager.getShipFrameLevel(shipId, profile) : 0);
+        const frameMax = areas ? Object.keys(areas).length * areaMax
+            : ((typeof economyConfig !== 'undefined') ? (economyConfig.maxShipFrameLevel || 8) : 8);
+        const rawLoadout = (typeof shipLoadoutManager !== 'undefined')
             ? shipLoadoutManager.getLoadout(shipId)
             : { weapons: [], defenses: [], abilities: [], energy: [] };
+        const loadout = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.normalizeLoadout)
+            ? shipLoadoutManager.normalizeLoadout(rawLoadout) : rawLoadout;
+        // Weapons sit in weaponSlots now; a wing slot carries two guns.
+        const mounts = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.weaponMounts)
+            ? shipLoadoutManager.weaponMounts(loadout)
+            : (loadout.weapons || []).filter(Boolean).map((id) => ({ id: id }));
+        const weaponCounts = {};
+        mounts.forEach((m) => { weaponCounts[m.id] = (weaponCounts[m.id] || 0) + 1; });
+        const count = (list) => (list || []).filter(Boolean).length;
         const caps = (typeof shipLoadoutManager !== 'undefined')
             ? shipLoadoutManager.getSlotCaps(shipId, (model && model.modelClass) || 'starfighter')
             : { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
@@ -169,11 +221,42 @@ extendClass(GalaxyMapManager, {
             name,
             modelClass,
             frameLabel: `${frameLevel}/${frameMax}`,
-            weaponsLabel: `${(loadout.weapons || []).length}/${caps.weapons || 0}`,
-            defensesLabel: `${(loadout.defenses || []).length}/${caps.defenses || 0}`,
-            abilitiesLabel: `${(loadout.abilities || []).length}/${caps.abilities || 0}`,
+            weaponsLabel: `${mounts.length}`,
+            weapons: Object.keys(weaponCounts),
+            weaponCounts: weaponCounts,
+            gunCount: mounts.length,
+            defensesLabel: `${count(loadout.defenses)}/${caps.defenses || 0}`,
+            abilitiesLabel: `${count(loadout.abilities)}/${caps.abilities || 0}`,
             status: isActive ? 'ACTIVE' : 'STANDBY'
         };
+    },
+
+    /**
+     * Active ship summary, shown bare (no panel) in the header toolbar
+     * between EXPLORE NEW SECTOR and TELEPORT.
+     */
+    shipBarHtml() {
+        const ship = this.getShipPanelInfo();
+        return `
+                <div class="gm-ship-card gm-ship-bar">
+                    <div class="gm-ship-card-art">
+                        <canvas class="gm-ship-mini-canvas" id="gmShipCanvas" width="84" height="120" aria-label="Selected ship"></canvas>
+                    </div>
+                    <div class="gm-ship-card-main">
+                        <div class="gm-ship-card-head">
+                            <span class="gm-panel-value" id="gmShipName">${String(ship.name).toUpperCase()}</span>
+                            <span class="gm-ship-card-status" id="gmShipStatus">${ship.status}</span>
+                        </div>
+                        <div class="gm-ship-card-class" id="gmShipClass">${ship.modelClass}</div>
+                        <dl class="gm-ship-card-stats">
+                            <div><dt>Frame</dt><dd id="gmShipFrame">${this.frameHtml(ship)}</dd></div>
+                            <div><dt>Guns</dt><dd id="gmShipGuns">${ship.gunCount}</dd></div>
+                            <div class="gm-ship-card-wide"><dt>Weapons</dt><dd class="gm-ship-loadout" id="gmShipLoadout">${this.weaponsHtml(ship)}</dd></div>
+                            <div class="gm-ship-card-wide"><dt>Modules</dt><dd id="gmShipModules">${this.loadoutModulesHtml(ship)}</dd></div>
+                        </dl>
+                    </div>
+                </div>
+        `;
     },
 
     renderPanelsHtml(info) {
@@ -183,7 +266,7 @@ extendClass(GalaxyMapManager, {
             : (info.cleared
                 ? 'CLEARED'
                 : (info.stage.highestStage
-                    ? (info.stage.highestStage >= 3 ? 'BOSS READY' : `NEXT STAGE ${info.stage.highestStage + 1}`)
+                    ? (info.stage.highestStage >= this.getStagesPerPlanet() ? `BOSS READY · ${this.getStagesPerPlanet() + 1}/${this.getStagesPerPlanet() + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet() + 1}`)
                     : 'READY'));
         const diff = info.unlocked ? (info.difficulty || '—') : '???';
         const enemies = info.unlocked ? String(info.enemyCount) : '???';
@@ -209,25 +292,11 @@ extendClass(GalaxyMapManager, {
                         <div class="stat-row"><span class="stat-label" id="gmStagesLabel">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmEnemiesLabel">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmStatusLabel">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
+                        <div class="gm-stage-stepper" id="gmStageStepper">${info.unlocked ? this.planetStagesHtml(info.id) : ''}</div>
                         <div class="gm-unlock-hint" id="gmUnlockHint">${unlockHint}</div>
                         <!-- Start / continue / fly / dock live inside the planet card. -->
                         <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
                             ${this.renderConfirmActionsHtml(info)}
-                        </div>
-                    </div>
-                </div>
-                <div class="galaxy-map-panel galaxy-map-panel-ship">
-                    <div class="gm-panel-label">SHIP</div>
-                    <div class="gm-ship-panel-body">
-                        <canvas class="gm-ship-mini-canvas" id="gmShipCanvas" width="84" height="120" aria-label="Selected ship"></canvas>
-                        <div class="gm-ship-panel-info">
-                            <div class="gm-panel-value" id="gmShipName">${String(ship.name).toUpperCase()}</div>
-                            <div class="gm-detail gm-ship-detail">
-                                <div class="stat-row"><span class="stat-label">Class</span><span class="stat-value" id="gmShipClass">${ship.modelClass}</span></div>
-                                <div class="stat-row"><span class="stat-label">Frame</span><span class="stat-value" id="gmShipFrame">${this.frameHtml(ship)}</span></div>
-                                <div class="stat-row"><span class="stat-label">Loadout</span><span class="stat-value gm-ship-loadout" id="gmShipLoadout">${this.loadoutHtml(ship)}</span></div>
-                                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="gmShipStatus">${ship.status}</span></div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -243,7 +312,7 @@ extendClass(GalaxyMapManager, {
     scheduleShipGraphicsRefresh() {
         const refresh = () => {
             if (!this.overlay || !this.overlay.isConnected) return;
-            this._shipIconKey = null;
+            this._shipIcons = null;
             this.paintShipMini();
             const url = this.getShipIconUrl && this.getShipIconUrl();
             const img = this.overlay.querySelector('.gm-ship-marker-img');
@@ -275,7 +344,9 @@ extendClass(GalaxyMapManager, {
         };
         setText('gmShipClass', ship.modelClass);
         setHtml('gmShipFrame', this.frameHtml(ship));
-        setHtml('gmShipLoadout', this.loadoutHtml(ship));
+        setHtml('gmShipLoadout', this.weaponsHtml(ship));
+        setText('gmShipGuns', String(ship.gunCount));
+        setHtml('gmShipModules', this.loadoutModulesHtml(ship));
         setText('gmShipStatus', ship.status);
         if (!canvas || !model) return;
         if (typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {

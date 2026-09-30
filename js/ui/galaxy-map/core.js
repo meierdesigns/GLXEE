@@ -21,7 +21,25 @@ class GalaxyMapManager {
         this.statusMsg = '';
         this.map = null;
         this.nodeById = {};
-        this.mapZoom = 3;
+        // Zoom level survives reloads (localStorage, written on change).
+        let zoom = 3;
+        try {
+            const saved = Number(localStorage.getItem('vf.galaxyMapZoom'));
+            if (Number.isFinite(saved) && saved > 0) zoom = saved;
+        } catch (e) {}
+        Object.defineProperty(this, 'mapZoom', {
+            configurable: true,
+            enumerable: true,
+            get: () => zoom,
+            set: (v) => {
+                zoom = v;
+                if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return;
+                clearTimeout(this._zoomSaveTimer);
+                this._zoomSaveTimer = setTimeout(() => {
+                    try { localStorage.setItem('vf.galaxyMapZoom', String(zoom)); } catch (e) {}
+                }, 300);
+            }
+        });
         this.mapPan = null;
     }
 
@@ -34,9 +52,10 @@ class GalaxyMapManager {
         this.onDock = options && options.onDock;
         this.onEscape = options && options.onEscape;
         this._mountEl = (options && options.mount) || null;
-        // Embedded maps are interactive immediately; keyboard navigation can
-        // still be used without requiring a separate activation step.
-        this._inputActive = true;
+        // Embedded map (PLAY tab): the keyboard stays with the station until
+        // ENTER / SPACE enters the map (armInput). Mouse clicks work anyway.
+        // The standalone map overlay takes the keyboard right away.
+        this._inputActive = !this._mountEl;
         this.statusMsg = '';
         if (
             typeof planetConfigManager !== 'undefined' &&
@@ -158,18 +177,94 @@ class GalaxyMapManager {
         return 3;
     }
 
-    getPlanetStageProgressLabel(planetId) {
+    /**
+     * Stage progress incl. the boss: stages 1..N plus the boss as N+1.
+     * Returns { done, total, boss } or null before the first clear;
+     * boss = true while the boss stage is the next one to fight.
+     */
+    getPlanetStageProgress(planetId) {
         const pid = String(planetId || '').toLowerCase();
-        if (!pid) return '';
+        if (!pid) return null;
         const stage = (typeof profileManager !== 'undefined')
             ? profileManager.getPlanetStageState(this.galaxyId, pid)
             : { highestStage: 0, bossCleared: false };
         const highest = Math.max(0, Math.round(Number(stage.highestStage) || 0));
-        const cleared = this.isCleared(pid);
-        if (!cleared && !stage.bossCleared && highest <= 0) return '';
-        const total = this.getStagesPerPlanet();
-        const done = (cleared || stage.bossCleared) ? total : Math.min(highest, total);
-        return `${done}/${total}`;
+        const cleared = this.isCleared(pid) || !!stage.bossCleared;
+        if (!cleared && highest <= 0) return null;
+        const stages = this.getStagesPerPlanet();
+        const total = stages + 1;
+        if (cleared) return { done: total, total, boss: false };
+        if (highest >= stages) return { done: total, total, boss: true };
+        return { done: highest, total, boss: false };
+    }
+
+    getPlanetStageProgressLabel(planetId) {
+        const p = this.getPlanetStageProgress(planetId);
+        if (!p) return '';
+        return p.boss ? `BOSS/${p.total}` : `${p.done}/${p.total}`;
+    }
+
+    /** Pixel boss skull (SVG group, 9×8 px) centred on x,y. */
+    bossIconSvg(x, y, px) {
+        const s = px || 1;
+        const rows = [
+            '.#######.',
+            '#########',
+            '##..#..##',
+            '##..#..##',
+            '#########',
+            '.###.###.',
+            '..#.#.#..',
+            '..#####..'
+        ];
+        let d = '';
+        rows.forEach((row, ry) => {
+            for (let rx = 0; rx < row.length; rx++) {
+                if (row[rx] === '#') d += `M${rx} ${ry}h1v1h-1z`;
+            }
+        });
+        return `<g class="gm-boss-icon" shape-rendering="crispEdges" transform="translate(${x - 4.5 * s},${y - 4 * s}) scale(${s})"><path d="${d}"/></g>`;
+    }
+
+    /**
+     * Stage stepper in the planet card: stages 1..N plus the boss.
+     * Cleared stages get a check, the next stage to fight shows the player
+     * ship, the boss stage the skull.
+     */
+    planetStagesHtml(planetId) {
+        const pid = String(planetId || '').toLowerCase();
+        if (!pid) return '';
+        const stages = this.getStagesPerPlanet();
+        const total = stages + 1;
+        const p = this.getPlanetStageProgress(pid) || { done: 0, total, boss: false };
+        const cleared = p.done >= total && !p.boss;
+        const current = cleared ? -1 : (p.boss ? total : p.done + 1);
+        const ship = this.getShipIconUrl ? this.getShipIconUrl(1) : null;
+        let html = '';
+        for (let i = 1; i <= total; i++) {
+            const isBoss = i === total;
+            const done = cleared || i < current;
+            const here = i === current;
+            let inner = '';
+            if (isBoss && !done) {
+                inner = `<svg viewBox="0 0 9 8">${this.bossIconSvg(4.5, 4, 1)}</svg>`;
+            } else if (done) {
+                // Cleared: solid green tile with a dark pixel check.
+                inner = '<svg viewBox="0 0 10 10" shape-rendering="crispEdges"><rect class="gm-stage-done-bg" width="10" height="10"/><path class="gm-stage-check" d="M2 5h1v1h1v1h1V6h1V5h1V4h1V3H7v1H6v1H5v1H4V5H3V4H2z"/></svg>';
+            } else {
+                // Open stage: pixel target / crosshair.
+                inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M3 0h3v1H3zM0 3h1v3H0zM8 3h1v3H8zM3 8h3v1H3zM1 1h2v1H2v1H1zM6 1h2v2H7V2H6zM1 6h1v1h1v1H1zM7 6h1v2H6V7h1zM4 2h1v2h2v1H5v2H4V5H2V4h2z"/></svg>';
+            }
+            // Player ship hovers above the stage it fights next.
+            if (here && ship) inner += `<img src="${ship}" alt="" class="gm-stage-ship">`;
+            const tag = isBoss ? 'BOSS' : String(i);
+            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}"` +
+                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}">` +
+                `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
+            // Connector to the next step: solid once walked, dashed ahead.
+            if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;
+        }
+        return html;
     }
 
     getPlanetInfo(planetId) {
@@ -325,7 +420,7 @@ class GalaxyMapManager {
             `</div>`;
     }
 
-    planetIconHtml(planetId, size) {
+    planetIconHtml(planetId, size, asImage, lightDir) {
         const sid = String(planetId || 'mars').toLowerCase();
         const px = size || 48;
         if (typeof planetSVGManager !== 'undefined') {
@@ -333,14 +428,38 @@ class GalaxyMapManager {
                 planetSVGManager.init();
             }
             // Large views get a finer grid instead of an upscaled icon.
-            const zoom = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom))
-                ? this.mapZoom : 1;
-            const detail = px >= 160 || zoom >= 2.5
-                ? 4
-                : (px >= 80 || zoom >= 1.35 ? 2 : 1);
-            let svg = planetSVGManager.getPlanetSVGDetailed
+            // Map nodes follow the zoom (shared with the ship, getMapDetail);
+            // big views (sector card) always get a fine grid.
+            const zoomDetail = this.getMapDetail ? this.getMapDetail() : 1;
+            const detail = px >= 160 ? Math.max(4, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
+            // Current rotation frame, so zoom re-renders don't jump.
+            const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, detail, lightDir) : null;
+            const spinFrame = spinModel ? planetSVGManager.getPlanetSpinIndex(sid, spinModel) : null;
+            let svg = spinModel ? planetSVGManager.getPlanetSpinFrame(spinModel, spinFrame) : planetSVGManager.getPlanetSVGDetailed
                 ? planetSVGManager.getPlanetSVGDetailed(sid, detail)
                 : planetSVGManager.getPlanetSVG(sid);
+            if (svg && asImage && planetSVGManager.planetSvgToImg) {
+                // Map nodes: an <img> is rasterised once and just scaled while
+                // zooming — inline SVG with thousands of rects repainted every frame.
+                let conv;
+                if (spinModel) {
+                    spinModel.frameUrls = spinModel.frameUrls || {};
+                    spinModel.frameScale = spinModel.frameScale || null;
+                    if (!spinModel.frameUrls[spinFrame]) {
+                        conv = planetSVGManager.planetSvgToImg(svg);
+                        spinModel.frameUrls[spinFrame] = conv.url;
+                        spinModel.frameScale = conv.scale;
+                    }
+                    conv = { url: spinModel.frameUrls[spinFrame], scale: spinModel.frameScale || planetSVGManager.planetSvgToImg(svg).scale };
+                } else {
+                    conv = planetSVGManager.planetSvgToImg(svg);
+                }
+                const big = px * conv.scale;
+                const off = -(big - px) / 2;
+                if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
+                return `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>` +
+                    `<img class="gm-planet-img" src="${conv.url}" alt="" draggable="false" style="width:${big}px;height:${big}px;left:${off}px;top:${off}px"></span>`;
+            }
             if (svg) {
                 const uid = 'gm_' + sid + '_' + Math.random().toString(36).slice(2, 7);
                 svg = svg
@@ -348,7 +467,9 @@ class GalaxyMapManager {
                     .replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${uid}_${id})`)
                     .replace(/width="[^"]*"/, `width="${px}"`)
                     .replace(/height="[^"]*"/, `height="${px}"`);
-                return `<span class="gm-planet-icon">${svg}</span>`;
+                // Slow axial rotation (planet-svgs/spin-frames.js).
+                if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
+                return `<span class="gm-planet-icon" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>${svg}</span>`;
             }
         }
         return `<span class="gm-planet-fallback" style="width:${px}px;height:${px}px">${sid.charAt(0).toUpperCase()}</span>`;

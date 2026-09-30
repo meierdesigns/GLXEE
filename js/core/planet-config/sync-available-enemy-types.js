@@ -20,7 +20,7 @@ extendClass(PlanetConfigManager, {
             const filtered = enemyConfigManager.getTypesForLocation(pid, gid);
             if (filtered.length) types = filtered;
         }
-        const planetFactions = this.getPlanetFactions(pid);
+        const planetFactions = this.getHostileFactions ? this.getHostileFactions(pid) : this.getPlanetFactions(pid);
         if (planetFactions.length && typeof enemyConfigManager !== 'undefined') {
             types = types.filter((typeId) => this.enemyMatchesPlanetFactions(typeId, planetFactions));
             if (!types.length) types = this.availableEnemyTypes.slice();
@@ -64,6 +64,40 @@ extendClass(PlanetConfigManager, {
             if (out.indexOf(f) === -1 && ok(f) && this.areFactionsAllied(owner, f)) out.push(f);
         });
         return out;
+    },
+
+    /** The active pilot's faction ('' when unknown). */
+    getPlayerFaction() {
+        const p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
+            ? profileManager.getActiveProfile() : null;
+        return String((p && p.faction) || '').toLowerCase();
+    },
+
+    /** True when a faction is the player's own or allied with it — it never attacks the player. */
+    isFriendlyFaction(faction) {
+        const own = this.getPlayerFaction();
+        return !!(own && faction && this.areFactionsAllied && this.areFactionsAllied(own, String(faction).toLowerCase()));
+    },
+
+    /**
+     * Factions that fight the player on a planet: getPlanetFactions without
+     * the player's own faction and its allies. A planet held by the player's
+     * side (home galaxy) is instead attacked by a seeded rival — the player
+     * liberates it; the own faction never shoots at the player.
+     */
+    getHostileFactions(planetId) {
+        const all = this.getPlanetFactions(planetId);
+        const own = this.getPlayerFaction();
+        if (!own) return all;
+        const hostile = all.filter((f) => !this.isFriendlyFaction(f));
+        if (hostile.length) return hostile;
+        const cfg = this.getConfig(planetId);
+        const control = cfg && cfg.galaxyId && this.getGalaxyControl ? this.getGalaxyControl(cfg.galaxyId) : null;
+        const rivals = ((control && control.factions) || []).map((f) => f.id).filter((f) => !this.isFriendlyFaction(f));
+        const pool = rivals.length ? rivals : (this.availableFactions || []).filter((f) => !this.isFriendlyFaction(f));
+        if (!pool.length) return all;
+        const seed = this.hashSeed ? (this.hashSeed('attacker|' + planetId) >>> 0) : 0;
+        return [pool[seed % pool.length]];
     },
 
     /**

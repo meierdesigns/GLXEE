@@ -187,7 +187,9 @@ extendClass(GalaxyMapManager, {
                 return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">FLY TO ${post.name}</button>`;
             }
             // Faction stations can also be raided (faction-holdings.js).
-            if (post.factionStation) {
+            const ownSide = typeof planetConfigManager !== 'undefined' && planetConfigManager.isFriendlyFaction
+                && planetConfigManager.isFriendlyFaction(post.faction);
+            if (post.factionStation && !ownSide) {
                 return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="raid">RAID</button>` +
                     `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">DOCK · ${post.name}</button>`;
             }
@@ -202,19 +204,21 @@ extendClass(GalaxyMapManager, {
         }
         // The ruler's base, once all its stations are gone, can be assaulted.
         const hold = profileManager.getFactionHoldings ? profileManager.getFactionHoldings(this.galaxyId) : null;
-        if (hold && !hold.baseLost && hold.base === info.id && !hold.stations.length
+        const ownRuler = hold && typeof planetConfigManager !== 'undefined' && planetConfigManager.isFriendlyFaction
+            && planetConfigManager.isFriendlyFaction(hold.ruler);
+        if (hold && !ownRuler && !hold.baseLost && hold.base === info.id && !hold.stations.length
             && profileManager.isHoldingBaseRevealed(this.galaxyId)) {
             return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">ASSAULT BASE</button>` +
-                `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="resume">START MISSION</button>`;
+                `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
         }
         const opts = this.getStartOptions(info && info.id);
         if (opts.canChoose) {
             return `
                 <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">FROM START</button>
-                <button class="action-button" id="gmConfirm" data-nav-item data-start-mode="resume">CONTINUE · ${opts.resumeLabel}</button>
+                <button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}CONTINUE · ${opts.resumeLabel}</button>
             `;
         }
-        return '<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="resume">START MISSION</button>';
+        return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
     },
 
     syncConfirmButton() {
@@ -279,6 +283,8 @@ extendClass(GalaxyMapManager, {
                 ? economyConfig.getResourceLabel(id) : String(id).toUpperCase()).join(' · '));
             set('gmStatusLabel', 'Status');
             set('gmStatus', open ? 'OPEN' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post));
+            const postStepper = this.overlay.querySelector('#gmStageStepper');
+            if (postStepper) postStepper.innerHTML = '';
             return;
         }
         set('gmDiffLabel', 'Difficulty');
@@ -293,11 +299,13 @@ extendClass(GalaxyMapManager, {
             ? (info.cleared
                 ? 'CLEARED'
                 : (info.stage.highestStage
-                    ? (info.stage.highestStage >= 3 ? 'BOSS READY' : `NEXT STAGE ${info.stage.highestStage + 1}`)
+                    ? (info.stage.highestStage >= this.getStagesPerPlanet() ? `BOSS READY · ${this.getStagesPerPlanet() + 1}/${this.getStagesPerPlanet() + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet() + 1}`)
                     : 'READY'))
             : 'LOCKED');
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
         set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED');
+        const stepper = this.overlay.querySelector('#gmStageStepper');
+        if (stepper) stepper.innerHTML = info.unlocked ? this.planetStagesHtml(info.id) : '';
         const unlockHint = this.overlay.querySelector('#gmUnlockHint');
         if (unlockHint) {
             const unlockFrom = !info.unlocked
@@ -308,7 +316,8 @@ extendClass(GalaxyMapManager, {
                 ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
                 : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
         }
-        const progressBar = this.overlay.querySelector('.galaxy-map-progress-bar');
+        const progressBar = this.overlay.querySelector('.galaxy-map-progress-bar .gm-progress-text')
+            || this.overlay.querySelector('.galaxy-map-progress-bar');
         if (progressBar) progressBar.textContent = this.getGalaxyProgressLabel();
     },
 
@@ -372,5 +381,11 @@ extendClass(GalaxyMapManager, {
         const cb = this.onBack;
         this.hide();
         if (typeof cb === 'function') cb();
+    },
+
+    /** Launch icon for the mission buttons (pixel, tinted in the accent). */
+    missionIconHtml() {
+        if (typeof iconRenderer === 'undefined' || !iconRenderer.imgHtml) return '';
+        return iconRenderer.imgHtml('menuStart', 16, 'gm-mission-icon', undefined, false);
     },
 });

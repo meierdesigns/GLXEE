@@ -29,17 +29,28 @@ extendClass(ParallaxManager, {
         }
     },
 
-    drawGrid(ctx, layer) {
-        const gridSize = 16;
-
-        for (let x = 0; x < 400; x += gridSize) {
-            for (let y = 0; y < 600; y += gridSize) {
-                const offsetX = (x + this.horizontalOffset * 0.1) % 400;
-                const offsetY = (y + layer.y) % 600;
-
-                if ((Math.floor(offsetX / gridSize) + Math.floor(offsetY / gridSize)) % 2 === 0) {
-                    ctx.fillRect(Math.floor(offsetX), Math.floor(offsetY), 4, 4);
-                }
+    drawGrid(ctx, layer, index) {
+        // Checker parity comes from the cell's own index, not from its
+        // scrolled position — the old version flipped the checker every time
+        // a cell crossed a 16 px boundary, so the dots jumped while scrolling.
+        // The period is two cells, so wrapping the offset at 2*gridSize is seamless.
+        // Depth by layer: slow (far) layers get a fine, small-dot grid, faster
+        // (near) ones a wider grid with bigger dots — stacked grid layers used
+        // to be identical in size and overlapped into a muddled pattern.
+        const depth = Math.max(0, Math.min(3, Math.round((Number(layer.speed) || 0.2) / 0.2) - 1 + (index || 0) % 2));
+        const gridSize = [12, 20, 28, 36][depth];
+        const dot = [2, 3, 4, 5][depth];
+        const period = gridSize * 2;
+        const w = (ctx.canvas && ctx.canvas.width) || 400;
+        const h = (ctx.canvas && ctx.canvas.height) || 600;
+        const ox = (((this.horizontalOffset * 0.1) % period) + period) % period;
+        const oy = (((layer.y || 0) % period) + period) % period;
+        const cols = Math.ceil(w / gridSize) + 2;
+        const rows = Math.ceil(h / gridSize) + 2;
+        for (let i = -2; i < cols; i++) {
+            for (let j = -2; j < rows; j++) {
+                if (((i + j) & 1) !== 0) continue;
+                ctx.fillRect(Math.round(i * gridSize + ox), Math.round(j * gridSize + oy), dot, dot);
             }
         }
     },

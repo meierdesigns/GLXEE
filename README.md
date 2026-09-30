@@ -325,6 +325,7 @@ be reviewed or reverted independently.
 | 47A | Pilot readouts | Profile scoring, ability stats, combat progression, and loadout feedback |
 | 47B | Planet theaters | Galaxy navigation, animated planet frames, and faction visual treatments |
 | 47C | Station presentation | Fleet previews, HD navigation icons, start intro, and hangar shell polish |
+| 48C | GLXEE scale baseline | Proportional 75% shell zoom for the normal browser view and compact HUD presentation |
 
 The wave commit convention is:
 

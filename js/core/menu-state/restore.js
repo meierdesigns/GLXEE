@@ -91,7 +91,7 @@ extendClass(MenuStateManager, {
                 if (this.restoreViewer(
                     typeof explosionViewerUI !== 'undefined' ? explosionViewerUI : null,
                     { explosionId: s.explosionId || 'default' },
-                    null
+                    'explosions'
                 )) return true;
                 break;
             case 'faction-viewer':

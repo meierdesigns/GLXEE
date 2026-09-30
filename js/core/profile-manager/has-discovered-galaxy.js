@@ -197,6 +197,9 @@ extendClass(ProfileManager, {
     },
 
     save() {
+        // Any save while a pilot is active counts as playing them.
+        const active = this.activeProfileId && this.profiles.find((p) => p.id === this.activeProfileId);
+        if (active) active.lastPlayedAt = Date.now();
         try {
             localStorage.setItem(this.storageKey, JSON.stringify({
                 activeProfileId: this.activeProfileId,

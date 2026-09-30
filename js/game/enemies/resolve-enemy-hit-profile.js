@@ -8,7 +8,9 @@ extendClass(EnemyManager, {
      */
     resolveEnemyHitProfile(opts) {
         const o = opts || {};
-        const drawScale = o.drawScale != null ? o.drawScale : 1;
+        // Enemies shrink with the player (footprint 22 → 18 px).
+        const ENEMY_SIZE_MUL = 18 / 22;
+        const drawScale = (o.drawScale != null ? o.drawScale : 1) * ENEMY_SIZE_MUL;
         let model = null;
         let scaleMul = 1;
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual) {
@@ -42,8 +44,9 @@ extendClass(EnemyManager, {
             };
         }
         let fullScale = drawScale * scaleMul;
-        // Hard cap: no enemy wider than 1.5× the player footprint (28px).
-        const maxW = 28 * 1.5 * drawScale;
+        // Hard cap: no enemy wider than 33 px × drawScale (kept independent of
+        // the player footprint so shrinking the player doesn't shrink enemies).
+        const maxW = 33 * drawScale;
         if ((model.width || 16) * fullScale > maxW) fullScale = maxW / (model.width || 16);
         const drawW = Math.max(4, (model.width || 16) * fullScale);
         const drawH = Math.max(4, (model.height || 12) * fullScale);

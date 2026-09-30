@@ -267,6 +267,10 @@ class GameControlSystem {
 
     // Game over handling
     gameOver() {
+        // Lost a flight ambush: back to the last station (see showLevelSelection).
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._postAmbushFlight) {
+            galaxyMapManager._ambushLost = true;
+        }
 
         this.gameState.stopGame();
         this.showGameOverOverlay();
@@ -285,6 +289,7 @@ class GameControlSystem {
     }
 
     playerWins() {
+        if (typeof galaxyMapManager !== 'undefined') galaxyMapManager._ambushLost = false;
         if (this._victoryLootPhase || this._victoryFinalizing) return;
         this.beginVictoryLootPhase();
     }

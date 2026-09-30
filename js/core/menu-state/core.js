@@ -67,6 +67,23 @@ class MenuStateManager {
     restoreViewer(ui, showOpts, focusExplore) {
         if (!ui || typeof ui.show !== 'function') return false;
         this.hideStartShell();
+        // With a pilot, wiki entries live inside the station modal: reopen the
+        // station on its WIKI tab and embed the viewer there, not standalone
+        if (focusExplore && typeof homeStationUI !== 'undefined' && homeStationUI.openExplorationInline
+            && typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
+            homeStationUI.show({
+                skipPersist: true,
+                tab: 'explorations',
+                focusExplore: focusExplore,
+                onClose: () => {
+                    if (typeof startScreenManager !== 'undefined') startScreenManager.returnToHub();
+                }
+            });
+            if (homeStationUI.isVisible
+                && homeStationUI.openExplorationInline(focusExplore, Object.assign({}, showOpts || {}, { skipPersist: true }))) {
+                return true;
+            }
+        }
         const opts = Object.assign({}, showOpts || {}, {
             skipPersist: true,
             onClose: this.returnToExplorations(focusExplore)

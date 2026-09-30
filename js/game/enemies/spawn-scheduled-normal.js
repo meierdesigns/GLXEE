@@ -23,11 +23,11 @@ extendClass(EnemyManager, {
             // when focused by the player.
             baseHp = Math.max(6, Math.round(baseHp * 0.35));
         }
-        // Side craft are deliberately smaller than champions, including their
-        // mounted weapons and projectiles. Combat roles get a little more
-        // hull so they can approach and pressure the player autonomously.
+        // Side craft stay a little smaller than champions (drawScale 0.8),
+        // including their mounted weapons and projectiles, but no longer tiny.
+        // Combat roles get a little more hull so they can pressure the player.
         const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
-            ? 0.64 : 0.52;
+            ? 0.72 : 0.62;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;

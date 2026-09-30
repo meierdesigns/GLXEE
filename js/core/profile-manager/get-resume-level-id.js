@@ -73,9 +73,9 @@ extendClass(ProfileManager, {
         if (st.bossCleared) {
             resumeLabel = 'STAGE 1';
         } else if (highest >= stagesPerPlanet) {
-            resumeLabel = 'BOSS';
+            resumeLabel = `BOSS ${stagesPerPlanet + 1}/${stagesPerPlanet + 1}`;
         } else if (highest > 0) {
-            resumeLabel = `STAGE ${highest + 1}`;
+            resumeLabel = `STAGE ${highest + 1}/${stagesPerPlanet + 1}`;
         }
 
         return {

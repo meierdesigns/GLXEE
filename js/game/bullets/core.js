@@ -253,7 +253,7 @@ class BulletManager {
             width: playerPosition.width,
             height: playerPosition.height
         };
-        const muzzleUp = (m) => (m.face === 'left' || m.face === 'right' ? 3.2 : 1.4);
+        const muzzleUp = () => 1.4;
         const fireKeys = (model.loadout && model.loadout.weaponKeys) || {};
         return weaponModules.map((m) => ({
             id: m.id,
@@ -264,7 +264,13 @@ class BulletManager {
             key: String(m.id || '') + '@' + String(m.face || 'up')
                 + (m.slotIndex != null ? '#' + m.slotIndex : '') + (m.side ? ':' + m.side : ''),
             // Muzzle in layout units (top centre of the mount) for the flash.
-            muzzle: { lx: m.x + (m.width || 0) / 2, ly: m.y - (m.height || 0) * muzzleUp(m), lw: m.width || 4, lh: m.height || 4 },
+            // Slot size factor (bigger slot → bigger gun and shots).
+            sizeScale: m.slotSizeScale || 1,
+            // Slot size class (0 S, 1 M, 2 L) — sets the shot size.
+            sizeLevel: (m.slotIndex != null && typeof shipLoadoutManager !== 'undefined'
+                && shipLoadoutManager.getSlotSizeLevel && model.id)
+                ? shipLoadoutManager.getSlotSizeLevel(model.id, 'weapon', m.slotIndex) : 1,
+            muzzle: { lx: m.x + (m.width || 0) / 2, ly: m.y - (m.height || 0) * muzzleUp(m), lw: m.width || 4, lh: m.height || 4, by: m.y + (m.height || 0) },
             position: {
                 x: playerPosition.x + m.x * scaleX,
                 // Weapon art is drawn taller than its frame, seated on the base

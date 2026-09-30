@@ -1,8 +1,8 @@
 "use strict";
 
 // Fixed in-game player ship width (internal pixels, before contentScale).
-const PLAYER_FOOTPRINT_WIDTH = 28;
-// Fixed scale: in-game pixels per layout unit (28 px for the 36-unit default
+const PLAYER_FOOTPRINT_WIDTH = 18;
+// Fixed scale: in-game pixels per layout unit (18 px for the 36-unit default
 // hull). The ship and its guns keep their size however areas are moved —
 // a wider layout makes the ship wider, it no longer shrinks to fit.
 const PLAYER_UNIT_SCALE = PLAYER_FOOTPRINT_WIDTH / 36;
@@ -108,8 +108,11 @@ extendClass(PlayerManager, {
         const model = this.currentShipModel || {};
         const mw = Math.max(1, Number(model.width || model.nativeWidth) || 20);
         const mh = Math.max(1, Number(model.height || model.nativeHeight) || 16);
-        this.player.width = Math.max(8, Math.round(mw * PLAYER_UNIT_SCALE * contentScale));
-        this.player.height = Math.max(8, Math.round(mh * PLAYER_UNIT_SCALE * contentScale));
+        // Wide layouts (long wings) used to make the ship huge: cap the
+        // footprint at 1.3× the reference size, keeping the aspect.
+        const k = Math.min(PLAYER_UNIT_SCALE, (PLAYER_FOOTPRINT_WIDTH * 1.3) / mw, (PLAYER_FOOTPRINT_WIDTH * 1.3) / mh);
+        this.player.width = Math.max(8, Math.round(mw * k * contentScale));
+        this.player.height = Math.max(8, Math.round(mh * k * contentScale));
         this.refreshPlayerHitMask();
     },
 

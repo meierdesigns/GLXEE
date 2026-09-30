@@ -19,8 +19,8 @@ extendClass(CoreLevelManager, {
         const stageLabel = isAmbush
             ? 'STAGE 1/1'
             : parsed.isBoss
-            ? 'BOSS'
-            : `STAGE ${parsed.stageIndex}/${stageCount}`;
+            ? `BOSS ${stageCount + 1}/${stageCount + 1}`
+            : `STAGE ${parsed.stageIndex}/${stageCount + 1}`;
 
         const stageKey = this.getStageKey(parsed);
         let resolved = { enemies: base.enemies || [], objective: base.objective || null };

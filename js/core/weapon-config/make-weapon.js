@@ -47,7 +47,8 @@ extendClass(WeaponConfigManager, {
     clampBulletSize(width, height) {
         return {
             width: Math.max(1, Math.min(3, Math.round(Number(width) || 2))),
-            height: Math.max(3, Math.min(8, Math.round(Number(height) || 7)))
+            // Up to 16 so long, thin beams (laser) are possible.
+            height: Math.max(3, Math.min(16, Math.round(Number(height) || 7)))
         };
     },
 

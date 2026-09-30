@@ -11,6 +11,9 @@ extendClass(BulletManager, {
             muzzle: slot.muzzle,
             charged: !!(cfg && cfg._charged)
         };
+        // Last shot per mount, kept past the flash (hangar preview recharge).
+        if (!this.lastShots) this.lastShots = {};
+        this.lastShots[slot.key] = { t: performance.now(), id: slot.id, muzzle: slot.muzzle };
     },
 
     /**
@@ -279,7 +282,9 @@ extendClass(BulletManager, {
                 || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip
                     ? weaponConfigManager.getDefaultsForShip(slot.id) : null);
             if (!weaponConfig) return;
-            let cooldown = weaponConfig.cooldown * jammerMul;
+            // Ability effects (ability-stats.js): higher fire rate = shorter cooldown.
+            const abilityRate = Number(this.currentShipModel.abilityFireRateMul) || 1;
+            let cooldown = weaponConfig.cooldown * jammerMul / abilityRate;
             if (opts.cooldownMul && opts.cooldownMul > 0 && opts.cooldownMul < 1) {
                 cooldown *= opts.cooldownMul;
             }
@@ -301,13 +306,14 @@ extendClass(BulletManager, {
             // Faction: each faction fights best with one weapon family.
             const factionMul = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponMul
                 ? weaponConfigManager.getFactionWeaponMul(this.getShipFactionId(), slot.id) : 1;
-            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul));
+            const abilityDmg = Number(this.currentShipModel.abilityDamageMul) || 1;
+            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul * abilityDmg));
             if (opts.chargeMult && opts.chargeMult > 1) {
                 const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
                 cfg.speed = (cfg.speed || 6) * (1 + (cm - 1) * 0.15);
-                cfg.width = Math.max(cfg.width || 2, Math.round(2 * cm));
-                cfg.height = Math.max(cfg.height || 8, Math.round(8 * (1 + (cm - 1) * 0.25)));
+                // Bonus shots keep their size; they are drawn brighter instead
+                // (bullet.bonusGlow, see drawBullet).
                 cfg._charged = true;
                 cfg._chargeMult = opts.chargeMult;
             }
@@ -317,9 +323,24 @@ extendClass(BulletManager, {
             const firstNew = this.bullets.length;
             this.fireWeaponByType(slot.id, slot.position, cfg, false);
             // Tag shots with their weapon so they render in its type colour.
-            for (let i = firstNew; i < this.bullets.length; i++) this.bullets[i].weaponId = slot.id;
-            // Shots leave the barrel: match their width to this mount's gun.
-            if (slot.muzzle) this.fitBulletsToBarrel(this.bullets, firstNew, slot.position.width, slot.id);
+            // Shot size follows the slot size class: S 0.6×, M 1×, L 1.5× the
+            // weapon's base shot (at least 1 × 3 px, so S stays visible).
+            // Preview close-ups fire at a zoomed ship: shotScale scales size
+            // and speed by that zoom on top.
+            const shotScale = Number(opts.shotScale) || 1;
+            const sizeMul = [0.6, 1, 1.5][slot.sizeLevel != null ? slot.sizeLevel : 1] || 1;
+            for (let i = firstNew; i < this.bullets.length; i++) {
+                const b = this.bullets[i];
+                b.weaponId = slot.id;
+                // 0..1 brightness boost from the charge / beat bonus.
+                if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
+                const cx = b.x + (b.width || 0) / 2;
+                // Whole pixels, or drawing rounds S up to M's width.
+                b.width = Math.max(1, Math.round((b.width || 2) * sizeMul)) * shotScale;
+                b.height = Math.max(3, Math.round((b.height || 8) * sizeMul)) * shotScale;
+                if (shotScale !== 1) b.speed = (b.speed || 6) * shotScale;
+                b.x = cx - b.width / 2;
+            }
             if (slot.muzzle) this.addMuzzleFlash(slot, cfg);
             firedAny = true;
         });

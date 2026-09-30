@@ -220,6 +220,14 @@
     --status-info: var(--status-info);
 }
 
+/* A browser zoom-out already provides the compact presentation. Avoid
+   applying the GLXEE baseline a second time on the resulting wide viewport. */
+@media (min-width: 1500px) {
+    :root {
+        --gui-zoom: 1;
+    }
+}
+
 * {
     margin: 0;
     padding: 0;

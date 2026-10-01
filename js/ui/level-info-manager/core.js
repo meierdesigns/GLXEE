@@ -10,6 +10,9 @@ const STAT_ICON_KEYS = {
  * Level Info Panel Manager
  * Displays real-time information about the current level
  */
+// How long the MISSION block stays in the HUD after a run starts.
+const MISSION_HUD_SHOW_MS = 8000;
+
 class LevelInfoManager {
     constructor() {
         this.panel = null;
@@ -284,6 +287,38 @@ class LevelInfoManager {
         }
     }
 
+    /**
+     * Small pixel icon of an enemy ship type (cached data URL). The model
+     * loads async: until it is ready the generic enemy icon stands in.
+     */
+    enemyIconHtml(type, label) {
+        const t = String(type || '');
+        this._enemyIcons = this._enemyIcons || {};
+        const url = t && this._enemyIcons[t];
+        if (url) return `<img src="${url}" alt="" class="gi-icon gi-enemy-icon" title="${label || t}">`;
+        if (t && url === undefined && typeof enemyManager !== 'undefined' && enemyManager.getEnemyShipModel
+            && typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {
+            this._enemyIcons[t] = null; // pending
+            enemyManager.getEnemyShipModel(t).then((model) => {
+                if (!model) return;
+                const c = document.createElement('canvas');
+                c.width = 11;
+                c.height = 15;
+                shipRenderer.renderShipPreview(c, model, 1);
+                this._enemyIcons[t] = c.toDataURL();
+            }).catch(() => {});
+        }
+        return this.iconHtml('menuEnemies', 24, label || t);
+    }
+
+    /** Count goal row: only the target's icon and the count (no text label). */
+    countRowHtml(iconHtml, label, value, valueId) {
+        const idAttr = valueId ? ` id="${valueId}"` : '';
+        return `<div class="gi-row gi-row-count" title="${String(label).replace(/"/g, '&quot;')}">` +
+            `<span class="gi-row-icon">${iconHtml}</span>` +
+            `<span class="gi-row-text"><span class="gi-row-value"${idAttr}>${value}</span></span></div>`;
+    }
+
     getObjectiveBits() {
         let label = 'OBJECTIVE';
         let progress = '—';
@@ -308,7 +343,6 @@ class LevelInfoManager {
             active = true;
             enemyType = status.enemyType || '';
             progress = `${status.todayKills}/${status.killCountPerDay}` +
-                (enemyType ? ` ${enemyType}` : '') +
                 ` · ${status.completedDays}/${status.requiredDays}d`;
         }
         return { active, progress, enemyType };
@@ -338,10 +372,18 @@ class LevelInfoManager {
             this.weaponChipsHtml()
         );
 
-        const missionRows =
-            this.rowHtml('menuStart', obj.label.replace(/:$/, ''), String(obj.progress).toUpperCase(), 'objectiveHudValue') +
-            this.rowHtml('hsUpgrade', 'DAILY', daily.active ? daily.progress : '—', 'dailyHudValue');
-        const mission = this.clusterHtml('MISSION', missionRows);
+        // Mission only shows at the start of a run. Goals with a count show
+        // just the icon of what to destroy plus the count.
+        const o = typeof objectiveManager !== 'undefined' ? objectiveManager.getObjective() : null;
+        const objRow = o && o.type === 'killCount'
+            ? this.countRowHtml(o.enemyType ? this.enemyIconHtml(o.enemyType, obj.label) : this.iconHtml('menuEnemies', 24, obj.label),
+                obj.label, String(obj.progress), 'objectiveHudValue')
+            : this.rowHtml('menuStart', obj.label.replace(/:$/, ''), String(obj.progress).toUpperCase(), 'objectiveHudValue');
+        const dailyRow = daily.active
+            ? this.countRowHtml(this.enemyIconHtml(daily.enemyType, 'DAILY ' + daily.enemyType), 'DAILY', daily.progress, 'dailyHudValue')
+            : '';
+        const showMission = !this.stats.startTime || (Date.now() - this.stats.startTime) < MISSION_HUD_SHOW_MS;
+        const mission = showMission ? this.clusterHtml('MISSION', objRow + dailyRow) : '';
 
         // Player ship stats; anything an upgrade improves lights up.
         const stats = this.trackPlayerStats();

@@ -285,6 +285,8 @@ extendClass(BulletManager, {
             // Ability effects (ability-stats.js): higher fire rate = shorter cooldown.
             const abilityRate = Number(this.currentShipModel.abilityFireRateMul) || 1;
             let cooldown = weaponConfig.cooldown * jammerMul / abilityRate;
+            // RAPID FIRE power-up (power-crates.js).
+            if (typeof pickupManager !== 'undefined' && pickupManager.getFireRateMul) cooldown *= pickupManager.getFireRateMul();
             if (opts.cooldownMul && opts.cooldownMul > 0 && opts.cooldownMul < 1) {
                 cooldown *= opts.cooldownMul;
             }

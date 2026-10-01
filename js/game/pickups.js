@@ -35,6 +35,7 @@ class PickupManager {
         this._saveTimer = 0;
         this.lootPhase = false;
         this.powerShotUntil = 0;
+        this.powerUntil = {};
         if (clearCollected !== false) {
             this.collectedThisRun = {};
         }

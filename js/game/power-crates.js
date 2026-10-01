@@ -8,6 +8,19 @@ const CRATE_SIZE = 12;
 const POWER_SHOT_MS = 12000;
 const POWER_SHOT_DAMAGE = 1.6;
 const POWER_SHOT_SIZE = 1.3;
+const RAPID_FIRE_MUL = 0.6;      // cooldown × (fires ~1.7× as fast)
+const BARRIER_DAMAGE_MUL = 0.5;  // damage taken ×
+
+/**
+ * Temporary power-ups a crate can drop. Each has its own colour, silhouette
+ * (diamond / hexagon / circle) and glyph so they read apart at a glance.
+ */
+const POWER_UPS = {
+    power_shot: { label: 'POWER SHOT', ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
+    rapid_fire: { label: 'RAPID FIRE', ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
+    barrier:    { label: 'BARRIER',    ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' }
+};
+const POWER_UP_IDS = Object.keys(POWER_UPS);
 
 extendClass(ObstacleManager, {
     /** Called every frame from update(): spawn a crate on a timer. */
@@ -108,11 +121,12 @@ extendClass(ObstacleManager, {
 });
 
 extendClass(PickupManager, {
-    /** Crate broke open: drop a power-up at its centre. */
+    /** Crate broke open: drop a random power-up at its centre. */
     spawnPowerUp(o) {
+        const id = POWER_UP_IDS[Math.floor(Math.random() * POWER_UP_IDS.length)];
         this.pickups.push({
-            id: 'power_shot',
-            powerUp: 'power_shot',
+            id: id,
+            powerUp: id,
             amount: 0,
             x: o.x + o.width / 2,
             y: o.y + o.height / 2,
@@ -127,55 +141,120 @@ extendClass(PickupManager, {
     /** Returns true if the pickup was a power-up (handled here). */
     collectPowerUp(p) {
         if (!p || !p.powerUp) return false;
+        const def = POWER_UPS[p.powerUp] || POWER_UPS.power_shot;
+        const id = POWER_UPS[p.powerUp] ? p.powerUp : 'power_shot';
+        if (!this.powerUntil) this.powerUntil = {};
         const now = Date.now();
-        const cur = this.powerShotUntil && this.powerShotUntil > now ? this.powerShotUntil : now;
+        const prev = this.powerUntil[id];
+        const cur = prev && prev > now ? prev : now;
         // Stacking extends the timer (capped at twice the base duration).
-        this.powerShotUntil = Math.min(now + POWER_SHOT_MS * 2, cur + POWER_SHOT_MS);
+        this.powerUntil[id] = Math.min(now + def.ms * 2, cur + def.ms);
+        if (id === 'power_shot') this.powerShotUntil = this.powerUntil[id];
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-            levelInfoManager.showLootNotice('POWER SHOT ' + Math.round((this.powerShotUntil - now) / 1000) + 's');
+            levelInfoManager.showLootNotice(def.label + ' ' + Math.round((this.powerUntil[id] - now) / 1000) + 's');
         }
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
-            graphicsManager.createHitEffect(p.x, p.y, 6, '#ffcf3a');
+            graphicsManager.createHitEffect(p.x, p.y, 6, def.color);
         }
         if (typeof soundManager !== 'undefined' && soundManager.playReflect) soundManager.playReflect();
         return true;
     },
 
+    /** Active power-up state { left, total } or null. */
+    getPowerUp(id) {
+        const until = id === 'power_shot' ? this.powerShotUntil : (this.powerUntil && this.powerUntil[id]);
+        const left = (until || 0) - Date.now();
+        if (left <= 0) return null;
+        return { left, total: POWER_UPS[id].ms };
+    },
+
     /** Current shot multipliers from active power-ups. */
     getPowerShot() {
-        const left = (this.powerShotUntil || 0) - Date.now();
-        if (left <= 0) return null;
-        return { damage: POWER_SHOT_DAMAGE, size: POWER_SHOT_SIZE, left, total: POWER_SHOT_MS };
+        const s = this.getPowerUp('power_shot');
+        return s ? Object.assign(s, { damage: POWER_SHOT_DAMAGE, size: POWER_SHOT_SIZE }) : null;
+    },
+
+    /** Weapon cooldown multiplier (RAPID FIRE). */
+    getFireRateMul() {
+        return this.getPowerUp('rapid_fire') ? RAPID_FIRE_MUL : 1;
+    },
+
+    /** Incoming damage multiplier (BARRIER). */
+    getDamageTakenMul() {
+        return this.getPowerUp('barrier') ? BARRIER_DAMAGE_MUL : 1;
     },
 
     drawPowerUp(ctx, p, x, y) {
+        const def = POWER_UPS[p.powerUp] || POWER_UPS.power_shot;
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        const s = 8 + Math.round(Math.sin(t * 0.01) * 1.5);
+        const r = 5 + Math.round(Math.sin(t * 0.01) * 1);
+        x = Math.round(x);
+        y = Math.round(y);
+        // Silhouette as pixel rows: half-width per row offset dy.
+        const half = (dy, rr) => {
+            const a = Math.abs(dy);
+            if (def.shape === 'diamond') return rr - a;
+            if (def.shape === 'hex') return Math.min(rr - 1, (rr - a) * 2);
+            return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
+        };
+        const shape = (rr, color) => {
+            ctx.fillStyle = color;
+            for (let dy = -rr; dy <= rr; dy++) {
+                const h = half(dy, rr);
+                if (h >= 0) ctx.fillRect(x - h, y + dy, h * 2 + 1, 1);
+            }
+        };
+        ctx.save();
+        // Coloured halo so the type reads even when tiny.
+        ctx.globalAlpha = 0.35;
+        shape(r + 3, def.color);
+        ctx.globalAlpha = 1;
+        shape(r + 1, '#05060a');
+        shape(r, def.color);
+        shape(Math.max(1, r - 3), def.light);
         ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - s / 2 - 1, y - s / 2 - 1, s + 2, s + 2);
-        ctx.fillStyle = '#ffcf3a';
-        ctx.fillRect(x - s / 2, y - s / 2, s, s);
-        // Arrow-up glyph: "stronger".
-        ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - 1, y - 2, 2, 5);
-        ctx.fillRect(x - 3, y - 1, 6, 1);
-        ctx.fillRect(x - 2, y - 2, 4, 1);
+        if (def.glyph === 'arrow') {
+            // Arrow up: "stronger".
+            ctx.fillRect(x, y - 2, 1, 5);
+            ctx.fillRect(x - 1, y - 1, 3, 1);
+            ctx.fillRect(x - 2, y, 5, 1);
+        } else if (def.glyph === 'chevrons') {
+            // Double chevron: "faster".
+            for (let k = 0; k < 2; k++) {
+                const yy = y - 2 + k * 3;
+                ctx.fillRect(x, yy, 1, 1);
+                ctx.fillRect(x - 1, yy + 1, 1, 1);
+                ctx.fillRect(x + 1, yy + 1, 1, 1);
+                ctx.fillRect(x - 2, yy + 2, 1, 1);
+                ctx.fillRect(x + 2, yy + 2, 1, 1);
+            }
+        } else {
+            // Plus: "protect".
+            ctx.fillRect(x, y - 2, 1, 5);
+            ctx.fillRect(x - 2, y, 5, 1);
+        }
+        ctx.restore();
     },
 
-    /** Remaining power-shot time as a thin bar under the player. */
+    /** Remaining power-up times as thin bars under the player, one per type in its colour. */
     drawPowerShotBar(ctx) {
-        const ps = this.getPowerShot();
-        if (!ps || typeof playerManager === 'undefined' || !playerManager.getPosition) return;
+        if (typeof playerManager === 'undefined' || !playerManager.getPosition) return;
         const pl = playerManager.getPosition();
         if (!pl) return;
         const w = Math.max(12, pl.width || 16);
         const x = Math.round(pl.x + (pl.width || 16) / 2 - w / 2);
-        const y = Math.round(pl.y + (pl.height || 16) + 3);
+        let y = Math.round(pl.y + (pl.height || 16) + 3);
         ctx.save();
-        ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - 1, y - 1, w + 2, 4);
-        ctx.fillStyle = ps.left < 2500 && Math.floor(ps.left / 150) % 2 ? '#fff2a8' : '#ffcf3a';
-        ctx.fillRect(x, y, Math.round(w * Math.min(1, ps.left / ps.total)), 2);
+        POWER_UP_IDS.forEach((id) => {
+            const ps = this.getPowerUp(id);
+            if (!ps) return;
+            const def = POWER_UPS[id];
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 1, y - 1, w + 2, 4);
+            ctx.fillStyle = ps.left < 2500 && Math.floor(ps.left / 150) % 2 ? def.light : def.color;
+            ctx.fillRect(x, y, Math.round(w * Math.min(1, ps.left / ps.total)), 2);
+            y += 4;
+        });
         ctx.restore();
     },
 });

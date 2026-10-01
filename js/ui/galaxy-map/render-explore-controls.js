@@ -106,9 +106,8 @@ extendClass(GalaxyMapManager, {
             if (okA !== okB) {
                 const open = okA ? edge[0] : edge[1];
                 const shut = okA ? edge[1] : edge[0];
-                const nm = (id) => String((this.getPlanetInfo(id) || {}).name || id).toUpperCase();
-                blocks += this.blockadeSvg((x1 + x2) / 2, (y1 + y2) / 2, open,
-                    `BEYOND: ${nm(shut)} (LOCKED)\nTO OPEN: CLEAR ${nm(open)}\nThe route stays sealed until the planet on this side is cleared. Click to focus it.`);
+                // Details show in the planet card when selected (no tooltip).
+                blocks += this.blockadeSvg((x1 + x2) / 2, (y1 + y2) / 2, open, shut);
             }
             if (okA === okB) {
                 edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA ? 'lit' : 'dim'));
@@ -146,13 +145,62 @@ extendClass(GalaxyMapManager, {
         '.ddddddddddddddddddd.'
     ],
 
-    /** Tower caps (5 wide, cols 1-5, mirrored to 15-19) per faction silhouette. */
-    BORDER_CAPS: {
-        modular: ['.lad.', '.lmd.', 'llmdd'],
-        spikes: ['a...a', 'l.l.l', 'llmdd'],
-        rings: ['.lal.', 'l...d', 'llmdd'],
-        scrap: ['.a...', '.ld..', 'lmmd.'],
-        circuit: ['a.l.a', 'lllmd', 'l.m.d']
+    /**
+     * Per-faction checkpoint shape (ship silhouettes): left tower 6×9 (the
+     * right one mirrors it), field rows 5-8 between
+     * them, 3 base rows. Built into a 21×12 art like BORDER_STATION_ART.
+     */
+    /**
+     * Checkpoint art on a 2× finer grid (41×22): two emitter pylons with a
+     * shaded body and window slits, faction head / fittings, the field
+     * between them and a riveted base. Keys as BORDER_STATION_ART.
+     */
+    borderArtFor(style) {
+        const sil = (style && style.silhouette) || 'modular';
+        this._borderArt = this._borderArt || {};
+        if (this._borderArt[sil]) return this._borderArt[sil];
+        const W = 41, H = 22, PW = 9;
+        const P = Array.from({ length: H }, () => Array(PW).fill('.'));
+        const fill = (x0, y0, w, h, c) => {
+            for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (P[y] && x >= 0 && x < PW) P[y][x] = c || '#';
+        };
+        // Pylon body + field emitter collar.
+        fill(1, 5, 6, 13);
+        fill(7, 8, 2, 10, 'k');
+        [7, 10, 13, 16].forEach((y) => { P[y][3] = 'w'; });
+        if (sil === 'spikes') {
+            fill(0, 4, 8, 1); fill(1, 3, 6, 1); fill(2, 2, 4, 1); fill(3, 1, 2, 1); P[0][3] = 'a';
+            fill(0, 8, 1, 5, 'd'); P[7][0] = 'd';
+        } else if (sil === 'rings') {
+            fill(2, 0, 4, 1); fill(1, 1, 1, 3); fill(6, 1, 1, 3); fill(2, 4, 4, 1); P[2][3] = 'a'; P[2][4] = 'a';
+        } else if (sil === 'scrap') {
+            fill(0, 3, 6, 2); fill(0, 2, 3, 1); fill(5, 0, 1, 3, 'k'); P[0][5] = 'a';
+            fill(0, 11, 1, 3, 'd'); fill(6, 5, 2, 2);
+        } else if (sil === 'circuit') {
+            fill(0, 2, 8, 3); P[1][0] = 'k'; P[1][7] = 'k'; P[0][7] = 'a';
+            fill(0, 5, 1, 5, 'k');
+        } else {
+            fill(0, 2, 8, 3); fill(3, 1, 1, 1, 'k'); P[0][3] = 'a';
+        }
+        // Shade generic hull cells by column: lit left, dark right.
+        for (let y = 0; y < H; y++) for (let x = 0; x < PW; x++) {
+            if (P[y][x] === '#') P[y][x] = x <= 1 ? 'l' : x >= 5 ? 'd' : 'm';
+        }
+        const rows = [];
+        for (let y = 0; y < H; y++) {
+            const left = P[y].join('');
+            let mid = '';
+            for (let x = PW; x < W - PW; x++) mid += (y >= 8 && y <= 17) ? (((x + y) % 2) ? 'R' : 'r') : '.';
+            rows.push(left + mid + left.split('').reverse().join(''));
+        }
+        // Riveted base slab.
+        const line = (f) => Array.from({ length: W }, (_, x) => f(x)).join('');
+        rows[18] = line(() => 'l');
+        rows[19] = line((x) => (x % 5 === 2 ? 'k' : 'm'));
+        rows[20] = line((x) => (x >= 1 && x < W - 1 ? 'd' : '.'));
+        rows[21] = line((x) => (x >= 3 && x < W - 3 ? 'k' : '.'));
+        this._borderArt[sil] = rows;
+        return rows;
     },
 
     /** Galaxy's ruling faction style (faction-holdings.js), or null. */
@@ -163,33 +211,26 @@ extendClass(GalaxyMapManager, {
         return factionShipStyles.getFactionStyle(holdings.ruler);
     },
 
-    blockadeSvg(cx, cy, focusPlanet, tip) {
+    blockadeSvg(cx, cy, focusPlanet, shutPlanet) {
         // Cached per checkpoint + zoom detail + ruler (the art is costly at high zoom).
         const style = this.borderRulerStyle();
-        const key = [cx.toFixed(2), cy.toFixed(2), focusPlanet, tip, this.getMapDetail ? this.getMapDetail() : 1,
+        const key = [cx.toFixed(2), cy.toFixed(2), focusPlanet, shutPlanet, this.getMapDetail ? this.getMapDetail() : 1,
             this.planetPixelSize(focusPlanet) * this.getMapObjectScale(), style ? style.silhouette + style.hull : ''].join('|');
         this._blockadeCache = this._blockadeCache || {};
-        if (!this._blockadeCache[key]) this._blockadeCache[key] = this.blockadeSvgRaw(cx, cy, focusPlanet, tip);
+        if (!this._blockadeCache[key]) this._blockadeCache[key] = this.blockadeSvgRaw(cx, cy, focusPlanet, shutPlanet);
         return this._blockadeCache[key];
     },
 
-    blockadeSvgRaw(cx, cy, focusPlanet, tip) {
+    blockadeSvgRaw(cx, cy, focusPlanet, shutPlanet, cellOverride) {
         const style = this.borderRulerStyle();
-        let rows = this.BORDER_STATION_ART;
-        const cap = style && this.BORDER_CAPS[style.silhouette];
-        if (cap) {
-            rows = rows.map((r, y) => {
-                if (y > 2) return r;
-                const mid = r.slice(6, 15);
-                const left = cap[y];
-                return '.' + left + mid.replace(/[^.]/g, '.') + left + '.';
-            });
-        }
+        const rows = this.borderArtFor(style);
+        // Same on-map size as the classic 21-wide art.
+        const artScale = 21 / rows[0].length;
         const w = rows[0].length, h = rows.length;
         // One art cell = one pixel of the planet it guards (zoom-scaled).
-        const cell = this.planetPixelSize(focusPlanet) * this.getMapObjectScale();
+        const cell = (cellOverride || this.planetPixelSize(focusPlanet) * this.getMapObjectScale()) * artScale;
         const at = (x, y) => (rows[y] && rows[y][x]) || '.';
-        const d = Math.min(GM_ART_DETAIL_MAX, this.getMapDetail ? this.getMapDetail() : 1);
+        const d = Math.max(1, Math.round(Math.min(GM_ART_DETAIL_MAX, this.getMapDetail ? this.getMapDetail() : 1) / 2));
         const solidAt = (x, y) => at(x, y) !== '.';
         let outline = '', body = '';
         if (d > 1) {
@@ -253,11 +294,12 @@ extendClass(GalaxyMapManager, {
         const styleAttr = style
             ? ` style="--bf-hull:${style.hull};--bf-edge:${style.edge || '#07080c'};--bf-accent:${style.accent || '#ff5a3c'}"`
             : '';
-        // App tooltip (ui-tooltip.js) via data-ui-tip.
-        const tipAttr = tip ? ` data-ui-tip-head="BORDER CHECKPOINT" data-ui-tip="${String(tip).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"` : '';
+        const tipAttr = shutPlanet ? ` data-border-shut="${String(shutPlanet).replace(/"/g, '')}"` : '';
         const focusAttr = focusPlanet ? ` data-focus-planet="${String(focusPlanet).replace(/"/g, '')}"` : '';
-        return `<g class="gm-border-station${style ? ' is-faction' : ''}"${styleAttr}${tipAttr}${focusAttr} transform="translate(${cx.toFixed(2)} ${cy.toFixed(2)}) scale(${cell}) translate(${-w / 2} ${-h / 2})" shape-rendering="crispEdges">` +
-            outline + body + `</g>`;
+        // Map: same corner selection frame as planets / posts (wide: own height).
+        const frame = cellOverride ? '' : `<g class="gm-frame-slot" data-frame-r="${(w / 2 * cell).toFixed(2)}" data-frame-ry="${(h / 2 * cell).toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(w / 2 * cell + 4, 7, 2, h / 2 * cell + 4)}</g>`;
+        return `<g class="gm-border-station${style ? ' is-faction' : ''}"${styleAttr}${tipAttr}${focusAttr} transform="translate(${cx.toFixed(2)} ${cy.toFixed(2)})">` + frame +
+            `<g transform="scale(${cell}) translate(${-w / 2} ${-h / 2})" shape-rendering="crispEdges">` + outline + body + `</g></g>`;
     },
 
     /**
@@ -1196,25 +1238,28 @@ extendClass(GalaxyMapManager, {
         if (!s) return;
         const px = (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
         const key = s.toFixed(4);
-        svg.querySelectorAll('.gm-frame-slot').forEach((slot) => {
+        // Only visible frames (selected / hovered) are rebuilt per zoom frame;
+        // the rest catch up when they get selected (syncNodeHighlight).
+        svg.querySelectorAll(':is(.gm-node, .gm-post-node, .gm-border-station):is(.selected, .hovered) .gm-frame-slot').forEach((slot) => {
             if (slot._frameKey === key) return;
             slot._frameKey = key;
             const r = Number(slot.getAttribute('data-frame-r')) || 16;
+            const ry = slot.hasAttribute('data-frame-ry') ? Number(slot.getAttribute('data-frame-ry')) : null;
             const post = slot.hasAttribute('data-frame-post');
             const gap = post ? 8 : 12, arm = post ? 10 : 16, thick = post ? 3 : 4;
             // Corner sits `gap` px outside the surface (a square frame around a disc).
             const f = r + px(gap);
-            slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick));
+            slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick), ry == null ? null : ry + px(gap));
         });
     },
 
-    selectionFrameSvg(f, L, t) {
+    selectionFrameSvg(f, L, t, fy) {
         const faction = this.getCursorFaction();
         const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
         let body = '';
         corners.forEach(([sx, sy]) => {
             const x = sx * f;
-            const y = sy * f;
+            const y = sy * (fy == null ? f : fy);
             const ix = -sx; // points inward
             const iy = -sy;
             switch (faction) {
@@ -1719,11 +1764,11 @@ extendClass(GalaxyMapManager, {
         }, true);
         svg.addEventListener('click', (e) => {
             if (this._mapDragSwallow) return;
-            // Border station: focus the planet whose clearing opens it.
+            // Border station: select it; the card shows what opens it.
             const border = e.target.closest && e.target.closest('.gm-border-station[data-focus-planet]');
             if (border) {
                 this.markUserPicked();
-                this.selectPlanet(border.getAttribute('data-focus-planet'));
+                this.selectBorder(border.getAttribute('data-focus-planet'), border.getAttribute('data-border-shut'));
                 return;
             }
             const target = e.composedPath().find((el) => el && el.classList
@@ -2156,10 +2201,22 @@ extendClass(GalaxyMapManager, {
      */
     stationPixelsSvg(post, detail) {
         const d = Math.min(GM_ART_DETAIL_MAX, Math.max(1, Math.round(detail || 1)));
-        const key = String((post && post.id) || '') + (post && post.factionStation ? '|f' : '') + '@' + d;
+        const st = this.stationFactionStyle(post);
+        const key = String((post && post.id) || '') + (post && post.factionStation ? '|f' : '') + '@' + d + (st ? '|' + st.id + st.hull : '');
         this._stationArtCache = this._stationArtCache || {};
         if (!this._stationArtCache[key]) this._stationArtCache[key] = this.stationPixelsSvgRaw(post, d);
         return this._stationArtCache[key];
+    },
+
+    /** Owner look of a station: its own faction, else the galaxy's ruler. */
+    stationFactionStyle(post) {
+        if (typeof factionShipStyles === 'undefined' || !factionShipStyles.getFactionStyle) return null;
+        let fid = post && post.faction;
+        if (!fid && typeof profileManager !== 'undefined' && profileManager.getFactionHoldings) {
+            const h = profileManager.getFactionHoldings(this.galaxyId);
+            fid = h && h.ruler;
+        }
+        return fid ? factionShipStyles.getFactionStyle(fid) : null;
     },
 
     stationPixelsSvgRaw(post, detail) {
@@ -2208,7 +2265,14 @@ extendClass(GalaxyMapManager, {
                 ['a', -3, -6, 1, 1], ['a', 2, -6, 1, 1], ['a', -3, 5, 1, 1], ['a', 2, 5, 1, 1],
                 ['r', -6, -1, 1, 1], ['g', 5, -1, 1, 1], ['w', -1, -6, 2, 1]]
         ];
-        const builds = (post && post.factionStation) ? stations : shops;
+        // Owner faction shape (ship silhouette): [faction station, trading post].
+        // Owner faction look: functional station architecture with subtle
+        // faction cues, on a 2× finer grid (-12..12, drawn at half cells).
+        // [faction station, trading post].
+        const facShapes = {'modular': [[['d', -12, -1, 24, 2], ['p', -12, -7, 3, 5], ['p', -12, 2, 3, 5], ['p', 9, -7, 3, 5], ['p', 9, 2, 3, 5], ['h', -4, -6, 8, 12], ['h', -8, -3, 4, 6], ['h', 4, -3, 4, 6], ['h', -2, -10, 4, 4], ['d', 0, -12, 1, 2], ['h', -3, 6, 6, 3], ['d', -2, 9, 4, 2], ['d', -4, 0, 8, 1], ['d', -8, 0, 4, 1], ['d', 4, 0, 4, 1], ['l', -3, -3, 1, 1], ['l', 2, -3, 1, 1], ['l', -1, -8, 2, 1], ['r', -12, -1, 1, 1], ['g', 11, -1, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['p', -12, -8, 4, 3], ['p', 8, -8, 4, 3], ['d', -8, -7, 4, 1], ['d', 4, -7, 4, 1], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'spikes': [[['d', -12, 2, 24, 1], ['d', -11, -6, 1, 8], ['d', 10, -6, 1, 8], ['h', -3, -8, 6, 14], ['h', -2, -10, 4, 2], ['h', -1, -12, 2, 2], ['h', -6, -4, 3, 8], ['h', -8, -2, 2, 6], ['h', -10, 0, 2, 4], ['h', 3, -4, 3, 8], ['h', 6, -2, 2, 6], ['h', 8, 0, 2, 4], ['h', -2, 6, 4, 3], ['d', -3, 9, 6, 2], ['d', -3, -2, 6, 1], ['d', -3, 3, 6, 1], ['d', -6, 1, 3, 1], ['d', 3, 1, 3, 1], ['l', -1, -6, 2, 1], ['r', -12, 2, 1, 1], ['g', 11, 2, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['d', -8, -6, 2, 2], ['d', -10, -8, 2, 2], ['d', 6, -6, 2, 2], ['d', 8, -8, 2, 2], ['h', -1, -10, 2, 2], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'rings': [[['h', -6, -11, 12, 2], ['h', -6, 9, 12, 2], ['h', -11, -6, 2, 12], ['h', 9, -6, 2, 5], ['h', 9, 3, 2, 3], ['h', -9, -9, 3, 2], ['h', -9, -9, 2, 3], ['h', 6, -9, 3, 2], ['h', 7, -9, 2, 3], ['h', -9, 7, 3, 2], ['h', -9, 6, 2, 3], ['h', 6, 7, 3, 2], ['h', 7, 6, 2, 3], ['d', -1, -9, 2, 4], ['d', -1, 5, 2, 4], ['d', -9, -1, 4, 2], ['d', 5, -1, 4, 2], ['h', -4, -4, 8, 8], ['h', -5, -3, 10, 6], ['h', -3, -5, 6, 10], ['p', -2, -2, 4, 4], ['l', -1, -1, 2, 2], ['r', -11, 0, 1, 1], ['g', 10, -6, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['d', -9, -10, 18, 1], ['d', -9, -10, 1, 5], ['d', 8, -10, 1, 3], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'scrap': [[['p', -12, -6, 3, 4], ['d', -9, -5, 3, 1], ['h', -6, -4, 10, 8], ['h', -9, -2, 3, 5], ['h', -2, -9, 4, 5], ['d', 2, -10, 1, 6], ['d', 2, -10, 6, 1], ['d', 7, -10, 1, 3], ['c', 4, -3, 4, 3], ['c', 4, 1, 5, 3], ['c', -10, 4, 4, 3], ['d', -6, 0, 10, 1], ['h', -4, 4, 5, 3], ['d', -3, 7, 3, 2], ['l', -1, -7, 2, 1], ['l', -4, -2, 1, 1], ['r', -9, 0, 1, 1], ['g', 8, 1, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['c', 3, -10, 3, 2], ['d', -8, -7, 2, 3], ['h', -9, -6, 3, 2], ['d', 5, -8, 1, 2], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'circuit': [[['d', -6, -9, 12, 1], ['d', -6, 8, 12, 1], ['d', -9, -6, 1, 12], ['d', 8, -6, 1, 12], ['h', -11, -11, 5, 5], ['h', 6, -11, 5, 5], ['h', -11, 6, 5, 5], ['h', 6, 6, 5, 5], ['h', -4, -4, 8, 8], ['d', -1, -6, 2, 2], ['d', -1, 4, 2, 2], ['d', -6, -1, 2, 2], ['d', 4, -1, 2, 2], ['p', -10, -10, 3, 3], ['p', 7, -10, 3, 3], ['p', -10, 7, 3, 3], ['p', 7, 7, 3, 3], ['p', -2, -2, 4, 4], ['r', -11, 8, 1, 1], ['g', 10, -11, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['p', -10, -8, 3, 3], ['p', 7, -8, 3, 3], ['d', -7, -7, 3, 1], ['d', 4, -7, 3, 1], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]]};
+        const owner = this.stationFactionStyle(post);
+        const own = owner && facShapes[owner.silhouette];
+        const builds = own ? [own[post && post.factionStation ? 0 : 1]] : ((post && post.factionStation) ? stations : shops);
         const cls = {
             h: 'gm-station-hull', d: 'gm-station-dark', p: 'gm-station-panel', c: 'gm-station-crate',
             s: 'gm-station-sign', l: 'gm-station-light',
@@ -2216,9 +2280,14 @@ extendClass(GalaxyMapManager, {
             w: 'gm-station-lamp gm-lamp-strobe', a: 'gm-station-lamp gm-lamp-amber'
         };
         const lamp = (k) => k === 'r' || k === 'g' || k === 'w' || k === 'a';
-        const parts = builds[hash % builds.length];
+        let parts = builds[hash % builds.length];
         const rect = (x, y, w, h, c, extra) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${c}"${extra || ''}/>`;
-        const d = Math.max(1, Math.round(detail || 1));
+        let d = Math.max(1, Math.round(detail || 1));
+        if (own) {
+            // Fine grid: half-cell parts, twice the sub-pixels (capped).
+            parts = parts.map(([k, x, y, w, h]) => [k, x / 2, y / 2, w / 2, h / 2]);
+            d = Math.min(6, d * 2);
+        }
         // Lamps: staggered blink per lamp (no translucent halo squares).
         let lampIdx = 0;
         const delays = parts.map(([k]) => lamp(k)
@@ -2281,7 +2350,10 @@ extendClass(GalaxyMapManager, {
         }
         const fineG = clipId
             ? `<clipPath id="${clipId}">${clipRects}</clipPath><g clip-path="url(#${clipId})">${fine}</g>` : fine;
-        return `<g class="gm-station" shape-rendering="crispEdges">` + outline + base + fineG + `</g>`;
+        // Owner faction colours (hull / edge / accent) via CSS vars.
+        const st = this.stationFactionStyle(post);
+        const stAttr = st ? ` style="--st-hull:${st.hull};--st-edge:${st.edge || '#07080c'};--st-accent:${st.accent || '#ff5a3c'}"` : '';
+        return `<g class="gm-station${st ? ' is-faction' : ''}"${stAttr} shape-rendering="crispEdges">` + outline + base + fineG + `</g>`;
     },
 
     syncNodeHighlight() {
@@ -2289,14 +2361,20 @@ extendClass(GalaxyMapManager, {
         this.overlay.querySelectorAll('.gm-post-node[data-post]').forEach(node => {
             node.classList.toggle('selected', node.getAttribute('data-post') === this.selectedPostId);
         });
+        const sb = this.selectedBorder;
+        this.overlay.querySelectorAll('.gm-border-station[data-focus-planet]').forEach(node => {
+            node.classList.toggle('selected', !!sb && node.getAttribute('data-focus-planet') === sb.open
+                && node.getAttribute('data-border-shut') === sb.shut);
+        });
         this.overlay.querySelectorAll('.gm-node').forEach(node => {
             const pid = node.getAttribute('data-planet');
-            node.classList.toggle('selected', !this.selectedPostId && pid === this.selectedPlanetId);
+            node.classList.toggle('selected', !this.selectedPostId && !this.selectedBorder && pid === this.selectedPlanetId);
             node.classList.toggle('hovered', pid === this.hoveredPlanetId);
         });
         if (this.syncRoutePreview) this.syncRoutePreview();
         this.raiseHoveredMarker();
         this.raiseSelectedMarker();
+        this.updateSelectionFrames();
         this.frameSelectionCamera();
     },
 

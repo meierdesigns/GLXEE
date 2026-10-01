@@ -201,6 +201,7 @@ class GalaxyMapManager {
         }
         // Cursor starts where the ship is.
         this.selectedPostId = null;
+        this.selectedBorder = null;
         const loc = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
             ? profileManager.getShipLocation(this.galaxyId)
             : null;
@@ -476,6 +477,12 @@ class GalaxyMapManager {
             `<span class="galaxy-map-situation-kind">NO ACTIVE MISSION</span>` +
             `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
             `</div>`;
+    }
+
+    /** Atmosphere haze tone baked into a planet SVG (palette atmoHaze, alpha 66); '' for stations / no atmosphere. */
+    planetAtmoColor(iconHtml) {
+        const m = /fill="(#[0-9a-f]{6})66"/i.exec(iconHtml || '');
+        return m ? m[1] : '';
     }
 
     planetIconHtml(planetId, size, asImage, lightDir) {

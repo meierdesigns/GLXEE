@@ -134,9 +134,14 @@ class ParallaxManager {
         // Never hard-reset scroll offsets: draws use modulo, and resets at
         // layer.height (often 300) or horizontalOffset=400 jumped while patterns
         // wrap at 600 / factor*offset (0.1/0.2).
-        this.layers.forEach(layer => {
-            layer.y += layer.speed * frameScale;
-        });
+        // Boss arenas hold still; regular stages scroll towards the player.
+        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
+            || obstacleManager.isScrollStage();
+        if (scrolling) {
+            this.layers.forEach(layer => {
+                layer.y += layer.speed * frameScale;
+            });
+        }
         this.horizontalOffset += this.horizontalSpeed * frameScale;
         this.updateFlyingStars(deltaTime);
     }

@@ -497,7 +497,13 @@ extendClass(PlanetSVGManager, {
         let color = this.normalizeHex(baseColor) || '#808080';
         const src = toHsl(color);
         let h = src.h, s = src.s, l = src.l;
-        if (!(cfg && cfg.baseColor)) {
+        // Explored planets store the galaxy (= ruling faction) colour as
+        // baseColor; that is no real pin — the planet still gets its own hue.
+        const galaxy = cfg && cfg.galaxyId && typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
+            ? planetConfigManager.getGalaxy(cfg.galaxyId) : null;
+        const pinnedColor = !!(cfg && cfg.baseColor) &&
+            !(galaxy && galaxy.baseColor && this.normalizeHex(galaxy.baseColor) === this.normalizeHex(cfg.baseColor));
+        if (!pinnedColor) {
             // Own colour anywhere on the wheel; factions only show as
             // city lights (applyFactionZones), not as the planet's hue.
             rng();

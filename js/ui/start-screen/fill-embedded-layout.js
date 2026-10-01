@@ -251,8 +251,8 @@ extendClass(StartScreenManager, {
                 `<div class="hs-layout-icon-grid">` + keys.map((k) =>
                     `<button type="button" class="hs-layout-icon-pick${k === cur ? ' is-on' : ''}${k === def ? ' is-default' : ''}" data-pick="${esc(k)}" title="${esc(k)}${k === def ? ' (default)' : ''}">${iconImg(k, 32)}</button>`).join('') +
                 `</div><div class="hs-menu-panel-actions">` +
-                `<button type="button" class="action-button hs-menu-panel-action hs-layout-modal-btn" data-pick="__default">DEFAULT</button>` +
                 `<button type="button" class="action-button hs-menu-panel-action hs-layout-modal-btn" data-pick="__close">CANCEL</button>` +
+                `<button type="button" class="action-button hs-menu-panel-action hs-layout-modal-btn" data-pick="__default">DEFAULT</button>` +
                 `</div></div>`;
             document.body.appendChild(back);
             const close = () => {

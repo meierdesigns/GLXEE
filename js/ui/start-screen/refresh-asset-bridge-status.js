@@ -133,6 +133,8 @@ extendClass(StartScreenManager, {
             case 'PROFILES':
                 // Start menu: the pilot list opens inside the terminal screen.
                 if (!this.embeddedMode && !this.overlayMode) {
+                    this._profilesCreate = false;
+                    this._profilesThenStart = true;
                     this.showProfiles = true;
                     this.createStartScreenUI();
                     break;
@@ -167,10 +169,11 @@ extendClass(StartScreenManager, {
                     break;
                 }
                 if (typeof profileSelectionManager !== 'undefined'
-                    && typeof profileManager !== 'undefined'
-                    && !profileManager.hasActiveProfile()) {
-                    // Pick / create a pilot inside the terminal, then launch.
+                    && typeof profileManager !== 'undefined') {
+                    // START = new game: create a fresh pilot inside the
+                    // terminal, then launch. LOAD picks an existing one.
                     this._profilesThenStart = true;
+                    this._profilesCreate = true;
                     this.showProfiles = true;
                     this.createStartScreenUI();
                     break;
@@ -209,6 +212,10 @@ extendClass(StartScreenManager, {
                 break;
             case 'ASSETS':
                 this.openAssetGenerator({ returnToSettings: false });
+                break;
+            case 'GALAXIES':
+                this.showGalaxies = true;
+                this.createStartScreenUI();
                 break;
             case 'CREDITS':
                 this.showCredits = true;

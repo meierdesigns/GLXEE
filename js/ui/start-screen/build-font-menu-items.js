@@ -81,7 +81,7 @@ extendClass(StartScreenManager, {
             return !(this.embeddedMode || this.overlayMode);
         }
         // PROFILES too: it is how a first pilot gets created or picked.
-        if (itemId === 'PROFILES' || itemId === 'SETTINGS' || itemId === 'ASSETS' || itemId === 'CREDITS') {
+        if (itemId === 'PROFILES' || itemId === 'SETTINGS' || itemId === 'ASSETS' || itemId === 'CREDITS' || itemId === 'GALAXIES') {
             return true;
         }
         if (this.devMode) return true;

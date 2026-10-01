@@ -22,19 +22,20 @@ class StartScreenManager {
                 id: 'play',
                 label: '',
                 items: [
-                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true, desc: 'Launch to your home station' }
+                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true, desc: 'Start a new game with a new pilot' }
                 ]
             },
             {
                 id: 'account',
                 items: [
-                    { id: 'PROFILES', icon: 'menuProfiles', desc: 'Create, switch or rename pilots' },
+                    { id: 'PROFILES', label: 'LOAD', icon: 'menuProfiles', desc: 'Continue with an existing pilot' },
                     { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display, audio and controls' }
                 ]
             },
             {
                 id: 'info',
                 items: [
+                    { id: 'GALAXIES', icon: 'menuPlanets', desc: 'Browse and create galaxies' },
                     { id: 'CREDITS', icon: 'menuCredits', desc: 'Who made this game' }
                 ]
             }
@@ -57,6 +58,7 @@ class StartScreenManager {
         this.showSettings = false;
         this.showFontMenu = false;
         this.showLevels = false;
+        this.showGalaxies = false;
         this.settingsIndex = 0;
         this.fontMenuIndex = 0;
         this.levelIndex = 0;

@@ -179,8 +179,10 @@ class ColorPickerOverlay {
             top = Math.max(8, rect.top - panel.height - gap);
         }
         this.el.style.transform = 'none';
-        this.el.style.left = `${Math.round(left)}px`;
-        this.el.style.top = `${Math.round(top)}px`;
+        // Rects are visual px; the panel may sit inside a zoomed container.
+        const toCss = (v) => (window.vfToCssPx ? window.vfToCssPx(this.el, v) : v);
+        this.el.style.left = `${Math.round(toCss(left))}px`;
+        this.el.style.top = `${Math.round(toCss(top))}px`;
     }
 
     normalizeHex(color) {

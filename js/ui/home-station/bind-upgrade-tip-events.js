@@ -54,8 +54,10 @@ extendClass(HomeStationUI, {
                     scroll.classList.add('is-panning');
                     scroll.setPointerCapture(e.pointerId);
                 }
-                scroll.scrollLeft = pan.left - (e.clientX - pan.x);
-                scroll.scrollTop = pan.top - (e.clientY - pan.y);
+                // Pointer deltas are visual px, scroll offsets CSS px (zoomed GUI).
+                const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(scroll) : 1;
+                scroll.scrollLeft = pan.left - (e.clientX - pan.x) / z;
+                scroll.scrollTop = pan.top - (e.clientY - pan.y) / z;
                 e.preventDefault();
             });
             const stopPan = (e) => {

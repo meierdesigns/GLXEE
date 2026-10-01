@@ -222,14 +222,17 @@ extendClass(HomeStationUI, {
                 if (!drag || drag.card !== card) return;
                 const stageRect = stage.getBoundingClientRect();
                 const baseRect = card.getBoundingClientRect();
-                const nextX = drag.offsetX + event.clientX - drag.startX;
-                const nextY = drag.offsetY + event.clientY - drag.startY;
-                const baseLeft = baseRect.left - drag.offsetX;
-                const baseTop = baseRect.top - drag.offsetY;
-                const minX = stageRect.left + 8 - baseLeft;
-                const maxX = stageRect.right - 8 - drag.width - baseLeft;
-                const minY = stageRect.top + 8 - baseTop;
-                const maxY = stageRect.bottom - 8 - drag.height - baseTop;
+                // Offsets are CSS px inside the zoomed stage; rects and
+                // pointer deltas are visual px.
+                const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(card) : 1;
+                const nextX = drag.offsetX + (event.clientX - drag.startX) / z;
+                const nextY = drag.offsetY + (event.clientY - drag.startY) / z;
+                const baseLeft = baseRect.left / z - drag.offsetX;
+                const baseTop = baseRect.top / z - drag.offsetY;
+                const minX = stageRect.left / z + 8 - baseLeft;
+                const maxX = (stageRect.right - drag.width) / z - 8 - baseLeft;
+                const minY = stageRect.top / z + 8 - baseTop;
+                const maxY = (stageRect.bottom - drag.height) / z - 8 - baseTop;
                 const x = Math.max(minX, Math.min(maxX, nextX));
                 const y = Math.max(minY, Math.min(maxY, nextY));
                 card.style.setProperty('--card-drag-x', `${x}px`);

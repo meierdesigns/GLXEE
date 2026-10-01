@@ -14,6 +14,61 @@ class CollisionManager {
         this.checkObstaclePlayerCollisions(gameState);
         this.checkObstacleEnemyCollisions(gameState);
         this.checkBulletObstacleCollisions(gameState);
+        this.checkTerrainCollisions(gameState);
+    }
+
+    /**
+     * Canyon walls in scrolling stages are solid: the ship is pushed back
+     * into the corridor and takes damage (with a short grace period), and
+     * any shot that reaches a wall bursts on it.
+     */
+    checkTerrainCollisions(gameState) {
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver) return;
+        const W = (gameState && gameState.width) || 240;
+        const player = playerManager.getPosition();
+        if (player) {
+            const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
+            if (walls) {
+                let hitX = null;
+                if (player.x < walls.left) { hitX = walls.left; player.x = walls.left + 1; }
+                else if (player.x + player.width > walls.right) { hitX = walls.right; player.x = walls.right - player.width - 1; }
+                const now = Date.now();
+                if (hitX != null && now - (this._terrainHitAt || 0) > 600) {
+                    this._terrainHitAt = now;
+                    const hy = player.y + player.height / 2;
+                    this.createDetailedHitEffect(hitX, hy, 'impact');
+                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                    if (playerManager.takeDamage(10) && typeof game !== 'undefined') game.gameOver();
+                }
+            }
+        }
+        // Shots chip the wall they hit; player shots that break a cell score.
+        const burst = (list, remove, byPlayer) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const b = list[i];
+                if (!b) continue;
+                const cx = b.x + (b.width || 0) / 2;
+                const cy = b.y + (b.height || 0) / 2;
+                const w = obstacleManager.terrainWallsAtY(cy, W);
+                if (!w || (cx >= w.left && cx <= w.right)) continue;
+                const side = cx < W / 2 ? 0 : 1;
+                const profile = obstacleManager.terrainWeaponProfile(b);
+                // Piercing shots tunnel on (once per wall row they cross).
+                const row = obstacleManager.terrainRowAtY(cy);
+                if (profile.pierce && b._terrainRow === row) continue;
+                b._terrainRow = row;
+                if (!profile.pierce) remove(i);
+                const broke = obstacleManager.damageTerrain(cy, side, profile);
+                this.createDetailedHitEffect(side ? w.right : w.left, cy, broke ? 'destroy' : 'impact');
+                if (broke && byPlayer && typeof game !== 'undefined') {
+                    const mat = obstacleManager.terrainMaterial(row, side);
+                    game.score += (mat.score || 1) * broke;
+                }
+                if (typeof soundManager !== 'undefined') soundManager.playHit();
+            }
+        };
+        burst(bulletManager.getBullets(), (i) => bulletManager.removeBullet(i), true);
+        burst(bulletManager.getEnemyBullets(), (i) => bulletManager.removeEnemyBullet(i), false);
     }
 
     checkBomberPlayerCollisions(gameState) {

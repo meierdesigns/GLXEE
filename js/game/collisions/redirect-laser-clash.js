@@ -166,6 +166,11 @@ extendClass(CollisionManager, {
                                b1.y + b1.height > b2.y;
 
         if (!basicCollision) return false;
+        // Carved boulders: only their remaining pixels are solid.
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
+            if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, b1)) return false;
+            if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, b2)) return false;
+        }
 
         const s1 = this.getCollisionSprite(obj1);
         const s2 = this.getCollisionSprite(obj2);

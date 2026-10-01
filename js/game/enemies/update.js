@@ -106,6 +106,7 @@ extendClass(EnemyManager, {
 
         // Enemy evasion behavior
         this.updateEvasion(deltaTime, game);
+        if (this.enemy.isBoss && this.updateBoss) this.updateBoss(effectiveDeltaTime, gameState);
 
         // Enemy shooting - use model-specific shooting interval (only if not exploding)
         if (!this.exploding) {
@@ -123,13 +124,16 @@ extendClass(EnemyManager, {
                 }
             }
 
-            if (Math.random() < shootChance) {
+            // Bosses fire only their own patterns (boss.js).
+            if (!this.enemy.isBoss && Math.random() < shootChance) {
                 bulletManager.enemyShoot(this.enemy);
             }
         }
 
-        // Final safety check - force enemy back into bounds if it somehow escaped
         const finalCanvasWidth = game?.internalWidth || game?.baseWidth || game?.width || 200;
+        this.avoidTerrainWalls(finalCanvasWidth);
+
+        // Final safety check - force enemy back into bounds if it somehow escaped
         if (this.enemy.x < 0) {
             console.warn('Enemy escaped left boundary, forcing back');
             this.enemy.x = 0;
@@ -150,5 +154,34 @@ extendClass(EnemyManager, {
             this.enemy.y = this.enemy.maxY;
             this.enemy.verticalSpeed = -Math.abs(this.enemy.verticalSpeed);
         }
+    },
+
+    /**
+     * Scrolling stages: steer away from the canyon walls before touching
+     * them (looking a bit ahead, since the walls scroll down), and never
+     * overlap them — the enemy turns around like at the screen edge.
+     */
+    avoidTerrainWalls(W) {
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver || !this.enemy) return;
+        const e = this.enemy;
+        const walls = obstacleManager.terrainWallsOver(e.y - 12, e.y + e.height + 4, W);
+        if (!walls) return;
+        const margin = 4;
+        const steer = 14; // start turning this far from a wall
+        const left = walls.left + margin;
+        const right = walls.right - margin;
+        if (right - left < e.width) {
+            e.x = (walls.left + walls.right - e.width) / 2;
+            return;
+        }
+        if (e.x < left + steer) {
+            e.x += Math.min(1.2, (left + steer - e.x) * 0.15);
+            if (e.speed < 0) e.speed = Math.abs(e.speed);
+        } else if (e.x + e.width > right - steer) {
+            e.x -= Math.min(1.2, (e.x + e.width - (right - steer)) * 0.15);
+            if (e.speed > 0) e.speed = -Math.abs(e.speed);
+        }
+        if (e.x < left) e.x = left;
+        if (e.x + e.width > right) e.x = right - e.width;
     },
 });

@@ -151,10 +151,14 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
-                        // Destroy obstacle
-                        obstacle.health--;
-                        if (obstacle.health <= 0) {
-                            obstacleManager.removeObstacle(j);
+                        // Weapon-scaled damage plus splash to nearby rocks.
+                        const rockDmg = obstacleManager.bulletRockDamage(bullet);
+                        const splash = obstacleManager.bulletSplashRadius(bullet);
+                        const hx = bulletX + (bullet.width || 0) / 2;
+                        const hy = bulletY + (bullet.height || 0) / 2;
+                        const destroyed = obstacleManager.damageObstacle(j, rockDmg, hx, hy);
+                        obstacleManager.splashObstacles(hx, hy, splash, Math.max(1, Math.ceil(rockDmg * 0.6)), destroyed ? null : obstacle);
+                        if (destroyed) {
                             this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.85);
                         } else {

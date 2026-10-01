@@ -31,6 +31,19 @@ class ObstacleManager {
         this.allowedTypes = types.length ? types : null;
     }
 
+    /**
+     * Planet environment: rock colour from the planet, accent + obstacle /
+     * terrain style from the faction that holds it (see applyToRuntime).
+     */
+    setEnvironment(env) {
+        this.environment = env || null;
+        this.terrainDamage = new Map(); // fresh, undamaged walls per planet
+    }
+
+    getEnvironment() {
+        return this.environment || { base: '#7a7f88', accent: '#8B6914', style: 'asteroid', faction: null };
+    }
+
     getObstacleDefs() {
         return this.obstacleDefs;
     }
@@ -114,6 +127,13 @@ class ObstacleManager {
     }
 
     createObstacleFromDef(def, overrides) {
+        const o = this.buildObstacleFromDef(def, overrides);
+        // Pattern-placed rocks (explicit size) keep their slot in the shape.
+        const ov = overrides || {};
+        return (ov.width == null && this.maybeBoulder) ? this.maybeBoulder(o) : o;
+    }
+
+    buildObstacleFromDef(def, overrides) {
         const d = def || {};
         const ov = overrides || {};
         const direction = d.direction || 'ltr';
@@ -137,7 +157,7 @@ class ObstacleManager {
             horizontalSpeed: ov.horizontalSpeed != null ? ov.horizontalSpeed : speeds.horizontalSpeed,
             verticalSpeed: ov.verticalSpeed != null ? ov.verticalSpeed : speeds.verticalSpeed,
             rotation: 0,
-            rotationSpeed: (Math.random() - 0.5) * (isFog ? 0.02 : (kind === 'crystal' ? 0.15 : 0.1)),
+            rotationSpeed: isFog ? (Math.random() - 0.5) * 0.02 : 0, // solid obstacles don't spin
             type: d.type || d.kind || 'asteroid',
             kind: kind,
             cluster: d.cluster || 'alpha',
@@ -179,12 +199,21 @@ class ObstacleManager {
 
         gameState.obstacleSpawnTimer += deltaTime;
         this.runTime = (this.runTime || 0) + deltaTime;
+        this.updateDebris(deltaTime);
+        // Victory loot phase: nothing new spawns, the field only drains.
+        const frozen = typeof enemyManager !== 'undefined' && enemyManager.spawnFrozen;
+        if (this.updateCrates && !frozen) this.updateCrates(deltaTime, gameState);
 
         // Update lighting bullets from bullet manager
         this.updateLightingBullets();
 
-        // Spawn new obstacles more frequently
-        if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
+        if (frozen) {
+            gameState.obstacleSpawnTimer = 0;
+        } else if (this.isScrollStage()) {
+            // Regular stages scroll towards the ship: obstacles arrive from
+            // the top in airy layers spaced by scrolled distance.
+            this.updateScrollLayers(deltaTime, gameState);
+        } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
                 // Mostly shaped pattern waves; the authored cluster waves stay
                 // in the mix so planet-specific groupings still show up.
@@ -239,6 +268,28 @@ class ObstacleManager {
                 this.obstacles.splice(i, 1);
             }
         }
+    }
+
+    /** Current level from whichever level manager is live. */
+    getCurrentLevel() {
+        const host = (typeof game !== 'undefined' && game) ? game
+            : ((typeof gameCore !== 'undefined' && gameCore) ? gameCore : null);
+        const lm = host && (host.coreLevelManager || host.levelManager);
+        return (lm && lm.getCurrentLevel && lm.getCurrentLevel()) || null;
+    }
+
+    /** Canyon walls + planet ground: scroll stages, but not space ambushes. */
+    hasTerrain() {
+        if (!this.isScrollStage()) return false;
+        const level = this.getCurrentLevel();
+        const pid = String((level && level.planetId) || '');
+        return pid.indexOf('ambush_') !== 0;
+    }
+
+    /** Non-boss stages scroll down; boss arenas stay static. */
+    isScrollStage() {
+        const level = this.getCurrentLevel();
+        return !(level && level.isBoss);
     }
 
     spawnFromDef(def, gameState = null, offsetX, offsetY) {

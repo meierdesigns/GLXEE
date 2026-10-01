@@ -159,61 +159,94 @@ extendClass(EnemyManager, {
     },
 
     /**
-     * Predictive obstacle steering for any enemy-like entity. Looks ahead
-     * along each obstacle's velocity, keeps only those whose swept path
-     * reaches the entity's padded box, and sums a sideways push (perpendicular
-     * to the obstacle's travel, away from its line) weighted by urgency.
-     * Returns { x, y } in -1..1-ish units, or null if nothing threatens.
+     * Predictive obstacle steering for any enemy-like entity. Sweeps each
+     * obstacle along its velocity and scores a handful of candidate spots
+     * around the entity by how soon it would be hit there; if the current
+     * spot is threatened, returns a push towards the nearest safe spot (so a
+     * ship facing a row of rocks slides to the gap instead of being pushed
+     * back and forth between neighbours). Returns { x, y } in -1..1-ish
+     * units, or null if nothing threatens.
      */
     computeObstacleAvoidance(entity) {
         if (!entity || typeof obstacleManager === 'undefined') return null;
-        const obstacles = obstacleManager.getObstacles() || [];
+        const all = obstacleManager.getObstacles() || [];
         const ex = entity.x + entity.width / 2;
         const ey = entity.y + entity.height / 2;
-        const pad = 10;
-        const lookahead = 45; // frames
-        let ax = 0;
-        let ay = 0;
-        let threat = 0;
-        for (let i = 0; i < obstacles.length; i++) {
-            const o = obstacles[i];
+        const pad = 12;
+        const lookahead = 110; // frames
+        const obstacles = [];
+        for (let i = 0; i < all.length; i++) {
+            const o = all[i];
             if (!o || o.isFog) continue;
-            const ox = o.x + o.width / 2;
-            const oy = o.y + o.height / 2;
             const vx = o.horizontalSpeed || 0;
             const vy = o.verticalSpeed || 0;
-            const rx = ex - ox;
-            const ry = ey - oy;
-            const reach = (entity.width + o.width) / 2 + pad;
-            const reachY = (entity.height + o.height) / 2 + pad;
-            // Closest approach time along obstacle velocity (relative frame).
-            const v2 = vx * vx + vy * vy;
-            let t = v2 > 0.0001 ? (rx * vx + ry * vy) / v2 : 0;
-            t = Math.max(0, Math.min(lookahead, t));
-            const cx = rx - vx * t;
-            const cy = ry - vy * t;
-            if (Math.abs(cx) > reach || Math.abs(cy) > reachY) continue;
-            // Urgency: sooner and more central = stronger.
-            const soon = 1 - t / lookahead;
-            const central = 1 - Math.min(1, Math.hypot(cx / reach, cy / reachY));
-            const w = 0.35 + soon * 0.4 + central * 0.25;
-            // Push away from the obstacle's path; if dead-centre, pick the
-            // side perpendicular to its travel that points into open space.
-            let px = cx;
-            let py = cy;
-            if (Math.hypot(px, py) < 1) {
-                px = -vy;
-                py = vx;
-                if (px * rx + py * ry < 0) { px = -px; py = -py; }
-            }
-            const m = Math.hypot(px, py) || 1;
-            ax += (px / m) * w;
-            ay += (py / m) * w;
-            threat = Math.max(threat, w);
+            const ox = o.x + o.width / 2;
+            const oy = o.y + o.height / 2;
+            // Skip anything that can't come near within the lookahead.
+            const range = Math.hypot(vx, vy) * lookahead + 90;
+            if (Math.abs(ox - ex) > range || Math.abs(oy - ey) > range) continue;
+            obstacles.push({ ox, oy, vx, vy, rw: (entity.width + o.width) / 2 + pad, rh: (entity.height + o.height) / 2 + pad });
         }
-        if (threat <= 0) return null;
-        const m = Math.hypot(ax, ay) || 1;
-        return { x: (ax / m) * threat, y: (ay / m) * threat };
+        if (!obstacles.length) return null;
+
+        // Danger at an offset: 0 = safe, up to ~1 per obstacle (sooner = worse).
+        const danger = (dx, dy) => {
+            const px = ex + dx;
+            const py = ey + dy;
+            let d = 0;
+            for (let i = 0; i < obstacles.length; i++) {
+                const o = obstacles[i];
+                const rx = px - o.ox;
+                const ry = py - o.oy;
+                const v2 = o.vx * o.vx + o.vy * o.vy;
+                // Time window where the swept box overlaps on each axis.
+                let t0 = 0;
+                let t1 = lookahead;
+                const axis = (r, v, reach) => {
+                    if (Math.abs(v) < 0.0001) {
+                        if (Math.abs(r) > reach) t1 = -1;
+                        return;
+                    }
+                    let a = (r - reach) / v;
+                    let b = (r + reach) / v;
+                    if (a > b) { const tmp = a; a = b; b = tmp; }
+                    t0 = Math.max(t0, a);
+                    t1 = Math.min(t1, b);
+                };
+                if (v2 < 0.0001) {
+                    if (Math.abs(rx) > o.rw || Math.abs(ry) > o.rh) continue;
+                } else {
+                    axis(rx, o.vx, o.rw);
+                    axis(ry, o.vy, o.rh);
+                    if (t0 > t1) continue;
+                }
+                d += 1.2 - t0 / lookahead;
+            }
+            return d;
+        };
+
+        const here = danger(0, 0);
+        if (here <= 0) return null;
+        const minY = entity.minY != null ? entity.minY : -Infinity;
+        const maxY = entity.maxY != null ? entity.maxY : Infinity;
+        let best = null;
+        let bestScore = here;
+        for (let dx = -96; dx <= 96; dx += 12) {
+            for (let dy = -24; dy <= 24; dy += 24) {
+                if (!dx && !dy) continue;
+                if (entity.y + dy < minY || entity.y + dy > maxY) continue;
+                // Distance costs a little: prefer the closest escape.
+                const score = danger(dx, dy) + Math.hypot(dx, dy) / 400;
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = { x: dx, y: dy };
+                }
+            }
+        }
+        if (!best) return null;
+        const threat = Math.min(1.4, 0.5 + here * 0.5);
+        const m = Math.hypot(best.x, best.y) || 1;
+        return { x: (best.x / m) * threat, y: (best.y / m) * threat };
     },
 
     avoidObstacles(game) {

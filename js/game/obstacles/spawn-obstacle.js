@@ -28,7 +28,7 @@ extendClass(ObstacleManager, {
             verticalSpeed: verticalSpeed, // 30% of horizontal speed
             // Rotation properties
             rotation: 0,
-            rotationSpeed: (Math.random() - 0.5) * 0.1, // -0.05 to 0.05 radians per frame
+            rotationSpeed: 0,
             // Obstacle properties
             type: obstacleType,
             kind: obstacleType.includes('shield') ? 'shield' : 'asteroid',
@@ -54,7 +54,7 @@ extendClass(ObstacleManager, {
             sprite: this.doesObstacleReflect(obstacleType) ? 'shield' : 'obstacle',
             opacity: 1
         };
-        this.obstacles.push(obstacle);
+        this.obstacles.push(this.maybeBoulder(obstacle));
     },
 
     getRandomObstacleType() {
@@ -209,7 +209,7 @@ extendClass(ObstacleManager, {
                 horizontalSpeed: horizontalSpeed,
                 verticalSpeed: verticalSpeed,
                 rotation: 0,
-                rotationSpeed: (Math.random() - 0.5) * 0.05,
+                rotationSpeed: 0,
                 type: obstacleType,
                 color: this.getObstacleColor(obstacleType),
                 health: this.getObstacleHealth(obstacleType),
@@ -239,7 +239,7 @@ extendClass(ObstacleManager, {
                 horizontalSpeed: horizontalSpeed,
                 verticalSpeed: verticalSpeed,
                 rotation: 0,
-                rotationSpeed: (Math.random() - 0.5) * 0.05,
+                rotationSpeed: 0,
                 type: obstacleType,
                 color: this.getObstacleColor(obstacleType),
                 health: this.getObstacleHealth(obstacleType),
@@ -266,7 +266,7 @@ extendClass(ObstacleManager, {
                 horizontalSpeed: horizontalSpeed,
                 verticalSpeed: verticalSpeed,
                 rotation: 0,
-                rotationSpeed: (Math.random() - 0.5) * 0.05,
+                rotationSpeed: 0,
                 type: obstacleType,
                 color: this.getObstacleColor(obstacleType),
                 health: this.getObstacleHealth(obstacleType),

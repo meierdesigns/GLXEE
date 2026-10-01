@@ -1,5 +1,8 @@
 "use strict";
 
+// Art pixels per logical playfield pixel for baked obstacles.
+const OBSTACLE_ART_DENSITY = 0.4; // 2.5 px cells: coarse, shared with the terrain
+
 // Rendering management
 class RenderManager {
     constructor() {
@@ -144,6 +147,8 @@ class RenderManager {
         // Deep-space fights (pirate ambushes etc.) have no planet below them.
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.isEncounterPlanet
             && planetConfigManager.isEncounterPlanet(String(planetId || '').split('-')[0])) return;
+        // Scrolling stages show the planet as the ground instead (drawScrollTerrain).
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.hasTerrain && obstacleManager.hasTerrain()) return;
         const img = this.getOrbitPlanetImage(planetId);
         if (!img) return;
         const w = width || 240;
@@ -224,7 +229,9 @@ class RenderManager {
             } finally {
                 parallaxManager.globalLayerOpacity = prevBg;
             }
+            this._fieldW = width || 240; // scenery pixel sizes follow the planet
             this.drawOrbitPlanet(ctx, width, height);
+            this.drawScrollTerrain(ctx, width, height);
         }
 
         const player = playerManager.getPosition();
@@ -245,6 +252,7 @@ class RenderManager {
                 }
             } else {
                 graphicsManager.renderEnemyShip(ctx, enemy, 1);
+                if (enemy.isBoss && enemyManager.renderBossBar) enemyManager.renderBossBar(ctx, width);
                 if (enemyManager.shieldMax > 0 && enemyManager.shield > 0
                     && graphicsManager.drawShieldHull) {
                     const threat = this.getShieldThreatProximity(enemy, { mode: 'enemy' });
@@ -297,9 +305,11 @@ class RenderManager {
             if (this.isOccludedByFog(player, obstacle, fogList)) return;
             this.drawObstacleSprite(ctx, obstacle);
         });
+        if (obstacleManager.renderDebris) obstacleManager.renderDebris(ctx);
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
             pickupManager.render(ctx);
+            if (pickupManager.drawPowerShotBar) pickupManager.drawPowerShotBar(ctx);
         }
 
         // Enemy bullets (occluded); player bullets always visible
@@ -352,6 +362,10 @@ class RenderManager {
 
     drawObstacleSprite(ctx, obstacle) {
         if (!obstacle || typeof graphicsManager === 'undefined') return;
+        if (obstacle.isCrate && obstacleManager.drawCrate) {
+            obstacleManager.drawCrate(ctx, obstacle);
+            return;
+        }
         const spriteName = obstacle.sprite
             || (obstacle.isFog ? 'fog'
                 : (obstacle.kind === 'crystal' || obstacle.opticalMode === 'mirror'
@@ -365,7 +379,17 @@ class RenderManager {
         const alpha = obstacle.opacity != null ? obstacle.opacity : 1;
         ctx.save();
         if (alpha < 1) ctx.globalAlpha = alpha;
-        if (sprite && spriteName !== 'crystal') {
+        const isCrystal = spriteName === 'crystal' || obstacle.kind === 'crystal'
+            || obstacle.opticalMode === 'mirror' || obstacle.opticalMode === 'prism'
+            || obstacle.opticalMode === 'kaleidoscope';
+        if (obstacle.isFog) {
+            this.drawAnimatedFog(ctx, obstacle);
+        } else if (!isCrystal) {
+            // Every solid obstacle (incl. planet-specific sprite names) gets
+            // the same hi-res look so nothing renders as chunky pixels.
+            this.drawHiResObstacle(ctx, obstacle,
+                obstacle.kind === 'shield' || !!obstacle.reflectsShots || spriteName === 'shield');
+        } else if (sprite && spriteName !== 'crystal') {
             graphicsManager.drawSprite(
                 ctx, sprite,
                 obstacle.x, obstacle.y, obstacle.width, obstacle.height,
@@ -383,5 +407,69 @@ class RenderManager {
             );
         }
         ctx.restore();
+    }
+
+    /**
+     * Asteroids and shield plates as pixel art on a finer grid than the old
+     * 6×8 sprites (OBSTACLE_ART_DENSITY art pixels per logical pixel). Each
+     * obstacle bakes its own shape once; it is drawn unrotated and snapped to
+     * the art grid so every pixel stays axis-aligned and equally sized.
+     */
+    drawHiResObstacle(ctx, obstacle, isShield) {
+        let img = obstacle._hiRes;
+        if (!img || img._w !== obstacle.width || img._h !== obstacle.height) {
+            img = this.bakeObstacleImage(obstacle, isShield);
+            obstacle._hiRes = img;
+        }
+        // Snap to whole px (not the coarse art cell) so movement stays smooth.
+        const x = Math.round(obstacle.x);
+        const y = Math.round(obstacle.y);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, x, y, obstacle.width, obstacle.height);
+        const li = obstacle.lightIntensity || 0;
+        if (li > 0) {
+            // Bullet light tints the rock's own pixels.
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = Math.min(0.6, li * 0.45);
+            ctx.drawImage(this.tintedObstacleImage(img, this.resolveCss(obstacle.lightColor, '#88ffcc')),
+                x, y, obstacle.width, obstacle.height);
+        }
+        ctx.restore();
+    }
+
+    tintedObstacleImage(img, color) {
+        if (img._tint && img._tintColor === color) return img._tint;
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0);
+        x.globalCompositeOperation = 'source-in';
+        x.fillStyle = color;
+        x.fillRect(0, 0, c.width, c.height);
+        img._tint = c;
+        img._tintColor = color;
+        return c;
+    }
+
+    /** Lighten (amt > 0) or darken (amt < 0) a hex/rgb colour. */
+    shadeColor(color, amt) {
+        let r = 128, g = 128, b = 128;
+        const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color).trim());
+        if (hex) {
+            let v = hex[1];
+            if (v.length === 3) v = v.split('').map((ch) => ch + ch).join('');
+            r = parseInt(v.slice(0, 2), 16);
+            g = parseInt(v.slice(2, 4), 16);
+            b = parseInt(v.slice(4, 6), 16);
+        } else {
+            const m = String(color).match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+            if (m) { r = +m[1]; g = +m[2]; b = +m[3]; }
+        }
+        const t = amt < 0 ? 0 : 255;
+        const p = Math.abs(amt);
+        const f = (v) => Math.round(v + (t - v) * p);
+        return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
     }
 }

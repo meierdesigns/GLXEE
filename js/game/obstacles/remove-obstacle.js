@@ -1,11 +1,130 @@
 "use strict";
 
 // ObstacleManager methods, split from obstacles.js.
+const FRAGMENT_MIN_PARENT = 16; // px: smaller rocks only burst into debris
+const FRAGMENT_MIN_SIZE = 10;   // px: smallest collidable chunk
+const DEBRIS_MAX = 260;
+
 extendClass(ObstacleManager, {
+    /**
+     * Visual-only burst: pixel chips in the rock's own colours fly out,
+     * spin down and fade, plus a short flash. No collision.
+     */
+    spawnDebris(o) {
+        if (!this.debris) this.debris = [];
+        const colors = this.debrisColors(o);
+        const cx = o.x + o.width / 2;
+        const cy = o.y + o.height / 2;
+        const size = Math.max(o.width, o.height);
+        const n = Math.min(28, 6 + Math.round(size * 0.7));
+        const cell = this.terrainCell ? this.terrainCell() : 2.5;
+        for (let i = 0; i < n; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = 0.4 + Math.random() * (1.2 + size * 0.03);
+            this.debris.push({
+                x: cx + (Math.random() - 0.5) * o.width * 0.6,
+                y: cy + (Math.random() - 0.5) * o.height * 0.6,
+                vx: Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5,
+                vy: Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5,
+                s: cell * (Math.random() < 0.25 ? 2 : 1),
+                c: colors[Math.floor(Math.random() * colors.length)],
+                life: 0,
+                ttl: 350 + Math.random() * 450
+            });
+        }
+        // Hot core flash: a few bright chips that die fast.
+        for (let i = 0; i < 6; i++) {
+            const a = Math.random() * Math.PI * 2;
+            this.debris.push({ x: cx, y: cy, vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 2.2,
+                s: cell, c: i % 2 ? '#ffe9a8' : '#ffffff', life: 0, ttl: 160 + Math.random() * 120 });
+        }
+        this.flashes = this.flashes || [];
+        this.flashes.push({ x: cx, y: cy, r: size * 0.9, life: 0, ttl: 140 });
+        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+    },
+
+    /** Opaque, non-outline colours from the rock's baked art (fallback grey). */
+    debrisColors(o) {
+        const img = o && o._hiRes;
+        const out = [];
+        try {
+            if (img && img.getContext) {
+                const d = img.getContext('2d').getImageData(0, 0, img.width, img.height).data;
+                for (let i = 0; i < d.length && out.length < 12; i += 4 * 3) {
+                    if (d[i + 3] < 200) continue;
+                    if (d[i] + d[i + 1] + d[i + 2] < 60) continue; // skip the dark outline
+                    out.push('rgb(' + d[i] + ',' + d[i + 1] + ',' + d[i + 2] + ')');
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return out.length ? out : ['#9aa0a8', '#6e737b', '#c8ccd2'];
+    },
+
+    updateDebris(deltaTime) {
+        const dt = Math.max(0, Number(deltaTime) || 16.67);
+        const f = Math.min(3, dt / 16.67);
+        const list = this.debris || [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const p = list[i];
+            p.life += dt;
+            if (p.life >= p.ttl) { list.splice(i, 1); continue; }
+            p.x += p.vx * f;
+            p.y += p.vy * f;
+            p.vx *= Math.pow(0.93, f);
+            p.vy *= Math.pow(0.93, f);
+        }
+        const fl = this.flashes || [];
+        for (let i = fl.length - 1; i >= 0; i--) {
+            fl[i].life += dt;
+            if (fl[i].life >= fl[i].ttl) fl.splice(i, 1);
+        }
+    },
+
+    renderDebris(ctx) {
+        const fl = this.flashes || [];
+        if (fl.length) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            fl.forEach((f) => {
+                const t = f.life / f.ttl;
+                ctx.globalAlpha = (1 - t) * 0.55;
+                ctx.fillStyle = '#ffd98a';
+                const r = f.r * (0.6 + t * 0.8);
+                // Pixel "disc": two crossed boxes, no smooth gradient.
+                ctx.fillRect(Math.round(f.x - r), Math.round(f.y - r * 0.5), Math.round(r * 2), Math.round(r));
+                ctx.fillRect(Math.round(f.x - r * 0.5), Math.round(f.y - r), Math.round(r), Math.round(r * 2));
+            });
+            ctx.restore();
+        }
+        const list = this.debris || [];
+        if (!list.length) return;
+        ctx.save();
+        list.forEach((p) => {
+            const t = p.life / p.ttl;
+            ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+            ctx.fillStyle = p.c;
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s);
+        });
+        ctx.restore();
+    },
+
+
     removeObstacle(index) {
         const obstacle = this.obstacles[index];
-        if (obstacle && obstacle.fragmentOnDestroy && obstacle.fragmentCount > 0 && !obstacle.isFog) {
-            this.spawnFragments(obstacle);
+        if (obstacle && obstacle.isCrate) {
+            this.spawnDebris(obstacle);
+            if (typeof pickupManager !== 'undefined' && pickupManager.spawnPowerUp) pickupManager.spawnPowerUp(obstacle);
+            this.obstacles.splice(index, 1);
+            return;
+        }
+        if (obstacle && !obstacle.isFog) {
+            this.spawnDebris(obstacle);
+            // Only big rocks split into real (collidable) chunks; small ones
+            // just burst into debris instead of littering the field.
+            if (obstacle.fragmentOnDestroy && obstacle.fragmentCount > 0
+                && Math.min(obstacle.width, obstacle.height) >= FRAGMENT_MIN_PARENT) {
+                this.spawnFragments(obstacle);
+            }
         }
         if (obstacle && !obstacle.isFog && typeof explosionSystem !== 'undefined' && obstacle._skipDestroyFx !== true) {
             // Destroy FX is usually played by collisions; only play if explicitly requested
@@ -17,10 +136,11 @@ extendClass(ObstacleManager, {
     },
 
     spawnFragments(parent) {
-        const count = Math.max(1, Math.min(12, parent.fragmentCount || 3));
-        const ratio = parent.fragmentSizeRatio != null ? parent.fragmentSizeRatio : 0.45;
-        const fw = Math.max(6, Math.round(parent.width * ratio));
-        const fh = Math.max(6, Math.round(parent.height * ratio));
+        const count = Math.max(1, Math.min(4, parent.fragmentCount || 2));
+        const ratio = Math.max(0.5, parent.fragmentSizeRatio != null ? parent.fragmentSizeRatio : 0.5);
+        // Chunks stay big enough to read as rocks on the coarse art grid.
+        const fw = Math.max(FRAGMENT_MIN_SIZE, Math.round(parent.width * ratio));
+        const fh = Math.max(FRAGMENT_MIN_SIZE, Math.round(parent.height * ratio));
         const generation = (parent.fragmentGeneration || 0) + 1;
         const maxDepth = parent.fragmentDepth != null ? parent.fragmentDepth : 0;
         const canCascade = generation <= maxDepth;
@@ -43,7 +163,7 @@ extendClass(ObstacleManager, {
                 horizontalSpeed: Math.cos(angle) * speed + (parent.horizontalSpeed || 0) * 0.4,
                 verticalSpeed: Math.sin(angle) * speed + (parent.verticalSpeed || 0) * 0.4,
                 rotation: 0,
-                rotationSpeed: (Math.random() - 0.5) * 0.25,
+                rotationSpeed: 0,
                 type: isCrystal ? 'crystal_shard' : 'small_asteroid',
                 kind: isCrystal ? 'crystal' : 'asteroid',
                 cluster: parent.cluster || 'alpha',
@@ -83,6 +203,11 @@ extendClass(ObstacleManager, {
 
     reset() {
         this.obstacles.length = 0;
+        this.debris = [];
+        this.flashes = [];
         this.runTime = 0;
+        this.scrollDistance = 0;
+        this.terrainOffset = 0;
+        this.crateTimer = null;
     },
 });

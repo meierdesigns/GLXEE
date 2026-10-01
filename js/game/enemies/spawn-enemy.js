@@ -120,6 +120,9 @@ extendClass(EnemyManager, {
             entryId: scheduleEntry && scheduleEntry.id,
             level: champLevel,
             champion: true,
+            renegade: !!(scheduleEntry && scheduleEntry.renegade),
+            renegadeColor: (scheduleEntry && scheduleEntry.renegadeColor) || null,
+            missionTarget: (scheduleEntry && scheduleEntry.missionTarget) || null,
             isBoss: !!(currentLevel && currentLevel.isBoss),
             minY: 25,
             maxY: canvasHeight / 3,
@@ -171,6 +174,13 @@ extendClass(EnemyManager, {
             this.evasionChance = ai.evasionChance;
             this.predictionSkill = ai.predictionSkill;
             this.enemy.damageMul = ai.damageMul;
+        }
+        // Early planets / stages: dodge rarer, slower and with longer pauses.
+        if (this.currentEvasionMul) {
+            const ev = this.currentEvasionMul();
+            this.evasionChance = (this.evasionChance != null ? this.evasionChance : 1) * ev;
+            this.evasionSpeed = (this.evasionSpeed || 2) * (0.5 + 0.5 * ev);
+            this.evasionCooldown = (this.evasionCooldown || 5000) / Math.max(0.35, ev);
         }
         // Later planets hit harder, early ones softer.
         if (this.currentTierMods) {

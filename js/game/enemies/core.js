@@ -122,9 +122,9 @@ class EnemyManager {
             const wanted = e.faction || typeFaction;
             let faction = levelFactions.length && levelFactions.indexOf(wanted) === -1 ? levelFactions[0] : wanted;
             // Invaded planet (invasion-scenario.js): everyone here is the attacker.
-            const invader = (typeof profileManager !== 'undefined' && profileManager.getActiveInvasion)
-                ? profileManager.getActiveInvasion() : null;
-            if (invader && invader.planetId === planetId) faction = invader.attacker;
+            const invader = (typeof profileManager !== 'undefined' && profileManager.getInvasionForPlanet)
+                ? profileManager.getInvasionForPlanet(planetId) : null;
+            if (invader) faction = invader.attacker;
             if (friendly(faction) && levelFactions.length) faction = levelFactions[0];
             const enemyClass = e.enemyClass || tax.enemyClass || 'assault';
             const tier = e.tier != null
@@ -147,6 +147,12 @@ class EnemyManager {
                 spawned: false
             };
         });
+        // Active faction contract on this planet decides who shows up
+        // (renegade / gang target, attackers of a defended planet) —
+        // faction-relations.js applyContractToSchedule.
+        if (typeof profileManager !== 'undefined' && profileManager.applyContractToSchedule) {
+            profileManager.applyContractToSchedule(planetId, this.schedule);
+        }
         // Faction holdings: stations add ruler defenders; the ruler's base
         // planet adds its garrison and tougher hulls (faction-holdings.js).
         const hold = (typeof profileManager !== 'undefined' && profileManager.getPlanetHoldingInfo && planetId)

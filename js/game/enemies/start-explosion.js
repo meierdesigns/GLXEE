@@ -81,8 +81,14 @@ extendClass(EnemyManager, {
                 const evasionBeatPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
                     ? beatSyncManager.getEvasionFreqPulse()
                     : 1;
-                if (distance < 100 && Math.random() <= this.evasionChance * evasionFreqMul * evasionBeatPulse) {
-                    this.startEvasion();
+                if (distance < 100) {
+                    // One roll per cooldown: rolling every frame made any
+                    // chance above zero a near-certain dodge.
+                    if (Math.random() <= this.evasionChance * evasionFreqMul * evasionBeatPulse) {
+                        this.startEvasion();
+                    } else {
+                        this.evasionTimer = 0;
+                    }
                     break;
                 }
             }

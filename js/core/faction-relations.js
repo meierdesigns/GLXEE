@@ -13,8 +13,27 @@ const FACTION_REP_MAX = 100;
 // Reputation from which a faction trades with the pilot without a pact.
 const FACTION_TRADE_REP = 40;
 
-// Gang names for bounty hunts, one pool shared by all galaxies.
+// Gang names for bounty hunts, one pool shared by all galaxies; each gang
+// paints its ships in its own colour (renegade livery, enemy-variants.js).
 const FACTION_BOUNTY_GANGS = ['RUST FANGS', 'NULL CORSAIRS', 'ASH COVENANT', 'BLACK TIDE', 'IRON JACKALS', 'HOLLOW STAR'];
+const FACTION_GANG_COLORS = ['#ff7a2a', '#3ad8ff', '#c0c0c0', '#2a6aff', '#ffd23a', '#c86aff'];
+// Callsigns of renegade captains (deserters a faction wants gone).
+const FACTION_RENEGADE_NAMES = ['VEX', 'KORR', 'SABLE', 'DRAX', 'NYX', 'HALVOR', 'RIKE', 'OSSA', 'MARROW', 'TESK'];
+
+/**
+ * Faction contract kinds. Each has a concrete goal on its target planet:
+ *   renegade — a deserter of the issuing faction leads the enemies there
+ *   conquer  — take a planet from a rival; on success the issuer holds it
+ *   defend   — drive a rival's raiders off one of the issuer's planets
+ *   bounty   — an outlaw gang (pirate ships in gang colours)
+ * All pay out when a stage on the target planet is won.
+ */
+const FACTION_CONTRACT_KINDS = {
+    renegade: { type: 'RENEGADE HUNT', mult: 1.3, rep: 10 },
+    conquer:  { type: 'CONQUEST',      mult: 1.6, rep: 14 },
+    defend:   { type: 'DEFENSE',       mult: 1.1, rep: 8 },
+    bounty:   { type: 'BOUNTY HUNT',   mult: 1.5, rep: 12 }
+};
 
 extendClass(FactionManager, {
     getReputation(id) {
@@ -102,6 +121,45 @@ extendClass(ProfileManager, {
         return [current].concat(others);
     },
 
+    /** Faction holding a planet: a conquest result first, else its configured owner. */
+    getPlanetOwner(planetId) {
+        const pid = String(planetId || '').toLowerCase();
+        const p = this.getActiveProfile();
+        if (p && p.planetCaptures && p.planetCaptures[pid]) return p.planetCaptures[pid];
+        if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getPlanetFactions) return null;
+        return planetConfigManager.getPlanetFactions(pid)[0] || null;
+    },
+
+    /**
+     * The active contract shapes the fight on its target planet (called from
+     * enemies/core.js setEnemySchedule with the built schedule).
+     */
+    applyContractToSchedule(planetId, schedule) {
+        const p = this.getActiveProfile();
+        const m = p && p.activeMission;
+        if (!m || !m.kind || !Array.isArray(schedule) || !schedule.length) return;
+        if (m.planetId !== String(planetId || '').toLowerCase()) return;
+        const champ = schedule.find((e) => e.champion) || schedule[0];
+        const others = schedule.filter((e) => e !== champ);
+        if (m.kind === 'renegade') {
+            // The deserter and his wingmen fly the issuer's ships, stripped of its colours.
+            [champ].concat(others.slice(0, 2)).forEach((e) => {
+                e.faction = m.factionId;
+                e.renegade = true;
+            });
+            champ.missionTarget = 'RENEGADE ' + (m.target || '');
+        } else if (m.kind === 'bounty') {
+            [champ].concat(others.slice(0, 3)).forEach((e) => {
+                e.faction = 'pirate';
+                e.renegade = true;
+                e.renegadeColor = m.gangColor || null;
+            });
+            champ.missionTarget = m.target || 'GANG LEADER';
+        } else if ((m.kind === 'conquer' || m.kind === 'defend') && m.enemyFaction) {
+            schedule.forEach((e) => { e.faction = m.enemyFaction; });
+        }
+    },
+
     /** Planets of a galaxy a contract can target (unlocked or cleared). */
     getContractPlanets(galaxyId) {
         if (typeof planetConfigManager === 'undefined') return [];
@@ -157,21 +215,55 @@ extendClass(ProfileManager, {
                     active: !!(active && active.contractId === entry.kind + ':' + gid + ':' + entry.factionId)
                 }));
             };
+            const pcm = planetConfigManager;
+            const ownerOf = (pid) => this.getPlanetOwner(pid);
+            const allied = (a, b) => a === b || !!(pcm.areFactionsAllied && pcm.areFactionsAllied(a, b));
+            const pickFrom = (list, salt) => list.length
+                ? list[this.missionHash(seedBase + '|' + gid + '|' + salt) % list.length] : null;
             factions.forEach((fid) => {
-                add({ kind: 'job', type: 'FACTION JOB', factionId: fid, planetId: pick(fid), mult: 1.1, rep: 8 });
+                const F = fid.toUpperCase();
+                // Which goals make sense for this faction here?
+                const own = planets.filter((pid) => ownerOf(pid) === fid);
+                const rivalHeld = planets.filter((pid) => ownerOf(pid) && !allied(ownerOf(pid), fid));
+                const kinds = ['renegade'];
+                if (rivalHeld.length) kinds.push('conquer');
+                if (own.length && factions.concat(planetConfigManager.getGalaxyFactionIds ? planetConfigManager.getGalaxyFactionIds(gid) : [])
+                    .some((f) => !allied(f, fid))) kinds.push('defend');
+                const kind = pickFrom(kinds, fid + 'kind') || 'renegade';
+                const def = FACTION_CONTRACT_KINDS[kind];
+                const entry = { kind: kind, type: def.type, factionId: fid, mult: def.mult, rep: def.rep };
+                if (kind === 'renegade') {
+                    const name = 'CAPTAIN ' + pickFrom(FACTION_RENEGADE_NAMES, fid + 'name');
+                    entry.planetId = pick(fid);
+                    entry.target = name;
+                    entry.goal = 'TAKE DOWN RENEGADE ' + name + ' · ' + F + ' DESERTER';
+                } else if (kind === 'conquer') {
+                    entry.planetId = pickFrom(rivalHeld, fid + 'conq');
+                    entry.enemyFaction = ownerOf(entry.planetId);
+                    entry.goal = 'SEIZE IT FROM ' + entry.enemyFaction.toUpperCase() + ' FOR ' + F;
+                } else {
+                    entry.planetId = pickFrom(own, fid + 'def');
+                    const galaxyFactions = planetConfigManager.getGalaxyFactionIds ? planetConfigManager.getGalaxyFactionIds(gid) : [];
+                    const foes = galaxyFactions.filter((f) => !allied(f, fid));
+                    entry.enemyFaction = pickFrom(foes.length ? foes : ['pirate'], fid + 'foe');
+                    entry.goal = 'DRIVE ' + entry.enemyFaction.toUpperCase() + ' RAIDERS OFF ' + F + ' GROUND';
+                }
+                add(entry);
             });
             if (factions.length) {
                 const issuer = factions[this.missionHash(seedBase + gid + 'bounty') % factions.length];
-                const gang = FACTION_BOUNTY_GANGS[this.missionHash(seedBase + gid + 'gang') % FACTION_BOUNTY_GANGS.length];
-                const renegade = this.missionHash(seedBase + gid + 'kind') % 2 === 0;
+                const g = this.missionHash(seedBase + gid + 'gang') % FACTION_BOUNTY_GANGS.length;
+                const def = FACTION_CONTRACT_KINDS.bounty;
                 add({
                     kind: 'bounty',
-                    type: 'BOUNTY HUNT',
+                    type: def.type,
                     factionId: issuer,
-                    target: renegade ? 'RENEGADE ' + issuer.toUpperCase() + ' WING' : gang,
+                    target: FACTION_BOUNTY_GANGS[g],
+                    gangColor: FACTION_GANG_COLORS[g],
+                    goal: 'WIPE OUT THE ' + FACTION_BOUNTY_GANGS[g] + ' GANG',
                     planetId: pick('bounty'),
-                    mult: 1.5,
-                    rep: 12
+                    mult: def.mult,
+                    rep: def.rep
                 });
             }
         });
@@ -207,7 +299,11 @@ extendClass(ProfileManager, {
             factionId: c.factionId,
             repGain: c.rep,
             contractId: c.id,
-            target: c.target || null
+            kind: c.kind,
+            target: c.target || null,
+            goal: c.goal || null,
+            enemyFaction: c.enemyFaction || null,
+            gangColor: c.gangColor || null
         };
         this.save();
         return { ok: true, mission: p.activeMission, travelled: travelled };
@@ -222,7 +318,37 @@ extendClass(ProfileManager, {
         const paid = base.call(this, planetId, profile);
         if (paid && paid.factionId && typeof factionManager !== 'undefined') {
             factionManager.addReputation(paid.factionId, paid.repGain || 5);
+            // Conquest: the issuer now holds the planet; the loser resents it.
+            if (paid.kind === 'conquer') {
+                const p = profile || this.getActiveProfile();
+                if (p) {
+                    if (!p.planetCaptures || typeof p.planetCaptures !== 'object') p.planetCaptures = {};
+                    p.planetCaptures[paid.planetId] = paid.factionId;
+                    p.factionNews = {
+                        galaxyId: paid.galaxyId,
+                        text: String(paid.planetId).toUpperCase() + ' SEIZED BY ' + String(paid.factionId).toUpperCase(),
+                        at: Date.now()
+                    };
+                    this.save();
+                }
+                if (paid.enemyFaction) factionManager.addReputation(paid.enemyFaction, -8);
+            }
         }
         return paid;
+    };
+})();
+
+// Conquered planets are held by their new owner (planet owner = first faction).
+(function wrapPlanetCaptures() {
+    if (typeof PlanetConfigManager === 'undefined') return;
+    const base = PlanetConfigManager.prototype.getPlanetFactions;
+    if (typeof base !== 'function') return;
+    PlanetConfigManager.prototype.getPlanetFactions = function (planetId, raw) {
+        const list = base.call(this, planetId, raw);
+        if (raw) return list;
+        const p = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const cap = p && p.planetCaptures && p.planetCaptures[String(planetId || '').toLowerCase()];
+        if (!cap) return list;
+        return [cap].concat(list.filter((f) => f !== cap));
     };
 })();

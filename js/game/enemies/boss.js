@@ -5,11 +5,12 @@
 
 /** Per planet tier (EASY .. NIGHTMARE): early planets forgiving, late ones brutal. */
 const PLANET_TIER_MODS = [
-    { health: 0.65, speed: 0.85, damage: 0.65, spawn: 1.35, boss: 0.85 },
-    { health: 0.9,  speed: 0.95, damage: 0.85, spawn: 1.1,  boss: 0.95 },
-    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.05 },
-    { health: 1.45, speed: 1.15, damage: 1.25, spawn: 0.82, boss: 1.15 },
-    { health: 1.8,  speed: 1.25, damage: 1.45, spawn: 0.7,  boss: 1.25 }
+    // evasion: dodge chance / speed multiplier (early planets barely dodge).
+    { health: 0.65, speed: 0.85, damage: 0.65, spawn: 1.35, boss: 0.85, evasion: 0.25 },
+    { health: 0.9,  speed: 0.95, damage: 0.85, spawn: 1.1,  boss: 0.95, evasion: 0.45 },
+    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.05, evasion: 0.7 },
+    { health: 1.45, speed: 1.15, damage: 1.25, spawn: 0.82, boss: 1.15, evasion: 0.9 },
+    { health: 1.8,  speed: 1.25, damage: 1.45, spawn: 0.7,  boss: 1.25, evasion: 1 }
 ];
 const PLANET_TIERS = ['EASY', 'NORMAL', 'HARD', 'EXPERT', 'NIGHTMARE'];
 const BOSS_SIZE_MUL = 1.6;
@@ -31,6 +32,20 @@ extendClass(EnemyManager, {
         const lm = host && (host.coreLevelManager || host.levelManager);
         const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
         return planetTierMods(level && level.planetTier != null ? level.planetTier : 1);
+    },
+
+    /**
+     * Dodge skill of the running level: planet tier × stage (stage 1 dodges
+     * least, later stages ramp toward the tier's full value).
+     */
+    currentEvasionMul() {
+        const host = (typeof game !== 'undefined' && game) ? game : null;
+        const lm = host && (host.coreLevelManager || host.levelManager);
+        const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+        const tier = planetTierMods(level && level.planetTier != null ? level.planetTier : 1);
+        const stage = level && level.stageIndex ? level.stageIndex : 1;
+        const stageMul = Math.min(1, 0.55 + (stage - 1) * 0.15);
+        return (tier.evasion != null ? tier.evasion : 1) * stageMul;
     },
 
     /** Called at the end of spawnEnemy for boss levels. */

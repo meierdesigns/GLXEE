@@ -61,7 +61,10 @@ extendClass(GraphicsManager, {
             const ghost = {
                 x: padX, y: padY, width: entity.width, height: entity.height,
                 faction: entity.faction, enemyClass: entity.enemyClass,
-                tier: entity.tier, level: entity.level, type: entity.type
+                tier: entity.tier, level: entity.level, type: entity.type,
+                // Same livery variant as the ship itself (enemy-variants.js).
+                variantSeed: entity.variantSeed != null ? entity.variantSeed : 0,
+                champion: entity.champion, renegade: entity.renegade, renegadeColor: entity.renegadeColor
             };
             const prevPlayer = this.currentPlayerModel;
             const prevEnemy = this.currentEnemyModel;

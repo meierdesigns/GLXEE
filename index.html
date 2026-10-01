@@ -6,9 +6,10 @@
     <title>GLXEE - Gameboy Style</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@700&display=swap">
-    <link rel="stylesheet" href="styles.css?v=px-40">
+    <link rel="stylesheet" href="styles.css?v=px-47">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
+    <script src="js/core/zoom-rect-fix.js"></script>
     <script src="js/graphics/pixel-cursors.js?v=pull-1"></script>
 </head>
 <body>
@@ -309,6 +310,7 @@
     <script src="js/game/enemies/get-enemy-ship-model.js"></script>
     <script src="js/game/enemies/update.js"></script>
     <script src="js/game/enemies/spawn-enemy.js"></script>
+    <script src="js/game/enemies/boss.js"></script>
     <script src="js/game/enemies/start-explosion.js"></script>
     <script src="js/game/enemies/wave-director.js"></script>
     <script src="js/game/enemies.js"></script>
@@ -317,8 +319,10 @@
     <script src="js/game/obstacles/spawn-patterns.js"></script>
     <script src="js/game/obstacles/spawn-ladder.js"></script>
     <script src="js/game/obstacles/remove-obstacle.js"></script>
+    <script src="js/game/obstacles/damage-obstacle.js"></script>
     <script src="js/game/obstacles.js"></script>
     <script src="js/game/pickups.js"></script>
+    <script src="js/game/power-crates.js"></script>
     <script src="js/game/collisions/core.js"></script>
     <script src="js/game/collisions/redirect-laser-clash.js"></script>
     <script src="js/game/collisions/is-sprite-solid-at.js"></script>
@@ -336,6 +340,8 @@
     <script src="js/graphics/icon-sprites/home-station-tabs.js?v=pull-1"></script>
     <script src="js/graphics/icon-sprites/home-station-panels.js?v=pull-1"></script>
     <script src="js/graphics/icon-sprites/emblems.js?v=pull-1"></script>
+    <script src="js/graphics/icon-sprites/emblems-hires.js?v=1"></script>
+    <script src="js/graphics/icon-sprites/resources-hires.js?v=1"></script>
     <script src="js/graphics/icon-sprites/ui-nav.js?v=3"></script>
     <script src="js/graphics/icon-sprites/menu-hd.js?v=2"></script>
     <script src="js/graphics/icon-sprites.js?v=pull-1"></script>
@@ -426,6 +432,7 @@
 
     <script src="js/ui/render/core.js?v=pull-1"></script>
     <script src="js/ui/render/draw-crystal-obstacle.js"></script>
+    <script src="js/ui/render/draw-environment.js"></script>
     <script src="js/ui/render/draw-bullet.js?v=bonus-1"></script>
     <script src="js/ui/render.js"></script>
     <script src="js/ui/parallax/core.js"></script>

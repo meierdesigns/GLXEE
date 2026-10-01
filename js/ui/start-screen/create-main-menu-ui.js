@@ -192,6 +192,22 @@ extendClass(StartScreenManager, {
         }
         brand.appendChild(title);
         brand.appendChild(profileLine);
+        // PLAY lives in the menu (not the station nav): straight into the map.
+        const station = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible ? homeStationUI : null;
+        if (station && station.renderPlayLaunch) {
+            const wrap = document.createElement('div');
+            wrap.innerHTML = station.renderPlayLaunch();
+            Array.from(wrap.children).forEach((el) => {
+                if (el.matches('[data-play-launch]')) {
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        station.launchPlay();
+                    });
+                }
+                brand.appendChild(el);
+            });
+        }
         header.appendChild(brand);
 
         const tabs = document.createElement('div');

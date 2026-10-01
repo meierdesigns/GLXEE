@@ -167,7 +167,9 @@ extendClass(HomeStationUI, {
     isMainTabChrome(el) {
         // The MENU area button has no data-tab but is tab-row chrome too
         // (otherwise ↓ into content landed on it as the "first content" item).
-        return !!(el && el.hasAttribute && (el.hasAttribute('data-tab') || el.hasAttribute('data-open-menu')));
+        // PLAY launch too: it has no data-tab, but must never count as content.
+        return !!(el && el.hasAttribute && (el.hasAttribute('data-tab') || el.hasAttribute('data-open-menu') ||
+            el.hasAttribute('data-play-launch')));
     },
 
     findFirstBodyFocusable(list) {
@@ -278,6 +280,10 @@ extendClass(HomeStationUI, {
      */
     enterOneNavLevel() {
         const el = this.getFocusables()[this.focusIndex];
+        if (el && el.hasAttribute('data-play-launch')) {
+            this.launchPlay();
+            return true;
+        }
         const row = this.getFocusedNavRow();
         if (!el || !row) return false;
         const hasSubnav = () => !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
@@ -343,7 +349,12 @@ extendClass(HomeStationUI, {
         const focusedEl = this.getFocusables()[this.focusIndex];
         // PLAY launch sits left of the area row: → goes back into that row.
         if (focusedEl && focusedEl.hasAttribute && focusedEl.hasAttribute('data-play-launch')) {
-            if (key === 'ArrowRight') return this.focusNavRow('area');
+            if (key === 'ArrowRight') {
+                // → opens HOME BASE right away (like switching areas).
+                const first = this.overlay.querySelector('.hs-area-btn[data-tab]');
+                if (first) first.click();
+                return this.focusNavRow('area');
+            }
             return key === 'ArrowLeft' || key === 'ArrowUp';
         }
         // Logout sits in the wallet card right of the area row: ← goes back.
@@ -387,6 +398,19 @@ extendClass(HomeStationUI, {
                 }
                 // ← from the first area (HOME BASE) steps onto the PLAY launch.
                 if (key === 'ArrowLeft' && cur === 0) {
+                    // Focusing PLAY opens the play section (map not entered yet).
+                    if (this.tab !== 'play' || this._travelModal) {
+                        if (this.tab === 'menu') {
+                            this.unmountMenuTab();
+                            this._menuOpts = null;
+                            this._prevTab = null;
+                        }
+                        this.tab = 'play';
+                        this._travelModal = false;
+                        this.statusMsg = '';
+                        this.persistTab();
+                        this.createUI();
+                    }
                     const play = this.overlay.querySelector('[data-play-launch]');
                     const i = play ? this.getFocusables().indexOf(play) : -1;
                     if (i >= 0) {
@@ -674,6 +698,10 @@ extendClass(HomeStationUI, {
                     // different, not-yet-shown menu tab is focused).
                     if (level === 'tabs' && focused && focused.hasAttribute && focused.hasAttribute('data-open-menu')) {
                         this.openMainMenuOverlay({ force: true });
+                        return;
+                    }
+                    if (focused && focused.hasAttribute && focused.hasAttribute('data-play-launch')) {
+                        this.launchPlay();
                         return;
                     }
                     if (level === 'tabs' && focused && focused.id === 'hsLogout') {

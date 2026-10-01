@@ -66,6 +66,7 @@ extendClass(HomeStationUI, {
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
             return divider + `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-nav-item title="${areaLabel}">` +
+                this.areaDecoHtml(area.id) +
                 `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:' + area.id, area.icon))}</span>` +
                 `<span class="hs-tab-label">${areaLabel}</span>` +
                 `</button>`;
@@ -73,6 +74,7 @@ extendClass(HomeStationUI, {
             // 5th area: the ESC menu (profiles, settings, assets, components, credits).
             '<span class="hs-tab-divider" aria-hidden="true"></span>' +
             `<button type="button" class="hs-tab hs-area-btn${this.isMenuRowTab() ? ' active' : ''}" data-open-menu="1" data-nav-item title="MENU (ESC)">` +
+            this.areaDecoHtml('menu') +
             `<span class="hs-tab-icon">${this.tabIconHtml('menuSettings')}</span>` +
             `<span class="hs-tab-label">MENU</span>` +
             `</button>`;
@@ -126,7 +128,26 @@ extendClass(HomeStationUI, {
         return `<nav class="hs-subnav${anim.area ? ' hs-subnav-enter' : ''}" aria-label="${this.menuLabelFor('area:' + area.id, area.label)}">${items}</nav>`;
     },
 
-    /** Big PLAY button left of both navbars: planet miniatures + play icon. */
+    /**
+     * Background icons of a main nav card (like PLAY's planets): tinted and
+     * pushed out at rest, pulled in and in colour on hover / focus.
+     */
+    areaDecoHtml(areaId) {
+        const res = (id) => this.resourceIconKey(id);
+        const sets = {
+            station: ['hsStation', 'hsShop', res('ore'), res('crystal')],
+            hangar: ['hsShip', 'hsCraft', 'statWeapon', 'statArmor'],
+            factions: ['menuPeoples', 'hsShip', 'statAbilities', 'statWeapon'],
+            explore: ['hsExplore', 'hsBlueprint', 'statEnergy', res('voltex')],
+            menu: ['menuSettings', 'menuProfiles', 'menuCredits', 'hsLogout']
+        };
+        const keys = sets[areaId] || [];
+        const items = keys.map((k, i) =>
+            `<span class="hs-area-deco-item hs-area-deco-${i}">${this.iconHtml(k, 24, 'hs-area-deco-img', false)}</span>`).join('');
+        return items ? `<span class="hs-area-deco" aria-hidden="true">${items}</span>` : '';
+    },
+
+    /** Big PLAY button left of both navbars (and in the main menu panel): planet miniatures + play icon. */
     renderPlayLaunch() {
         const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
         const planets = ids.map((id, i) => {
@@ -135,7 +156,7 @@ extendClass(HomeStationUI, {
         }).join('');
         const tint = this.factionTintFilter();
         const label = this.menuLabelFor('play', 'PLAY');
-        return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}" data-tab="play" data-play-launch data-nav-item title="${label}">` +
+        return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}" data-play-launch data-nav-item title="${label}">` +
             (tint ? this.factionTintSvg(tint) : '') +
             `<span class="hs-play-launch-planets" aria-hidden="true">${planets}</span>` +
             `<span class="hs-play-launch-icon" aria-hidden="true"></span>` +
@@ -242,7 +263,10 @@ extendClass(HomeStationUI, {
         const savedTab = opts.tab || (typeof menuStateManager !== 'undefined' && menuStateManager.get().tab);
         const savedState = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : {};
         const savedShopCat = opts.shopCategory || savedState.shopCategory;
-        this.tab = this._tabs.includes(savedTab) ? savedTab : 'station';
+        // TRAVEL is a modal over PLAY: a reload never reopens it.
+        const restored = savedTab === 'travel' ? 'play' : savedTab;
+        // PLAY sits in the main menu, not in an area's tab row.
+        this.tab = (restored === 'play' || this._tabs.includes(restored)) ? restored : 'station';
         this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'resources';
         this.ensureShopCategory();
         const savedUpgradeSub = opts.upgradeSubTab || savedState.upgradeSubTab;
@@ -278,7 +302,7 @@ extendClass(HomeStationUI, {
         if (typeof menuStateManager === 'undefined') return;
         const tab = this.tab === 'menu'
             ? ((this._prevTab && this._prevTab !== 'menu') ? this._prevTab : 'station')
-            : this.tab;
+            : (this.tab === 'travel' ? 'play' : this.tab);
         this.captureShopPrefs();
         const extra = {
             tab: tab,

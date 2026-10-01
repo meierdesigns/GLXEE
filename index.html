@@ -6,7 +6,7 @@
     <title>GLXEE - Gameboy Style</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap">
-    <link rel="stylesheet" href="styles.css?v=px-72">
+    <link rel="stylesheet" href="styles.css?v=faction-panel-padding-11">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
     <script src="js/core/reload-keys.js"></script>
@@ -343,8 +343,8 @@
     <script src="js/graphics/icon-sprites/menu.js?v=pull-1"></script>
     <script src="js/graphics/icon-sprites/home-station-tabs.js?v=pull-1"></script>
     <script src="js/graphics/icon-sprites/home-station-panels.js?v=pull-1"></script>
-    <script src="js/graphics/icon-sprites/emblems.js?v=pull-1"></script>
-    <script src="js/graphics/icon-sprites/emblems-hires.js?v=1"></script>
+    <script src="js/graphics/icon-sprites/emblems.js?v=pirate-seal-2"></script>
+    <script src="js/graphics/icon-sprites/emblems-hires.js?v=pirate-seal-2"></script>
     <script src="js/graphics/icon-sprites/resources-hires.js?v=1"></script>
     <script src="js/graphics/icon-sprites/ui-nav.js?v=3"></script>
     <script src="js/graphics/icon-sprites/menu-hd.js?v=2"></script>
@@ -386,7 +386,7 @@
     <script src="js/graphics/color-palette-system.js?v=pull-1"></script>
     <script src="js/graphics/performance-optimizer.js?v=pull-1"></script>
     <script src="js/graphics/theme-context.js?v=pull-1"></script>
-    <script src="js/graphics/ui-appearance.js?v=pixel-1"></script>
+    <script src="js/graphics/ui-appearance.js?v=ui-scale-1"></script>
     <script src="js/ui/enhanced-palette-ui/core.js"></script>
     <script src="js/ui/enhanced-palette-ui/create-palette-history.js"></script>
     <script src="js/ui/enhanced-palette-ui.js"></script>
@@ -481,9 +481,9 @@
     <script src="js/ui/explosion-viewer/core.js"></script>
     <script src="js/ui/explosion-viewer/make-slider.js"></script>
     <script src="js/ui/explosion-viewer.js"></script>
-    <script src="js/ui/faction-viewer/core.js"></script>
-    <script src="js/ui/faction-viewer/bind-preview-controls.js"></script>
-    <script src="js/ui/faction-viewer/render-detail.js"></script>
+    <script src="js/ui/faction-viewer/core.js?v=faction-wiki-3"></script>
+    <script src="js/ui/faction-viewer/bind-preview-controls.js?v=faction-wiki-3"></script>
+    <script src="js/ui/faction-viewer/render-detail.js?v=faction-wiki-3"></script>
     <script src="js/ui/faction-viewer.js"></script>
     <script src="js/ui/event-viewer.js"></script>
     <script src="js/ui/planet-editor/core.js"></script>
@@ -538,14 +538,14 @@
     <script src="js/ui/combined-selection/update-ship-details.js"></script>
     <script src="js/ui/combined-selection.js"></script>
     <script src="js/ui/galaxy-selection.js"></script>
-    <script src="js/ui/galaxy-map/core.js?v=stages-2"></script>
-    <script src="js/ui/galaxy-map/create-ui.js?v=tp-4"></script>
-    <script src="js/ui/galaxy-map/render-explore-controls.js?v=lines-13"></script>
+    <script src="js/ui/galaxy-map/core.js?v=atmo-detail-1"></script>
+    <script src="js/ui/galaxy-map/create-ui.js?v=tp-8"></script>
+    <script src="js/ui/galaxy-map/render-explore-controls.js?v=lines-18"></script>
     <script src="js/ui/galaxy-map/navigate-by-arrow.js?v=stages-2"></script>
     <script src="js/ui/galaxy-map/flight-travel.js?v=lines-4"></script>
     <script src="js/ui/galaxy-map.js"></script>
     <script src="js/ui/profile-selection/core.js?v=kit-6"></script>
-    <script src="js/ui/galaxy-viewer.js?v=6"></script>
+    <script src="js/ui/galaxy-viewer.js?v=galaxy-directory-scroll-8"></script>
     <script src="js/ui/profile-selection/render-profile-details.js?v=pull-2"></script>
     <script src="js/ui/profile-selection.js"></script>
     <script src="js/ui/onboarding.js"></script>
@@ -565,7 +565,7 @@
     <script src="js/ui/home-station/open-main-menu-overlay.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-missing-materials.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-portal-faction-filters.js?v=nav-3"></script>
-    <script src="js/ui/home-station/create-ui.js?v=wiki-3"></script>
+    <script src="js/ui/home-station/create-ui.js?v=ui-scale-slider-2"></script>
     <script src="js/ui/home-station/mount-play-tab.js?v=nav-3"></script>
     <script src="js/ui/home-station/switch-sub-tab.js?v=nav-5"></script>
     <script src="js/ui/home-station/bind-upgrade-tip-events.js?v=pull-1"></script>
@@ -578,7 +578,7 @@
     <script src="js/ui/home-station/render-missions-tab.js?v=missions-1"></script>
     <script src="js/ui/home-station/shop-sell.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-hangar-tab.js?v=stats-1"></script>
-    <script src="js/ui/home-station/render-factions-tab.js?v=nav-5"></script>
+    <script src="js/ui/home-station/render-factions-tab.js?v=fleet-view-4"></script>
     <script src="js/ui/home-station/faction-fleet-preview.js?v=1"></script>
     <script src="js/ui/home-station/draw-hangar-bay.js?v=slotsz-1"></script>
     <script src="js/ui/home-station/update-component-details.js?v=pull-1"></script>
@@ -609,11 +609,11 @@
 
     <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
 
-    <script src="js/ui/start-screen/core.js?v=terminal-3"></script>
+    <script src="js/ui/start-screen/core.js?v=ui-scale-1"></script>
     <script src="js/ui/start-screen/build-font-menu-items.js?v=profiles-2"></script>
     <script src="js/ui/start-screen/show-overlay.js?v=galaxies-2"></script>
     <script src="js/ui/start-screen/create-main-menu-ui.js?v=inline-1"></script>
-    <script src="js/ui/start-screen/fill-embedded-credits.js?v=pull-1"></script>
+    <script src="js/ui/start-screen/fill-embedded-credits.js?v=ui-scale-1"></script>
     <script src="js/ui/start-screen/fill-embedded-layout.js?v=btn-4"></script>
     <script src="js/ui/start-screen/build-settings-row.js?v=pull-1"></script>
     <script src="js/ui/start-screen/build-theme-strip.js?v=pull-1"></script>
@@ -621,12 +621,12 @@
     <script src="js/ui/start-screen/build-controls-show-btn.js?v=inline-1"></script>
     <script src="js/ui/start-screen/handle-arrow-down.js?v=terminal-1"></script>
     <script src="js/ui/start-screen/refresh-asset-bridge-status.js?v=galaxies-2"></script>
-    <script src="js/ui/start-screen/apply-settings.js?v=pull-1"></script>
+    <script src="js/ui/start-screen/apply-settings.js?v=ui-scale-1"></script>
     <script src="js/ui/start-screen.js"></script>
     <script src="js/ui/start-intro.js"></script>
     <script src="js/ui/volume-controls.js"></script>
     <script src="js/graphics/planet-svgs/core.js?v=pull-1"></script>
-    <script src="js/graphics/planet-svgs/apply-rings.js?v=pull-1"></script>
+    <script src="js/graphics/planet-svgs/apply-rings.js?v=atmo-detail-3"></script>
     <script src="js/graphics/planet-svgs/extra-styles.js?v=pull-1"></script>
     <script src="js/graphics/planet-svgs/get-planet-svg.js?v=pull-1"></script>
     <script src="js/graphics/planet-svgs/spin-frames.js?v=pull-1"></script>

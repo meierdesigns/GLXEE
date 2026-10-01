@@ -84,18 +84,22 @@
 .gm-border-station .gm-border-w { fill: #ffd9a0; }
 .gm-border-station .gm-border-a { fill: #ff5a3c; animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
 .gm-border-station .gm-border-r,
-.gm-border-station .gm-border-r2 { fill: #ff5a3c; opacity: 0.85; animation: gm-border-field 0.8s steps(2, end) infinite; }
-.gm-border-station .gm-border-r2 { fill: #ff9a6a; animation-delay: -0.4s; }
+.gm-border-station .gm-border-r2 { fill: var(--faction-accent, var(--color-primary)); opacity: 0.85; animation: gm-border-field 0.8s steps(2, end) infinite; }
+/* Energy field = colour of the lit route line (.gm-edge.gm-pxline.lit). */
+.gm-border-station .gm-border-r2 { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff); animation-delay: -0.4s; }
 .gm-border-station .gm-border-shade { fill: #000; opacity: 0.3; }
 .gm-border-station .gm-border-glint { fill: #fff; opacity: 0.22; }
 .gm-border-station .gm-border-deep { fill: #000; opacity: 0.5; }
-/* Ruling faction: hull tones from its hull colour, field/lamps in its accent. */
-.gm-border-station.is-faction .gm-border-k { fill: color-mix(in srgb, var(--bf-edge) 80%, #000); }
-.gm-border-station.is-faction .gm-border-d { fill: var(--bf-edge); }
-.gm-border-station.is-faction .gm-border-m { fill: color-mix(in srgb, var(--bf-hull) 75%, #000); }
-.gm-border-station.is-faction .gm-border-l { fill: color-mix(in srgb, var(--bf-hull) 70%, #fff); }
-.gm-border-station.is-faction :is(.gm-border-a, .gm-border-r) { fill: var(--bf-accent); }
-.gm-border-station.is-faction .gm-border-r2 { fill: color-mix(in srgb, var(--bf-accent) 60%, #fff); }
+/* Ruling faction: hull tones from its hull colour, lamps in its accent. */
+.gm-border-station.is-faction .gm-border-k { fill: color-mix(in srgb, var(--bf-edge) 35%, #0c0d12); }
+.gm-border-station.is-faction .gm-border-d { fill: color-mix(in srgb, var(--bf-edge) 45%, #2a2d36); }
+.gm-border-station.is-faction .gm-border-m { fill: color-mix(in srgb, var(--bf-hull) 30%, #545a66); }
+.gm-border-station.is-faction .gm-border-l { fill: color-mix(in srgb, var(--bf-hull) 25%, #9097a3); }
+.gm-border-station.is-faction .gm-border-a { fill: var(--bf-accent); }
+.gm-border-station.is-faction .gm-border-w { fill: color-mix(in srgb, var(--bf-accent) 35%, #e8e4d8); }
+/* Selected checkpoint on the map; card art fills the planet slot. */
+.gm-border-station { cursor: pointer; }
+.gm-sector-planet-bg .gm-border-card { width: 100%; height: 100%; }
 @keyframes gm-border-field { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .gm-border-station rect { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .gm-pxline .gm-pxline-flow, .gm-pxline .gm-pxline-halo { animation: none; } }
@@ -7785,6 +7789,25 @@ body.pe-resizing * {
     width: 100%;
     height: 100%;
 }
+/* Atmosphere: stepped haze rings around the disc (disc ≈ 74% of the half box),
+   tinted with the planet's own haze tone (--atmo, set from its SVG). */
+.gm-sector-planet-bg.has-atmo::before {
+    content: '';
+    position: absolute;
+    inset: -12%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(circle closest-side,
+        transparent 62%,
+        color-mix(in srgb, var(--atmo) 45%, transparent) 62%,
+        color-mix(in srgb, var(--atmo) 45%, transparent) 67%,
+        color-mix(in srgb, var(--atmo) 25%, transparent) 67%,
+        color-mix(in srgb, var(--atmo) 25%, transparent) 74%,
+        color-mix(in srgb, var(--atmo) 10%, transparent) 74%,
+        color-mix(in srgb, var(--atmo) 10%, transparent) 84%,
+        transparent 84%);
+}
+.galaxy-map-panel-select .gm-detail { position: relative; z-index: 1; }
 .gm-sector-heading {
     display: flex;
     align-items: baseline;
@@ -15058,7 +15081,8 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 
 /* Trading post selection frame (reuses planet corners). */
 .gm-post-node .gm-selection-frame { opacity: 0; }
-.gm-post-node.selected .gm-selection-frame { opacity: 1; }
+.gm-post-node.selected .gm-selection-frame,
+.gm-border-station.selected .gm-selection-frame { opacity: 1; }
 
 /* Trading posts drawn as pixel space stations (map node + sector card). */
 .gm-station-outline { fill: #05060a; }
@@ -15085,6 +15109,13 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .gm-station-lamp { pointer-events: none; }
 .gm-lamp-red { fill: #ff3b3b; }
 .gm-lamp-green { fill: #3bff7a; }
+/* Owner faction (stationFactionStyle): hull / trim / glow in its colours. */
+.gm-station.is-faction .gm-station-hull { fill: color-mix(in srgb, var(--st-hull) 28%, #858b97); }
+.gm-station.is-faction .gm-station-dark { fill: color-mix(in srgb, var(--st-edge) 45%, #2a2d36); }
+.gm-station.is-faction .gm-station-crate { fill: color-mix(in srgb, var(--st-hull) 20%, #5c5a52); }
+.gm-station.is-faction .gm-station-panel { fill: color-mix(in srgb, var(--st-accent) 18%, #1a2030); stroke: none; }
+.gm-station.is-faction :is(.gm-station-light, .gm-station-window) { fill: color-mix(in srgb, var(--st-accent) 35%, #e8e4d8); }
+.gm-station.is-faction .gm-station-sign-glyph { fill: var(--st-accent); }
 .gm-lamp-strobe { fill: #ffffff; }
 .gm-lamp-amber { fill: #ffb43b; }
 :is(.gm-post-node, .gm-station-card).open .gm-station-lamp { animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
@@ -15637,7 +15668,8 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     opacity: 0.4;
     animation: none !important;
 }
-.gm-post-node.selected .gm-selection-frame {
+.gm-post-node.selected .gm-selection-frame,
+.gm-border-station.selected .gm-selection-frame {
     opacity: 1;
     transform-origin: center;
 }
@@ -18901,7 +18933,8 @@ button.hs-faction-card.nav-focused {
 
 /* Selection frame: snaps onto the picked planet / post, then breathes. */
 .gm-node.selected .gm-selection-frame,
-.gm-post-node.selected .gm-selection-frame {
+.gm-post-node.selected .gm-selection-frame,
+.gm-border-station.selected .gm-selection-frame {
     transform-box: fill-box;
     transform-origin: center;
     animation:
@@ -20302,6 +20335,8 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     border: 2px solid #6b7690;
     color: #cfd6e6;
     image-rendering: pixelated;
+    /* Dark outline so the tiles read on top of the planet. */
+    box-shadow: 0 0 0 2px #05060a;
 }
 .gm-stage-stepper .gm-sector-stage svg {
     width: 100%;
@@ -20330,8 +20365,11 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     padding: 3px;
     background: none;
     border: none;
+    box-shadow: none;
     color: #5fd37a;
 }
+/* Outline on the green square itself, not the padded box. */
+.gm-stage-stepper .gm-sector-stage.is-done svg { outline: 2px solid #05060a; }
 .gm-stage-stepper .gm-stage-done-bg { fill: #5fd37a; }
 .gm-stage-stepper .gm-stage-check { fill: #05060a; }
 .gm-stage-stepper .gm-sector-stage.is-boss:not(.is-done) {
@@ -20362,6 +20400,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 
 /* Galaxy map cards (sector + ship): plain rows, no outline per row. */
 .galaxy-map-panels .stat-row {
+    background: transparent;
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
@@ -23326,3 +23365,403 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-wal
     line-height: 1;
     text-align: center;
 }
+
+/* PLAY launch in the main menu panel header (right of the GLXEE title). */
+.hs-menu-panel-brand > .hs-play-launch {
+    align-self: center;
+    margin-left: auto;
+    height: 88px;
+}
+
+/* --- Main nav = boxed launch cards (like PLAY), active one is an index-card
+   tab whose body runs down into the sub-nav, which now opens the content
+   area below the header (create-ui.js renders it before .hs-body). */
+html body .home-station-overlay .home-station-content .hs-header-main {
+    justify-content: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-topbar,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs {
+    flex: 1 1 auto;
+    height: 100%;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab-divider { display: none !important; }
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn {
+    position: relative;
+    flex: 0 1 132px;
+    min-width: 96px;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px !important;
+    margin: 8px 0 0 !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--color-primary) 12%, #05060a) 0%, #020203 80%) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 4px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+    clip-path: var(--faction-ctl-clip, none);
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:is(:hover, .nav-focused) {
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 4px var(--color-primary),
+        inset 0 0 18px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn :is(.hs-tab-icon, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) {
+    width: 36px !important;
+    height: 36px !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn .hs-tab-label {
+    font-size: 13px !important;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+}
+/* Active card: open at the bottom, the bridge (syncTabDrop, pad 0) draws its
+   top + sides and fills the gap down into the sub-nav. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active {
+    clip-path: none;
+    background: var(--hs-tabpanel) !important;
+    box-shadow: none !important;
+    margin-bottom: 0 !important;
+}
+/* Header no longer holds the sub-nav: it sits at the top of the content. */
+html body .home-station-overlay .home-station-content .hs-header-split {
+    margin-bottom: 0;
+}
+html body .home-station-overlay .home-station-content > .hs-subnav {
+    margin: 0 0 6px !important;
+    width: 100%;
+    box-sizing: border-box;
+}
+/* Boxed cards: no frame around the card row, cards as tall as PLAY. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-topbar,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    clip-path: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-topbar::before,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-topbar::after { display: none !important; }
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn {
+    align-self: stretch;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 8px 0 6px !important;
+    overflow: visible !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active {
+    margin-bottom: 0 !important;
+}
+/* Sub-nav frame: sides + bottom as inset lines, top line drawn as a gradient
+   with a gap under the active card (--hs-gap-l/r from syncTabDrop). */
+html body .home-station-overlay .home-station-content > .hs-subnav {
+    box-shadow:
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary),
+        inset 0 -2px 0 var(--color-primary) !important;
+    background:
+        linear-gradient(to right,
+            var(--color-primary) 0 var(--hs-gap-l, 0px),
+            transparent var(--hs-gap-l, 0px) var(--hs-gap-r, 0px),
+            var(--color-primary) var(--hs-gap-r, 0px)) top / 100% 2px no-repeat,
+        var(--hs-tabpanel) !important;
+}
+
+/* Active card joins the sub-nav itself (no measured bridge): it reaches
+   2px down over the sub-nav's top line and draws top + sides only. */
+.home-station-overlay .home-station-content > .hs-tab-bridge { display: none !important; }
+html body .home-station-overlay .home-station-content .hs-header-split,
+html body .home-station-overlay .home-station-content .hs-header-main {
+    overflow: visible !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active {
+    z-index: 3;
+    margin-bottom: -2px !important;
+    background: var(--hs-tabpanel) !important;
+    box-shadow:
+        inset 0 2px 0 var(--color-primary),
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary) !important;
+}
+/* Sub-nav: plain full frame; the active card covers it under itself. */
+html body .home-station-overlay .home-station-content > .hs-subnav {
+    position: relative;
+    z-index: 1;
+    background: var(--hs-tabpanel) !important;
+    box-shadow: inset 0 0 0 2px var(--color-primary) !important;
+}
+
+/* Nav card background icons (areaDecoHtml), animated like PLAY's planets. */
+.hs-area-btn .hs-area-deco {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    opacity: 0.9;
+}
+.hs-area-btn .hs-area-deco-item {
+    position: absolute;
+    display: block;
+    width: 22px;
+    height: 22px;
+    image-rendering: pixelated;
+    filter: url(#hsPlayTint) brightness(0.45);
+    transform: translate(calc(var(--pdx, 0px) * -1), calc(var(--pdy, 0px) * -1)) scale(0.75);
+    transition: filter 0.2s, transform 0.2s;
+}
+.hs-area-btn .hs-area-deco-item img,
+.hs-area-btn .hs-area-deco-item canvas { width: 100% !important; height: 100% !important; display: block; }
+.hs-area-btn .hs-area-deco-0 { left: 6px; top: 6px; --pdx: 8px; --pdy: 6px; }
+.hs-area-btn .hs-area-deco-1 { right: 6px; top: 6px; --pdx: -8px; --pdy: 6px; }
+.hs-area-btn .hs-area-deco-2 { left: 6px; bottom: 6px; --pdx: 8px; --pdy: -6px; }
+.hs-area-btn .hs-area-deco-3 { right: 6px; bottom: 6px; --pdx: -8px; --pdy: -6px; }
+.hs-area-btn:is(:hover, .nav-focused, .active) .hs-area-deco-item {
+    filter: none;
+    transform: scale(1.05);
+}
+.hs-area-btn :is(.hs-tab-icon, .hs-tab-label) { position: relative; z-index: 1; }
+
+/* Nav cards = PLAY: same frame, same hover (bright frame + inner glow,
+   lighter label), active card open at the bottom into the sub-nav. The
+   .hs-tabs selector beats the older index-card rules above. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn {
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 18%, #05060a) 0%, #020203 80%) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px var(--color-primary),
+        inset 0 0 22px color-mix(in srgb, var(--color-primary) 80%, transparent) !important;
+    transition: none;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:is(:hover, :focus-visible, .nav-focused) {
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff),
+        inset 0 0 28px var(--faction-accent, var(--color-primary)) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-label {
+    color: var(--color-text, #f0e6dc) !important;
+    text-shadow: 2px 2px 0 #000 !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:is(:hover, :focus-visible, .nav-focused) .hs-tab-label {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    z-index: 3;
+    margin-bottom: -4px !important;
+    background: var(--hs-tabpanel) !important;
+    box-shadow:
+        inset 0 2px 0 var(--color-primary),
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-label {
+    color: var(--faction-accent, var(--color-primary)) !important;
+}
+/* Background icons: like PLAY's planets — big, half out of the card, dim
+   and tinted at rest; on hover they slide in, grow and get their colours. */
+html body .home-station-overlay .home-station-content .hs-area-btn .hs-area-deco-item {
+    width: 30px;
+    height: 30px;
+    filter: url(#hsPlayTint) brightness(0.55);
+    transition: filter 0.2s, transform 0.2s;
+}
+.hs-area-btn .hs-area-deco-0 { left: 2px; top: 2px; --pdx: 10px; --pdy: 8px; }
+.hs-area-btn .hs-area-deco-1 { right: 2px; top: 2px; --pdx: -10px; --pdy: 8px; }
+.hs-area-btn .hs-area-deco-2 { left: 2px; bottom: 2px; --pdx: 10px; --pdy: -8px; }
+.hs-area-btn .hs-area-deco-3 { right: 2px; bottom: 2px; --pdx: -10px; --pdy: -8px; }
+html body .home-station-overlay .home-station-content .hs-area-btn.active .hs-area-deco-item {
+    filter: url(#hsPlayTint) brightness(0.55);
+    transform: translate(calc(var(--pdx, 0px) * -1), calc(var(--pdy, 0px) * -1)) scale(0.75);
+}
+html body .home-station-overlay .home-station-content .hs-area-btn:is(:hover, :focus-visible, .nav-focused) .hs-area-deco-item {
+    filter: none;
+    transform: scale(1.05);
+}
+/* Deco stays inside the frame (clipped at the inner edge, so at rest the
+   icons peek in from the corners) and never draws over the outline. */
+html body .home-station-overlay .home-station-content .hs-area-btn .hs-area-deco {
+    inset: 5px;
+    overflow: hidden;
+}
+.hs-area-btn .hs-area-deco-0 { left: 0; top: 0; }
+.hs-area-btn .hs-area-deco-1 { right: 0; top: 0; }
+.hs-area-btn .hs-area-deco-2 { left: 0; bottom: 0; }
+.hs-area-btn .hs-area-deco-3 { right: 0; bottom: 0; }
+html body .home-station-overlay .home-station-content .hs-area-btn:is(:hover, :focus-visible, .nav-focused) .hs-area-deco-item {
+    filter: url(#hsPlayTint) brightness(1.15);
+}
+html body .home-station-overlay .home-station-content .hs-area-btn.active .hs-area-deco { inset: 2px 2px 0; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    margin-bottom: -3px !important;
+}
+html body .home-station-overlay .home-station-content .hs-area-btn:is(:hover, :focus-visible, .nav-focused) .hs-area-deco-item {
+    transform: scale(0.85);
+}
+
+/* PLAY and the 5 nav cards share one card size. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn {
+    flex: 0 0 132px !important;
+    width: 132px !important;
+    min-width: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+    flex: 0 0 132px !important;
+    width: 132px !important;
+    min-width: 0 !important;
+}
+/* Dark pixel outline around the card labels (readable over the icons). */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    text-shadow:
+        -2px 0 0 #05060a, 2px 0 0 #05060a, 0 -2px 0 #05060a, 0 2px 0 #05060a,
+        -2px -2px 0 #05060a, 2px -2px 0 #05060a, -2px 2px 0 #05060a, 2px 2px 0 #05060a !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    flex: 0 0 132px !important;
+    width: 132px !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-label {
+    font-size: 12px !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn,
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+    max-width: none !important;
+    box-sizing: border-box !important;
+}
+
+/* No jump on switching: the active card keeps the deco box of a normal card
+   (its extra 9px reach into the sub-nav stays empty) and shows the same
+   lit state as hover, so click -> rebuild -> active changes nothing. */
+html body .home-station-overlay .home-station-content .hs-area-btn.active .hs-area-deco {
+    inset: 5px 5px 14px;
+}
+html body .home-station-overlay .home-station-content .hs-area-btn.active .hs-area-deco-item {
+    filter: url(#hsPlayTint) brightness(1.15);
+    transform: scale(0.85);
+}
+
+/* PLAY at nav-card size: planets stay in the corners (never over the play
+   disc or the label); hover / active only lights them and nudges them in. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-planet-0 { width: 26px; height: 26px; left: 6px; top: 6px; right: auto; bottom: auto; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-planet-1 { width: 30px; height: 30px; right: 6px; top: 6px; left: auto; bottom: auto; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-planet-2 { width: 26px; height: 26px; left: 6px; bottom: 6px; top: auto; right: auto; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-planet-3 { width: 22px; height: 22px; right: 8px; bottom: 8px; top: auto; left: auto; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-planet-4 { display: none; }
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused, .active) .hs-play-launch-planet {
+    filter: none;
+    transform: translate(calc(var(--pdx, 0px) * -0.4), calc(var(--pdy, 0px) * -0.4)) scale(0.9);
+}
+
+/* --- Responsive nav (overrides the older column / wrap breakpoints):
+   < 1100px: row 1 = pilot card + wallet, row 2 = PLAY + the 5 nav cards,
+   which stays the last row so the active card still runs into the sub-nav.
+   Cards shrink evenly; small screens drop the deco, then the labels. */
+@media (max-width: 1100px) {
+    html body .home-station-overlay .home-station-content .hs-header-split {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        row-gap: 0;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card {
+        order: 0;
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+        order: 1;
+        flex: 0 1 auto;
+        margin: 8px 0 0 !important;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+        order: 2;
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: 132px !important;
+        min-width: 0 !important;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
+        order: 3;
+        flex: 5 1 0;
+        width: auto;
+        min-width: 0;
+    }
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn,
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: 132px !important;
+        min-width: 0 !important;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs {
+        flex-wrap: nowrap !important;
+        min-width: 0;
+    }
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-label {
+        font-size: 10px !important;
+        letter-spacing: 0.04em;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: clip;
+    }
+}
+@media (max-width: 640px) {
+    html body .home-station-overlay .home-station-content .hs-header-split { column-gap: 4px !important; }
+    html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs { gap: 4px !important; }
+    html body .home-station-overlay .home-station-content :is(.hs-area-btn .hs-area-deco, .hs-play-launch .hs-play-launch-planets) { display: none; }
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn { padding: 6px 2px !important; }
+}
+@media (max-width: 480px) {
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-label { display: none !important; }
+    html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label { display: none; }
+}
+@media (max-width: 1100px) {
+    /* Line break after pilot + wallet: PLAY + nav cards get their own row. */
+    html body .home-station-overlay .home-station-content .hs-header-split::after {
+        content: '';
+        order: 2;
+        flex: 0 0 100%;
+        height: 0;
+    }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { order: 3; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main { order: 4; }
+    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-pilot-card) { min-height: 76px; }
+}
+@media (max-width: 640px) {
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card { flex-basis: 100%; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { flex: 1 1 100%; }
+}
+@media (max-width: 1100px) {
+    /* Second row tall enough for PLAY's disc + label (no scaling). */
+    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-header-main) { min-height: 92px; }
+}
+
+/* Every planet-card button: icon before the label. */
+.galaxy-map-panel-select .gm-card-actions .action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.gm-card-actions .action-button .gm-mission-icon {
+    flex: 0 0 auto;
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+.gm-btn-lock .gm-lock-shackle, .gm-btn-lock .gm-lock-body { fill: currentColor; }
+
+/* Faction stations: steady muted lamps (no strobe show). */
+.gm-station.is-faction .gm-lamp-red { fill: #c8473f; }
+.gm-station.is-faction .gm-lamp-green { fill: #4fae74; }

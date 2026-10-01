@@ -97,6 +97,8 @@ extendClass(HomeStationUI, {
             // there is one: climbing up lands there first, not on the area row.
             this.overlay.querySelector('.hs-subnav-tab.active') ||
             this.overlay.querySelector('.hs-tab.active') ||
+            // PLAY belongs to no area: its launch button is the active tab.
+            this.overlay.querySelector('.hs-play-launch.active') ||
             this.overlay.querySelector('.hs-home-btn.active')
         );
         const idx = active ? list.indexOf(active) : -1;

@@ -40,7 +40,7 @@ const MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // tabs of the active area show up next to it as small icon tabs.
 // The first tab of an area is where a click on the area lands first.
 const MENU_AREAS = [
-    { id: 'station', label: 'HOME STATION', icon: 'hsStation', tabs: ['play', 'station', 'hangar'], defaultTab: 'station' },
+    { id: 'station', label: 'HOME STATION', icon: 'hsStation', tabs: ['station', 'hangar'], defaultTab: 'station' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
     { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },

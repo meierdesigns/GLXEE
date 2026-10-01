@@ -42,8 +42,6 @@ extendClass(HomeStationUI, {
                 this._navLevel = 'tabs';
                 this.persistTab();
                 this.createUI();
-                // The big PLAY button goes straight into the galaxy map.
-                if (btn.hasAttribute('data-play-launch')) requestAnimationFrame(() => this.enterPlayMap());
             });
         });
 

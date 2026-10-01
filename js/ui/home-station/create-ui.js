@@ -200,7 +200,6 @@ extendClass(HomeStationUI, {
                                 ${this.renderTabs()}
                             </div>
                         </div>
-                        ${this.renderAreaSubnav()}
                     </div>
                     <!-- Wallet card right of both navbars: resources + logout. -->
                     <div class="hs-wallet-card">
@@ -210,6 +209,8 @@ extendClass(HomeStationUI, {
                         </button>
                     </div>
                 </div>
+                <!-- Sub-nav opens the content area, under the active index-card tab. -->
+                ${this.renderAreaSubnav()}
                 <div class="${bodyClass}">${body}</div>
                 <div class="hs-footer ui-controls-hint">
                     <div class="profile-selection-instructions"><p>${footerHint}</p></div>
@@ -224,6 +225,15 @@ extendClass(HomeStationUI, {
             document.body.appendChild(this.overlay);
         }
         this.bindEvents();
+        // Header PLAY is a launch button, not a nav tab: straight into the map.
+        const playBtn = this.overlay.querySelector('.hs-header-split > [data-play-launch]');
+        if (playBtn) {
+            playBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.launchPlay();
+            });
+        }
         this.bindControlsToggle();
         this.syncTopbarResLayout();
         // MENU area button = same as pressing ESC.
@@ -355,11 +365,19 @@ extendClass(HomeStationUI, {
     },
 
     launchPlay() {
+        if (this.tab === 'menu') {
+            this.unmountMenuTab();
+            this._menuOpts = null;
+            this._prevTab = null;
+        }
         this.tab = 'play';
+        this._navLevel = 'tabs';
+        this._travelModal = false;
         this.statusMsg = '';
         this.focusIndex = 0;
         this.persistTab();
         this.createUI();
+        requestAnimationFrame(() => this.enterPlayMap());
     },
 
     renderPlayTab(profile) {
@@ -402,7 +420,7 @@ extendClass(HomeStationUI, {
             // line): one outline for tab + bridge; only the part below the
             // tab is filled, the tab itself stays visible through it.
             // Breathing room between the tab's label and its outline.
-            const pad = 8;
+            const pad = 0;
             // Rects are visual px; the bridge lives in zoomed CSS px.
             const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(root) : 1;
             const top = (b.top - r.top) / z - pad;
@@ -411,6 +429,9 @@ extendClass(HomeStationUI, {
             bridge.style.width = Math.round(b.width / z + 2 * pad) + 'px';
             bridge.style.top = Math.round(top) + 'px';
             bridge.style.height = Math.max(0, Math.round((s.top - r.top) / z + 2 - top)) + 'px';
+            // Sub-nav top line has a gap right under the active tab.
+            sub.style.setProperty('--hs-gap-l', Math.round((b.left - s.left) / z + 2) + 'px');
+            sub.style.setProperty('--hs-gap-r', Math.round((b.right - s.left) / z - 2) + 'px');
         };
         measure();
         requestAnimationFrame(measure);

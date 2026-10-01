@@ -157,7 +157,15 @@ change whether a faction trades and which prices it offers.
 
 <div align="center">
 
-<img src="assets/ui/readme-strip-emblems.png" alt="Live faction emblems — Terran Kronax Voidborn Pirate Machine" width="960" />
+<img src="assets/ui/readme-shot-emblems.png" alt="Hi-res faction emblems in the Relations screen" width="960" />
+
+<br/>
+
+`TERRAN` · `KRONAX` · `VOIDBORN` · `PIRATE` · `MACHINE`
+
+<br/>
+
+<img src="assets/ui/readme-strip-emblems.png" alt="Hand-shaded 32×32 faction emblems at @4x" width="960" />
 
 <br/>
 
@@ -168,6 +176,10 @@ change whether a faction trades and which prices it offers.
 `MARS` · `JUPITER` · `SATURN` · `NEPTUNE` · `PLUTO`
 
 </div>
+
+Large UI surfaces (crest, relations cards, profile modal) draw **hand-shaded
+32×32 emblems** through the `@2x` / `@4x` icon path instead of a blocky upscale
+of the 16×16 silhouettes. Resource chips use the same hi-res treatment.
 
 ### Faction relations and contracts
 
@@ -272,15 +284,26 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Faction silhouettes use topology and plating so shape communicates doctrine.
 - Champions can announce escorts: repair drones, shield batteries, gunners,
   jammers, and tethers.
-- Wave direction and obstacle patterns vary encounters.
+- **Scrolling terrain** walls carve flight lanes (canyons, narrows, teeth, reefs)
+  tinted by the planet and the holding faction.
+- Rocks take **weapon-scaled damage**, splash, and shed collidable chunks; debris
+  is visual-only chip FX in the rock's own colours.
+- **Planet tiers** (Easy → Nightmare) scale enemy health, speed, damage, and spawn
+  cadence so early theaters forgive and late ones punish.
+- **Boss stages** after the regular clear: multiphase patterns, escort calls, and
+  a dedicated HP bar — bosses ignore the normal lane shooter loop.
+- **Supply crates** drift in on a timer; shooting one grants a short power-shot
+  boost (bigger, harder hits with a HUD glow).
+- Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
 - Weapons, abilities, shields, charge, drive, pickups, and explosion FX form the
   moment-to-moment combat layer.
 - Victory loot pays resources, credits, blueprint progress, and active mission
-  rewards.
+  rewards; the scoop phase ends early once the field is clear.
 
 The combat renderer uses a shared ship voxel lattice, faction hull builders,
 Scale2x refinement on high-density displays, pixel snapping, and authored full
-sprites where segmented rendering would distort a faction silhouette.
+sprites where segmented rendering would distort a faction silhouette. Enemies
+steer around predictive obstacle sweeps and terrain walls so lanes stay readable.
 
 ## Screenshots
 
@@ -293,6 +316,12 @@ Live captures from the current build (station shell, factions, travel, combat).
 | <img src="assets/ui/readme-shot-station.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy.png" alt="Galaxy travel map" width="460" /> |
 | Upgrade tree | Combat focus |
 | <img src="assets/ui/readme-shot-upgrade.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus.png" alt="Mars combat focus crop" width="460" /> |
+| Factions (hi-res emblems) | Emblem strip |
+| <img src="assets/ui/readme-shot-factions.png" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
+
+<br/>
+
+<img src="assets/ui/readme-shot-emblems.png" alt="Relations row — live hi-res emblems" width="960" />
 
 <br/>
 
@@ -329,6 +358,9 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Guided start intro and embedded menu layouts that keep the station loop intact.
 - Procedural planet SVGs, parallax station decks, palette editors, and global look persistence.
 - Combat events, champion escorts, patterned obstacles, pickups, loot, and Web Audio SFX.
+- Scrolling planet terrain, destructible rocks, boss stages, and timed supply crates.
+- Hand-shaded hi-res faction emblems and resource icons for large UI draws.
+- Zoom-safe pointer hit testing across Chromium and embedded Electron viewports.
 - Optional YouTube soundtrack / beat-sync layer.
 - Optional ComfyUI and asset-generation bridge.
 - Cursed IDE packages under `packages/`.
@@ -336,18 +368,20 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STATION ── browser shell ── 75% GUI zoom ── readable tabs ── PLAY launch
+STATION ── browser shell ── 75% GUI zoom ── zoom-safe pointers ── PLAY launch
    │
-HANGAR  ── size-aware slots ── weapon mounts ── power budget ── test arena
+HANGAR  ── size-aware slots ── weapon keys ── power budget ── test arena
    │
-TRAVEL  ── route preview ── arrival sector ── encounter staging ── mission loot
+TRAVEL  ── explore map ── faction stations ── stage progress ── mission loot
    │
-COMBAT  ── wave direction ── enemy lanes ── pickups ── victory handoff
+COMBAT  ── terrain scroll ── rock damage ── bosses ── crates ── victory scoop
+   │
+ICONS   ── 32×32 emblems ── @2x/@4x Scale2x ── resource hi-res chips
 ```
 
-Recent shell work keeps Home Station proportional across Cursor and desktop
-browsers: one outer shell, one zoom baseline, no double CSS zoom, and stable
-header geometry for the launch control.
+Recent combat work adds scrolling terrain lanes, weapon-scaled rock damage,
+planet-tier difficulty, boss clears, and supply-crate power shots. Large UI
+emblems now use hand-shaded 32×32 art instead of a naive 16×16 upscale.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -432,6 +466,15 @@ be reviewed or reverted independently.
 | 48K | Station readability | Uniform GUI zoom geometry, fixed PLAY launch width, larger tab labels, and mobile wrap |
 | 49A | README visual refresh | Live sprite strips for fleet, planets, and weapons plus updated terminal banner chrome |
 | 49B | Live README screenshots | Capture station, factions, galaxy travel, and Mars combat into the GitHub archive |
+| 50 | Live README strips | Replace old planet/weapon/ship gallery sprites with combat-renderer and SVG exports |
+| 51A | Hi-res emblems | Hand-shaded 32×32 faction emblems and resource icons on the `@2x`/`@4x` path |
+| 51B | Zoom-safe pointers | Patch CSS-zoom rect drift so hit tests match visual pixels across engines |
+| 51C | Scrolling terrain | Destructible rocks, debris, planet-tinted walls, and flight-lane patterns |
+| 51D | Bosses and planet tiers | Difficulty curve, multiphase bosses, ambush flavours, enemy steering |
+| 51E | Supply crates | Timed power-shot crates, boosted bullet glow, and faster victory scoop |
+| 51F | Galaxy explore polish | Faction station borders, stage progress, and explore-map refinements |
+| 51G | Station and HUD polish | Weapon keys, shield vitals, hangar tips, and combat info panel readability |
+| 51H | README wave archive | Hi-res emblem screenshots and expanded combat/docs for waves 51A–51G |
 
 The wave commit convention is:
 

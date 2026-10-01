@@ -38,8 +38,8 @@ extendClass(FactionViewerUI, {
         });
         const onMove = (e) => {
             if (!this.previewPanning || !this.visible) return;
-            this.previewPanX += e.clientX - this.previewPanLastX;
-            this.previewPanY += e.clientY - this.previewPanLastY;
+            this.previewPanX += vfPanDelta(this.previewCanvas, e.clientX - this.previewPanLastX);
+            this.previewPanY += vfPanDelta(this.previewCanvas, e.clientY - this.previewPanLastY);
             this.previewPanLastX = e.clientX;
             this.previewPanLastY = e.clientY;
             this.applyPreviewView();

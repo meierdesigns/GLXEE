@@ -340,6 +340,17 @@ extendClass(HomeStationUI, {
      * ↑ back to the area row, ↓ into the content. Returns true if handled.
      */
     handleNavRowArrow(key) {
+        const focusedEl = this.getFocusables()[this.focusIndex];
+        // PLAY launch sits left of the area row: → goes back into that row.
+        if (focusedEl && focusedEl.hasAttribute && focusedEl.hasAttribute('data-play-launch')) {
+            if (key === 'ArrowRight') return this.focusNavRow('area');
+            return key === 'ArrowLeft' || key === 'ArrowUp';
+        }
+        // Logout sits in the wallet card right of the area row: ← goes back.
+        if (focusedEl && focusedEl.id === 'hsLogout') {
+            if (key === 'ArrowLeft') return this.focusNavRow('area');
+            return key === 'ArrowRight' || key === 'ArrowUp';
+        }
         const row = this.getFocusedNavRow();
         if (!row) return false;
         const hasSub = !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
@@ -362,6 +373,30 @@ extendClass(HomeStationUI, {
                 // a real area switches right away, MENU is only focused.
                 const btns = Array.from(this.overlay.querySelectorAll('.hs-area-btn'));
                 const cur = Math.max(0, btns.indexOf(focused));
+                // → from the last area (MENU) steps onto the logout button.
+                if (key === 'ArrowRight' && cur === btns.length - 1) {
+                    const out = this.overlay.querySelector('#hsLogout');
+                    const i = out ? this.getFocusables().indexOf(out) : -1;
+                    if (i >= 0) {
+                        this._navLevel = 'tabs';
+                        this.focusIndex = i;
+                        this.refreshFocus();
+                        this.syncNavHint && this.syncNavHint();
+                        return true;
+                    }
+                }
+                // ← from the first area (HOME BASE) steps onto the PLAY launch.
+                if (key === 'ArrowLeft' && cur === 0) {
+                    const play = this.overlay.querySelector('[data-play-launch]');
+                    const i = play ? this.getFocusables().indexOf(play) : -1;
+                    if (i >= 0) {
+                        this._navLevel = 'tabs';
+                        this.focusIndex = i;
+                        this.refreshFocus();
+                        this.syncNavHint && this.syncNavHint();
+                        return true;
+                    }
+                }
                 const next = btns[(cur + (key === 'ArrowLeft' ? -1 : 1) + btns.length) % btns.length];
                 if (!next) return true;
                 if (next.hasAttribute('data-tab')) {
@@ -430,6 +465,14 @@ extendClass(HomeStationUI, {
                 galaxyMapManager.isVisible &&
                 galaxyMapManager._mountEl;
             const playMapActive = playMapMounted && this.isPlayMapActive();
+            // SPACE with the map on screen jumps straight into it, skipping
+            // the nav rows (ENTER still steps through them one level at a time).
+            if (playMapMounted && !playMapActive && e.key === ' ' && !this._resBuyModal) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.enterPlayMap();
+                return;
+            }
             // ENTER / SPACE in a nav row goes exactly one level deeper
             // (area row → its sub-nav → content / map / menu section).
             if ((e.key === 'Enter' || e.key === ' ') && !playMapActive && !this._resBuyModal
@@ -445,13 +488,18 @@ extendClass(HomeStationUI, {
                     this.enterPlayMap();
                     return;
                 }
-                galaxyMapManager.confirm('resume');
+                // First press focuses the start button, the next one starts.
+                galaxyMapManager.confirmKey();
                 return;
             }
             if (playMapActive) {
                 if (e.key === 'Escape' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (galaxyMapManager.hasActionFocus()) {
+                        galaxyMapManager.clearActionFocus();
+                        return;
+                    }
                     this.exitPlayMap();
                     return;
                 }

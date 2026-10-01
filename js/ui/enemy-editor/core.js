@@ -161,8 +161,8 @@ class EnemyEditorUI {
         });
         window.addEventListener('mousemove', (e) => {
             if (!this.previewPanning) return;
-            const dx = e.clientX - this.previewPanLastX;
-            const dy = e.clientY - this.previewPanLastY;
+            const dx = vfPanDelta(this.previewCanvas, e.clientX - this.previewPanLastX);
+            const dy = vfPanDelta(this.previewCanvas, e.clientY - this.previewPanLastY);
             this.previewPanLastX = e.clientX;
             this.previewPanLastY = e.clientY;
             this.previewPanX += dx;

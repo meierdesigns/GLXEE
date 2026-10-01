@@ -43,6 +43,14 @@
         };
     }
 
+    /**
+     * .game-container is CSS-zoomed (--gui-zoom) and stretched to vw/zoom, so
+     * canvas sizes set inside it live in that zoomed layout space.
+     */
+    function guiZoom() {
+        return clamp(readCssNumber('--gui-zoom', 1), 0.25, 4);
+    }
+
     function measureChromeHeight() {
         const container = document.querySelector('.game-canvas-container');
         const canvas = document.getElementById('gameCanvas');
@@ -56,7 +64,8 @@
             if (el.classList && el.classList.contains('game-stage')) continue;
             const cs = getComputedStyle(el);
             if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-            h += el.getBoundingClientRect().height;
+            // Rects are visual px; convert back to zoomed layout px.
+            h += el.getBoundingClientRect().height / guiZoom();
             h += parseFloat(cs.marginTop) || 0;
             h += parseFloat(cs.marginBottom) || 0;
         }
@@ -90,13 +99,17 @@
     }
 
     function update() {
-        const { vw, vh } = viewportSize();
+        const real = viewportSize();
         const { aspect, designW, designH } = playfieldParams();
 
-        ROOT.style.setProperty('--vw', vw + 'px');
-        ROOT.style.setProperty('--vh', vh + 'px');
+        ROOT.style.setProperty('--vw', real.vw + 'px');
+        ROOT.style.setProperty('--vh', real.vh + 'px');
+        // Everything below is laid out inside the zoomed container.
+        const zoom = guiZoom();
+        const vw = real.vw / zoom;
+        const vh = real.vh / zoom;
 
-        const sidePanel = clamp(Math.round(vw * 0.14), 172, 220);
+        const sidePanel = clamp(Math.round(vw * 0.19), 220, 300); // wide enough for full HUD labels
         const padX = clamp(Math.round(vw * 0.012), 6, 14);
         const padY = clamp(Math.round(vh * 0.012), 4, 10);
         const gap = clamp(Math.round(vw * 0.01), 6, 14);

@@ -74,6 +74,8 @@ extendClass(EnemyManager, {
             level: entry.level,
             champion: false,
             isSideEnemy: true,
+            renegade: !!entry.renegade,
+            renegadeColor: entry.renegadeColor || null,
             role: role,
             isEscort: isEscort,
             escortSlot: escortSlot,

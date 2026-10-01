@@ -200,12 +200,19 @@ class GraphicsManager {
             overlayIntensity = colorManager.getCurrentOverlayIntensity();
         }
 
-        if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+        // Faction ships: seeded livery variant / renegade markings, baked
+        // once per variant (enemy-variants.js).
+        const baked = visual && this.drawEnemyVariant
+            && this.drawEnemyVariant(ctx, enemy, enemyModel, x, y, finalScale);
+        if (baked) {
+            // drawn from the variant cache
+        } else if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
             this.shipAssetLoader.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         } else if (this.shipModels) {
             this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         }
         this.drawEnemyGun(ctx, enemy);
+        if (enemy.renegade && this.drawRenegadeBeacon) this.drawRenegadeBeacon(ctx, enemy);
     }
 
     /**

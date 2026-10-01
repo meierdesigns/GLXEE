@@ -60,8 +60,11 @@ extendClass(HomeStationUI, {
             // Last used sub-tab of the area — except PLAY (the map is never
             // entered just by switching areas) — else the area's default.
             const last = this._areaLastTab[area.id];
-            const fallback = area.defaultTab && tabs.indexOf(area.defaultTab) !== -1 ? area.defaultTab : tabs[0];
-            const target = tabs.indexOf(last) !== -1 && last !== 'play' ? last : fallback;
+            // TRAVEL is only a modal over the map: never the landing tab.
+            const modal = (id) => id === 'play' || id === 'travel';
+            const pages = tabs.filter((id) => !modal(id));
+            const fallback = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
+            const target = tabs.indexOf(last) !== -1 && !modal(last) ? last : fallback;
             const divider = n > 0 ? '<span class="hs-tab-divider" aria-hidden="true"></span>' : '';
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.

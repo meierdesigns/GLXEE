@@ -105,6 +105,7 @@ class UIManager {
                     maxHealth: maxHp,
                     shield: enemyManager.shield || 0,
                     shieldMax: enemyManager.shieldMax || 0,
+                    shieldRegen: enemyManager.shieldRegen || 0,
                     factionId: faction.id,
                     factionLabel: faction.label
                 });
@@ -125,6 +126,7 @@ class UIManager {
                 maxHealth: side.maxHealth || side.health || 1,
                 shield: side.shield || 0,
                 shieldMax: side.shieldMax || 0,
+                shieldRegen: side.shieldRegen || 0,
                 factionId: faction.id,
                 factionLabel: faction.label
             });
@@ -220,7 +222,8 @@ class UIManager {
                 fill.appendChild(hpText);
 
                 main.appendChild(fill);
-                if (enemy.shieldMax > 0) {
+                {
+                    // Always show the shield row so unshielded ships read as such.
                     const sh = document.createElement('div');
                     sh.className = 'enemy-shield-fill';
                     const shText = document.createElement('span');
@@ -247,7 +250,12 @@ class UIManager {
             if (hpText) hpText.textContent = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
             // Shield: level + a pulsing charge state while it refills.
             const sh = fill.parentNode && fill.parentNode.querySelector('.enemy-shield-fill');
-            if (sh && enemy.shieldMax > 0) {
+            if (sh && !(enemy.shieldMax > 0)) {
+                sh.classList.add('is-none');
+                sh.style.setProperty('--shield-width', '0%');
+                const t = sh.querySelector('.enemy-shield-text');
+                if (t) t.textContent = 'NO SHIELD';
+            } else if (sh) {
                 const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
                 const prev = Number(sh.dataset.prev || sp);
                 sh.style.setProperty('--shield-width', sp + '%');
@@ -255,7 +263,8 @@ class UIManager {
                 sh.classList.toggle('is-down', sp <= 0);
                 sh.dataset.prev = String(sp);
                 const t = sh.querySelector('.enemy-shield-text');
-                if (t) t.textContent = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax);
+                if (t) t.textContent = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
+                    (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
             }
         }
     }

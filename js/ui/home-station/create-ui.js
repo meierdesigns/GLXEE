@@ -204,6 +204,7 @@ extendClass(HomeStationUI, {
                     <!-- Wallet card right of both navbars: resources + logout. -->
                     <div class="hs-wallet-card">
                         <div class="hs-wallet-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
+                        ${typeof vfFullscreen !== 'undefined' ? vfFullscreen.buttonHtml('hs-logout-btn hs-fullscreen-btn', 'hsFullscreen') : ''}
                         <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
                             <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
                         </button>

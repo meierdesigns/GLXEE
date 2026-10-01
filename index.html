@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GLXEE - Gameboy Style</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@700&display=swap">
-    <link rel="stylesheet" href="styles.css?v=px-55">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap">
+    <link rel="stylesheet" href="styles.css?v=px-72">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
+    <script src="js/core/reload-keys.js"></script>
     <script src="js/core/zoom-rect-fix.js"></script>
     <script src="js/graphics/pixel-cursors.js?v=pull-1"></script>
 </head>
@@ -77,6 +78,7 @@
             <div class="game-over-content">
                 <h2>GAME OVER</h2>
                 <p>Mission Failed</p>
+                <div class="game-over-epitaph"></div>
                 <div class="game-over-buttons">
                     <button onclick="game.restart()" class="game-over-button" data-index="0">PLAY AGAIN</button>
                     <button onclick="game.showLevelSelection()" class="game-over-button" data-index="1">PLANET SELECT</button>
@@ -180,32 +182,32 @@
     <script src="js/core/menu-state.js"></script>
     <script src="js/core/economy-config/station-upgrades-base.js"></script>
     <script src="js/core/economy-config/station-upgrades-advanced.js"></script>
-    <script src="js/core/economy-config/core.js?v=areas-1"></script>
+    <script src="js/core/economy-config/core.js?v=loot-12s"></script>
     <script src="js/core/economy-config/compute-station-stats.js"></script>
     <script src="js/core/economy-config/pick-weighted-resource-id.js"></script>
     <script src="js/core/economy-config.js"></script>
     <script src="js/core/difficulty-config.js"></script>
     <script src="js/core/planet-config/core.js"></script>
-    <script src="js/core/planet-config/get-faction-meta.js"></script>
+    <script src="js/core/planet-config/get-faction-meta.js?v=galaxy-gen-2"></script>
     <script src="js/core/planet-config/next-enemy-id.js"></script>
     <script src="js/core/planet-config/sync-available-enemy-types.js"></script>
     <script src="js/core/planet-config/create-main-planet-defaults.js"></script>
     <script src="js/core/planet-config/create-pluto-defaults.js"></script>
-    <script src="js/core/planet-config/apply-playfield-to-runtime.js"></script>
-    <script src="js/core/planet-config/generate-explored-planet.js?v=control-1"></script>
-    <script src="js/core/planet-config/add-planet.js?v=ambush-1"></script>
+    <script src="js/core/planet-config/apply-playfield-to-runtime.js?v=stages-2"></script>
+    <script src="js/core/planet-config/generate-explored-planet.js?v=galaxy-gen-1"></script>
+    <script src="js/core/planet-config/add-planet.js?v=world-1"></script>
     <script src="js/core/planet-config/sync-galaxy-membership.js?v=pull-1"></script>
     <script src="js/core/planet-config/ambush-encounter.js?v=ambush-1"></script>
-    <script src="js/core/planet-config/galaxy-control.js?v=control-1"></script>
+    <script src="js/core/planet-config/galaxy-control.js?v=control-2"></script>
     <script src="js/core/planet-config.js"></script>
     <script src="js/core/profile-manager/core.js?v=mount-4"></script>
-    <script src="js/core/profile-manager/owns-portal.js?v=faction-gui-4"></script>
+    <script src="js/core/profile-manager/owns-portal.js?v=warp-rel-1"></script>
     <script src="js/core/profile-manager/get-module-upgrade-bonuses.js?v=faction-gui-4"></script>
     <script src="js/core/profile-manager/has-discovered-galaxy.js?v=played-1"></script>
     <script src="js/core/profile-manager/create.js?v=faction-gui-4"></script>
     <script src="js/core/profile-manager/try-blueprint-drop.js?v=faction-gui-4"></script>
-    <script src="js/core/profile-manager/buy-blueprint.js?v=posts-1"></script>
-    <script src="js/core/profile-manager/get-resume-level-id.js?v=faction-gui-4"></script>
+    <script src="js/core/profile-manager/buy-blueprint.js?v=stages-2"></script>
+    <script src="js/core/profile-manager/get-resume-level-id.js?v=stages-2"></script>
     <script src="js/core/profile-manager/style-unlocks.js?v=sell-1"></script>
     <script src="js/core/profile-manager/trading-posts.js?v=pull-1"></script>
     <script src="js/core/profile-manager/missions.js?v=missions-2"></script>
@@ -216,8 +218,9 @@
     <script src="js/core/faction-manager.js"></script>
     <script src="js/core/faction-relations.js?v=frel-1"></script>
     <script src="js/core/profile-manager/faction-holdings.js?v=1"></script>
-    <script src="js/core/profile-manager/invasion-scenario.js?v=1"></script>
+    <script src="js/core/profile-manager/invasion-scenario.js?v=2"></script>
     <script src="js/core/profile-manager/profile-score.js?v=1"></script>
+    <script src="js/core/world-control.js?v=1"></script>
     <script src="js/core/flight-profiles.js"></script>
     <script src="js/core/weapon-config/core.js?v=laser-1"></script>
     <script src="js/core/weapon-config/make-weapon.js?v=laser-1"></script>
@@ -259,18 +262,19 @@
     <script src="js/core/ship-loadout.js"></script>
     <script src="js/core/objective-manager.js"></script>
     <script src="js/core/daily-tracker.js"></script>
-    <script src="js/core/level-manager/core.js"></script>
-    <script src="js/core/level-manager/build-stage-level.js"></script>
+    <script src="js/core/level-manager/core.js?v=stages-2"></script>
+    <script src="js/core/level-manager/build-stage-level.js?v=boss-1"></script>
     <script src="js/core/level-manager.js"></script>
     <script src="js/core/system-manager.js"></script>
-    <script src="js/core/game-control-system/core.js?v=ambush-3"></script>
-    <script src="js/core/game-control-system/begin-victory-loot-phase.js?v=missions-1"></script>
-    <script src="js/core/game-control-system/show-victory-overlay.js"></script>
+    <script src="js/core/game-control-system/core.js?v=boss-map-1"></script>
+    <script src="js/core/game-control-system/begin-victory-loot-phase.js?v=stepper-1"></script>
+    <script src="js/core/game-control-system/show-victory-overlay.js?v=boss-map-1"></script>
+    <script src="js/core/game-control-system/stage-stepper.js?v=2"></script>
     <script src="js/core/game-control-system/leave-game-session.js?v=ambush-3"></script>
     <script src="js/core/game-control-system.js"></script>
     <script src="js/core/game-loop.js"></script>
     <script src="js/core/menu-nav.js"></script>
-    <script src="js/core/ui-dialog.js"></script>
+    <script src="js/core/ui-dialog.js?v=btn-1"></script>
     <script src="js/core/input-handler/core.js"></script>
     <script src="js/core/input-handler/handle-key-up.js"></script>
     <script src="js/core/input-handler.js"></script>
@@ -352,6 +356,7 @@
     <script src="js/graphics/icon-renderer/get-module-kind-color.js?v=px-1"></script>
     <script src="js/graphics/icon-renderer.js?v=pull-1"></script>
     <script src="js/ui/ui-tooltip.js?v=2"></script>
+    <script src="js/ui/fullscreen-toggle.js?v=1"></script>
     <script src="js/ui/color-picker-overlay/core.js"></script>
     <script src="js/ui/color-picker-overlay/sync-ui.js"></script>
     <script src="js/ui/color-picker-overlay.js"></script>
@@ -360,6 +365,7 @@
     <script src="js/graphics/faction-ship-styles/build-all-pixel-sprites.js?v=pull-1"></script>
     <script src="js/graphics/faction-ship-styles/faction-hull-builders.js?v=hull-1"></script>
     <script src="js/graphics/faction-ship-styles.js?v=hull-1"></script>
+    <script src="js/ui/game-over-wreck.js?v=1"></script>
     <script src="js/graphics/asset-gen-registry/core.js?v=pull-1"></script>
     <script src="js/graphics/asset-gen-registry/find-from-element.js?v=pull-1"></script>
     <script src="js/graphics/asset-gen-registry/faction-ids.js?v=pull-1"></script>
@@ -371,6 +377,7 @@
     <script src="js/graphics/lighting-system.js?v=pull-1"></script>
     <script src="js/graphics/graphics-manager/core.js?v=pull-1"></script>
     <script src="js/graphics/graphics-manager/draw-shield-hull.js?v=hull-1"></script>
+    <script src="js/graphics/graphics-manager/enemy-variants.js?v=var-1"></script>
     <script src="js/graphics/graphics-manager.js?v=pull-1"></script>
     <script src="js/graphics/graphics.js?v=pull-1"></script>
     <script src="js/graphics/color-palette-system/core.js?v=pull-1"></script>
@@ -438,7 +445,7 @@
     <script src="js/ui/parallax/core.js"></script>
     <script src="js/ui/parallax/draw-custom-tile.js"></script>
     <script src="js/ui/parallax.js"></script>
-    <script src="js/ui/bg-mouse-parallax/state.js"></script>
+    <script src="js/ui/bg-mouse-parallax/state.js?v=inline-1"></script>
     <script src="js/ui/bg-mouse-parallax/backgrounds.js"></script>
     <script src="js/ui/bg-mouse-parallax/hosts.js"></script>
     <script src="js/ui/bg-mouse-parallax.js"></script>
@@ -489,7 +496,7 @@
     <script src="js/ui/planet-editor/render-objectives-tab.js"></script>
     <script src="js/ui/planet-editor/render-graphics-tab.js"></script>
     <script src="js/ui/planet-editor/make-multi-check.js"></script>
-    <script src="js/ui/planet-editor/open-pattern-editor.js"></script>
+    <script src="js/ui/planet-editor/open-pattern-editor.js?v=btn-1"></script>
     <script src="js/ui/planet-editor/draw-pattern-thumbnail.js"></script>
     <script src="js/ui/planet-editor/update-preview-obstacles.js"></script>
     <script src="js/ui/planet-editor.js"></script>
@@ -518,27 +525,28 @@
     <script src="js/levels/saturn.js"></script>
     <script src="js/levels/neptune.js"></script>
     <script src="js/levels/pluto.js"></script>
-    <script src="js/levels/level-manager.js"></script>
+    <script src="js/levels/level-manager.js?v=stages-2"></script>
 
     <!-- UI & Menus -->
     <script src="js/ui/ship-renderer.js"></script>
     <script src="js/ui/combined-selection/core.js"></script>
     <script src="js/ui/combined-selection/create-fallback-player-ships.js"></script>
     <script src="js/ui/combined-selection/show.js"></script>
-    <script src="js/ui/combined-selection/create-combined-selection-ui.js"></script>
+    <script src="js/ui/combined-selection/create-combined-selection-ui.js?v=btn-1"></script>
     <script src="js/ui/combined-selection/render-level-preview.js"></script>
     <script src="js/ui/combined-selection/handle-key-down.js"></script>
     <script src="js/ui/combined-selection/update-ship-details.js"></script>
     <script src="js/ui/combined-selection.js"></script>
     <script src="js/ui/galaxy-selection.js"></script>
-    <script src="js/ui/galaxy-map/core.js?v=nav-6"></script>
-    <script src="js/ui/galaxy-map/create-ui.js?v=tp-3"></script>
-    <script src="js/ui/galaxy-map/render-explore-controls.js?v=nav-9"></script>
-    <script src="js/ui/galaxy-map/navigate-by-arrow.js?v=pull-8"></script>
-    <script src="js/ui/galaxy-map/flight-travel.js?v=ambush-3"></script>
+    <script src="js/ui/galaxy-map/core.js?v=stages-2"></script>
+    <script src="js/ui/galaxy-map/create-ui.js?v=tp-4"></script>
+    <script src="js/ui/galaxy-map/render-explore-controls.js?v=lines-13"></script>
+    <script src="js/ui/galaxy-map/navigate-by-arrow.js?v=stages-2"></script>
+    <script src="js/ui/galaxy-map/flight-travel.js?v=lines-4"></script>
     <script src="js/ui/galaxy-map.js"></script>
-    <script src="js/ui/profile-selection/core.js?v=inline-1"></script>
-    <script src="js/ui/profile-selection/render-profile-details.js?v=pull-1"></script>
+    <script src="js/ui/profile-selection/core.js?v=kit-6"></script>
+    <script src="js/ui/galaxy-viewer.js?v=6"></script>
+    <script src="js/ui/profile-selection/render-profile-details.js?v=pull-2"></script>
     <script src="js/ui/profile-selection.js"></script>
     <script src="js/ui/onboarding.js"></script>
     <script src="js/ui/hangar-test-arena/core.js"></script>
@@ -557,11 +565,11 @@
     <script src="js/ui/home-station/open-main-menu-overlay.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-missing-materials.js?v=pull-1"></script>
     <script src="js/ui/home-station/get-portal-faction-filters.js?v=nav-3"></script>
-    <script src="js/ui/home-station/create-ui.js?v=wiki-2"></script>
+    <script src="js/ui/home-station/create-ui.js?v=wiki-3"></script>
     <script src="js/ui/home-station/mount-play-tab.js?v=nav-3"></script>
     <script src="js/ui/home-station/switch-sub-tab.js?v=nav-5"></script>
     <script src="js/ui/home-station/bind-upgrade-tip-events.js?v=pull-1"></script>
-    <script src="js/ui/home-station/render-module-type-upgrades.js?v=wiki-2"></script>
+    <script src="js/ui/home-station/render-module-type-upgrades.js?v=warp-rel-1"></script>
     <script src="js/ui/home-station/render-parts-list.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-shop-part-rows.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-shop-tab.js?v=slotsz-1"></script>
@@ -601,18 +609,18 @@
 
     <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
 
-    <script src="js/ui/start-screen/core.js?v=terminal-1"></script>
-    <script src="js/ui/start-screen/build-font-menu-items.js?v=profiles-1"></script>
-    <script src="js/ui/start-screen/show-overlay.js?v=terminal-1"></script>
+    <script src="js/ui/start-screen/core.js?v=terminal-3"></script>
+    <script src="js/ui/start-screen/build-font-menu-items.js?v=profiles-2"></script>
+    <script src="js/ui/start-screen/show-overlay.js?v=galaxies-2"></script>
     <script src="js/ui/start-screen/create-main-menu-ui.js?v=inline-1"></script>
     <script src="js/ui/start-screen/fill-embedded-credits.js?v=pull-1"></script>
-    <script src="js/ui/start-screen/fill-embedded-layout.js?v=names-3"></script>
+    <script src="js/ui/start-screen/fill-embedded-layout.js?v=btn-4"></script>
     <script src="js/ui/start-screen/build-settings-row.js?v=pull-1"></script>
     <script src="js/ui/start-screen/build-theme-strip.js?v=pull-1"></script>
     <script src="js/ui/start-screen/refresh-settings-row.js?v=pull-1"></script>
     <script src="js/ui/start-screen/build-controls-show-btn.js?v=inline-1"></script>
     <script src="js/ui/start-screen/handle-arrow-down.js?v=terminal-1"></script>
-    <script src="js/ui/start-screen/refresh-asset-bridge-status.js?v=inline-1"></script>
+    <script src="js/ui/start-screen/refresh-asset-bridge-status.js?v=galaxies-2"></script>
     <script src="js/ui/start-screen/apply-settings.js?v=pull-1"></script>
     <script src="js/ui/start-screen.js"></script>
     <script src="js/ui/start-intro.js"></script>

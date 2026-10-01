@@ -143,8 +143,8 @@ extendClass(CombinedSelectionManager, {
                 </div>
 
                 <div class="combined-selection-actions">
-                    <button type="button" class="pe-btn pe-primary" id="csStart">START</button>
                     <button type="button" class="pe-btn" id="csCancel">CANCEL</button>
+                    <button type="button" class="pe-btn pe-primary" id="csStart">START</button>
                 </div>
 
                 <div class="combined-selection-instructions">

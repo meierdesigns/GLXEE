@@ -11,7 +11,7 @@
         '.start-screen-overlay',
         '.home-station-overlay',
         '.content-viewer-overlay',
-        '.profile-selection-overlay',
+        '.profile-selection-overlay:not(.is-inline)',
         '.victory-screen',
         '.game-over',
         '.ag-overlay'

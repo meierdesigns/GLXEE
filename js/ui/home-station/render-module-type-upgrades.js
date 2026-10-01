@@ -101,9 +101,11 @@ extendClass(HomeStationUI, {
                 : { ok: gid === 'milky_way' };
             const here = gid === current;
             const req = (typeof economyConfig !== 'undefined')
-                ? economyConfig.getGalaxyWarpRequirement(gid)
+                ? economyConfig.getGalaxyWarpRequirement(gid, current)
                 : 0;
-            const planetCount = (g.planetIds && g.planetIds.length) || 0;
+            // Map nodes = the galaxy's real planets (planetIds can hold strays).
+            const gmap = (typeof planetConfigManager !== 'undefined') ? planetConfigManager.getGalaxyMap(gid) : null;
+            const planetCount = (gmap && gmap.nodes && gmap.nodes.length) || 0;
             const faction = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction)
                 ? planetConfigManager.getGalaxyFaction(gid)
                 : ((g && g.faction) || '');

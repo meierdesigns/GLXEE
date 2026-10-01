@@ -5,14 +5,18 @@
 // fights one or more rivals. Contested galaxies seed frontline planets
 // that mix two factions, hit harder and pay out more.
 
-// Built-in galaxies; any other galaxy gets a seeded default.
+// Built-in galaxies; any other galaxy gets a seeded default. Rivals are
+// never allies of the ruler: a faction with allies is attacked by their
+// common enemies, so the allies can come to defend it.
 const GALAXY_CONTROL_DEFAULTS = {
     milky_way: { control: 'contested', rivals: ['pirate'] },
-    andromeda: { control: 'contested', rivals: ['terran', 'machine'] },
-    void_reach: { control: 'held', rivals: [] },
-    scrap_belt: { control: 'contested', rivals: ['kronax', 'machine', 'voidborn'] },
-    synth_grid: { control: 'held', rivals: [] }
+    andromeda: { control: 'contested', rivals: ['terran', 'voidborn'] },
+    void_reach: { control: 'contested', rivals: ['machine'] },
+    scrap_belt: { control: 'contested', rivals: ['kronax', 'machine'] },
+    synth_grid: { control: 'contested', rivals: ['terran', 'pirate'] }
 };
+// Bump when the presets change so saved galaxies pick them up again.
+const GALAXY_CONTROL_REV = 2;
 
 // Factions that fight side by side. Only allies share a planet against the
 // player; enemies of each other never spawn together.
@@ -39,21 +43,34 @@ extendClass(PlanetConfigManager, {
         return FACTION_ALLIANCES.some((pair) => pair.indexOf(a) !== -1 && pair.indexOf(b) !== -1);
     },
 
+    /** Factions hostile to a faction and to all of its allies. */
+    getCommonEnemies(id) {
+        const key = String(id || '').toLowerCase();
+        const side = [key].concat(this.getFactionAllies(key));
+        return (this.availableFactions || [])
+            .filter((f) => side.every((s) => !this.areFactionsAllied(s, f)));
+    },
+
 
     /** Fills galaxy.control / galaxy.rivals (saved galaxies predate them). */
     ensureGalaxyControl(galaxy) {
         if (!galaxy || typeof galaxy !== 'object') return null;
         const main = this.ensureGalaxyFaction(galaxy);
+        const preset = GALAXY_CONTROL_DEFAULTS[galaxy.id];
+        if (preset && galaxy.controlRev !== GALAXY_CONTROL_REV) galaxy.control = null;
         if (galaxy.control !== 'held' && galaxy.control !== 'contested') {
-            const preset = GALAXY_CONTROL_DEFAULTS[galaxy.id];
+            galaxy.controlRev = GALAXY_CONTROL_REV;
             if (preset) {
                 galaxy.control = preset.control;
                 galaxy.rivals = preset.rivals.slice();
             } else {
-                // Seeded: roughly half of all other galaxies are contested.
+                // Seeded: roughly half of all other galaxies are contested —
+                // always those of a faction with allies — and only by
+                // common enemies of the ruler and its allies.
                 const h = this.hashSeed('control|' + galaxy.id);
-                const others = this.availableFactions.filter((f) => f !== main);
-                galaxy.control = h % 2 ? 'contested' : 'held';
+                const others = this.getCommonEnemies(main);
+                const hasAllies = this.getFactionAllies(main).length > 0;
+                galaxy.control = others.length && (hasAllies || h % 2) ? 'contested' : 'held';
                 galaxy.rivals = galaxy.control === 'contested'
                     ? [others[h % others.length], others[(h >> 3) % others.length]]
                         .filter((f, i, arr) => arr.indexOf(f) === i)
@@ -62,7 +79,7 @@ extendClass(PlanetConfigManager, {
         }
         galaxy.rivals = (Array.isArray(galaxy.rivals) ? galaxy.rivals : [])
             .map((f) => this.normalizeGalaxyFaction(f))
-            .filter((f, i, arr) => f && f !== main && arr.indexOf(f) === i);
+            .filter((f, i, arr) => f && f !== main && arr.indexOf(f) === i && !this.areFactionsAllied(main, f));
         if (!galaxy.rivals.length) galaxy.control = 'held';
         return galaxy.control;
     },

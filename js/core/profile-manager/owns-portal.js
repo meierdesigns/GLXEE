@@ -62,8 +62,9 @@ extendClass(ProfileManager, {
         if (this.ownsPortal(gid, p)) {
             return { ok: true, via: 'portal' };
         }
-        if (!economyConfig.canTravelToGalaxy(gid, levels)) {
-            const req = economyConfig.getGalaxyWarpRequirement(gid);
+        const from = this.getCurrentGalaxyId ? this.getCurrentGalaxyId(p) : null;
+        if (!economyConfig.canTravelToGalaxy(gid, levels, from)) {
+            const req = economyConfig.getGalaxyWarpRequirement(gid, from);
             return { ok: false, reason: 'DRIVE', requireWarp: req };
         }
         return { ok: true, via: 'warp' };

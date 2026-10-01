@@ -28,7 +28,7 @@ class EconomyConfig {
         /** Extra seconds after objective clear for the player to scoop pickups. */
         // Release the combat area quickly after the last enemy falls while
         // still leaving a short window to collect nearby drops.
-        this.victoryLootGraceMs = 3500;
+        this.victoryLootGraceMs = 12000;
         /** Credits-equivalent unit value for the resource market. Credits are uncapped currency. */
         this.resourceTradeValue = {
             scrap: 1,
@@ -155,16 +155,36 @@ class EconomyConfig {
         };
     }
 
-    getGalaxyWarpRequirement(galaxyId) {
+    /**
+     * Warp tier of a galaxy (its distance from the Milky Way). Generated
+     * galaxies take their difficulty tier (EASY counts as 1).
+     */
+    getGalaxyWarpTier(galaxyId) {
         const id = String(galaxyId || '').toLowerCase();
         if (Object.prototype.hasOwnProperty.call(this.galaxyWarpRequirement, id)) {
             return this.galaxyWarpRequirement[id];
         }
+        const g = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
+            ? planetConfigManager.getGalaxy(id) : null;
+        if (g) return Math.max(1, Math.min(4, Math.round(Number(g.difficultyTier) || 0)));
         return 99;
     }
 
-    canTravelToGalaxy(galaxyId, stationLevels) {
-        const req = this.getGalaxyWarpRequirement(galaxyId);
+    /**
+     * Warp drive level needed to jump to galaxyId. With fromGalaxyId the jump
+     * is measured from there (tier gap), never more than the direct tier, so
+     * every galaxy can be reached from every other and home stays close.
+     */
+    getGalaxyWarpRequirement(galaxyId, fromGalaxyId) {
+        const to = this.getGalaxyWarpTier(galaxyId);
+        if (!fromGalaxyId) return to;
+        if (String(fromGalaxyId).toLowerCase() === String(galaxyId || '').toLowerCase()) return 0;
+        const from = this.getGalaxyWarpTier(fromGalaxyId);
+        return from >= 99 ? to : Math.min(to, Math.abs(to - from));
+    }
+
+    canTravelToGalaxy(galaxyId, stationLevels, fromGalaxyId) {
+        const req = this.getGalaxyWarpRequirement(galaxyId, fromGalaxyId);
         if (req <= 0) return true;
         const warp = Math.max(0, Math.round(Number((stationLevels && stationLevels.warp_drive) || 0)));
         return warp >= req;

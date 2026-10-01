@@ -143,8 +143,8 @@ extendClass(PlanetConfigManager, {
         if (!slug) slug = 'planet';
         if (!this.configs[slug]) return slug;
         let n = 2;
-        while (this.configs[slug + '-' + n]) n += 1;
-        return slug + '-' + n;
+        while (this.configs[slug + '_' + n]) n += 1;
+        return slug + '_' + n;
     },
 
     nextBlankPlanetName(galaxyId) {

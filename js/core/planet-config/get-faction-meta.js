@@ -257,6 +257,102 @@ extendClass(PlanetConfigManager, {
         return neighbors;
     },
 
+    /** Random galaxy name not used yet ("HYDRA DRIFT"). */
+    randomGalaxyName() {
+        const pre = ['NOVA', 'ORION', 'CYGNUS', 'HYDRA', 'LYRA', 'VEGA', 'DRACO', 'PHOENIX', 'CARINA', 'TAURUS', 'KESSLER', 'ECHO', 'ASHEN', 'IRON', 'GHOST'];
+        const post = ['REACH', 'EXPANSE', 'DRIFT', 'CLUSTER', 'VEIL', 'NEBULA', 'SPIRAL', 'RIFT', 'HALO', 'MARCH', 'DEEP', 'CROWN'];
+        const pick = (a) => a[Math.floor(Math.random() * a.length)];
+        let name = '';
+        for (let i = 0; i < 40; i++) {
+            name = pick(pre) + ' ' + pick(post);
+            if (!this.galaxies[name.toLowerCase().replace(/[^a-z0-9]+/g, '_')]) break;
+        }
+        return name;
+    },
+
+    /** Up to two random rivals that may contest a galaxy ruled by faction. */
+    pickGalaxyRivals(faction) {
+        const pool = (this.getCommonEnemies ? this.getCommonEnemies(faction) : []).sort(() => Math.random() - 0.5);
+        return pool.slice(0, Math.min(2, pool.length));
+    },
+
+    /** planetCount / difficultyTier / control / rivals of a generated galaxy. */
+    applyCustomGalaxySettings(g, src) {
+        g.custom = true;
+        g.planetCount = Math.max(3, Math.min(12, Math.round(Number(src.planetCount) || 7)));
+        g.difficultyTier = Math.max(0, Math.min(4, Math.round(Number(src.difficultyTier) || 0)));
+        // Suns on the galaxy map (1–3); unset keeps the size-based default.
+        if (src.sunCount != null) g.sunCount = Math.max(1, Math.min(3, Math.round(Number(src.sunCount) || 1)));
+        g.control = src.control === 'contested' ? 'contested' : 'held';
+        g.rivals = Array.isArray(src.rivals) ? src.rivals.slice() : [];
+        if (typeof GALAXY_CONTROL_REV !== 'undefined') g.controlRev = GALAXY_CONTROL_REV;
+        if (this.ensureGalaxyControl) this.ensureGalaxyControl(g);
+        return g;
+    },
+
+    /**
+     * Generated galaxy: { name, faction, control: 'held'|'contested',
+     * planetCount, difficultyTier (0 EASY … 4 NIGHTMARE) }. Its planets are
+     * charted on first visit (ensureGalaxyArrivalContent). Saved with the rest.
+     */
+    generateGalaxy(options) {
+        const opts = options || {};
+        const name = String(opts.name || '').trim().toUpperCase().slice(0, 24) || this.randomGalaxyName();
+        let id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'galaxy';
+        if (this.galaxies[id]) id += '_' + Date.now().toString(36);
+        const faction = this.normalizeGalaxyFaction(opts.faction)
+            || this.availableFactions[Math.floor(Math.random() * this.availableFactions.length)];
+        const theme = this.getFactionPlanetTheme(faction);
+        let rivals = [];
+        if (opts.control === 'contested' && Array.isArray(opts.rivals) && opts.rivals.length) {
+            rivals = opts.rivals.filter((f) => f !== faction).slice(0, 2);
+        } else if (opts.control === 'contested' && this.getCommonEnemies) {
+            const pool = this.getCommonEnemies(faction).sort(() => Math.random() - 0.5);
+            rivals = pool.slice(0, Math.min(2, pool.length));
+        }
+        const g = {
+            id,
+            name,
+            faction,
+            baseColor: this.normalizeGalaxyBaseColor(theme.baseColor),
+            planetIds: [],
+            map: this.createDefaultGalaxyMap(id)
+        };
+        this.applyCustomGalaxySettings(g, {
+            planetCount: opts.planetCount,
+            difficultyTier: opts.difficultyTier,
+            sunCount: opts.sunCount,
+            control: rivals.length ? 'contested' : 'held',
+            rivals
+        });
+        this.galaxies[id] = g;
+        this.saveGalaxies();
+        return g;
+    },
+
+    /** Names of pilots that have been in a galaxy (blocks deleting it). */
+    getGalaxyPilots(galaxyId) {
+        const gid = String(galaxyId || '').toLowerCase();
+        const profiles = typeof profileManager !== 'undefined' && profileManager.getProfiles ? profileManager.getProfiles() : [];
+        return profiles.filter((p) => {
+            try { return JSON.stringify(p).indexOf('"' + gid + '"') !== -1; } catch (e) { return false; }
+        }).map((p) => p.name || '?');
+    },
+
+    /** Deletes a generated galaxy and its planets. Built-in or visited galaxies stay. */
+    deleteGalaxy(galaxyId) {
+        const gid = String(galaxyId || '').toLowerCase();
+        const g = this.galaxies[gid];
+        if (!g || !g.custom) return { ok: false, reason: 'BUILT-IN GALAXY' };
+        const pilots = this.getGalaxyPilots(gid);
+        if (pilots.length) return { ok: false, reason: 'USED BY ' + pilots.join(', ').toUpperCase() };
+        (g.planetIds || []).forEach((pid) => { delete this.configs[pid]; });
+        delete this.galaxies[gid];
+        if (this.save) this.save();
+        this.saveGalaxies();
+        return { ok: true };
+    },
+
     getGalaxyIds() {
         return Object.keys(this.galaxies);
     },

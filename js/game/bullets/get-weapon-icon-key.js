@@ -307,7 +307,11 @@ extendClass(BulletManager, {
             const factionMul = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponMul
                 ? weaponConfigManager.getFactionWeaponMul(this.getShipFactionId(), slot.id) : 1;
             const abilityDmg = Number(this.currentShipModel.abilityDamageMul) || 1;
-            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul * abilityDmg));
+            // Temporary power-up from supply crates.
+            const powerShot = (typeof pickupManager !== 'undefined' && pickupManager.getPowerShot)
+                ? pickupManager.getPowerShot() : null;
+            const powerMul = powerShot ? powerShot.damage : 1;
+            cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul * abilityDmg * powerMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
                 const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
@@ -328,11 +332,13 @@ extendClass(BulletManager, {
             // Preview close-ups fire at a zoomed ship: shotScale scales size
             // and speed by that zoom on top.
             const shotScale = Number(opts.shotScale) || 1;
-            const sizeMul = [0.6, 1, 1.5][slot.sizeLevel != null ? slot.sizeLevel : 1] || 1;
+            const sizeMul = ([0.6, 1, 1.5][slot.sizeLevel != null ? slot.sizeLevel : 1] || 1)
+                * (powerShot ? powerShot.size : 1);
             for (let i = firstNew; i < this.bullets.length; i++) {
                 const b = this.bullets[i];
                 b.weaponId = slot.id;
                 // 0..1 brightness boost from the charge / beat bonus.
+                if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
                 if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
                 const cx = b.x + (b.width || 0) / 2;
                 // Whole pixels, or drawing rounds S up to M's width.

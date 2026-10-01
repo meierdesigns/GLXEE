@@ -67,26 +67,13 @@ extendClass(GameControlSystem, {
         }
 
         const noPickups = !(typeof pickupManager !== 'undefined' && pickupManager.pickups
-            && pickupManager.pickups.length > 0);
-        const enemiesClear = !(typeof enemyManager !== 'undefined' && enemyManager.isFieldClear)
-            || enemyManager.isFieldClear();
+            && pickupManager.pickups.some((p) => !p.powerUp));
         const minElapsed = this._victoryLootMinMs <= 0;
 
-        // Finish only when enemies are gone and all resources are collected
-        if (noPickups && enemiesClear && minElapsed) {
+        // Done early once everything is scooped up; otherwise the timer is a
+        // hard limit — finalizeVictory() banks whatever is still floating.
+        if ((noPickups && minElapsed) || this._victoryLootTimer <= 0) {
             this.finalizeVictory();
-            return;
-        }
-
-        // Keep scooping if the timer ran out but loot remains
-        if (this._victoryLootTimer <= 0 && !noPickups) {
-            this._victoryLootTimer = 8000;
-            if (typeof pickupManager !== 'undefined' && pickupManager.beginLootPhase) {
-                pickupManager.beginLootPhase(8000);
-            }
-            if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                levelInfoManager.showLootNotice('COLLECT REMAINING RESOURCES');
-            }
         }
     },
 

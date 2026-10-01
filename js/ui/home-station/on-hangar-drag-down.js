@@ -426,13 +426,14 @@ extendClass(HomeStationUI, {
                 const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
                 const hasY = edge.indexOf('top') !== -1 || edge.indexOf('bottom') !== -1;
                 const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
-                // The frame is already scaled, so grow the scale by the same
-                // ratio the frame grows — the grabbed edge tracks the pointer.
+                // Convert the pointer delta directly to scale units. Multiplying
+                // by startScale here made a previously resized edge lag behind
+                // (or run ahead of) the pointer.
                 shipLoadoutManager.setSegmentScale(
                     this.hangarShipId,
                     'wing',
-                    h.drag.startScaleX * (1 + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth)),
-                    h.drag.startScaleY * (1 + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight))
+                    h.drag.startScaleX + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth),
+                    h.drag.startScaleY + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight)
                 );
             } else {
                 const outward = h.drag.side === 'left' ? -dx : dx;
@@ -447,13 +448,14 @@ extendClass(HomeStationUI, {
             const widthSign = edge.indexOf('right') !== -1 ? 1 : (edge.indexOf('left') !== -1 ? -1 : 0);
             const heightSign = edge.indexOf('bottom') !== -1 ? 1 : (edge.indexOf('top') !== -1 ? -1 : 0);
             // Spine parts are centred, so width grows on both sides: the
-            // grabbed edge moves dx → the frame widens by 2·dx. Scale grows
-            // by the frame's ratio since the frame is already scaled.
+            // grabbed edge moves dx → the frame widens by 2·dx. Convert that
+            // directly into scale units so the dragged edge stays under the
+            // pointer at every existing scale.
             shipLoadoutManager.setSegmentScale(
                 this.hangarShipId,
                 h.drag.segment,
-                h.drag.startScaleX * (1 + (2 * widthSign * dx) / Math.max(1, h.drag.frameWidth || h.core.width)),
-                h.drag.startScaleY * (1 + (heightSign * dy) / Math.max(1, h.drag.frameHeight || h.core.height))
+                h.drag.startScaleX + (2 * widthSign * dx) / Math.max(1, h.drag.frameWidth || h.core.width),
+                h.drag.startScaleY + (heightSign * dy) / Math.max(1, h.drag.frameHeight || h.core.height)
             );
         } else {
             shipLoadoutManager.setSegmentOffset(

@@ -10,6 +10,7 @@ extendClass(FactionViewerUI, {
         const lore = f.loreLong || f.lore || 'No archive entry.';
         const enemyCount = this.countRelatedEnemies(f.id);
         const planetCount = this.countRelatedPlanets(f.id);
+        const accent = this.factionAccent(f);
         const emblemKey = (typeof factionShipStyles !== 'undefined' && factionShipStyles.emblemKey)
             ? factionShipStyles.emblemKey(f.id)
             : ('faction-' + f.id);
@@ -23,8 +24,8 @@ extendClass(FactionViewerUI, {
             return `<button type="button" class="pe-btn fv-fleet-chip" data-ag-type="factionShip" data-ag-id="${shipKey}" data-ag-key="${shipKey}" title="${shipKey}">${String(cls).toUpperCase()}</button>`;
         }).join('');
         root.innerHTML = `
-            <div class="content-viewer-hero" data-ag-type="faction" data-ag-id="${emblemKey}" data-ag-key="${emblemKey}">
-                <div class="cv-ability-hero-icon" data-icon="${f.icon}" data-ag-key="${emblemKey}">${this.iconHtml(f.icon, 64, f.label || f.id)}</div>
+            <div class="content-viewer-hero fv-faction-hero" style="--faction-accent:${accent}" data-ag-type="faction" data-ag-id="${emblemKey}" data-ag-key="${emblemKey}">
+                <div class="cv-ability-hero-icon cv-faction-emblem" data-icon="${f.icon}" data-ag-key="${emblemKey}">${this.iconHtml(f.icon, 64, f.label || f.id, accent)}</div>
                 <div>
                     <h3 class="content-viewer-name">${f.label}</h3>
                     <p class="content-viewer-desc">${f.lore || ''}</p>

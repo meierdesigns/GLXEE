@@ -240,8 +240,10 @@ extendClass(FactionViewerUI, {
         list.innerHTML = '';
         this.factions.forEach((faction, index) => {
             const btn = document.createElement('button');
+            const accent = this.factionAccent(faction);
             btn.type = 'button';
             btn.className = 'content-viewer-item' + (index === this.selectedIndex ? ' selected' : '');
+            btn.style.setProperty('--faction-accent', accent);
             const emblemKey = (typeof factionShipStyles !== 'undefined' && factionShipStyles.emblemKey)
                 ? factionShipStyles.emblemKey(faction.id)
                 : ('faction-' + faction.id);
@@ -249,7 +251,7 @@ extendClass(FactionViewerUI, {
             btn.setAttribute('data-ag-id', emblemKey);
             btn.setAttribute('data-ag-key', emblemKey);
             btn.innerHTML =
-                `<span class="cv-ability-icon cv-list-ability-icon" data-icon="${faction.icon}" data-ag-key="${emblemKey}">${this.iconHtml(faction.icon, 32, faction.label || faction.id)}</span>` +
+                `<span class="cv-ability-icon cv-list-ability-icon cv-faction-emblem" data-icon="${faction.icon}" data-ag-key="${emblemKey}">${this.iconHtml(faction.icon, 32, faction.label || faction.id, accent)}</span>` +
                 `<span class="cv-item-label">${faction.label}` +
                 (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
                     ? devProfileToggles.badgesHtml({

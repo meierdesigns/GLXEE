@@ -122,9 +122,9 @@ class FactionViewerUI {
         this.previewSim = null;
     }
 
-    iconHtml(key, size, tipLabel) {
+    iconHtml(key, size, tipLabel, tint) {
         if (typeof iconRenderer !== 'undefined') {
-            const html = iconRenderer.imgHtml(key, size || 16, 'cv-ability-icon-img', undefined, tipLabel);
+            const html = iconRenderer.imgHtml(key, size || 16, 'cv-ability-icon-img', tint, tipLabel);
             if (html) return html;
         }
         return '◆';
@@ -138,6 +138,10 @@ class FactionViewerUI {
     }
 
     factionAccent(faction) {
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const style = factionShipStyles.getFactionStyle(faction && faction.id);
+            if (style && style.accent) return style.accent;
+        }
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionPlanetTheme) {
             const theme = planetConfigManager.getFactionPlanetTheme(faction && faction.id);
             if (theme && theme.baseColor) return theme.baseColor;

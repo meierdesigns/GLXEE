@@ -67,7 +67,8 @@ extendClass(GalaxyMapManager, {
     /** Planet-to-planet lines (lit, dim, or fading towards a locked planet). */
     edgeLinesSvg() {
         const edges = this.map.edges || [];
-        let blocks = '';
+        let backBlocks = '';
+        let frontBlocks = '';
         const W = 640;
         const H = 320;
         const pad = 48;
@@ -108,7 +109,12 @@ extendClass(GalaxyMapManager, {
                 const open = okA ? edge[0] : edge[1];
                 const shut = okA ? edge[1] : edge[0];
                 // Details show in the planet card when selected (no tooltip).
-                blocks += this.blockadeSvg((x1 + x2) / 2, (y1 + y2) / 2, open, shut);
+                const block = this.blockadeSvg((x1 + x2) / 2, (y1 + y2) / 2, open, shut);
+                // The map's lower half is visually closer to the camera:
+                // foreground barriers cover beams, while upper ones remain
+                // behind them. This preserves depth when routes overlap.
+                if ((y1 + y2) / 2 >= H / 2) frontBlocks += block;
+                else backBlocks += block;
             }
             if (okA === okB) {
                 edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA ? 'lit' : 'dim'));
@@ -121,8 +127,7 @@ extendClass(GalaxyMapManager, {
             edgesHtml += this.pixelLineSvg([from, to], 'gm-edge lit', { range: [0, 0.5] }) +
                 this.pixelLineSvg([from, to], 'gm-edge dim', { range: [0.5, 1] });
         });
-        // Blockades on top of every beam.
-        return edgesHtml + blocks;
+        return backBlocks + edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + frontBlocks;
     },
 
     /**
@@ -313,7 +318,7 @@ extendClass(GalaxyMapManager, {
         const key = this.getLineDetail() + '|' + this.nodeObjScale().toFixed(3);
         this._linesByDetail = this._linesByDetail || {};
         if (!this._linesByDetail[key]) {
-            this._linesByDetail[key] = this.edgeLinesSvg() + (this.postLanesSvg ? this.postLanesSvg() : '');
+            this._linesByDetail[key] = this.edgeLinesSvg();
         }
         return this._linesByDetail[key];
     },
@@ -352,7 +357,7 @@ extendClass(GalaxyMapManager, {
             const selected = !this.selectedPostId && n.planetId === this.selectedPlanetId;
             const hovered = n.planetId === this.hoveredPlanetId;
             // Progress label only while there's still something to fight.
-            const stageProgress = cleared ? null : this.getPlanetStageProgress(n.planetId);
+            const stageProgress = !unlocked || cleared ? null : this.getPlanetStageProgress(n.planetId);
             const sizeSeed = String(n.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
             const baseSize = 32 + (sizeSeed % 7) * 10;
             const size = baseSize * this.getMapObjectScale();
@@ -386,7 +391,7 @@ extendClass(GalaxyMapManager, {
                             // Boss stage: skull + "/4". The skull sits clear of the text's
                             // dark outline stroke, which used to paint over its right edge.
                             ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextSvg('/' + stageProgress.total, 0, 12, 'start')}`
-                            : this.pixelTextSvg(stageProgress.done + '/' + stageProgress.total, 0, 12, 'middle')}
+                            : this.pixelTextSvg(stageProgress.next + '/' + stageProgress.total, 0, 12, 'middle')}
                     </g>` : ''}
                     ${!unlocked ? `
                         <g class="gm-locked-icon" transform="translate(-6,${size / 2 + 3})">
@@ -471,12 +476,12 @@ extendClass(GalaxyMapManager, {
         }
 
         return `
-            <svg class="galaxy-map-svg" style="--gm-px:${1 / this.getMapDetail()}" viewBox="${this.getMapViewBox(W, H, pad).join(' ')}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+            <svg class="galaxy-map-svg${(this.mapZoom || 1) >= 2.5 ? ' gm-close-view' : ''}" style="--gm-px:${1 / this.getMapDetail()}" viewBox="${this.getMapViewBox(W, H, pad).join(' ')}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
                 ${this.galaxyStarsSvg ? this.galaxyStarsSvg(W, H) : ''}
                 <g class="gm-suns">${this.galaxySunsSvg ? this.galaxySunsSvg(W, H, pad) : ''}</g>
                 ${nodesHtml}
                 ${postsHtml}
-                <g class="gm-lines">${edgesHtml}${this.postLanesSvg ? this.postLanesSvg() : ''}</g>
+                <g class="gm-lines">${edgesHtml}</g>
                 <g class="gm-route-layer">${this.routePreviewSvg ? this.routePreviewSvg() : ''}</g>
                 ${shipHtml}
             </svg>
@@ -987,21 +992,37 @@ extendClass(GalaxyMapManager, {
             travelled += len;
         }
         // Row runs → one compact path per layer.
-        // Flow: bright pulses sliding along the beam (animated dash offset).
+        // Data packets use two parallel lanes, one for each direction.
         // Pulse spacing is in map units so slices of one line stay in phase.
         let flow = '';
-        if (!o.dash && !o.noFlow) {
+        if ((!o.dash || o.traffic) && !o.noFlow) {
             const fp = rg
                 ? [{ x: points[0].x + rx * rg[0], y: points[0].y + ry * rg[0] }, { x: points[0].x + rx * rg[1], y: points[0].y + ry * rg[1] }]
                 : points;
             const off = rg ? Math.sqrt(rl2) * rg[0] : 0;
-            // Irregular dark bands (in brush widths) so the beam reads as a
-            // moving current rather than an even tube.
-            const pattern = [4, 3, 1.5, 5, 6, 2, 2.5, 8];
+            // Short, separated packets make the bidirectional traffic
+            // readable as data travelling over the route.
+            const pattern = o.traffic ? [1.6, 14] : [1.8, 8, 2.8, 11];
             const period = pattern.reduce((m, v) => m + v, 0) * width;
             const dashes = pattern.map((v) => (v * width).toFixed(2)).join(' ');
-            flow = `<path class="gm-pxline-flow" fill="none" d="M${fp.map((q) => q.x.toFixed(2) + ' ' + q.y.toFixed(2)).join('L')}" ` +
-                `style="stroke-width:${(rad * 2 * p).toFixed(2)};stroke-dasharray:${dashes};--flow-len:${period.toFixed(2)}px;--flow-from:${(-(off % period)).toFixed(2)}px"/>`;
+            const packetWidth = o.traffic
+                ? Math.max(p, width * 0.45)
+                : Math.max(p, rad * 1.25 * p);
+            const laneOffset = o.traffic
+                ? Math.max(packetWidth * 1.2, p)
+                : Math.max(packetWidth * 1.4, p * 1.5);
+            const lanePath = (side) => `M${fp.map((q, i) => {
+                const prev = fp[Math.max(0, i - 1)];
+                const next = fp[Math.min(fp.length - 1, i + 1)];
+                const dx = next.x - prev.x;
+                const dy = next.y - prev.y;
+                const length = Math.hypot(dx, dy) || 1;
+                return `${(q.x - dy / length * laneOffset * side).toFixed(2)} ${(q.y + dx / length * laneOffset * side).toFixed(2)}`;
+            }).join('L')}`;
+            const flowStyle = `stroke-width:${packetWidth.toFixed(2)};stroke-dasharray:${dashes};--flow-len:${period.toFixed(2)}px;--flow-from:${(-(off % period)).toFixed(2)}px`;
+            const flowClass = o.traffic ? ' gm-post-traffic' : '';
+            flow = `<path class="gm-pxline-flow${flowClass}" fill="none" d="${lanePath(-1)}" style="${flowStyle}"/>` +
+                `<path class="gm-pxline-flow gm-pxline-flow-reverse${flowClass}" fill="none" d="${lanePath(1)}" style="${flowStyle}"/>`;
         }
         // A cell belongs to its innermost layer: skip it in outer ones.
         const toPath = (map, ...skips) => {
@@ -1062,7 +1083,7 @@ extendClass(GalaxyMapManager, {
                 p[0] = trim(p[0], p[1], 16);
                 const planetInset = this.planetSurfaceRadius(pid) * this.nodeObjScale();
                 p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], planetInset);
-                out += this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1] });
+                out += this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1], traffic: true });
             });
         });
         return out;
@@ -1160,7 +1181,7 @@ extendClass(GalaxyMapManager, {
 
     getMapDetail() {
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
-        return z >= 6 ? 8 : (z >= 2.5 ? 4 : (z >= 1.35 ? 2 : 1));
+        return z >= 2.5 ? 4 : (z >= 1.35 ? 2 : 1);
     },
 
     /**
@@ -1445,8 +1466,12 @@ extendClass(GalaxyMapManager, {
             ? area.clientWidth / area.clientHeight : W / H;
         let w = x1 - x0, h = y1 - y0;
         if (w / h < aspect) w = h * aspect; else h = w / aspect;
-        let cx = (x0 + x1) / 2;
-        let cy = (y0 + y1) / 2;
+        const baseW = w;
+        const baseH = h;
+        const baseCx = (x0 + x1) / 2;
+        const baseCy = (y0 + y1) / 2;
+        let cx = baseCx;
+        let cy = baseCy;
         if (this._panAnchor) {
             cx = this._panAnchor.x;
             cy = this._panAnchor.y;
@@ -1465,6 +1490,24 @@ extendClass(GalaxyMapManager, {
         const z = this.mapZoom || 1;
         w /= z;
         h /= z;
+        // Keep enough of the galaxy in view that panning never loses the map,
+        // while retaining a little overscroll for a natural camera feel.
+        const limitCenter = (center, baseCenter, baseSize, viewSize) => {
+            const overscroll = Math.min(baseSize, viewSize) * 0.25;
+            const min = baseCenter - baseSize / 2 + viewSize / 2 - overscroll;
+            const max = baseCenter + baseSize / 2 - viewSize / 2 + overscroll;
+            return min > max ? baseCenter : Math.max(min, Math.min(max, center));
+        };
+        const clampedCx = limitCenter(cx, baseCx, baseW, w);
+        const clampedCy = limitCenter(cy, baseCy, baseH, h);
+        if (this.mapPan && (clampedCx !== cx || clampedCy !== cy)) {
+            const panBaseX = this._panAnchor ? this._panAnchor.x : baseCx;
+            const panBaseY = this._panAnchor ? this._panAnchor.y : baseCy;
+            this.mapPan.x = clampedCx - panBaseX;
+            this.mapPan.y = clampedCy - panBaseY;
+        }
+        cx = clampedCx;
+        cy = clampedCy;
         return [cx - w / 2, cy - h / 2, w, h];
     },
 
@@ -1475,7 +1518,6 @@ extendClass(GalaxyMapManager, {
      */
     frameSelectionCamera(withShip) {
         if (this._flight || !this.overlay || typeof profileManager === 'undefined') return;
-        if (!withShip) this.armCameraIdleReturn();
         const svg = this.overlay.querySelector('.galaxy-map-svg');
         if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
         const target = this.selectedPostId
@@ -1489,7 +1531,7 @@ extendClass(GalaxyMapManager, {
         const a = this.locationPoint(target);
         const b = shipLoc ? this.locationPoint(shipLoc) : null;
         if (!a) return;
-        // The ship joins the frame only after the cursor has been idle (armCameraIdleReturn).
+        // Callers can opt into framing the selected target and the ship together.
         const pts = b && withShip ? [a, b] : [a];
         const margin = 110;
         const x0 = Math.min(...pts.map((p) => p.x)) - margin;
@@ -1529,28 +1571,6 @@ extendClass(GalaxyMapManager, {
             if (t < 1) requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
-    },
-
-    /**
-     * Glide back to the player ship only after 5 s without cursor activity
-     * on the map; any pointer move / wheel / press restarts the wait.
-     */
-    armCameraIdleReturn() {
-        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
-        if (!area) return;
-        const restart = () => {
-            clearTimeout(this._camIdleTimer);
-            this._camIdleTimer = setTimeout(() => {
-                if (!this.overlay || !area.isConnected || this._flight) return;
-                this.returnCameraToShip();
-            }, 5000);
-        };
-        if (!area._gmIdleBound) {
-            area._gmIdleBound = true;
-            ['pointermove', 'pointerdown', 'wheel'].forEach((ev) =>
-                area.addEventListener(ev, restart, { passive: true }));
-        }
-        restart();
     },
 
     /** Glide the camera (current zoom) back to centre on the player ship. */
@@ -1600,7 +1620,6 @@ extendClass(GalaxyMapManager, {
     },
 
     bindMapZoom() {
-        this.armCameraIdleReturn();
         const svg = this.overlay.querySelector('.galaxy-map-svg');
         if (!svg) return;
         requestAnimationFrame(() => this.updateSelectionFrames());
@@ -1673,6 +1692,7 @@ extendClass(GalaxyMapManager, {
         let apply = () => {
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
+            cur.classList.toggle('gm-close-view', (this.mapZoom || 1) >= 2.5);
             // Only the camera moves: set the viewBox directly (no re-render).
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
@@ -1798,17 +1818,29 @@ extendClass(GalaxyMapManager, {
                 this._panAnchor = { x: vb.x + vb.width / 2, y: vb.y + vb.height / 2 };
                 this.mapPan = { x: 0, y: 0 };
             }
-            this._mapDrag = { x: e.clientX, y: e.clientY, moved: false, pointerId: e.pointerId };
+            const node = e.composedPath().find((el) => el && el.classList && el.classList.contains('gm-node'));
+            const post = e.composedPath().find((el) => el && el.classList && el.classList.contains('gm-post-node'));
+            this._mapDrag = {
+                x: e.clientX,
+                y: e.clientY,
+                moved: false,
+                pointerId: e.pointerId,
+                planetId: node && node.getAttribute('data-planet'),
+                postId: post && post.getAttribute('data-post')
+            };
         });
         const endDrag = (e) => {
             if (!this._mapDrag || (e.pointerId != null && e.pointerId !== this._mapDrag.pointerId)) return;
             const drag = this._mapDrag;
             this._mapDrag = null;
-            if (svg.hasPointerCapture?.(drag.pointerId)) svg.releasePointerCapture(drag.pointerId);
             svg.classList.remove('is-panning');
             if (drag.moved) {
                 this._mapDragSwallow = true;
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
+            } else if (drag.planetId || drag.postId) {
+                this.markUserPicked();
+                if (drag.planetId) this.selectPlanet(drag.planetId);
+                else this.selectPost(drag.postId);
             }
         };
         svg.addEventListener('pointerup', endDrag);
@@ -1829,7 +1861,19 @@ extendClass(GalaxyMapManager, {
             }
             const target = e.composedPath().find((el) => el && el.classList
                 && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
-            if (!target) return;
+            if (!target) {
+                const point = this.clientToMapPoint(svg, e.clientX, e.clientY);
+                if (!point || !this.locationPoint) return;
+                const hit = (this.map.nodes || []).find((node) => {
+                    const loc = this.locationPoint({ kind: 'planet', id: node.planetId });
+                    const radius = Math.max(14, this.planetSurfaceRadius(node.planetId) * this.getMapObjectScale());
+                    return loc && Math.hypot(point.x - loc.x, point.y - loc.y) <= radius;
+                });
+                if (!hit) return;
+                this.markUserPicked();
+                this.selectPlanet(hit.planetId);
+                return;
+            }
             const pid = target.getAttribute('data-planet');
             const postId = target.getAttribute('data-post');
             this.markUserPicked();
@@ -1856,17 +1900,19 @@ extendClass(GalaxyMapManager, {
             cur.classList.add('is-panning');
             const vb = cur.viewBox.baseVal;
             const rect = cur.getBoundingClientRect();
-            const scaleX = vb.width / Math.max(1, rect.width);
-            const scaleY = vb.height / Math.max(1, rect.height);
+            const scale = Math.min(
+                rect.width / Math.max(1, vb.width),
+                rect.height / Math.max(1, vb.height)
+            );
             this.mapPan = this.mapPan || { x: 0, y: 0 };
-            this.mapPan.x -= dx * scaleX;
-            this.mapPan.y -= dy * scaleY;
+            this.mapPan.x -= dx / Math.max(0.0001, scale);
+            this.mapPan.y -= dy / Math.max(0.0001, scale);
             delayShipLabel();
             drag.x = e.clientX;
             drag.y = e.clientY;
             apply();
         });
-        window.addEventListener('pointerup', () => {
+        const stopWindowDrag = () => {
             const drag = this._mapDrag;
             this._mapDrag = null;
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
@@ -1876,7 +1922,9 @@ extendClass(GalaxyMapManager, {
                 // Clear if no click follows (released outside the map).
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
             }
-        });
+        };
+        window.addEventListener('pointerup', stopWindowDrag);
+        window.addEventListener('pointercancel', stopWindowDrag);
     },
 
     bindPostClicks() {
@@ -2486,7 +2534,6 @@ extendClass(GalaxyMapManager, {
         this.raiseHoveredMarker();
         this.raiseSelectedMarker();
         this.updateSelectionFrames();
-        this.frameSelectionCamera();
     },
 
     /**
@@ -2536,6 +2583,15 @@ extendClass(GalaxyMapManager, {
         this.bindMapZoom();
         this.raiseSelectedMarker();
         if (this.selectedPostId) this.updateDetails();
+
+        const locateShipBtn = this.overlay.querySelector('#gmLocateShip');
+        if (locateShipBtn) {
+            locateShipBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.returnCameraToShip();
+            });
+        }
 
         // Jump to the station's galaxy travel (teleport) tab.
         const teleportBtn = this.overlay.querySelector('#gmTeleport');

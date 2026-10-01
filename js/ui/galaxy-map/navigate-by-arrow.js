@@ -404,8 +404,8 @@ extendClass(GalaxyMapManager, {
         const planetBg = this.overlay.querySelector('.gm-sector-planet-bg');
         if (planetBg) {
             const icon = this.planetIconHtml(info.id, 240);
-            planetBg.innerHTML = icon + (info.unlocked ? '' : this.lockBadgeHtml());
             const atmo = this.planetAtmoColor(icon);
+            planetBg.innerHTML = icon + (info.unlocked ? '' : this.lockBadgeHtml());
             planetBg.classList.toggle('has-atmo', !!atmo);
             planetBg.style.setProperty('--atmo', atmo || 'transparent');
         }

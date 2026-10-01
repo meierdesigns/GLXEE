@@ -74,7 +74,8 @@ extendClass(GalaxyMapManager, {
         const edgeGap = 0;
         const mapSpread = 2.0;
         // Lines aim at the centre and stop on the drawn surface.
-        const planetRadius = (planetId) => this.planetSurfaceRadius(planetId);
+        const objScale = this.nodeObjScale();
+        const planetRadius = (planetId) => this.planetSurfaceRadius(planetId) * objScale;
         let edgesHtml = '';
         edges.forEach(edge => {
             const a = this.nodeById[edge[0]];
@@ -224,8 +225,8 @@ extendClass(GalaxyMapManager, {
     blockadeSvgRaw(cx, cy, focusPlanet, shutPlanet, cellOverride) {
         const style = this.borderRulerStyle();
         const rows = this.borderArtFor(style);
-        // Same on-map size as the classic 21-wide art.
-        const artScale = 21 / rows[0].length;
+        // Same on-map size as a shop station (its art spans ~13 planet pixels).
+        const artScale = 13 / rows[0].length;
         const w = rows[0].length, h = rows.length;
         // One art cell = one pixel of the planet it guards (zoom-scaled).
         const cell = (cellOverride || this.planetPixelSize(focusPlanet) * this.getMapObjectScale()) * artScale;
@@ -298,8 +299,10 @@ extendClass(GalaxyMapManager, {
         const focusAttr = focusPlanet ? ` data-focus-planet="${String(focusPlanet).replace(/"/g, '')}"` : '';
         // Map: same corner selection frame as planets / posts (wide: own height).
         const frame = cellOverride ? '' : `<g class="gm-frame-slot" data-frame-r="${(w / 2 * cell).toFixed(2)}" data-frame-ry="${(h / 2 * cell).toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(w / 2 * cell + 4, 7, 2, h / 2 * cell + 4)}</g>`;
-        return `<g class="gm-border-station${style ? ' is-faction' : ''}"${styleAttr}${tipAttr}${focusAttr} transform="translate(${cx.toFixed(2)} ${cy.toFixed(2)})">` + frame +
-            `<g transform="scale(${cell}) translate(${-w / 2} ${-h / 2})" shape-rendering="crispEdges">` + outline + body + `</g></g>`;
+        const wrapClass = 'gm-border-station' + (style ? ' is-faction' : '');
+        const art = this.gmArtImage(outline + body, wrapClass, styleAttr.replace(/^ style="|"$/g, ''), -1, -1, w + 2, h + 2);
+        return `<g class="${wrapClass}"${styleAttr}${tipAttr}${focusAttr} transform="translate(${cx.toFixed(2)} ${cy.toFixed(2)})">` + frame +
+            `<g transform="scale(${cell}) translate(${-w / 2} ${-h / 2})">` + art + `</g></g>`;
     },
 
     /**
@@ -307,7 +310,7 @@ extendClass(GalaxyMapManager, {
      * redraws lines (and returns instantly to steps seen before).
      */
     linesLayerHtml() {
-        const key = this.getLineDetail();
+        const key = this.getLineDetail() + '|' + this.nodeObjScale().toFixed(3);
         this._linesByDetail = this._linesByDetail || {};
         if (!this._linesByDetail[key]) {
             this._linesByDetail[key] = this.edgeLinesSvg() + (this.postLanesSvg ? this.postLanesSvg() : '');
@@ -324,6 +327,8 @@ extendClass(GalaxyMapManager, {
 
         const mapSpread = 2.0;
         this._linesByDetail = {};
+        // Planets are sized once per full render — lines must use that same scale.
+        this._nodeObjScale = this.getMapObjectScale();
         const edgesHtml = this.edgeLinesSvg();
 
         // Ruling faction's base planet (faction-holdings.js).
@@ -346,7 +351,8 @@ extendClass(GalaxyMapManager, {
             const cleared = this.isCleared(n.planetId);
             const selected = !this.selectedPostId && n.planetId === this.selectedPlanetId;
             const hovered = n.planetId === this.hoveredPlanetId;
-            const stageProgress = this.getPlanetStageProgress(n.planetId);
+            // Progress label only while there's still something to fight.
+            const stageProgress = cleared ? null : this.getPlanetStageProgress(n.planetId);
             const sizeSeed = String(n.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
             const baseSize = 32 + (sizeSeed % 7) * 10;
             const size = baseSize * this.getMapObjectScale();
@@ -361,18 +367,12 @@ extendClass(GalaxyMapManager, {
                 <g class="gm-node ${stateClass}"
                    data-planet="${n.planetId}" data-size="${size}" transform="translate(${x},${y})">
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
-                    <g class="gm-frame-slot" data-frame-r="${this.planetSurfaceRadius(n.planetId).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
+                    <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit" data-lit-x="${x}" data-lit-y="${y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
                             ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y))}
                         </div>
                     </foreignObject>
-                    ${cleared ? `
-                        <g class="gm-cleared-badge" transform="translate(${size / 2 - 2},${-size / 2 + 2})">
-                            <circle cx="0" cy="0" r="8" class="gm-cleared-badge-bg"/>
-                            <path class="gm-cleared-check" d="M-3.5 0 L-1 2.5 L3.5 -2.5" fill="none"/>
-                        </g>
-                    ` : ''}
                     ${this.planetFactionsSvg(n.planetId, size)}
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `
@@ -381,13 +381,13 @@ extendClass(GalaxyMapManager, {
                             ${this.baseFortressSvg(size, holdings.ruler)}
                         </g>
                     ` : ''}
-                    ${stageProgress ? `
+                    ${stageProgress ? `<g class="gm-stage-anchor" transform="translate(0,${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}) scale(${this.getMapObjectScale().toFixed(4)})">
                         ${stageProgress.boss
                             // Boss stage: skull + "/4". The skull sits clear of the text's
                             // dark outline stroke, which used to paint over its right edge.
-                            ? `${this.bossIconSvg(-7.5, size / 2 + 9, 1)}${this.pixelTextSvg('/' + stageProgress.total, 0, size / 2 + 12, 'start')}`
-                            : this.pixelTextSvg(stageProgress.done + '/' + stageProgress.total, 0, size / 2 + 12, 'middle')}
-                    ` : ''}
+                            ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextSvg('/' + stageProgress.total, 0, 12, 'start')}`
+                            : this.pixelTextSvg(stageProgress.done + '/' + stageProgress.total, 0, 12, 'middle')}
+                    </g>` : ''}
                     ${!unlocked ? `
                         <g class="gm-locked-icon" transform="translate(-6,${size / 2 + 3})">
                             <path class="gm-lock-shackle" d="M3 6V3h1V2h1V1h2v1h1v1h1v3H8V3H7V2H5v1H4v3z"/>
@@ -419,7 +419,7 @@ extendClass(GalaxyMapManager, {
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
                     ${post.factionStation ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${pp.toFixed(3)})">${this.stationPixelsSvg(post, this.getMapDetail())}</g>
+                    <g class="gm-post-art" transform="scale(${pp.toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
                 </g>
             `;
         });
@@ -521,7 +521,7 @@ extendClass(GalaxyMapManager, {
             if (big) glow += sq(x - q, y, s + 2 * q, s) + sq(x, y - q, s, s + 2 * q);
             if (twinkle && twinkles < 140) {
                 twinkles++;
-                stars += `<rect class="gm-star-twinkle" x="${x}" y="${y}" width="${s}" height="${s}" style="animation-delay:${(-delay * 4).toFixed(2)}s"/>`;
+                stars += `<rect class="gm-star-twinkle" x="${x}" y="${y}" width="${s}" height="${s}" style="animation-delay:${(-Math.floor(delay * 6) * 0.6).toFixed(1)}s"/>`;
             } else {
                 buckets[Math.min(3, Math.floor((a - 0.45) / 0.1375))] += sq(x, y, s, s);
             }
@@ -1060,7 +1060,7 @@ extendClass(GalaxyMapManager, {
                 };
                 const p = pts.slice();
                 p[0] = trim(p[0], p[1], 16);
-                const planetInset = this.planetSurfaceRadius(pid);
+                const planetInset = this.planetSurfaceRadius(pid) * this.nodeObjScale();
                 p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], planetInset);
                 out += this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1] });
             });
@@ -1072,7 +1072,7 @@ extendClass(GalaxyMapManager, {
     invasionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getInvadedPlanetId) return '';
         if (profileManager.getInvadedPlanetId(this.galaxyId) !== planetId) return '';
-        const inv = profileManager.getActiveInvasion();
+        const inv = profileManager.getActiveInvasion(null, this.galaxyId);
         const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
             ? factionShipStyles.getFactionStyle(inv.attacker) : null;
         const accent = (st && st.accent) || '#ff4a3a';
@@ -1080,13 +1080,39 @@ extendClass(GalaxyMapManager, {
             ? profileSelectionManager.getFactionEmblemHtml(inv.attacker, 14) : '';
         const f = size / 2 + 12;
         return `<g class="gm-invasion" style="--fac:${accent}">` +
-            `<title>${String(inv.attacker).toUpperCase()} INVASION · WIN A STAGE HERE TO REPEL IT</title>` +
+            `<title>${String(inv.attacker).toUpperCase()} INVASION · ${inv.ally ? 'DEFEND YOUR ' + String(inv.defender).toUpperCase() + ' ALLIES HERE' : 'WIN A STAGE HERE TO REPEL IT'}</title>` +
             `<rect class="gm-invasion-ring" x="${-f}" y="${-f}" width="${f * 2}" height="${f * 2}"/>` +
             `<rect class="gm-invasion-ring gm-invasion-ring-2" x="${-f - 6}" y="${-f - 6}" width="${f * 2 + 12}" height="${f * 2 + 12}"/>` +
+            this.planetBattleSvg(planetId) +
             `<text class="gm-invasion-label" x="0" y="${f + 14}">UNDER ATTACK</text>` +
             `<foreignObject x="${f - 10}" y="${-f - 10}" width="20" height="20">` +
             `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem">${emblem}</div></foreignObject>` +
             `</g>`;
+    },
+
+    /**
+     * Fighting on an invaded planet: small pixel explosions where the factions
+     * clash, in planet-pixel cells so they match the planet art's coarseness.
+     */
+    planetBattleSvg(planetId) {
+        const k = this.getMapObjectScale();
+        const cell = (this.planetPixelSize ? this.planetPixelSize(planetId) : 2) * k;
+        const r = this.planetSurfaceRadius(planetId) * k;
+        // Stable spots per planet (seeded), inside the disc.
+        let seed = 0;
+        for (const ch of String(planetId)) seed = (Math.imul(seed, 31) + ch.charCodeAt(0)) >>> 0;
+        const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 8) / 16777216;
+        // Single planet pixels that flare up and fade out, one at a time.
+        let out = '<g class="gm-battle" shape-rendering="crispEdges">';
+        for (let i = 0; i < 14; i++) {
+            const a = rnd() * Math.PI * 2;
+            const d = Math.sqrt(rnd()) * (r - cell * 1.5);
+            const x = Math.floor(Math.cos(a) * d / cell) * cell;
+            const y = Math.floor(Math.sin(a) * d / cell) * cell;
+            const delay = (rnd() * 3.2).toFixed(2);
+            out += `<rect class="gm-battle-px" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" style="--bd:${delay}s"/>`;
+        }
+        return out + '</g>';
     },
 
     /** Emblems of the factions fighting on a planet, in a row above it. */
@@ -1094,8 +1120,11 @@ extendClass(GalaxyMapManager, {
         if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getPlanetFactions) return '';
         // Factions are only known on reachable planets.
         if (this.isUnlocked && !this.isUnlocked(planetId)) return '';
-        // Only the factions attacking the player here (never the own side).
-        const factions = planetConfigManager.getHostileFactions
+        // Liberated planet: the player's own emblem flies over it again.
+        const own = this.isCleared && this.isCleared(planetId) && planetConfigManager.getPlayerFaction
+            ? planetConfigManager.getPlayerFaction() : null;
+        // Otherwise only the factions attacking the player here (never the own side).
+        const factions = own ? [own] : planetConfigManager.getHostileFactions
             ? planetConfigManager.getHostileFactions(planetId)
             : planetConfigManager.getPlanetFactions(planetId);
         if (!factions.length) return '';
@@ -1106,8 +1135,13 @@ extendClass(GalaxyMapManager, {
         ).join('');
         const w = 80;
         const h = 18;
-        return `<foreignObject x="${-w / 2}" y="${-size / 2 - h - 8}" width="${w}" height="${h}">` +
-            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-factions">${names}</div></foreignObject>`;
+        // Shrinks with the planet when zoomed in (same object scale).
+        const k = this.getMapObjectScale();
+        // Anchored on the visible disc edge (the icon box has empty margin).
+        const top = this.planetSurfaceRadius(planetId) * k;
+        return `<g transform="translate(0,${-top}) scale(${k.toFixed(4)})">` +
+            `<foreignObject x="${-w / 2}" y="${-h - 4}" width="${w}" height="${h}">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-factions">${names}</div></foreignObject></g>`;
     },
 
     /** Player's active ship rendered once to a small PNG data URL (cached per model). */
@@ -1134,6 +1168,11 @@ extendClass(GalaxyMapManager, {
      * Without this compensation, planets and stations grow linearly with the
      * viewBox and become oversized pixel blocks before their finer art loads.
      */
+    /** Object scale the planet nodes were last rendered with (lines match it). */
+    nodeObjScale() {
+        return this._nodeObjScale || this.getMapObjectScale();
+    },
+
     getMapObjectScale() {
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom))
             ? Math.max(1, this.mapZoom) : 1;
@@ -1232,9 +1271,26 @@ extendClass(GalaxyMapManager, {
      */
     updateSelectionFrames() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
-        if (!svg || !svg.getScreenCTM) return;
-        const ctm = svg.getScreenCTM();
-        const s = ctm ? Math.hypot(ctm.a, ctm.b) : 0;
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
+        // Screen scale from the cached element size + viewBox (meet): reading
+        // getScreenCTM right after a viewBox change forced a full layout of
+        // the map on every zoom frame.
+        if (this._svgSizeEl !== svg || !this._svgSize) {
+            const r = svg.getBoundingClientRect();
+            const vb0 = svg.viewBox.baseVal;
+            const ctm = svg.getScreenCTM && svg.getScreenCTM();
+            const fit = vb0.width && vb0.height ? Math.min(r.width / vb0.width, r.height / vb0.height) : 0;
+            // CTM vs. rect ratio (the GUI's CSS zoom), measured once.
+            const c = ctm && fit ? Math.hypot(ctm.a, ctm.b) / fit : 1;
+            this._svgSizeEl = svg;
+            this._svgSize = { w: r.width * c, h: r.height * c };
+            if (!this._svgSizeReset) {
+                this._svgSizeReset = () => { this._svgSize = null; };
+                window.addEventListener('resize', this._svgSizeReset);
+            }
+        }
+        const vb = svg.viewBox.baseVal;
+        const s = vb.width && vb.height ? Math.min(this._svgSize.w / vb.width, this._svgSize.h / vb.height) : 0;
         if (!s) return;
         const px = (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
         const key = s.toFixed(4);
@@ -1610,7 +1666,7 @@ extendClass(GalaxyMapManager, {
             cur.querySelectorAll('.gm-post-node[data-post]').forEach((node) => {
                 const art = node.querySelector('.gm-post-art');
                 const post = art && this.getTradingPosts().find((p) => p.id === node.getAttribute('data-post'));
-                if (post) art.innerHTML = this.stationPixelsSvg(post, detail);
+                if (post) art.innerHTML = this.stationArtImage(post, detail, node.classList.contains('open'));
             });
             applyShip();
         };
@@ -2199,6 +2255,61 @@ extendClass(GalaxyMapManager, {
      * the detail at 4 and cache the markup per station + detail, so zoom
      * steps only swap strings instead of rebuilding the art.
      */
+    /**
+     * Map station art as one <image>: thousands of pixel rects (some of them
+     * animated) in the live map SVG made every frame repaint them all. The
+     * live .gm-station wrapper keeps the hover / closed filters.
+     */
+    stationArtImage(post, detail, open) {
+        const raw = this.stationPixelsSvg(post, detail);
+        const key = raw.length + '|' + (open ? 'o' : 'c') + '|' + this.stationPixelsSvgKey(post, detail);
+        this._stationImgCache = this._stationImgCache || {};
+        if (!this._stationImgCache[key]) {
+            const cls = (/^<g class="([^"]*)"/.exec(raw) || [])[1] || 'gm-station';
+            this._stationImgCache[key] = `<g class="${cls}">` +
+                this.gmArtImage(raw, 'gm-post-node ' + (open ? 'open' : 'closed'), '', -9, -9, 18, 18) + `</g>`;
+        }
+        return this._stationImgCache[key];
+    },
+
+    stationPixelsSvgKey(post, detail) {
+        const d = Math.min(GM_ART_DETAIL_MAX, Math.max(1, Math.round(detail || 1)));
+        const st = this.stationFactionStyle(post);
+        return String((post && post.id) || '') + (post && post.factionStation ? '|f' : '') + '@' + d + (st ? '|' + st.id + st.hull : '');
+    },
+
+    /** Map-art CSS (rules + keyframes) for standalone art images, collected once. */
+    gmArtCss() {
+        if (this._gmArtCss != null) return this._gmArtCss;
+        const want = /gm-(border|station|lamp)/;
+        let css = '';
+        for (const sheet of Array.from(document.styleSheets)) {
+            let rules;
+            try { rules = sheet.cssRules; } catch (e) { continue; }
+            for (const r of Array.from(rules || [])) {
+                // Filters stay on the live wrapper (hover / closed), not inside.
+                if (r.type === 1 && want.test(r.selectorText) && !/\bfilter\s*:/.test(r.cssText)) css += r.cssText + '\n';
+                else if (r.type === 7 && /^gm-/.test(r.name)) css += r.cssText + '\n';
+            }
+        }
+        this._gmArtCss = css;
+        return css;
+    },
+
+    /**
+     * Pixel art (SVG markup in art units) as a single <image> covering
+     * x/y/w/h. Wrapped in wrapClass + wrapStyle inside its own document so
+     * the map CSS selectors and faction vars still apply.
+     */
+    gmArtImage(inner, wrapClass, wrapStyle, x, y, w, h) {
+        const cs = getComputedStyle((this.overlay && this.overlay.querySelector('.galaxy-map-svg')) || document.documentElement);
+        const vars = ['--faction-accent', '--color-primary']
+            .map((v) => { const val = cs.getPropertyValue(v).trim(); return val ? v + ':' + val + ';' : ''; }).join('');
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" width="${w * 16}" height="${h * 16}" shape-rendering="crispEdges">` +
+            `<style>${this.gmArtCss()}</style><g class="${wrapClass}" style="${vars}${wrapStyle || ''}">${inner}</g></svg>`;
+        return `<image class="gm-art-img" href="data:image/svg+xml,${encodeURIComponent(svg)}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>`;
+    },
+
     stationPixelsSvg(post, detail) {
         const d = Math.min(GM_ART_DETAIL_MAX, Math.max(1, Math.round(detail || 1)));
         const st = this.stationFactionStyle(post);

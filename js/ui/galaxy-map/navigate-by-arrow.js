@@ -120,7 +120,7 @@ extendClass(GalaxyMapManager, {
         if (typeof profileManager !== 'undefined' && profileManager.getPlanetStartOptions) {
             return profileManager.getPlanetStartOptions(planetId);
         }
-        const pid = String(planetId || '').toLowerCase().split('-')[0];
+        const pid = planetIdOfLevelId(planetId);
         return {
             canChoose: false,
             startLevelId: pid ? `${pid}-1` : null,
@@ -234,7 +234,20 @@ extendClass(GalaxyMapManager, {
             return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">${this.btnIconHtml('menuWeapons')}ASSAULT BASE</button>` +
                 `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
         }
+        // Liberated planet: nothing left to fight (unless it's invaded again;
+        // dev mode can still replay stages).
+        const invaded = profileManager.getInvadedPlanetId && profileManager.getInvadedPlanetId(this.galaxyId) === info.id;
+        if (this.isCleared && this.isCleared(info.id) && !invaded && !(this.isDevMode && this.isDevMode())) {
+            return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>LIBERATED</button>`;
+        }
         const opts = this.getStartOptions(info && info.id);
+        // Dev mode: the stage picked in the stepper is what launches.
+        const pick = this.isDevMode && this.isDevMode() && this.getDevStagePick ? this.getDevStagePick(info && info.id) : null;
+        if (pick) {
+            const n = this.getStagesPerPlanet(info.id);
+            const label = pick > n ? `BOSS ${n + 1}/${n + 1}` : `STAGE ${pick}/${n + 1}`;
+            return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}${label}</button>`;
+        }
         if (opts.canChoose) {
             return `
                 <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">${this.btnIconHtml('menuRetry')}FROM START</button>
@@ -287,6 +300,10 @@ extendClass(GalaxyMapManager, {
         }
         actions.innerHTML = this.renderConfirmActionsHtml(info) + (backHtml ? ` ${backHtml}` : '');
         this.bindConfirmActions();
+        // The stage row reads the same progress as the button: rebuild it
+        // with it, else it kept the state from when the map was opened.
+        const stepper = this.overlay.querySelector('#gmStageStepper');
+        if (stepper && info) stepper.innerHTML = info.unlocked ? this.planetStagesHtml(info.id) : '';
     },
 
     bindConfirmActions() {
@@ -397,7 +414,7 @@ extendClass(GalaxyMapManager, {
             ? (info.cleared
                 ? 'CLEARED'
                 : (info.stage.highestStage
-                    ? (info.stage.highestStage >= this.getStagesPerPlanet() ? `BOSS READY · ${this.getStagesPerPlanet() + 1}/${this.getStagesPerPlanet() + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet() + 1}`)
+                    ? (info.stage.highestStage >= this.getStagesPerPlanet(info.id) ? `BOSS READY · ${this.getStagesPerPlanet(info.id) + 1}/${this.getStagesPerPlanet(info.id) + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet(info.id) + 1}`)
                     : 'READY'))
             : 'LOCKED');
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
@@ -455,9 +472,11 @@ extendClass(GalaxyMapManager, {
         }
         const mode = startMode === 'start' ? 'start' : 'resume';
         const opts = this.getStartOptions(info.id);
-        const levelId = mode === 'start'
-            ? (opts.startLevelId || `${info.id}-1`)
-            : (opts.resumeLevelId || `${info.id}-1`);
+        // Dev mode: a stage picked in the stepper overrides progress.
+        const levelId = (this.getDevStageLevelId && this.getDevStageLevelId(info.id))
+            || (mode === 'start'
+                ? (opts.startLevelId || `${info.id}-1`)
+                : (opts.resumeLevelId || `${info.id}-1`));
         const cb = this.onConfirm;
         const payload = {
             galaxyId: this.galaxyId,

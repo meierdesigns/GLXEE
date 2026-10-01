@@ -220,7 +220,12 @@ extendClass(HomeStationUI, {
                 <button type="button" class="ui-controls-show-btn" id="hsShowControls" title="Show controls (Shift+H)" aria-label="Show controls">?</button>
                 ${this.renderResourceBuyModal(profile)}
               </div>
-            </div>`);
+            </div>
+            <label class="hs-frame-ui-scale" for="hsFrameUiScale">
+                <span>GUI</span>
+                <input type="range" id="hsFrameUiScale" min="50" max="125" step="5" value="${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}" aria-label="GUI scale">
+                <output id="hsFrameUiScaleValue">${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}%</output>
+            </label>`);
         if (!reuse) {
             this.overlay.classList.add('vf-menu-enter');
             document.body.appendChild(this.overlay);

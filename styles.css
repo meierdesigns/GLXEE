@@ -86,6 +86,16 @@
 .gm-border-station .gm-border-r,
 .gm-border-station .gm-border-r2 { fill: #ff5a3c; opacity: 0.85; animation: gm-border-field 0.8s steps(2, end) infinite; }
 .gm-border-station .gm-border-r2 { fill: #ff9a6a; animation-delay: -0.4s; }
+.gm-border-station .gm-border-shade { fill: #000; opacity: 0.3; }
+.gm-border-station .gm-border-glint { fill: #fff; opacity: 0.22; }
+.gm-border-station .gm-border-deep { fill: #000; opacity: 0.5; }
+/* Ruling faction: hull tones from its hull colour, field/lamps in its accent. */
+.gm-border-station.is-faction .gm-border-k { fill: color-mix(in srgb, var(--bf-edge) 80%, #000); }
+.gm-border-station.is-faction .gm-border-d { fill: var(--bf-edge); }
+.gm-border-station.is-faction .gm-border-m { fill: color-mix(in srgb, var(--bf-hull) 75%, #000); }
+.gm-border-station.is-faction .gm-border-l { fill: color-mix(in srgb, var(--bf-hull) 70%, #fff); }
+.gm-border-station.is-faction :is(.gm-border-a, .gm-border-r) { fill: var(--bf-accent); }
+.gm-border-station.is-faction .gm-border-r2 { fill: color-mix(in srgb, var(--bf-accent) 60%, #fff); }
 @keyframes gm-border-field { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .gm-border-station rect { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .gm-pxline .gm-pxline-flow, .gm-pxline .gm-pxline-halo { animation: none; } }
@@ -1039,6 +1049,12 @@ html[data-vf-arcade="on"] .settings-row-value {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.gi-chip-loot .gi-chip-count {
+    color: var(--color-text-primary, var(--color-primary));
+    font-weight: bold;
+    font-size: 0.72em;
 }
 
 /* Legacy hooks kept for any external selectors */
@@ -7594,6 +7610,9 @@ body.pe-resizing * {
     stroke: var(--color-background);
     stroke-width: 2.5px;
 }
+.gm-stage-progress-px { pointer-events: none; }
+.gm-stage-progress-px .gm-pixel-text { fill: var(--color-text); }
+.gm-stage-progress-px .gm-pixel-text-o { fill: var(--color-background); }
 .gm-node {
     cursor: pointer;
     pointer-events: all;
@@ -15042,6 +15061,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .gm-post-node.selected .gm-selection-frame { opacity: 1; }
 
 /* Trading posts drawn as pixel space stations (map node + sector card). */
+.gm-station-outline { fill: #05060a; }
 .gm-station-hull { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #d8d8e0); }
 .gm-station-dark { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #1a1a24); }
 .gm-station-panel { fill: #2d5fa8; stroke: #7fb2ff; stroke-width: 0.3; }
@@ -15050,6 +15070,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 /* Card-size station detail layers (see stationPixelsSvg detail). */
 .gm-station-glint { fill: #ffffff; opacity: 0.28; }
 .gm-station-shade { fill: #000000; opacity: 0.32; }
+.gm-station-deep { fill: #000000; opacity: 0.5; }
 .gm-station-window { fill: #fff6c8; opacity: 0.85; }
 .gm-station-card .gm-station-panel { stroke: none; }
 @keyframes gm-station-blink { 50% { fill: var(--faction-accent, var(--color-primary)); } }
@@ -15066,8 +15087,6 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .gm-lamp-green { fill: #3bff7a; }
 .gm-lamp-strobe { fill: #ffffff; }
 .gm-lamp-amber { fill: #ffb43b; }
-.gm-lamp-halo { opacity: 0.35; }
-.gm-lamp-halo.gm-lamp-strobe { opacity: 0.25; }
 :is(.gm-post-node, .gm-station-card).open .gm-station-lamp { animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
 :is(.gm-post-node, .gm-station-card).open .gm-lamp-strobe { animation: gm-lamp-strobe 2.4s steps(1, end) infinite; }
 :is(.gm-post-node, .gm-station-card).open .gm-lamp-amber { animation-duration: 0.8s; }
@@ -18059,15 +18078,31 @@ button.hs-faction-card.nav-focused {
    needs; the vitals panel (health / energy / shield) fills the rest, so
    the bars are tall instead of leaving an empty info box. */
 .game-left-cluster > .game-info-panel {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
 }
 .game-left-cluster > .player-vitals-side {
-    --vitals-h: clamp(180px, 34vh, 520px);
-    flex: 1 1 auto;
-    height: auto;
-    max-height: none;
+    --vitals-h: clamp(130px, 20vh, 240px);
+    flex: 0 0 auto;
+    height: var(--vitals-h);
+    max-height: var(--vitals-h);
     min-height: var(--vitals-h);
 }
+
+/* Left HUD readability: larger labels/values, full-contrast labels. */
+.game-info-panel { font-size: calc(var(--font-text) + 2px); }
+.game-info-panel .gi-cluster-title { font-size: 0.9em; }
+.game-info-panel :is(.gi-metric-label, .gi-row-label, .gi-chip-row-label) {
+    font-size: 0.88em;
+    opacity: 1;
+    color: color-mix(in srgb, var(--color-text, #fff) 80%, var(--faction-accent, var(--color-primary)));
+}
+.game-info-panel .gi-metric-value { font-size: 1.15em; color: #fff; }
+.game-info-panel .gi-row-value { font-size: 1.05em; color: #fff; }
+.game-info-panel .gi-chip-label { font-size: 0.8em; }
+.game-info-panel .gi-row { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+.game-info-panel :is(.gi-row-icon, .gi-icon) { width: 28px; height: 28px; }
+.game-info-panel .gi-row-icon img { width: 28px !important; height: 28px !important; }
+.game-left-cluster .weapon-info { font-size: calc(var(--font-text) + 2px); }
 .player-vitals-side .health-fill {
     width: 26px;
 }
@@ -22823,4 +22858,471 @@ html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-
         width: 100%;
         min-width: 0;
     }
+}
+
+/* PLAY launch reacts like a main nav tab: label + icon light up in the
+   faction colour on hover / keyboard focus, and stay accented while active. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    color: var(--color-text, #f0e6dc);
+    font-family: var(--ui-font-family);
+    letter-spacing: 0.08em;
+    transition: none;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused) .hs-play-launch-label {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 2px 2px 0 #000;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused, .active)::before,
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused, .active) .hs-play-launch-icon {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused) {
+    outline: none;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff),
+        inset 0 0 28px var(--faction-accent, var(--color-primary));
+}
+
+/* Enemy rows: shield bar under the HP bar (cyan), pulsing while it recharges. */
+.enemy-vitals-side .health-bar.enemy-health .enemy-health-main,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-health-main {
+    flex-direction: column;
+    gap: 3px;
+}
+.enemy-vitals-side .health-bar.enemy-health .health-fill {
+    width: 100%;
+    flex: 0 0 auto;
+}
+.enemy-vitals-side .enemy-shield-fill {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    background: #000;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, #4fd8ff 55%, transparent);
+    box-sizing: border-box;
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-shield-fill { height: 12px; }
+.enemy-vitals-side .enemy-shield-fill::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: var(--shield-width, 100%);
+    background: #4fd8ff;
+    transition: width 0.25s linear;
+}
+.enemy-vitals-side .enemy-shield-fill.is-charging::before {
+    animation: enemy-shield-charge 0.6s steps(2) infinite;
+}
+.enemy-vitals-side .enemy-shield-fill.is-down { border-color: #ff4f4f; }
+@keyframes enemy-shield-charge {
+    50% { background: color-mix(in srgb, #4fd8ff 45%, #fff); }
+}
+.enemy-vitals-side .enemy-shield-text {
+    position: relative;
+    z-index: 1;
+    display: block;
+    text-align: center;
+    font-family: var(--ui-font-family);
+    font-size: 8px;
+    line-height: 8px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+.enemy-vitals-side .enemy-shield-fill.is-down .enemy-shield-text { color: #ff8080; }
+
+/* Left sidebar: spread the info clusters over the full height instead of
+   leaving an empty block at the bottom; rows get room to breathe. */
+.game-left-cluster > .game-info-panel .gi-body {
+    justify-content: space-between;
+}
+.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) .gi-cluster-body {
+    flex: 1 1 auto;
+    justify-content: space-evenly;
+    gap: 4px;
+}
+.game-left-cluster > .game-info-panel .gi-metric {
+    padding: 4px 5px;
+    gap: 2px;
+}
+.game-left-cluster > .game-info-panel .gi-row { padding: 3px 0; }
+/* Fill the stretched clusters: metric tiles and rows grow into the free
+   height instead of floating in the middle of an empty box. */
+.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) .gi-cluster-body {
+    justify-content: stretch;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics {
+    flex: 1 1 auto;
+    grid-auto-rows: 1fr;
+    align-content: stretch;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric {
+    justify-content: center;
+    gap: 4px;
+}
+/* No outlines between the tiles: separated by the gap and a soft fill only
+   (border stays transparent so the stat-change flash can still light it). */
+.game-left-cluster > .game-info-panel .gi-metric {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+    box-shadow: none;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric-value {
+    font-size: 1.25em;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row {
+    flex: 1 1 0;
+    min-height: 0;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row:last-child { border-bottom: 0; }
+
+/* Victory / game-over menu: the selected button is a solid lit block
+   (accent fill, dark text + icon, glow); the others stay quiet — a thin dim
+   frame only — so the selection is obvious at a glance. */
+html body #victoryOverlay .victory-button {
+    background: color-mix(in srgb, #05060a 85%, transparent) !important;
+    color: color-mix(in srgb, var(--color-text, #fff) 70%, transparent) !important;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transform: none !important;
+}
+html body #victoryOverlay .victory-button::before,
+html body #victoryOverlay .victory-button::after {
+    display: none !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) {
+    background: var(--faction-accent, var(--color-primary)) !important;
+    color: #05060a !important;
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        0 0 0 3px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent),
+        0 0 18px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) .button-text {
+    color: #05060a !important;
+    text-shadow: none !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) .button-icon :is(img, canvas) {
+    filter: brightness(0) !important;
+}
+
+/* FIELD → LOOT: label above the chips; larger, resource-coloured icons. */
+.game-info-panel .gi-chip-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+}
+.game-info-panel .gi-chips { gap: 5px; }
+.game-info-panel .gi-chip.gi-chip-loot {
+    width: 48px;
+    padding: 4px 2px 3px;
+    border-color: color-mix(in srgb, var(--loot-color) 60%, transparent);
+    background: color-mix(in srgb, var(--loot-color) 12%, #05060a);
+}
+.game-info-panel .gi-chip.gi-chip-loot :is(.gi-icon, img) {
+    width: 32px !important;
+    height: 32px !important;
+}
+.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
+    color: var(--loot-color);
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+/* FIELD → LOOT: bare icon + count below, no chip frame; empty resources dimmed. */
+.game-info-panel .gi-chip.gi-chip-loot {
+    width: auto;
+    min-width: 32px;
+    padding: 0;
+    border: 0;
+    background: none;
+    clip-path: none;
+}
+.game-info-panel .gi-chip.gi-chip-loot.gi-chip-empty { opacity: 0.35; }
+
+/* LOOT: more headroom above the label; chips share the row evenly,
+   icon and count centred in each column. */
+.game-info-panel .gi-cluster-field .gi-chip-row {
+    padding-top: 8px;
+}
+.game-info-panel .gi-chip-row-label {
+    margin-bottom: 2px;
+}
+.game-info-panel .gi-chip-row .gi-chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    justify-items: center;
+    width: 100%;
+}
+.game-info-panel .gi-chip.gi-chip-loot {
+    width: 100%;
+    max-width: 56px;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
+    text-align: center;
+    width: 100%;
+}
+
+/* SHIP stats: improved values light up green with their delta, lowered
+   ones dim red; the weapon box glows while shots are boosted. */
+.game-info-panel .gi-stat .gi-stat-delta {
+    margin-left: 5px;
+    font-size: 0.7em;
+    vertical-align: middle;
+}
+.game-info-panel .gi-stat.gi-stat-up {
+    border-color: #5dff9a !important;
+    background: color-mix(in srgb, #5dff9a 18%, #05060a) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #5dff9a 35%, transparent), 0 0 12px color-mix(in srgb, #5dff9a 45%, transparent);
+    animation: gi-stat-pulse 0.5s steps(2) 4;
+}
+.game-info-panel .gi-stat.gi-stat-up :is(.gi-metric-label, .gi-metric-value) { color: #5dff9a !important; }
+.game-info-panel .gi-stat.gi-stat-down {
+    border-color: color-mix(in srgb, #ff6a5d 60%, transparent) !important;
+}
+.game-info-panel .gi-stat.gi-stat-down .gi-metric-value { color: #ff8a80 !important; }
+@keyframes gi-stat-pulse { 50% { background: color-mix(in srgb, #5dff9a 40%, #05060a); } }
+
+.gi-weapon-boosted {
+    border-color: #ffcf3a !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #ffcf3a 35%, transparent), 0 0 14px color-mix(in srgb, #ffcf3a 45%, transparent) !important;
+}
+.gi-weapon-boosted #weaponInfo::after {
+    content: '  ▲ BOOST';
+    color: #ffcf3a;
+    font-weight: bold;
+}
+.gi-weapon-flash { animation: gi-stat-pulse 0.5s steps(2) 4; }
+
+/* LOADOUT → all slotted weapons; breathing glow during temporary boosts (power shot). */
+.game-info-panel .gi-weapon-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 4px;
+}
+.game-info-panel .gi-chip.gi-chip-weapon :is(.gi-icon, img) {
+    filter: drop-shadow(0 0 1px #05060a);
+}
+.game-info-panel .gi-chip.gi-chip-weapon.gi-chip-boosted {
+    border-color: #ffcf3a;
+    animation: gi-weapon-breath 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
+}
+.game-info-panel .gi-chip.gi-chip-weapon.gi-chip-boosted :is(.gi-icon, img) {
+    animation: gi-weapon-breath-icon 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
+}
+@keyframes gi-weapon-breath {
+    0%, 100% { background: color-mix(in srgb, #ffcf3a 8%, transparent); }
+    50% { background: color-mix(in srgb, #ffcf3a 30%, transparent); }
+}
+@keyframes gi-weapon-breath-icon {
+    0%, 100% { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #ffcf3a); }
+    50% { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 5px #ffcf3a) brightness(1.3); }
+}
+
+/* SHIP stats: icon instead of the text label. */
+.game-info-panel .gi-stat .gi-stat-icon {
+    display: flex;
+    line-height: 0;
+}
+.game-info-panel .gi-stat .gi-stat-icon :is(.gi-icon, img) {
+    width: 24px !important;
+    height: 24px !important;
+}
+
+/* Wallet card: own card right of the navbars (same chrome as the pilot
+   card) — resources in a 2-column grid, logout behind a divider. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+    flex: 0 0 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    margin: 8px 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px 8px 14px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    background: color-mix(in srgb, var(--color-background, #050508) 80%, transparent);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-wallet-card .hs-wallet-res {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 8px 16px;
+    align-items: center;
+}
+.hs-wallet-card .hs-credit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.hs-wallet-card .hs-credit-icon,
+.hs-wallet-card .hs-credit-icon :is(img, canvas) {
+    width: 20px !important;
+    height: 20px !important;
+}
+.hs-wallet-card .hs-credit-amount {
+    font-size: 14px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+.hs-wallet-card .hs-logout-btn {
+    flex: 0 0 auto;
+    align-self: stretch;
+    margin: 0;
+    padding-left: 12px;
+    border-left: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+}
+@media (max-width: 900px) {
+    html body .home-station-overlay .home-station-content .hs-header-split { flex-wrap: wrap; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { margin: 0; }
+}
+
+/* SHIP stat tiles: icon/label and value centred horizontally. */
+.game-info-panel .gi-cluster-combat .gi-metric {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+.game-info-panel .gi-cluster-combat .gi-metric > * {
+    justify-content: center;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* LOOT: icons always at full colour (also at 0); bigger counts. */
+.game-info-panel .gi-chip.gi-chip-loot,
+.game-info-panel .gi-chip.gi-chip-loot.gi-chip-empty {
+    opacity: 1 !important;
+    filter: none !important;
+}
+.game-info-panel .gi-chip.gi-chip-loot :is(img, canvas) {
+    opacity: 1 !important;
+    filter: none !important;
+}
+.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
+    font-size: 15px !important;
+    line-height: 1.1;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+/* Wallet card: wider, all resources side by side in one row. */
+.hs-wallet-card .hs-wallet-res {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 14px;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+    padding-left: 16px;
+}
+
+/* Sub-navbar may wrap onto several rows instead of scrolling / clipping. */
+html body .home-station-overlay .home-station-content .hs-subnav {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 42px !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    row-gap: 4px;
+    align-content: flex-start;
+}
+html body .home-station-overlay .home-station-content .hs-subnav > .hs-tab {
+    flex: 0 0 auto;
+}
+
+/* Galaxy map start buttons: black fill + double outline (accent border,
+   dark gap, inner accent line). The mission button is the primary: brighter
+   lines and text. No colour-fill pulse on focus. */
+.galaxy-map-panel-select .gm-card-actions .action-button,
+.action-button#gmConfirmStart,
+.action-button.gm-mission-btn {
+    --gm-btn-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #05060a);
+    background: #05060a !important;
+    color: #d8d8de !important;
+    border: 3px solid var(--gm-btn-line) !important;
+    box-shadow: inset 0 0 0 3px #05060a, inset 0 0 0 6px var(--gm-btn-line), 3px 3px 0 0 #000 !important;
+    text-shadow: 1px 1px 0 #000;
+    opacity: 1;
+    animation: none !important;
+}
+.action-button.gm-mission-btn {
+    --gm-btn-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, #fff);
+    color: #fff !important;
+    font-weight: bold;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused),
+.action-button#gmConfirmStart:is(:hover, :focus-visible, .nav-focused),
+.action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused) {
+    --gm-btn-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+    background: #05060a !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 3px #05060a, inset 0 0 0 6px var(--gm-btn-line), 5px 5px 0 0 #000 !important;
+}
+.action-button.gm-mission-btn .gm-mission-icon { filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a); }
+/* The station frame (::before = solid frame colour, ::after = inner fill)
+   painted over the black button; the card's shine ::after replaced the inner
+   fill, so the button looked solid. These buttons draw their own double outline. */
+.home-station-overlay :is(#gmConfirmStart, .gm-mission-btn, .gm-card-actions .action-button)::before,
+.galaxy-map-panel-select .gm-card-actions :is(#gmConfirmStart, .gm-mission-btn, .action-button)::before {
+    display: none !important;
+}
+.home-station-overlay :is(#gmConfirmStart, .gm-mission-btn, .gm-card-actions .action-button)::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent) !important;
+    clip-path: none !important;
+}
+
+/* Sector card: settling factions as coloured chips. */
+.gm-faction-value { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.gm-faction-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--chip); text-shadow: 1px 1px 0 #05060a; }
+.gm-faction-dot { width: 7px; height: 7px; background: var(--chip); box-shadow: 0 0 0 1px #05060a; }
+
+/* Wallet card: wider, roomier resource row. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+    min-width: 440px;
+    padding: 8px 12px 8px 22px;
+    gap: 20px;
+}
+.hs-wallet-card .hs-wallet-res {
+    flex: 1 1 auto;
+    justify-content: space-between;
+    gap: 22px;
+}
+@media (max-width: 900px) {
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { min-width: 0; }
+}
+
+/* Wallet: icon above the amount, both larger. */
+.hs-wallet-card .hs-credit {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+}
+.hs-wallet-card .hs-credit-icon,
+.hs-wallet-card .hs-credit-icon :is(img, canvas) {
+    width: 28px !important;
+    height: 28px !important;
+}
+.hs-wallet-card .hs-credit-amount {
+    font-size: 22px !important;
+    line-height: 1;
+    text-align: center;
 }

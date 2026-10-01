@@ -234,8 +234,10 @@ extendClass(HomeStationUI, {
             this.hideUpgradeTip();
             return;
         }
-        const tw = host.offsetWidth;
-        const th = host.offsetHeight;
+        // Visual px throughout; converted to CSS px on write (zoomed host).
+        const hz = window.vfEffectiveZoom ? window.vfEffectiveZoom(host) : 1;
+        const tw = host.offsetWidth * hz;
+        const th = host.offsetHeight * hz;
         let left = r.left + (r.width / 2) - (tw / 2);
         let top = r.top - th - 12;
         host.classList.remove('below');
@@ -247,8 +249,8 @@ extendClass(HomeStationUI, {
         if (top + th > window.innerHeight - 8 && !host.classList.contains('below')) {
             top = Math.max(8, window.innerHeight - th - 8);
         }
-        host.style.left = Math.round(left) + 'px';
-        host.style.top = Math.round(top) + 'px';
+        host.style.left = Math.round(window.vfToCssPx ? window.vfToCssPx(host, left) : left) + 'px';
+        host.style.top = Math.round(window.vfToCssPx ? window.vfToCssPx(host, top) : top) + 'px';
     },
 
     hideUpgradeTip() {

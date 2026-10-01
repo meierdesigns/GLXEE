@@ -199,15 +199,15 @@ extendClass(HomeStationUI, {
                             <div class="hs-tabs">
                                 ${this.renderTabs()}
                             </div>
-                            <!-- Resources right of the MENU tab (moved out of the pilot card). -->
-                            <div class="hs-topbar-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
-                            <div class="hs-topbar-actions">
-                                <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
-                                    <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
-                                </button>
-                            </div>
                         </div>
                         ${this.renderAreaSubnav()}
+                    </div>
+                    <!-- Wallet card right of both navbars: resources + logout. -->
+                    <div class="hs-wallet-card">
+                        <div class="hs-wallet-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
+                        <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
+                            <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
+                        </button>
                     </div>
                 </div>
                 <div class="${bodyClass}">${body}</div>
@@ -403,12 +403,14 @@ extendClass(HomeStationUI, {
             // tab is filled, the tab itself stays visible through it.
             // Breathing room between the tab's label and its outline.
             const pad = 8;
-            const top = b.top - r.top - pad;
-            bridge.style.setProperty('--tab-h', Math.round(b.height + pad) + 'px');
-            bridge.style.left = Math.round(b.left - r.left - pad) + 'px';
-            bridge.style.width = Math.round(b.width + 2 * pad) + 'px';
+            // Rects are visual px; the bridge lives in zoomed CSS px.
+            const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(root) : 1;
+            const top = (b.top - r.top) / z - pad;
+            bridge.style.setProperty('--tab-h', Math.round(b.height / z + pad) + 'px');
+            bridge.style.left = Math.round((b.left - r.left) / z - pad) + 'px';
+            bridge.style.width = Math.round(b.width / z + 2 * pad) + 'px';
             bridge.style.top = Math.round(top) + 'px';
-            bridge.style.height = Math.max(0, Math.round(s.top - r.top + 2 - top)) + 'px';
+            bridge.style.height = Math.max(0, Math.round((s.top - r.top) / z + 2 - top)) + 'px';
         };
         measure();
         requestAnimationFrame(measure);

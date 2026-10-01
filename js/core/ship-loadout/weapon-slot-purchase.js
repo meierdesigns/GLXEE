@@ -10,6 +10,9 @@
 //
 //   profile.shipUpgrades[shipId].weaponSlotsBought = n   (extra slots)
 //
+// Profiles created later (profile.weaponSlotStart === 'single') start every
+// ship with only the nose gun instead of the class mounts.
+//
 // Older profiles keep the previous caps, so no equipped weapon is lost.
 (function weaponSlotPurchase() {
     const MAX_EXTRA = 4;
@@ -75,6 +78,8 @@
         const profile = baseCreate.call(this, name, factionId);
         if (profile) {
             profile.weaponSlotModel = 'purchase';
+            // Every ship starts with just the nose gun; more are bought.
+            profile.weaponSlotStart = 'single';
             this.save();
         }
         return profile;
@@ -91,8 +96,10 @@
             return caps;
         }
         const base = this.getBaseSlotCaps(modelClass || this.resolveModelClass(shipId));
-        const baseMounts = this.baseWeaponMounts(base);
-        const areaBonus = Math.max(0, (Number(caps.weapons) || 0) - baseMounts);
+        const classMounts = this.baseWeaponMounts(base);
+        const p = profileManager.getActiveProfile && profileManager.getActiveProfile();
+        const baseMounts = p && p.weaponSlotStart === 'single' ? 1 : classMounts;
+        const areaBonus = Math.max(0, (Number(caps.weapons) || 0) - classMounts);
         const bought = profileManager.getWeaponSlotsBought(shipId);
         // Class mounts (interceptor 1, starfighter/assault 3, heavy 5) + 2 per bought slot.
         caps.weapons = baseMounts + 2 * bought + areaBonus;

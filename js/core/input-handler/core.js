@@ -214,16 +214,18 @@ class InputHandler {
                         bulletManager.beginCharge();
                     }
                 } else {
-                    bulletManager.shoot(playerManager.getPosition());
+                    // Space fires only its own slots unless it is the ALL key.
+                    const spaceOpts = () => ({ fireKey: bulletManager.fireGroupFor ? bulletManager.fireGroupFor('space') : 'space' });
+                    bulletManager.shoot(playerManager.getPosition(), spaceOpts());
 
                     // Fast fire cheat - shoot multiple bullets
                     if (typeof cheatSystem !== 'undefined' && cheatSystem.cheats && cheatSystem.cheats.fastFire) {
                         this.clearFastFireTimeouts();
                         this.activeTimeouts.push(
-                            setTimeout(() => bulletManager.shoot(playerManager.getPosition()), 50)
+                            setTimeout(() => bulletManager.shoot(playerManager.getPosition(), spaceOpts()), 50)
                         );
                         this.activeTimeouts.push(
-                            setTimeout(() => bulletManager.shoot(playerManager.getPosition()), 100)
+                            setTimeout(() => bulletManager.shoot(playerManager.getPosition(), spaceOpts()), 100)
                         );
                     }
                 }

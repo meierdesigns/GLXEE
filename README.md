@@ -204,6 +204,21 @@ pattern. Flights and cleared battles advance the control simulation:
 - a new profile begins with a seeded home-galaxy invasion that can be repelled
   for an opening reward.
 
+**Shared world ownership:** clearing a planet claims it for the pilot's faction
+in a global `galaxy.owners` map (latest clear wins). Holding more than half of
+a galaxy's planets makes that faction the ruler for every pilot; rivals keep
+the galaxy **CONTESTED**. Built-in control presets bump with `GALAXY_CONTROL_REV`
+so saved galaxies pick up new ally/rival rules.
+
+**Ally defense:** when an allied faction's home galaxy is invaded by a common
+enemy, the pilot can fly there to repel it for bonus credits, scrap, and
+reputation with the ally.
+
+**Custom galaxies:** the main-menu **GALAXIES** viewer browses every shared
+galaxy (ruler emblems, map, planets). Pilots can generate a named start galaxy
+at creation (planet count, difficulty tier, suns, rivals) or open NEW GALAXY
+from the viewer; unused generated galaxies can be deleted.
+
 Planet cards on the explore map show atmosphere haze from the live SVG palette.
 Border **checkpoints** between sectors use faction silhouette art (modular,
 spikes, rings, scrap, circuits). Selecting a border, planet, or station updates
@@ -309,10 +324,18 @@ Combat is a vertical shooter with a readable pixel hierarchy:
   is visual-only chip FX in the rock's own colours.
 - **Planet tiers** (Easy → Nightmare) scale enemy health, speed, damage, and spawn
   cadence so early theaters forgive and late ones punish.
+- **Stage count** varies by planet difficulty (roughly 2–5 stages + boss); later
+  stages raise terrain danger and harsh flight zones.
+- Victory and defeat screens show an **outcome stepper** for the planet just
+  fought (cleared / current WON·LOST / locked).
 - **Boss stages** after the regular clear: multiphase patterns, escort calls, and
   a dedicated HP bar — bosses ignore the normal lane shooter loop.
-- **Supply crates** drift in on a timer; shooting one grants a short power-shot
-  boost (bigger, harder hits with a HUD glow).
+- **Supply crates** drop random timed power-ups: **POWER SHOT**, **RAPID FIRE**,
+  or **BARRIER** (half damage taken), each with HUD notice and icon glow.
+- Enemy waves use **seeded liveries** so ships of one faction still look distinct;
+  renegade contract targets get outlaw markings (hazard slash, crossed badge).
+- Faction contracts can spawn **renegade captains** or **outlaw gangs** with their
+  own callsigns and paint.
 - Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
 - Weapons, abilities, shields, charge, drive, pickups, and explosion FX form the
   moment-to-moment combat layer.
@@ -373,6 +396,10 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Home Station browser shell with proportional 75% GUI zoom and a dedicated PLAY launch into the map.
 - Area-tab corner deco icons and keyboard focus that opens PLAY or the first area hub.
 - Galaxy explore: atmosphere planet cards, faction border checkpoints, fly / dock / raid / assault actions.
+- Shared world planet ownership, custom generated galaxies, and a main-menu GALAXIES viewer.
+- Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
+- Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
+- Fullscreen toggle, game-over wreck backdrop, and embedded-browser reload keys (F5 / Ctrl+R).
 - Profile score and ability-stat readouts for faster loadout decisions.
 - Faction fleet previews in the station and high-definition navigation icons.
 - Animated planet spin frames and extra faction-specific planet treatments.
@@ -389,20 +416,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STATION ── PLAY launch ── area deco tabs ── 75% GUI zoom ── zoom-safe pointers
+WORLD   ── shared owners ── custom galaxies ── GALAXIES viewer ── ally defense
    │
-HANGAR  ── size-aware slots ── weapon keys ── power budget ── test arena
+STATION ── PLAY launch ── area deco tabs ── fullscreen ── 75% GUI zoom
    │
-TRAVEL  ── border checkpoints ── fly/dock/raid ── atmo planet cards ── stage progress
+TRAVEL  ── border checkpoints ── fly/dock/raid ── invasion alerts ── warp tiers
    │
-COMBAT  ── terrain scroll ── rock damage ── bosses ── crates ── victory scoop
-   │
-ICONS   ── 32×32 emblems ── @2x/@4x Scale2x ── resource hi-res chips
+COMBAT  ── stage count ── liveries ── power-ups ── outcome stepper ── wreck FX
 ```
 
-Recent station work moves PLAY out of the area tab row into a dedicated launch
-control, decorates area hubs with corner icons, and turns galaxy borders into
-selectable faction checkpoints with fly, dock, raid, and assault actions.
+Recent work makes galaxies a shared world (ownership, generated theaters, ally
+invasions), expands crate power-ups and enemy liveries, and adds a GALAXIES
+browser plus fullscreen / game-over wreck chrome.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -501,6 +526,14 @@ be reviewed or reverted independently.
 | 52B | Border checkpoints | Faction silhouette borders, fly/dock/raid/assault confirms, planet atmo haze |
 | 52C | Station and map chrome | Area-tab corner deco, faction station fills, selection frames, PLAY styling |
 | 52D | README travel archive | Document PLAY launch, border actions, and explore-map chrome for waves 52A–52C |
+| 53A | Shared world ownership | Global planet owners, galaxy generation, warp tiers, control presets |
+| 53B | Invasions and liveries | Ally defense invasions, renegade/gang contracts, seeded enemy paint |
+| 53C | Multi power-ups | Crate drops for power shot, rapid fire, and barrier with HUD cues |
+| 53D | Stage progression | Variable stage counts, stage-scaled terrain, victory/defeat outcome stepper |
+| 53E | GALAXIES viewer | Main-menu galaxy browser and custom start-galaxy creation modal |
+| 53F | Explore map sync | Ownership/invasion cues, battle marks, and travel confirm polish |
+| 53G | Shell chrome | Fullscreen toggle, game-over wreck, reload keys, and UI styling |
+| 53H | README world archive | Document shared world, power-ups, stages, and GALAXIES for waves 53A–53G |
 
 The wave commit convention is:
 

@@ -63,7 +63,7 @@ extendClass(ProfileManager, {
                     status: status,
                     difficulty: rw.difficulty,
                     stagesDone: Number(stage.highestStage) || 0,
-                    stagesTotal: Array.isArray(cfg.stages) ? cfg.stages.length : Object.keys(cfg.stages || {}).length,
+                    stagesTotal: typeof getPlanetStageCount === 'function' ? getPlanetStageCount(pid) + 1 : 4,
                     reward: rw.reward,
                     active: !!(active && active.planetId === pid && active.galaxyId === gid)
                 };

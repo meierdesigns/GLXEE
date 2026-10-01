@@ -45,7 +45,7 @@ class LevelManager {
 
     getLevelByPlanetId(planetId) {
         if (planetId == null) return null;
-        const key = String(planetId).toLowerCase().split('-')[0];
+        const key = planetIdOfLevelId(planetId);
         return this.levels.get(key) || null;
     }
     
@@ -61,7 +61,7 @@ class LevelManager {
             return this.levels.get(raw);
         }
 
-        const planetKey = raw.split('-')[0];
+        const planetKey = planetIdOfLevelId(raw);
         if (this.levels.has(planetKey)) {
             return this.levels.get(planetKey);
         }

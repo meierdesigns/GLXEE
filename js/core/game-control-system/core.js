@@ -239,8 +239,14 @@ class GameControlSystem {
             return false;
         }
 
+        // Boss down = planet cleared: back to the map, never auto-start the next planet.
+        if (currentLevel.isBoss) {
+            this.showLevelSelection();
+            return true;
+        }
+
         const currentId = currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
-            ? `${currentLevel.planetId}-${currentLevel.stageIndex}`
+            ? `${currentLevel.planetId}-${currentLevel.isBoss ? 'boss' : currentLevel.stageIndex}`
             : (currentLevel.id
                 || currentLevel.levelId
                 || currentLevel.stageId

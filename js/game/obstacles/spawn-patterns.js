@@ -29,11 +29,28 @@ const TERRAIN_MATERIALS = {
 const TERRAIN_SILL_ROWS = 5;     // rows of the threshold at an area change
 const TERRAIN_SILL_REACH = 0.13; // how far it juts in from each side (x W)
 const OBSTACLE_LAYER_SPACING = 160; // px of scroll between obstacle rows
+// Areas that squeeze or stab into the passage; later stages favour them.
+const TERRAIN_HARSH_ZONES = ['narrows', 'teeth', 'zigzag', 'gorge', 'spires', 'icefall', 'ribs', 'chasm', 'funnel'];
+const TERRAIN_CALM_ZONES = ['canyon', 'open', 'delta', 'winding'];
 
 extendClass(ObstacleManager, {
-    /** 0..1 intensity that grows over the run. */
+    /**
+     * Stage danger 0..1: stage 1 = 0, the last stage and the boss = 1.
+     * Later stages start denser and get harsher areas (kept moderate).
+     */
+    stageDanger() {
+        const level = this.getCurrentLevel();
+        if (!level) return 0;
+        const n = Math.max(2, Number(level.stagesPerPlanet) || 3);
+        if (level.isBoss) return 1;
+        const i = Math.max(1, Number(level.stageIndex) || 1);
+        return Math.max(0, Math.min(1, (i - 1) / (n - 1)));
+    },
+
+    /** 0..1 intensity that grows over the run (later stages start higher). */
     patternIntensity() {
-        return Math.max(0, Math.min(1, (this.runTime || 0) / OBSTACLE_RAMP_MS));
+        const ramp = (this.runTime || 0) / OBSTACLE_RAMP_MS;
+        return Math.max(0, Math.min(1, Math.max(ramp, this.stageDanger() * 0.35)));
     },
 
     pickPattern() {
@@ -341,16 +358,28 @@ extendClass(ObstacleManager, {
     terrainProfile() {
         const level = this.getCurrentLevel();
         const pid = String((level && (level.planetId || level.background)) || 'mars');
-        if (this._terrainProfile && this._terrainProfile.pid === pid && this._terrainProfile.env === this.getEnvironment()) return this._terrainProfile;
+        // Each stage gets its own area order / walls / floors.
+        const stage = level ? (level.isBoss ? 'boss' : String(level.stageIndex || 1)) : '1';
+        const danger = this.stageDanger();
+        if (this._terrainProfile && this._terrainProfile.pid === pid && this._terrainProfile.stage === stage
+            && this._terrainProfile.env === this.getEnvironment()) return this._terrainProfile;
         let seed = 7;
-        for (let i = 0; i < pid.length; i++) seed = (Math.imul(seed, 31) + pid.charCodeAt(i)) >>> 0;
+        const seedKey = pid + '#' + stage;
+        for (let i = 0; i < seedKey.length; i++) seed = (Math.imul(seed, 31) + seedKey.charCodeAt(i)) >>> 0;
+        // Planet-only seed for the base wall width, so later stages are never
+        // thinner-walled than earlier ones.
+        let pseed = 7;
+        for (let i = 0; i < pid.length; i++) pseed = (Math.imul(pseed, 31) + pid.charCodeAt(i)) >>> 0;
         const r = (k) => this.terrainHash(seed % 100003, k);
         const env = this.getEnvironment();
         // Planet look: only its own areas appear.
         const zoneBias = env.zones || null;
+        // Later stages lean towards harsh areas (within the planet's own set).
+        const zoneMul = (z) => TERRAIN_HARSH_ZONES.includes(z) ? 1 + 1.5 * danger
+            : (TERRAIN_CALM_ZONES.includes(z) ? 1 - 0.5 * danger : 1);
         const zones = TERRAIN_ZONES.map((z, i) => ({
             id: z,
-            weight: zoneBias ? (zoneBias[z] ? zoneBias[z] : 0) : 0.3 + r(50 + i) * 1.4
+            weight: (zoneBias ? (zoneBias[z] ? zoneBias[z] : 0) : 0.3 + r(50 + i) * 1.4) * zoneMul(z)
         }));
         // Material weights -> cumulative thresholds for rock/metal/crystal/magma.
         const mw = [0.2 + r(3), 0.1 + r(4) * 0.8, 0.1 + r(5) * 0.8, 0.05 + r(6) * 0.7];
@@ -378,10 +407,11 @@ extendClass(ObstacleManager, {
         let acc = 0;
         const materials = mw.map((v) => (acc += v / tot));
         this._terrainProfile = {
-            pid, env, seed, zones, materials, zoneMats, zoneFloors,
+            pid, stage, danger, env, seed, zones, materials, zoneMats, zoneFloors,
             // ~12-17 s per area at the base scroll speed: long, coherent stretches.
             zoneRows: Math.round(170 + r(1) * 70),
-            width: (0.75 + r(2) * 0.6) * (env.width || 1),
+            // Thicker walls on later stages (narrower passage, still flyable).
+            width: (0.75 + this.terrainHash(pseed % 100003, 2) * 0.6) * (env.width || 1) * (1 + 0.18 * danger),
             freq: 0.6 + r(7) * 1.0,
             phase: r(8) * 100
         };
@@ -586,7 +616,7 @@ extendClass(ObstacleManager, {
         // Occasional big outcrop reaching far into the passage (one side per slot).
         const outcrop = (side) => {
             const slot = Math.floor(wr / 70);
-            if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45) return 0;
+            if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
             if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
             const t = (wr - slot * 70 - 10) / 44;
             if (t < 0 || t > 1) return 0;

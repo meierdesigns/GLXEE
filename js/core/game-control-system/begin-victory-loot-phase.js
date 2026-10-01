@@ -187,6 +187,7 @@ extendClass(GameControlSystem, {
                 : {};
             this.applyGameOverFaction(gameOverOverlay, lost);
             gameOverOverlay.classList.remove('hidden');
+            if (typeof VFGameOverWreck !== 'undefined') VFGameOverWreck.start(gameOverOverlay);
             if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
                 VFBgMouseParallax.refresh();
             }
@@ -197,11 +198,11 @@ extendClass(GameControlSystem, {
     applyGameOverFaction(overlay, lost) {
         const faction = String(document.documentElement.dataset.faction || 'terran').toLowerCase();
         const lines = {
-            terran: ['GAME OVER', 'Mission Failed'],
-            kronax: ['DISHONOR', 'The blade was broken'],
-            voidborn: ['DISSOLVED', 'The void reclaims you'],
-            pirate: ['SUNK', 'Ship scuttled, loot lost'],
-            machine: ['SYSTEM FAILURE', 'Unit terminated']
+            terran: ['GAME OVER', 'Mission Failed', 'HULL BREACH · CREW EVACUATED'],
+            kronax: ['DISHONOR', 'The blade was broken', 'THE CLAN WILL FORGE ANOTHER'],
+            voidborn: ['DISSOLVED', 'The void reclaims you', 'THE SHELL RETURNS TO SILENCE'],
+            pirate: ['SUNK', 'Ship scuttled, loot lost', 'DEAD MEN TELL NO TALES'],
+            machine: ['SYSTEM FAILURE', 'Unit terminated', 'CHASSIS 0x00 · REBOOT PENDING']
         };
         const pick = lines[faction] || lines.terran;
         const content = overlay.querySelector('.game-over-content');
@@ -210,6 +211,9 @@ extendClass(GameControlSystem, {
         const p = content.querySelector('p');
         if (h) h.textContent = pick[0];
         if (p) p.textContent = pick[1];
+        const ep = content.querySelector('.game-over-epitaph');
+        if (ep) ep.textContent = pick[2] || '';
+        if (this.applyOutcomeStepper) this.applyOutcomeStepper(ep || p || h, 'lost');
         let box = content.querySelector('.game-over-loss');
         if (!box) {
             box = document.createElement('div');
@@ -231,5 +235,6 @@ extendClass(GameControlSystem, {
         if (gameOverOverlay) {
             gameOverOverlay.classList.add('hidden');
         }
+        if (typeof VFGameOverWreck !== 'undefined') VFGameOverWreck.stop();
     },
 });

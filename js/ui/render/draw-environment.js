@@ -256,7 +256,10 @@ extendClass(RenderManager, {
         const H = height || 300;
         const cell = 1 / OBSTACLE_ART_DENSITY;
         const offset = obstacleManager.terrainOffset || 0;
-        const key = env.base + env.accent + env.surface + (env.planetStyle || '');
+        // Later stages look harsher: darker floor, walls drift towards red,
+        // more glowing veins (stageDanger 0..1, kept subtle).
+        const danger = obstacleManager.stageDanger ? obstacleManager.stageDanger() : 0;
+        const key = env.base + env.accent + env.surface + (env.planetStyle || '') + '|' + danger.toFixed(2);
         if (!this._terrainPal || this._terrainKey !== key) {
             this._terrainKey = key;
             const rock = this.mixColor(env.base, '#7a7f88', 0.25);
@@ -265,14 +268,18 @@ extendClass(RenderManager, {
             // Planets with a known graphic style keep much more of their colour.
             const looked = !!env.planetStyle;
             const soil = this.mixColor(this.hueShift(rock, 0, looked ? 1.1 : 0.45), '#1a2230', looked ? 0.15 : 0.35);
-            const gt = looked ? [-0.45, -0.55, -0.65, -0.76] : [-0.62, -0.7, -0.77, -0.84];
+            const gt = (looked ? [-0.45, -0.55, -0.65, -0.76] : [-0.62, -0.7, -0.77, -0.84])
+                .map((t) => Math.max(-0.92, t - 0.08 * danger));
+            const wallBase = this.mixColor(env.base, '#b0402a', 0.14 * danger);
             this._terrainPal = {
                 ground: gt.map((t) => this.shadeColor(soil, t)),
                 craterLit: this.shadeColor(soil, -0.5),
                 craterPit: this.shadeColor(soil, -0.92),
-                wall: [0.55, 0.3, 0.05, -0.2].map((t) => this.shadeColor(this.hueShift(env.base, 0, 1.2), t)),
+                wall: [0.55, 0.3, 0.05, -0.2].map((t) => this.shadeColor(this.hueShift(wallBase, 0, 1.2), t)),
                 accent: this.shadeColor(env.accent, 0.3),
-                special: { lava: '#c9501c', ice: '#9fc4d6', void: '#7a3fb8', toxic: '#5f9e24' }[env.surface] || null
+                special: { lava: '#c9501c', ice: '#9fc4d6', void: '#7a3fb8', toxic: '#5f9e24' }[env.surface]
+                    || (danger > 0.4 ? this.shadeColor('#c9501c', -0.25) : null),
+                veinMul: 1 + 1.2 * danger
             };
         }
         const pal = this._terrainPal;
@@ -310,7 +317,7 @@ extendClass(RenderManager, {
             for (let cx = 0; cx < cols; cx++) {
                 const n = this.envNoise(cx, wr);
                 let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
-                if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.04 : 0.018)) col = pal.special;
+                if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.04 : 0.018) * pal.veinMul) col = pal.special;
                 // The area overhead (wall row at this screen y) picks the floor.
                 const floor = obstacleManager.terrainFloorAt
                     ? obstacleManager.terrainFloorAt(baseRow - r, cx) : 'craters';

@@ -175,3 +175,7 @@ Object.assign(IconSprites, {
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ]
 });
+
+// Keep enlarged pirate badges sharp and angular instead of smoothing the
+// previous rounded skull. IconRenderer applies Scale2x for @2x/@4x draws.
+IconSprites.factionPirateHi = IconSprites.factionPirate;

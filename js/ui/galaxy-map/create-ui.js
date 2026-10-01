@@ -57,10 +57,10 @@ extendClass(GalaxyMapManager, {
                 ${emptyHint}
                 <!-- Map + floating corner cards (planet bottom-left, ship bottom-right). -->
                 <div class="gm-map-stage">
-                    <div class="galaxy-map-area" id="gmMapArea">
-                        ${this.renderMapSvg()}
-                    </div>
-                    ${panelsHtml}
+                <div class="galaxy-map-area" id="gmMapArea">
+                    ${this.renderMapSvg()}
+                </div>
+                ${panelsHtml}
                 </div>
                 <div class="galaxy-map-instructions">
                     ${instructions}
@@ -103,6 +103,17 @@ extendClass(GalaxyMapManager, {
         this.bindEvents();
         this.paintShipMini();
         this.scheduleShipGraphicsRefresh();
+    },
+
+    shipLocatorButtonHtml() {
+        const ship = this.getShipIconUrl ? this.getShipIconUrl(1) : null;
+        const shipHtml = ship
+            ? `<img src="${ship}" alt="" class="gm-locate-ship-art">`
+            : '<span class="gm-locate-ship-fallback">▲</span>';
+        return `<button type="button" class="gm-locate-ship" id="gmLocateShip" title="RETURN TO SHIP" aria-label="Return to ship">` +
+            `<span class="gm-locate-ship-icon">${shipHtml}</span>` +
+            `<svg class="gm-locate-pin" viewBox="0 0 16 16" aria-hidden="true"><path d="M7 0h2v5h5v2H9v2h5v2H9v5H7V9H2V7h5V5H2V3h5z"/></svg>` +
+            `</button>`;
     },
 
     getActiveShipId() {
@@ -283,6 +294,7 @@ extendClass(GalaxyMapManager, {
         return `
             <div class="galaxy-map-panels">
                 <div class="galaxy-map-panel galaxy-map-panel-select">
+                    ${this.shipLocatorButtonHtml()}
                     <div class="gm-sector-planet-col">
                         <div class="gm-sector-heading">
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
@@ -298,7 +310,7 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-stage-stepper" id="gmStageStepper">${info.unlocked ? this.planetStagesHtml(info.id) : ''}</div>
                         <div class="gm-unlock-hint" id="gmUnlockHint">${unlockHint}</div>
                     </div>
-                    <!-- Start / continue / fly / dock: full card width at the bottom. -->
+                    <!-- Start / continue / fly / dock actions at the bottom of the sector card. -->
                     <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
                         ${this.renderConfirmActionsHtml(info)}
                     </div>

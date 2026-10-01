@@ -164,9 +164,11 @@ class GalaxyViewer {
                 <span class="muted">${pilots.length ? 'PILOTS: ' + pilots.join(', ').toUpperCase() : 'NO PILOT HAS BEEN HERE'}</span>
                 ${g.custom ? `<button type="button" class="galaxy-viewer-btn danger" data-gv-delete${pilots.length ? ' disabled title="Visited galaxies cannot be deleted"' : ''}>DELETE</button>` : ''}
             </div>
-            <h3 class="galaxy-viewer-sub">PLANETS</h3>
-            <ul class="galaxy-viewer-rows">${planetRows}</ul>
-            ${posts.length ? `<h3 class="galaxy-viewer-sub">STATIONS</h3><ul class="galaxy-viewer-rows">${stationRows}</ul>` : ''}`;
+            <div class="galaxy-viewer-directory">
+                <h3 class="galaxy-viewer-sub">PLANETS</h3>
+                <ul class="galaxy-viewer-rows">${planetRows}</ul>
+                ${posts.length ? `<h3 class="galaxy-viewer-sub">STATIONS</h3><ul class="galaxy-viewer-rows">${stationRows}</ul>` : ''}
+            </div>`;
     }
 
     /** Right column: stats of the clicked planet / station. */

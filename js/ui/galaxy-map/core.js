@@ -27,15 +27,15 @@ class GalaxyMapManager {
         let zoom = 1;
         try {
             const saved = Number(localStorage.getItem(zoomStorageKey));
-            if (Number.isFinite(saved) && saved > 0) zoom = Math.max(0.75, Math.min(2.5, saved));
+            if (Number.isFinite(saved) && saved > 0) zoom = Math.max(0.35, Math.min(12, saved));
         } catch (e) {}
         Object.defineProperty(this, 'mapZoom', {
             configurable: true,
             enumerable: true,
             get: () => zoom,
             set: (v) => {
-                zoom = v;
                 if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return;
+                zoom = Math.max(0.35, Math.min(12, v));
                 clearTimeout(this._zoomSaveTimer);
                 this._zoomSaveTimer = setTimeout(() => {
                     try { localStorage.setItem(zoomStorageKey, String(zoom)); } catch (e) {}
@@ -242,7 +242,7 @@ class GalaxyMapManager {
 
     /**
      * Stage progress incl. the boss: stages 1..N plus the boss as N+1.
-     * Returns { done, total, boss } or null before the first clear;
+     * Returns { done, next, total, boss } or null for invalid planets;
      * boss = true while the boss stage is the next one to fight.
      */
     getPlanetStageProgress(planetId) {
@@ -253,18 +253,17 @@ class GalaxyMapManager {
             : { highestStage: 0, bossCleared: false };
         const highest = Math.max(0, Math.round(Number(stage.highestStage) || 0));
         const cleared = this.isCleared(pid) || !!stage.bossCleared;
-        if (!cleared && highest <= 0) return null;
         const stages = this.getStagesPerPlanet(pid);
         const total = stages + 1;
-        if (cleared) return { done: total, total, boss: false };
-        if (highest >= stages) return { done: total, total, boss: true };
-        return { done: highest, total, boss: false };
+        if (cleared) return { done: total, next: total, total, boss: false };
+        if (highest >= stages) return { done: stages, next: total, total, boss: true };
+        return { done: highest, next: highest + 1, total, boss: false };
     }
 
     getPlanetStageProgressLabel(planetId) {
         const p = this.getPlanetStageProgress(planetId);
         if (!p) return '';
-        return p.boss ? `BOSS/${p.total}` : `${p.done}/${p.total}`;
+        return p.boss ? `BOSS/${p.total}` : `${p.next}/${p.total}`;
     }
 
     /** Pixel boss skull (SVG group, 9×8 px) centred on x,y. */
@@ -544,7 +543,7 @@ class GalaxyMapManager {
             // Map nodes follow the zoom (shared with the ship, getMapDetail);
             // big views (sector card) always get a fine grid.
             const zoomDetail = this.getMapDetail ? this.getMapDetail() : 1;
-            const detail = px >= 160 ? Math.max(4, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
+            const detail = px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
             // Current rotation frame, so zoom re-renders don't jump.
             const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, detail, lightDir) : null;
             const spinFrame = spinModel ? planetSVGManager.getPlanetSpinIndex(sid, spinModel) : null;

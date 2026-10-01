@@ -204,6 +204,20 @@ pattern. Flights and cleared battles advance the control simulation:
 - a new profile begins with a seeded home-galaxy invasion that can be repelled
   for an opening reward.
 
+Planet cards on the explore map show atmosphere haze from the live SVG palette.
+Border **checkpoints** between sectors use faction silhouette art (modular,
+spikes, rings, scrap, circuits). Selecting a border, planet, or station updates
+the confirm row:
+
+| Selection | Actions |
+|:----------|:--------|
+| Locked border / planet | Disabled lock button |
+| Open planet | **FLY TO** the theater |
+| Friendly / trade station | **DOCK** |
+| Hostile station | **RAID** (+ fly-away) |
+| Exposed faction base | **ASSAULT BASE** |
+| Checkpoint border | Jump to the planet whose clear opens it |
+
 <img src="assets/ui/readme-h-station.svg" alt="CH.06 HOME STATION" width="960" />
 
 ## Home Station and hangar
@@ -217,10 +231,15 @@ The station is the progression hub:
 | Hangar | Ship editor, loadout, parts workspace, and test arena |
 | Shop | Ships, blueprints, modules, and style unlocks |
 | Craft | Unlock hulls and equipment from blueprints |
-| Travel | Galaxy map and arrival sectors |
 | Explorations | Ships, planets, enemies, factions, and events |
 | Missions | Liberate / patrol board and mission rewards |
 | Factions | Relations, trade quotes, contracts, and fleet previews |
+
+**PLAY** is no longer a station sub-tab. A dedicated header launch button (and a
+matching control in the main menu) drops straight onto the galaxy map. Area tabs
+carry corner deco icons so HOME STATION, HANGAR, FACTIONS, and EXPLORATIONS read
+as distinct hubs at a glance. Travel remains a modal over PLAY and is never
+restored after a reload.
 
 ### Browser shell and GUI scale
 
@@ -351,7 +370,9 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Faction-specific weapon mount art and full-sprite fallback rendering for
   procedural ships.
 - Resizable station sidebars with remembered widths and responsive hangar panels.
-- Home Station browser shell with proportional 75% GUI zoom and stable PLAY launch control.
+- Home Station browser shell with proportional 75% GUI zoom and a dedicated PLAY launch into the map.
+- Area-tab corner deco icons and keyboard focus that opens PLAY or the first area hub.
+- Galaxy explore: atmosphere planet cards, faction border checkpoints, fly / dock / raid / assault actions.
 - Profile score and ability-stat readouts for faster loadout decisions.
 - Faction fleet previews in the station and high-definition navigation icons.
 - Animated planet spin frames and extra faction-specific planet treatments.
@@ -368,20 +389,20 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STATION ── browser shell ── 75% GUI zoom ── zoom-safe pointers ── PLAY launch
+STATION ── PLAY launch ── area deco tabs ── 75% GUI zoom ── zoom-safe pointers
    │
 HANGAR  ── size-aware slots ── weapon keys ── power budget ── test arena
    │
-TRAVEL  ── explore map ── faction stations ── stage progress ── mission loot
+TRAVEL  ── border checkpoints ── fly/dock/raid ── atmo planet cards ── stage progress
    │
 COMBAT  ── terrain scroll ── rock damage ── bosses ── crates ── victory scoop
    │
 ICONS   ── 32×32 emblems ── @2x/@4x Scale2x ── resource hi-res chips
 ```
 
-Recent combat work adds scrolling terrain lanes, weapon-scaled rock damage,
-planet-tier difficulty, boss clears, and supply-crate power shots. Large UI
-emblems now use hand-shaded 32×32 art instead of a naive 16×16 upscale.
+Recent station work moves PLAY out of the area tab row into a dedicated launch
+control, decorates area hubs with corner icons, and turns galaxy borders into
+selectable faction checkpoints with fly, dock, raid, and assault actions.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -475,6 +496,11 @@ be reviewed or reverted independently.
 | 51F | Galaxy explore polish | Faction station borders, stage progress, and explore-map refinements |
 | 51G | Station and HUD polish | Weapon keys, shield vitals, hangar tips, and combat info panel readability |
 | 51H | README wave archive | Hi-res emblem screenshots and expanded combat/docs for waves 51A–51G |
+| 51I | Live screenshot refresh | Recapture station, upgrade, galaxy, factions, and Mars combat with terrain |
+| 52A | PLAY launch | Dedicated header/menu PLAY control; remove PLAY from station sub-tabs |
+| 52B | Border checkpoints | Faction silhouette borders, fly/dock/raid/assault confirms, planet atmo haze |
+| 52C | Station and map chrome | Area-tab corner deco, faction station fills, selection frames, PLAY styling |
+| 52D | README travel archive | Document PLAY launch, border actions, and explore-map chrome for waves 52A–52C |
 
 The wave commit convention is:
 

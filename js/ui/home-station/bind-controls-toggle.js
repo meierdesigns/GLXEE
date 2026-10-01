@@ -24,6 +24,14 @@ extendClass(HomeStationUI, {
                 }
             });
         }
+        const scaleSlider = this.overlay.querySelector('#hsFrameUiScale');
+        const scaleValue = this.overlay.querySelector('#hsFrameUiScaleValue');
+        if (scaleSlider && typeof uiAppearanceManager !== 'undefined') {
+            scaleSlider.addEventListener('input', () => {
+                uiAppearanceManager.setUiScale(scaleSlider.value);
+                if (scaleValue) scaleValue.textContent = `${uiAppearanceManager.uiScale}%`;
+            });
+        }
     },
 
     playButtonResult(btn, ok, msg) {

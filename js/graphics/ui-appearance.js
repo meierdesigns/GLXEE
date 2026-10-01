@@ -48,9 +48,11 @@ class UIAppearanceManager {
             chroma: fxSteps(1.1)
         };
         this.shipRenderStyles = ['FLAT', 'VOXEL'];
+        this.uiScaleOptions = ['50', '55', '60', '65', '70', '75', '80', '85', '90', '95', '100', '105', '110', '115', '120', '125'];
         this.borderWeight = 'NORMAL';
         this.indicatorWeight = '2';
         this.shipRenderStyle = 'FLAT';
+        this.uiScale = '75';
         this.font = 'COURIER';
         this.fontSizes = {
             h1: '28',
@@ -81,6 +83,10 @@ class UIAppearanceManager {
 
     getShipRenderStyleOptions() {
         return this.shipRenderStyles.slice();
+    }
+
+    getUiScaleOptions() {
+        return this.uiScaleOptions.slice();
     }
 
     getFontOptions() {
@@ -114,6 +120,10 @@ class UIAppearanceManager {
             }
             if (data.shipRenderStyle && this.shipRenderStyles.indexOf(data.shipRenderStyle) !== -1) {
                 this.shipRenderStyle = data.shipRenderStyle;
+            }
+            const uiScale = String(data.uiScale || '');
+            if (this.uiScaleOptions.includes(uiScale)) {
+                this.uiScale = uiScale;
             }
             if (data.font && this.fonts[data.font]) {
                 this.font = data.font;
@@ -152,6 +162,7 @@ class UIAppearanceManager {
                 borderWeight: this.borderWeight,
                 indicatorWeight: this.indicatorWeight,
                 shipRenderStyle: this.shipRenderStyle,
+                uiScale: this.uiScale,
                 font: this.font,
                 fontSizes: this.fontSizes,
                 controlsHints: this.controlsHints,
@@ -186,6 +197,17 @@ class UIAppearanceManager {
         if (this.shipRenderStyles.indexOf(val) === -1) return;
         this.shipRenderStyle = val;
         this.persist();
+    }
+
+    setUiScale(scale) {
+        const value = String(scale || '');
+        if (!this.uiScaleOptions.includes(value)) return;
+        this.uiScale = value;
+        this.persist();
+        this.apply();
+        if (window.viewportFit && typeof window.viewportFit.scheduleUpdate === 'function') {
+            window.viewportFit.scheduleUpdate();
+        }
     }
 
     setFont(fontId) {
@@ -260,6 +282,7 @@ class UIAppearanceManager {
         root.style.setProperty('--ui-border-width-thick', bw.thick);
         root.style.setProperty('--ui-indicator-width', iw);
         root.style.setProperty('--ui-font-family', font);
+        root.style.setProperty('--gui-zoom', String(Number(this.uiScale) / 100));
         root.style.setProperty('--font-h1', `${this.fontSizes.h1}px`);
         root.style.setProperty('--font-h2', `${this.fontSizes.h2}px`);
         root.style.setProperty('--font-text', `${this.fontSizes.text}px`);

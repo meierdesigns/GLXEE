@@ -546,7 +546,8 @@ be reviewed or reverted independently.
 | 54C | Map traffic and locator | Bidirectional route packets, ship locator, zoom detail, barrier depth |
 | 54D | Faction fleet zoom | Fleet preview zoom controls and accented faction-viewer emblems |
 | 54E | Hangar edge drag | Pointer-locked frame resize at every existing scale |
-| 54F | README map polish | Document pirate seal, GUI slider, locator, and fleet zoom for 54A–54E |
+| 54F | Map and station chrome | GUI slider, ship locator, traffic, fleet zoom, and viewer accents |
+| 54G | README map polish | Document pirate seal, GUI slider, locator, and fleet zoom for 54A–54F |
 
 The wave commit convention is:
 

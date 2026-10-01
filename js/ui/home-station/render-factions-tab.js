@@ -252,7 +252,7 @@ extendClass(HomeStationUI, {
         const shown = list.filter((c) => filter === 'all' || c.kind === filter || c.factionId === filter);
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const active = profile.activeMission;
-        const filters = [['all', 'ALL'], ['job', 'FACTION JOBS'], ['bounty', 'BOUNTY HUNTS']]
+        const filters = [['all', 'ALL'], ['renegade', 'RENEGADES'], ['conquer', 'CONQUEST'], ['defend', 'DEFENSE'], ['bounty', 'BOUNTY HUNTS']]
             .concat(this._factionContractFaction ? [[this._factionContractFaction, this.factionLabel(this._factionContractFaction)]] : []);
         const filterHtml = filters.map(([fid, label]) =>
             `<button type="button" class="hs-shop-cat${filter === fid ? ' active' : ''}" data-fcontract-filter="${fid}" data-nav-item>${label}</button>`
@@ -264,7 +264,7 @@ extendClass(HomeStationUI, {
                   `<button type="button" class="action-button secondary hs-line-action" data-mission-abandon data-nav-item>ABANDON</button>`
                 : `<button type="button" class="action-button hs-line-action" data-fcontract-accept="${esc(c.id)}" data-nav-item${busy ? ' disabled title="Finish or abandon your active mission first"' : ''}>` +
                   `${c.remote ? 'TELEPORT &amp; LAUNCH' : 'ACCEPT &amp; LAUNCH'}</button>`;
-            const target = c.kind === 'bounty' ? `HUNT ${esc(c.target)} · ` : '';
+            const target = c.goal ? `<span class="hs-mission-goal">${esc(c.goal)}</span> · ` : '';
             return `<div class="hs-line hs-mission is-${c.kind}${c.active ? ' is-active' : ''}${c.remote ? ' is-remote' : ''}">` +
                 `<span class="hs-line-name">` +
                 `<span class="hs-mission-type">${c.type}</span>` +
@@ -278,7 +278,7 @@ extendClass(HomeStationUI, {
         return `<div class="hs-section hs-panel hs-missions-root hs-faction-contracts">` +
             `${this.panelTitle('hsExplore', 'FACTION CONTRACTS')}` +
             `<div class="hs-row hs-fcontract-filters">${filterHtml}</div>` +
-            `<p class="hs-muted hs-hint">Jobs and bounty hunts in every galaxy you can already reach. Remote contracts teleport you there and pay 25% more. ` +
+            `<p class="hs-muted hs-hint">Hunt renegades (marked with a red slash and beacon), seize planets from rivals, defend allied ground or wipe out gangs — in every galaxy you can already reach. Remote contracts teleport you there and pay 25% more. ` +
             `Paid when you clear a stage on the target planet.</p>` +
             `<div class="hs-tab-fill hs-mission-list">${rows || '<p class="hs-muted hs-empty-slot">NO CONTRACTS · improve relations or extend your warp range</p>'}</div>` +
             `</div>`;

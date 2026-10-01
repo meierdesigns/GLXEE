@@ -65,7 +65,7 @@
 /* Flow pulses (darker bands): dash offset slides one pulse period per cycle, butt caps keep it blocky. */
 .gm-pxline .gm-pxline-flow {
     stroke: #07080c; stroke-linecap: butt; opacity: 0.7;
-    animation: gm-beam-flow 3.2s linear infinite;
+    animation: gm-beam-flow 3.2s steps(16, end) infinite;
 }
 .gm-edge.gm-pxline.dim .gm-pxline-flow { display: none; }
 @keyframes gm-beam-flow {
@@ -111,7 +111,7 @@
 .gm-route.gm-pxline .gm-pxline-core { filter: brightness(1.6); }
 .gm-route.gm-pxline .gm-pxline-glow { opacity: 0.35; }
 .gm-route.gm-pxline.risky { color: #ff5a3c; }
-.gm-space .gm-stars .gm-star-twinkle { animation: gm-star-twinkle 3.6s ease-in-out infinite; }
+.gm-space .gm-stars .gm-star-twinkle { animation: gm-star-twinkle 3.6s steps(6, end) infinite; }
 @keyframes gm-star-twinkle {
     0%, 100% { opacity: 0.15; }
     50%      { opacity: 1; }
@@ -124,19 +124,19 @@
 .gm-sun { pointer-events: none; }
 .gm-sun { shape-rendering: crispEdges; }
 .gm-sun .gm-sun-glow rect { fill: var(--sun-glow); }
-.gm-sun .gm-sun-glow-outer { opacity: 0.12; animation: gm-sun-glow 5s ease-in-out infinite; }
-.gm-sun .gm-sun-glow-inner { opacity: 0.2; animation: gm-sun-glow 5s ease-in-out infinite; }
+.gm-sun .gm-sun-glow-outer { opacity: 0.12; animation: gm-sun-glow 5s steps(5, end) infinite; }
+.gm-sun .gm-sun-glow-inner { opacity: 0.2; animation: gm-sun-glow 5s steps(5, end) infinite; }
 /* The star itself: slow breathing + flickering surface layers. */
 .gm-sun .gm-sun-body {
     transform-box: fill-box;
     transform-origin: center;
-    animation: gm-sun-breathe 6s ease-in-out infinite;
+    animation: gm-sun-breathe 6s steps(6, end) infinite;
 }
 .gm-sun .gm-sun-inner { animation: gm-sun-flicker 2.3s steps(4, end) infinite; }
 .gm-sun .gm-sun-core { animation: gm-sun-flicker 1.7s steps(3, end) infinite reverse; }
 @keyframes gm-sun-breathe {
-    0%, 100% { transform: scale(1);    filter: brightness(1); }
-    50%      { transform: scale(1.04); filter: brightness(1.15); }
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
 }
 @keyframes gm-sun-flicker {
     0%, 100% { opacity: 1; }
@@ -398,7 +398,7 @@ body {
 .start-screen-overlay:not(.vf-bg-parallax-ready),
 .home-station-overlay:not(.vf-bg-parallax-ready),
 .content-viewer-overlay:not(.vf-bg-parallax-ready),
-.profile-selection-overlay:not(.vf-bg-parallax-ready),
+.profile-selection-overlay:not(.is-inline):not(.vf-bg-parallax-ready),
 .game-container:not(.vf-bg-parallax-ready),
 .victory-screen:not(.vf-bg-parallax-ready),
 .game-over:not(.vf-bg-parallax-ready),
@@ -417,7 +417,7 @@ body {
 .start-screen-overlay:not(.vf-bg-parallax-ready)::before,
 .home-station-overlay:not(.vf-bg-parallax-ready)::before,
 .content-viewer-overlay:not(.vf-bg-parallax-ready)::before,
-.profile-selection-overlay:not(.vf-bg-parallax-ready)::before,
+.profile-selection-overlay:not(.is-inline):not(.vf-bg-parallax-ready)::before,
 .game-container:not(.vf-bg-parallax-ready)::before,
 .victory-screen:not(.vf-bg-parallax-ready)::before,
 .game-over:not(.vf-bg-parallax-ready)::before,
@@ -7596,7 +7596,7 @@ body.pe-resizing * {
 .galaxy-map-overlay .gm-node.selected .gm-selection-frame,
 .galaxy-map-embedded.is-input-active .gm-node.hovered .gm-selection-frame,
 .galaxy-map-embedded.is-input-active .gm-node.selected .gm-selection-frame {
-    animation: gm-select-pulse 0.95s ease-in-out infinite alternate;
+    animation: gm-select-pulse 0.95s steps(4, end) infinite alternate;
 }
 @keyframes gm-select-pulse {
     from { transform: scale(0.88); }
@@ -13717,7 +13717,8 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 
 /* Terran — disciplined orthogonal plating, small stepped pixel corners. */
-html[data-faction="terran"] {
+html[data-faction="terran"],
+.profile-selection-content[data-faction="terran"] {
     --faction-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, calc(100% - 10px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 10px 100%, 5px 100%, 5px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
     --faction-surface:
         linear-gradient(color-mix(in srgb, var(--faction-accent) 55%, transparent) 0 2px, transparent 2px) 0 0 / 100% 12px,
@@ -13725,7 +13726,8 @@ html[data-faction="terran"] {
 }
 
 /* Kronax — deep stair-stepped blade cuts, pixel diagonal banding. */
-html[data-faction="kronax"] {
+html[data-faction="kronax"],
+.profile-selection-content[data-faction="kronax"] {
     --faction-clip: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, 100% 0, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 0 100%);
     --faction-border-width: calc(var(--ui-border-width) + 2px);
     --faction-surface:
@@ -13737,7 +13739,8 @@ html[data-faction="kronax"] {
 }
 
 /* Voidborn — asymmetric pixel-rounded pod, dither surface. */
-html[data-faction="voidborn"] {
+html[data-faction="voidborn"],
+.profile-selection-content[data-faction="voidborn"] {
     --faction-surface:
         conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 55%, transparent) 0) 0px 0px / 8px 8px,
         conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 55%, transparent) 0) 4px 4px / 8px 8px;
@@ -13746,7 +13749,8 @@ html[data-faction="voidborn"] {
 }
 
 /* Pirate — lopsided welded salvage, uneven pixel steps. */
-html[data-faction="pirate"] {
+html[data-faction="pirate"],
+.profile-selection-content[data-faction="pirate"] {
     --faction-clip: polygon(0px 15px, 0px 12px, 3px 12px, 3px 9px, 6px 9px, 6px 6px, 9px 6px, 9px 3px, 12px 3px, 12px 0px, 15px 0px, calc(100% - 21px) 0px, calc(100% - 18px) 0px, calc(100% - 18px) 3px, calc(100% - 15px) 3px, calc(100% - 15px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 9px, calc(100% - 9px) 9px, calc(100% - 9px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 15px, calc(100% - 3px) 15px, calc(100% - 3px) 18px, 100% 18px, 100% 21px, 100% calc(100% - 9px), 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, calc(100% - 9px) 100%, 24px 100%, 21px 100%, 21px calc(100% - 3px), 18px calc(100% - 3px), 18px calc(100% - 6px), 15px calc(100% - 6px), 15px calc(100% - 9px), 12px calc(100% - 9px), 12px calc(100% - 12px), 9px calc(100% - 12px), 9px calc(100% - 15px), 6px calc(100% - 15px), 6px calc(100% - 18px), 3px calc(100% - 18px), 3px calc(100% - 21px), 0px calc(100% - 21px), 0px calc(100% - 24px));
     --faction-surface:
         conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 50%, transparent) 0) 0px 0px / 20px 20px,
@@ -13757,7 +13761,8 @@ html[data-faction="pirate"] {
 }
 
 /* Machine — machined rectangular notches, fine circuit traces. */
-html[data-faction="machine"] {
+html[data-faction="machine"],
+.profile-selection-content[data-faction="machine"] {
     --faction-clip: polygon(
         0 0, 100% 0,
         100% 20%, calc(100% - 9px) 20%, calc(100% - 9px) 31%, 100% 31%,
@@ -13813,23 +13818,28 @@ html[data-faction="machine"] {
    Panels, sections, tabs and station buttons take the faction's stepped
    silhouette instead of one shared chamfer. Shapes are deliberately bold so
    each faction reads at a glance. */
-html[data-faction="terran"] {
+html[data-faction="terran"],
+.profile-selection-content[data-faction="terran"] {
     --faction-panel-clip: polygon(0px 16px, 0px 12px, 4px 12px, 4px 8px, 8px 8px, 8px 4px, 12px 4px, 12px 0px, 16px 0px, calc(100% - 16px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 4px, calc(100% - 8px) 4px, calc(100% - 8px) 8px, calc(100% - 4px) 8px, calc(100% - 4px) 12px, 100% 12px, 100% 16px, 100% calc(100% - 16px), 100% calc(100% - 12px), calc(100% - 4px) calc(100% - 12px), calc(100% - 4px) calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) calc(100% - 4px), calc(100% - 12px) calc(100% - 4px), calc(100% - 12px) 100%, calc(100% - 16px) 100%, 16px 100%, 12px 100%, 12px calc(100% - 4px), 8px calc(100% - 4px), 8px calc(100% - 8px), 4px calc(100% - 8px), 4px calc(100% - 12px), 0px calc(100% - 12px), 0px calc(100% - 16px));
     --faction-ctl-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
 }
-html[data-faction="kronax"] {
+html[data-faction="kronax"],
+.profile-selection-content[data-faction="kronax"] {
     --faction-panel-clip: polygon(0px 28px, 0px 21px, 7px 21px, 7px 14px, 14px 14px, 14px 7px, 21px 7px, 21px 0px, 28px 0px, calc(50% - 24px) 0px, calc(50% - 24px) 7px, 50% 8px, calc(50% + 24px) 7px, calc(50% + 24px) 0px, 100% 0, 100% calc(100% - 28px), 100% calc(100% - 21px), calc(100% - 7px) calc(100% - 21px), calc(100% - 7px) calc(100% - 14px), calc(100% - 14px) calc(100% - 14px), calc(100% - 14px) calc(100% - 7px), calc(100% - 21px) calc(100% - 7px), calc(100% - 21px) 100%, calc(100% - 28px) 100%, calc(50% + 24px) 100%, calc(50% + 24px) calc(100% - 7px), 50% calc(100% - 8px), calc(50% - 24px) calc(100% - 7px), calc(50% - 24px) 100%, 0 100%);
     --faction-ctl-clip: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
 }
-html[data-faction="voidborn"] {
+html[data-faction="voidborn"],
+.profile-selection-content[data-faction="voidborn"] {
     --faction-panel-clip: polygon(0px 30px, 0px 25px, 1px 25px, 1px 20px, 3px 20px, 3px 15px, 6px 15px, 6px 10px, 10px 10px, 10px 5px, 18px 5px, 18px 0px, 30px 0px, calc(100% - 10px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 30px), 100% calc(100% - 25px), calc(100% - 1px) calc(100% - 25px), calc(100% - 1px) calc(100% - 20px), calc(100% - 3px) calc(100% - 20px), calc(100% - 3px) calc(100% - 15px), calc(100% - 6px) calc(100% - 15px), calc(100% - 6px) calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) calc(100% - 5px), calc(100% - 18px) calc(100% - 5px), calc(100% - 18px) 100%, calc(100% - 30px) 100%, 10px 100%, 3px 100%, 3px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
     --faction-ctl-clip: polygon(0px 12px, 0px 8px, 2px 8px, 2px 4px, 5px 4px, 5px 0px, 12px 0px, calc(100% - 12px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 8px, 100% 8px, 100% 12px, 100% calc(100% - 12px), 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 4px), calc(100% - 5px) calc(100% - 4px), calc(100% - 5px) 100%, calc(100% - 12px) 100%, 12px 100%, 5px 100%, 5px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 8px), 0px calc(100% - 8px), 0px calc(100% - 12px));
 }
-html[data-faction="pirate"] {
+html[data-faction="pirate"],
+.profile-selection-content[data-faction="pirate"] {
     --faction-panel-clip: polygon(0px 12px, 0px 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0px, 12px 0px, calc(100% - 24px) 0px, calc(100% - 20px) 0px, calc(100% - 20px) 4px, calc(100% - 16px) 4px, calc(100% - 16px) 8px, calc(100% - 12px) 8px, calc(100% - 12px) 12px, calc(100% - 8px) 12px, calc(100% - 8px) 16px, calc(100% - 4px) 16px, calc(100% - 4px) 20px, 100% 20px, 100% 24px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 20px 100%, 16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px), 12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px), 4px calc(100% - 12px), 4px calc(100% - 16px), 0px calc(100% - 16px), 0px calc(100% - 20px));
     --faction-ctl-clip: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
 }
-html[data-faction="machine"] {
+html[data-faction="machine"],
+.profile-selection-content[data-faction="machine"] {
     --faction-panel-clip: polygon(0 12px, 12px 12px, 12px 0, calc(100% - 12px) 0, calc(100% - 12px) 12px, 100% 12px, 100% calc(50% - 10px), calc(100% - 6px) calc(50% - 10px), calc(100% - 6px) calc(50% + 10px), 100% calc(50% + 10px), 100% calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 12px calc(100% - 12px), 0 calc(100% - 12px), 0 calc(50% + 10px), 6px calc(50% + 10px), 6px calc(50% - 10px), 0 calc(50% - 10px));
     --faction-ctl-clip: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
 }
@@ -15212,7 +15222,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .galaxy-map-embedded.is-input-active .gm-node.selected .gm-cursor-voidborn,
 .galaxy-map-embedded.is-input-active .gm-node.hovered .gm-cursor-voidborn,
 .gm-post-node.selected .gm-cursor-voidborn {
-    animation: gm-void-breathe 2.4s ease-in-out infinite;
+    animation: gm-void-breathe 2.4s steps(8, end) infinite;
 }
 @keyframes gm-void-breathe {
     0%   { transform: scale(0.94) rotate(0deg); }
@@ -15675,7 +15685,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 }
 .galaxy-map-overlay .gm-post-node.selected .gm-selection-frame,
 .galaxy-map-embedded.is-input-active .gm-post-node.selected .gm-selection-frame {
-    animation: gm-select-pulse 0.95s ease-in-out infinite alternate;
+    animation: gm-select-pulse 0.95s steps(4, end) infinite alternate;
 }
 
 /* --- Hangar fits the modal vertically: body does not scroll, the columns do. */
@@ -18905,7 +18915,7 @@ button.hs-faction-card.nav-focused {
 .gm-base-marker .gm-base-m { fill: color-mix(in srgb, var(--fac) 55%, #454552); }
 .gm-base-marker .gm-base-l { fill: color-mix(in srgb, var(--fac) 70%, #d8d9e2); }
 .gm-base-marker .gm-base-w { fill: color-mix(in srgb, var(--fac) 55%, #fff); }
-.gm-base-marker .gm-base-c { fill: color-mix(in srgb, var(--fac) 80%, #fff); animation: gm-base-core 2.4s ease-in-out infinite; }
+.gm-base-marker .gm-base-c { fill: color-mix(in srgb, var(--fac) 80%, #fff); animation: gm-base-core 2.4s steps(4, end) infinite; }
 .gm-base-marker .gm-base-a { fill: #ffb43b; animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
 @keyframes gm-base-core { 50% { fill: var(--fac); } }
 .gm-base-marker .gm-base-label {
@@ -19686,7 +19696,6 @@ details.settings-section[open] > .settings-section-list {
     display: inline-flex;
     width: 16px;
     height: 16px;
-    filter: drop-shadow(0 0 2px #000);
 }
 .gm-node-faction-icon > * { width: 100%; height: 100%; }
 
@@ -22975,6 +22984,8 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
 }
 .enemy-vitals-side .enemy-shield-fill.is-down .enemy-shield-text { color: #ff8080; }
+.enemy-vitals-side .enemy-shield-fill.is-none { border-color: color-mix(in srgb, #4fd8ff 22%, transparent); }
+.enemy-vitals-side .enemy-shield-fill.is-none .enemy-shield-text { color: #6f8a96; }
 
 /* Left sidebar: spread the info clusters over the full height instead of
    leaving an empty block at the bottom; rows get room to breathe. */
@@ -23765,3 +23776,1181 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 /* Faction stations: steady muted lamps (no strobe show). */
 .gm-station.is-faction .gm-lamp-red { fill: #c8473f; }
 .gm-station.is-faction .gm-lamp-green { fill: #4fae74; }
+
+/* Fullscreen toggle (fullscreen-toggle.js): corner button on every screen,
+   hidden while the station shows its own one next to logout. */
+.vf-fullscreen-btn {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    z-index: 100000;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #05060a;
+    border: 2px solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    opacity: 0.6;
+}
+.vf-fullscreen-btn:hover, .vf-fullscreen-btn:focus-visible { opacity: 1; color: #fff; border-color: var(--faction-accent, var(--color-primary)); }
+body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
+.vf-fs-icon { fill: currentColor; filter: drop-shadow(1px 1px 0 #05060a); }
+.hs-fullscreen-btn .vf-fs-icon { width: 24px; height: 24px; }
+.hs-fullscreen-btn:hover, .hs-fullscreen-btn:focus-visible, .hs-fullscreen-btn.nav-focused {
+    border-color: var(--faction-accent, var(--color-primary));
+    color: #fff;
+}
+
+/* --- Viewport fit: the terminal uses the full window height, and the pilot
+   creation step sizes its fixed boxes by vh so it fits without scrolling. */
+.start-screen-content.start-screen-retro {
+    height: min(calc(var(--vh, 100dvh) - 2 * var(--bezel) - 24px), 1040px);
+}
+.profile-selection-name-mode.is-name-step .profile-faction-info-row {
+    height: clamp(150px, 26vh, 300px);
+    margin: clamp(6px, 1.4vh, 16px) 0;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-ship {
+    width: auto !important;
+    height: clamp(70px, 15vh, 182px) !important;
+    max-width: 100%;
+}
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-map {
+    height: clamp(90px, 18vh, 210px);
+    width: auto;
+}
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-nav { height: clamp(48px, 9vh, 84px); }
+.profile-selection-name-mode.is-name-step .profile-selection-title { margin-bottom: clamp(4px, 1vh, 14px); }
+.profile-selection-name-mode.is-name-step .profile-name-input { margin: clamp(4px, 1vh, 12px) auto clamp(6px, 1.6vh, 20px); }
+.profile-selection-name-mode.is-name-step .profile-start-options { margin-top: clamp(4px, 1vh, 12px); }
+@media (max-height: 940px) {
+    .profile-selection-content.profile-selection-floating.profile-selection-name-mode.is-name-step { padding: clamp(10px, 2vh, 28px) 32px; }
+    .profile-selection-name-mode.is-name-step .profile-modal-crest { transform: scale(0.7); margin: -8px 0; }
+    .profile-selection-name-mode.is-name-step .profile-faction-info-row { height: clamp(130px, 22vh, 300px); }
+    .profile-selection-name-mode.is-name-step .profile-faction-ship { height: clamp(60px, 11vh, 182px) !important; }
+    .profile-selection-name-mode.is-name-step .profile-start-galaxy-map { height: clamp(80px, 15vh, 210px); }
+    .profile-selection-name-mode.is-name-step .profile-start-options { gap: 4px; }
+}
+.profile-selection-name-mode.is-name-step .profile-faction-info-row { height: auto; }
+
+/* --- Viewport fit: faction picker. The info/lore row takes the leftover
+   height (lore scrolls inside); the other rows tighten on short windows. */
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 120px;
+    max-height: 300px;
+    margin: clamp(6px, 1.4vh, 16px) 0;
+}
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row .profile-faction-lore {
+    display: flex;
+    flex-direction: column;
+}
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-lore-text {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+}
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-ship {
+    height: clamp(60px, 14vh, 182px) !important;
+    width: auto !important;
+}
+@media (max-height: 940px) {
+    .profile-selection-content.profile-selection-floating.profile-selection-name-mode:not(.is-name-step) { padding: clamp(10px, 2vh, 28px) 32px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-modal-crest { transform: scale(0.7); margin: -8px 0; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-selection-title { margin-bottom: 6px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-faction-picker { margin-bottom: 6px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-faction-swatches { margin-bottom: 4px; }
+    .profile-selection-name-mode:has(.profile-faction-info-row):not(.is-name-step) .profile-faction-swatch { padding: 8px 6px 6px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-faction-facts { margin-bottom: 8px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-faction-fact { padding: 8px 10px; }
+    .profile-selection-name-mode:not(.is-name-step) .profile-faction-fact-icon { width: 40px; height: 40px; }
+}
+
+/* Inline profile dialog lives inside the start-screen host — never its own parallax host. */
+.profile-selection-overlay.is-inline {
+    overflow: visible !important;
+    isolation: auto !important;
+}
+.profile-selection-overlay.is-inline > .vf-bg-parallax-base,
+.profile-selection-overlay.is-inline > .vf-bg-parallax-glow { display: none !important; }
+
+/* Profile dialog scrollbars: thin, square, faction-tinted. */
+.profile-selection-content,
+.profile-selection-content * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--faction-accent, var(--color-primary)) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, #05060a);
+}
+
+/* Faction fact cards: dark, nearly opaque fill so the light text reads
+   against the bright hangar backdrop. */
+.profile-selection-content .profile-faction-fact {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, rgba(5, 6, 10, 0.94));
+}
+
+/* Fact cards: icon + label as a header row, value and note use the full
+   card width below so the text fits instead of being clipped. */
+.profile-selection-name-mode .profile-faction-fact {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: start;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 6px;
+    padding: 10px 12px;
+}
+.profile-selection-name-mode .profile-faction-fact-body { display: contents; }
+.profile-selection-name-mode .profile-faction-fact-icon,
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-fact-icon { width: 30px; height: 30px; }
+.profile-selection-name-mode .profile-faction-fact-icon img,
+.profile-selection-name-mode .profile-faction-fact-icon canvas,
+.profile-selection-name-mode .profile-faction-fact-icon svg { max-width: 26px; max-height: 26px; }
+.profile-selection-name-mode .profile-faction-fact-label { margin: 0; line-height: 1.3; }
+.profile-selection-name-mode .profile-faction-fact-value,
+.profile-selection-name-mode .profile-faction-fact-note {
+    grid-column: 1 / -1;
+    margin: 0;
+    letter-spacing: 1px;
+    overflow-wrap: normal;
+    hyphens: auto;
+}
+.profile-selection-name-mode .profile-faction-fact-value { font-size: 13px; line-height: 1.4; -webkit-line-clamp: 3; line-clamp: 3; }
+.profile-selection-name-mode .profile-faction-fact-note { font-size: 11px; line-height: 1.4; -webkit-line-clamp: 4; line-clamp: 4; }
+.profile-selection-name-mode .profile-faction-facts { grid-auto-rows: auto; }
+.profile-selection-name-mode .profile-faction-fact-value { -webkit-line-clamp: 4; line-clamp: 4; }
+
+/* Faction picker swatches: emblem left of the name. */
+.profile-selection-content .profile-faction-swatch,
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatch {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px;
+}
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatch-emblem {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    margin: 0;
+}
+.profile-selection-content .profile-faction-swatch-label { margin: 0; }
+
+/* --- Pilot name step cleanup: each label sits above its setting, all
+   blocks share one centred column, ship left of the info in the card. */
+.profile-start-options,
+.profile-selection-name-mode.is-name-step .profile-start-options {
+    max-width: min(960px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+    gap: clamp(8px, 1.6vh, 14px);
+}
+.profile-start-row,
+.profile-selection-name-mode.is-name-step .profile-start-row[data-start-row="galaxy"] {
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+.profile-start-label { text-align: left; }
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    flex-wrap: nowrap;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    max-width: min(960px, 100%);
+    box-sizing: border-box;
+    gap: clamp(12px, 2.4vw, 32px);
+}
+.profile-selection-name-mode.is-name-step .profile-faction-ship { flex: 0 0 auto; }
+.profile-selection-name-mode.is-name-step .profile-faction-preview-text { flex: 1 1 auto; }
+@media (max-width: 520px) {
+    .profile-selection-name-mode.is-name-step .profile-faction-preview { flex-wrap: wrap; justify-content: center; }
+}
+
+/* Faction picker previews the full faction frame language, not just colour:
+   geometry vars are re-scoped onto .profile-selection-content[data-faction]. */
+.profile-selection-content[data-faction] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    position: relative;
+    isolation: isolate;
+    clip-path: var(--faction-panel-clip, none);
+    border-width: var(--faction-border-width);
+}
+.profile-selection-content[data-faction] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--faction-surface, none);
+    opacity: var(--faction-surface-opacity, 0.16);
+}
+.profile-selection-content[data-faction] :is(.action-button, .profile-faction-swatch, .profile-name-input) {
+    clip-path: var(--faction-ctl-clip, none);
+}
+.profile-selection-content[data-faction] .profile-faction-swatch.selected {
+    clip-path: var(--faction-panel-clip, var(--faction-ctl-clip, none));
+}
+
+/* Dev mode: every stage in the planet stepper is clickable. */
+.gm-sector-stage.is-dev-pick { cursor: pointer; }
+.gm-sector-stage.is-dev-pick:hover { filter: brightness(1.3); }
+
+/* HUD mission count rows: enemy ship icon + count only. */
+.gi-enemy-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
+.gi-row-count .gi-row-text { justify-content: flex-start; }
+
+/* --- Game-over wreck backdrop (js/ui/game-over-wreck.js) ---------------- */
+.game-over-wreck {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+    opacity: 0.85;
+}
+.game-over::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 42%, transparent 25%, rgba(0, 0, 0, 0.7) 85%),
+        radial-gradient(ellipse at 50% 45%, color-mix(in srgb, #ff5a2a 14%, transparent), transparent 45%);
+}
+.game-over-content { position: relative; z-index: 1; margin-top: 30vh; backdrop-filter: blur(2px); }
+.game-over-epitaph {
+    margin: -8px 0 16px;
+    font-size: var(--font-small, 11px);
+    letter-spacing: 0.25em;
+    color: var(--color-error, #ff5a4a);
+    opacity: 0.85;
+}
+
+/* === Faction picker: strong per-faction frame language ====================
+   P = big panels (preview / lore / fact cards), C = controls. */
+.profile-selection-content[data-faction] {
+    --fp-accent: var(--ui-border, var(--color-primary));
+}
+.profile-selection-content[data-faction] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::after {
+    opacity: var(--fp-surface-opacity, 0.3);
+}
+.profile-selection-content[data-faction] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: var(--fp-ornament, none);
+}
+
+/* Terran — engineered plating: thick double rail, corner brackets, rivets. */
+.profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: double;
+    border-width: 6px;
+    box-shadow: inset 0 0 0 2px #05060a, inset 0 0 0 4px color-mix(in srgb, var(--fp-accent) 45%, transparent);
+    --fp-surface-opacity: 0.32;
+    --fp-ornament:
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px 8px / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px 8px / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) 8px / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) 8px / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px calc(100% - 8px) / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px calc(100% - 8px) / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) calc(100% - 8px) / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) calc(100% - 8px) / 4px 22px no-repeat,
+        linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--fp-accent) 70%, transparent) 40% 60%, transparent 60%) 50% 0 / 80px 4px no-repeat;
+}
+
+/* Kronax — war blades: heavy slab border, hazard band top, aggressive slant. */
+.profile-selection-content[data-faction="kronax"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-width: 6px;
+    border-style: solid;
+    box-shadow: inset 0 -10px 0 color-mix(in srgb, var(--fp-accent) 22%, transparent);
+    --fp-surface-opacity: 0.4;
+    --fp-ornament:
+        repeating-linear-gradient(-45deg, var(--fp-accent) 0 8px, #05060a 8px 16px) 0 0 / 100% 10px no-repeat,
+        linear-gradient(135deg, var(--fp-accent) 0 18px, transparent 18px) calc(100% - 0px) calc(100% - 0px) / 36px 36px no-repeat;
+}
+.profile-selection-content[data-faction="kronax"] .action-button,
+.profile-selection-content[data-faction="kronax"] .profile-faction-swatch {
+    border-width: 4px;
+    clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+    padding-left: 22px;
+    padding-right: 22px;
+}
+
+/* Voidborn — organic membrane: soft rounded hulls, pulsing inner glow, no hard cuts. */
+.profile-selection-content[data-faction="voidborn"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact),
+.profile-selection-content[data-faction="voidborn"] :is(.action-button, .profile-faction-swatch, .profile-name-input) {
+    clip-path: none;
+    border-radius: 28px 6px 28px 6px;
+}
+.profile-selection-content[data-faction="voidborn"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-width: 3px;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--fp-accent) 55%, transparent),
+        inset 0 0 28px color-mix(in srgb, var(--fp-accent) 35%, transparent);
+    animation: fp-void-pulse 3.2s ease-in-out infinite;
+    --fp-surface-opacity: 0.35;
+    --fp-ornament: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--fp-accent) 30%, transparent), transparent 55%),
+        radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--fp-accent) 25%, transparent), transparent 40%);
+}
+.profile-selection-content[data-faction="voidborn"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before,
+.profile-selection-content[data-faction="voidborn"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::after { border-radius: inherit; }
+@keyframes fp-void-pulse {
+    50% { box-shadow: 0 0 30px color-mix(in srgb, var(--fp-accent) 80%, transparent),
+        inset 0 0 40px color-mix(in srgb, var(--fp-accent) 50%, transparent); }
+}
+
+/* Pirate — salvaged junk: crooked plates, rivet rows, mismatched thick edge. */
+.profile-selection-content[data-faction="pirate"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: solid;
+    border-width: 3px 7px 5px 3px;
+    --fp-surface-opacity: 0.4;
+    --fp-ornament:
+        radial-gradient(circle, var(--fp-accent) 0 2.5px, #05060a 3px 4px, transparent 4.5px) 6px 6px / 18px 12px repeat-x,
+        radial-gradient(circle, var(--fp-accent) 0 2.5px, #05060a 3px 4px, transparent 4.5px) 6px calc(100% - 6px) / 18px 12px repeat-x;
+}
+.profile-selection-content[data-faction="pirate"] .profile-faction-preview { transform: rotate(-0.6deg); }
+.profile-selection-content[data-faction="pirate"] .profile-faction-lore { transform: rotate(0.5deg); }
+.profile-selection-content[data-faction="pirate"] .profile-faction-fact:nth-child(odd) { transform: rotate(-0.8deg); }
+.profile-selection-content[data-faction="pirate"] .profile-faction-fact:nth-child(even) { transform: rotate(0.7deg) translateY(3px); }
+.profile-selection-content[data-faction="pirate"] .action-button { transform: rotate(-1deg); }
+
+/* Machine — circuit board: dashed traces, node notches, scanning trace line. */
+.profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: dashed;
+    border-width: 3px;
+    outline: 2px solid color-mix(in srgb, var(--fp-accent) 55%, transparent);
+    outline-offset: -9px;
+    --fp-surface-opacity: 0.38;
+    --fp-ornament:
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 0 50% / 14px 3px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 100% 50% / 14px 3px no-repeat,
+        radial-gradient(circle, var(--fp-accent) 0 4px, transparent 4.5px) 14px 50% / 10px 10px no-repeat,
+        radial-gradient(circle, var(--fp-accent) 0 4px, transparent 4.5px) calc(100% - 14px) 50% / 10px 10px no-repeat,
+        linear-gradient(90deg, transparent, color-mix(in srgb, var(--fp-accent) 60%, transparent), transparent) 0 0 / 40% 2px no-repeat;
+    animation: fp-machine-scan 2.6s linear infinite;
+}
+.profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    background-position: 0 50%, 100% 50%, 14px 50%, calc(100% - 14px) 50%, var(--fp-scan, -40%) 0;
+}
+@keyframes fp-machine-scan { from { --fp-scan: -40%; } to { --fp-scan: 140%; } }
+@property --fp-scan { syntax: '<percentage>'; inherits: true; initial-value: -40%; }
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-selection-content[data-faction] * { animation: none !important; }
+}
+
+/* Faction contract goal line (faction-relations.js FACTION_CONTRACT_KINDS). */
+.hs-mission-goal { color: var(--color-text, #e8e4d8); font-weight: bold; }
+.hs-mission.is-renegade .hs-mission-type,
+.hs-mission.is-bounty .hs-mission-type { color: #ff5a3c; }
+.hs-mission.is-conquer .hs-mission-type { color: #ffcf3a; }
+.hs-mission.is-defend .hs-mission-type { color: #5cff7a; }
+
+/* Faction preview card: emblem left of the faction name; trait / hero lines
+   run underneath, spanning the full width. */
+.profile-faction-preview .profile-faction-preview-text {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+}
+.profile-faction-preview .profile-faction-preview-text > .profile-faction-preview-emblem {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+}
+.profile-faction-preview .profile-faction-preview-text > .profile-faction-preview-name {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+}
+.profile-faction-preview .profile-faction-preview-text > :not(.profile-faction-preview-emblem):not(.profile-faction-preview-name) {
+    grid-column: 1 / -1;
+}
+
+/* Invaded planet: single planet pixels flare up where the factions clash. */
+.gm-battle { pointer-events: none; }
+.gm-battle-px { opacity: 0; fill: #fff3c0; animation: gm-battle-px 3.2s steps(1, end) infinite; animation-delay: var(--bd, 0s); }
+@keyframes gm-battle-px {
+    0%  { opacity: 1; fill: #fff3c0; }
+    3%  { opacity: 0.9; fill: #ffb347; }
+    7%  { opacity: 0.6; fill: #c8461e; }
+    12% { opacity: 0.3; fill: #5a2418; }
+    16% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .gm-battle-px { animation: none; opacity: 0.6; fill: #ffb347; } }
+
+/* Start galaxy card: real planet sprites on a star field, readable text. */
+.profile-start-galaxy-map .stars rect { fill: #cfe4ff; }
+.profile-start-galaxy-map .dust rect { fill: var(--galaxy-color); }
+.profile-start-galaxy-map .edges path { fill: color-mix(in srgb, var(--galaxy-color) 70%, #fff); opacity: 0.7; }
+.profile-start-galaxy-map .start-bracket { fill: #fff; }
+.profile-start-galaxy-map .planet-label {
+    font-family: var(--ui-font-family);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-anchor: middle;
+    fill: color-mix(in srgb, #fff 80%, var(--galaxy-color));
+    paint-order: stroke;
+    stroke: #05060a;
+    stroke-width: 3px;
+}
+.profile-start-galaxy-map .planet-label.is-start { fill: #fff; }
+.profile-start-planet { width: 100%; height: 100%; }
+.profile-start-label,
+.profile-selection-name-mode .profile-start-label {
+    font-size: 13px;
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #fff);
+    text-shadow: none;
+    filter: none;
+}
+.profile-start-galaxy-ruler { font-size: 13px; color: #fff; }
+.profile-start-galaxy-meta { font-size: 12px; opacity: 1; color: color-mix(in srgb, #fff 82%, var(--faction-accent, var(--color-primary))); }
+.profile-start-galaxy-home { font-size: 12px; }
+.profile-start-chip { font-size: 13px; color: #fff; }
+.profile-start-galaxy-info, .profile-start-label, .profile-start-chip:not(.selected) {
+    text-shadow: 1px 0 0 #05060a, -1px 0 0 #05060a, 0 1px 0 #05060a, 0 -1px 0 #05060a;
+}
+
+/* Profile dialog buttons: pixel glyph before the label. */
+.profile-selection-actions .action-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.ps-btn-icon { flex: none; filter: drop-shadow(1px 1px 0 #05060a); }
+.profile-start-galaxy-new {
+    align-self: flex-start;
+    margin-top: 8px;
+    padding: 4px 10px;
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--faction-accent, var(--color-primary));
+    background: transparent;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    cursor: pointer;
+}
+.profile-start-galaxy-new:hover { color: #000; background: var(--faction-accent, var(--color-primary)); }
+@media (max-width: 900px) { .profile-start-galaxy-new { align-self: center; } }
+
+/* Starter kit: chips + live effect readout in one card. */
+.profile-start-kit-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 7%, #05060a);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.profile-start-kit-card .profile-start-chips {
+    padding: 6px;
+    flex-wrap: nowrap;
+}
+.profile-start-kit-card .profile-start-chip { flex: 1 1 0; min-width: 0; text-align: center; }
+.profile-start-kit-effect {
+    padding: 7px 12px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #000);
+    color: var(--color-text, #fff);
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-align: left;
+}
+.profile-start-kit-effect::before {
+    content: '▸ ';
+    color: var(--faction-accent, var(--color-primary));
+}
+
+/* NEW GALAXY modal (pilot creation). */
+.profile-galaxy-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.72);
+}
+.profile-galaxy-modal-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(620px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: clamp(14px, 3vw, 28px);
+    background: #05060a;
+    border: var(--ui-border-width) solid var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent);
+}
+.profile-galaxy-modal-title {
+    margin: 0 0 4px;
+    text-align: center;
+    letter-spacing: 4px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.profile-galaxy-modal-name { display: flex; gap: 6px; }
+.profile-galaxy-modal-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 6px 10px;
+    color: #fff;
+    background: #000;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    text-transform: uppercase;
+}
+.profile-galaxy-modal .profile-start-chip { display: inline-flex; align-items: center; gap: 6px; }
+.profile-galaxy-modal-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 6px; }
+.profile-galaxy-modal-buttons .profile-start-chip { min-width: 120px; justify-content: center; }
+
+/* Name step: fit everything vertically — difficulty + kit share one row,
+   galaxy map and faction preview shrink with viewport height. */
+.profile-selection-name-mode.is-name-step .profile-start-options {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 14px;
+    row-gap: clamp(4px, 0.8vh, 8px);
+    align-items: end;
+}
+.profile-selection-name-mode.is-name-step .profile-start-row[data-start-row="galaxy"] { grid-column: 1 / -1; }
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-map { height: clamp(90px, 17vh, 220px) !important; }
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-nav { height: clamp(48px, 10vh, 120px) !important; }
+.profile-selection-name-mode.is-name-step .profile-start-kit-effect { padding: 4px 10px; }
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    padding: clamp(6px, 1.2vh, 16px) 20px !important;
+    margin-top: clamp(4px, 1vh, 12px);
+}
+.profile-selection-name-mode.is-name-step .profile-faction-ship { height: clamp(56px, 10vh, 140px) !important; }
+@media (max-width: 900px) {
+    .profile-selection-name-mode.is-name-step .profile-start-options { grid-template-columns: 1fr; }
+}
+
+/* NEW GALAXY modal: crisp, readable type (Silkscreen on its 8px grid, no
+   glow shadows) and calm selected / focused states. */
+.profile-galaxy-modal :is(.profile-galaxy-modal-title, .profile-start-label, .profile-start-chip, .profile-galaxy-modal-input) {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-shadow: none;
+    filter: none;
+    -webkit-font-smoothing: none;
+}
+.profile-galaxy-modal .profile-galaxy-modal-title { font-size: 24px; line-height: 24px; letter-spacing: 3px; }
+.profile-galaxy-modal .profile-start-label { font-size: 16px; line-height: 16px; color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, #fff); }
+.profile-galaxy-modal .profile-start-chip,
+.profile-galaxy-modal .profile-galaxy-modal-input { font-size: 16px; line-height: 16px; }
+.profile-galaxy-modal .profile-start-chip { color: #d8dbe2; }
+.profile-galaxy-modal .profile-start-chip.selected {
+    color: #fff;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, #05060a);
+    border-color: var(--faction-accent, var(--color-primary));
+}
+.profile-galaxy-modal .profile-start-row.nav-row-active .profile-start-label {
+    color: #fff;
+    text-shadow: none;
+}
+.profile-galaxy-modal .profile-start-row.nav-row-active .profile-start-chip.selected,
+.profile-galaxy-modal .profile-galaxy-modal-buttons .profile-start-chip.selected {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+
+/* NEW GALAXY modal: form left, system preview right (stacked when narrow). */
+.profile-galaxy-modal-box { width: min(980px, 100%); }
+.profile-galaxy-modal-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    gap: clamp(12px, 2.4vw, 28px);
+    align-items: start;
+}
+.profile-galaxy-modal-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.profile-galaxy-modal-preview { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.profile-galaxy-modal-map {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 320 / 200;
+    background: #000;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.profile-galaxy-modal-map .lanes line {
+    stroke: color-mix(in srgb, var(--gm-color) 60%, #fff);
+    stroke-width: 1;
+    stroke-dasharray: 2 3;
+    opacity: 0.6;
+}
+.profile-galaxy-modal-map .tier { fill: #fff; opacity: 0.7; }
+.profile-galaxy-modal-map .start { fill: #fff; }
+.profile-galaxy-modal-sum {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: #d8dbe2;
+    -webkit-font-smoothing: none;
+}
+.profile-galaxy-modal-sum strong { color: #fff; font-size: 16px; }
+.profile-galaxy-modal-sum span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.profile-galaxy-modal-sum .vs { color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff); }
+@media (max-width: 760px) {
+    .profile-galaxy-modal-body { grid-template-columns: 1fr; }
+    .profile-galaxy-modal-preview { order: -1; }
+}
+
+/* Start galaxy card: name opens a galaxy dropdown (ruler emblem first). */
+.profile-start-galaxy-info { position: relative; }
+.profile-start-galaxy-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 2px 6px;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: var(--ui-border-width) solid transparent;
+    cursor: pointer;
+}
+.profile-start-galaxy-pick:hover { border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent); }
+.profile-start-galaxy-caret { color: var(--faction-accent, var(--color-primary)); font-size: 14px; }
+.profile-start-galaxy-list {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: max-content;
+    min-width: 100%;
+    max-width: min(360px, 90vw);
+    max-height: 260px;
+    overflow-y: auto;
+    margin: 4px 0 0;
+    padding: 4px;
+    list-style: none;
+    background: #05060a;
+    border: var(--ui-border-width) solid var(--faction-accent, var(--color-primary));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.profile-start-galaxy-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: #d8dbe2;
+    text-align: left;
+    text-shadow: none;
+    -webkit-font-smoothing: none;
+    cursor: pointer;
+}
+.profile-start-galaxy-list li:hover { background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #05060a); color: #fff; }
+.profile-start-galaxy-list li.selected { background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, #05060a); color: #fff; }
+.profile-start-galaxy-list .ruler { display: inline-flex; width: 20px; height: 20px; flex: none; }
+.profile-start-galaxy-list .name { flex: 1 1 auto; white-space: nowrap; }
+.profile-start-galaxy-list .rivals { display: inline-flex; gap: 2px; opacity: 0.8; }
+
+/* Native dropdown lists: dark list with light text everywhere (the light
+   OS default list made the light option text unreadable). */
+select { color-scheme: dark; }
+select option,
+select optgroup {
+    background-color: #0b1018;
+    color: #e8e4d8;
+}
+select option:checked {
+    background-color: var(--color-primary, #3a8fd8);
+    color: #05060a;
+}
+select option:disabled { color: #6a7080; }
+
+/* Main menu GALAXIES viewer. */
+.galaxy-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10040;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.78);
+}
+.galaxy-viewer-box {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: min(1200px, 100%);
+    max-height: 100%;
+    box-sizing: border-box;
+    padding: clamp(12px, 2.4vw, 24px);
+    background: #05060a;
+    border: var(--ui-border-width) solid var(--color-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.galaxy-viewer-box :is(h2, li, span, strong, button) {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-shadow: none;
+    -webkit-font-smoothing: none;
+}
+.galaxy-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.galaxy-viewer-head h2 { margin: 0; font-size: 24px; line-height: 24px; letter-spacing: 3px; color: var(--color-primary); }
+.galaxy-viewer-body {
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    gap: clamp(12px, 2vw, 24px);
+    min-height: 0;
+    overflow: hidden;
+}
+.galaxy-viewer-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.galaxy-viewer-list, .galaxy-viewer-planets { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.galaxy-viewer-list { flex: 1 1 auto; max-height: 60vh; border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent); padding: 4px; }
+.galaxy-viewer-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-size: 16px;
+    line-height: 16px;
+    color: #d8dbe2;
+    cursor: pointer;
+}
+.galaxy-viewer-list li:hover { background: color-mix(in srgb, var(--color-primary) 14%, #05060a); color: #fff; }
+.galaxy-viewer-list li.selected { background: color-mix(in srgb, var(--color-primary) 28%, #05060a); color: #fff; }
+.galaxy-viewer-list .ruler { display: inline-flex; width: 20px; height: 20px; flex: none; }
+.galaxy-viewer-list .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.galaxy-viewer-list .rivals { display: inline-flex; gap: 2px; opacity: 0.8; }
+.galaxy-viewer-list .tag { font-size: 8px; line-height: 8px; padding: 2px 3px; color: #000; background: var(--color-primary); }
+.galaxy-viewer-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+    grid-template-areas: "map info" "planets planets";
+    gap: 14px;
+    min-width: 0;
+    overflow-y: auto;
+}
+.galaxy-viewer-map { grid-area: map; min-width: 0; }
+.galaxy-viewer-map svg { width: 100%; height: auto; aspect-ratio: 560 / 220; display: block; border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.galaxy-viewer-info { grid-area: info; display: flex; flex-direction: column; gap: 8px; font-size: 16px; line-height: 16px; color: #d8dbe2; }
+.galaxy-viewer-info span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 16px; }
+.galaxy-viewer-name { font-size: 24px; line-height: 24px; color: #fff; }
+.galaxy-viewer-info .vs { color: color-mix(in srgb, var(--color-primary) 60%, #fff); }
+.galaxy-viewer-info .muted { opacity: 0.6; }
+.galaxy-viewer-planets { grid-area: planets; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; }
+.galaxy-viewer-planets li { display: flex; align-items: center; gap: 8px; font-size: 16px; line-height: 16px; color: #d8dbe2; }
+.galaxy-viewer-planets .icon { display: inline-flex; width: 20px; height: 20px; }
+.galaxy-viewer-planets .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.galaxy-viewer-planets .diff { opacity: 0.6; }
+.galaxy-viewer-btn {
+    align-self: flex-start;
+    padding: 6px 12px;
+    font-size: 16px;
+    line-height: 16px;
+    color: #d8dbe2;
+    background: color-mix(in srgb, var(--color-primary) 6%, #000);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    cursor: pointer;
+}
+.galaxy-viewer-btn:hover { color: #fff; border-color: var(--color-primary); }
+.galaxy-viewer-btn.danger { color: #ff8a8a; border-color: #8a3a3a; }
+.galaxy-viewer-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 860px) {
+    .galaxy-viewer-body { grid-template-columns: 1fr; overflow-y: auto; }
+    .galaxy-viewer-list { max-height: 30vh; }
+    .galaxy-viewer-detail { grid-template-columns: 1fr; grid-template-areas: "map" "info" "planets"; }
+}
+
+/* GALAXIES as a start-screen page: fills the terminal screen, no modal. */
+.galaxy-viewer {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    padding: 0;
+    background: none;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+}
+.galaxy-viewer-box {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+.galaxy-viewer-body { flex: 1 1 auto; }
+.galaxy-viewer-list { max-height: none; }
+.start-screen-content.start-screen-galaxies {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Main menu entries as real buttons (framed plate, faction corners, pressed state). */
+html .start-screen-menu-clustered .menu-cluster { display: flex; flex-direction: column; gap: 8px; }
+html .start-screen-menu-clustered .menu-item,
+html .start-screen-menu-clustered .menu-item.menu-item-primary {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-width: 300px;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 3px) solid color-mix(in srgb, var(--color-primary) 45%, transparent) !important;
+    background:
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent 55%),
+        color-mix(in srgb, var(--color-primary) 6%, #05060a) !important;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.45), 0 0 0 2px #05060a !important;
+    clip-path: var(--faction-ctl-clip, none);
+    cursor: pointer;
+}
+html .start-screen-menu-clustered .menu-item:hover:not(.selected) {
+    border-color: color-mix(in srgb, var(--color-primary) 75%, transparent) !important;
+}
+html .start-screen-menu-clustered .menu-item.selected,
+html .start-screen-menu-clustered .menu-item.menu-item-primary.selected {
+    border-color: var(--color-primary) !important;
+    background:
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-primary) 34%, transparent), color-mix(in srgb, var(--color-primary) 10%, transparent)),
+        #05060a !important;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.45), inset 0 0 0 2px #05060a, 0 0 0 2px #05060a !important;
+}
+html .start-screen-menu-clustered .menu-item:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.5), 0 0 0 2px #05060a !important;
+}
+html .start-screen-menu-clustered .menu-item-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+}
+html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px !important; height: 48px !important; }
+/* Button already shows focus — drop the floating caret column. */
+.start-screen-retro .menu-item .menu-item-label::before { display: none; }
+
+/* GALAXIES page: compact fit — left-aligned text, rows hug their content,
+   map gets the width, planets as a tight table. */
+.galaxy-viewer, .galaxy-viewer * { text-align: left; }
+.galaxy-viewer-box { padding: 0; gap: 10px; min-height: 0; }
+.galaxy-viewer-head h2 { font-size: 16px; line-height: 16px; }
+.galaxy-viewer-btn { padding: 4px 10px; font-size: 8px; line-height: 8px; letter-spacing: 2px; }
+.galaxy-viewer-body {
+    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+.galaxy-viewer-side { max-height: 100%; }
+.galaxy-viewer-list { flex: 0 1 auto; max-height: min(60vh, 520px); }
+.galaxy-viewer-list li { padding: 5px 6px; font-size: 8px; line-height: 8px; letter-spacing: 2px; gap: 8px; }
+.galaxy-viewer-list .ruler { width: 16px; height: 16px; }
+.galaxy-viewer-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: 12px 16px;
+}
+.galaxy-viewer-map svg { max-height: 46vh; }
+.galaxy-viewer-info { gap: 8px; font-size: 8px; line-height: 8px; }
+.galaxy-viewer-info span { font-size: 8px; line-height: 12px; letter-spacing: 2px; }
+.galaxy-viewer-name { font-size: 16px; line-height: 16px; }
+.galaxy-viewer-info .galaxy-viewer-btn { margin-top: 6px; }
+.galaxy-viewer-planets {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    grid-auto-rows: min-content;
+    align-content: start;
+    gap: 6px 20px;
+}
+.galaxy-viewer-planets li { font-size: 8px; line-height: 8px; letter-spacing: 2px; gap: 6px; }
+.galaxy-viewer-planets .icon { width: 16px; height: 16px; flex: none; }
+.galaxy-viewer-planets .diff { margin-left: auto; text-align: right; }
+/* Readable size (16px Silkscreen), tight spacing. */
+.galaxy-viewer-head h2 { font-size: 24px; line-height: 24px; letter-spacing: 3px; }
+.galaxy-viewer-btn { font-size: 16px; line-height: 16px; letter-spacing: 1px; padding: 5px 10px; }
+.galaxy-viewer-body { grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); }
+.galaxy-viewer-list li { font-size: 16px; line-height: 16px; letter-spacing: 1px; padding: 6px 8px; }
+.galaxy-viewer-list .ruler { width: 20px; height: 20px; }
+.galaxy-viewer-detail { grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); }
+.galaxy-viewer-map svg { max-height: 58vh; }
+.galaxy-viewer-name { font-size: 24px; line-height: 24px; }
+.galaxy-viewer-info span { font-size: 16px; line-height: 20px; letter-spacing: 1px; }
+.galaxy-viewer-planets { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 24px; }
+.galaxy-viewer-planets li { font-size: 16px; line-height: 16px; letter-spacing: 1px; }
+.galaxy-viewer-planets .icon { width: 20px; height: 20px; }
+@media (max-width: 1100px) {
+    .galaxy-viewer-detail { grid-template-columns: 1fr; grid-template-areas: "map" "info" "planets"; }
+}
+/* Map full width, info as one row under it, then the planets. */
+.galaxy-viewer-detail,
+.galaxy-viewer-detail[class] { grid-template-columns: 1fr; grid-template-areas: "map" "info" "planets"; }
+.galaxy-viewer-info { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.galaxy-viewer-info .galaxy-viewer-btn { margin: 0 0 0 auto; }
+.galaxy-viewer-name { flex: 1 0 100%; }
+/* GALAXIES page sizes to its content (no full-height stretch). */
+/* Same terminal size as every other page; content hugs the top and
+   scrolls inside if a galaxy has many planets. */
+.start-screen-galaxies > .galaxy-viewer { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-items: flex-start; }
+.galaxy-viewer, .galaxy-viewer-box { height: auto; }
+.galaxy-viewer-body, .galaxy-viewer-detail, .galaxy-viewer-planets { overflow: visible; }
+
+/* Galaxy page + NEW GALAXY modal: Silkscreen Regular for body text, bold
+   only for headings and galaxy names. */
+.galaxy-viewer-box :is(li, span, button),
+.profile-galaxy-modal :is(.profile-start-label, .profile-start-chip, .profile-galaxy-modal-input),
+.profile-galaxy-modal-sum,
+.profile-start-galaxy-list li { font-weight: 400; }
+.galaxy-viewer-box :is(h2, .galaxy-viewer-name),
+.profile-galaxy-modal-title,
+.profile-galaxy-modal-sum strong { font-weight: 700; }
+
+/* GALAXIES: list | map + planets/stations | stats of the clicked item. */
+.galaxy-viewer-body { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(220px, 280px); }
+.galaxy-viewer-sub {
+    margin: 4px 0 0;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 2px;
+    color: var(--color-primary);
+    text-shadow: none;
+}
+.galaxy-viewer-detail { grid-template-areas: none; display: flex; flex-direction: column; gap: 10px; }
+.galaxy-viewer-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.galaxy-viewer-rows li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 6px;
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: #d8dbe2;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+    cursor: pointer;
+}
+.galaxy-viewer-rows li:hover { background: color-mix(in srgb, var(--color-primary) 12%, #05060a); color: #fff; }
+.galaxy-viewer-rows li.selected { background: color-mix(in srgb, var(--color-primary) 26%, #05060a); color: #fff; }
+.galaxy-viewer-rows .icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; }
+.galaxy-viewer-rows .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.galaxy-viewer-rows .diff { opacity: 0.65; white-space: nowrap; }
+.gv-station-icon {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: #9fb3c8;
+    box-shadow: inset 0 0 0 3px #3a4a5c;
+    flex: none;
+}
+.gv-station-icon.is-faction { background: #ff7a6a; box-shadow: inset 0 0 0 3px #6a2a24; }
+.galaxy-viewer-map .gv-station rect { fill: #3a4a5c; stroke: #9fb3c8; stroke-width: 1; }
+.galaxy-viewer-map .gv-station rect.core { fill: #9fb3c8; stroke: none; }
+.galaxy-viewer-map .gv-station.is-faction rect { fill: #6a2a24; stroke: #ff7a6a; }
+.galaxy-viewer-map .gv-station.is-faction rect.core { fill: #ff7a6a; }
+.galaxy-viewer-map .gv-station.is-selected rect:not(.hit) { stroke: #fff; stroke-width: 2; }
+.galaxy-viewer-map rect.hit, .galaxy-viewer-map rect.gv-hit { fill: transparent; stroke: none; cursor: pointer; }
+.galaxy-viewer-map rect.gv-hit.is-selected { stroke: #fff; stroke-width: 2; stroke-dasharray: 4 3; }
+.galaxy-viewer-map .gv-station { cursor: pointer; }
+.galaxy-viewer-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 4%, #05060a);
+    min-width: 0;
+}
+.galaxy-viewer-stats :is(h3, span, p, div) {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    text-shadow: none;
+    -webkit-font-smoothing: none;
+}
+.gv-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 20px;
+    letter-spacing: 1px;
+    color: #fff;
+}
+.gv-planet-head { display: flex; align-items: center; gap: 10px; }
+.gv-planet-icon { display: inline-flex; width: 48px; height: 48px; flex: none; }
+.gv-stat { display: flex; flex-direction: column; gap: 3px; }
+.gv-stat .k { font-size: 8px; line-height: 8px; letter-spacing: 2px; color: color-mix(in srgb, var(--color-primary) 70%, #fff); }
+.gv-stat .v { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 16px; line-height: 20px; color: #d8dbe2; }
+.gv-empty { margin: 0; font-size: 16px; line-height: 20px; color: #8a90a0; }
+@media (max-width: 1200px) {
+    .galaxy-viewer-body { grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); }
+    .galaxy-viewer-stats { grid-column: 2; }
+}
+.galaxy-viewer-rows .diff { display: inline-flex; align-items: center; gap: 6px; }
+.gv-owner { display: inline-flex; width: 16px; height: 16px; }
+
+/* Victory / defeat: planet + stage stepper (stage-stepper.js). */
+.outcome-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 12px auto 4px;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    text-shadow: none;
+    --outcome-accent: var(--faction-accent, var(--color-primary));
+}
+.outcome-progress[hidden] { display: none; }
+.outcome-planet { display: flex; align-items: center; gap: 12px; }
+.outcome-planet-icon { display: inline-flex; width: 56px; height: 56px; flex: none; }
+.outcome-planet-text { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.outcome-planet-text strong { font-size: 16px; line-height: 16px; letter-spacing: 2px; color: #fff; }
+.outcome-planet-text span { font-size: 8px; line-height: 8px; letter-spacing: 2px; color: #a8adb8; }
+.outcome-stepper {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.outcome-step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 84px;
+}
+/* Connector to the previous step. */
+.outcome-step + .outcome-step::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    right: 50%;
+    width: calc(100% - 28px);
+    margin-right: 14px;
+    height: 2px;
+    background: #3a3f4a;
+}
+.outcome-step.is-done::before, .outcome-step.is-won::before { background: var(--outcome-accent); }
+.outcome-step-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    box-sizing: border-box;
+    font-size: 16px;
+    line-height: 16px;
+    color: #6a7080;
+    background: #0a0c12;
+    border: 2px solid #3a3f4a;
+}
+.outcome-step-label { font-size: 8px; line-height: 8px; letter-spacing: 1px; color: #6a7080; white-space: nowrap; }
+.outcome-step.is-done .outcome-step-dot { color: #000; background: color-mix(in srgb, var(--outcome-accent) 70%, #000); border-color: var(--outcome-accent); }
+.outcome-step.is-done .outcome-step-label { color: #c8ccd6; }
+.outcome-step.is-won .outcome-step-dot { color: #000; background: var(--outcome-accent); border-color: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--outcome-accent) 40%, transparent); }
+.outcome-step.is-won .outcome-step-label { color: #fff; }
+.outcome-step.is-lost .outcome-step-dot { color: #fff; background: #8a1f1f; border-color: #ff6a6a; box-shadow: 0 0 0 3px rgba(255, 90, 90, 0.35); }
+.outcome-step.is-lost .outcome-step-label { color: #ff8a8a; }
+.outcome-step.is-boss .outcome-step-dot { width: 32px; height: 32px; margin-top: -2px; }
+
+/* Planet card buttons side by side (FROM START left, mission right). */
+.galaxy-map-panel-select .gm-card-actions {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    white-space: nowrap;
+}
+.outcome-step { width: 56px; }
+.outcome-status {
+    margin: 0;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 2px;
+    color: var(--outcome-accent);
+}
+.outcome-progress[data-result="lost"] .outcome-status { color: #ff8a8a; }
+.outcome-planet-text span { font-size: 16px; line-height: 16px; letter-spacing: 1px; }
+
+/* Planet card: wider, stats clustered as a 2-column tile grid, the planet
+   column slimmer, buttons across the full card width at the bottom. */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    width: min(680px, 56%);
+}
+.galaxy-map-panel-select {
+    flex-wrap: wrap;
+    row-gap: 8px;
+}
+.galaxy-map-panel-select .gm-sector-planet-col {
+    width: 30%;
+}
+.galaxy-map-panel-select .gm-detail {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 6px;
+    align-content: start;
+    flex: 1 1 0;
+}
+.galaxy-map-panel-select .gm-detail .stat-row {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 4px 8px;
+    background: color-mix(in srgb, #05060a 60%, transparent) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+    min-width: 0;
+}
+.galaxy-map-panel-select .gm-detail .stat-row .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+}
+.galaxy-map-panel-select .gm-detail .stat-row .stat-value {
+    text-align: left;
+    justify-content: flex-start;
+    overflow-wrap: anywhere;
+}
+/* Faction (first row) spans both columns; stepper + hint too. */
+.galaxy-map-panel-select .gm-detail .stat-row:first-child,
+.galaxy-map-panel-select .gm-detail .gm-stage-stepper,
+.galaxy-map-panel-select .gm-detail .gm-unlock-hint {
+    grid-column: 1 / -1;
+}
+.galaxy-map-panel-select .gm-detail .gm-unlock-hint:empty { display: none; }
+.galaxy-map-panel-select > .gm-card-actions {
+    flex: 1 0 100%;
+    margin-top: 0;
+    padding-top: 0;
+}

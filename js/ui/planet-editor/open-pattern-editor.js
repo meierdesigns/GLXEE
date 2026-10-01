@@ -224,9 +224,9 @@ extendClass(PlanetEditorUI, {
         cancelBtn.textContent = 'CANCEL';
         cancelBtn.addEventListener('click', () => this.closePatternEditor());
 
-        actions.appendChild(saveBtn);
-        actions.appendChild(delBtn);
         actions.appendChild(cancelBtn);
+        actions.appendChild(delBtn);
+        actions.appendChild(saveBtn);
 
         dialog.appendChild(head);
         dialog.appendChild(idRow);

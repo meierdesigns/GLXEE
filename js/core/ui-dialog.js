@@ -26,8 +26,8 @@ class UIDialog {
             message,
             title: opts.title,
             buttons: [
-                { label: opts.okLabel || 'OK', value: true, primary: true, danger: !!opts.danger },
-                { label: opts.cancelLabel || 'CANCEL', value: false, cancel: true }
+                { label: opts.cancelLabel || 'CANCEL', value: false, cancel: true },
+                { label: opts.okLabel || 'OK', value: true, primary: true, danger: !!opts.danger }
             ]
         });
     }
@@ -46,8 +46,8 @@ class UIDialog {
             title: opts.title,
             input: { value: defaultValue == null ? '' : String(defaultValue), maxLength: opts.maxLength },
             buttons: [
-                { label: opts.okLabel || 'OK', value: 'input', primary: true },
-                { label: opts.cancelLabel || 'CANCEL', value: null, cancel: true }
+                { label: opts.cancelLabel || 'CANCEL', value: null, cancel: true },
+                { label: opts.okLabel || 'OK', value: 'input', primary: true }
             ]
         });
     }
@@ -167,7 +167,9 @@ class UIDialog {
                 focusAt(0);
                 input.select();
             } else {
-                focusAt(0);
+                // Positive action sits right (last) — focus it by default.
+                const primaryIdx = buttons.findIndex((b) => !b.classList.contains('secondary'));
+                focusAt(primaryIdx >= 0 ? primaryIdx : 0);
             }
         });
     }

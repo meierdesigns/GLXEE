@@ -188,6 +188,25 @@ extendClass(PlanetConfigManager, {
                         edges: (map.edges || []).map(e => [e[0], e[1]])
                     }
                 };
+                // Shared world (world-control.js): who holds which planet.
+                if (g.worldControl) {
+                    payload[gid].world = {
+                        owners: Object.assign({}, g.owners || {}),
+                        control: g.control,
+                        rivals: (g.rivals || []).slice(),
+                        originalFaction: g.originalFaction || null
+                    };
+                }
+                // Generated galaxies keep their creation settings.
+                if (g.custom) {
+                    payload[gid].custom = {
+                        planetCount: g.planetCount,
+                        difficultyTier: g.difficultyTier,
+                        sunCount: g.sunCount,
+                        control: g.control,
+                        rivals: (g.rivals || []).slice()
+                    };
+                }
             });
             localStorage.setItem(this.galaxyStorageKey, JSON.stringify(payload));
         } catch (e) {
@@ -221,6 +240,7 @@ extendClass(PlanetConfigManager, {
                         planetIds: [],
                         map: this.normalizeGalaxyMap(gid, src.map)
                     });
+                    if (src.custom) this.applyCustomGalaxySettings(this.galaxies[gid], src.custom);
                 } else {
                     if (src.name) this.galaxies[gid].name = src.name;
                     if (src.faction !== undefined) {
@@ -238,6 +258,15 @@ extendClass(PlanetConfigManager, {
                     } else if (!this.galaxies[gid].map) {
                         this.galaxies[gid].map = this.createDefaultGalaxyMap(gid);
                     }
+                }
+                if (src.world) {
+                    const g = this.galaxies[gid];
+                    g.worldControl = true;
+                    g.owners = src.world.owners || {};
+                    g.control = src.world.control === 'contested' ? 'contested' : 'held';
+                    g.rivals = Array.isArray(src.world.rivals) ? src.world.rivals.slice() : [];
+                    g.originalFaction = src.world.originalFaction || null;
+                    if (typeof GALAXY_CONTROL_REV !== 'undefined') g.controlRev = GALAXY_CONTROL_REV;
                 }
             });
             Object.keys(this.galaxies).forEach(gid => {

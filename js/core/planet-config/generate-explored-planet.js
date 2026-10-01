@@ -18,7 +18,9 @@ extendClass(PlanetConfigManager, {
         const rng = this.seededRandom(seed);
         const idx = Math.max(1, Math.round(Number(exploreIndex) || 1));
         const difficulties = ['EASY', 'NORMAL', 'HARD', 'EXPERT', 'NIGHTMARE'];
-        const diffIdx = Math.min(difficulties.length - 1, Math.floor((idx - 1) / 2));
+        // Generated galaxies start at their chosen tier and ramp from there.
+        const baseTier = Math.max(0, Number(this.galaxies[gid].difficultyTier) || 0);
+        const diffIdx = Math.min(difficulties.length - 1, baseTier + Math.floor((idx - 1) / 2));
         const difficulty = difficulties[diffIdx];
         // Held galaxies: one faction. Contested: owner + an opposing faction
         // fighting over the planet (see galaxy-control.js).
@@ -214,6 +216,8 @@ extendClass(PlanetConfigManager, {
 
     /** Planets a charted galaxy gets on arrival: 7–9, seeded per galaxy. */
     getArrivalPlanetTarget(galaxyId) {
+        const g = this.getGalaxy(galaxyId);
+        if (g && g.planetCount) return g.planetCount;
         return 7 + ((this.hashSeed('size|' + String(galaxyId || '')) >>> 0) % 3);
     },
 
@@ -233,7 +237,8 @@ extendClass(PlanetConfigManager, {
             { kind: 'blue', color: '#cfe8ff', glow: '#6fb0ff', r: 0.11 },
             { kind: 'red', color: '#ff6a4a', glow: '#c0301a', r: 0.19 }
         ];
-        const count = nodes.length >= 7 ? 2 : 1;
+        const g = this.getGalaxy(gid);
+        const count = g && g.sunCount ? g.sunCount : (nodes.length >= 7 ? 2 : 1);
         const suns = [];
         // Candidate spots on the map border (centre just outside the edge, so
         // only part of the star reaches into the map).

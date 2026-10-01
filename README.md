@@ -179,13 +179,16 @@ change whether a faction trades and which prices it offers.
 
 Large UI surfaces (crest, relations cards, profile modal) draw **hand-shaded
 32×32 emblems** through the `@2x` / `@4x` icon path instead of a blocky upscale
-of the 16×16 silhouettes. Resource chips use the same hi-res treatment.
+of the 16×16 silhouettes. Resource chips use the same hi-res treatment. The
+Pirate seal is an angular void-skull over crossed boarding cleavers — harsh on
+both the 16px HUD badge and the enlarged `@4x` crest.
 
 ### Faction relations and contracts
 
-The Home Station Factions area has three focused views:
+The Home Station Factions area has focused views:
 
 - **Relations:** reputation meter, allegiance, pacts, controlled planets, and lore.
+- **Fleets:** live formation preview with zoom controls (− / + / reset and wheel).
 - **Trade:** faction specialties, demanded resources, buy/sell quotes, and relation discounts.
 - **Contracts:** faction jobs and bounty hunts in reachable galaxies.
 
@@ -221,8 +224,10 @@ from the viewer; unused generated galaxies can be deleted.
 
 Planet cards on the explore map show atmosphere haze from the live SVG palette.
 Border **checkpoints** between sectors use faction silhouette art (modular,
-spikes, rings, scrap, circuits). Selecting a border, planet, or station updates
-the confirm row:
+spikes, rings, scrap, circuits). Route beams carry **bidirectional data-packet
+traffic**; foreground barriers sit in front of lower routes for depth. A **ship
+locator** recenters the map on the pilot. Selecting a border, planet, or station
+updates the confirm row:
 
 | Selection | Actions |
 |:----------|:--------|
@@ -262,7 +267,8 @@ Home Station renders inside a dedicated `.vf-browser-shell` frame so the
 station content fills the live viewport without double-scaling. The shell uses
 a proportional `--gui-zoom` baseline (default **75%**) so tabs, labels, and the
 PLAY launch control stay readable while still matching the compact Game Boy
-presentation.
+presentation. A frame **GUI** slider (50–125%) writes the same `--gui-zoom`
+through `uiAppearanceManager` and reschedules viewport fit.
 
 - Native browser zoom stays available; GLXEE's shell zoom is separate.
 - Wide and Cursor-hosted viewports keep the same proportional content scale.
@@ -279,6 +285,7 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 - Weapon sockets can be dragged between nose, core, and wings when space allows.
 - Area toggles can hide nose, aft, or wing sections and safely remap modules.
 - The hangar Parts view shows inventory, fit status, slot size, and drag targets.
+- Frame-edge resize keeps the grabbed handle under the pointer at every scale.
 
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
@@ -393,13 +400,15 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Faction-specific weapon mount art and full-sprite fallback rendering for
   procedural ships.
 - Resizable station sidebars with remembered widths and responsive hangar panels.
-- Home Station browser shell with proportional 75% GUI zoom and a dedicated PLAY launch into the map.
+- Home Station browser shell with proportional GUI zoom (default 75%, slider 50–125%) and a dedicated PLAY launch into the map.
 - Area-tab corner deco icons and keyboard focus that opens PLAY or the first area hub.
 - Galaxy explore: atmosphere planet cards, faction border checkpoints, fly / dock / raid / assault actions.
+- Bidirectional route traffic, ship locator, and zoom-aware map detail on the explore map.
 - Shared world planet ownership, custom generated galaxies, and a main-menu GALAXIES viewer.
 - Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
 - Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
 - Fullscreen toggle, game-over wreck backdrop, and embedded-browser reload keys (F5 / Ctrl+R).
+- Angular Pirate emblem at 16px and `@4x`; faction fleet preview zoom in the station.
 - Profile score and ability-stat readouts for faster loadout decisions.
 - Faction fleet previews in the station and high-definition navigation icons.
 - Animated planet spin frames and extra faction-specific planet treatments.
@@ -416,18 +425,16 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-WORLD   ── shared owners ── custom galaxies ── GALAXIES viewer ── ally defense
+STATION ── GUI scale slider ── fleet zoom ── hangar edge drag ── PLAY launch
    │
-STATION ── PLAY launch ── area deco tabs ── fullscreen ── 75% GUI zoom
+TRAVEL  ── ship locator ── packet traffic ── border depth ── fly/dock/raid
    │
-TRAVEL  ── border checkpoints ── fly/dock/raid ── invasion alerts ── warp tiers
-   │
-COMBAT  ── stage count ── liveries ── power-ups ── outcome stepper ── wreck FX
+ICONS   ── pirate void-skull ── @4x crests ── faction viewer accents
 ```
 
-Recent work makes galaxies a shared world (ownership, generated theaters, ally
-invasions), expands crate power-ups and enemy liveries, and adds a GALAXIES
-browser plus fullscreen / game-over wreck chrome.
+Recent polish refreshes the Pirate seal, adds a persistent GUI scale slider,
+puts a ship locator and bidirectional traffic on the galaxy map, and lets the
+faction fleet preview zoom.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -534,6 +541,12 @@ be reviewed or reverted independently.
 | 53F | Explore map sync | Ownership/invasion cues, battle marks, and travel confirm polish |
 | 53G | Shell chrome | Fullscreen toggle, game-over wreck, reload keys, and UI styling |
 | 53H | README world archive | Document shared world, power-ups, stages, and GALAXIES for waves 53A–53G |
+| 54A | Pirate emblem | Angular void-skull boarding seal at 16px and hi-res `@4x` |
+| 54B | GUI scale slider | Persistent 50–125% shell zoom via frame slider and uiAppearance |
+| 54C | Map traffic and locator | Bidirectional route packets, ship locator, zoom detail, barrier depth |
+| 54D | Faction fleet zoom | Fleet preview zoom controls and accented faction-viewer emblems |
+| 54E | Hangar edge drag | Pointer-locked frame resize at every existing scale |
+| 54F | README map polish | Document pirate seal, GUI slider, locator, and fleet zoom for 54A–54E |
 
 The wave commit convention is:
 

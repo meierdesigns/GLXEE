@@ -16,6 +16,11 @@ extendClass(CoreLevelManager, {
         const speedMult = parsed.isBoss ? 1.25 : (0.9 + (parsed.stageIndex - 1) * 0.12);
         const spawnMult = parsed.isBoss ? 0.7 : (1.15 - (parsed.stageIndex - 1) * 0.12);
 
+        // Planet tier: early planets easier, later ones harder.
+        const tier = (typeof planetTierIndex === 'function') ? planetTierIndex(base.difficulty) : 1;
+        const tierMods = (typeof planetTierMods === 'function') ? planetTierMods(tier)
+            : { health: 1, speed: 1, spawn: 1 };
+
         const stageLabel = isAmbush
             ? 'STAGE 1/1'
             : parsed.isBoss
@@ -48,14 +53,15 @@ extendClass(CoreLevelManager, {
                 ? `${base.name} boss chamber`
                 : `${base.description} (Stage ${parsed.stageIndex})`,
             enemyType,
-            enemySpeed: Math.round((base.enemySpeed || 1) * speedMult * 100) / 100,
-            enemyHealth: Math.round((base.enemyHealth || 100) * healthMult),
+            planetTier: tier,
+            enemySpeed: Math.round((base.enemySpeed || 1) * speedMult * tierMods.speed * 100) / 100,
+            enemyHealth: Math.round((base.enemyHealth || 100) * healthMult * tierMods.health),
             enemyCount: (resolved.enemies && resolved.enemies.length) || base.enemyCount || 3,
             enemies: resolved.enemies || [],
             objective: resolved.objective || null,
             dailies: base.dailies || null,
             obstacles: base.obstacles || [],
-            obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult)),
+            obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult * tierMods.spawn)),
             background: base.background || parsed.planetId,
             stageScale: stageMult
         };

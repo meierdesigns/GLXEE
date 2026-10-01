@@ -39,6 +39,8 @@ extendClass(EnemyManager, {
             };
         }
         const levelMul = 1 + 0.1 * ((entry.level || 1) - 1);
+        const tierMods = this.currentTierMods ? this.currentTierMods() : { health: 1, damage: 1 };
+        baseHp = Math.max(1, Math.round(baseHp * tierMods.health));
         const sideFlightProfile = (typeof flightProfiles !== 'undefined')
             ? flightProfiles.resolve(entry.faction || 'pirate', entry.enemyClass || 'assault')
             : null;
@@ -128,7 +130,7 @@ extendClass(EnemyManager, {
                 side.shieldRegen = (cfg.shieldRegen || 0) * 0.4;
                 side.damageReduction = cfg.damageReduction || 0;
                 side.reflectChance = cfg.reflectChance || 0;
-                side.damageMul = ai ? ai.damageMul : 1;
+                side.damageMul = (ai ? ai.damageMul : 1) * tierMods.damage;
                 side.evasionChance = ai ? ai.evasionChance : 1;
                 side.predictionSkill = ai ? ai.predictionSkill : 0;
                 side.defenseMechanisms = (cfg.abilities || cfg.defenseMechanisms || []).slice();
@@ -215,8 +217,9 @@ extendClass(EnemyManager, {
             entry.spawned = true;
             if (entry.champion) {
                 this.spawnChampionFromEntry(entry);
-            } else {
-                this.spawnScheduledNormal(entry, gameState);
+            } else if (!this.spawnScheduledNormal(entry, gameState)) {
+                // Side slots full: keep it queued instead of dropping it.
+                entry.spawned = false;
             }
         }
     },

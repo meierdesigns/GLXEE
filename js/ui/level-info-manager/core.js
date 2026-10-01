@@ -1,5 +1,11 @@
 "use strict";
 
+const STAT_HIGHLIGHT_MS = 4000; // how long an improved stat stays lit
+const STAT_ICON_KEYS = {
+    hp: 'statHealth', shield: 'statShield', energy: 'statEnergy',
+    speed: 'statSpeed', armor: 'statArmor', dmg: 'statDamage'
+};
+
 /**
  * Level Info Panel Manager
  * Displays real-time information about the current level
@@ -55,6 +61,9 @@ class LevelInfoManager {
 
     /** Show HUD + refresh content without starting the combat clock. */
     prepareForCombat() {
+        // New run: the loadout is the baseline, not an upgrade.
+        this._statPrev = {};
+        this._statFx = {};
         this.showPanel();
         this.startUpdateLoop();
         this.updateDisplay();
@@ -63,6 +72,24 @@ class LevelInfoManager {
     updateLevelData(levelData) {
         this.levelData = levelData;
         this.updateDisplay();
+    }
+
+    /** Loot chip: the resource's own icon with the collected count. */
+    lootChipHtml(r) {
+        const key = (typeof economyConfig !== 'undefined' && economyConfig.getResourceIconKey)
+            ? economyConfig.getResourceIconKey(r.id)
+            : 'hsCargo';
+        const tip = `${String(r.name || r.id).toUpperCase()} ×${r.amount}`.replace(/"/g, '&quot;');
+        // Tinted in the resource's own colour (same as pickups / station).
+        const tint = (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor)
+            ? economyConfig.getResourceColor(r.id) : undefined;
+        const icon = (typeof iconRenderer !== 'undefined' && iconRenderer && iconRenderer.imgHtml)
+            ? iconRenderer.imgHtml(key || 'hsCargo', 32, 'gi-icon', tint, tip) : '';
+        const empty = !(Number(r.amount) > 0) ? ' gi-chip-empty' : '';
+        return `<span class="gi-chip gi-chip-loot${empty}" title="${tip}" style="--loot-color:${tint || 'currentColor'}">` +
+            icon +
+            `<span class="gi-chip-label gi-chip-count">${r.amount}</span>` +
+            `</span>`;
     }
 
     iconHtml(key, size, tipLabel) {
@@ -103,6 +130,67 @@ class LevelInfoManager {
             `</span></div>`;
     }
 
+    /** Current player ship stats (label, key, numeric value, display text). */
+    playerStatList() {
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+        const ps = typeof pickupManager !== 'undefined' && pickupManager.getPowerShot ? pickupManager.getPowerShot() : null;
+        const dmg = ps ? ps.damage : 1;
+        const list = [
+            { key: 'hp', label: 'HULL', value: num(pm && pm.maxHealth) },
+            { key: 'shield', label: 'SHIELD', value: num(pm && pm.shieldMax) },
+            { key: 'energy', label: 'ENERGY', value: num(pm && pm.maxEnergy) },
+            { key: 'speed', label: 'SPEED', value: num(pm && pm.player && pm.player.speed), digits: 1 },
+            { key: 'armor', label: 'ARMOR', value: num(pm && pm.armor) },
+            { key: 'dmg', label: 'DMG', value: dmg, text: '×' + dmg.toFixed(1) }
+        ];
+        list.forEach((st) => {
+            if (!st.text) st.text = st.digits ? st.value.toFixed(st.digits) : String(Math.round(st.value));
+        });
+        return list;
+    }
+
+    /**
+     * Compare with the last snapshot: a stat that went up (upgrade, power-up)
+     * gets a highlight with its delta for a few seconds; down = warning tint.
+     */
+    trackPlayerStats() {
+        const now = Date.now();
+        const list = this.playerStatList();
+        this._statPrev = this._statPrev || {};
+        this._statFx = this._statFx || {};
+        list.forEach((st) => {
+            const prev = this._statPrev[st.key];
+            if (prev != null && Math.abs(st.value - prev) > 1e-6) {
+                const delta = st.value - prev;
+                this._statFx[st.key] = { dir: delta > 0 ? 'up' : 'down', delta, until: now + STAT_HIGHLIGHT_MS };
+            }
+            this._statPrev[st.key] = st.value;
+            const fx = this._statFx[st.key];
+            st.fx = fx && fx.until > now ? fx : null;
+        });
+        // The weapon box shares the damage highlight (power shot etc.).
+        const wi = document.getElementById('weaponInfo');
+        const box = wi && (wi.closest('.weapon-selection') || wi.parentElement);
+        if (box) {
+            const dmgFx = list.find((st) => st.key === 'dmg');
+            box.classList.toggle('gi-weapon-boosted', dmgFx.value > 1);
+            box.classList.toggle('gi-weapon-flash', !!(dmgFx.fx && dmgFx.fx.dir === 'up'));
+        }
+        return list;
+    }
+
+    statMetricHtml(st) {
+        const fx = st.fx;
+        const cls = fx ? ' gi-stat-' + fx.dir : '';
+        const d = fx ? Math.abs(fx.delta) : 0;
+        const dTxt = fx ? `<span class="gi-stat-delta">${fx.dir === 'up' ? '▲' : '▼'}${st.key === 'dmg' ? d.toFixed(1) : (st.digits ? d.toFixed(st.digits) : Math.round(d))}</span>` : '';
+        return `<div class="gi-metric gi-stat${cls}" data-stat="${st.key}">` +
+            `<span class="gi-metric-label gi-stat-icon">${this.iconHtml(STAT_ICON_KEYS[st.key], 24, st.label) || st.label}</span>` +
+            `<span class="gi-metric-value">${st.text}${dTxt}</span>` +
+            `</div>`;
+    }
+
     metricHtml(label, valueHtml, valueId) {
         const idAttr = valueId ? ` id="${valueId}"` : '';
         return `<div class="gi-metric">` +
@@ -123,6 +211,28 @@ class LevelInfoManager {
             `${this.iconHtml(iconKey, 24, full)}` +
             `<span class="gi-chip-label">${short}</span>` +
             `</span>`;
+    }
+
+    /** Every slotted weapon as a chip; they breathe while a temporary boost is active. */
+    weaponChipsHtml() {
+        const weapons = this.collectEquippedWeapons ? this.collectEquippedWeapons() : [];
+        if (!weapons.length) return '';
+        const boosted = typeof pickupManager !== 'undefined' && pickupManager.getPowerShot
+            && !!pickupManager.getPowerShot();
+        const iconKey = (id) => (typeof bulletManager !== 'undefined' && bulletManager.getWeaponIconKey)
+            ? bulletManager.getWeaponIconKey(id)
+            : this.weaponIconKey(id);
+        // The body re-renders every second: offset by wall-clock so the breath keeps its phase.
+        const phase = boosted ? ` style="--gi-breath-delay:-${Date.now() % 1600}ms"` : '';
+        const chips = weapons.map((w) => {
+            const name = String(w.name || w.id).toUpperCase();
+            const tip = (name + (w.count > 1 ? ` ×${w.count}` : '')).replace(/"/g, '&quot;');
+            return `<span class="gi-chip gi-chip-weapon${boosted ? ' gi-chip-boosted' : ''}" title="${tip}"${phase}>` +
+                this.iconHtml(iconKey(w.id), 24, name) +
+                `<span class="gi-chip-label">${w.count > 1 ? '×' + w.count : name}</span>` +
+                `</span>`;
+        }).join('');
+        return `<div class="gi-weapon-chips">${chips}</div>`;
     }
 
     clusterHtml(title, rowsHtml, extraClass) {
@@ -224,7 +334,8 @@ class LevelInfoManager {
         const loadout = this.clusterHtml('LOADOUT',
             this.rowHtml('menuEnemies', 'ENEMY', String(d.enemyType || '—').toUpperCase(), 'enemyType') +
             this.rowHtml('hsShip', 'SHIP', String(d.playerShipType || '—'), 'playerShipType') +
-            this.rowHtml(weaponKey, 'WEAPON', String(weaponName), 'giCurrentWeapon')
+            this.rowHtml(weaponKey, 'WEAPON', String(weaponName), 'giCurrentWeapon') +
+            this.weaponChipsHtml()
         );
 
         const missionRows =
@@ -232,30 +343,25 @@ class LevelInfoManager {
             this.rowHtml('hsUpgrade', 'DAILY', daily.active ? daily.progress : '—', 'dailyHudValue');
         const mission = this.clusterHtml('MISSION', missionRows);
 
-        const combat = this.clusterHtml('COMBAT',
+        // Player ship stats; anything an upgrade improves lights up.
+        const stats = this.trackPlayerStats();
+        const combat = this.clusterHtml('SHIP',
             `<div class="gi-metrics gi-metrics-2x2">` +
-            this.metricHtml('E.SPD', d.enemySpeed || '0.8') +
-            this.metricHtml('E.HP', d.enemyHealth || '100') +
-            this.metricHtml('P.SPD', d.playerSpeed || '1.0') +
-            this.metricHtml('P.HP', d.playerMaxHealth || '100') +
+            stats.map((st) => this.statMetricHtml(st)).join('') +
             `</div>`,
             'gi-cluster-combat'
         );
 
         // Only this run's real content: planet obstacles, equipped weapons.
         const resources = d.resources || [];
-        const resourceChips = resources.map((r) =>
-            this.chipHtml('hsCargo', `${r.name} ×${r.amount}`)
-        ).join('');
+        const resourceChips = resources.map((r) => this.lootChipHtml(r)).join('');
 
         const chipRow = (label, chips) => chips
             ? `<div class="gi-chip-row"><span class="gi-chip-row-label">${label}</span>` +
                 `<div class="gi-chips">${chips}</div></div>`
             : '';
         const field = this.clusterHtml('FIELD',
-            chipRow('LOOT', resourceChips) ||
-            `<div class="gi-chip-row"><span class="gi-chip-row-label">LOOT</span>` +
-            `<div class="gi-chips"><span class="gi-chip-label">NONE</span></div></div>`,
+            chipRow('LOOT', resourceChips),
             'gi-cluster-field'
         );
 

@@ -52,7 +52,7 @@ extendClass(EnemyManager, {
         if (this.levelMods && this.levelMods.enemyHealth) {
             enemyMaxHealth = this.levelMods.enemyHealth;
         }
-        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * 0.8);
+        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * 0.55);
         enemySpeed = enemySpeed * (1 + 0.1 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
         enemyVerticalSpeed = enemyVerticalSpeed * (1 + 0.08 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
         if (typeof difficultyConfigManager !== 'undefined') {
@@ -172,10 +172,15 @@ extendClass(EnemyManager, {
             this.predictionSkill = ai.predictionSkill;
             this.enemy.damageMul = ai.damageMul;
         }
+        // Later planets hit harder, early ones softer.
+        if (this.currentTierMods) {
+            this.enemy.damageMul = (this.enemy.damageMul != null ? this.enemy.damageMul : 1) * this.currentTierMods().damage;
+        }
         this.shield = this.shieldMax;
 
         this.health = this.maxHealth;
         this.exploding = false;
+        if (this.enemy.isBoss && this.initBoss) this.initBoss();
         this.explosionTimer = 0;
         this.sideFleeing = false;
 

@@ -152,7 +152,11 @@ class GameControlSystem {
         this.hideVictoryOverlay();
 
         const currentLevel = this.coreLevelManager.getCurrentLevel();
-        const levelId = currentLevel
+        // Boss stages carry stageIndex = stages + 1, which parseLevelId would
+        // clamp to the last regular stage — restart them by their boss id.
+        const levelId = currentLevel && currentLevel.isBoss && currentLevel.planetId
+            ? `${currentLevel.planetId}-boss`
+            : currentLevel
             ? (currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
                 ? `${currentLevel.planetId}-${currentLevel.stageIndex}`
                 : (currentLevel.id

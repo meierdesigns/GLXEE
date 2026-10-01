@@ -103,6 +103,8 @@ class UIManager {
                     model: enemyManager.currentEnemyModel || null,
                     health: hp,
                     maxHealth: maxHp,
+                    shield: enemyManager.shield || 0,
+                    shieldMax: enemyManager.shieldMax || 0,
                     factionId: faction.id,
                     factionLabel: faction.label
                 });
@@ -121,6 +123,8 @@ class UIManager {
                 model: null,
                 health: side.health,
                 maxHealth: side.maxHealth || side.health || 1,
+                shield: side.shield || 0,
+                shieldMax: side.shieldMax || 0,
                 factionId: faction.id,
                 factionLabel: faction.label
             });
@@ -150,7 +154,7 @@ class UIManager {
         if (!container) return;
 
         const enemies = this.collectActiveEnemies();
-        const keys = enemies.map((e) => e.key + ':' + (e.factionId || '')).join('|');
+        const keys = enemies.map((e) => e.key + ':' + (e.factionId || '') + ':' + (e.shieldMax > 0 ? 's' : '')).join('|');
         const layout = this.enemyHudLayout(Math.max(enemies.length, 1));
 
         container.style.setProperty('--enemy-bar-h', layout.barH + 'px');
@@ -216,6 +220,14 @@ class UIManager {
                 fill.appendChild(hpText);
 
                 main.appendChild(fill);
+                if (enemy.shieldMax > 0) {
+                    const sh = document.createElement('div');
+                    sh.className = 'enemy-shield-fill';
+                    const shText = document.createElement('span');
+                    shText.className = 'enemy-shield-text';
+                    sh.appendChild(shText);
+                    main.appendChild(sh);
+                }
                 row.appendChild(head);
                 row.appendChild(main);
                 container.appendChild(row);
@@ -233,6 +245,18 @@ class UIManager {
             fill.style.setProperty('--health-width', pct + '%');
             const hpText = fill.querySelector('.enemy-hp-text');
             if (hpText) hpText.textContent = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            // Shield: level + a pulsing charge state while it refills.
+            const sh = fill.parentNode && fill.parentNode.querySelector('.enemy-shield-fill');
+            if (sh && enemy.shieldMax > 0) {
+                const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
+                const prev = Number(sh.dataset.prev || sp);
+                sh.style.setProperty('--shield-width', sp + '%');
+                sh.classList.toggle('is-charging', sp < 100 && sp > prev);
+                sh.classList.toggle('is-down', sp <= 0);
+                sh.dataset.prev = String(sp);
+                const t = sh.querySelector('.enemy-shield-text');
+                if (t) t.textContent = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax);
+            }
         }
     }
 

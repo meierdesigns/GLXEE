@@ -112,7 +112,7 @@ extendClass(LevelInfoManager, {
         const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds)
             ? economyConfig.resourceIds
             : Object.keys(bag);
-        return ids.filter((id) => (Number(bag[id]) || 0) > 0).map((id) => ({
+        return ids.map((id) => ({
             id: id,
             name: (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
                 ? economyConfig.getResourceLabel(id)

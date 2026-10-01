@@ -240,11 +240,6 @@ extendClass(ProfileSelectionManager, {
                 profileManager._suppressHoldingTick = false;
             }
         }
-        // Difficulty: the game-wide setting, remembered on the profile too.
-        if (o.difficulty && typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.setDifficulty) {
-            difficultyConfigManager.setDifficulty(o.difficulty);
-            p.difficulty = o.difficulty;
-        }
         // Starter kit.
         if (!p.resources || typeof p.resources !== 'object') p.resources = {};
         const addRes = (id, n) => { p.resources[id] = (Number(p.resources[id]) || 0) + n; };

@@ -151,13 +151,25 @@ extendClass(StartScreenManager, {
             '<div class="start-scoreboard-title">RECENT PILOTS</div>' +
             '<div class="start-scoreboard-head"><span>#</span><span></span><span>NAME</span><span>SCORE</span></div>' +
             `<ol class="start-scoreboard-list">${rows}</ol>`;
-        // Picking a row only selects the pilot; START launches with it.
+        // Picking a row loads that pilot and launches straight into the game
+        // (START is always a new game).
         board.querySelectorAll('.start-scoreboard-row.is-pickable').forEach((row) => {
             const pick = () => {
                 const id = row.getAttribute('data-profile-id');
-                if (id === activeId) return;
-                pm.setActive(id);
-                this.createStartScreenUI();
+                if (id !== activeId) pm.setActive(id);
+                // Always land in the home station (not the last saved tab /
+                // menu) — same order as the START path: station first, then
+                // hide the start screen. If the switch fails in place
+                // (state of the previous pilot), a reload loads the new one.
+                try {
+                    if (typeof homeStationUI === 'undefined') throw new Error('no station');
+                    homeStationUI.show({ tab: 'station', menuTab: null, onClose: () => this.returnToHub() });
+                    this.hide();
+                    if (!homeStationUI.isVisible) throw new Error('station not shown');
+                } catch (err) {
+                    console.warn('[start] pilot switch fell back to reload:', err);
+                    location.reload();
+                }
             };
             row.addEventListener('click', pick);
             row.addEventListener('keydown', (e) => {
@@ -475,8 +487,11 @@ extendClass(StartScreenManager, {
         content.appendChild(host);
         if (typeof profileSelectionManager === 'undefined') return;
         // The profile dialog itself, rendered inside the terminal screen.
+        const createNew = !!this._profilesCreate;
+        this._profilesCreate = false;
         profileSelectionManager.show({
             host,
+            create: createNew,
             onClose: () => {
                 this.showProfiles = false;
                 const thenStart = this._profilesThenStart;

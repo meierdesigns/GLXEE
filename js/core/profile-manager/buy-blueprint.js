@@ -262,9 +262,18 @@ extendClass(ProfileManager, {
     getPlanetStageState(galaxyId, planetId) {
         const profile = this.getActiveProfile();
         if (!profile) return { highestStage: 0, bossCleared: false };
-        const gp = this.ensureGalaxyProgress(profile, galaxyId);
         const pid = String(planetId || '').toLowerCase();
-        const st = gp.stages[pid];
+        const gp = this.ensureGalaxyProgress(profile, galaxyId);
+        let st = gp.stages[pid];
+        // Stage clears are saved under the planet's own galaxy id
+        // (markStageCleared → getPlanetGalaxyId), which can differ from the
+        // galaxy the map shows it in: read that record as well.
+        const own = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetGalaxyId
+            ? planetConfigManager.getPlanetGalaxyId(pid) : null;
+        if (own && own !== galaxyId) {
+            const alt = this.ensureGalaxyProgress(profile, own).stages[pid];
+            if (alt && (!st || (Number(alt.highestStage) || 0) > (Number(st.highestStage) || 0) || (alt.bossCleared && !st.bossCleared))) st = alt;
+        }
         return st ? Object.assign({}, st) : { highestStage: 0, bossCleared: false };
     },
 });

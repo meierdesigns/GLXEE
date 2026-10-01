@@ -45,7 +45,7 @@ const MENU_AREAS = [
     // only opened on purpose).
     { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
     { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
-    { id: 'explore', label: 'EXPLORATIONS', icon: 'hsExplore', tabs: ['travel', 'explorations'] }
+    { id: 'explore', label: 'EXPLORATIONS', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
 ];
 
 const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';

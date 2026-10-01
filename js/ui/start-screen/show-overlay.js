@@ -174,11 +174,40 @@ extendClass(StartScreenManager, {
         if (startScreen) startScreen.classList.add('hidden');
     },
 
+    /** Remembers the open start-screen page + selected item (restored on load). */
+    saveMenuState() {
+        const page = this.showGalaxies ? 'galaxies' : this.showSettings ? 'settings' : this.showCredits ? 'credits' : 'menu';
+        try {
+            localStorage.setItem('vf_start_menu_state_v1', JSON.stringify({
+                page, selected: this.menuItems[this.selectedIndex] || null
+            }));
+        } catch (e) { /* storage unavailable */ }
+    },
+
+    restoreMenuState() {
+        let st = null;
+        try { st = JSON.parse(localStorage.getItem('vf_start_menu_state_v1') || 'null'); } catch (e) { st = null; }
+        if (!st) return;
+        const i = st.selected ? this.menuItems.indexOf(st.selected) : -1;
+        if (i >= 0) this.selectedIndex = i;
+        this.showGalaxies = st.page === 'galaxies';
+        this.showSettings = st.page === 'settings';
+        this.showCredits = st.page === 'credits';
+    },
+
     createStartScreenUI() {
         const host = this.getUIHost();
         if (!host) {
             console.error('Start screen host not found');
             return;
+        }
+        // First main-menu render: reopen the page the player was on.
+        if (!this._menuStateRestored && !this.overlayMode && !this.embeddedMode) {
+            this._menuStateRestored = true;
+            if (!this.showProfiles && !this.showLevels && !this.showFontMenu &&
+                !this.showSettings && !this.showCredits && !this.showGalaxies) {
+                this.restoreMenuState();
+            }
         }
 
         if (!this._settingsOutsideClickBound) {
@@ -223,6 +252,14 @@ extendClass(StartScreenManager, {
             }
         } else if (this.showProfiles) {
             this.createProfilesScreenUI(content);
+        } else if (this.showGalaxies && typeof galaxyViewer !== 'undefined') {
+            content.classList.add('start-screen-galaxies');
+            galaxyViewer.mount(content, {
+                onClose: () => {
+                    this.showGalaxies = false;
+                    this.createStartScreenUI();
+                }
+            });
         } else if (this.showCredits) {
             this.createCreditsUI(content);
         } else if (this.showFontMenu) {
@@ -239,6 +276,7 @@ extendClass(StartScreenManager, {
         // inside the same terminal screen.
         if (!this.overlayMode && !this.embeddedMode) content.classList.add('start-screen-retro');
         host.appendChild(content);
+        if (!this.overlayMode && !this.embeddedMode) this.saveMenuState();
 
         // Update menu selection
         this.updateMenuSelection();

@@ -368,6 +368,7 @@ extendClass(GalaxyMapManager, {
                    data-planet="${n.planetId}" data-size="${size}" transform="translate(${x},${y})">
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
+                    <g class="gm-node-art">
                     <foreignObject class="gm-planet-lit" data-lit-x="${x}" data-lit-y="${y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
                             ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y))}
@@ -395,6 +396,7 @@ extendClass(GalaxyMapManager, {
                             <rect class="gm-lock-hole" x="5" y="8" width="2" height="3"/>
                         </g>
                     ` : ''}
+                    </g>
                 </g>
             `;
         });
@@ -1179,6 +1181,23 @@ extendClass(GalaxyMapManager, {
         return 1 / Math.sqrt(z);
     },
 
+    updatePlanetObjectScales(zoom) {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        const objectScale = 1 / Math.sqrt(Math.max(1, Number.isFinite(zoom) ? zoom : this.mapZoom || 1));
+        const baseScale = this.nodeObjScale();
+        const relativeScale = objectScale / baseScale;
+        svg.querySelectorAll('.gm-node[data-planet]').forEach((node) => {
+            const art = node.querySelector('.gm-node-art');
+            if (art) art.setAttribute('transform', `scale(${relativeScale.toFixed(4)})`);
+            const frame = node.querySelector('.gm-frame-slot');
+            if (frame) {
+                const planetId = node.getAttribute('data-planet');
+                frame.setAttribute('data-frame-r', (this.planetSurfaceRadius(planetId) * objectScale).toFixed(2));
+            }
+        });
+    },
+
     /**
      * Player's active ship rendered to a small PNG data URL, at `detail`×
      * the base 11×15 grid (cached per model + detail).
@@ -1525,6 +1544,7 @@ extendClass(GalaxyMapManager, {
             const k = ease(t);
             const vb = from.map((v, i) => v + (to[i] - v) * k);
             svg.setAttribute('viewBox', vb.map((v) => v.toFixed(2)).join(' '));
+            this.updatePlanetObjectScales(this.mapZoom * to[2] / vb[2]);
             this.updateSelectionFrames();
             if (t < 1) requestAnimationFrame(step);
         };
@@ -1676,6 +1696,7 @@ extendClass(GalaxyMapManager, {
             // Only the camera moves: set the viewBox directly (no re-render).
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
+            this.updatePlanetObjectScales();
             this.updateSelectionFrames();
             // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
             const shipScale = cur.querySelector('.gm-ship-scale');

@@ -123,7 +123,63 @@ class GalaxyMapManager {
     }
 
     disarmInput() {
+        this.clearActionFocus();
         return this.setInputActive(false);
+    }
+
+    /** Start/confirm buttons of the selected planet card, enabled only. */
+    getActionButtons() {
+        const actions = this.overlay && this.overlay.querySelector('#gmActions');
+        if (!actions) return [];
+        return Array.from(actions.querySelectorAll('button[data-nav-item]'))
+            .filter((b) => !b.disabled && b.id !== 'gmBack');
+    }
+
+    hasActionFocus() {
+        return this._actionFocus != null && this.getActionButtons().length > 0;
+    }
+
+    /** Highlight one action button (defaults to the main CONTINUE/START one). */
+    focusActionButton(index) {
+        const list = this.getActionButtons();
+        if (!list.length) {
+            this._actionFocus = null;
+            return false;
+        }
+        let i = index;
+        if (i == null) {
+            const main = list.findIndex((b) => b.id === 'gmConfirm');
+            i = main >= 0 ? main : 0;
+        }
+        i = (i + list.length) % list.length;
+        this._actionFocus = i;
+        list.forEach((b, idx) => b.classList.toggle('nav-focused', idx === i));
+        try { list[i].focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+        return true;
+    }
+
+    clearActionFocus() {
+        this._actionFocus = null;
+        this.getActionButtons().forEach((b) => {
+            b.classList.remove('nav-focused');
+            if (document.activeElement === b) b.blur();
+        });
+    }
+
+    /**
+     * ENTER / SPACE inside the map: first press moves focus from the map to
+     * the planet card's start button, the next press activates it.
+     */
+    confirmKey() {
+        if (!this.hasActionFocus()) {
+            if (this.focusActionButton()) return true;
+            this.confirm('resume');
+            return true;
+        }
+        const btn = this.getActionButtons()[this._actionFocus];
+        this.clearActionFocus();
+        if (btn) btn.click();
+        return true;
     }
 
     loadMap() {

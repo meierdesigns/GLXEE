@@ -215,10 +215,32 @@ extendClass(GalaxyMapManager, {
         if (opts.canChoose) {
             return `
                 <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">FROM START</button>
-                <button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}CONTINUE · ${opts.resumeLabel}</button>
+                <button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}${opts.resumeLabel}</button>
             `;
         }
         return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
+    },
+
+    /** One faction as a coloured name (faction accent, dark outline). */
+    factionLabelHtml(fid) {
+        const id = String(fid || '').toLowerCase();
+        const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
+            ? planetConfigManager.getFactionMeta(id) : null;
+        const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(id) : null;
+        const color = (st && st.accent) || 'var(--color-primary)';
+        const label = String((meta && meta.label) || id).toUpperCase().replace(/</g, '&lt;');
+        return `<span class="gm-faction-chip" style="--chip:${color}"><span class="gm-faction-dot"></span>${label}</span>`;
+    },
+
+    /** Factions settling a planet (ruling first), for the sector card. */
+    planetFactionsLabelHtml(planetId) {
+        let list = [];
+        try {
+            list = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions
+                ? planetConfigManager.getPlanetFactions(planetId) || [] : [];
+        } catch (e) { list = []; }
+        return list.length ? list.slice(0, 3).map((f) => this.factionLabelHtml(f)).join(' ') : '—';
     },
 
     syncConfirmButton() {
@@ -228,6 +250,7 @@ extendClass(GalaxyMapManager, {
         const info = this.getPlanetInfo(this.selectedPlanetId);
         const backBtn = actions.querySelector('#gmBack');
         const backHtml = backBtn ? backBtn.outerHTML : '';
+        this._actionFocus = null; // buttons are rebuilt; focus returns to the map
         actions.innerHTML = this.renderConfirmActionsHtml(info) + (backHtml ? ` ${backHtml}` : '');
         this.bindConfirmActions();
     },
@@ -270,6 +293,8 @@ extendClass(GalaxyMapManager, {
             const sells = ['weapon', 'defense', 'ability', 'energy']
                 .filter((k) => eco.sells[k])
                 .map((k) => eco.sells[k] + ' ' + kindShort[k]).join(' · ');
+            const pFac = this.overlay.querySelector('#gmFaction');
+            if (pFac) pFac.innerHTML = post.faction ? this.factionLabelHtml(post.faction) : '—';
             set('gmDiffLabel', 'Economy');
             set('gmDiff', eco.wealth + ' · ' + eco.stockValue.toLocaleString('en-US') + ' CR');
             const cats = (post.categories || []).filter((c) => c !== 'resources')
@@ -287,6 +312,10 @@ extendClass(GalaxyMapManager, {
             if (postStepper) postStepper.innerHTML = '';
             return;
         }
+        const facEl = this.overlay.querySelector('#gmFaction');
+        if (facEl) facEl.innerHTML = this.planetFactionsLabelHtml(info.id);
+        const facLabel = this.overlay.querySelector('#gmFactionLabel');
+        if (facLabel) facLabel.textContent = 'Faction';
         set('gmDiffLabel', 'Difficulty');
         set('gmStagesLabel', 'Stages');
         set('gmEnemiesLabel', 'Enemies');

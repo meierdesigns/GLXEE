@@ -288,6 +288,7 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
                     </div>
                     <div class="gm-detail">
+                        <div class="stat-row"><span class="stat-label" id="gmFactionLabel">Faction</span><span class="stat-value gm-faction-value" id="gmFaction">${this.planetFactionsLabelHtml ? this.planetFactionsLabelHtml(info.id) : ''}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmDiffLabel">Difficulty</span><span class="stat-value" id="gmDiff">${diff}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmStagesLabel">Stages</span><span class="stat-value" id="gmStages">${stages}</span></div>
                         <div class="stat-row"><span class="stat-label" id="gmEnemiesLabel">Enemies</span><span class="stat-value" id="gmEnemies">${enemies}</span></div>

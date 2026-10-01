@@ -7,14 +7,17 @@ extendClass(CoreLevelManager, {
         if (!base) return null;
 
         const isAmbush = String(parsed.planetId || '').indexOf('ambush_') === 0;
-        const stageCount = isAmbush ? 1 : this.stagesPerPlanet;
+        const stageCount = isAmbush ? 1 : getPlanetStageCount(parsed.planetId);
         const stageMult = parsed.isBoss
-            ? 1.0 + stageCount * 0.35
-            : 0.75 + (parsed.stageIndex - 1) * 0.2;
+            ? 1.0 + 3 * 0.35
+            : 0.75 + (stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0) * 0.2;
 
-        const healthMult = parsed.isBoss ? 2.2 : (0.85 + (parsed.stageIndex - 1) * 0.25);
-        const speedMult = parsed.isBoss ? 1.25 : (0.9 + (parsed.stageIndex - 1) * 0.12);
-        const spawnMult = parsed.isBoss ? 0.7 : (1.15 - (parsed.stageIndex - 1) * 0.12);
+        // Ramp over the planet's own stage count (2..5 stages) so the last
+        // stage is as tough as before, however many stages lead up to it.
+        const ramp = stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0;
+        const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.25);
+        const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.12);
+        const spawnMult = parsed.isBoss ? 0.7 : (1.15 - ramp * 0.12);
 
         // Planet tier: early planets easier, later ones harder.
         const tier = (typeof planetTierIndex === 'function') ? planetTierIndex(base.difficulty) : 1;
@@ -214,9 +217,12 @@ extendClass(CoreLevelManager, {
 
         // Custom/explored planets are not necessarily in the legacy
         // planetOrder list, but their local stage progression still applies.
-        if (!parsed.isBoss && parsed.stageIndex < this.stagesPerPlanet) {
+        if (!parsed.isBoss && parsed.stageIndex < getPlanetStageCount(parsed.planetId)) {
             return `${parsed.planetId}-${parsed.stageIndex + 1}`;
         }
+        // Last stage → this planet's boss room (explored planets are not in
+        // planetOrder, so the global list below would skip the boss).
+        if (!parsed.isBoss) return `${parsed.planetId}-boss`;
 
         const all = this.getAllStageIds();
         const idx = all.indexOf(parsed.id);

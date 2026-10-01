@@ -99,6 +99,7 @@ extendClass(GameControlSystem, {
         }
 
         this.updateVictoryStats();
+        if (this.applyOutcomeStepper) this.applyOutcomeStepper(victoryOverlay.querySelector('.victory-header'), 'won');
 
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
@@ -196,7 +197,7 @@ extendClass(GameControlSystem, {
         const level = this.coreLevelManager.getCurrentLevel();
         if (!level) return null;
         if (level.planetId && Number.isFinite(Number(level.stageIndex))) {
-            return `${level.planetId}-${level.stageIndex}`;
+            return `${level.planetId}-${level.isBoss ? 'boss' : level.stageIndex}`;
         }
         return level.id || level.levelId || level.stageId || level.planetId || level.background || null;
     },
@@ -260,13 +261,16 @@ extendClass(GameControlSystem, {
         const button = document.querySelector('#victoryOverlay .victory-button[data-index="0"] .button-text')
             || document.querySelector('#victoryNextButton .button-text');
         if (button) {
-            button.textContent = ambushVictory ? 'CONTINUE TRAVEL' : (meta ? meta.label : 'CAMPAIGN COMPLETE');
+            const bossVictory = !ambushVictory && !!(currentLevel && currentLevel.isBoss);
+            button.textContent = ambushVictory ? 'CONTINUE TRAVEL'
+                : (bossVictory ? 'MAP SELECT' : (meta ? meta.label : 'CAMPAIGN COMPLETE'));
         }
 
         const nextBtn = document.querySelector('#victoryOverlay .victory-button[data-index="0"]');
         if (nextBtn) {
-            nextBtn.disabled = !meta && !ambushVictory;
-            nextBtn.classList.toggle('disabled', !meta && !ambushVictory);
+            const canAdvance = !!meta || ambushVictory || !!(currentLevel && currentLevel.isBoss);
+            nextBtn.disabled = !canAdvance;
+            nextBtn.classList.toggle('disabled', !canAdvance);
         }
     },
 

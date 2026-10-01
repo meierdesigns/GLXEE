@@ -4,6 +4,40 @@
  * Core Level Management System
  * Planets have multiple stages + a boss room. Progression is linear across stages.
  */
+/**
+ * Stages before the boss, per planet: base by difficulty (EASY 2 … NIGHTMARE 5)
+ * plus a seeded -1/0/+1, clamped 2..5. A planet config's `stageCount` wins.
+ * Ambush encounters are a single stage.
+ */
+/**
+ * Planet id from a planet or level id (mars, mars-2, mars-boss). Planet ids
+ * themselves may contain '-' (duplicates like terra-2), so a known planet id
+ * wins over splitting off a stage suffix.
+ */
+function planetIdOfLevelId(id) {
+    let raw = String(id || '').toLowerCase().trim();
+    const known = (k) => typeof planetConfigManager !== 'undefined' && planetConfigManager.configs
+        && Object.prototype.hasOwnProperty.call(planetConfigManager.configs, k);
+    while (raw.indexOf('-') !== -1 && !known(raw)) raw = raw.slice(0, raw.lastIndexOf('-'));
+    return raw;
+}
+
+const PLANET_STAGE_BASE = { EASY: 2, NORMAL: 3, HARD: 3, EXPERT: 4, NIGHTMARE: 4 };
+function getPlanetStageCount(planetId) {
+    const pid = planetIdOfLevelId(planetId);
+    if (!pid) return 3;
+    if (pid.indexOf('ambush_') === 0) return 1;
+    const cfg = typeof planetConfigManager !== 'undefined' && planetConfigManager.getConfig
+        ? planetConfigManager.getConfig(pid) : null;
+    if (cfg && Number(cfg.stageCount) > 0) return Math.max(1, Math.min(8, Math.round(Number(cfg.stageCount))));
+    const diff = String((cfg && cfg.difficulty) || 'NORMAL').toUpperCase();
+    const base = PLANET_STAGE_BASE[diff] || 3;
+    let h = 2166136261;
+    for (let i = 0; i < pid.length; i++) { h ^= pid.charCodeAt(i); h = Math.imul(h, 16777619); }
+    const jitter = ((h >>> 0) % 3) - 1;
+    return Math.max(2, Math.min(5, base + jitter));
+}
+
 class CoreLevelManager {
     constructor(gameState) {
         this.gameState = gameState;
@@ -110,7 +144,10 @@ class CoreLevelManager {
 
     normalizePlanetId(raw) {
         if (raw == null) return null;
-        const s = String(raw).toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_');
+        const exact = String(raw).toLowerCase().trim();
+        if (exact.indexOf('-') !== -1 && typeof planetConfigManager !== 'undefined'
+            && planetConfigManager.configs && planetConfigManager.configs[exact]) return exact;
+        const s = exact.replace(/[^a-z0-9_]+/g, '_');
         if (!s) return null;
         if (this.levels[s]) return s;
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.configs &&
@@ -148,9 +185,9 @@ class CoreLevelManager {
         let stageKey = '1';
 
         if (raw.includes('-')) {
-            const parts = raw.split('-');
-            planetId = this.normalizePlanetId(parts[0]);
-            stageKey = parts.slice(1).join('-') || '1';
+            const base = planetIdOfLevelId(raw);
+            planetId = this.normalizePlanetId(base);
+            stageKey = raw.slice(base.length + 1) || '1';
         } else {
             planetId = this.normalizePlanetId(raw);
             stageKey = '1';
@@ -159,15 +196,16 @@ class CoreLevelManager {
         if (!planetId) return null;
 
         const isBoss = stageKey === 'boss' || stageKey === 'b';
-        let stageIndex = isBoss ? this.stagesPerPlanet + 1 : parseInt(stageKey, 10);
+        const n = getPlanetStageCount(planetId);
+        let stageIndex = isBoss ? n + 1 : parseInt(stageKey, 10);
         if (Number.isNaN(stageIndex) || stageIndex < 1) stageIndex = 1;
-        if (!isBoss && stageIndex > this.stagesPerPlanet) {
-            stageIndex = this.stagesPerPlanet;
+        if (!isBoss && stageIndex > n) {
+            stageIndex = n;
         }
 
         return {
             planetId,
-            stageIndex: isBoss ? this.stagesPerPlanet + 1 : stageIndex,
+            stageIndex: isBoss ? n + 1 : stageIndex,
             isBoss,
             id: isBoss ? `${planetId}-boss` : `${planetId}-${stageIndex}`
         };
@@ -177,7 +215,7 @@ class CoreLevelManager {
         const pid = this.normalizePlanetId(planetId);
         if (!pid) return [];
         const ids = [];
-        for (let i = 1; i <= this.stagesPerPlanet; i++) {
+        for (let i = 1; i <= getPlanetStageCount(pid); i++) {
             ids.push(`${pid}-${i}`);
         }
         ids.push(`${pid}-boss`);

@@ -7,20 +7,14 @@ extendClass(ProfileManager, {
      * Plain planet ids (mars) resume after the highest cleared stage.
      */
     getResumeLevelId(planetId) {
-        const pid = String(planetId || '').toLowerCase().split('-')[0];
+        const pid = planetIdOfLevelId(planetId);
         if (!pid) return null;
 
         let galaxyId = null;
         if (typeof planetConfigManager !== 'undefined') {
             galaxyId = planetConfigManager.getPlanetGalaxyId(pid);
         }
-        const stagesPerPlanet = (typeof game !== 'undefined'
-            && game.levelManager
-            && game.levelManager.stagesPerPlanet)
-            || (typeof gameCore !== 'undefined'
-                && gameCore.levelManager
-                && gameCore.levelManager.stagesPerPlanet)
-            || 3;
+        const stagesPerPlanet = typeof getPlanetStageCount === 'function' ? getPlanetStageCount(pid) : 3;
         const st = galaxyId
             ? this.getPlanetStageState(galaxyId, pid)
             : { highestStage: 0, bossCleared: false };
@@ -43,7 +37,7 @@ extendClass(ProfileManager, {
      * canChoose is true when mid-planet progress exists (not cleared, highestStage > 0).
      */
     getPlanetStartOptions(planetId) {
-        const pid = String(planetId || '').toLowerCase().split('-')[0];
+        const pid = planetIdOfLevelId(planetId);
         if (!pid) {
             return {
                 canChoose: false,
@@ -57,13 +51,7 @@ extendClass(ProfileManager, {
         if (typeof planetConfigManager !== 'undefined') {
             galaxyId = planetConfigManager.getPlanetGalaxyId(pid);
         }
-        const stagesPerPlanet = (typeof game !== 'undefined'
-            && game.levelManager
-            && game.levelManager.stagesPerPlanet)
-            || (typeof gameCore !== 'undefined'
-                && gameCore.levelManager
-                && gameCore.levelManager.stagesPerPlanet)
-            || 3;
+        const stagesPerPlanet = typeof getPlanetStageCount === 'function' ? getPlanetStageCount(pid) : 3;
         const st = galaxyId
             ? this.getPlanetStageState(galaxyId, pid)
             : { highestStage: 0, bossCleared: false };

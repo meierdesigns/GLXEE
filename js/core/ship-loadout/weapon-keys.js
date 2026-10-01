@@ -30,6 +30,10 @@
         L.weaponKeys = this.normalizeWeaponKeys(src && src.weaponKeys);
         const all = String((src && src.allFireKey) || 'space').toLowerCase();
         L.allFireKey = KEYS.indexOf(all) !== -1 ? all : 'space';
+        // Heal saved loadouts where a slot shares the ALL key.
+        Object.keys(L.weaponKeys).forEach((slot) => {
+            if (L.weaponKeys[slot] === L.allFireKey) delete L.weaponKeys[slot];
+        });
         return L;
     };
 
@@ -41,7 +45,15 @@
     proto.cycleAllFireKey = function (shipId) {
         const L = this.getLoadout(shipId);
         const cur = this.getAllFireKey(L);
-        L.allFireKey = KEYS[(KEYS.indexOf(cur) + 1) % KEYS.length];
+        const next = KEYS[(KEYS.indexOf(cur) + 1) % KEYS.length];
+        L.allFireKey = next;
+        // Keys stay unique: a slot holding the new ALL key takes the old one.
+        L.weaponKeys = this.normalizeWeaponKeys(L.weaponKeys);
+        Object.keys(L.weaponKeys).forEach((slot) => {
+            if (L.weaponKeys[slot] !== next) return;
+            if (cur === 'space') delete L.weaponKeys[slot];
+            else L.weaponKeys[slot] = cur;
+        });
         this.setLoadout(shipId, L);
         return L.allFireKey;
     };
@@ -65,8 +77,12 @@
 
     /** SPACE → A → S → D → SPACE. */
     proto.cycleWeaponFireKey = function (shipId, index) {
-        const cur = this.getWeaponFireKey(this.getLoadout(shipId), index);
-        const next = KEYS[(KEYS.indexOf(cur) + 1) % KEYS.length];
+        const L = this.getLoadout(shipId);
+        const cur = this.getWeaponFireKey(L, index);
+        const allKey = this.getAllFireKey(L);
+        let next = KEYS[(KEYS.indexOf(cur) + 1) % KEYS.length];
+        // Skip the ALL key — that key already fires every weapon.
+        if (next === allKey && next !== 'space') next = KEYS[(KEYS.indexOf(next) + 1) % KEYS.length];
         return this.setWeaponFireKey(shipId, index, next);
     };
 })();

@@ -299,6 +299,17 @@ extendClass(HomeStationUI, {
         if (viewer && !(opts && opts.keepViewer) && (viewer.visible || viewer.isVisible) && viewer.hide) viewer.hide();
     },
 
+    /** Compact amount: 999 · 1.2K · 12K · 1.2M (full value in the tooltip). */
+    shortAmount(v) {
+        const n = Math.round(Number(v) || 0);
+        const a = Math.abs(n);
+        const fmt = (x, suf) => (x < 10 ? (Math.floor(x * 10) / 10).toString() : Math.floor(x).toString()) + suf;
+        if (a >= 1e9) return (n < 0 ? '-' : '') + fmt(a / 1e9, 'B');
+        if (a >= 1e6) return (n < 0 ? '-' : '') + fmt(a / 1e6, 'M');
+        if (a >= 1e3) return (n < 0 ? '-' : '') + fmt(a / 1e3, 'K');
+        return String(n);
+    },
+
     renderCreditsBar(map, profile) {
         const p = profile || this.getProfile();
         const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
@@ -306,7 +317,7 @@ extendClass(HomeStationUI, {
             : Math.max(0, Math.round(Number((p && p.credits) || 0)));
         const creditChip = `<span class="hs-credit hs-res-credits${credits <= 0 ? ' hs-res-empty' : ''}">` +
             `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey('credits'), 16, 'hs-pixel hs-pixel-16')}</span>` +
-            `<span class="hs-credit-amount">${credits}</span>` +
+            `<span class="hs-credit-amount" title="${credits}">${this.shortAmount(credits)}</span>` +
             `</span>`;
         const ids = (typeof economyConfig !== 'undefined')
             ? economyConfig.resourceIds
@@ -316,7 +327,7 @@ extendClass(HomeStationUI, {
             const empty = n <= 0 ? ' hs-res-empty' : '';
             return `<span class="hs-credit hs-res-${id}${empty}">` +
                 `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey(id), 16, 'hs-pixel hs-pixel-16')}</span>` +
-                `<span class="hs-credit-amount">${n}</span>` +
+                `<span class="hs-credit-amount" title="${n}">${this.shortAmount(n)}</span>` +
                 `</span>`;
         });
         return creditChip + (parts.join('') || '');

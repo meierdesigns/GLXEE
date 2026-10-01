@@ -232,9 +232,11 @@ extendClass(HomeStationUI, {
                 return;
             }
             const r = p.getBoundingClientRect();
-            const x = outward < 0 ? r.left - sr.left - 16 : r.right - sr.left + 16;
+            // Rects are visual px; the stage is zoomed, so convert to CSS px.
+            const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(stage) : 1;
+            const x = outward < 0 ? (r.left - sr.left) / z - 16 : (r.right - sr.left) / z + 16;
             h.style.left = Math.round(x) + 'px';
-            h.style.top = Math.round(r.top + r.height / 2 - sr.top) + 'px';
+            h.style.top = Math.round((r.top + r.height / 2 - sr.top) / z) + 'px';
             h.setAttribute('data-slot-index', index);
             h.hidden = false;
             if (h.dataset.bound !== '1') {
@@ -336,8 +338,9 @@ extendClass(HomeStationUI, {
         let raf = 0;
         const move = (e) => {
             const sr = stage.getBoundingClientRect();
-            handle.style.left = Math.round(e.clientX - sr.left) + 'px';
-            handle.style.top = Math.round(e.clientY - sr.top) + 'px';
+            const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(stage) : 1;
+            handle.style.left = Math.round((e.clientX - sr.left) / z) + 'px';
+            handle.style.top = Math.round((e.clientY - sr.top) / z) + 'px';
             const spot = this.hangarSocketSpotAt(index, e.clientX, e.clientY);
             this.showHangarSlotsInArea(spot ? spot.area : null);
             handle.classList.toggle('is-invalid', !!(spot && !spot.ok));

@@ -87,7 +87,13 @@ extendClass(GraphicsManager, {
             };
             // Ship voxel size + grid offset, so the rim uses the same pixels.
             const grid = this.detectShieldVoxelGrid(sd, w, h, MAX_CELL);
-            const c = grid.cell;
+            // Rim runs on half the ship voxel (min 2 px): same gap to the
+            // hull, but finer steps and a thinner rim than the hull pixels.
+            const shipCell = grid.cell;
+            const c = shipCell >= 4 ? Math.ceil(shipCell / 2) : shipCell;
+            const sub = shipCell / c;
+            grid.ox = grid.ox % c;
+            grid.oy = grid.oy % c;
             const gx0 = grid.ox - Math.ceil(grid.ox / c) * c; // first column start (<= 0)
             const gy0 = grid.oy - Math.ceil(grid.oy / c) * c;
             const cols = Math.ceil((w - gx0) / c);
@@ -100,7 +106,8 @@ extendClass(GraphicsManager, {
                     if (opaque(x, y)) occ[r * cols + Math.floor((x - gx0) / c)] = 1;
                 }
             }
-            const R = gapCells + thickCells;
+            const gapFine = Math.max(1, Math.round(gapCells * sub));
+            const R = gapFine + thickCells;
             for (let r = 0; r < rows; r++) {
                 for (let q = 0; q < cols; q++) {
                     if (occ[r * cols + q]) continue;
@@ -116,7 +123,7 @@ extendClass(GraphicsManager, {
                         }
                     }
                     // Ring outside the gap band — empty voxels between hull and rim
-                    if (minCheb <= gapCells || minCheb > R) continue;
+                    if (minCheb <= gapFine || minCheb > R) continue;
                     const x0 = Math.max(0, gx0 + q * c);
                     const y0 = Math.max(0, gy0 + r * c);
                     const x1 = Math.min(w, gx0 + (q + 1) * c);

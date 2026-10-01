@@ -179,6 +179,7 @@ extendClass(HomeStationUI, {
         const up = (v) => String(v || '').replace(/_/g, ' ').toUpperCase();
         const classes = fss.classes;
         const sel = classes.indexOf(this._factionFleetShip) !== -1 ? this._factionFleetShip : 'all';
+        const zoom = Math.max(0.5, Math.min(2.5, Number(this._factionFleetZoom) || 1));
         const item = (cid, label, img) =>
             `<button type="button" class="hs-fd-fleet-item${sel === cid ? ' active' : ''}" data-faction-fleet="${cid}" data-nav-item>` +
             `<span class="hs-fd-fleet-thumb">${img}</span><span>${label}</span></button>`;
@@ -197,7 +198,15 @@ extendClass(HomeStationUI, {
             `<section class="hs-panel hs-fd-block"><h4>${this.factionLabel(id)} FLEET · ${up(style.silhouette || '')} HULLS</h4>` +
                 `<div class="hs-fd-fleet">` +
                     `<div class="hs-fd-fleet-list" role="listbox">${list}</div>` +
-                    `<div class="hs-fd-fleet-stage"><canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="240" height="135"></canvas></div>` +
+                    `<div class="hs-fd-fleet-stage" data-fleet-preview-viewport>` +
+                        `<div class="hs-fd-fleet-toolbar">` +
+                            `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom="-0.25" title="Zoom out">−</button>` +
+                            `<span class="hs-fd-fleet-zoom" data-fleet-zoom-label>${Math.round(zoom * 100)}%</span>` +
+                            `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom="0.25" title="Zoom in">+</button>` +
+                            `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom-reset title="Reset zoom">1:1</button>` +
+                        `</div>` +
+                        `<canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="240" height="135" style="--fleet-zoom:${zoom}"></canvas>` +
+                    `</div>` +
                 `</div>` +
                 `<div class="hs-fd-chips">${swatch('HULL', style.hull)}${swatch('EDGE', style.edge)}${swatch('ACCENT', style.accent)}${swatch('ENGINE', style.engine)}</div>` +
                 (style.prompt ? `<p class="hs-fd-text">${style.prompt.charAt(0).toUpperCase() + style.prompt.slice(1)}.</p>` : '') +
@@ -295,6 +304,22 @@ extendClass(HomeStationUI, {
             this.createUI();
         });
         const fleetCanvas = this.overlay.querySelector('[data-fleet-preview]');
+        const setFleetZoom = (value) => {
+            this._factionFleetZoom = Math.max(0.5, Math.min(2.5, Math.round(value * 100) / 100));
+            if (!fleetCanvas) return;
+            fleetCanvas.style.setProperty('--fleet-zoom', this._factionFleetZoom);
+            const label = this.overlay.querySelector('[data-fleet-zoom-label]');
+            if (label) label.textContent = `${Math.round(this._factionFleetZoom * 100)}%`;
+        };
+        q('[data-fleet-zoom]', (btn) => setFleetZoom((Number(this._factionFleetZoom) || 1) + Number(btn.getAttribute('data-fleet-zoom'))));
+        q('[data-fleet-zoom-reset]', () => setFleetZoom(1));
+        const fleetViewport = this.overlay.querySelector('[data-fleet-preview-viewport]');
+        if (fleetViewport) {
+            fleetViewport.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                setFleetZoom((Number(this._factionFleetZoom) || 1) + (e.deltaY < 0 ? 0.1 : -0.1));
+            }, { passive: false });
+        }
         if (fleetCanvas) this.startFactionFleetPreview(fleetCanvas.getAttribute('data-faction'), fleetCanvas.getAttribute('data-ship'));
         else this.stopFactionFleetPreview();
         q('[data-faction-section]', (btn) => {

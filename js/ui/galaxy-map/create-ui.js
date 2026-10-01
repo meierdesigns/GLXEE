@@ -278,6 +278,8 @@ extendClass(GalaxyMapManager, {
         const unlockHint = unlockFrom
             ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
             : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
+        const planetIcon = this.planetIconHtml(info.id, 240);
+        const planetAtmo = this.planetAtmoColor(planetIcon);
         return `
             <div class="galaxy-map-panels">
                 <div class="galaxy-map-panel galaxy-map-panel-select">
@@ -285,7 +287,7 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-sector-heading">
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
                         </div>
-                        <div class="gm-sector-planet-bg">${this.planetIconHtml(info.id, 240)}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
+                        <div class="gm-sector-planet-bg${planetAtmo ? ' has-atmo' : ''}" style="--atmo:${planetAtmo || 'transparent'}">${planetIcon}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
                     </div>
                     <div class="gm-detail">
                         <div class="stat-row"><span class="stat-label" id="gmFactionLabel">Faction</span><span class="stat-value gm-faction-value" id="gmFaction">${this.planetFactionsLabelHtml ? this.planetFactionsLabelHtml(info.id) : ''}</span></div>

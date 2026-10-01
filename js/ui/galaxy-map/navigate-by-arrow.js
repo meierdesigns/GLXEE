@@ -88,10 +88,32 @@ extendClass(GalaxyMapManager, {
 
     selectPlanet(planetId) {
         this.selectedPostId = null;
+        this.selectedBorder = null;
         this.selectedPlanetId = planetId;
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
+    },
+
+    /**
+     * Select a border checkpoint (route from open → shut). The card shows
+     * it; actions stay those of the open planet whose clearing unseals it.
+     */
+    selectBorder(openId, shutId) {
+        this.selectedPostId = null;
+        this.selectedPlanetId = openId;
+        this.selectedBorder = { open: openId, shut: shutId };
+        this.syncNodeHighlight();
+        this.updateDetails();
+        this.syncConfirmButton();
+    },
+
+    /** Border checkpoint art sized for the planet card. */
+    borderCardSvg(openId) {
+        const art = this.borderArtFor(this.borderRulerStyle());
+        const w = art[0].length, h = art.length;
+        return `<svg class="gm-border-card" viewBox="${-w / 2} ${-h / 2} ${w} ${h}">` +
+            this.blockadeSvgRaw(0, 0, openId, null, w / 21) + '</svg>';
     },
 
     getStartOptions(planetId) {
@@ -122,6 +144,7 @@ extendClass(GalaxyMapManager, {
     selectPost(postId) {
         const post = this.getTradingPosts().find((p) => p.id === postId);
         if (!post) return;
+        this.selectedBorder = null;
         this.selectedPostId = post.id;
         this.selectedPlanetId = post.planetId;
         this.syncNodeHighlight();
@@ -181,26 +204,26 @@ extendClass(GalaxyMapManager, {
         const post = this.getSelectedPost();
         if (post) {
             if (!profileManager.isTradingPostUnlocked(post)) {
-                return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>${post.name} · LOCKED</button>`;
+                return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>${this.btnIconHtml('lock')}${post.name} · LOCKED</button>`;
             }
             if (!this.isShipAt('post', post.id)) {
-                return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">FLY TO ${post.name}</button>`;
+                return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">${this.btnIconHtml('hsTravel')}FLY TO ${post.name}</button>`;
             }
             // Faction stations can also be raided (faction-holdings.js).
             const ownSide = typeof planetConfigManager !== 'undefined' && planetConfigManager.isFriendlyFaction
                 && planetConfigManager.isFriendlyFaction(post.faction);
             if (post.factionStation && !ownSide) {
-                return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="raid">RAID</button>` +
-                    `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">DOCK · ${post.name}</button>`;
+                return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="raid">${this.btnIconHtml('menuWeapons')}RAID</button>` +
+                    `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">${this.btnIconHtml('hsStation')}DOCK · ${post.name}</button>`;
             }
-            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">DOCK · ${post.name}</button>`;
+            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">${this.btnIconHtml('hsStation')}DOCK · ${post.name}</button>`;
         }
         const unlocked = !!(info && info.unlocked);
         if (!unlocked) {
-            return '<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>LOCKED</button>';
+            return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>${this.btnIconHtml('lock')}LOCKED</button>`;
         }
         if (!this.isShipAt('planet', info.id)) {
-            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">FLY TO ${String(info.name || info.id).toUpperCase()}</button>`;
+            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">${this.btnIconHtml('hsTravel')}FLY TO ${String(info.name || info.id).toUpperCase()}</button>`;
         }
         // The ruler's base, once all its stations are gone, can be assaulted.
         const hold = profileManager.getFactionHoldings ? profileManager.getFactionHoldings(this.galaxyId) : null;
@@ -208,13 +231,13 @@ extendClass(GalaxyMapManager, {
             && planetConfigManager.isFriendlyFaction(hold.ruler);
         if (hold && !ownRuler && !hold.baseLost && hold.base === info.id && !hold.stations.length
             && profileManager.isHoldingBaseRevealed(this.galaxyId)) {
-            return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">ASSAULT BASE</button>` +
+            return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">${this.btnIconHtml('menuWeapons')}ASSAULT BASE</button>` +
                 `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
         }
         const opts = this.getStartOptions(info && info.id);
         if (opts.canChoose) {
             return `
-                <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">FROM START</button>
+                <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">${this.btnIconHtml('menuRetry')}FROM START</button>
                 <button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}${opts.resumeLabel}</button>
             `;
         }
@@ -251,6 +274,17 @@ extendClass(GalaxyMapManager, {
         const backBtn = actions.querySelector('#gmBack');
         const backHtml = backBtn ? backBtn.outerHTML : '';
         this._actionFocus = null; // buttons are rebuilt; focus returns to the map
+        if (this.selectedBorder) {
+            // Checkpoint: nothing to start here — one button jumps to the
+            // planet whose clearing opens it.
+            const openId = this.selectedBorder.open;
+            const name = String((this.getPlanetInfo(openId) || {}).name || openId).toUpperCase();
+            actions.innerHTML = `<button class="action-button" id="gmBorderFocus" data-nav-item>${this.btnIconHtml('hsExplore')}SHOW ${name}</button>` + (backHtml ? ` ${backHtml}` : '');
+            actions.querySelector('#gmBorderFocus').addEventListener('click', () => this.selectPlanet(openId));
+            const back = actions.querySelector('#gmBack');
+            if (back) back.addEventListener('click', () => this.back());
+            return;
+        }
         actions.innerHTML = this.renderConfirmActionsHtml(info) + (backHtml ? ` ${backHtml}` : '');
         this.bindConfirmActions();
     },
@@ -281,12 +315,41 @@ extendClass(GalaxyMapManager, {
             const el = this.overlay.querySelector('#' + id);
             if (el) el.textContent = text;
         };
+        const border = this.selectedBorder;
+        if (border) {
+            const nm = (id) => String((this.getPlanetInfo(id) || {}).name || id).toUpperCase();
+            set('gmSectorName', 'BORDER CHECKPOINT');
+            const bg = this.overlay.querySelector('.gm-sector-planet-bg');
+            if (bg) {
+                bg.innerHTML = this.borderCardSvg(border.open);
+                bg.classList.remove('has-atmo');
+            }
+            const holdings = profileManager.getFactionHoldings ? profileManager.getFactionHoldings(this.galaxyId) : null;
+            const fac = this.overlay.querySelector('#gmFaction');
+            if (fac) fac.innerHTML = holdings && holdings.ruler ? this.factionLabelHtml(holdings.ruler) : '—';
+            set('gmDiffLabel', 'Route');
+            set('gmDiff', nm(border.open) + ' → ' + nm(border.shut));
+            set('gmStagesLabel', 'Beyond');
+            set('gmStages', nm(border.shut) + ' (LOCKED)');
+            set('gmEnemiesLabel', 'To open');
+            set('gmEnemies', 'CLEAR ' + nm(border.open));
+            set('gmStatusLabel', 'Status');
+            set('gmStatus', 'SEALED');
+            const bStepper = this.overlay.querySelector('#gmStageStepper');
+            if (bStepper) bStepper.innerHTML = '';
+            set('gmUnlockHint', 'The route stays sealed until ' + nm(border.open) + ' is cleared.');
+            return;
+        }
         const post = this.getSelectedPost();
         if (post) {
             const open = profileManager.isTradingPostUnlocked(post);
             set('gmSectorName', post.name);
             const bg = this.overlay.querySelector('.gm-sector-planet-bg');
-            if (bg) bg.innerHTML = this.postIconSvg(open, post) + (open ? '' : this.lockBadgeHtml());
+            if (bg) {
+                bg.innerHTML = this.postIconSvg(open, post) + (open ? '' : this.lockBadgeHtml());
+                // Stations have no atmosphere.
+                bg.classList.remove('has-atmo');
+            }
             // Trading posts: economic profile instead of combat stats.
             const eco = profileManager.getTradingPostEconomy(post);
             const kindShort = { weapon: 'WPN', defense: 'DEF', ability: 'ABL', energy: 'NRG' };
@@ -322,7 +385,13 @@ extendClass(GalaxyMapManager, {
         set('gmStatusLabel', 'Status');
         set('gmSectorName', info.name || '—');
         const planetBg = this.overlay.querySelector('.gm-sector-planet-bg');
-        if (planetBg) planetBg.innerHTML = this.planetIconHtml(info.id, 240) + (info.unlocked ? '' : this.lockBadgeHtml());
+        if (planetBg) {
+            const icon = this.planetIconHtml(info.id, 240);
+            planetBg.innerHTML = icon + (info.unlocked ? '' : this.lockBadgeHtml());
+            const atmo = this.planetAtmoColor(icon);
+            planetBg.classList.toggle('has-atmo', !!atmo);
+            planetBg.style.setProperty('--atmo', atmo || 'transparent');
+        }
         set('gmDiff', info.unlocked ? (info.difficulty || '—') : '???');
         set('gmStages', info.unlocked
             ? (info.cleared
@@ -354,6 +423,8 @@ extendClass(GalaxyMapManager, {
         // A flight in progress owns the map; an ambush waits for its choice.
         if (this._ambush) { this.resolveAmbush('fight'); return; }
         if (this._flight) return;
+        // Checkpoint selected: confirm just jumps to the planet that opens it.
+        if (this.selectedBorder) { this.selectPlanet(this.selectedBorder.open); return; }
         const post = this.getSelectedPost();
         if (post && startMode === 'raid' && post.factionStation) {
             // Raid: fight at the station's planet; winning destroys the station.
@@ -413,6 +484,17 @@ extendClass(GalaxyMapManager, {
     },
 
     /** Launch icon for the mission buttons (pixel, tinted in the accent). */
+    /** Small icon before a card button label ('lock' = pixel padlock). */
+    btnIconHtml(name) {
+        if (name === 'lock') {
+            return '<svg class="gm-mission-icon gm-btn-lock" viewBox="0 0 12 14" shape-rendering="crispEdges" aria-hidden="true">' +
+                '<path class="gm-lock-shackle" d="M3 6V3h1V2h1V1h2v1h1v1h1v3H8V3H7V2H5v1H4v3z"/>' +
+                '<rect class="gm-lock-body" x="1" y="6" width="10" height="7"/></svg>';
+        }
+        if (typeof iconRenderer === 'undefined' || !iconRenderer.imgHtml) return '';
+        return iconRenderer.imgHtml(name, 16, 'gm-mission-icon', undefined, false);
+    },
+
     missionIconHtml() {
         if (typeof iconRenderer === 'undefined' || !iconRenderer.imgHtml) return '';
         return iconRenderer.imgHtml('menuStart', 16, 'gm-mission-icon', undefined, false);

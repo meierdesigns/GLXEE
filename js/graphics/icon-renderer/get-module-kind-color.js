@@ -108,6 +108,7 @@ extendClass(IconRenderer, {
         const ic = raw ? false : (Number.isFinite(Number(contrast)) ? Number(contrast) : this.getIconContrast());
         const ib = raw ? false : (Number.isFinite(Number(brightness)) ? Number(brightness) : this.getIconBrightness());
         const is = raw ? false : (Number.isFinite(Number(saturation)) ? Number(saturation) : this.getIconSaturation());
+        key = this.detailKey(key, size);
         const png = this.getPngOverride(key);
         const cssSize = Math.max(1, Math.round(size || 16));
         // Snap to sprite grid (16) then ≥2× backing for HiDPI / fractional DPR

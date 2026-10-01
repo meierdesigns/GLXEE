@@ -19,9 +19,20 @@ class IconRenderer {
         if (this._hiRes[key]) return this._hiRes[key];
         let sprite = IconSprites[m[1]] || null;
         if (!sprite) return null;
-        for (let n = Number(m[2]); n > 1; n /= 2) sprite = this.scale2x(sprite);
+        let n = Number(m[2]);
+        // Hand-drawn 32x32 art (e.g. factionTerranHi) replaces the first doubling.
+        if (IconSprites[m[1] + 'Hi']) { sprite = IconSprites[m[1] + 'Hi']; n /= 2; }
+        for (; n > 1; n /= 2) sprite = this.scale2x(sprite);
         this._hiRes[key] = sprite;
         return sprite;
+    }
+
+    /** Large draws of sprites with hand-drawn 32x32 art get the @2x/@4x key. */
+    detailKey(key, size) {
+        const k = String(key || '');
+        if (/@[24]x$/.test(k) || typeof IconSprites === 'undefined' || !IconSprites[k + 'Hi']) return key;
+        const s = Number(size) || 16;
+        return s >= 48 ? k + '@4x' : (s >= 24 ? k + '@2x' : key);
     }
 
     /** Scale2x: doubles a pixel matrix, rounding diagonal steps into slopes. */
@@ -72,6 +83,7 @@ class IconRenderer {
     }
 
     drawKey(ctx, key, x, y, size, tint, contrast, brightness, saturation) {
+        key = this.detailKey(key, size);
         const png = this.getPngOverride(key);
         if (png) {
             this.drawPng(ctx, png, x, y, size);

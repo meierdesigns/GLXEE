@@ -155,6 +155,8 @@ class PlayerManager {
         }
 
         let hpDamage = Number(damage) || 0;
+        // BARRIER power-up (power-crates.js).
+        if (typeof pickupManager !== 'undefined' && pickupManager.getDamageTakenMul) hpDamage *= pickupManager.getDamageTakenMul();
         const online = this.isSystemsOnline();
         const costPer = Math.max(0.01, Number(this.shieldAbsorbEnergyPerDmg) || 0.5);
         const maxAbsByEnergy = online ? (this.energy / costPer) : 0;

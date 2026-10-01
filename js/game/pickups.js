@@ -34,6 +34,7 @@ class PickupManager {
         this._saveDirty = false;
         this._saveTimer = 0;
         this.lootPhase = false;
+        this.powerShotUntil = 0;
         if (clearCollected !== false) {
             this.collectedThisRun = {};
         }
@@ -160,6 +161,7 @@ class PickupManager {
             if (n > 0) lost[id] = n;
         });
         this.pickups.forEach((p) => {
+            if (p.powerUp) return;
             lost[p.id] = (lost[p.id] || 0) + (p.amount || 0);
         });
         const profile = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
@@ -242,6 +244,10 @@ class PickupManager {
 
     collectOne(pickup) {
         if (!pickup) return;
+        if (pickup.powerUp) {
+            if (this.collectPowerUp) this.collectPowerUp(pickup);
+            return;
+        }
         let granted = pickup.amount;
         if (typeof profileManager !== 'undefined' && profileManager.addCargoResource) {
             const result = profileManager.addCargoResource(pickup.id, pickup.amount, { skipSave: true });
@@ -287,6 +293,12 @@ class PickupManager {
             const x = Math.round(p.x);
             const y = Math.round(p.y + bob);
             const size = Math.max(6, Math.round(p.size));
+            if (p.powerUp && this.drawPowerUp) {
+                ctx.save();
+                this.drawPowerUp(ctx, p, x, y);
+                ctx.restore();
+                return;
+            }
             const key = this.resourceIconKey(p.id);
             const tint = this.resourceColor(p.id);
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;

@@ -78,6 +78,9 @@ class GalaxyMapManager {
             }
             if (profile && firstVisit && profileManager.discoverGalaxy) {
                 profileManager.discoverGalaxy(this.galaxyId);
+            } else if (profile && profileManager.ensureAllyDefense) {
+                // Saves from before ally defenses: start it on the next visit.
+                profileManager.ensureAllyDefense(this.galaxyId, profile);
             }
         }
         this.loadMap();
@@ -226,7 +229,8 @@ class GalaxyMapManager {
         return profileManager.isPlanetCleared(this.galaxyId, planetId);
     }
 
-    getStagesPerPlanet() {
+    getStagesPerPlanet(planetId) {
+        if (planetId && typeof getPlanetStageCount === 'function') return getPlanetStageCount(planetId);
         if (typeof game !== 'undefined' && game.levelManager && game.levelManager.stagesPerPlanet) {
             return Math.max(1, Math.round(Number(game.levelManager.stagesPerPlanet)) || 3);
         }
@@ -250,7 +254,7 @@ class GalaxyMapManager {
         const highest = Math.max(0, Math.round(Number(stage.highestStage) || 0));
         const cleared = this.isCleared(pid) || !!stage.bossCleared;
         if (!cleared && highest <= 0) return null;
-        const stages = this.getStagesPerPlanet();
+        const stages = this.getStagesPerPlanet(pid);
         const total = stages + 1;
         if (cleared) return { done: total, total, boss: false };
         if (highest >= stages) return { done: total, total, boss: true };
@@ -290,19 +294,60 @@ class GalaxyMapManager {
      * Cleared stages get a check, the next stage to fight shows the player
      * ship, the boss stage the skull.
      */
+    isDevMode() {
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+
+    /** Dev-mode stage pick for a planet (1..N, N = boss) or null. */
+    getDevStagePick(planetId) {
+        const v = this._devStagePick && this._devStagePick[String(planetId || '').toLowerCase()];
+        return v || null;
+    }
+
+    /** Level id of the dev-mode pick, e.g. "mars-2" / "mars-boss". */
+    getDevStageLevelId(planetId) {
+        const pid = String(planetId || '').toLowerCase();
+        const pick = this.isDevMode() ? this.getDevStagePick(pid) : null;
+        if (!pick) return null;
+        return pick > this.getStagesPerPlanet(pid) ? `${pid}-boss` : `${pid}-${pick}`;
+    }
+
+    /** Stepper clicks in dev mode (delegated, bound once). */
+    bindDevStagePicks() {
+        if (this._devStageBound) return;
+        this._devStageBound = true;
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.closest && e.target.closest('.gm-sector-stage[data-dev-stage]');
+            if (!el || !this.isDevMode()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const pid = el.getAttribute('data-dev-planet');
+            this._devStagePick = this._devStagePick || {};
+            this._devStagePick[pid] = Number(el.getAttribute('data-dev-stage')) || 1;
+            const stepper = this.overlay && this.overlay.querySelector('#gmStageStepper');
+            if (stepper) stepper.innerHTML = this.planetStagesHtml(pid);
+            // Start button follows the pick.
+            if (this.syncConfirmButton) this.syncConfirmButton();
+        }, true);
+    }
+
     planetStagesHtml(planetId) {
+        this.bindDevStagePicks();
         const pid = String(planetId || '').toLowerCase();
         if (!pid) return '';
-        const stages = this.getStagesPerPlanet();
+        const stages = this.getStagesPerPlanet(pid);
         const total = stages + 1;
         const p = this.getPlanetStageProgress(pid) || { done: 0, total, boss: false };
         const cleared = p.done >= total && !p.boss;
-        const current = cleared ? -1 : (p.boss ? total : p.done + 1);
+        // Dev mode: every stage is pickable; the pick replaces the "current" one.
+        const dev = this.isDevMode();
+        const pick = dev ? this.getDevStagePick(pid) : null;
+        const current = pick ? pick : (cleared ? -1 : (p.boss ? total : p.done + 1));
         const ship = this.getShipIconUrl ? this.getShipIconUrl(1) : null;
         let html = '';
         for (let i = 1; i <= total; i++) {
             const isBoss = i === total;
-            const done = cleared || i < current;
+            const done = pick ? (cleared || i < (cleared ? total + 1 : (p.boss ? total : p.done + 1))) : (cleared || i < current);
             const here = i === current;
             let inner = '';
             if (isBoss && !done) {
@@ -317,8 +362,9 @@ class GalaxyMapManager {
             // Player ship hovers above the stage it fights next.
             if (here && ship) inner += `<img src="${ship}" alt="" class="gm-stage-ship">`;
             const tag = isBoss ? 'BOSS' : String(i);
-            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}"` +
-                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}">` +
+            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}"` +
+                (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
+                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;
@@ -431,16 +477,18 @@ class GalaxyMapManager {
         const p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null;
         // Invasion of this galaxy comes first (invasion-scenario.js).
         const inv = (typeof profileManager !== 'undefined' && profileManager.getActiveInvasion)
-            ? profileManager.getActiveInvasion(p) : null;
-        if (inv && inv.galaxyId === this.galaxyId) {
+            ? profileManager.getActiveInvasion(p, this.galaxyId) : null;
+        if (inv) {
             const icfg = planetConfigManager.getConfig ? planetConfigManager.getConfig(inv.planetId) : null;
             const iplanet = String((icfg && icfg.name) || inv.planetId).toUpperCase();
             const ist = styleOf(inv.attacker);
             return `<div class="galaxy-map-situation is-invasion" style="--ruler-accent:${(ist && ist.accent) || '#ff4a3a'}">` +
-                `<span class="galaxy-map-situation-kind">INVASION</span>` +
+                `<span class="galaxy-map-situation-kind">${inv.ally ? 'ALLY UNDER ATTACK' : 'INVASION'}</span>` +
                 `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 14)}</span>` +
                 `<span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span></span>` +
-                `<span class="galaxy-map-situation-sub">FLY THERE AND WIN A STAGE TO REPEL IT</span>` +
+                `<span class="galaxy-map-situation-sub">${inv.ally
+                    ? 'DEFEND YOUR ' + esc(String(inv.defender).toUpperCase()) + ' ALLIES · WIN A STAGE THERE'
+                    : 'FLY THERE AND WIN A STAGE TO REPEL IT'}</span>` +
                 `</div>`;
         }
         const m = p && p.activeMission;

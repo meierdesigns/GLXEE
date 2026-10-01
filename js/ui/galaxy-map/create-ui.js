@@ -266,7 +266,7 @@ extendClass(GalaxyMapManager, {
             : (info.cleared
                 ? 'CLEARED'
                 : (info.stage.highestStage
-                    ? (info.stage.highestStage >= this.getStagesPerPlanet() ? `BOSS READY · ${this.getStagesPerPlanet() + 1}/${this.getStagesPerPlanet() + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet() + 1}`)
+                    ? (info.stage.highestStage >= this.getStagesPerPlanet(info.id) ? `BOSS READY · ${this.getStagesPerPlanet(info.id) + 1}/${this.getStagesPerPlanet(info.id) + 1}` : `NEXT STAGE ${info.stage.highestStage + 1}/${this.getStagesPerPlanet(info.id) + 1}`)
                     : 'READY'));
         const diff = info.unlocked ? (info.difficulty || '—') : '???';
         const enemies = info.unlocked ? String(info.enemyCount) : '???';
@@ -297,10 +297,10 @@ extendClass(GalaxyMapManager, {
                         <div class="stat-row"><span class="stat-label" id="gmStatusLabel">Status</span><span class="stat-value" id="gmStatus">${status}</span></div>
                         <div class="gm-stage-stepper" id="gmStageStepper">${info.unlocked ? this.planetStagesHtml(info.id) : ''}</div>
                         <div class="gm-unlock-hint" id="gmUnlockHint">${unlockHint}</div>
-                        <!-- Start / continue / fly / dock live inside the planet card. -->
-                        <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
-                            ${this.renderConfirmActionsHtml(info)}
-                        </div>
+                    </div>
+                    <!-- Start / continue / fly / dock: full card width at the bottom. -->
+                    <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
+                        ${this.renderConfirmActionsHtml(info)}
                     </div>
                 </div>
             </div>

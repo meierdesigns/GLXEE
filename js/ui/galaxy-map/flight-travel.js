@@ -179,7 +179,7 @@ extendClass(GalaxyMapManager, {
             if (!loc || loc.kind !== 'planet' || list.length < 2 || !this.planetSurfaceRadius) return;
             const a = list[list.length - 1], b = list[list.length - 2];
             const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-            const by = Math.min(l * 0.9, this.planetSurfaceRadius(loc.id));
+            const by = Math.min(l * 0.9, this.planetSurfaceRadius(loc.id) * (this.nodeObjScale ? this.nodeObjScale() : 1));
             list[list.length - 1] = { x: a.x + (b.x - a.x) / l * by, y: a.y + (b.y - a.y) / l * by };
         };
         const line = pts.slice();

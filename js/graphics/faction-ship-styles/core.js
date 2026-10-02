@@ -257,23 +257,37 @@ class FactionShipStyles {
 
     /**
      * On-screen footprint in playfield pixels (aspect ≈ sprite grid 18×14).
-     * Kept well below asset resolution so 32/64 assets stay crisp when scaled down.
+     * Scaled by Settings → Enemy Size (S–XXL) across the five class tiers.
      */
     displaySizeForClass(enemyClass) {
+        let base;
         switch (this.normalizeClass(enemyClass)) {
-            // Relative to the 28px player: scouts ~0.8×, capitals ~1.45× (×tier ≤ 1.5×).
+            // Relative ladder: scout → capital. Defaults already larger than
+            // the old 22–40 band so champions read clearly on the playfield.
             case 'scout':
-                return { width: 22, height: 17 };
+                base = { width: 36, height: 28 };
+                break;
             case 'assault':
-                return { width: 26, height: 20 };
+                base = { width: 48, height: 36 };
+                break;
             case 'heavy':
-                return { width: 31, height: 24 };
+                base = { width: 58, height: 44 };
+                break;
             case 'elite':
-                return { width: 36, height: 28 };
+                base = { width: 70, height: 52 };
+                break;
             case 'capital':
             default:
-                return { width: 40, height: 31 };
+                base = { width: 84, height: 64 };
+                break;
         }
+        const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getEnemySizeMul)
+            ? uiAppearanceManager.getEnemySizeMul(this.normalizeClass(enemyClass))
+            : 1.35;
+        return {
+            width: Math.max(12, Math.round(base.width * mul)),
+            height: Math.max(10, Math.round(base.height * mul))
+        };
     }
 
     blankGrid() {

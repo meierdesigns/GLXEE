@@ -331,11 +331,15 @@ extendClass(BulletManager, {
             // Tag shots with their weapon so they render in its type colour.
             // Shot size follows the slot size class: S 0.6×, M 1×, L 1.5× the
             // weapon's base shot (at least 1 × 3 px, so S stays visible).
-            // Preview close-ups fire at a zoomed ship: shotScale scales size
-            // and speed by that zoom on top.
+            // Shot size: slot class (S/M/L) × Settings → Player Shots.
+            // Applied after spawn so clampBulletSize cannot crush the setting.
             const shotScale = Number(opts.shotScale) || 1;
+            const appearanceMul = (typeof uiAppearanceManager !== 'undefined'
+                && uiAppearanceManager.getShotSizeMul)
+                ? uiAppearanceManager.getShotSizeMul('player') : 1;
             const sizeMul = ([0.6, 1, 1.5][slot.sizeLevel != null ? slot.sizeLevel : 1] || 1)
-                * (powerShot ? powerShot.size : 1);
+                * (powerShot ? powerShot.size : 1)
+                * appearanceMul;
             for (let i = firstNew; i < this.bullets.length; i++) {
                 const b = this.bullets[i];
                 b.weaponId = slot.id;
@@ -343,10 +347,11 @@ extendClass(BulletManager, {
                 if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
                 if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
                 const cx = b.x + (b.width || 0) / 2;
-                // Whole pixels, or drawing rounds S up to M's width.
-                b.width = Math.max(1, Math.round((b.width || 2) * sizeMul)) * shotScale;
-                b.height = Math.max(3, Math.round((b.height || 8) * sizeMul)) * shotScale;
+                // Keep fractional sizes so S→XXL stays visible (not snapped to 1–3).
+                b.width = Math.max(1, (b.width || 2) * sizeMul) * shotScale;
+                b.height = Math.max(3, (b.height || 8) * sizeMul) * shotScale;
                 if (shotScale !== 1) b.speed = (b.speed || 6) * shotScale;
+                if (b.lightRadius) b.lightRadius = Math.max(6, b.lightRadius * Math.sqrt(Math.max(0.3, appearanceMul)));
                 b.x = cx - b.width / 2;
             }
             if (slot.muzzle) this.addMuzzleFlash(slot, cfg);

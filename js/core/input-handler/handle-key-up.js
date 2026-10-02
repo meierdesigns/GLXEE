@@ -28,6 +28,11 @@ extendClass(InputHandler, {
         if (!this.gameState.gameRunning) {
             return;
         }
+        // Size tuner owns its own pause preview — close it instead of dimming.
+        if (typeof enemySizeOverlay !== 'undefined' && enemySizeOverlay.isOpen && enemySizeOverlay.isOpen()) {
+            enemySizeOverlay.hide();
+            return;
+        }
 
         if (this.gameState.isPaused) {
             if (typeof game !== 'undefined') {

@@ -118,8 +118,8 @@ extendClass(BulletManager, {
      */
     fitBulletsToBarrel(list, from, gunWidth, weaponId, maxGrow) {
         if (!(gunWidth > 0)) return;
-        // Never below 1 px wide / 3 px long, so shots stay readable.
-        const target = Math.max(1, gunWidth * this.getBarrelFraction(weaponId));
+        // Floor at 2 px so Settings → Shot Size still has room to scale up/down.
+        const target = Math.max(2, gunWidth * this.getBarrelFraction(weaponId));
         const grow = Math.max(1, Number(maxGrow) || 1);
         for (let i = from; i < list.length; i++) {
             const b = list[i];
@@ -137,6 +137,33 @@ extendClass(BulletManager, {
                 b.h = Math.max(3, (b.h || 8) * s);
             }
             b.x = cx - nw / 2;
+        }
+    },
+
+    /** Apply Settings → Shot Size (player / enemy / boss) to new bullets. */
+    applyShotSizeSetting(list, from, kind) {
+        if (!list || !(from >= 0)) return;
+        const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSizeMul)
+            ? uiAppearanceManager.getShotSizeMul(kind || 'enemy') : 1;
+        if (!(mul > 0) || Math.abs(mul - 1) < 0.01) return;
+        for (let i = from; i < list.length; i++) {
+            const b = list[i];
+            if (!b) continue;
+            const bw = b.width != null ? b.width : b.w;
+            const bh = b.height != null ? b.height : b.h;
+            if (!(bw > 0)) continue;
+            const cx = b.x + bw / 2;
+            const nw = Math.max(1, Math.round(bw * mul * 100) / 100);
+            const nh = Math.max(3, Math.round((bh || 8) * mul * 100) / 100);
+            if (b.width != null) {
+                b.width = nw;
+                b.height = nh;
+            } else {
+                b.w = nw;
+                b.h = nh;
+            }
+            b.x = cx - nw / 2;
+            if (b.lightRadius) b.lightRadius = Math.max(6, b.lightRadius * Math.sqrt(mul));
         }
     },
 
@@ -194,6 +221,8 @@ extendClass(BulletManager, {
             const before = this.enemyBullets.length;
             this.enemyShootDefault(enemy);
             this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
+            this.applyShotSizeSetting(this.enemyBullets, before,
+                enemy && enemy.isBoss ? 'boss' : 'enemy');
         }
 
         if (typeof soundManager !== 'undefined') {
@@ -245,6 +274,8 @@ extendClass(BulletManager, {
             this.enemyBullets[i].isEnemyShot = true;
         }
         this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), defaultWeapon);
+        this.applyShotSizeSetting(this.enemyBullets, before,
+            enemy && enemy.isBoss ? 'boss' : 'enemy');
     },
 
     enemyShootDefault(enemy) {

@@ -8,9 +8,9 @@ extendClass(EnemyManager, {
      */
     resolveEnemyHitProfile(opts) {
         const o = opts || {};
-        // Enemies shrink with the player (footprint 22 → 18 px).
-        const ENEMY_SIZE_MUL = 18 / 22;
-        const drawScale = (o.drawScale != null ? o.drawScale : 1) * ENEMY_SIZE_MUL;
+        // Footprint comes from displaySizeForClass × Enemy Size setting.
+        // No extra shrink — that made champions look like flecks.
+        const drawScale = (o.drawScale != null ? o.drawScale : 1);
         let model = null;
         let scaleMul = 1;
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual) {
@@ -36,20 +36,19 @@ extendClass(EnemyManager, {
         }
         if (!model) {
             return {
-                width: Math.max(6, Math.round(16 * drawScale)),
-                height: Math.max(6, Math.round(12 * drawScale)),
+                width: Math.max(8, Math.round(28 * drawScale)),
+                height: Math.max(8, Math.round(22 * drawScale)),
                 sprite: null,
                 colors: null,
                 collision: null
             };
         }
         let fullScale = drawScale * scaleMul;
-        // Hard cap: no enemy wider than 33 px × drawScale (kept independent of
-        // the player footprint so shrinking the player doesn't shrink enemies).
-        const maxW = 33 * drawScale;
+        // Soft ceiling only — XXL capitals can approach half the playfield.
+        const maxW = 280 * Math.max(0.5, drawScale);
         if ((model.width || 16) * fullScale > maxW) fullScale = maxW / (model.width || 16);
-        const drawW = Math.max(4, (model.width || 16) * fullScale);
-        const drawH = Math.max(4, (model.height || 12) * fullScale);
+        const drawW = Math.max(6, (model.width || 16) * fullScale);
+        const drawH = Math.max(6, (model.height || 12) * fullScale);
         const sprite = model.sprite || null;
         const colors = model.colors || null;
         // Hit mask from the actually rendered ship (voxel segments / PNG crops,
@@ -164,12 +163,50 @@ extendClass(EnemyManager, {
         const contentScale = (typeof game !== 'undefined' && game && game.contentScale != null)
             ? Math.max(0.5, Math.min(3, Number(game.contentScale) || 1))
             : 1;
+        const prevW = entity.width || profile.width;
+        const prevH = entity.height || profile.height;
+        const cx = entity.x + prevW * 0.5;
+        const cy = entity.y + prevH * 0.5;
         entity.width = Math.max(4, Math.round(profile.width * contentScale));
         entity.height = Math.max(4, Math.round(profile.height * contentScale));
+        entity.x = cx - entity.width * 0.5;
+        entity.y = cy - entity.height * 0.5;
         entity.sprite = profile.sprite;
         entity.colors = profile.colors;
         entity.collision = this.scaleEnemyCollision(profile.collision, contentScale);
         return entity;
+    },
+
+    /** Re-apply footprints after Enemy Size setting changes (live + sides). */
+    refreshEnemySizes() {
+        if (this.enemy && !this.exploding) {
+            this.applyEnemyHitProfile(this.enemy, {
+                faction: this.enemy.faction,
+                enemyClass: this.enemy.enemyClass,
+                tier: this.enemy.tier,
+                level: this.enemy.level,
+                type: this.enemy.type || this.currentShipType,
+                drawScale: 1
+            });
+        }
+        (this.sideEnemies || []).forEach((side) => {
+            if (!side) return;
+            const role = side.role || 'assault';
+            const scale = role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68;
+            side.weaponScale = scale;
+            this.applyEnemyHitProfile(side, {
+                faction: side.faction,
+                enemyClass: side.enemyClass,
+                tier: side.tier,
+                level: side.level,
+                type: side.type,
+                drawScale: scale
+            });
+        });
+        // Drop baked variant bitmaps so the next frame redraws at the new size.
+        if (typeof graphicsManager !== 'undefined' && graphicsManager._variantCache) {
+            graphicsManager._variantCache.clear();
+        }
     },
 
     roleForcesEscort(role) {

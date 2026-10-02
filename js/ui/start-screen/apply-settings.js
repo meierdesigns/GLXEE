@@ -65,6 +65,20 @@ extendClass(StartScreenManager, {
             uiAppearanceManager.setShipRenderStyle(shipRenderSetting.value);
         }
 
+        if (typeof uiAppearanceManager !== 'undefined') {
+            this.settingsItems.forEach((item) => {
+                if (item.type === 'enemyClassSize' && item.enemyClass) {
+                    uiAppearanceManager.setEnemyClassSize(item.enemyClass, item.value);
+                }
+                if (item.type === 'playerSize') {
+                    uiAppearanceManager.setPlayerSize(item.value);
+                }
+                if (item.type === 'shotSize' && item.shotKind) {
+                    uiAppearanceManager.setShotSize(item.shotKind, item.value);
+                }
+            });
+        }
+
         const parallaxSetting = this.settingsItems.find(item => item.type === 'bgParallax');
         if (parallaxSetting && typeof VFBgMouseParallax !== 'undefined') {
             VFBgMouseParallax.setIntensity(parallaxSetting.value);

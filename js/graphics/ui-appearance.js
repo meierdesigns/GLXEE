@@ -48,6 +48,45 @@ class UIAppearanceManager {
             chroma: fxSteps(1.1)
         };
         this.shipRenderStyles = ['FLAT', 'VOXEL'];
+        // Per-class scale steps — wide gaps so S→XXL is obvious on the field.
+        this.enemySizeScaleSteps = {
+            S: 0.5,
+            M: 0.85,
+            L: 1.35,
+            XL: 2.0,
+            XXL: 2.9
+        };
+        this.enemyClassIds = ['scout', 'assault', 'heavy', 'elite', 'capital'];
+        this.enemyClassSizes = {
+            scout: 'L',
+            assault: 'L',
+            heavy: 'L',
+            elite: 'L',
+            capital: 'L'
+        };
+        // Shot size steps — wide gaps so S→XXL is obvious on the field.
+        this.shotSizeScaleSteps = {
+            S: 0.45,
+            M: 0.7,
+            L: 1,
+            XL: 2.2,
+            XXL: 3.6
+        };
+        this.shotSizeIds = ['player', 'enemy', 'boss'];
+        this.shotSizes = {
+            player: 'L',
+            enemy: 'L',
+            boss: 'L'
+        };
+        // Player hull size (independent of enemy class sizes).
+        this.playerSizeScaleSteps = {
+            S: 0.55,
+            M: 0.8,
+            L: 1,
+            XL: 1.5,
+            XXL: 2.1
+        };
+        this.playerSize = 'L';
         this.uiScaleOptions = ['50', '55', '60', '65', '70', '75', '80', '85', '90', '95', '100', '105', '110', '115', '120', '125'];
         this.borderWeight = 'NORMAL';
         this.indicatorWeight = '2';
@@ -85,6 +124,49 @@ class UIAppearanceManager {
         return this.shipRenderStyles.slice();
     }
 
+    getEnemySizeOptions() {
+        return Object.keys(this.enemySizeScaleSteps);
+    }
+
+    getEnemyClassSize(enemyClass) {
+        const cls = String(enemyClass || 'assault').toLowerCase();
+        return this.enemyClassSizes[cls] || 'L';
+    }
+
+    getEnemySizeMul(enemyClass) {
+        const step = this.getEnemyClassSize(enemyClass);
+        const mul = this.enemySizeScaleSteps[step];
+        return Number.isFinite(mul) ? mul : 1.35;
+    }
+
+    getShotSizeOptions() {
+        return Object.keys(this.shotSizeScaleSteps);
+    }
+
+    getShotSize(kind) {
+        const id = String(kind || 'player').toLowerCase();
+        return this.shotSizes[id] || 'L';
+    }
+
+    getShotSizeMul(kind) {
+        const step = this.getShotSize(kind);
+        const mul = this.shotSizeScaleSteps[step];
+        return Number.isFinite(mul) ? mul : 1;
+    }
+
+    getPlayerSizeOptions() {
+        return Object.keys(this.playerSizeScaleSteps);
+    }
+
+    getPlayerSize() {
+        return this.playerSize || 'L';
+    }
+
+    getPlayerSizeMul() {
+        const mul = this.playerSizeScaleSteps[this.getPlayerSize()];
+        return Number.isFinite(mul) ? mul : 1;
+    }
+
     getUiScaleOptions() {
         return this.uiScaleOptions.slice();
     }
@@ -120,6 +202,30 @@ class UIAppearanceManager {
             }
             if (data.shipRenderStyle && this.shipRenderStyles.indexOf(data.shipRenderStyle) !== -1) {
                 this.shipRenderStyle = data.shipRenderStyle;
+            }
+            // Migrate legacy single enemySize → all five classes.
+            if (data.enemySize && this.enemySizeScaleSteps[data.enemySize]) {
+                this.enemyClassIds.forEach((cls) => {
+                    this.enemyClassSizes[cls] = data.enemySize;
+                });
+            }
+            if (data.enemyClassSizes && typeof data.enemyClassSizes === 'object') {
+                this.enemyClassIds.forEach((cls) => {
+                    const step = String(data.enemyClassSizes[cls] || '').toUpperCase();
+                    if (this.enemySizeScaleSteps[step]) this.enemyClassSizes[cls] = step;
+                });
+            }
+            if (data.shotSizes && typeof data.shotSizes === 'object') {
+                this.shotSizeIds.forEach((id) => {
+                    const step = String(data.shotSizes[id] || '').toUpperCase();
+                    if (this.shotSizeScaleSteps[step]) this.shotSizes[id] = step;
+                });
+            } else if (data.shotSize && this.shotSizeScaleSteps[String(data.shotSize).toUpperCase()]) {
+                const legacy = String(data.shotSize).toUpperCase();
+                this.shotSizeIds.forEach((id) => { this.shotSizes[id] = legacy; });
+            }
+            if (data.playerSize && this.playerSizeScaleSteps[String(data.playerSize).toUpperCase()]) {
+                this.playerSize = String(data.playerSize).toUpperCase();
             }
             const uiScale = String(data.uiScale || '');
             if (this.uiScaleOptions.includes(uiScale)) {
@@ -162,6 +268,9 @@ class UIAppearanceManager {
                 borderWeight: this.borderWeight,
                 indicatorWeight: this.indicatorWeight,
                 shipRenderStyle: this.shipRenderStyle,
+                enemyClassSizes: Object.assign({}, this.enemyClassSizes),
+                shotSizes: Object.assign({}, this.shotSizes),
+                playerSize: this.playerSize,
                 uiScale: this.uiScale,
                 font: this.font,
                 fontSizes: this.fontSizes,
@@ -197,6 +306,49 @@ class UIAppearanceManager {
         if (this.shipRenderStyles.indexOf(val) === -1) return;
         this.shipRenderStyle = val;
         this.persist();
+    }
+
+    setEnemyClassSize(enemyClass, size) {
+        const cls = String(enemyClass || '').toLowerCase();
+        const val = String(size || '').toUpperCase();
+        if (!this.enemyClassSizes[cls] || !this.enemySizeScaleSteps[val]) return;
+        this.enemyClassSizes[cls] = val;
+        this.persist();
+        if (typeof enemyManager !== 'undefined' && enemyManager.refreshEnemySizes) {
+            enemyManager.refreshEnemySizes();
+        }
+    }
+
+    setShotSize(kind, size) {
+        const id = String(kind || '').toLowerCase();
+        const val = String(size || '').toUpperCase();
+        if (!this.shotSizes[id] || !this.shotSizeScaleSteps[val]) return;
+        this.shotSizes[id] = val;
+        this.persist();
+    }
+
+    setPlayerSize(size) {
+        const val = String(size || '').toUpperCase();
+        if (!this.playerSizeScaleSteps[val]) return;
+        this.playerSize = val;
+        this.persist();
+        if (typeof playerManager !== 'undefined' && playerManager.applyFixedFootprint) {
+            const p = playerManager.player;
+            const cx = p ? p.x + p.width / 2 : null;
+            const cy = p ? p.y + p.height / 2 : null;
+            playerManager.applyFixedFootprint();
+            if (p && cx != null) {
+                p.x = cx - p.width / 2;
+                p.y = cy - p.height / 2;
+                if (typeof game !== 'undefined' && game) {
+                    const W = game.internalWidth || game.baseWidth || 200;
+                    const H = game.internalHeight || game.baseHeight || 300;
+                    p.x = Math.max(0, Math.min(W - p.width, p.x));
+                    p.y = Math.max(p.minY || 0, Math.min((p.maxY != null ? p.maxY : H - p.height), p.y));
+                    p.maxY = H - p.height;
+                }
+            }
+        }
     }
 
     setUiScale(scale) {

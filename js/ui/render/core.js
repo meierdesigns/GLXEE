@@ -288,9 +288,11 @@ class RenderManager {
                     ctx.restore();
                 }
                 ctx.save();
-                ctx.globalAlpha = 0.9;
+                ctx.globalAlpha = 0.95;
                 if (graphicsManager.renderEnemyShip) {
-                    graphicsManager.renderEnemyShip(ctx, side, 0.7);
+                    // Draw at footprint size (hit profile already ~75–80% of champion).
+                    // Do not shrink again — a second scale made escorts look like flecks.
+                    graphicsManager.renderEnemyShip(ctx, side, 1);
                 } else {
                     ctx.fillStyle = this.resolveCss('var(--current-accent)', '#ff8844');
                     ctx.fillRect(side.x, side.y, side.width, side.height);

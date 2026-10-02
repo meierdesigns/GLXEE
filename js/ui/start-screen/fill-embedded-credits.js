@@ -9,6 +9,8 @@ const SETTINGS_SECTION_ICONS = {
     fx: 'M1.5 3h13v9h-13zM1.5 5.5h13M1.5 8h13M1.5 10.5h13M6 14h4',
     sound: 'M2 6h3l4-3v10l-4-3H2zM11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9',
     game: 'M3 5h10a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM4 7.5v2M3 8.5h2M11 8h.5M12.5 9.5h.5',
+    enemies: 'M8 2l2 3h3l-2.5 2 1 3L8 8.5 4.5 10l1-3L3 5h3zM3 12h10v2H3z',
+    shots: 'M7 2h2v8H7zM6 10h4v1H6zM7.5 12h1v2h-1zM3 4h2v5H3zM11 5h2v4h-2z',
     assets: 'M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6'
 };
 
@@ -144,8 +146,105 @@ extendClass(StartScreenManager, {
         return true;
     },
 
+    /** Guarantee the five enemy-class size rows exist (survives stale caches). */
+    ensureEnemyClassSizeSettings() {
+        if (!Array.isArray(this.settingsItems)) this.settingsItems = [];
+        const classes = [
+            { id: 'scout', name: 'Scout Size' },
+            { id: 'assault', name: 'Assault Size' },
+            { id: 'heavy', name: 'Heavy Size' },
+            { id: 'elite', name: 'Elite Size' },
+            { id: 'capital', name: 'Capital Size' }
+        ];
+        const opts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getEnemySizeOptions)
+            ? uiAppearanceManager.getEnemySizeOptions()
+            : ['S', 'M', 'L', 'XL', 'XXL'];
+        // Drop legacy single "Enemy Size" row if present.
+        this.settingsItems = this.settingsItems.filter((item) => item && item.type !== 'enemySize');
+        let insertAt = this.settingsItems.findIndex((item) => item && item.type === 'shipRenderStyle');
+        insertAt = insertAt >= 0 ? insertAt + 1 : this.settingsItems.length;
+
+        let playerItem = this.settingsItems.find((s) => s && s.type === 'playerSize');
+        const playerOpts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getPlayerSizeOptions)
+            ? uiAppearanceManager.getPlayerSizeOptions()
+            : opts.slice();
+        if (!playerItem) {
+            playerItem = {
+                name: 'Player Size',
+                value: 'L',
+                options: playerOpts.slice(),
+                type: 'playerSize'
+            };
+            this.settingsItems.splice(insertAt, 0, playerItem);
+            insertAt += 1;
+        } else {
+            playerItem.name = 'Player Size';
+            playerItem.options = playerOpts.slice();
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getPlayerSize) {
+                playerItem.value = uiAppearanceManager.getPlayerSize();
+            }
+        }
+
+        classes.forEach((cls, i) => {
+            let item = this.settingsItems.find((s) => s && s.type === 'enemyClassSize' && s.enemyClass === cls.id);
+            if (!item) {
+                item = {
+                    name: cls.name,
+                    value: 'L',
+                    options: opts.slice(),
+                    type: 'enemyClassSize',
+                    enemyClass: cls.id
+                };
+                this.settingsItems.splice(insertAt + i, 0, item);
+            } else {
+                item.name = cls.name;
+                item.options = opts.slice();
+            }
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getEnemyClassSize) {
+                item.value = uiAppearanceManager.getEnemyClassSize(cls.id);
+            }
+        });
+    },
+
+    /** Guarantee player / enemy / boss shot-size rows exist. */
+    ensureShotSizeSettings() {
+        if (!Array.isArray(this.settingsItems)) this.settingsItems = [];
+        const kinds = [
+            { id: 'player', name: 'Player Shots' },
+            { id: 'enemy', name: 'Enemy Shots' },
+            { id: 'boss', name: 'Boss Shots' }
+        ];
+        const opts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSizeOptions)
+            ? uiAppearanceManager.getShotSizeOptions()
+            : ['S', 'M', 'L', 'XL', 'XXL'];
+        let insertAt = this.settingsItems.findIndex((item) => item && item.type === 'enemyClassSize'
+            && item.enemyClass === 'capital');
+        insertAt = insertAt >= 0 ? insertAt + 1 : this.settingsItems.length;
+        kinds.forEach((kind, i) => {
+            let item = this.settingsItems.find((s) => s && s.type === 'shotSize' && s.shotKind === kind.id);
+            if (!item) {
+                item = {
+                    name: kind.name,
+                    value: 'L',
+                    options: opts.slice(),
+                    type: 'shotSize',
+                    shotKind: kind.id
+                };
+                this.settingsItems.splice(insertAt + i, 0, item);
+            } else {
+                item.name = kind.name;
+                item.options = opts.slice();
+            }
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSize) {
+                item.value = uiAppearanceManager.getShotSize(kind.id);
+            }
+        });
+    },
+
     createSettingsUI(content, opts) {
         const bare = !!(opts && opts.bare);
+        this.ensureEnemyClassSizeSettings();
+        this.ensureShotSizeSettings();
         if (typeof VFBgMouseParallax !== 'undefined') {
             const parallaxItem = this.settingsItems.find(item => item.type === 'bgParallax');
             if (parallaxItem) parallaxItem.value = VFBgMouseParallax.getIntensity();
@@ -154,6 +253,18 @@ extendClass(StartScreenManager, {
             this.settingsItems.forEach((item) => {
                 if (item.type === 'uiFx' && item.fxKey) {
                     item.value = uiAppearanceManager.getFxValue(item.fxKey);
+                }
+                if (item.type === 'shipRenderStyle') {
+                    item.value = uiAppearanceManager.shipRenderStyle;
+                }
+                if (item.type === 'enemyClassSize' && item.enemyClass) {
+                    item.value = uiAppearanceManager.getEnemyClassSize(item.enemyClass);
+                }
+                if (item.type === 'playerSize') {
+                    item.value = uiAppearanceManager.getPlayerSize();
+                }
+                if (item.type === 'shotSize' && item.shotKind) {
+                    item.value = uiAppearanceManager.getShotSize(item.shotKind);
                 }
             });
         }
@@ -215,9 +326,19 @@ extendClass(StartScreenManager, {
         right.className = 'settings-cluster';
         right.dataset.cluster = 'audio-game';
 
-        // Accordion: only one section open at a time, remembered across opens.
-        let openSection = 'theme';
-        try { openSection = localStorage.getItem('vf_settings_open_section') || 'theme'; } catch (e) { /* optional */ }
+        // Prefer SHOTS once on first land so the new rows are visible;
+        // otherwise keep the last-opened section.
+        let openSection = 'shots';
+        try {
+            const seen = localStorage.getItem('vf_settings_shots_seen_v1');
+            if (seen) {
+                openSection = localStorage.getItem('vf_settings_open_section') || 'enemies';
+            } else {
+                localStorage.setItem('vf_settings_shots_seen_v1', '1');
+                localStorage.setItem('vf_settings_open_section', 'shots');
+                openSection = 'shots';
+            }
+        } catch (e) { /* optional */ }
 
         const addSection = (parent, sectionId, sectionTitle, predicate) => {
             const items = this.settingsItems
@@ -280,6 +401,9 @@ extendClass(StartScreenManager, {
             item.name === 'Difficulty' || item.action === 'difficultyEditor'
                 || item.action === 'factionCommand'
         );
+        addSection(right, 'enemies', 'ENEMIES', (item) =>
+            item.type === 'enemyClassSize' || item.type === 'playerSize');
+        addSection(right, 'shots', 'SHOTS', (item) => item.type === 'shotSize');
         // Asset editor lives here only (no main-menu entry).
         addSection(right, 'assets', 'ASSETS', (item) =>
             (item.type === 'action' && item.action !== 'difficultyEditor'

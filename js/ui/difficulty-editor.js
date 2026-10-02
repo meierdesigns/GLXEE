@@ -116,6 +116,18 @@ class DifficultyEditorUI {
         return row;
     }
 
+    appendSection(root, title, fields, profile) {
+        const h = document.createElement('h3');
+        h.textContent = title;
+        root.appendChild(h);
+        fields.forEach(([label, key, min, max, step]) => {
+            const val = profile[key] != null ? profile[key] : 1;
+            root.appendChild(this.makeSlider(label, key, min, max, step, val, (value) => {
+                profile[key] = value;
+            }));
+        });
+    }
+
     render() {
         const manager = window.difficultyConfigManager;
         if (!manager) return;
@@ -142,8 +154,8 @@ class DifficultyEditorUI {
     renderProfile() {
         const root = document.getElementById('deControls');
         const profile = window.difficultyConfigManager.getProfile(this.profileId);
-        root.innerHTML = '<h3>GLOBAL COMBAT VALUES</h3>';
-        const fields = [
+        root.innerHTML = '';
+        this.appendSection(root, 'GLOBAL COMBAT VALUES', [
             ['Enemy damage', 'enemyDamageMul', 0, 3, 0.05],
             ['Player damage', 'playerDamageMul', 0, 3, 0.05],
             ['Enemy health', 'enemyHealthMul', 0.25, 4, 0.05],
@@ -151,12 +163,25 @@ class DifficultyEditorUI {
             ['Number of enemies', 'enemyCountMul', 0.25, 3, 0.05],
             ['Max active enemies', 'enemyMaxActive', 1, 10, 1],
             ['Obstacle frequency', 'obstacleSpawnMul', 0.25, 3, 0.05]
-        ];
-        fields.forEach(([label, key, min, max, step]) => {
-            root.appendChild(this.makeSlider(label, key, min, max, step, profile[key], (value) => {
-                profile[key] = value;
-            }));
-        });
+        ], profile);
+        this.appendSection(root, 'CHAMPION', [
+            ['Damage', 'championDamageMul', 0.25, 3, 0.05],
+            ['Health', 'championHealthMul', 0.25, 4, 0.05],
+            ['Speed', 'championSpeedMul', 0.25, 3, 0.05],
+            ['Evasion', 'championEvasionMul', 0.25, 3, 0.05]
+        ], profile);
+        this.appendSection(root, 'SIDE ENEMIES', [
+            ['Damage', 'sideDamageMul', 0.25, 3, 0.05],
+            ['Health', 'sideHealthMul', 0.25, 4, 0.05],
+            ['Speed', 'sideSpeedMul', 0.25, 3, 0.05],
+            ['Count', 'sideCountMul', 0.25, 3, 0.05]
+        ], profile);
+        this.appendSection(root, 'BOSS', [
+            ['Damage', 'bossDamageMul', 0.25, 3, 0.05],
+            ['Health', 'bossHealthMul', 0.25, 4, 0.05],
+            ['Speed', 'bossSpeedMul', 0.25, 3, 0.05],
+            ['Attack rate', 'bossAttackRateMul', 0.25, 3, 0.05]
+        ], profile);
         root.dataset.profile = this.profileId;
         root._profileDraft = profile;
     }
@@ -181,6 +206,14 @@ class DifficultyEditorUI {
                     cfg[key] = value / (tierCfg[key] || 1);
                 }));
             });
+        // Show this faction's boss kit so designers see the weapon split.
+        const kit = manager.getBossWeaponKit ? manager.getBossWeaponKit(faction) : null;
+        if (kit) {
+            const note = document.createElement('p');
+            note.className = 'de-kit-note';
+            note.textContent = `Boss kit — fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep}`;
+            aiRoot.appendChild(note);
+        }
         root.appendChild(aiRoot);
     }
 

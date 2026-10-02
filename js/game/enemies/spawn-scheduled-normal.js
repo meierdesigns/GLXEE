@@ -23,11 +23,9 @@ extendClass(EnemyManager, {
             // when focused by the player.
             baseHp = Math.max(6, Math.round(baseHp * 0.35));
         }
-        // Side craft stay a little smaller than champions (drawScale 0.8),
-        // including their mounted weapons and projectiles, but no longer tiny.
-        // Combat roles get a little more hull so they can pressure the player.
+        // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
         const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
-            ? 0.72 : 0.62;
+            ? 0.78 : 0.68;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;
@@ -125,7 +123,7 @@ extendClass(EnemyManager, {
             const cfg = enemyConfigManager.getConfig(entry.type);
             if (cfg) {
                 const ai = (typeof difficultyConfigManager !== 'undefined')
-                    ? difficultyConfigManager.resolveEnemy(entry.faction, entry.tier, cfg) : null;
+                    ? difficultyConfigManager.resolveEnemy(entry.faction, entry.tier, cfg, 'side') : null;
                 side.armor = cfg.armor || 0;
                 side.shieldMax = Math.round((cfg.shieldMax || 0) * 0.4 * scale);
                 side.shield = side.shieldMax;
@@ -135,12 +133,34 @@ extendClass(EnemyManager, {
                 side.damageMul = (ai ? ai.damageMul : 1) * tierMods.damage;
                 side.evasionChance = ai ? ai.evasionChance : 1;
                 side.predictionSkill = ai ? ai.predictionSkill : 0;
+                if (ai) {
+                    if (ai.healthMul && ai.healthMul !== 1) {
+                        side.maxHealth = Math.max(1, Math.round(side.maxHealth * ai.healthMul));
+                        side.health = side.maxHealth;
+                    }
+                    if (ai.speedMul && ai.speedMul !== 1) {
+                        side.speed *= ai.speedMul;
+                        side.verticalSpeed *= ai.speedMul;
+                        if (side.bomberSpeed) side.bomberSpeed *= ai.speedMul;
+                    }
+                    if (ai.attackRateMul && side.shootInterval > 0) {
+                        side.shootInterval = Math.max(500,
+                            Math.round(side.shootInterval / Math.max(0.4, ai.attackRateMul)));
+                    }
+                }
                 side.defenseMechanisms = (cfg.abilities || cfg.defenseMechanisms || []).slice();
                 side.abilities = side.defenseMechanisms.slice();
                 if (role === 'gunner' && cfg.shootInterval) {
                     side.shootInterval = Math.max(800, Math.round(cfg.shootInterval * 1.2));
                 }
             }
+        } else if (typeof difficultyConfigManager !== 'undefined') {
+            const ai = difficultyConfigManager.resolveEnemy(entry.faction, entry.tier, null, 'side');
+            side.damageMul = (ai.damageMul || 1) * tierMods.damage;
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * (ai.healthMul || 1)));
+            side.health = side.maxHealth;
+            side.speed *= ai.speedMul || 1;
+            side.verticalSpeed *= ai.speedMul || 1;
         }
         this.sideEnemies.push(side);
         if (typeof profileManager !== 'undefined' && profileManager.discoverEnemyContents && entry.type) {

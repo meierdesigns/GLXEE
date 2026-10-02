@@ -55,11 +55,6 @@ extendClass(EnemyManager, {
         enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * 0.55);
         enemySpeed = enemySpeed * (1 + 0.1 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
         enemyVerticalSpeed = enemyVerticalSpeed * (1 + 0.08 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
-        if (typeof difficultyConfigManager !== 'undefined') {
-            const profile = difficultyConfigManager.getProfile();
-            enemySpeed *= profile.enemySpeedMul;
-            enemyMaxHealth = Math.max(1, Math.round(enemyMaxHealth * profile.enemyHealthMul));
-        }
 
         const champType = (scheduleEntry && scheduleEntry.type)
             || (currentLevel && currentLevel.isBoss ? 'boss' : 'spaceship');
@@ -69,14 +64,23 @@ extendClass(EnemyManager, {
             ? scheduleEntry.tier
             : (scheduleEntry && scheduleEntry.level) || 1;
         const champLevel = scheduleEntry && scheduleEntry.level;
+        const isBossLvl = !!(currentLevel && currentLevel.isBoss);
+        if (typeof difficultyConfigManager !== 'undefined') {
+            const roleAi = difficultyConfigManager.resolveEnemy(
+                champFaction, champTier, null, isBossLvl ? 'boss' : 'champion'
+            );
+            enemySpeed *= roleAi.speedMul;
+            enemyVerticalSpeed *= roleAi.speedMul;
+            enemyMaxHealth = Math.max(1, Math.round(enemyMaxHealth * roleAi.healthMul));
+        }
         const hitProfile = this.resolveEnemyHitProfile({
             faction: champFaction,
             enemyClass: champClass,
             tier: champTier,
             level: champLevel,
             type: (scheduleEntry && scheduleEntry.type) || this.currentShipType,
-            // Champions a bit smaller than their raw model (ships read too large).
-            drawScale: 0.8
+            // Full class footprint; Enemy Size setting drives the rest.
+            drawScale: 1
         });
         shipWidth = hitProfile.width;
         shipHeight = hitProfile.height;
@@ -123,13 +127,22 @@ extendClass(EnemyManager, {
             renegade: !!(scheduleEntry && scheduleEntry.renegade),
             renegadeColor: (scheduleEntry && scheduleEntry.renegadeColor) || null,
             missionTarget: (scheduleEntry && scheduleEntry.missionTarget) || null,
-            isBoss: !!(currentLevel && currentLevel.isBoss),
+            isBoss: isBossLvl,
             minY: 25,
             maxY: canvasHeight / 3,
             sprite: hitProfile.sprite,
             colors: hitProfile.colors,
             collision: this.scaleEnemyCollision(hitProfile.collision, contentScale)
         };
+
+        // Faction kit on the hull — bosses swap pattern weapons later.
+        if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossWeaponKit && isBossLvl) {
+            this.enemy.weaponId = difficultyConfigManager.getBossWeaponKit(champFaction).primary;
+            this.enemy.bossWeaponKit = difficultyConfigManager.getBossWeaponKit(champFaction);
+        } else if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons) {
+            const kit = factionShipStyles.getFactionDefaultWeapons(champFaction);
+            this.enemy.weaponId = (kit && kit[0]) || 'laser';
+        }
 
         this.maxHealth = enemyMaxHealth;
 
@@ -167,13 +180,16 @@ extendClass(EnemyManager, {
             this.defenseMechanisms = [];
         }
         if (typeof difficultyConfigManager !== 'undefined') {
+            const role = this.enemy.isBoss ? 'boss' : 'champion';
             const ai = difficultyConfigManager.resolveEnemy(
                 this.enemy.faction, this.enemy.tier,
-                { evasionChance: this.evasionChance, predictionSkill: this.predictionSkill }
+                { evasionChance: this.evasionChance, predictionSkill: this.predictionSkill },
+                role
             );
             this.evasionChance = ai.evasionChance;
             this.predictionSkill = ai.predictionSkill;
             this.enemy.damageMul = ai.damageMul;
+            this.enemy.attackRateMul = ai.attackRateMul;
         }
         // Early planets / stages: dodge rarer, slower and with longer pauses.
         if (this.currentEvasionMul) {

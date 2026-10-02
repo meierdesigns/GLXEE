@@ -193,11 +193,13 @@ class EnemyManager {
         }));
         if (typeof difficultyConfigManager !== 'undefined') {
             const profile = difficultyConfigManager.getProfile();
-            this.sideEnemyCap = Math.max(1, Math.min(3,
-                Math.round(profile.enemyMaxActive * profile.enemyCountMul)));
-            if (profile.enemyCountMul < 1) {
+            const sideMul = profile.sideCountMul != null ? profile.sideCountMul : 1;
+            this.sideEnemyCap = Math.max(1, Math.min(6,
+                Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
+            if (profile.enemyCountMul < 1 || sideMul < 1) {
+                const mul = Math.min(profile.enemyCountMul || 1, sideMul);
                 const normalEntries = this.schedule.filter(e => !e.champion);
-                normalEntries.slice(Math.max(1, Math.ceil(normalEntries.length * profile.enemyCountMul)))
+                normalEntries.slice(Math.max(1, Math.ceil(normalEntries.length * mul)))
                     .forEach(e => { e.spawnAt = Math.max(e.spawnAt, 999999); });
             }
         }

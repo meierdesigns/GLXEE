@@ -6,7 +6,7 @@
     <title>GLXEE - Gameboy Style</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap">
-    <link rel="stylesheet" href="styles.css?v=faction-panel-padding-11">
+    <link rel="stylesheet" href="styles.css?v=shot-size-2">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
     <script src="js/core/reload-keys.js"></script>
@@ -24,6 +24,7 @@
                         <h3 id="levelName">MARS</h3>
                         <div class="level-difficulty gi-diff" id="levelDifficulty">EASY</div>
                     </div>
+                    <button type="button" class="gi-size-btn" id="enemySizeHudBtn" title="Enemy sizes (preview while paused)" aria-label="Enemy sizes">SIZE</button>
                 </header>
                 <div id="giBody" class="gi-body"></div>
             </div>
@@ -186,7 +187,7 @@
     <script src="js/core/economy-config/compute-station-stats.js"></script>
     <script src="js/core/economy-config/pick-weighted-resource-id.js"></script>
     <script src="js/core/economy-config.js"></script>
-    <script src="js/core/difficulty-config.js"></script>
+    <script src="js/core/difficulty-config.js?v=role-diff-1"></script>
     <script src="js/core/planet-config/core.js"></script>
     <script src="js/core/planet-config/get-faction-meta.js?v=galaxy-gen-2"></script>
     <script src="js/core/planet-config/next-enemy-id.js"></script>
@@ -223,7 +224,7 @@
     <script src="js/core/world-control.js?v=1"></script>
     <script src="js/core/flight-profiles.js"></script>
     <script src="js/core/weapon-config/core.js?v=laser-1"></script>
-    <script src="js/core/weapon-config/make-weapon.js?v=laser-1"></script>
+    <script src="js/core/weapon-config/make-weapon.js?v=shot-size-2"></script>
     <script src="js/core/weapon-config.js"></script>
     <script src="js/core/ability-config/core.js"></script>
     <script src="js/core/ability-config/create-combat-ability-defaults.js"></script>
@@ -276,14 +277,14 @@
     <script src="js/core/menu-nav.js"></script>
     <script src="js/core/ui-dialog.js?v=btn-1"></script>
     <script src="js/core/input-handler/core.js"></script>
-    <script src="js/core/input-handler/handle-key-up.js"></script>
+    <script src="js/core/input-handler/handle-key-up.js?v=enemy-size-3"></script>
     <script src="js/core/input-handler.js"></script>
     <script src="js/core/ui-manager/core.js?v=hud-1"></script>
     <script src="js/core/ui-manager/update-game-over-menu-display.js"></script>
     <script src="js/core/ui-manager.js"></script>
     <script src="js/core/cheat-system.js"></script>
     <script src="js/core/settings-manager.js"></script>
-    <script src="js/core/render-manager.js"></script>
+    <script src="js/core/render-manager.js?v=enemy-size-3"></script>
     <script src="js/core/viewport-fit.js"></script>
     <script src="js/core/core/core.js"></script>
     <script src="js/core/core/show-start-screen.js"></script>
@@ -299,22 +300,22 @@
     <script src="js/game/beat-sync.js"></script>
     <script src="js/game/charge-system.js"></script>
     <script src="js/game/player/core.js?v=freeflight-2"></script>
-    <script src="js/game/player/set-ship-model.js?v=player-2"></script>
+    <script src="js/game/player/set-ship-model.js?v=shot-size-2"></script>
     <script src="js/game/player.js?v=player-2"></script>
     <script src="js/game/bullets/core.js?v=shot-7"></script>
-    <script src="js/game/bullets/get-weapon-icon-key.js?v=bonus-1"></script>
-    <script src="js/game/bullets/shoot-with-legacy-system.js?v=bonus-1"></script>
-    <script src="js/game/bullets/shoot-burst.js?v=shot-6"></script>
+    <script src="js/game/bullets/get-weapon-icon-key.js?v=shot-size-2"></script>
+    <script src="js/game/bullets/shoot-with-legacy-system.js?v=shot-size-2"></script>
+    <script src="js/game/bullets/shoot-burst.js?v=shot-size-2"></script>
     <script src="js/game/bullets/reset.js"></script>
     <script src="js/game/bullets.js"></script>
-    <script src="js/game/enemies/core.js"></script>
-    <script src="js/game/enemies/resolve-enemy-hit-profile.js"></script>
-    <script src="js/game/enemies/spawn-scheduled-normal.js"></script>
+    <script src="js/game/enemies/core.js?v=role-diff-1"></script>
+    <script src="js/game/enemies/resolve-enemy-hit-profile.js?v=enemy-size-4"></script>
+    <script src="js/game/enemies/spawn-scheduled-normal.js?v=role-diff-1"></script>
     <script src="js/game/enemies/update-side-enemies.js?v=fieldclear-1"></script>
     <script src="js/game/enemies/get-enemy-ship-model.js"></script>
     <script src="js/game/enemies/update.js"></script>
-    <script src="js/game/enemies/spawn-enemy.js"></script>
-    <script src="js/game/enemies/boss.js"></script>
+    <script src="js/game/enemies/spawn-enemy.js?v=role-diff-1"></script>
+    <script src="js/game/enemies/boss.js?v=shot-size-2"></script>
     <script src="js/game/enemies/start-explosion.js"></script>
     <script src="js/game/enemies/wave-director.js"></script>
     <script src="js/game/enemies.js"></script>
@@ -360,7 +361,7 @@
     <script src="js/ui/color-picker-overlay/core.js"></script>
     <script src="js/ui/color-picker-overlay/sync-ui.js"></script>
     <script src="js/ui/color-picker-overlay.js"></script>
-    <script src="js/graphics/faction-ship-styles/core.js?v=pull-8"></script>
+    <script src="js/graphics/faction-ship-styles/core.js?v=enemy-size-4"></script>
     <script src="js/graphics/faction-ship-styles/paint-class-topology.js?v=pull-1"></script>
     <script src="js/graphics/faction-ship-styles/build-all-pixel-sprites.js?v=pull-1"></script>
     <script src="js/graphics/faction-ship-styles/faction-hull-builders.js?v=hull-1"></script>
@@ -386,7 +387,7 @@
     <script src="js/graphics/color-palette-system.js?v=pull-1"></script>
     <script src="js/graphics/performance-optimizer.js?v=pull-1"></script>
     <script src="js/graphics/theme-context.js?v=pull-1"></script>
-    <script src="js/graphics/ui-appearance.js?v=ui-scale-1"></script>
+    <script src="js/graphics/ui-appearance.js?v=shot-size-2"></script>
     <script src="js/ui/enhanced-palette-ui/core.js"></script>
     <script src="js/ui/enhanced-palette-ui/create-palette-history.js"></script>
     <script src="js/ui/enhanced-palette-ui.js"></script>
@@ -416,7 +417,7 @@
     <script src="js/ui/component-editor/on-generate.js"></script>
     <script src="js/ui/component-editor/on-component-property-change.js"></script>
     <script src="js/ui/component-editor.js"></script>
-    <script src="js/ui/difficulty-editor.js"></script>
+    <script src="js/ui/difficulty-editor.js?v=role-diff-1"></script>
     <script src="js/ui/faction-command.js"></script>
 
     <!-- Ship Assets -->
@@ -515,6 +516,7 @@
     <script src="js/ui/level-info-manager/core.js?v=field-1"></script>
     <script src="js/ui/level-info-manager/update-element.js?v=field-2"></script>
     <script src="js/ui/level-info-manager.js"></script>
+    <script src="js/ui/enemy-size-overlay.js?v=shot-size-2"></script>
     <script src="js/ui/mission-start/core.js"></script>
     <script src="js/ui/mission-start/prepare-fly-in.js"></script>
     <script src="js/ui/mission-start.js"></script>
@@ -597,7 +599,7 @@
     <script src="js/ui/home-station/bind-navigation-events.js?v=crest-2"></script>
     <script src="js/ui/home-station/bind-station-events.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-component-tree.js?v=sdrop-2"></script>
-    <script src="js/ui/home-station/area-upgrades.js?v=slotsz-1"></script>
+    <script src="js/ui/home-station/area-upgrades.js?v=slotsz-2"></script>
     <script src="js/ui/home-station/slot-upgrades.js?v=stats-1"></script>
     <script src="js/ui/home-station.js?v=faction-gui-4"></script>
     <script src="js/ui/player-selection/core.js"></script>
@@ -609,11 +611,11 @@
 
     <!-- Debug Tools: tools/debug/ (disabled — avoid HSL interference) -->
 
-    <script src="js/ui/start-screen/core.js?v=ui-scale-1"></script>
+    <script src="js/ui/start-screen/core.js?v=shot-size-2"></script>
     <script src="js/ui/start-screen/build-font-menu-items.js?v=profiles-2"></script>
     <script src="js/ui/start-screen/show-overlay.js?v=galaxies-2"></script>
     <script src="js/ui/start-screen/create-main-menu-ui.js?v=inline-1"></script>
-    <script src="js/ui/start-screen/fill-embedded-credits.js?v=ui-scale-1"></script>
+    <script src="js/ui/start-screen/fill-embedded-credits.js?v=shot-size-2"></script>
     <script src="js/ui/start-screen/fill-embedded-layout.js?v=btn-4"></script>
     <script src="js/ui/start-screen/build-settings-row.js?v=pull-1"></script>
     <script src="js/ui/start-screen/build-theme-strip.js?v=pull-1"></script>
@@ -621,8 +623,8 @@
     <script src="js/ui/start-screen/build-controls-show-btn.js?v=inline-1"></script>
     <script src="js/ui/start-screen/handle-arrow-down.js?v=terminal-1"></script>
     <script src="js/ui/start-screen/refresh-asset-bridge-status.js?v=galaxies-2"></script>
-    <script src="js/ui/start-screen/apply-settings.js?v=ui-scale-1"></script>
-    <script src="js/ui/start-screen.js"></script>
+    <script src="js/ui/start-screen/apply-settings.js?v=shot-size-2"></script>
+    <script src="js/ui/start-screen.js?v=enemy-size-2"></script>
     <script src="js/ui/start-intro.js"></script>
     <script src="js/ui/volume-controls.js"></script>
     <script src="js/graphics/planet-svgs/core.js?v=pull-1"></script>

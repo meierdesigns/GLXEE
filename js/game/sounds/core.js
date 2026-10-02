@@ -40,18 +40,32 @@ class SoundManager {
         };
     }
 
+    /**
+     * Soft boot only — do not create AudioContext here. Browsers block
+     * autoplay; creating the context before a user gesture logs a console
+     * warning and leaves it suspended anyway. ensureContext() opens it
+     * on the first play / gesture.
+     */
     init() {
-        try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {
-            this.enabled = false;
-        }
+        this.enabled = !!(window.AudioContext || window.webkitAudioContext);
     }
 
     ensureContext() {
         if (!this.enabled) return null;
-        if (!this.audioContext) this.init();
-        if (this.audioContext && this.audioContext.state === 'suspended') {
+        if (!this.audioContext) {
+            // Avoid the autoplay console warning: do not construct until
+            // the document has seen a real user activation.
+            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+                return null;
+            }
+            try {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                this.enabled = false;
+                return null;
+            }
+        }
+        if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(() => {});
         }
         return this.audioContext;

@@ -20,8 +20,9 @@ class YouTubeSoundtrackManager {
         this.volume = 0.2;
         this.hostEl = null;
         this.load();
-        this.ensureHost();
-        this.loadApi();
+        // Do not load the YouTube iframe API on boot — it sets cross-site
+        // cookies (SameSite warnings) even when no track is configured.
+        // loadApi() runs from _playVideo when a menu/planet URL is actually played.
     }
 
     load() {
@@ -207,6 +208,19 @@ class YouTubeSoundtrackManager {
             return false;
         }
         this.ensureHost();
+        this.mode = mode;
+        this.currentKey = key;
+        this.currentVideoId = videoId;
+
+        // Defer iframe_api until a real user gesture — loading it on boot
+        // rejects YouTube's SameSite cookies and spams the console even when
+        // playback cannot start yet.
+        if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+            this.pending = { key, videoId, mode };
+            this._armGestureUnlock();
+            return true;
+        }
+
         this.loadApi();
 
         if (this.playerReady && this.currentVideoId === videoId && this.mode === mode) {
@@ -216,15 +230,8 @@ class YouTubeSoundtrackManager {
 
         if (!this.apiReady) {
             this.pending = { key, videoId, mode };
-            this.mode = mode;
-            this.currentKey = key;
-            this.currentVideoId = videoId;
             return true;
         }
-
-        this.mode = mode;
-        this.currentKey = key;
-        this.currentVideoId = videoId;
 
         if (this.player && this.playerReady && typeof this.player.loadVideoById === 'function') {
             try {
@@ -239,5 +246,24 @@ class YouTubeSoundtrackManager {
 
         this._createPlayer(videoId);
         return true;
+    }
+
+    _armGestureUnlock() {
+        if (this._gestureArmed) return;
+        this._gestureArmed = true;
+        const unlock = () => {
+            this._gestureArmed = false;
+            if (!this.enabled || !this.currentVideoId) return;
+            const job = this.pending || {
+                key: this.currentKey,
+                videoId: this.currentVideoId,
+                mode: this.mode
+            };
+            this.pending = job;
+            this.loadApi();
+        };
+        document.addEventListener('pointerdown', unlock, { once: true, capture: true });
+        document.addEventListener('keydown', unlock, { once: true, capture: true });
+        document.addEventListener('touchstart', unlock, { once: true, capture: true });
     }
 }

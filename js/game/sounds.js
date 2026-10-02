@@ -5,10 +5,10 @@
 const soundManager = new SoundManager();
 
 function resumeSoundContext() {
-    if (soundManager.audioContext && soundManager.audioContext.state === 'suspended') {
-        soundManager.audioContext.resume();
-    }
+    // Opens (or resumes) the AudioContext after a real user gesture.
+    if (typeof soundManager.ensureContext === 'function') soundManager.ensureContext();
 }
 
-document.addEventListener('click', resumeSoundContext, { once: true });
-document.addEventListener('keydown', resumeSoundContext, { once: true });
+document.addEventListener('pointerdown', resumeSoundContext, { once: true, capture: true });
+document.addEventListener('keydown', resumeSoundContext, { once: true, capture: true });
+document.addEventListener('touchstart', resumeSoundContext, { once: true, capture: true });

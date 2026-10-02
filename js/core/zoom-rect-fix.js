@@ -12,6 +12,9 @@
  * window.vfEffectiveZoom(el) gives the accumulated zoom of an element — use
  * it to turn visual px deltas back into CSS px when positioning inside a
  * zoomed container.
+ *
+ * Detection is deferred until after stylesheets settle so the probe does not
+ * force layout during initial parse (FOUC warning).
  */
 (function () {
     function effectiveZoom(el) {
@@ -24,10 +27,12 @@
     }
 
     const nativeRect = Element.prototype.getBoundingClientRect;
+    let legacy = false;
+    let ready = false;
 
     function detectLegacy() {
         const probe = document.createElement('div');
-        probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:100px;height:10px;zoom:0.5;visibility:hidden';
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:100px;height:10px;zoom:0.5;visibility:hidden;pointer-events:none;';
         document.documentElement.appendChild(probe);
         const w = nativeRect.call(probe).width;
         probe.remove();
@@ -35,10 +40,7 @@
         return w > 75;
     }
 
-    let legacy = false;
-    try { legacy = detectLegacy(); } catch (e) { legacy = false; }
-
-    if (legacy) {
+    function applyLegacyPatch() {
         Element.prototype.getBoundingClientRect = function () {
             const r = nativeRect.call(this);
             const z = effectiveZoom(this);
@@ -58,7 +60,29 @@
         }
     }
 
-    window.vfLegacyZoom = legacy;
+    function finishDetect() {
+        if (ready) return;
+        ready = true;
+        try { legacy = detectLegacy(); } catch (e) { legacy = false; }
+        if (legacy) applyLegacyPatch();
+        window.vfLegacyZoom = legacy;
+    }
+
+    function scheduleDetect() {
+        // Two rAFs after window.load: CSSOM is settled, no FOUC warning.
+        requestAnimationFrame(() => requestAnimationFrame(finishDetect));
+    }
+
+    // Only probe after the full load event — "interactive"/DOMContentLoaded
+    // can still have pending stylesheets and triggers Firefox's FOUC warning
+    // when getBoundingClientRect forces layout.
+    if (document.readyState === 'complete') {
+        scheduleDetect();
+    } else {
+        window.addEventListener('load', scheduleDetect, { once: true });
+    }
+
+    window.vfLegacyZoom = false;
     // Visual px ↔ CSS px factor for positioning inside `el`.
     window.vfEffectiveZoom = function (el) {
         return el ? effectiveZoom(el) : 1;

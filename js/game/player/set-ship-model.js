@@ -105,14 +105,17 @@ extendClass(PlayerManager, {
         const contentScale = (typeof game !== 'undefined' && game && game.contentScale != null)
             ? Math.max(0.5, Math.min(3, Number(game.contentScale) || 1))
             : 1;
+        const playerSizeMul = (typeof uiAppearanceManager !== 'undefined'
+            && uiAppearanceManager.getPlayerSizeMul)
+            ? uiAppearanceManager.getPlayerSizeMul() : 1;
         const model = this.currentShipModel || {};
         const mw = Math.max(1, Number(model.width || model.nativeWidth) || 20);
         const mh = Math.max(1, Number(model.height || model.nativeHeight) || 16);
         // Wide layouts (long wings) used to make the ship huge: cap the
         // footprint at 1.3× the reference size, keeping the aspect.
         const k = Math.min(PLAYER_UNIT_SCALE, (PLAYER_FOOTPRINT_WIDTH * 1.3) / mw, (PLAYER_FOOTPRINT_WIDTH * 1.3) / mh);
-        this.player.width = Math.max(8, Math.round(mw * k * contentScale));
-        this.player.height = Math.max(8, Math.round(mh * k * contentScale));
+        this.player.width = Math.max(8, Math.round(mw * k * contentScale * playerSizeMul));
+        this.player.height = Math.max(8, Math.round(mh * k * contentScale * playerSizeMul));
         this.refreshPlayerHitMask();
     },
 

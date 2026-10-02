@@ -110,8 +110,10 @@ class CoreRenderManager {
     }
 
     renderUIOverlays() {
-        // Render pause overlay
-        if (this.gameState.isPaused) {
+        // Size tuner needs a clear view of enemies — skip the canvas dim.
+        const sizeTune = typeof enemySizeOverlay !== 'undefined' && enemySizeOverlay.isOpen
+            && enemySizeOverlay.isOpen();
+        if (this.gameState.isPaused && !sizeTune) {
             this.renderPauseOverlay();
         }
         

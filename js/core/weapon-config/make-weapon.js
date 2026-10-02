@@ -43,10 +43,11 @@ extendClass(WeaponConfigManager, {
         };
     },
 
-    /** Keep projectiles tiny relative to ships (~30px). */
+    /** Keep projectiles tiny relative to ships (~30px). Shot Size setting
+     *  scales after spawn, so the clamp only sets the L baseline. */
     clampBulletSize(width, height) {
         return {
-            width: Math.max(1, Math.min(3, Math.round(Number(width) || 2))),
+            width: Math.max(1, Math.min(4, Math.round(Number(width) || 2))),
             // Up to 16 so long, thin beams (laser) are possible.
             height: Math.max(3, Math.min(16, Math.round(Number(height) || 7)))
         };

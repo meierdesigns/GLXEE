@@ -154,11 +154,13 @@ extendClass(BulletManager, {
 
         angles.forEach(angle => {
             if (this.bullets.length < 6) { // Max bullets for spread
+                const w = (config && config.width) || 2;
+                const h = (config && config.height) || 8;
                 const bullet = {
-                    x: playerPosition.x + playerPosition.width / 2 - 1.5,
+                    x: playerPosition.x + playerPosition.width / 2 - w / 2,
                     y: playerPosition.y,
-                    width: 2,
-                    height: 8,
+                    width: w,
+                    height: h,
                     speed: config.speed,
                     damage: config.damage,
                     angle: angle,
@@ -176,14 +178,16 @@ extendClass(BulletManager, {
 
     shootRapidWeapon(playerPosition, config) {
         const bulletCount = config.bulletCount || 2;
+        const w = (config && config.width) || 2;
+        const h = (config && config.height) || 8;
 
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length < 6) {
                 const bullet = {
-                    x: playerPosition.x + playerPosition.width / 2 - 1.5 + (i * 3),
+                    x: playerPosition.x + playerPosition.width / 2 - w / 2 + (i - (bulletCount - 1) / 2) * (w + 1),
                     y: playerPosition.y,
-                    width: 2,
-                    height: 8,
+                    width: w,
+                    height: h,
                     speed: config.speed,
                     damage: config.damage,
                     color: '#808080', // Grayscale base - will be colored by render system

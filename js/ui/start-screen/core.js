@@ -138,6 +138,95 @@ class StartScreenManager {
                 type: 'shipRenderStyle'
             },
             {
+                name: 'Player Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getPlayerSize() : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getPlayerSizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'playerSize'
+            },
+            {
+                name: 'Scout Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemyClassSize('scout') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemySizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'enemyClassSize',
+                enemyClass: 'scout'
+            },
+            {
+                name: 'Assault Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemyClassSize('assault') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemySizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'enemyClassSize',
+                enemyClass: 'assault'
+            },
+            {
+                name: 'Heavy Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemyClassSize('heavy') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemySizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'enemyClassSize',
+                enemyClass: 'heavy'
+            },
+            {
+                name: 'Elite Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemyClassSize('elite') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemySizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'enemyClassSize',
+                enemyClass: 'elite'
+            },
+            {
+                name: 'Capital Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemyClassSize('capital') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getEnemySizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'enemyClassSize',
+                enemyClass: 'capital'
+            },
+            {
+                name: 'Player Shots',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSize('player') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'shotSize',
+                shotKind: 'player'
+            },
+            {
+                name: 'Enemy Shots',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSize('enemy') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'shotSize',
+                shotKind: 'enemy'
+            },
+            {
+                name: 'Boss Shots',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSize('boss') : 'L',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getShotSizeOptions()
+                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                type: 'shotSize',
+                shotKind: 'boss'
+            },
+            {
                 name: 'BG Parallax',
                 value: (typeof VFBgMouseParallax !== 'undefined')
                     ? VFBgMouseParallax.getIntensity()

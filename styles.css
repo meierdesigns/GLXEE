@@ -890,6 +890,128 @@ html[data-vf-arcade="on"] .settings-row-value {
     flex-shrink: 0;
 }
 
+.gi-size-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    background: var(--ui-surface, #0a0c10);
+    color: var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-border, var(--color-primary));
+    font-family: var(--ui-font-family);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    cursor: pointer;
+    line-height: 1.2;
+}
+.gi-size-btn:hover,
+.gi-size-btn:focus-visible,
+.gi-size-btn.is-active {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    color: var(--color-text, #fff);
+    outline: none;
+}
+
+.enemy-size-overlay {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 3200;
+    pointer-events: none;
+    background: transparent;
+}
+.enemy-size-overlay.hidden { display: none; }
+.enemy-size-panel {
+    pointer-events: auto;
+    min-width: 220px;
+    max-width: min(280px, 42vw);
+    background: color-mix(in srgb, #05060a 92%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--color-border, var(--color-primary));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    padding: 10px 12px 12px;
+    font-family: var(--ui-font-family);
+    color: var(--color-text, #e8e8e8);
+}
+.enemy-size-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.enemy-size-head strong {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--color-primary);
+}
+.enemy-size-close {
+    background: transparent;
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    padding: 0;
+}
+.enemy-size-close:hover { background: color-mix(in srgb, var(--color-primary) 25%, transparent); }
+.enemy-size-hint {
+    margin: 0 0 8px;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    color: color-mix(in srgb, var(--color-text) 65%, transparent);
+    text-transform: uppercase;
+}
+.enemy-size-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.enemy-size-section {
+    margin-top: 6px;
+    padding-top: 4px;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: color-mix(in srgb, var(--color-primary) 80%, transparent);
+    text-transform: uppercase;
+}
+.enemy-size-section:first-child { margin-top: 0; padding-top: 0; }
+.enemy-size-row {
+    display: grid;
+    grid-template-columns: 1fr 28px 36px 28px;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 0;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.enemy-size-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--color-text);
+}
+.enemy-size-value {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+.enemy-size-step {
+    background: var(--ui-surface, #0a0c10);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 11px;
+    height: 24px;
+    cursor: pointer;
+    padding: 0;
+}
+.enemy-size-step:hover {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
 .game-info-planet {
     display: flex;
     align-items: center;

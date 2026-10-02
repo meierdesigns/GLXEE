@@ -4,9 +4,9 @@
  * Runtime explosion player — particles + timed ring bursts from presets.
  */
 // Velocity kept per frame by explosion particles: max spread ≈ speed / (1 − drag).
-const EXPLOSION_PARTICLE_DRAG = 0.9;
+const EXPLOSION_PARTICLE_DRAG = 0.86;
 // Largest ring base size in playfield pixels.
-const EXPLOSION_MAX_BASE = 36;
+const EXPLOSION_MAX_BASE = 22;
 
 class ExplosionSystem {
     constructor() {

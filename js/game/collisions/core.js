@@ -89,7 +89,7 @@ class CollisionManager {
             }
             if (typeof soundManager !== 'undefined') soundManager.playHurt();
             if (typeof graphicsManager !== 'undefined') {
-                graphicsManager.createHitEffect(sx, sy, 14);
+                graphicsManager.createHitEffect(sx, sy, 6);
             }
             const killed = sides[j];
             sides.splice(j, 1);
@@ -127,7 +127,7 @@ class CollisionManager {
                         else soundManager.playHit();
                     }
                     if (typeof graphicsManager !== 'undefined') {
-                        graphicsManager.createHitEffect(sx, sy, 8);
+                        graphicsManager.createHitEffect(sx, sy, 4);
                     }
                     if (killedByHit) {
                         const killed = sides[j];
@@ -189,11 +189,12 @@ class CollisionManager {
                     const cfg = enemyConfigManager.getConfig(typeId);
                     if (cfg && cfg.explosionId) enemyExplosionId = cfg.explosionId;
                 }
-                this.createExplosion(enemyX, enemyY, enemyDefeated ? enemyExplosionId : 'small_pop');
+                this.createExplosion(enemyX, enemyY, enemyDefeated ? enemyExplosionId : 'small_pop',
+                    enemyDefeated ? null : { scale: 0.45 });
 
                 // Create hit particles
                 if (typeof graphicsManager !== 'undefined' && !enemyDefeated) {
-                    graphicsManager.createHitEffect(enemyX, enemyY, 12);
+                    graphicsManager.createHitEffect(enemyX, enemyY, 5);
                 }
 
                 // Enemy will start exploding, victory will be shown after explosion
@@ -229,7 +230,7 @@ class CollisionManager {
 
                 // Create hit particles
                 if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(playerX, playerY, 8);
+                    graphicsManager.createHitEffect(playerX, playerY, 4);
                 }
 
                 if (typeof soundManager !== 'undefined' && damage > 0) {

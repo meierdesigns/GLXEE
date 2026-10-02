@@ -6,7 +6,7 @@
  */
 class ExplosionConfigManager {
     constructor() {
-        this.storageKey = 'vf_explosion_configs_v1';
+        this.storageKey = 'vf_explosion_configs_v2';
         this.soundOptions = ['explosion', 'kill', 'hit', 'none'];
         this.configs = this.createDefaults();
         this.load();
@@ -47,15 +47,15 @@ class ExplosionConfigManager {
             small_pop: this.makePreset({
                 id: 'small_pop',
                 name: 'Small Pop',
-                particleCount: 8,
-                particleSpeed: 2,
-                particleLife: 28,
-                particleSize: 1.5,
+                particleCount: 5,
+                particleSpeed: 1.15,
+                particleLife: 18,
+                particleSize: 1.2,
                 colors: ['var(--color-highlight)', 'var(--color-particle)'],
                 rings: 1,
-                ringDurationMs: 350,
-                ringScale: 0.6,
-                sparkles: 3,
+                ringDurationMs: 220,
+                ringScale: 0.35,
+                sparkles: 1,
                 sound: 'hit',
                 screenShake: 0
             }),

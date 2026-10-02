@@ -109,15 +109,18 @@ extendClass(CollisionManager, {
         }
     },
 
-    createExplosion(x, y, presetId) {
+    createExplosion(x, y, presetId, options) {
         const id = presetId || 'default';
+        const opts = Object.assign({ silent: true }, options || {});
+        // Hit pops stay compact; death bursts keep full preset size.
+        if (id === 'small_pop' && opts.scale == null) opts.scale = 0.55;
         if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
-            explosionSystem.play(id, x, y, { silent: true });
+            explosionSystem.play(id, x, y, opts);
             return;
         }
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
-            graphicsManager.createHitEffect(x, y, 14, 'var(--color-explosion)');
-            graphicsManager.createHitEffect(x, y, 8, 'var(--color-highlight)');
+            const n = Math.max(3, Math.round(6 * (opts.scale != null ? opts.scale : 1)));
+            graphicsManager.createHitEffect(x, y, n, 'var(--color-explosion)');
             return;
         }
         if (game && game.renderManager && game.renderManager.ctx) {
@@ -127,34 +130,37 @@ extendClass(CollisionManager, {
                 color = getComputedStyle(document.documentElement).getPropertyValue('--color-highlight').trim() || color;
             } catch (e) { /* ignore */ }
             ctx.fillStyle = color;
-            ctx.fillRect(x - 5, y - 5, 30, 30);
+            ctx.fillRect(x - 2, y - 2, 8, 8);
         }
     },
 
     createDetailedHitEffect(x, y, effectType, presetId) {
         if (effectType === 'destroy' && typeof explosionSystem !== 'undefined') {
-            explosionSystem.play(presetId || 'asteroid_burst', x, y, { silent: true });
+            explosionSystem.play(presetId || 'asteroid_burst', x, y, { silent: true, scale: 0.85 });
             return;
         }
+        // Light hits: small particle flecks only — no stacked ring burst.
         if (typeof graphicsManager !== 'undefined') {
             switch (effectType) {
                 case 'reflect':
-                    graphicsManager.createHitEffect(x, y, 8, 'var(--color-highlight)');
+                    graphicsManager.createHitEffect(x, y, 4, 'var(--color-highlight)');
                     break;
                 case 'damage':
-                    graphicsManager.createHitEffect(x, y, 10, 'var(--color-warning)');
+                    graphicsManager.createHitEffect(x, y, 5, 'var(--color-warning)');
                     break;
                 case 'destroy':
-                    graphicsManager.createHitEffect(x, y, 15, 'var(--color-explosion)');
+                    graphicsManager.createHitEffect(x, y, 8, 'var(--color-explosion)');
                     break;
                 case 'impact':
-                    graphicsManager.createHitEffect(x, y, 6, 'var(--color-text)');
+                    graphicsManager.createHitEffect(x, y, 3, 'var(--color-text)');
                     break;
                 default:
-                    graphicsManager.createHitEffect(x, y, 8);
+                    graphicsManager.createHitEffect(x, y, 4);
             }
         }
-
-        this.createExplosion(x, y, presetId || 'small_pop');
+        // Tiny ring only when an explicit preset is requested.
+        if (presetId) {
+            this.createExplosion(x, y, presetId, { scale: 0.45 });
+        }
     },
 });

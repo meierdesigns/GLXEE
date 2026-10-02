@@ -51,6 +51,25 @@ const VFStartIntro = {
 
     chime() {
         try {
+            // Creating AudioContext before any user gesture logs a console
+            // warning and stays suspended — skip until the page is unlocked.
+            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+            if (typeof soundManager !== 'undefined' && soundManager.ensureContext) {
+                const ctx = soundManager.ensureContext();
+                if (!ctx) return;
+                [[1046.5, 0, 0.09], [2093, 0.09, 0.5]].forEach(([f, at, len]) => {
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = 'square';
+                    o.frequency.value = f;
+                    g.gain.setValueAtTime(0.06, ctx.currentTime + at);
+                    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + len);
+                    o.connect(g).connect(ctx.destination);
+                    o.start(ctx.currentTime + at);
+                    o.stop(ctx.currentTime + at + len + 0.05);
+                });
+                return;
+            }
             const AC = window.AudioContext || window.webkitAudioContext;
             if (!AC) return;
             const ac = new AC();

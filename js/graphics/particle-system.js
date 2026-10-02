@@ -16,12 +16,12 @@ class ParticleSystem {
         } else if (colorOrOpts) {
             singleColor = colorOrOpts;
         }
-        const baseSpeed = opts && opts.speed != null ? Number(opts.speed) : 2.5;
-        const baseLife = opts && opts.life != null ? Number(opts.life) : 40;
-        const baseSize = opts && opts.size != null ? Number(opts.size) : 2;
+        const baseSpeed = opts && opts.speed != null ? Number(opts.speed) : 1.35;
+        const baseLife = opts && opts.life != null ? Number(opts.life) : 22;
+        const baseSize = opts && opts.size != null ? Number(opts.size) : 1.4;
         const colorList = opts && Array.isArray(opts.colors) ? opts.colors : null;
         // Per-frame velocity damping (1 = none): bounds how far a burst spreads.
-        const drag = opts && opts.drag != null ? Math.max(0.5, Math.min(1, Number(opts.drag))) : 1;
+        const drag = opts && opts.drag != null ? Math.max(0.5, Math.min(1, Number(opts.drag))) : 0.88;
         const n = Math.max(0, Math.round(count));
 
         for (let i = 0; i < n; i++) {

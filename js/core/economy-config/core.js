@@ -111,35 +111,44 @@ class EconomyConfig {
         this.maxShipFrameLevel = 8;
         this.moduleUpgradeDefs = {
             weapons: {
-                power: { label: 'POWER', desc: '+Damage', maxLevel: 3 },
-                cyclic: { label: 'CYCLIC', desc: '−Cooldown', maxLevel: 3 },
-                barrel: { label: 'BARREL', desc: '+Projectiles / spread', maxLevel: 3 }
+                power: { label: 'POWER', desc: '+Damage (scales hard at high L)', maxLevel: 5, costMul: 1.2 },
+                cyclic: { label: 'CYCLIC', desc: '−Cooldown', maxLevel: 5, costMul: 1.0 },
+                barrel: { label: 'BARREL', desc: '+Projectiles / spread', maxLevel: 5, costMul: 1.4 }
             },
             defenses: {
-                capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 3 },
-                harden: { label: 'HARDEN', desc: 'Damage reduction', maxLevel: 3 },
-                recover: { label: 'RECOVER', desc: '+Regen', maxLevel: 3 }
+                capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.15 },
+                harden: { label: 'HARDEN', desc: 'Damage reduction', maxLevel: 5, costMul: 1.35 },
+                recover: { label: 'RECOVER', desc: '+Regen', maxLevel: 5, costMul: 0.95 }
             },
             abilities: {
-                efficiency: { label: 'EFFICIENCY', desc: '−Cooldown', maxLevel: 3 },
-                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 3 },
-                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 3 }
+                efficiency: { label: 'EFFICIENCY', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.3 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
             },
             charge: {
-                focus: { label: 'FOCUS', desc: '−Charge time (shot & drive)', maxLevel: 3 },
-                output: { label: 'OUTPUT', desc: '+Charge power / shield fill / burst', maxLevel: 3 },
-                ballast: { label: 'BALLAST', desc: '−Slowdown while drive-charging', maxLevel: 3 }
+                focus: { label: 'FOCUS', desc: '−Charge time (shot & drive)', maxLevel: 5, costMul: 1.15 },
+                output: { label: 'OUTPUT', desc: '+Charge power / shield fill / burst', maxLevel: 5, costMul: 1.4 },
+                ballast: { label: 'BALLAST', desc: '−Slowdown while drive-charging', maxLevel: 5, costMul: 0.9 }
             },
             energy: {
-                capacity: { label: 'CAPACITY', desc: '+Energy pool', maxLevel: 3 },
-                regen: { label: 'REGEN', desc: '+Energy recharge', maxLevel: 3 },
-                efficiency: { label: 'EFFICIENCY', desc: '−Power drain', maxLevel: 3 }
+                capacity: { label: 'CAPACITY', desc: '+Energy pool', maxLevel: 5, costMul: 1.2 },
+                regen: { label: 'REGEN', desc: '+Energy recharge', maxLevel: 5, costMul: 1.1 },
+                efficiency: { label: 'EFFICIENCY', desc: '−Power drain', maxLevel: 5, costMul: 1.25 }
             },
             collector: {
-                radius: { label: 'RADIUS', desc: '+Pickup collect radius', maxLevel: 5 },
-                yield: { label: 'YIELD', desc: '+Resources per kill drop', maxLevel: 5 },
-                magnet: { label: 'MAGNET', desc: '+Pull strength toward ship', maxLevel: 5 }
+                radius: { label: 'RADIUS', desc: '+Pickup collect radius', maxLevel: 6, costMul: 0.85 },
+                yield: { label: 'YIELD', desc: '+Resources per kill drop', maxLevel: 6, costMul: 1.25 },
+                magnet: { label: 'MAGNET', desc: '+Pull strength toward ship', maxLevel: 6, costMul: 1.0 }
             }
+        };
+        /** Category base materials for module-type upgrades (scaled by level + track). */
+        this.moduleUpgradeCatBase = {
+            weapons: { scrap: 48, ore: 14 },
+            defenses: { scrap: 42, ore: 22 },
+            abilities: { scrap: 55, ore: 12 },
+            charge: { scrap: 60, ore: 16 },
+            energy: { scrap: 50, ore: 18 },
+            collector: { scrap: 36, ore: 14 }
         };
         /** Base pixel radius for collecting mission resource pickups. */
         this.collectBaseRadius = 32;
@@ -255,31 +264,39 @@ class EconomyConfig {
     getModuleUpgradeCost(category, track, nextLevel) {
         const cat = this.moduleUpgradeDefs[category];
         if (!cat || !cat[track]) return null;
-        const max = cat[track].maxLevel;
+        const meta = cat[track];
+        const max = meta.maxLevel;
         const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
         if (lv > max) return null;
+        const base = this.moduleUpgradeCatBase[category] || { scrap: 45, ore: 15 };
+        const trackMul = Number(meta.costMul) || 1;
+        // Progressive curve: L1 cheap & distinct, later levels climb steeply.
+        const prog = Math.pow(lv, 1.55);
         const cost = {
-            scrap: 30 + lv * 25,
-            ore: 8 + lv * 10
+            scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
+            ore: Math.max(0, Math.round(base.ore * trackMul * prog))
         };
         if (category === 'weapons') {
-            if (lv >= 2) cost.crystal = 12 + lv * 8;
+            if (lv >= 2) cost.crystal = Math.round((10 + lv * 9) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((8 + lv * 6) * trackMul);
         } else if (category === 'defenses') {
-            if (lv >= 2) cost.ore = (cost.ore || 0) + 10;
-            if (lv >= 2) cost.crystal = 10 + lv * 6;
+            cost.ore = Math.round(cost.ore * 1.15);
+            if (lv >= 2) cost.crystal = Math.round((8 + lv * 7) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((6 + lv * 5) * trackMul);
         } else if (category === 'charge') {
-            if (lv >= 2) cost.crystal = 14 + lv * 9;
-            if (lv >= 3) cost.voltex = 14;
+            if (lv >= 2) cost.crystal = Math.round((12 + lv * 10) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((10 + lv * 7) * trackMul);
         } else if (category === 'energy') {
-            if (lv >= 2) cost.crystal = 14 + lv * 8;
-            if (lv >= 3) cost.voltex = 10;
+            if (lv >= 2) cost.crystal = Math.round((11 + lv * 9) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((8 + lv * 6) * trackMul);
         } else if (category === 'collector') {
-            if (lv >= 2) cost.ore = (cost.ore || 0) + 8 + lv * 6;
-            if (lv >= 2) cost.crystal = 10 + lv * 7;
-            if (lv >= 4) cost.voltex = 8 + lv * 4;
+            cost.ore = Math.round(cost.ore + lv * 6 * trackMul);
+            if (lv >= 2) cost.crystal = Math.round((8 + lv * 7) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((6 + lv * 5) * trackMul);
         } else {
-            if (lv >= 2) cost.crystal = 15 + lv * 10;
-            if (lv >= 3) cost.voltex = 12;
+            // abilities
+            if (lv >= 2) cost.crystal = Math.round((14 + lv * 11) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((10 + lv * 8) * trackMul);
         }
         return cost;
     }

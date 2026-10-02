@@ -9,6 +9,8 @@ extendClass(HomeStationUI, {
             || typeof profileManager === 'undefined' || !profileManager.getShipAreaLevels) return '';
         const slm = shipLoadoutManager;
         const wallet = profile.resources || {};
+        const levels = profileManager.getShipAreaLevels(shipId, profile);
+        const max = profileManager.maxShipAreaLevel();
         const kindsIn = { front: 'NOSE WEAPON', center: 'DEFENSE · ENERGY', back: 'ABILITY', wing: 'WING WEAPONS (PAIRS)' };
         return slm.getShipAreas().map((area) => {
             const lv = levels[area.id] || 0;

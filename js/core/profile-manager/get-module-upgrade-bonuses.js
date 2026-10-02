@@ -45,24 +45,32 @@ extendClass(ProfileManager, {
         const colRad = this.getModuleUpgradeLevel('collector', 'radius', p);
         const colYld = this.getModuleUpgradeLevel('collector', 'yield', p);
         const colMag = this.getModuleUpgradeLevel('collector', 'magnet', p);
+        // Progressive stack: early levels mild, late levels punch harder.
+        const ramp = (lv, base, accel) => {
+            const n = Math.max(0, Math.round(Number(lv) || 0));
+            if (n <= 0) return 0;
+            let total = 0;
+            for (let i = 1; i <= n; i++) total += base + (i - 1) * accel;
+            return total;
+        };
         return {
-            weaponDamageMul: 1 + wPow * 0.08,
-            weaponCooldownMul: Math.max(0.55, 1 - wCyc * 0.07),
-            weaponProjectileBonus: wBar,
-            defenseCapacityMul: 1 + dCap * 0.1,
-            defenseHarden: dHard * 0.04,
-            defenseRegenMul: 1 + dRec * 0.12,
-            abilityCooldownMul: Math.max(0.55, 1 - aEff * 0.07),
-            abilityPotencyMul: 1 + aPot * 0.1,
-            abilityDurationMul: 1 + aDur * 0.1,
+            weaponDamageMul: 1 + ramp(wPow, 0.07, 0.03),
+            weaponCooldownMul: Math.max(0.48, 1 - ramp(wCyc, 0.06, 0.02)),
+            weaponProjectileBonus: wBar >= 5 ? wBar + 1 : wBar,
+            defenseCapacityMul: 1 + ramp(dCap, 0.08, 0.035),
+            defenseHarden: Math.min(0.35, ramp(dHard, 0.035, 0.015)),
+            defenseRegenMul: 1 + ramp(dRec, 0.1, 0.04),
+            abilityCooldownMul: Math.max(0.48, 1 - ramp(aEff, 0.06, 0.02)),
+            abilityPotencyMul: 1 + ramp(aPot, 0.09, 0.035),
+            abilityDurationMul: 1 + ramp(aDur, 0.08, 0.03),
             chargeFocus: cFoc,
             chargeOutput: cOut,
             chargeBallast: cBal,
-            energyCapacityBonus: eCap * 25,
-            energyRegenBonus: eReg * 3,
-            energyDrainMul: Math.max(0.4, 1 - eEff * 0.12),
-            collectRadiusBonus: colRad * 14,
-            collectYieldMul: 1 + colYld * 0.18,
+            energyCapacityBonus: Math.round(ramp(eCap, 22, 10)),
+            energyRegenBonus: Math.round(ramp(eReg, 2.5, 1.2)),
+            energyDrainMul: Math.max(0.35, 1 - ramp(eEff, 0.1, 0.035)),
+            collectRadiusBonus: Math.round(ramp(colRad, 12, 5)),
+            collectYieldMul: 1 + ramp(colYld, 0.14, 0.06),
             collectMagnet: colMag
         };
     },

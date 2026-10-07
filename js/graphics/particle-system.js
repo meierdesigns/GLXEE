@@ -108,25 +108,38 @@ class ParticleSystem {
 
     render(ctx) {
         ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
         for (const particle of this.particles) {
             const alpha = Math.max(0.4, particle.life / particle.maxLife);
-            const s = Math.max(2, Math.ceil(particle.size));
-            ctx.globalAlpha = alpha * 0.5;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(
-                Math.floor(particle.x - s / 2) - 1,
-                Math.floor(particle.y - s / 2) - 1,
-                s + 2,
-                s + 2
-            );
-            ctx.globalAlpha = alpha;
-            ctx.fillStyle = particle.color;
-            ctx.fillRect(
-                Math.floor(particle.x - s / 2),
-                Math.floor(particle.y - s / 2),
-                s,
-                s
-            );
+            // VOXEL: default one lattice cell; fine flecks (size < cell) use half-cell.
+            let s;
+            let snap = cell;
+            if (cell) {
+                if (particle.size > 0 && particle.size < cell * 0.85) {
+                    snap = Math.max(1, cell * 0.5);
+                    s = snap;
+                } else {
+                    s = cell;
+                }
+            } else {
+                s = Math.max(2, Math.ceil(particle.size));
+            }
+            const px = cell ? Math.round((particle.x - s / 2) / snap) * snap : Math.floor(particle.x - s / 2);
+            const py = cell ? Math.round((particle.y - s / 2) / snap) * snap : Math.floor(particle.y - s / 2);
+            if (!cell) {
+                ctx.globalAlpha = alpha * 0.5;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(px - 1, py - 1, s + 2, s + 2);
+            }
+            if (cv && cv.fill) {
+                cv.fill(ctx, px, py, s, s, particle.color, alpha);
+            } else {
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = particle.color;
+                ctx.fillRect(px, py, s, s);
+            }
         }
         ctx.restore();
     }

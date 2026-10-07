@@ -17,8 +17,11 @@ extendClass(GraphicsManager, {
     drawShieldHull(ctx, entity, ratio, flip = false, model = null, opts = null) {
         if (!ctx || !entity || !(ratio > 0.01)) return;
         // Gap and rim in voxels (px values only size the padding; the ship's
-        // voxel is at most MAX_CELL px here).
-        const MAX_CELL = 8;
+        // voxel is at most MAX_CELL px here). Prefer the shared combat lattice.
+        const sharedCell = (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell)
+            ? window.combatVoxels.cell()
+            : null;
+        const MAX_CELL = sharedCell || 8;
         const gapCells = 1;  // freiraum between hull and shield rim
         const thickCells = Math.max(1, Math.round(((opts && opts.thick) || 2) / 2));
         const pulse = (opts && opts.pulse != null) ? opts.pulse : 1;

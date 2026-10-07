@@ -220,10 +220,15 @@ extendClass(ShipAssetLoader, {
         return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     },
 
-    /** Fill one clean, axis-aligned 2D voxel cell. */
+    /** Fill one clean, axis-aligned cell — snapped to backing pixels (no blur). */
     fillVoxelCell(ctx, x, y, w, h, baseColor) {
+        const d = this.getDeviceScale ? this.getDeviceScale() : 1;
+        const x0 = Math.round(x * d);
+        const y0 = Math.round(y * d);
+        const x1 = Math.round((x + w) * d);
+        const y1 = Math.round((y + h) * d);
         ctx.fillStyle = baseColor;
-        ctx.fillRect(x, y, w, h);
+        ctx.fillRect(x0 / d, y0 / d, Math.max(1, x1 - x0) / d, Math.max(1, y1 - y0) / d);
     },
 
     /**
@@ -244,8 +249,9 @@ extendClass(ShipAssetLoader, {
             ctx.fillRect(x, y, width, height);
             return;
         }
-        // Hull-part palettes carry accent shades: break up flat accent blocks.
-        if (colors && colors[6] && colors[7]) sprite = this.shadeAccentBlocks(sprite);
+        // Accent bevels soften large blocks — skip in VOXEL so cells stay flat.
+        const voxel = this.isVoxelStyle && this.isVoxelStyle();
+        if (!voxel && colors && colors[6] && colors[7]) sprite = this.shadeAccentBlocks(sprite);
         const cols = sprite[0].length;
         const rows = sprite.length;
         // Rasterize every generated hull part into equal square 2D voxels.
@@ -279,17 +285,49 @@ extendClass(ShipAssetLoader, {
             }
             return color;
         };
+        // Horizontal RLE: merge consecutive same-colour cells into one fill.
         for (let row = 0; row < rows; row++) {
+            let runColor = null;
+            let runCol0 = 0;
+            let runLen = 0;
+            const flush = () => {
+                if (!runColor || runLen <= 0) return;
+                if (cellPx) {
+                    this.fillVoxelCell(
+                        ctx,
+                        originX + runCol0 * cell,
+                        originY + row * cell,
+                        cell * runLen,
+                        cell,
+                        runColor
+                    );
+                } else {
+                    const left = originX + Math.floor(runCol0 * cell);
+                    const top = originY + Math.floor(row * cell);
+                    const right = originX + Math.ceil((runCol0 + runLen) * cell);
+                    const bottom = originY + Math.ceil((row + 1) * cell);
+                    this.fillVoxelCell(ctx, left, top, right - left, bottom - top, runColor);
+                }
+                runColor = null;
+                runLen = 0;
+            };
             for (let col = 0; col < cols; col++) {
                 const pixel = sprite[row][col];
-                if (!pixel) continue;
+                if (!pixel) {
+                    flush();
+                    continue;
+                }
                 const color = resolve(palette[pixel] || '#888888');
-                const left = originX + Math.floor(col * cell);
-                const top = originY + Math.floor(row * cell);
-                const right = originX + Math.ceil((col + 1) * cell);
-                const bottom = originY + Math.ceil((row + 1) * cell);
-                this.fillVoxelCell(ctx, left, top, right - left, bottom - top, color);
+                if (color === runColor) {
+                    runLen++;
+                } else {
+                    flush();
+                    runColor = color;
+                    runCol0 = col;
+                    runLen = 1;
+                }
             }
+            flush();
         }
     },
 

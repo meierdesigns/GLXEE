@@ -33,7 +33,10 @@ extendClass(ShipAssetLoader, {
         const cy = pivotY != null ? pivotY : y + height * 0.5;
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
-        const cell = Math.max(1, Math.round(size));
+        // Keep the lattice cell size — rounding up to ≥1 logical px doubled
+        // fine combat cells and made rotated wings look soft / oversized.
+        const d = this.getDeviceScale ? this.getDeviceScale() : 1;
+        const cell = Math.max(1 / d, Math.round(size * d) / d);
         // Scan the destination area the rotated art actually reaches. Iterating
         // the unrotated grid box was fine while it spun around its own centre,
         // but a root pivot swings the span well outside that box and the tip
@@ -68,9 +71,7 @@ extendClass(ShipAssetLoader, {
                 if (sourceCol < 0 || sourceCol >= cols || sourceRow < 0 || sourceRow >= rows) continue;
                 const pixel = grid[sourceRow][sourceCol];
                 if (!pixel) continue;
-                const left = Math.round(originX + col * size);
-                const top = Math.round(originY + row * size);
-                this.fillVoxelCell(ctx, left, top, cell, cell, colors[pixel] || '#888888');
+                this.fillVoxelCell(ctx, originX + col * cell, originY + row * cell, cell, cell, colors[pixel] || '#888888');
             }
         }
     },

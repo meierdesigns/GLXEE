@@ -88,12 +88,13 @@ extendClass(PlayerManager, {
 
         this.applyFixedFootprint();
 
-        if (shipModel.minY !== undefined) this.player.minY = shipModel.minY;
-        if (shipModel.maxY !== undefined) this.player.maxY = shipModel.maxY;
-
+        // Full vertical playfield — ignore legacy ship-lane minY (was ~200).
+        this.player.minY = 0;
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             this.player.maxY = canvasHeight - this.player.height;
+        } else if (shipModel.maxY !== undefined) {
+            this.player.maxY = shipModel.maxY;
         }
     },
 

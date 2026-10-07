@@ -57,7 +57,7 @@ export const playerHeavyFighterModel = {
     damage: 45,        // High damage
     
     // Movement constraints
-    minY: 200,
+    minY: 0,
     maxY: 284,
     
     // Weapons - Heavy Fighter specializes in area suppression

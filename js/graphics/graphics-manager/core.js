@@ -129,6 +129,41 @@ class GraphicsManager {
             overlayIntensity = colorManager.getCurrentOverlayIntensity();
         }
 
+        const voxel = typeof window !== 'undefined' && window.combatVoxels
+            && window.combatVoxels.active && window.combatVoxels.active();
+        // VOXEL: bake hull once and blit — avoids per-cell fillRect every frame.
+        if (voxel && this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+            const cell = window.combatVoxels.cell() || 1;
+            const dw = Math.max(1, Math.ceil(mw * drawScale));
+            const dh = Math.max(1, Math.ceil(mh * drawScale));
+            const key = String(model.id || model.name || 'player')
+                + '|' + cell + '|' + dw + 'x' + dh
+                + '|' + String(colorOverlay || '') + '|' + String(overlayIntensity || 0);
+            this._voxelShipBake = this._voxelShipBake || Object.create(null);
+            let baked = this._voxelShipBake[key];
+            if (!baked || baked.width !== dw || baked.height !== dh) {
+                baked = document.createElement('canvas');
+                baked.width = dw;
+                baked.height = dh;
+                const bctx = baked.getContext('2d');
+                if (bctx) {
+                    bctx.imageSmoothingEnabled = false;
+                    this.shipAssetLoader.renderShip(
+                        bctx, model, 0, 0, drawScale, colorOverlay, overlayIntensity,
+                        { showThrusterGlow: false, allowColorMountSprites: true }
+                    );
+                }
+                this._voxelShipBake[key] = baked;
+                const keys = Object.keys(this._voxelShipBake);
+                if (keys.length > 24) {
+                    delete this._voxelShipBake[keys[0]];
+                }
+            }
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(baked, Math.round(x), Math.round(y));
+            return;
+        }
+
         // Use asset loader if available, otherwise fallback to old system
         if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
             this.shipAssetLoader.renderShip(
@@ -242,13 +277,23 @@ class GraphicsManager {
             : loader.getWeaponTemplate(weaponId, style, false);
         if (!tpl || !tpl.length) return;
         const ramp = loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, weaponId) : null;
-        const px = 1;
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        const px = cell || 1;
         const gw = cols * px;
         const gh = rows * px;
-        const gx = Math.round(enemy.x + enemy.width / 2 - gw / 2);
+        let gx = enemy.x + enemy.width / 2 - gw / 2;
         // Breech tucked under the hull, barrel sticking out below it.
-        const gy = Math.round(enemy.y + enemy.height - gh * (side ? 0.8 : 0.45));
+        let gy = enemy.y + enemy.height - gh * (side ? 0.8 : 0.45);
+        if (cell) {
+            gx = Math.round(gx / cell) * cell;
+            gy = Math.round(gy / cell) * cell;
+        } else {
+            gx = Math.round(gx);
+            gy = Math.round(gy);
+        }
         ctx.save();
+        ctx.imageSmoothingEnabled = false;
         for (let r = 0; r < tpl.length; r++) {
             for (let c = 0; c < tpl[r].length; c++) {
                 const idx = tpl[r][c];
@@ -257,9 +302,14 @@ class GraphicsManager {
                     || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
                     || (loader.getHullMountShade && loader.getHullMountShade(idx));
                 if (!color) continue;
-                ctx.fillStyle = color;
                 // Flip vertically: template muzzle is at the top, enemy guns face down.
-                ctx.fillRect(gx + c * px, gy + (tpl.length - 1 - r) * px, px, px);
+                const bx = gx + c * px;
+                const by = gy + (tpl.length - 1 - r) * px;
+                if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
+                else {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(bx, by, px, px);
+                }
             }
         }
         ctx.restore();

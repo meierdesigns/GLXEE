@@ -20,7 +20,13 @@ extendClass(ShipLoadoutManager, {
             ? factionShipStyles.resolveActiveFaction() : null);
         const factionWeapons = faction && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons
             ? factionShipStyles.getFactionDefaultWeapons(faction) : [];
-        const weapons = factionWeapons.concat(shipWeapons.filter((w) => factionWeapons.indexOf(w) === -1));
+        // A starter part must fit the hull's slots (the faction's standard gun
+        // can be bigger than a fresh S mount); fall back to the basic laser.
+        // A fresh hull's nose gun is a single M mount (see slot-sizes.js).
+        const slotLv = 1;
+        const fits = (w) => !this.getPartSizeLevel || this.getPartSizeLevel('weapon', w) <= slotLv;
+        let weapons = factionWeapons.concat(shipWeapons.filter((w) => factionWeapons.indexOf(w) === -1)).filter(fits);
+        if (!weapons.length) weapons = ['laser'];
         const allAbilities = (cfg && cfg.abilities) ? cfg.abilities.slice() : [];
         const defenses = [];
         const abilities = [];
@@ -97,6 +103,22 @@ extendClass(ShipLoadoutManager, {
             if (!profile.shipLoadouts[id]) {
                 profile.shipLoadouts[id] = this.defaultLoadoutFromShip(id);
                 profileManager.save();
+            }
+            // Parts that never fitted (older default loadouts) are unequipped.
+            const saved = profile.shipLoadouts[id];
+            if (saved && Array.isArray(saved.weaponSlots) && this.getPartSizeLevel) {
+                // No getSlotSizeLevel here: isSplitSlot calls getLoadout and would recurse.
+                const slotLv = (i) => (i === 0 ? 1 : 0) + (this.getSlotUpgradeLevel ? this.getSlotUpgradeLevel(id, 'weapon', i) : 0);
+                let changed = false;
+                saved.weaponSlots = saved.weaponSlots.map((w, i) => {
+                    if (w && this.getPartSizeLevel('weapon', w) >= 2
+                        && slotLv(i) < 2) { changed = true; return null; }
+                    return w;
+                });
+                if (changed) {
+                    saved.weapons = saved.weaponSlots.filter(Boolean);
+                    profileManager.save();
+                }
             }
             // An emptied energy slot stays empty — the player chose that.
             return this.clampLoadoutToCaps(profile.shipLoadouts[id], id, modelClass);

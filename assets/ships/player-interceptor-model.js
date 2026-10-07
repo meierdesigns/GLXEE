@@ -51,7 +51,7 @@ export const playerInterceptorModel = {
     damage: 18,        // Low damage
     
     // Movement constraints
-    minY: 200,
+    minY: 0,
     maxY: 284,
     
     // Weapons - Interceptor specializes in rapid strikes

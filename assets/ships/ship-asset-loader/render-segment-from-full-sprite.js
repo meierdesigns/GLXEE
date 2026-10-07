@@ -4,6 +4,14 @@ import { ShipAssetLoader } from './core.js';
 
 // ShipAssetLoader methods, split from ship-asset-loader.js.
 extendClass(ShipAssetLoader, {
+    /** True when Ship Render is VOXEL (shared combat / preview lattice). */
+    isVoxelStyle() {
+        const g = Number(this.globalVoxelCell);
+        if (Number.isFinite(g) && g > 0) return true;
+        return typeof uiAppearanceManager !== 'undefined'
+            && String(uiAppearanceManager.shipRenderStyle || '').toUpperCase() === 'VOXEL';
+    },
+
     renderSegmentFromFullSprite(ctx, shipModel, seg, x, y, w, h, colorOverlay, overlayIntensity) {
         const rawUv = seg.uv || (typeof shipLoadoutManager !== 'undefined'
             && shipLoadoutManager.segmentUv
@@ -14,8 +22,9 @@ extendClass(ShipAssetLoader, {
         const uv = seg.fullUv ? seg.uv : this.getEdgeCropForSegment(seg, rawUv);
         if (!uv) return false;
 
+        const voxel = this.isVoxelStyle();
         const spriteName = this.getSpriteNameForShip(shipModel);
-        const png = spriteName
+        const png = !voxel && spriteName
             && typeof spriteLoader !== 'undefined'
             && spriteLoader.getSprite
             && spriteLoader.getSprite(spriteName);
@@ -59,11 +68,10 @@ extendClass(ShipAssetLoader, {
         let r0 = Math.floor(uv.y * rows);
         let cw = Math.max(1, Math.floor(uv.w * cols));
         let rh = Math.max(1, Math.floor(uv.h * rows));
-        // Supersampled playfield: refine the low-res sprite with Scale2x
-        // until one voxel is ~2-3 backing pixels, so combat ships show far
-        // more (and smoother-edged) voxels than their authored grid.
         const d = this.getDeviceScale();
-        if (d > 1) {
+        // VOXEL: keep authored pixels as hard NN blocks on the shared lattice —
+        // Scale2x rounds diagonals into a softer, more "filtered" look.
+        if (!voxel && d > 1) {
             let passes = 0;
             while (passes < 3 && (w * d) / (cw * Math.pow(2, passes + 1)) >= 2) passes++;
             if (passes > 0) {
@@ -81,7 +89,6 @@ extendClass(ShipAssetLoader, {
                 rh = sprite.length;
             }
         }
-        const snap = (v) => Math.floor(v * d) / d;
         const colors = shipModel.colors || {};
         const resolve = (color) => {
             if (!color || color === 'transparent') return color;
@@ -95,28 +102,51 @@ extendClass(ShipAssetLoader, {
             }
             return color;
         };
-        // Cover the full segment: leftover edge pixels get an extra cell.
         ctx.save();
+        ctx.imageSmoothingEnabled = false;
         if (seg.mirror) {
             ctx.translate(x + w, y);
             ctx.scale(-1, 1);
             x = 0;
             y = 0;
         }
-        for (let r = 0; r < rh; r++) {
-            const row = sprite[r0 + r];
-            if (!row) continue;
-            const top = snap(y + (r * h) / rh);
-            const bottom = snap(y + ((r + 1) * h) / rh);
-            for (let c = 0; c < cw; c++) {
-                const pixel = row[c0 + c];
-                if (!pixel) continue;
-                let fill = resolve(colors[pixel] || '#888888');
-                fill = this.tintPixelColor(fill, colorOverlay, overlayIntensity);
-                ctx.fillStyle = fill;
-                const left = snap(x + (c * w) / cw);
-                const right = snap(x + ((c + 1) * w) / cw);
-                ctx.fillRect(left, top, Math.max(1 / d, right - left), Math.max(1 / d, bottom - top));
+        if (voxel) {
+            // One hard square per lattice step — same idea as FLAT pixels, just larger.
+            const cell = this.shipVoxelCellAt(shipModel, 1);
+            const originX = this.snapToVoxelLattice(x, cell, 'x');
+            const originY = this.snapToVoxelLattice(y, cell, 'y');
+            const gridCols = Math.max(1, Math.round(w / cell));
+            const gridRows = Math.max(1, Math.round(h / cell));
+            for (let row = 0; row < gridRows; row++) {
+                const srcR = r0 + Math.min(rh - 1, Math.floor((row + 0.5) * rh / gridRows));
+                const srcRow = sprite[srcR];
+                if (!srcRow) continue;
+                for (let col = 0; col < gridCols; col++) {
+                    const srcC = c0 + Math.min(cw - 1, Math.floor((col + 0.5) * cw / gridCols));
+                    const pixel = srcRow[srcC];
+                    if (!pixel) continue;
+                    let fill = resolve(colors[pixel] || '#888888');
+                    fill = this.tintPixelColor(fill, colorOverlay, overlayIntensity);
+                    this.fillVoxelCell(ctx, originX + col * cell, originY + row * cell, cell, cell, fill);
+                }
+            }
+        } else {
+            const snap = (v) => Math.floor(v * d) / d;
+            for (let r = 0; r < rh; r++) {
+                const row = sprite[r0 + r];
+                if (!row) continue;
+                const top = snap(y + (r * h) / rh);
+                const bottom = snap(y + ((r + 1) * h) / rh);
+                for (let c = 0; c < cw; c++) {
+                    const pixel = row[c0 + c];
+                    if (!pixel) continue;
+                    let fill = resolve(colors[pixel] || '#888888');
+                    fill = this.tintPixelColor(fill, colorOverlay, overlayIntensity);
+                    ctx.fillStyle = fill;
+                    const left = snap(x + (c * w) / cw);
+                    const right = snap(x + ((c + 1) * w) / cw);
+                    ctx.fillRect(left, top, Math.max(1 / d, right - left), Math.max(1 / d, bottom - top));
+                }
             }
         }
         ctx.restore();
@@ -196,7 +226,10 @@ extendClass(ShipAssetLoader, {
         const cols = rows ? g[0].length : 0;
         if (rows < 3 || cols < 3) return;
         this.applyFactionPlatingPattern(g, silhouette, seedIndex, flipX);
-        this.applySurfaceDetail(g, seedIndex, flipX, symmetric);
+        // VOXEL: keep hard flat colour blocks (no rim/panel soft-volume shading).
+        if (!this.isVoxelStyle()) {
+            this.applySurfaceDetail(g, seedIndex, flipX, symmetric);
+        }
     },
 
     /**
@@ -374,6 +407,26 @@ extendClass(ShipAssetLoader, {
     },
 
     shipVoxelCellAt(shipModel, scale) {
+        // Playfield VOXEL mode: one absolute cell for every ship/module so the
+        // lattice matches terrain / obstacles / debris.
+        let global = Number(this.globalVoxelCell);
+        if (!(Number.isFinite(global) && global > 0)
+            && typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell) {
+            const shared = Number(window.combatVoxels.cell());
+            if (Number.isFinite(shared) && shared > 0) global = shared;
+        }
+        if (!(Number.isFinite(global) && global > 0)) {
+            const fromWin = Number(typeof window !== 'undefined' ? window.PLAYFIELD_VOXEL_CELL : NaN);
+            if (Number.isFinite(fromWin) && fromWin > 0
+                && typeof uiAppearanceManager !== 'undefined'
+                && String(uiAppearanceManager.shipRenderStyle || '').toUpperCase() === 'VOXEL') {
+                global = fromWin;
+            }
+        }
+        if (Number.isFinite(global) && global > 0) {
+            const d = this.getDeviceScale();
+            return Math.max(1 / d, Math.round(global * d) / d);
+        }
         const layout = shipModel && shipModel.layout;
         const loadout = layout && layout.loadout;
         const zoom = Math.max(0.25, Number(scale) || 1);

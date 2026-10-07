@@ -114,7 +114,8 @@ extendClass(ShipLoadoutManager, {
         }
         const sid = String(moduleId || '').toLowerCase();
         if (kind === 'weapon') {
-            if (sid === 'missile' || sid === 'nova') return 2;
+            if (sid === 'nova') return 2;
+            if (sid === 'missile') return 1;
             return this.heavyWeaponIds[sid] ? 1 : 0;
         }
         const integ = this.getModuleIntegration(kind, moduleId) || {};

@@ -66,7 +66,7 @@ export const playerStarfighterModel = {
     damage: 25,        // Moderate damage
     
     // Movement constraints
-    minY: 200,
+    minY: 0,
     maxY: 284,
     
     // Weapons - Starfighter specializes in precision strikes

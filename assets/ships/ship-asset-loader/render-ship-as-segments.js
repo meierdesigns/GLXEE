@@ -83,9 +83,10 @@ extendClass(ShipAssetLoader, {
         segments.sort((a, b) => (order[a.id] || 9) - (order[b.id] || 9));
 
         let drew = false;
+        const voxel = this.isVoxelStyle && this.isVoxelStyle();
         segments.forEach((seg) => {
             const segKey = this.resolveSegmentSpriteKey(shipModel, seg.id);
-            const hasSegPng = segKey
+            const hasSegPng = !voxel && segKey
                 && typeof spriteLoader !== 'undefined'
                 && spriteLoader.getSprite
                 && spriteLoader.getSprite(segKey);

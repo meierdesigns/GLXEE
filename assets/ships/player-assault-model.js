@@ -55,7 +55,7 @@ export const playerAssaultModel = {
     damage: 35,        // Medium damage
     
     // Movement constraints
-    minY: 200,
+    minY: 0,
     maxY: 284,
     
     // Weapons - Assault ship has versatile weapon systems

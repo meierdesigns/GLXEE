@@ -11,7 +11,7 @@ class PlayerManager {
             speed: 4,
             color: 'var(--gray-1000)',
             type: 'spaceship',
-            minY: 200,
+            minY: 0,
             maxY: 276
         };
         this.maxHealth = 100;
@@ -88,44 +88,50 @@ class PlayerManager {
             tetherMul = enemyManager.getTetherSpeedMul();
         }
         const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul;
+        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
+        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
 
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             const canvasWidth = game.internalWidth || game.baseWidth || 200;
-            // Once every enemy is down (victory loot phase) the ship may fly
-            // the whole screen to reach pickups; otherwise it keeps to the
-            // lower two thirds and drifts back there after the phase ends.
-            const freeFlight = !!(game.gameControl && game.gameControl._victoryLootPhase);
-            this.player.minY = freeFlight ? 0 : canvasHeight * 0.33;
+            // Full vertical playfield — upper band is open to the player.
+            this.player.minY = 0;
             this.player.maxY = canvasHeight - this.player.height;
-            if (!freeFlight && this.player.y < this.player.minY) {
-                this.player.y = Math.min(this.player.minY, this.player.y + moveSpeed);
-            }
 
             // The ship's centre (its guns) may reach either edge, so enemies
             // bouncing along the walls stay hittable.
             const halfW = this.player.width / 2;
             // Arrow keys only: A / S / D fire assigned weapon groups.
-            if (keys['ArrowLeft']) {
-                this.player.x = Math.max(-halfW, this.player.x - moveSpeed);
+            // VOXEL: Game-Boy raster — accumulate into whole lattice steps.
+            let dx = 0;
+            let dy = 0;
+            if (keys['ArrowLeft']) dx -= moveSpeed;
+            if (keys['ArrowRight']) dx += moveSpeed;
+            if (keys['ArrowUp']) dy -= moveSpeed;
+            if (keys['ArrowDown']) dy += moveSpeed;
+            if (voxelMove) {
+                cv.stepMove(this.player, dx, dy);
+            } else {
+                this.player.x += dx;
+                this.player.y += dy;
             }
-            if (keys['ArrowRight']) {
-                this.player.x = Math.min(canvasWidth - halfW, this.player.x + moveSpeed);
-            }
+            this.player.x = Math.max(-halfW, Math.min(canvasWidth - halfW, this.player.x));
+            this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
+            if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
-            if (keys['ArrowLeft']) {
-                this.player.x = Math.max(0, this.player.x - moveSpeed);
+            let dx = 0;
+            let dy = 0;
+            if (keys['ArrowLeft']) dx -= moveSpeed;
+            if (keys['ArrowRight']) dx += moveSpeed;
+            if (keys['ArrowUp']) dy -= moveSpeed;
+            if (keys['ArrowDown']) dy += moveSpeed;
+            if (voxelMove) cv.stepMove(this.player, dx, dy);
+            else {
+                this.player.x += dx;
+                this.player.y += dy;
             }
-            if (keys['ArrowRight']) {
-                this.player.x = Math.min(200 - this.player.width, this.player.x + moveSpeed);
-            }
-        }
-
-        if (keys['ArrowUp']) {
-            this.player.y = Math.max(this.player.minY, this.player.y - moveSpeed);
-        }
-        if (keys['ArrowDown']) {
-            this.player.y = Math.min(this.player.maxY, this.player.y + moveSpeed);
+            this.player.x = Math.max(0, Math.min(200 - this.player.width, this.player.x));
+            this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
         }
 
         const diverting = typeof chargeSystem !== 'undefined'
@@ -260,7 +266,7 @@ class PlayerManager {
         this.applyFixedFootprint();
         this.player.x = (canvasWidth / 2) - (this.player.width / 2);
         this.player.y = canvasHeight - this.player.height - 20;
-        this.player.minY = canvasHeight * 0.33;
+        this.player.minY = 0;
         this.player.maxY = canvasHeight - this.player.height;
 
         this.health = this.maxHealth;

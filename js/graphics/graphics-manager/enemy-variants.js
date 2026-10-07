@@ -83,12 +83,17 @@ extendClass(GraphicsManager, {
         out.height = h;
         const o = out.getContext('2d');
         o.imageSmoothingEnabled = false;
-        o.filter = enemy.renegade
-            // Renegade: stripped of faction colours, dark and grimy.
-            ? 'grayscale(0.7) brightness(0.62) contrast(1.25)'
-            : `hue-rotate(${v.hue}deg) brightness(${v.light.toFixed(2)}) saturate(${v.sat.toFixed(2)})`;
+        // CSS canvas filters resample edges — skip in VOXEL so blocks stay hard.
+        const voxel = typeof uiAppearanceManager !== 'undefined'
+            && String(uiAppearanceManager.shipRenderStyle || '').toUpperCase() === 'VOXEL';
+        if (!voxel) {
+            o.filter = enemy.renegade
+                // Renegade: stripped of faction colours, dark and grimy.
+                ? 'grayscale(0.7) brightness(0.62) contrast(1.25)'
+                : `hue-rotate(${v.hue}deg) brightness(${v.light.toFixed(2)}) saturate(${v.sat.toFixed(2)})`;
+        }
         o.drawImage(base, 0, 0);
-        if (!enemy.renegade) this.paintAreaStyles(o, base, w, h, v);
+        if (!voxel && !enemy.renegade) this.paintAreaStyles(o, base, w, h, v);
         o.filter = 'none';
 
         // Paint only on hull pixels.
@@ -202,13 +207,29 @@ extendClass(GraphicsManager, {
     drawRenegadeBeacon(ctx, enemy) {
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         if (Math.floor(t / 350) % 2) return;
-        const x = Math.round(enemy.x + enemy.width / 2);
-        const y = Math.round(enemy.y - 3);
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        let x = enemy.x + enemy.width / 2;
+        let y = enemy.y - 3;
+        const s = cell || 2;
+        if (cell) {
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+        } else {
+            x = Math.round(x);
+            y = Math.round(y);
+        }
         ctx.save();
-        ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - 2, y - 2, 4, 4);
-        ctx.fillStyle = enemy.renegadeColor || '#ff3a2a';
-        ctx.fillRect(x - 1, y - 1, 2, 2);
+        ctx.imageSmoothingEnabled = false;
+        if (cv && cv.fill) {
+            cv.fill(ctx, x - s, y - s, s * 2, s * 2, '#05060a', 1);
+            cv.fill(ctx, x - s / 2, y - s / 2, s, s, enemy.renegadeColor || '#ff3a2a', 1);
+        } else {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 2, y - 2, 4, 4);
+            ctx.fillStyle = enemy.renegadeColor || '#ff3a2a';
+            ctx.fillRect(x - 1, y - 1, 2, 2);
+        }
         ctx.restore();
     },
 });

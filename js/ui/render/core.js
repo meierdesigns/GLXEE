@@ -66,7 +66,15 @@ class RenderManager {
      */
     getRenderScale() {
         const k = Number(window.PLAYFIELD_RENDER_SCALE);
-        return Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+        let scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+        // VOXEL: larger cells already look blocky — less supersampling is enough
+        // and cuts fill/transform cost hard (4× → 1–2× backing store).
+        if (this.isVoxelCombat && this.isVoxelCombat()) {
+            const cell = this.getCombatVoxelCell();
+            if (cell >= 4) scale = Math.min(scale, 1);
+            else if (cell >= 2) scale = Math.min(scale, 2);
+        }
+        return scale;
     }
 
     /** Planet background strength in combat (window.PLAYFIELD_BG_OPACITY). */
@@ -79,6 +87,67 @@ class RenderManager {
     getCombatVoxelDetail() {
         const d = Number(window.PLAYFIELD_VOXEL_DETAIL);
         return Number.isFinite(d) && d > 0 ? d : 0.5;
+    }
+
+    /**
+     * Shared logical voxel cell (px) for the whole playfield when Ship Render
+     * is VOXEL — ships, modules, terrain, obstacles and debris all use this.
+     * Returns null in FLAT mode so per-object sizing stays as before.
+     */
+    getCombatVoxelCell() {
+        const style = (typeof uiAppearanceManager !== 'undefined'
+            && uiAppearanceManager.shipRenderStyle)
+            ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
+            : 'FLAT';
+        if (style !== 'VOXEL') return null;
+        // Prefer the settings value so every draw path shares one lattice.
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getVoxelSize) {
+            const fromUi = Number(uiAppearanceManager.getVoxelSize());
+            if (Number.isFinite(fromUi) && fromUi > 0) return fromUi;
+        }
+        const c = Number(window.PLAYFIELD_VOXEL_CELL);
+        return Number.isFinite(c) && c > 0 ? c : 1;
+    }
+
+    isVoxelCombat() {
+        return this.getCombatVoxelCell() != null;
+    }
+
+    /** Snap a coordinate onto the shared combat voxel lattice. */
+    snapCombat(v, cell) {
+        const c = cell != null ? cell : this.getCombatVoxelCell();
+        if (c == null || !(c > 0)) return Math.round(v);
+        return Math.round(v / c) * c;
+    }
+
+    /** Quantize a size to whole lattice steps (min one cell). */
+    quantizeCombatSize(s, cell) {
+        const c = cell != null ? cell : this.getCombatVoxelCell();
+        if (c == null || !(c > 0)) return Math.max(1, Math.round(s));
+        return Math.max(c, Math.round(s / c) * c);
+    }
+
+    /**
+     * Hard fill on the shared combat lattice (VOXEL) or rounded fillRect (FLAT).
+     * Used by bullets, particles, explosions, pickups, debris — every playfield FX.
+     */
+    fillCombatRect(ctx, x, y, w, h, color, alpha) {
+        if (!ctx) return;
+        const cell = this.getCombatVoxelCell();
+        if (alpha != null) ctx.globalAlpha = alpha;
+        if (color != null) ctx.fillStyle = color;
+        if (cell == null || !(cell > 0)) {
+            ctx.fillRect(
+                Math.round(x), Math.round(y),
+                Math.max(1, Math.round(w)), Math.max(1, Math.round(h))
+            );
+            return;
+        }
+        const sx = Math.round(x / cell) * cell;
+        const sy = Math.round(y / cell) * cell;
+        const sw = Math.max(cell, Math.round(w / cell) * cell);
+        const sh = Math.max(cell, Math.round(h / cell) * cell);
+        ctx.fillRect(sx, sy, sw, sh);
     }
 
     render(ctx = null, width = null, height = null) {
@@ -97,12 +166,17 @@ class RenderManager {
         if (!c) return;
         c.setTransform(k, 0, 0, k, 0, 0);
         c.imageSmoothingEnabled = false;
+        if (c.mozImageSmoothingEnabled !== undefined) c.mozImageSmoothingEnabled = false;
+        if (c.webkitImageSmoothingEnabled !== undefined) c.webkitImageSmoothingEnabled = false;
+        if (c.msImageSmoothingEnabled !== undefined) c.msImageSmoothingEnabled = false;
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;
         const prevScale = loader ? loader.deviceScale : null;
         const prevDetail = loader ? loader.voxelDetail : null;
+        const prevGlobal = loader ? loader.globalVoxelCell : null;
         if (loader) {
             loader.deviceScale = k;
             loader.voxelDetail = this.getCombatVoxelDetail();
+            loader.globalVoxelCell = this.getCombatVoxelCell();
         }
         try {
             return this.renderFrame(c, width || lw, height || lh);
@@ -110,6 +184,7 @@ class RenderManager {
             if (loader) {
                 loader.deviceScale = prevScale;
                 loader.voxelDetail = prevDetail;
+                loader.globalVoxelCell = prevGlobal;
             }
         }
     }
@@ -175,25 +250,37 @@ class RenderManager {
         const t = now - pl.start;
         const maxShift = w * 0.12;
         const clamp = (v) => Math.max(-maxShift, Math.min(maxShift, v));
-        const x = Math.round(w * pl.cx - d / 2 + clamp(pl.vx * t) + Math.sin(now / 40) * 4);
-        const y = Math.round(h - d * pl.show + clamp(pl.vy * t)); // only the limb shows, below the player
+        const cell = this.getCombatVoxelCell();
+        let x = w * pl.cx - d / 2 + clamp(pl.vx * t) + Math.sin(now / 40) * 4;
+        let y = h - d * pl.show + clamp(pl.vy * t); // only the limb shows, below the player
+        let dd = d;
+        if (cell) {
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+            dd = Math.max(cell, Math.round(d / cell) * cell);
+        } else {
+            x = Math.round(x);
+            y = Math.round(y);
+        }
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         // Kept faint: it is scenery, not something to read during a fight.
         ctx.globalAlpha = this.getCombatBackdropOpacity() * 0.45;
-        ctx.drawImage(img, x, y, d, d);
-        // Night-side veil toward the top so ships stay readable.
-        const g = ctx.createLinearGradient(0, y, 0, y + d * 0.3);
-        g.addColorStop(0, 'rgba(0,0,0,0.55)');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.drawImage(img, x, y, dd, dd);
         ctx.restore();
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y, d, d * 0.3);
-        ctx.restore();
+        // Soft night veil only in FLAT — VOXEL keeps hard planet pixels.
+        if (!cell) {
+            const g = ctx.createLinearGradient(0, y, 0, y + dd * 0.3);
+            g.addColorStop(0, 'rgba(0,0,0,0.55)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x + dd / 2, y + dd / 2, dd / 2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.fillStyle = g;
+            ctx.fillRect(x, y, dd, dd * 0.3);
+            ctx.restore();
+        }
     }
 
     renderFrame(ctx = null, width = null, height = null) {
@@ -239,6 +326,10 @@ class RenderManager {
             ? obstacleManager.getFogObstacles()
             : ((obstacleManager.getObstacles && obstacleManager.getObstacles()) || []).filter((o) => o && o.isFog);
 
+        // Obstacles tagged wallDepth:'under' sit under the canyon walls.
+        this.drawSolidObstacles(ctx, fogList, player, 'under');
+        if (this.drawScrollTerrainWalls) this.drawScrollTerrainWalls(ctx);
+
         // Fog / nebula first (always drawn)
         fogList.forEach((fog) => this.drawObstacleSprite(ctx, fog));
 
@@ -275,16 +366,37 @@ class RenderManager {
                 if (this.isOccludedByFog(player, side, fogList)) return;
                 if (side.repairBeamActive && enemyManager.getEnemy && enemyManager.getEnemy()) {
                     const champ = enemyManager.getEnemy();
-                    ctx.save();
-                    ctx.strokeStyle = side.role === 'shieldBattery'
+                    const beamColor = side.role === 'shieldBattery'
                         ? (getComputedStyle(document.documentElement).getPropertyValue('--current-secondary').trim() || '#6af')
                         : (getComputedStyle(document.documentElement).getPropertyValue('--current-accent').trim() || '#8f8');
-                    ctx.globalAlpha = 0.55;
-                    ctx.lineWidth = 1.5;
-                    ctx.beginPath();
-                    ctx.moveTo(side.x + side.width / 2, side.y + side.height / 2);
-                    ctx.lineTo(champ.x + champ.width / 2, champ.y + champ.height / 2);
-                    ctx.stroke();
+                    const x0 = side.x + side.width / 2;
+                    const y0 = side.y + side.height / 2;
+                    const x1 = champ.x + champ.width / 2;
+                    const y1 = champ.y + champ.height / 2;
+                    const cell = this.getCombatVoxelCell();
+                    ctx.save();
+                    if (cell) {
+                        // VOXEL: dashed lattice beam instead of soft stroke.
+                        const dx = x1 - x0;
+                        const dy = y1 - y0;
+                        const len = Math.hypot(dx, dy) || 1;
+                        const steps = Math.max(1, Math.floor(len / cell));
+                        for (let i = 0; i <= steps; i += 2) {
+                            const t = i / steps;
+                            this.fillCombatRect(
+                                ctx, x0 + dx * t - cell / 2, y0 + dy * t - cell / 2,
+                                cell, cell, beamColor, 0.7
+                            );
+                        }
+                    } else {
+                        ctx.strokeStyle = beamColor;
+                        ctx.globalAlpha = 0.55;
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(x0, y0);
+                        ctx.lineTo(x1, y1);
+                        ctx.stroke();
+                    }
                     ctx.restore();
                 }
                 ctx.save();
@@ -301,12 +413,8 @@ class RenderManager {
             });
         }
 
-        // Non-fog obstacles
-        obstacleManager.getObstacles().forEach(obstacle => {
-            if (obstacle.isFog) return;
-            if (this.isOccludedByFog(player, obstacle, fogList)) return;
-            this.drawObstacleSprite(ctx, obstacle);
-        });
+        // Non-fog obstacles that sit on top of the canyon walls.
+        this.drawSolidObstacles(ctx, fogList, player, 'over');
         if (obstacleManager.renderDebris) obstacleManager.renderDebris(ctx);
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
@@ -360,6 +468,22 @@ class RenderManager {
         if (typeof explosionSystem !== 'undefined' && explosionSystem.render) {
             explosionSystem.render(ctx);
         }
+    }
+
+    /**
+     * Solid (non-fog) obstacles for one canyon depth:
+     * 'under' = behind walls, 'over' = in front (default).
+     */
+    drawSolidObstacles(ctx, fogList, player, depth) {
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.getObstacles) return;
+        const wantUnder = depth === 'under';
+        obstacleManager.getObstacles().forEach((obstacle) => {
+            if (!obstacle || obstacle.isFog) return;
+            const under = obstacle.wallDepth === 'under';
+            if (wantUnder ? !under : under) return;
+            if (this.isOccludedByFog(player, obstacle, fogList)) return;
+            this.drawObstacleSprite(ctx, obstacle);
+        });
     }
 
     drawObstacleSprite(ctx, obstacle) {
@@ -423,19 +547,31 @@ class RenderManager {
             img = this.bakeObstacleImage(obstacle, isShield);
             obstacle._hiRes = img;
         }
-        // Snap to whole px (not the coarse art cell) so movement stays smooth.
-        const x = Math.round(obstacle.x);
-        const y = Math.round(obstacle.y);
+        // Snap to combat lattice in VOXEL; whole px otherwise.
+        const cell = this.getCombatVoxelCell();
+        let x = obstacle.x;
+        let y = obstacle.y;
+        let dw = obstacle.width;
+        let dh = obstacle.height;
+        if (cell) {
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+            dw = Math.max(cell, Math.round(dw / cell) * cell);
+            dh = Math.max(cell, Math.round(dh / cell) * cell);
+        } else {
+            x = Math.round(x);
+            y = Math.round(y);
+        }
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, x, y, obstacle.width, obstacle.height);
+        ctx.drawImage(img, x, y, dw, dh);
         const li = obstacle.lightIntensity || 0;
         if (li > 0) {
             // Bullet light tints the rock's own pixels.
             ctx.globalCompositeOperation = 'lighter';
             ctx.globalAlpha = Math.min(0.6, li * 0.45);
             ctx.drawImage(this.tintedObstacleImage(img, this.resolveCss(obstacle.lightColor, '#88ffcc')),
-                x, y, obstacle.width, obstacle.height);
+                x, y, dw, dh);
         }
         ctx.restore();
     }

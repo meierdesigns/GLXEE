@@ -118,6 +118,9 @@ class GameLoop {
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(deltaTime || 16);
             if (gameControl.updateVictoryLootPhase) gameControl.updateVictoryLootPhase(deltaTime);
+            if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.snapWorld) {
+                window.combatVoxels.snapWorld();
+            }
             if (typeof uiManager !== 'undefined') uiManager.updateUI();
             return;
         }
@@ -134,6 +137,11 @@ class GameLoop {
         if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
         if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
         if (typeof explosionSystem !== 'undefined') explosionSystem.update(deltaTime || 16);
+
+        // VOXEL: lock every combat element to the Game-Boy lattice after physics.
+        if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.snapWorld) {
+            window.combatVoxels.snapWorld();
+        }
         
         // Always update UI, even when paused
         if (typeof uiManager !== 'undefined') uiManager.updateUI();

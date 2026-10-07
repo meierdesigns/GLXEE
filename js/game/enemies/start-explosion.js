@@ -25,7 +25,9 @@ extendClass(EnemyManager, {
             explosionSystem.play(presetId, ex, ey, {
                 width: this.enemy.width,
                 height: this.enemy.height,
-                silent: true
+                silent: true,
+                ship: this.enemy,
+                voxelPower: 1.15
             });
         }
     },

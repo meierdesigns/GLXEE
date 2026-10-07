@@ -106,9 +106,13 @@ extendClass(EnemyManager, {
             enemySpeed = Math.abs(enemySpeed);
         }
 
+        // Full top flight band — do not park under a dead ceiling gap.
+        const enemyMinY = 2;
+        const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.38));
+        const spawnY = enemyMinY + Math.max(0, Math.round((enemyMaxY - enemyMinY - shipHeight) * 0.35));
         this.enemy = {
             x: canvasWidth / 2 - shipWidth / 2,
-            y: 25,
+            y: spawnY,
             width: shipWidth,
             height: shipHeight,
             speed: enemySpeed,
@@ -128,8 +132,8 @@ extendClass(EnemyManager, {
             renegadeColor: (scheduleEntry && scheduleEntry.renegadeColor) || null,
             missionTarget: (scheduleEntry && scheduleEntry.missionTarget) || null,
             isBoss: isBossLvl,
-            minY: 25,
-            maxY: canvasHeight / 3,
+            minY: enemyMinY,
+            maxY: enemyMaxY,
             sprite: hitProfile.sprite,
             colors: hitProfile.colors,
             collision: this.scaleEnemyCollision(hitProfile.collision, contentScale)

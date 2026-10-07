@@ -254,6 +254,18 @@ extendClass(MenuStateManager, {
                     return true;
                 }
                 break;
+            case 'profiles':
+                // LOAD / pilot list: reopen the embedded profile page in the start screen
+                if (typeof startScreenManager !== 'undefined') {
+                    startScreenManager.show({ skipPersist: true, forceMenu: true });
+                    startScreenManager.showSettings = false;
+                    startScreenManager.showCredits = false;
+                    startScreenManager._profilesThenStart = true;
+                    startScreenManager.showProfiles = true;
+                    startScreenManager.createStartScreenUI();
+                    return true;
+                }
+                break;
             case 'ships':
                 if (typeof playerSelectionManager !== 'undefined') {
                     this.hideStartShell();

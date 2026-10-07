@@ -24,7 +24,7 @@
     width: 20px;
     height: 20px;
     background: #000;
-    border: 2px solid var(--fac);
+    border: var(--ui-border-width, 2px) solid var(--fac);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -47,51 +47,52 @@
 }
 .galaxy-map-area .galaxy-map-svg { overflow: hidden; }
 .gm-locate-ship {
-    position: absolute;
-    right: 14px;
-    bottom: 14px;
-    z-index: 6;
+    position: relative;
+    flex: 0 0 auto;
+    align-self: center;
+    z-index: 2;
     display: grid;
     place-items: center;
     width: 56px;
     height: 56px;
+    margin: 0 8px 0 4px;
     padding: 0;
     cursor: pointer;
     color: var(--faction-accent, var(--color-primary));
-    background: color-mix(in srgb, #05060a 88%, transparent);
-    border: 2px solid currentColor;
-    box-shadow: inset 0 0 0 3px #05060a, 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, currentColor 22%, #05060a), #05060a);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, currentColor 70%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 2px 0 #000;
 }
 .gm-locate-ship:is(:hover, :focus-visible) {
-    background: color-mix(in srgb, currentColor 18%, #05060a);
-    box-shadow: inset 0 0 0 3px #05060a, 0 0 0 3px currentColor;
+    color: var(--color-primary);
+    background: linear-gradient(180deg, color-mix(in srgb, currentColor 40%, #05060a), color-mix(in srgb, currentColor 12%, #05060a));
+    border-color: currentColor;
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 0 var(--ui-border-width, 2px) currentColor, 0 0 12px color-mix(in srgb, currentColor 45%, transparent);
+    outline: none;
 }
-.gm-locate-ship-icon {
-    display: grid;
-    place-items: center;
+.gm-locate-ship:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 1px 0 #000;
+}
+.gm-locate-map-icon {
+    display: block;
     width: 32px;
-    height: 36px;
-}
-.gm-locate-ship-art {
-    width: 28px;
-    height: 34px;
+    height: 32px;
+    overflow: visible;
     image-rendering: pixelated;
-    transform: rotate(180deg);
+    transform-box: view-box;
+    transform-origin: 50% 85%;
 }
-.gm-locate-ship-fallback { font-size: 24px; line-height: 1; }
-.gm-locate-pin {
-    position: absolute;
-    right: 3px;
-    bottom: 3px;
-    width: 16px;
-    height: 16px;
-    fill: currentColor;
-    filter: drop-shadow(1px 1px 0 #05060a);
+.gm-locate-ship:is(:hover, :focus-visible) .gm-locate-map-icon {
+    /* Stepped GPS pin drop — not the hangar gear tick. */
+    animation: gm-locate-pin 0.7s steps(1, end) infinite;
 }
-.galaxy-map-panel-select .gm-locate-ship {
-    top: 10px;
-    right: 10px;
-    bottom: auto;
+@keyframes gm-locate-pin {
+    0%   { transform: translateY(0); }
+    50%  { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-locate-ship:is(:hover, :focus-visible) .gm-locate-map-icon { animation: none; }
 }
 .gm-space { pointer-events: none; }
 .gm-space .gm-space-bg { fill: #000; }
@@ -191,10 +192,10 @@
 }
 /* At close zoom the off-screen star field still owns most of the animation
    budget. Keep its stars visible but static while preserving route traffic. */
-.galaxy-map-svg.gm-close-view .gm-star-twinkle,
-.galaxy-map-svg.gm-close-view .gm-battle-px {
+.galaxy-map-svg.gm-close-view .gm-star-twinkle {
     animation: none;
 }
+/* The fights on invaded planets keep flickering at close zoom (only 14 pixels per planet). */
 .galaxy-map-svg.gm-close-view .gm-star-twinkle { opacity: 0.55; }
 @media (prefers-reduced-motion: reduce) {
     .gm-space .gm-stars .gm-star-twinkle { animation: none; }
@@ -263,11 +264,12 @@
     --font-h2: 14px;
     --font-text: 12px;
 
-    /* Global UI appearance (independent of color themes) */
-    --ui-border-width: 2px;
-    --ui-border-width-thin: 2px;
+    /* Global UI appearance (independent of color themes).
+       Contour tokens stay equal within a weight; NORMAL default = 4px. */
+    --ui-border-width: 4px;
+    --ui-border-width-thin: 4px;
     --ui-border-width-thick: 4px;
-    --ui-indicator-width: 2px;
+    --ui-indicator-width: 4px;
     --ui-font-family: 'Courier New', Courier, monospace;
 
     /* Retro / arcade FX (driven by uiAppearanceManager) */
@@ -345,7 +347,12 @@ body {
     -moz-osx-font-smoothing: unset;
 }
 
-/* Soft page-refresh bridge: destination bg while menus boot */
+/* Soft page-refresh bridge: solid dark while menus boot, so no frame shows
+   the bare background art without its menu; the finished menu fades in. */
+html.vf-booting .vf-bg-parallax-base,
+html.vf-booting .vf-bg-parallax-glow { transition: none !important; }
+.vf-boot-veil[class] { background-image: none !important; background-color: #05060a; }
+
 .vf-boot-veil {
     position: fixed;
     left: 0;
@@ -702,37 +709,65 @@ html[data-vf-scanlines="off"] .vf-fx-scanlines {
 }
 
 .vf-fx-crt {
-    opacity: calc(var(--vf-crt, 0) * 1);
+    /* Tube look instead of plain darkening: the picture behind gets more
+       contrast, saturation and bloom; an RGB phosphor mask and a faint
+       centre glow sit on top, the corners fall off only softly, and the
+       whole thing flickers slightly. */
+    -webkit-backdrop-filter: url(#vfCrtFx) contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0))) blur(calc(0.9px * var(--vf-crt, 0)));
+    backdrop-filter: url(#vfCrtFx) contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0))) blur(calc(0.9px * var(--vf-crt, 0)));
     background:
-        radial-gradient(
-            ellipse 78% 70% at 50% 50%,
-            transparent 32%,
-            rgba(0, 0, 0, calc(0.88 * var(--vf-crt, 0))) 100%
+        /* coarse shadow mask: 3px RGB stripes, broken by dark gaps every 6px */
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, calc(0.22 * var(--vf-crt, 0))) 0px,
+            rgba(0, 0, 0, calc(0.22 * var(--vf-crt, 0))) 1px,
+            transparent 1px,
+            transparent 6px
         ),
-        linear-gradient(
-            180deg,
-            rgba(255, 255, 255, calc(0.1 * var(--vf-crt, 0))) 0%,
-            transparent 16%,
-            transparent 84%,
-            rgba(0, 0, 0, calc(0.38 * var(--vf-crt, 0))) 100%
+        repeating-linear-gradient(
+            90deg,
+            rgba(255, 0, 0, calc(0.16 * var(--vf-crt, 0))) 0px,
+            rgba(255, 0, 0, calc(0.16 * var(--vf-crt, 0))) 3px,
+            rgba(0, 255, 0, calc(0.16 * var(--vf-crt, 0))) 3px,
+            rgba(0, 255, 0, calc(0.16 * var(--vf-crt, 0))) 6px,
+            rgba(0, 0, 255, calc(0.16 * var(--vf-crt, 0))) 6px,
+            rgba(0, 0, 255, calc(0.16 * var(--vf-crt, 0))) 9px
+        ),
+        radial-gradient(
+            ellipse 70% 65% at 50% 50%,
+            rgba(255, 255, 255, calc(0.05 * var(--vf-crt, 0))) 0%,
+            transparent 70%
+        ),
+        radial-gradient(
+            ellipse 85% 80% at 50% 50%,
+            transparent 55%,
+            rgba(0, 0, 0, calc(0.35 * var(--vf-crt, 0))) 100%
         );
-    box-shadow: inset 0 0 calc(80px * var(--vf-crt, 0)) calc(24px * var(--vf-crt, 0)) rgba(0, 0, 0, 0.9);
+    box-shadow: inset 0 0 calc(40px * var(--vf-crt, 0)) calc(4px * var(--vf-crt, 0)) rgba(0, 0, 0, 0.5);
+    animation: vf-fx-crt-flicker 4.5s steps(1, end) infinite;
+}
+
+@keyframes vf-fx-crt-flicker {
+    0%, 100% { opacity: 1; }
+    37% { opacity: 0.93; }
+    38% { opacity: 1; }
+    71% { opacity: 0.95; }
+    72% { opacity: 1; }
 }
 
 html[data-vf-crt="off"] .vf-fx-crt {
-    opacity: 0;
+    display: none;
 }
 
 .vf-fx-chroma {
-    opacity: calc(var(--vf-chroma, 0) * 1);
-    background:
-        linear-gradient(90deg, rgba(255, 40, 40, 0.75), transparent 12%, transparent 88%, rgba(40, 120, 255, 0.75)),
-        linear-gradient(0deg, rgba(40, 255, 120, 0.35), transparent 14%, transparent 86%, rgba(255, 40, 180, 0.35));
-    mix-blend-mode: screen;
+    /* Doppler-style channel split: the page behind is re-drawn with red and
+       blue pulled apart (filter #vfChromaFx, offsets set from the Chroma value). */
+    -webkit-backdrop-filter: url(#vfChromaFx);
+    backdrop-filter: url(#vfChromaFx);
 }
 
 html[data-vf-chroma="off"] .vf-fx-chroma {
-    opacity: 0;
+    display: none;
 }
 
 @keyframes vf-fx-scan-drift {
@@ -917,7 +952,8 @@ html[data-vf-arcade="on"] .settings-row-value {
     position: fixed;
     top: 12px;
     left: 12px;
-    z-index: 3200;
+    /* Above home-station (3600) / profile overlays so SIZES works from FLEETS. */
+    z-index: 3800;
     pointer-events: none;
     background: transparent;
 }
@@ -925,7 +961,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .enemy-size-panel {
     pointer-events: auto;
     min-width: 220px;
-    max-width: min(280px, 42vw);
+    max-width: min(calc(280px * var(--zk)), calc(42 * var(--cw)));
     background: color-mix(in srgb, #05060a 92%, transparent);
     border: var(--ui-border-width, 2px) solid var(--color-border, var(--color-primary));
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
@@ -981,13 +1017,15 @@ html[data-vf-arcade="on"] .settings-row-value {
 .enemy-size-section:first-child { margin-top: 0; padding-top: 0; }
 .enemy-size-row {
     display: grid;
-    grid-template-columns: 1fr 28px 36px 28px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "label label" "num range";
     align-items: center;
-    gap: 4px;
-    padding: 3px 0;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    gap: 4px 8px;
+    padding: 4px 0;
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .enemy-size-label {
+    grid-area: label;
     font-size: 11px;
     letter-spacing: 1px;
     color: var(--color-text);
@@ -1347,7 +1385,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     color: var(--color-text);
     font-family: var(--ui-font-family);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-    width: min(92vw, 520px);
+    width: min(calc(92 * var(--cw)), calc(520px * var(--zk)));
     max-height: 92vh;
     box-sizing: border-box;
 }
@@ -1485,7 +1523,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     text-align: center;
     padding: clamp(8px, 1.5vh, 16px) clamp(10px, 2vw, 24px);
     width: fit-content;
-    max-width: min(94vw, 820px);
+    max-width: min(calc(94 * var(--cw)), calc(820px * var(--zk)));
     max-height: min(94vh, var(--vh, 94dvh));
     overflow: hidden;
     box-sizing: border-box;
@@ -1551,7 +1589,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     margin: 5px 0;
 }
 
-/* Game Canvas Container — no flex-grow so left HUD sits next to the stage */
+/* Game Canvas Container — fight fills the column; chrome overlays the stage */
 .game-canvas-container {
     display: flex;
     flex-direction: column;
@@ -1564,11 +1602,20 @@ html[data-vf-arcade="on"] .settings-row-value {
     height: 100%;
     max-height: 100%;
     overflow: hidden;
+    position: relative;
 }
 
 .game-header {
-    margin-bottom: clamp(2px, 0.6vh, 8px);
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    margin: 0;
     flex-shrink: 0;
+    pointer-events: none;
+    width: max-content;
+    max-width: 100%;
 }
 
 .game-header h1 {
@@ -1810,6 +1857,30 @@ html[data-vf-arcade="on"] .settings-row-value {
     filter: contrast(var(--theme-contrast-filter, 1.15))
         saturate(var(--theme-saturation-filter, 1))
         brightness(var(--theme-brightness-filter, 1));
+}
+/* VOXEL: no CSS filters / CRT blur — they resample and soften the lattice. */
+html[data-vf-ship-render="VOXEL"] #gameCanvas {
+    filter: none !important;
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+}
+html[data-vf-ship-render="VOXEL"] .vf-fx-crt {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: none;
+}
+html[data-vf-ship-render="VOXEL"] .vf-fx-chroma {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+html[data-vf-ship-render="VOXEL"] .vf-fx-scanlines {
+    mix-blend-mode: normal;
+    opacity: calc(var(--vf-scan, 0) * 0.55);
+}
+html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
 }
 
 /* Right HUD cluster: enemy health bars */
@@ -2168,7 +2239,21 @@ html[data-vf-arcade="on"] .settings-row-value {
 }
 
 .game-canvas-container > .ui-controls-show-btn {
-    margin-top: 4px;
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    margin: 0;
+    z-index: 6;
+}
+.game-canvas-container > .controls {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    z-index: 6;
+    margin: 0;
+    max-width: calc(100% - 8px);
 }
 
 .shot-type-display {
@@ -2346,7 +2431,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     text-align: center;
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--color-primary);
     min-width: min(320px, 90vw);
-    width: min(92vw, 480px);
+    width: min(calc(92 * var(--cw)), calc(480px * var(--zk)));
     max-height: 92vh;
     box-sizing: border-box;
 }
@@ -2453,7 +2538,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--color-primary);
     min-width: 560px;
     max-width: 720px;
-    width: min(92vw, 720px);
+    width: min(calc(92 * var(--cw)), calc(720px * var(--zk)));
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -2796,7 +2881,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 @media (max-width: 640px) {
     .victory-content {
         min-width: 0;
-        width: min(96vw, 720px);
+        width: min(calc(96 * var(--cw)), calc(720px * var(--zk)));
         padding: 20px 16px;
     }
 
@@ -2838,11 +2923,11 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .pause-overlay .pause-menu {
     background: rgba(0, 0, 0, 0.95);
-    border: 4px solid var(--ui-border);
+    border: var(--ui-border-width, 2px) solid var(--ui-border);
     padding: clamp(20px, 4vh, 40px) clamp(24px, 4vw, 48px);
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 8px color-mix(in srgb, var(--color-primary) 72%, transparent), 0 0 0 18px color-mix(in srgb, var(--color-primary) 48%, transparent), 0 0 0 28px color-mix(in srgb, var(--color-primary) 30%, transparent), 0 0 0 40px color-mix(in srgb, var(--color-primary) 16%, transparent);
     min-width: min(260px, 90vw);
-    width: min(92vw, 420px);
+    width: min(calc(92 * var(--cw)), calc(420px * var(--zk)));
     max-height: 92vh;
     box-sizing: border-box;
 }
@@ -2928,10 +3013,10 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .settings-content {
     background: color-mix(in srgb, var(--color-primary) 4%, rgba(0, 0, 0, 0.95));
-    border: 4px solid var(--ui-border, var(--color-primary));
+    border: var(--ui-border-width, 2px) solid var(--ui-border, var(--color-primary));
     padding: clamp(12px, 2.5vh, 32px) clamp(12px, 3vw, 40px);
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border, var(--color-primary)), 0 0 0 var(--ui-border-width) var(--ui-border, var(--color-primary)), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 72%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 48%, transparent), 0 0 0 28px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 30%, transparent), 0 0 0 40px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 16%, transparent);
-    width: min(92vw, 520px);
+    width: min(calc(92 * var(--cw)), calc(520px * var(--zk)));
     max-width: 100%;
     max-height: min(82vh, 92dvh);
     overflow-y: auto;
@@ -3031,11 +3116,11 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .planet-selection-content {
     background: var(--color-background);
-    border: 4px solid var(--ui-border);
+    border: var(--ui-border-width, 2px) solid var(--ui-border);
     border-radius: 0px;
     padding: clamp(16px, 3vh, 32px);
     text-align: center;
-    max-width: min(960px, 96vw);
+    max-width: min(calc(960px * var(--zk)), calc(96 * var(--cw)));
     width: 96%;
     max-height: 96vh;
     overflow: auto;
@@ -3279,14 +3364,14 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .combined-selection-content {
     background: var(--color-background);
-    border: 4px solid var(--ui-border);
+    border: var(--ui-border-width, 2px) solid var(--ui-border);
     border-radius: 0px;
     padding: clamp(16px, 3vh, 32px);
     text-align: center;
-    max-width: min(1400px, 98vw);
+    max-width: min(calc(1400px * var(--zk)), calc(98 * var(--cw)));
     width: 98%;
     max-height: 96vh;
-    height: min(96vh, 900px);
+    height: min(calc(96 * var(--ch)), calc(900px * var(--zk)));
     overflow-y: auto;
     box-sizing: border-box;
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 8px color-mix(in srgb, var(--color-primary) 72%, transparent), 0 0 0 18px color-mix(in srgb, var(--color-primary) 48%, transparent), 0 0 0 28px color-mix(in srgb, var(--color-primary) 30%, transparent), 0 0 0 40px color-mix(in srgb, var(--color-primary) 16%, transparent);
@@ -3568,14 +3653,14 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .player-selection-content {
     background: var(--color-background);
-    border: 4px solid var(--ui-border);
+    border: var(--ui-border-width, 2px) solid var(--ui-border);
     border-radius: 0px;
     padding: clamp(16px, 3vh, 32px);
     text-align: center;
-    max-width: min(1400px, 98vw);
+    max-width: min(calc(1400px * var(--zk)), calc(98 * var(--cw)));
     width: 98%;
     max-height: 96vh;
-    height: min(96vh, 900px);
+    height: min(calc(96 * var(--ch)), calc(900px * var(--zk)));
     overflow-y: auto;
     box-sizing: border-box;
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 8px color-mix(in srgb, var(--color-primary) 72%, transparent), 0 0 0 18px color-mix(in srgb, var(--color-primary) 48%, transparent), 0 0 0 28px color-mix(in srgb, var(--color-primary) 30%, transparent), 0 0 0 40px color-mix(in srgb, var(--color-primary) 16%, transparent);
@@ -4223,7 +4308,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     padding: clamp(8px, 1.4vh, 14px) clamp(12px, 2vw, 22px);
     text-align: center;
     width: fit-content;
-    max-width: min(860px, 94vw);
+    max-width: min(calc(860px * var(--zk)), calc(94 * var(--cw)));
     max-height: min(94vh, var(--vh, 94dvh));
     overflow: hidden;
     box-sizing: border-box;
@@ -4240,7 +4325,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .start-screen-content:has(> .settings-panel),
 .start-screen-content:has(> .start-screen-menu.settings-panel) {
-    width: min(94vw, 860px);
+    width: min(calc(94 * var(--cw)), calc(860px * var(--zk)));
 }
 
 .start-screen-content > .settings-panel,
@@ -4513,6 +4598,28 @@ html[data-vf-arcade="on"] .settings-row-value {
     cursor: not-allowed;
 }
 
+/* LOAD with no pilots: stay muted even when hovered/selected. */
+.start-screen-retro .menu-item.locked,
+.start-screen-retro .menu-item.locked.selected {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.start-screen-retro .menu-item.locked .menu-item-label,
+.start-screen-retro .menu-item.locked.selected .menu-item-label {
+    color: var(--color-text-secondary, #8a8f99);
+    text-shadow: none;
+}
+.start-screen-retro .menu-item.locked.selected .menu-item-label::before {
+    visibility: hidden;
+    animation: none;
+}
+.start-screen-retro .menu-item.locked .menu-pixel-icon {
+    opacity: 0.45;
+    filter: grayscale(1);
+}
+
 .start-screen-instructions {
     color: var(--color-text-secondary);
     font-size: var(--font-text);
@@ -4542,8 +4649,8 @@ html[data-vf-arcade="on"] .settings-row-value {
 }
 .planet-editor-overlay.hidden { display: none; }
 .planet-editor-panel {
-    width: min(1600px, 98vw);
-    height: min(96vh, 1100px);
+    width: min(calc(1600px * var(--zk)), calc(98 * var(--cw)));
+    height: min(calc(96 * var(--ch)), calc(1100px * var(--zk)));
     max-height: 96vh;
     display: flex;
     flex-direction: column;
@@ -5323,7 +5430,7 @@ body.pe-resizing * {
 }
 .pe-pattern-modal-dialog {
     width: min(520px, 100%);
-    max-height: min(70vh, 560px);
+    max-height: min(calc(70 * var(--ch)), calc(560px * var(--zk)));
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -5428,7 +5535,7 @@ body.pe-resizing * {
 }
 .hs-res-buy-dialog {
     width: min(520px, 100%);
-    max-height: min(80vh, 640px);
+    max-height: min(calc(80 * var(--ch)), calc(640px * var(--zk)));
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -5527,7 +5634,7 @@ body.pe-resizing * {
 }
 .pe-pattern-editor-dialog {
     width: min(420px, 100%);
-    max-height: min(88vh, 720px);
+    max-height: min(calc(88 * var(--ch)), calc(720px * var(--zk)));
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -5608,8 +5715,8 @@ body.pe-resizing * {
     image-rendering: crisp-edges;
 }
 .content-viewer-panel {
-    width: min(1280px, 98vw);
-    height: min(96vh, 860px);
+    width: min(calc(1280px * var(--zk)), calc(98 * var(--cw)));
+    height: min(calc(96 * var(--ch)), calc(860px * var(--zk)));
     max-height: 96vh;
     overflow: hidden;
     background: var(--color-background, #1a1208);
@@ -5837,7 +5944,7 @@ body.pe-resizing * {
     position: relative;
     padding: 3px;
     box-sizing: border-box;
-    border: 2px solid var(--faction-accent);
+    border: var(--ui-border-width, 2px) solid var(--faction-accent);
     background: color-mix(in srgb, var(--faction-accent) 14%, #05060a);
     box-shadow: inset 0 0 0 2px #05060a, 0 0 0 2px color-mix(in srgb, var(--faction-accent) 30%, transparent);
 }
@@ -6017,7 +6124,7 @@ body.pe-resizing * {
     font-size: var(--font-text);
     letter-spacing: 0.08em;
     padding: 1px 5px;
-    border: 2px solid var(--ui-border, #3a2a18);
+    border: var(--ui-border-width, 2px) solid var(--ui-border, #3a2a18);
     opacity: 0.55;
 }
 .cv-dev-badge.on {
@@ -6371,6 +6478,51 @@ body.pe-resizing * {
     min-width: 0;
 }
 
+/* STYLE section: settings rows left, live ship-render preview on the right. */
+.settings-style-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: clamp(10px, 1.6vw, 20px);
+    align-items: start;
+    min-width: 0;
+}
+.settings-ship-render-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: clamp(120px, 14vw, 168px);
+    flex: 0 0 auto;
+    padding: 8px;
+    box-sizing: border-box;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 5%, rgba(0, 0, 0, 0.45));
+}
+.settings-ship-render-canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    image-rendering: pixelated;
+    background: transparent;
+    display: block;
+}
+.settings-ship-render-caption {
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text, 12px);
+    letter-spacing: 0.14em;
+    color: var(--color-primary);
+    opacity: 0.9;
+}
+@media (max-width: 720px) {
+    .settings-style-body {
+        grid-template-columns: 1fr;
+    }
+    .settings-ship-render-preview {
+        width: min(168px, 50%);
+        margin-inline: auto;
+    }
+}
+
 .settings-row {
     display: flex;
     align-items: center;
@@ -6671,7 +6823,7 @@ body.pe-resizing * {
 .settings-look-controls {
     flex: 1 1 auto;
     min-width: 0;
-    max-width: min(220px, 48vw);
+    max-width: min(calc(220px * var(--zk)), calc(48 * var(--cw)));
     gap: clamp(6px, 1.2vw, 10px);
 }
 
@@ -6814,7 +6966,7 @@ body.pe-resizing * {
     flex-direction: column;
     gap: 3px;
     width: 100%;
-    max-height: min(42vh, 280px);
+    max-height: min(calc(42 * var(--ch)), calc(280px * var(--zk)));
     overflow-y: auto;
     overflow-x: hidden;
     padding: 4px;
@@ -6919,7 +7071,7 @@ body.pe-resizing * {
     }
 
     .theme-list {
-        max-height: min(28vh, 200px);
+        max-height: min(calc(28 * var(--ch)), calc(200px * var(--zk)));
     }
 }
 
@@ -6952,8 +7104,8 @@ body.pe-resizing * {
     font-family: var(--ui-font-family);
 }
 .theme-editor-panel {
-    width: min(1400px, 98vw);
-    height: min(92vh, 820px);
+    width: min(calc(1400px * var(--zk)), calc(98 * var(--cw)));
+    height: min(calc(92 * var(--ch)), calc(820px * var(--zk)));
     display: flex;
     flex-direction: column;
     background: var(--color-background, #0a0a0a);
@@ -7450,11 +7602,11 @@ body.pe-resizing * {
 .galaxy-map-content,
 .profile-selection-content {
     background: var(--color-background);
-    border: 4px solid var(--ui-border);
+    border: var(--ui-border-width, 2px) solid var(--ui-border);
     border-radius: 0;
     padding: clamp(16px, 3vh, 28px);
     text-align: center;
-    max-width: min(1100px, 96vw);
+    max-width: min(calc(1100px * var(--zk)), calc(96 * var(--cw)));
     width: 96%;
     max-height: 96vh;
     overflow-y: auto;
@@ -7463,15 +7615,15 @@ body.pe-resizing * {
 }
 
 .profile-selection-content.profile-selection-floating {
-    max-width: min(720px, 92vw);
-    width: min(720px, 92vw);
+    max-width: min(calc(720px * var(--zk)), calc(92 * var(--cw)));
+    width: min(calc(720px * var(--zk)), calc(92 * var(--cw)));
     padding: clamp(14px, 2.4vh, 22px);
     text-align: left;
 }
 
 .profile-selection-content.profile-selection-name-mode {
-    max-width: min(420px, 90vw);
-    width: min(420px, 90vw);
+    max-width: min(calc(420px * var(--zk)), calc(90 * var(--cw)));
+    width: min(calc(420px * var(--zk)), calc(90 * var(--cw)));
     text-align: center;
 }
 
@@ -7487,7 +7639,7 @@ body.pe-resizing * {
     align-items: stretch;
     margin-bottom: 14px;
     min-height: 220px;
-    max-height: min(52vh, 420px);
+    max-height: min(calc(52 * var(--ch)), calc(420px * var(--zk)));
 }
 
 .profile-selection-floating .profile-list {
@@ -7581,7 +7733,7 @@ body.pe-resizing * {
     justify-content: center;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 0;
+    margin-top: 28px;
 }
 
 .profile-selection-floating .profile-selection-actions .action-button {
@@ -7598,7 +7750,7 @@ body.pe-resizing * {
 @media (max-width: 560px) {
     .profile-selection-body {
         grid-template-columns: 1fr;
-        max-height: min(68vh, 560px);
+        max-height: min(calc(68 * var(--ch)), calc(560px * var(--zk)));
     }
     .profile-selection-floating .profile-list {
         max-height: 28vh;
@@ -7803,7 +7955,7 @@ body.pe-resizing * {
 }
 .galaxy-map-area {
     width: 100%;
-    height: min(34vh, 280px);
+    height: min(calc(34 * var(--ch)), calc(280px * var(--zk)));
     border: var(--ui-border-width) solid var(--color-border);
     background: rgba(0, 0, 0, 0.35);
     margin-bottom: 14px;
@@ -8020,14 +8172,14 @@ body.pe-resizing * {
     position: relative;
     z-index: 1;
 }
-/* Oversized planet bleeding out of the card's bottom-left corner. */
+/* Oversized planet in the card's bottom-left; slight bleed, mostly visible. */
 .gm-sector-planet-bg {
     position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 115%;
-    aspect-ratio: 1 / 1;
-    transform: translate(-25%, 25%);
+    left: -12px;
+    bottom: -36px;
+    width: 220px;
+    height: 220px;
+    transform: none;
     pointer-events: none;
     z-index: 0;
 }
@@ -8137,6 +8289,33 @@ body.pe-resizing * {
     border-bottom: var(--ui-border-width) solid var(--color-border);
     cursor: pointer;
     letter-spacing: 2px;
+}
+.profile-list-item[hidden], .profile-list-empty[hidden] { display: none; }
+.profile-faction-filter {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    background: #05060a;
+    border-bottom: var(--ui-border-width) solid var(--color-border);
+}
+.profile-faction-btn {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    background: transparent;
+    border: var(--ui-border-width) solid var(--color-border);
+    cursor: pointer;
+    opacity: 0.7;
+}
+.profile-faction-btn:hover,
+.profile-faction-btn.is-active {
+    opacity: 1;
+    border-color: var(--color-primary);
 }
 .profile-list-item:last-child {
     border-bottom: none;
@@ -8816,8 +8995,8 @@ button.hs-logout-btn.nav-focused {
     );
 }
 .hs-credits-crawl-stage-fullscreen {
-    width: min(640px, 92vw);
-    height: min(52vh, 420px);
+    width: min(calc(640px * var(--zk)), calc(92 * var(--cw)));
+    height: min(calc(52 * var(--ch)), calc(420px * var(--zk)));
     margin: 8px auto 0;
 }
 .hs-credits-crawl {
@@ -9678,39 +9857,148 @@ button.hs-tab.active.nav-focused {
     grid-column: auto;
     grid-row: auto;
 }
-.galaxy-map-embedded .galaxy-map-ruler {
+/* One full-width bar: large planet | stacked galaxy/situation | big start. */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar {
     position: static;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    align-self: start;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: min(60%, 640px);
-    min-width: 0;
-    flex-direction: initial;
-    justify-content: flex-end;
+    display: flex;
+    flex-direction: row;
     align-items: stretch;
-    gap: 8px;
-    pointer-events: none;
-}
-.galaxy-map-embedded .galaxy-map-ruler-card,
-.galaxy-map-embedded .galaxy-map-situation {
+    justify-content: stretch;
+    flex: 0 0 auto;
+    width: 100%;
     min-width: 0;
+    max-width: none;
+    gap: 0;
+    pointer-events: auto;
+    padding: 0;
+    background: color-mix(in srgb, #05060a 90%, #000);
+    border: var(--ui-border-width, 2px) solid var(--ruler-accent, var(--color-primary));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 28%, transparent),
+        4px 4px 0 0 #000;
+    overflow: hidden;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg {
+    min-width: 0;
+    flex: 1 1 0;
+    width: auto;
+    height: auto;
+    align-self: stretch;
+    pointer-events: auto;
+    padding: 10px 16px;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet {
+    flex: 3 1 0;
+    min-width: 380px;
+    padding: 10px 14px;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex: 2 1 0;
+    min-width: 260px;
+    max-width: none;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg {
+    flex: 1 1 0;
+    max-width: none;
+    border-left: 0;
+    padding: 8px 14px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg + .galaxy-map-ruler-seg {
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+    border-left: 0;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card .galaxy-map-ruler-text {
+    align-items: flex-start;
+    text-align: left;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation {
+    justify-content: center;
+    align-items: stretch;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation-row {
+    justify-content: flex-start;
     width: 100%;
 }
-.galaxy-map-embedded .galaxy-map-ruler-card {
-    grid-column: 1;
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation-kind {
+    width: 100%;
+    text-align: left;
 }
-.galaxy-map-embedded .galaxy-map-situation {
-    grid-column: 2;
-    min-width: 0;
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
+    flex: 0 0 auto;
+    min-width: 240px;
+    max-width: 340px;
+    width: min(34vw, 340px);
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 10px 14px;
 }
-.galaxy-map-embedded .galaxy-map-ruler-card {
-    padding: 8px 12px;
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 8px;
+    min-height: 0;
 }
-.galaxy-map-embedded .galaxy-map-situation {
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 64px;
+    margin: 0;
+    padding: 14px 18px;
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    white-space: normal;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 8px 12px;
+    gap: 10px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button img,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button .menu-pixel-icon,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button .gm-mission-icon {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 auto;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.disabled,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button:disabled {
+    opacity: 0.38;
+    filter: grayscale(1);
+    cursor: not-allowed;
+    pointer-events: none;
 }
 .galaxy-map-embedded.is-input-active {
     opacity: 1;
@@ -9762,18 +10050,6 @@ button.hs-tab.active.nav-focused {
     justify-self: end;
     margin: 0;
 }
-.galaxy-map-header .galaxy-map-ruler {
-    position: static;
-    grid-column: 1;
-    grid-row: 2;
-    width: 100%;
-    max-width: 640px;
-    justify-self: start;
-}
-.galaxy-map-header .galaxy-map-ruler-card,
-.galaxy-map-header .galaxy-map-situation {
-    flex: 1 1 0;
-}
 .galaxy-map-content .galaxy-map-header {
     margin-bottom: 8px;
 }
@@ -9799,19 +10075,15 @@ button.hs-tab.active.nav-focused {
     grid-row: 3;
     flex: 0 1 auto;
     min-height: 160px;
-    height: min(34vh, 280px);
+    height: min(calc(34 * var(--ch)), calc(280px * var(--zk)));
     margin-bottom: 0;
 }
 @media (max-width: 720px) {
     .galaxy-map-embedded {
         grid-template-columns: 1fr;
     }
-    .galaxy-map-embedded .galaxy-map-toolbar,
-    .galaxy-map-embedded .galaxy-map-ruler {
+    .galaxy-map-embedded .galaxy-map-toolbar {
         grid-column: 1;
-    }
-    .galaxy-map-embedded .galaxy-map-ruler {
-        grid-row: 2;
     }
     .galaxy-map-embedded .galaxy-map-area {
         grid-row: 3;
@@ -10304,6 +10576,11 @@ button.hs-tab.active.nav-focused {
 }
 .hs-panel-stores .hs-chip-value {
     font-size: calc(var(--font-h2) * 2.4);
+    text-shadow:
+        1px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        -1px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        0 1px 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        0 -1px 0 color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 .hs-panel-stores .hs-chip-cap {
     font-size: calc(var(--font-text) * 1.8);
@@ -10555,8 +10832,8 @@ button.hs-play.nav-focused {
     white-space: nowrap;
 }
 .hs-credit-icon {
-    width: 16px;
-    height: 16px;
+    width: 32px;
+    height: 32px;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -11604,7 +11881,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hta-panel {
     width: min(960px, 100%);
-    max-height: min(92vh, 720px);
+    max-height: min(calc(92 * var(--ch)), calc(720px * var(--zk)));
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -12438,14 +12715,17 @@ button.hs-upg-node.nav-focused {
     width: max-content;
     max-width: min(280px, calc(100vw - 16px));
     padding: 8px 12px;
-    background: #0a0612;
-    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 85%, #fff);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.85);
-    color: #fff;
-    font-family: inherit;
+    background: color-mix(in srgb, var(--color-background, #05060a) 92%, #000);
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width-thin, 2px) #05060a,
+        0 0 0 var(--ui-border-width-thin, 2px) #000,
+        0 10px 28px rgba(0, 0, 0, 0.85);
+    color: var(--color-text, #fff);
+    font-family: var(--ui-font-family, inherit);
     font-size: var(--font-text);
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.12em;
     line-height: 1.3;
     text-transform: uppercase;
     white-space: nowrap;
@@ -12831,7 +13111,7 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 /* Onboarding */
 .onboarding-content {
-    max-width: min(560px, 96vw);
+    max-width: min(calc(560px * var(--zk)), calc(96 * var(--cw)));
     text-align: center;
 }
 .onboarding-story {
@@ -13458,8 +13738,8 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     min-height: 80px;
 }
 .component-editor-overlay .hs-comp-overlay-panel {
-    width: min(1200px, 98vw);
-    height: min(90vh, 860px);
+    width: min(calc(1200px * var(--zk)), calc(98 * var(--cw)));
+    height: min(calc(90 * var(--ch)), calc(860px * var(--zk)));
     display: flex;
     flex-direction: column;
 }
@@ -13529,8 +13809,8 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 }
 .difficulty-editor-overlay.hidden { display: none; }
 .difficulty-editor-panel {
-    width: min(920px, 96vw);
-    height: min(720px, 92vh);
+    width: min(calc(920px * var(--zk)), calc(96 * var(--cw)));
+    height: min(calc(720px * var(--zk)), calc(92 * var(--ch)));
     display: flex;
     flex-direction: column;
     color: var(--current-text, #d8fff5);
@@ -13648,8 +13928,8 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     background: rgba(0, 0, 0, .88);
 }
 .faction-command-panel {
-    width: min(900px, 96vw);
-    height: min(680px, 90vh);
+    width: min(calc(900px * var(--zk)), calc(96 * var(--cw)));
+    height: min(calc(680px * var(--zk)), calc(90 * var(--ch)));
     display: flex;
     flex-direction: column;
     color: var(--current-text, #d8fff5);
@@ -14144,13 +14424,13 @@ html[data-faction="voidborn"] .home-station-overlay :is(.hs-panel, .hs-section):
 
 /* Panel headers carry a faction signature strip. */
 .home-station-overlay .hs-panel-title {
-    padding-left: 10px;
+    padding-left: 14px;
     padding-top: 4px;
     border-bottom-width: var(--ui-border-width);
 }
 html[data-faction="terran"] .home-station-overlay .hs-panel-title {
-    box-shadow: inset 4px 0 0 var(--faction-accent);
-    background: linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 0) 0 100% / 100% 4px no-repeat;
+    box-shadow: inset 2px 0 0 var(--faction-accent);
+    background: linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 0) 0 100% / 100% 2px no-repeat;
 }
 html[data-faction="kronax"] .home-station-overlay .hs-panel-title {
     /* Stair-stepped blade banding behind the header. */
@@ -15038,6 +15318,18 @@ html[data-faction] .enemy-vitals-side,
     pointer-events: none;
     background: var(--frame-color);
     clip-path: var(--faction-panel-clip, none);
+    /* Ring only: --bezel is inherited from the overlay (28px) and must not size the frame. */
+    box-sizing: border-box;
+    --ring-w: 8px;
+    padding: var(--ring-w);
+    --hole: linear-gradient(#000 0 0) var(--ring-w) var(--ring-w) / calc(100% - 2 * var(--ring-w)) calc(100% - 2 * var(--ring-w)) no-repeat;
+    -webkit-mask: var(--hole), linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--hole) exclude, linear-gradient(#000 0 0);
+}
+.home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card) {
+    padding-left: 16px;
+    padding-right: 16px;
 }
 .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::after,
 .home-station-overlay .hs-hangar-bay-stage::after {
@@ -15390,11 +15682,11 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 .gm-lamp-red { fill: #ff3b3b; }
 .gm-lamp-green { fill: #3bff7a; }
 /* Owner faction (stationFactionStyle): hull / trim / glow in its colours. */
-.gm-station.is-faction .gm-station-hull { fill: color-mix(in srgb, var(--st-hull) 28%, #858b97); }
-.gm-station.is-faction .gm-station-dark { fill: color-mix(in srgb, var(--st-edge) 45%, #2a2d36); }
-.gm-station.is-faction .gm-station-crate { fill: color-mix(in srgb, var(--st-hull) 20%, #5c5a52); }
-.gm-station.is-faction .gm-station-panel { fill: color-mix(in srgb, var(--st-accent) 18%, #1a2030); stroke: none; }
-.gm-station.is-faction :is(.gm-station-light, .gm-station-window) { fill: color-mix(in srgb, var(--st-accent) 35%, #e8e4d8); }
+.gm-station.is-faction .gm-station-hull { fill: color-mix(in srgb, var(--st-hull) 62%, #6c727e); }
+.gm-station.is-faction .gm-station-dark { fill: color-mix(in srgb, var(--st-edge) 70%, #20232b); }
+.gm-station.is-faction .gm-station-crate { fill: color-mix(in srgb, var(--st-hull) 45%, #4a4840); }
+.gm-station.is-faction .gm-station-panel { fill: color-mix(in srgb, var(--st-accent) 45%, #141a28); stroke: none; }
+.gm-station.is-faction :is(.gm-station-light, .gm-station-window) { fill: color-mix(in srgb, var(--st-accent) 75%, #ffffff); }
 .gm-station.is-faction .gm-station-sign-glyph { fill: var(--st-accent); }
 .gm-lamp-strobe { fill: #ffffff; }
 .gm-lamp-amber { fill: #ffb43b; }
@@ -15831,7 +16123,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     flex: 1 1 auto;
     min-height: 0;
     grid-template-rows: minmax(0, 1fr);
-    height: min(52vh, 420px);
+    height: min(calc(52 * var(--ch)), calc(420px * var(--zk)));
 }
 .profile-selection-floating .profile-selection-body > * {
     min-height: 0;
@@ -15846,7 +16138,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 @media (max-width: 560px) {
     .profile-selection-floating .profile-selection-body {
         grid-template-rows: minmax(0, 0.8fr) minmax(0, 1.2fr);
-        height: min(68vh, 560px);
+        height: min(calc(68 * var(--ch)), calc(560px * var(--zk)));
     }
 }
 
@@ -16166,7 +16458,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     font-size: 10px;
 }
 .profile-selection-content.profile-selection-name-mode {
-    width: min(560px, 94vw);
+    width: min(calc(560px * var(--zk)), calc(94 * var(--cw)));
 }
 .profile-faction-lore {
     margin: 0 auto 14px;
@@ -16202,8 +16494,8 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 
 /* --- Faction picker: wider modal, info left / lore right. */
 .profile-selection-content.profile-selection-floating.profile-selection-name-mode {
-    max-width: min(860px, 94vw);
-    width: min(860px, 94vw);
+    max-width: min(calc(860px * var(--zk)), calc(94 * var(--cw)));
+    width: min(calc(860px * var(--zk)), calc(94 * var(--cw)));
 }
 .profile-faction-info-row {
     display: grid;
@@ -16237,7 +16529,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     gap: 10px;
     align-items: flex-start;
     padding: 10px;
-    border: 2px solid var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
     background: rgba(0, 0, 0, 0.35);
     clip-path: var(--pf-ctl, none);
 }
@@ -16248,7 +16540,7 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     justify-content: center;
     width: 32px;
     height: 32px;
-    border: 1px solid var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
     opacity: 0.95;
 }
 .profile-faction-fact-body { min-width: 0; }
@@ -17598,9 +17890,9 @@ button.hs-faction-card.nav-focused {
    fill; with a see-through fill that tints the whole panel. Mask it down to
    a ring of --frame-w so only the outline stays coloured. */
 .home-station-overlay .home-station-content :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
-    padding: var(--frame-w, 2px);
+    padding: var(--ring-w, 8px);
     box-sizing: border-box;
-    --hole: linear-gradient(#000 0 0) var(--bezel) var(--bezel) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel)) no-repeat;
+    --hole: linear-gradient(#000 0 0) var(--ring-w, 8px) var(--ring-w, 8px) / calc(100% - 2 * var(--ring-w, 8px)) calc(100% - 2 * var(--ring-w, 8px)) no-repeat;
     -webkit-mask: var(--hole), linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask: var(--hole) exclude, linear-gradient(#000 0 0);
@@ -17866,9 +18158,10 @@ button.hs-faction-card.nav-focused {
 }
 .hs-hangar-view-btn img,
 .hs-hangar-view-btn .hs-pixel {
-    width: 16px;
-    height: 16px;
+    width: 32px;
+    height: 32px;
     flex: none;
+    image-rendering: pixelated;
 }
 
 /* Planet map toolbar: jump to galaxy travel. */
@@ -18475,11 +18768,22 @@ button.hs-faction-card.nav-focused {
     margin-left: 6px;
     vertical-align: middle;
 }
+.hs-ship-icon-btn {
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #05060a);
+    background: #05060a;
+    clip-path: var(--faction-ctl-clip, polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px));
+    image-rendering: pixelated;
+}
+.hs-ship-icon-btn .hs-pixel { width: 20px; height: 20px; image-rendering: pixelated; }
+button.hs-ship-icon-btn:is(:hover, .nav-focused) {
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, #05060a);
+}
 .hs-ship-icon-btn.is-active {
     color: var(--color-primary);
-    font-size: 18px;
-    border: var(--ui-border-width) solid var(--color-primary);
-    box-sizing: border-box;
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #05060a);
 }
 .hs-ship-table-thumb {
     width: 60px;
@@ -18988,12 +19292,14 @@ button.hs-faction-card.nav-focused {
     cursor: not-allowed;
 }
 
-/* Galaxy map: ruling faction, top right */
+/* Galaxy map host positioning for overlay children. */
 .galaxy-map-embedded,
 .galaxy-map-content {
     position: relative;
 }
-.galaxy-map-ruler {
+/* Legacy absolute ruler (non-stage); stage layout overrides this. */
+.galaxy-map-content > .galaxy-map-header .galaxy-map-ruler,
+.galaxy-map-overlay .galaxy-map-ruler {
     position: absolute;
     top: 8px;
     right: 12px;
@@ -19054,7 +19360,7 @@ button.hs-faction-card.nav-focused {
     height: 16px;
     box-sizing: border-box;
     background: rgba(0, 0, 0, 0.75);
-    border: 1px solid var(--fac);
+    border: var(--ui-border-width, 2px) solid var(--fac);
 }
 .gm-node-faction > * {
     width: 12px;
@@ -19100,21 +19406,25 @@ button.hs-faction-card.nav-focused {
    Solid backgrounds so both read over the busy map. */
 .galaxy-map-ruler {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: stretch;
-    gap: 8px;
+    gap: 0;
     padding: 0;
     min-width: 0;
-    width: 280px;
+    width: auto;
     background: none;
     border: none;
 }
 .galaxy-map-ruler-card,
 .galaxy-map-situation {
+    color: #fff;
+}
+/* Standalone cards (non-bar contexts) keep their own frame. */
+.galaxy-map-ruler:not(.is-bar) .galaxy-map-ruler-card,
+.galaxy-map-ruler:not(.is-bar) .galaxy-map-situation {
     background: color-mix(in srgb, var(--color-background, #000) 94%, #000);
     border: var(--ui-border-width, 2px) solid var(--ruler-accent, var(--color-primary));
     box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 16%, transparent);
-    color: #fff;
 }
 .galaxy-map-ruler-card {
     display: flex;
@@ -19195,7 +19505,7 @@ button.hs-faction-card.nav-focused {
     letter-spacing: 2px;
     text-anchor: middle;
 }
-.gm-post-node.is-faction .gm-faction-station-ring {
+.gm-post-node.is-built .gm-faction-station-ring {
     display: none;
 }
 .galaxy-map-ruler-holdings {
@@ -19257,7 +19567,7 @@ button.hs-faction-card.nav-focused {
    a faint divider under each heading and an accent bar on open sections. */
 .hs-tree-root,
 .hs-tree-root > summary {
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
     box-shadow: none !important;
 }
 .hs-tree-branch,
@@ -19271,11 +19581,11 @@ button.hs-faction-card.nav-focused {
 .hs-tree-item > summary {
     border: none !important;
     box-shadow: none !important;
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) !important;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) !important;
 }
 .hs-tree-branch[open],
 .hs-tree-item[open] {
-    border-left: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 7%, transparent);
 }
 .hs-tree-branch > summary:hover,
@@ -19295,7 +19605,7 @@ button.hs-faction-card.nav-focused {
 .hs-tree-item .hs-style-dropdown-current,
 .hs-tree-branch .hs-style-dropdown-thumb,
 .hs-tree-item .hs-style-dropdown-thumb {
-    border-width: 1px !important;
+    border-width: var(--ui-border-width, 2px) !important;
     border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) !important;
     box-shadow: none !important;
 }
@@ -19310,8 +19620,8 @@ button.hs-faction-card.nav-focused {
 
 /* --- Faction picker, large: fill the screen, bigger type and icons. */
 .profile-selection-content.profile-selection-floating.profile-selection-name-mode:has(.profile-faction-info-row) {
-    max-width: min(1320px, 96vw);
-    width: min(1320px, 96vw);
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
     max-height: 96vh;
     overflow-y: auto;
     padding: 28px 32px;
@@ -19356,8 +19666,8 @@ button.hs-faction-card.nav-focused {
 
 /* --- Profiles overlay, large: same footprint as the station's big panels. */
 .profile-selection-content.profile-selection-floating:not(.profile-selection-name-mode) {
-    max-width: min(1320px, 96vw);
-    width: min(1320px, 96vw);
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
     max-height: 94vh;
     padding: 28px 32px;
 }
@@ -19365,7 +19675,7 @@ button.hs-faction-card.nav-focused {
 .profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
     grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
     gap: 18px;
-    height: min(70vh, 820px);
+    height: min(calc(70 * var(--ch)), calc(820px * var(--zk)));
     max-height: none;
 }
 .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item {
@@ -19389,13 +19699,13 @@ button.hs-faction-card.nav-focused {
 @media (max-width: 560px) {
     .profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
         grid-template-columns: 1fr;
-        height: min(72vh, 640px);
+        height: min(calc(72 * var(--ch)), calc(640px * var(--zk)));
     }
 }
 
 /* --- Start menu, wide: pilot card + a one-line hint under each entry. */
 .start-screen-content:has(> .start-screen-menu-clustered) {
-    width: min(560px, 94vw);
+    width: min(calc(560px * var(--zk)), calc(94 * var(--cw)));
     padding: 28px 36px 18px;
     gap: 10px;
 }
@@ -19469,7 +19779,7 @@ button.hs-faction-card.nav-focused {
     color: var(--color-primary);
     font-weight: bold;
     padding-bottom: 8px;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 .profile-faction-lore-hero {
     font-size: 0.85em;
@@ -19528,8 +19838,8 @@ button.hs-faction-card.nav-focused {
 
 /* Settings modal: wide, three columns, collapsible sections. */
 .start-screen-content:has(> .settings-panel-3col) {
-    width: min(96vw, 1100px);
-    max-width: min(96vw, 1100px);
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
 }
 .settings-panel-clustered.settings-panel-3col {
     /* Sections stacked, each the full modal width. */
@@ -19595,7 +19905,7 @@ html[data-vf-glow]:not([data-vf-glow="off"]) .settings-panel-clustered details.s
 }
 /* Fixed modal height, whichever section is open; the panel scrolls inside. */
 .start-screen-content:has(> .settings-panel-3col) {
-    height: min(86vh, 860px);
+    height: min(calc(86 * var(--ch)), calc(860px * var(--zk)));
 }
 .start-screen-content > .settings-panel-3col {
     overflow-y: auto;
@@ -19606,8 +19916,8 @@ html[data-vf-glow]:not([data-vf-glow="off"]) .settings-panel-clustered details.s
    spent most of its time tiny in the distance). */
 .hs-credits-crawl-stage { perspective: none; }
 .hs-credits-crawl-stage-fullscreen {
-    width: min(900px, 92vw);
-    height: min(64vh, 560px);
+    width: min(calc(900px * var(--zk)), calc(92 * var(--cw)));
+    height: min(calc(64 * var(--ch)), calc(560px * var(--zk)));
 }
 .hs-credits-crawl { transform: none; }
 .hs-credits-crawl-text {
@@ -19630,9 +19940,9 @@ html[data-vf-glow]:not([data-vf-glow="off"]) .settings-panel-clustered details.s
 }
 .hs-credits-crawl-stage-fullscreen .hs-credits-crawl-text { --credits-roll-from: min(64vh, 560px); }
 .start-screen-content:has(> .hs-credits-crawl-stage-fullscreen) {
-    width: min(96vw, 1100px);
-    max-width: min(96vw, 1100px);
-    height: min(88vh, 820px);
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    height: min(calc(88 * var(--ch)), calc(820px * var(--zk)));
 }
 .start-screen-content > .hs-credits-crawl-stage-fullscreen {
     width: 100%;
@@ -19661,7 +19971,8 @@ html[data-vf-glow]:not([data-vf-glow="off"]) .settings-panel-clustered details.s
 }
 
 /* Settings accordion: the opened section's rows slide in. */
-details.settings-section[open] > .settings-section-list {
+details.settings-section[open] > .settings-section-list,
+details.settings-section[open] > .settings-style-body {
     animation: vf-section-in 200ms steps(5, end) both;
     transform-origin: top center;
 }
@@ -19670,7 +19981,8 @@ details.settings-section[open] > .settings-section-list {
     to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-    details.settings-section[open] > .settings-section-list { animation: none; }
+    details.settings-section[open] > .settings-section-list,
+    details.settings-section[open] > .settings-style-body { animation: none; }
 }
 
 /* Pilot creation: start options (galaxy / difficulty / starter kit). */
@@ -19745,7 +20057,7 @@ details.settings-section[open] > .settings-section-list {
 .profile-start-galaxy-map {
     flex: 0 0 auto;
     background: #000;
-    border: 1px solid color-mix(in srgb, var(--galaxy-color) 45%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--galaxy-color) 45%, transparent);
 }
 .profile-start-galaxy-map .edges line {
     stroke: color-mix(in srgb, var(--galaxy-color) 55%, transparent);
@@ -19880,7 +20192,7 @@ details.settings-section[open] > .settings-section-list {
     align-items: center;
     justify-content: center;
     background: #000;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
 }
 .profile-selection-name-mode.is-name-step .profile-start-options { max-width: 1040px; }
 .profile-selection-name-mode.is-name-step .profile-start-row[data-start-row="galaxy"] {
@@ -20091,7 +20403,7 @@ details.settings-section[open] > .settings-section-list {
 .home-station-content .hs-tabs:has(.nav-focused),
 .home-station-content .hs-subnav:has(.nav-focused),
 .home-station-content .hs-shop-cats:has(.nav-focused) {
-    outline: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+    outline: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
     outline-offset: 3px;
     box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent) 16%, transparent);
     background-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 5%, transparent);
@@ -20124,7 +20436,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-home-btn).active {
 }
 .home-station-content .is-nav-row-active {
     position: relative;
-    outline: 2px solid var(--faction-accent, var(--color-primary)) !important;
+    outline: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
     outline-offset: 2px;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, transparent) !important;
     box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 72%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 30%, transparent), 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 16%, transparent) !important;
@@ -20308,8 +20620,8 @@ html .home-station-overlay :is(.hs-subnav, .hs-subnav-menu) {
 .hs-topbar .hs-topbar-res .hs-credit-icon,
 .hs-topbar .hs-topbar-res .hs-credit-icon img,
 .hs-topbar .hs-topbar-res .hs-credit-icon canvas {
-    width: 24px !important;
-    height: 24px !important;
+    width: 32px !important;
+    height: 32px !important;
 }
 .hs-topbar .hs-topbar-res .hs-credit-amount {
     font-size: 17px;
@@ -20429,7 +20741,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     padding: 0;
     color: var(--faction-accent, var(--color-primary));
     background: transparent;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
     cursor: pointer;
 }
 .hs-layout-btn:hover:not([disabled]),
@@ -20450,7 +20762,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     height: 22px;
     color: var(--color-text);
     background: #05060a;
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
 }
 
 /* LAYOUT editor drag & drop. */
@@ -20505,7 +20817,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     letter-spacing: 1px;
     padding: 2px 5px;
     color: color-mix(in srgb, #fff 55%, transparent);
-    border: 1px solid color-mix(in srgb, #fff 25%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, #fff 25%, transparent);
 }
 
 /* LAYOUT editor: icon buttons + icon picker modal */
@@ -20522,7 +20834,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 .hs-layout-icon-modal {
     width: min(640px, calc(100vw - 32px)); max-height: 80vh; display: flex; flex-direction: column; gap: 12px;
     padding: 16px; background: var(--color-bg, #10151c);
-    border: 2px solid var(--faction-accent, var(--color-primary));
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
     box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 16%, transparent);
 }
 .hs-layout-icon-grid {
@@ -20530,17 +20842,17 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 }
 .hs-layout-icon-pick {
     width: 48px; height: 48px; padding: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04); border: var(--ui-border-width, 2px) solid rgba(255, 255, 255, 0.12);
 }
 .hs-layout-icon-pick img, .hs-layout-icon-pick canvas { image-rendering: pixelated; display: block; }
 .hs-layout-icon-pick .ui-icon-tip { display: block; line-height: 0; }
 /* 2px border when selected: keep the icon on the same pixel grid. */
-.hs-layout-icon-pick { border-width: 2px !important; }
+.hs-layout-icon-pick { border-width: var(--ui-border-width, 2px) !important; }
 .hs-layout-icon-pick:not(.is-on):not(:hover):not(:focus) { border-color: rgba(255, 255, 255, 0.12); }
 .hs-layout-icon-pick:hover, .hs-layout-icon-pick:focus { border-color: var(--faction-accent, var(--color-primary)); outline: none; }
 .hs-layout-icon-pick.is-default { border-style: dashed; }
 .hs-layout-icon-pick.is-on {
-    border: 2px solid var(--faction-accent, var(--color-primary));
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
 }
 
@@ -20557,13 +20869,13 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 .hs-layout-rename-input {
     flex: 1 1 auto; min-width: 0; font: inherit; letter-spacing: inherit; text-transform: uppercase;
     color: #fff; background: rgba(0, 0, 0, 0.35); padding: 2px 6px;
-    border: 1px solid var(--faction-accent, var(--color-primary)); outline: none;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)); outline: none;
 }
 .hs-layout-icon-modal .hs-menu-panel-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .hs-layout-modal-btn {
     font: inherit; font-size: 12px; letter-spacing: 0.15em; padding: 8px 16px; cursor: pointer;
     color: var(--faction-accent, var(--color-primary)); background: rgba(255, 255, 255, 0.04);
-    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
 }
 .hs-layout-modal-btn:hover, .hs-layout-modal-btn:focus { color: #fff; border-color: var(--faction-accent, var(--color-primary)); outline: none; }
 
@@ -20611,7 +20923,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     box-sizing: border-box;
     padding: 5px;
     background: #05060a;
-    border: 2px solid #6b7690;
+    border: var(--ui-border-width, 2px) solid #6b7690;
     color: #cfd6e6;
     image-rendering: pixelated;
     /* Dark outline so the tiles read on top of the planet. */
@@ -20625,9 +20937,9 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 .gm-stage-link {
     flex: 1 1 auto;
     height: 0;
-    border-top: 3px dashed #3a4256;
+    border-top: var(--ui-border-width, 2px) dashed #3a4256;
 }
-.gm-stage-link.is-walked { border-top: 3px solid #5fd37a; }
+.gm-stage-link.is-walked { border-top: var(--ui-border-width, 2px) solid #5fd37a; }
 .gm-stage-tag {
     position: absolute;
     top: 100%;
@@ -20648,7 +20960,7 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     color: #5fd37a;
 }
 /* Outline on the green square itself, not the padded box. */
-.gm-stage-stepper .gm-sector-stage.is-done svg { outline: 2px solid #05060a; }
+.gm-stage-stepper .gm-sector-stage.is-done svg { outline: var(--ui-border-width, 2px) solid #05060a; }
 .gm-stage-stepper .gm-stage-done-bg { fill: #5fd37a; }
 .gm-stage-stepper .gm-stage-check { fill: #05060a; }
 .gm-stage-stepper .gm-sector-stage.is-boss:not(.is-done) {
@@ -20697,7 +21009,7 @@ html .home-station-overlay .home-station-content .hs-topbar.is-res-stacked {
     justify-content: flex-end;
     margin: 0 4px 2px;
     padding-bottom: 6px;
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent);
 }
 
 /* Profile rows: emblem · name · faction · ACTIVE badge · actions — one line. */
@@ -20775,7 +21087,7 @@ html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-amou
     flex-direction: column;
     gap: 3px;
     padding: 6px 0 4px;
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
 }
 .hs-hangar-part-detail-group:first-child { padding-top: 0; }
 .hs-hangar-part-detail-head {
@@ -20938,7 +21250,7 @@ html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon
     margin-left: auto;
     box-sizing: border-box;
     background: #05060a;
-    border: 2px solid #4a5268;
+    border: var(--ui-border-width, 2px) solid #4a5268;
 }
 .hs-hangar-part-switch > span {
     position: absolute;
@@ -20964,7 +21276,7 @@ html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon
     height: 18px;
     margin-left: auto;
     box-sizing: border-box;
-    border: 2px solid #4a5268;
+    border: var(--ui-border-width, 2px) solid #4a5268;
     background: #05060a;
     /* Pixel "circle": corners cut. */
     clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px),
@@ -21003,7 +21315,7 @@ html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon
     letter-spacing: 0.08em;
     padding-bottom: 4px;
     margin-bottom: 2px;
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
 }
 .ui-tooltip-row { display: flex; justify-content: space-between; gap: 12px; }
 .ui-tooltip-key { opacity: 0.6; }
@@ -21057,7 +21369,7 @@ body.hs-part-grabbing .hs-hangar-part-icon.is-drag-handle { cursor: grabbing; }
     width: 24px;
     height: 24px;
     box-sizing: border-box;
-    border: 2px dashed color-mix(in srgb, var(--kind-color, var(--color-primary)) 45%, transparent);
+    border: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--kind-color, var(--color-primary)) 45%, transparent);
     background: #05060a;
 }
 .hs-section-slot.is-filled {
@@ -21117,9 +21429,11 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 /* Parts section headers: bigger label, type glyph and slot boxes. */
 .hs-hangar-parts-title { font-size: 14px; padding-bottom: 5px; }
 .hs-hangar-parts-title .hs-slot-glyph { width: 22px; height: 22px; }
-.hs-section-slot { width: 32px; height: 32px; }
+.hs-section-slot { width: 36px; height: 36px; overflow: hidden; }
+.hs-section-slot img,
+.hs-section-slot .hs-pixel { width: 24px; height: 24px; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
 .hs-section-slot-count { font-size: 13px; }
-.hs-hangar-parts-caret { font-size: 11px; }
+.hs-hangar-parts-caret { font-size: 16px; line-height: 1; margin-left: 8px; color: var(--kind-color, var(--color-primary)); }
 
 /* Parts section headers: pixel sprite + label in the section's colour. */
 .hs-hangar-parts-icon { display: inline-flex; flex: 0 0 auto; line-height: 0; }
@@ -21146,7 +21460,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     color: #fff3c4;
     font-weight: 700;
     padding: 1px 4px 1px 2px;
-    border: 1px solid #ffd24a;
+    border: var(--ui-border-width, 2px) solid #ffd24a;
     background: rgba(255, 210, 74, 0.14);
     text-shadow: 0 0 1px #05060a, 0 0 6px rgba(255, 210, 74, 0.8);
 }
@@ -21179,6 +21493,11 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .hs-hangar-parts-icon { width: 32px; height: 32px; }
 .hs-hangar-parts-icon img { width: 32px; height: 32px; }
 .hs-hangar-parts-section .hs-hangar-parts-title { min-height: 38px; box-sizing: border-box; }
+/* More vertical air between the collapsible sections and their content. */
+.hs-hangar-parts-section { margin-top: 14px; }
+.hs-hangar-parts-section:first-child { margin-top: 4px; }
+.hs-hangar-parts-section .hs-hangar-parts-title { margin-bottom: 8px; }
+.hs-hangar-parts-section > .hs-hangar-parts-grid { padding-bottom: 6px; }
 
 /* Replay boot intro from the main menu footer */
 .ui-intro-btn {
@@ -21346,7 +21665,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     margin-top: clamp(2px, 0.6vh, 8px);
     padding: 10px 16px;
     background: #05060a;
-    border: 2px solid color-mix(in srgb, var(--color-primary, #ff5a1f) 70%, #000);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary, #ff5a1f) 70%, #000);
     font-family: 'Silkscreen', var(--ui-font-family);
     text-transform: uppercase;
 }
@@ -21357,7 +21676,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     text-align: center;
     text-shadow: 2px 2px 0 #000;
     padding-bottom: 6px;
-    border-bottom: 2px dashed color-mix(in srgb, var(--color-primary, #ff5a1f) 40%, transparent);
+    border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--color-primary, #ff5a1f) 40%, transparent);
 }
 .start-scoreboard-head,
 .start-scoreboard-row {
@@ -21422,8 +21741,8 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     min-height: min(560px, 80vh);
 }
 .start-screen-content.start-screen-retro {
-    width: min(96vw, 980px) !important;
-    max-width: min(96vw, 980px) !important;
+    width: min(calc(96 * var(--cw)), calc(980px * var(--zk))) !important;
+    max-width: min(calc(96 * var(--cw)), calc(980px * var(--zk))) !important;
     padding-left: clamp(24px, 4vw, 48px);
     padding-right: clamp(24px, 4vw, 48px);
 }
@@ -21526,7 +21845,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 /* Profiles page inside the terminal screen */
 .start-screen-retro .start-screen-profiles-body {
     width: 100%;
-    max-height: min(56vh, 520px);
+    max-height: min(calc(56 * var(--ch)), calc(520px * var(--zk)));
     overflow-y: auto;
     text-align: left;
 }
@@ -21538,7 +21857,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     gap: 4px;
     margin-bottom: 14px;
     padding-bottom: 10px;
-    border-bottom: 2px dashed color-mix(in srgb, var(--retro-ink) 35%, transparent);
+    border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--retro-ink) 35%, transparent);
 }
 .start-screen-profiles-body .hs-menu-profile-filter,
 .start-screen-profiles-body .hs-menu-profile-filter:not(.hs-menu-profile-create) {
@@ -21549,7 +21868,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     padding: 6px 10px;
     font-size: 11px;
     letter-spacing: 0.12em;
-    border-width: 2px;
+    border-width: var(--ui-border-width, 2px);
     white-space: nowrap;
 }
 .start-screen-profiles-body .hs-menu-profile-filter-ico { width: 18px; height: 18px; }
@@ -21564,7 +21883,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     margin: 0;
     padding: 6px 8px;
     min-height: 0;
-    border: 2px solid color-mix(in srgb, var(--row-accent, var(--retro-ink)) 45%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--row-accent, var(--retro-ink)) 45%, transparent);
     box-shadow: none;
     transform: none;
     background: rgba(255, 255, 255, 0.02);
@@ -21575,10 +21894,10 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     background: color-mix(in srgb, var(--row-accent, var(--retro-ink)) 12%, transparent);
     outline: none;
 }
-.start-screen-profiles-body .hs-menu-profile-act { padding: 3px 8px; font-size: 10px; border-width: 2px; }
+.start-screen-profiles-body .hs-menu-profile-act { padding: 3px 8px; font-size: 10px; border-width: var(--ui-border-width, 2px); }
 .start-screen-profiles-body .hs-menu-profile-stats {
-    border-width: 2px;
-    max-height: min(44vh, 400px);
+    border-width: var(--ui-border-width, 2px);
+    max-height: min(calc(44 * var(--ch)), calc(400px * var(--zk)));
     font-size: 11px;
 }
 .start-screen-retro .hs-credits-crawl-back {
@@ -21741,6 +22060,8 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
     position: fixed !important;
     top: calc((var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y)) / var(--hs-z)) !important;
     left: calc((var(--hs-frame-gap) + var(--bezel)) / var(--hs-z)) !important;
+    right: auto !important;
+    bottom: auto !important;
     margin: 0 !important;
     transform: none !important;
     box-shadow:
@@ -22217,7 +22538,7 @@ html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.h
     filter: none !important;
     color: var(--color-text, #e8e8f0);
     background: rgba(4, 3, 10, 0.72) !important;
-    border: 2px solid color-mix(in srgb, var(--color-text, #fff) 18%, transparent) !important;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 18%, transparent) !important;
     border-bottom-color: transparent !important;
 }
 html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card:is(:hover, .nav-focused) {
@@ -22278,7 +22599,7 @@ html body .home-station-overlay .hs-faction-tabs .hs-faction-head { gap: 10px; }
     font-size: 12px;
     letter-spacing: 2px;
     color: var(--faction-accent, var(--color-primary));
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
     padding-bottom: 4px;
 }
 .hs-fd-goal { margin: 0; font-size: 14px; line-height: 1.45; color: var(--color-text, #eee); }
@@ -22316,12 +22637,12 @@ html body .home-station-overlay .hs-faction-tabs .hs-faction-head { gap: 10px; }
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.45);
-    border: 1px solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
 }
 .hs-fd-ship-img img { width: 80%; height: 80%; object-fit: contain; image-rendering: pixelated; }
 .hs-fd-ship figcaption { font-size: 11px; letter-spacing: 2px; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
 .hs-fd-swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 1px; }
-.hs-fd-swatch i { width: 16px; height: 16px; border: 1px solid #000; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); }
+.hs-fd-swatch i { width: 16px; height: 16px; border: var(--ui-border-width, 2px) solid #000; box-shadow: 0 0 0 var(--ui-border-width, 2px) rgba(255,255,255,0.25); }
 .hs-fd-swatch em { font-style: normal; opacity: 0.6; }
 
 /* Faction detail: section tabs + larger type throughout. */
@@ -22330,7 +22651,7 @@ html body .home-station-overlay .hs-faction-tabs .hs-faction-head { gap: 10px; }
     flex-wrap: wrap;
     gap: 6px;
     padding-bottom: 6px;
-    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
 }
 html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab {
     opacity: 1;
@@ -22373,7 +22694,7 @@ html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab-label 
     cursor: pointer;
     font: inherit;
     color: var(--color-primary);
-    border: 2px solid var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
     background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-primary) 22%, #05060a) 0%, #05060a 80%);
     clip-path: var(--faction-ctl-clip, none);
     transition: background 0.15s, filter 0.15s;
@@ -22551,7 +22872,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     text-align: left;
     color: var(--color-text, #eee);
     background: rgba(0, 0, 0, 0.45);
-    border: 2px solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
     cursor: pointer;
 }
 .hs-fd-fleet-item:is(:hover, .nav-focused) { border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent); }
@@ -22567,7 +22888,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     height: auto;
     min-height: 0;
     background: #05060a;
-    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
@@ -22579,13 +22900,17 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     justify-content: flex-end;
     gap: 4px;
     padding: 4px;
-    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
     background: color-mix(in srgb, #05060a 86%, var(--faction-accent, var(--color-primary)));
     z-index: 1;
 }
 .hs-fd-fleet-toolbar .pe-preview-btn {
     min-width: 28px;
     padding: 2px 6px;
+}
+.hs-fd-fleet-toolbar .hs-fd-sizes-btn.is-active {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
 }
 .hs-fd-fleet-zoom {
     min-width: 42px;
@@ -22700,13 +23025,14 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     padding: 2px 8px;
 }
 
-/* Planet + ship info as hovering cards in the map's bottom corners. */
+/* Map fills the stage; bottom bar sits under it (map ends above the bar). */
 .galaxy-map-embedded .gm-map-stage {
     position: relative;
     flex: 1 1 auto;
     min-height: 160px;
     display: flex;
     flex-direction: column;
+    gap: 10px;
 }
 .home-station-content .hs-body-play .galaxy-map-embedded .gm-map-stage > .galaxy-map-area {
     flex: 1 1 auto;
@@ -22714,40 +23040,53 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     height: auto;
 }
 .galaxy-map-embedded .gm-map-stage > .galaxy-map-panels {
-    position: absolute;
-    inset: auto 12px 12px 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 12px;
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    flex: 0 0 auto;
+    display: block;
     margin: 0;
     padding: 0;
     border: 0;
     background: none;
     overflow: visible;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 30;
 }
-.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-panel {
+.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-ruler.is-bar {
     pointer-events: auto;
-    background: color-mix(in srgb, #05060a 82%, transparent);
-    border-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-border));
-    box-shadow: 4px 4px 0 0 #000, 0 0 0 1px #000;
 }
 .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
-    width: min(520px, 48%);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    min-width: 0;
     min-height: 0;
 }
 .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-ship {
-    width: min(380px, 34%);
+    width: 100%;
 }
-@media (max-width: 720px) {
-    .galaxy-map-embedded .gm-map-stage > .galaxy-map-panels {
-        flex-direction: column;
-        align-items: stretch;
+@media (max-width: 900px) {
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar {
+        flex-wrap: wrap;
     }
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select,
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-ship { width: auto; }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet {
+        flex: 1 1 100%;
+        min-width: 0;
+        border-right: 0;
+        border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+    }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+        flex: 1 1 55%;
+        max-width: none;
+        border-right: 0;
+    }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
+        flex: 1 1 40%;
+        max-width: none;
+    }
 }
 
 /* Nebula layers: slow breathing + a few map units of drift, per layer offset. */
@@ -22817,7 +23156,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     gap: 6px;
     min-width: 0;
     padding: 2px 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 .gm-ship-card-stats .gm-ship-card-wide { grid-column: 1 / -1; }
 .gm-ship-card-stats dt {
@@ -22836,7 +23175,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     font-size: var(--font-text);
     color: #fff;
 }
-.gm-ship-card-stats .gm-stat-chip img { width: 20px !important; height: 20px !important; }
+.gm-ship-card-stats .gm-stat-chip img { width: 24px !important; height: 24px !important; }
 .gm-muted { color: var(--color-text-secondary); }
 
 /* Map planets as images (galaxy-map planetIconHtml asImage). */
@@ -22863,10 +23202,10 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     font-weight: bold;
     color: #fff;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 38%, #05060a);
-    border: 2px solid var(--faction-accent, var(--color-primary));
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
     box-shadow:
         3px 3px 0 0 #000,
-        0 0 0 1px #000,
+        0 0 0 var(--ui-border-width, 2px) #000,
         0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
     text-shadow: 1px 1px 0 #000;
     transition: transform 0.12s steps(2, end), box-shadow 0.12s steps(2, end), background-color 0.12s steps(2, end);
@@ -22893,7 +23232,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 62%, #05060a);
     box-shadow:
         5px 5px 0 0 #000,
-        0 0 0 1px #000,
+        0 0 0 var(--ui-border-width, 2px) #000,
         0 0 20px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 75%, transparent);
     animation: gm-card-btn-pulse 1.2s ease-in-out infinite;
 }
@@ -22903,7 +23242,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 }
 .galaxy-map-panel-select .gm-card-actions .action-button:not(:disabled):active {
     transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 0 #000, 0 0 0 1px #000;
+    box-shadow: 1px 1px 0 0 #000, 0 0 0 var(--ui-border-width, 2px) #000;
     animation: none;
 }
 .galaxy-map-panel-select .gm-card-actions .action-button:disabled {
@@ -22929,8 +23268,8 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
    Fluid sizes instead of fixed px, and stacking breakpoints at 900 / 640 px.
    ========================================================================== */
 .profile-selection-content.profile-selection-floating.profile-selection-name-mode:has(.profile-faction-info-row) {
-    width: min(1320px, 96vw);
-    max-width: min(1320px, 96vw);
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
     padding: clamp(14px, 2.4vw, 32px) clamp(12px, 2.6vw, 32px);
     box-sizing: border-box;
 }
@@ -23031,7 +23370,9 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    grid-column: 1 / -1;
+    width: 100%;
     gap: 14px;
 }
 .galaxy-map-embedded .galaxy-map-toolbar > .galaxy-map-progress-bar {
@@ -23061,8 +23402,10 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     flex: 0 0 auto;
 }
 .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar {
+    grid-column: 1 / -1;
     grid-row: 2;
     align-self: center;
+    width: 100%;
 }
 /* Same height as the ruler / conflict cards in that row. */
 .galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
@@ -23083,20 +23426,20 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .gm-locked-icon .gm-lock-body { fill: #ff9b54; stroke: #050508; stroke-width: 1.5px; paint-order: stroke; }
 .gm-locked-icon .gm-lock-hole { fill: #050508; }
 
-/* Ship summary in the header toolbar: bare (no panel), filling the space
-   between EXPLORE NEW SECTOR and TELEPORT, framed by thin dividers.
-   Row 1: name · class · status. Row 2: stats as label/value pairs. */
+/* Ship summary: [art] [name/class/status stacked] [Weapons · Modules] [buttons]. */
 .galaxy-map-toolbar .gm-ship-bar {
     flex: 1 1 auto;
+    margin-right: auto;
     min-width: 0;
+    max-width: none;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     padding: 0 16px;
     background: none;
     border: 0;
-    border-left: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
-    border-right: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
     box-shadow: none;
 }
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-art {
@@ -23109,25 +23452,43 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-mini-canvas { width: 70px !important; height: 100px !important; }
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-main {
     flex: 1 1 auto;
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    align-items: baseline;
-    gap: 6px 10px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
     min-width: 0;
 }
-/* Flatten the head so name, class and status share row 1. */
-.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-head { display: contents; }
-.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-head .gm-panel-value { grid-row: 1; grid-column: 1; }
-.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-class { grid-row: 1; grid-column: 2; }
-.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-status { grid-row: 1; grid-column: 3; justify-self: start; }
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-info {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-info .gm-panel-value {
+    line-height: 1.1;
+    white-space: nowrap;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-class {
+    font-size: 0.85em;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+    line-height: 1.1;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-status {
+    justify-self: start;
+}
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats {
-    grid-row: 2;
-    grid-column: 1 / -1;
-    /* Four columns across the full width: label on top, value below. */
+    flex: 1 1 auto;
     display: grid;
-    grid-template-columns: repeat(4, minmax(max-content, 1fr));
-    gap: 4px 24px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 28px;
     margin: 0;
+    min-width: 0;
+    align-self: stretch;
+    align-content: center;
 }
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats > div {
     flex-direction: column;
@@ -23141,7 +23502,12 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     justify-content: flex-start;
 }
 .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats dd { justify-content: flex-start; }
-.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img { width: 16px !important; height: 16px !important; }
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img,
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.hs-pixel,
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon {
+    width: 40px !important;
+    height: 40px !important;
+}
 /* Header toolbar: EXPLORE button with its budget / reason line underneath. */
 .galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore {
     display: flex;
@@ -23161,6 +23527,25 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .galaxy-map-embedded .galaxy-map-toolbar .gm-progress-col .gm-explore-meta { margin: 0; white-space: nowrap; }
 .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar { gap: 24px; }
 .galaxy-map-embedded .galaxy-map-toolbar .gm-progress-col .galaxy-map-explore { align-items: flex-end; }
+.galaxy-map-explore .gm-explore-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.galaxy-map-explore .gm-explore-progress .gm-progress-icon {
+    width: 32px !important;
+    height: 32px !important;
+    flex: none;
+}
+.galaxy-map-explore .gm-explore-progress .gm-progress-text {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore .gm-explore-progress {
+    align-self: flex-end;
+}
 /* EXPLORE cost: resource icon + amount chips inside the button. */
 .gm-explore-btn { display: inline-flex; align-items: center; gap: 12px; }
 .gm-explore-costs { display: inline-flex; align-items: center; gap: 10px; }
@@ -23557,8 +23942,8 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-wal
     border-left: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
 }
 @media (max-width: 900px) {
-    html body .home-station-overlay .home-station-content .hs-header-split { flex-wrap: wrap; }
-    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { margin: 0; }
+    html body .home-station-overlay .home-station-content .hs-header-split { flex-wrap: nowrap !important; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { margin: 8px 0 6px; }
 }
 
 /* SHIP stat tiles: icon/label and value centred horizontally. */
@@ -23624,8 +24009,11 @@ html body .home-station-overlay .home-station-content .hs-subnav > .hs-tab {
     --gm-btn-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #05060a);
     background: #05060a !important;
     color: #d8d8de !important;
-    border: 3px solid var(--gm-btn-line) !important;
-    box-shadow: inset 0 0 0 3px #05060a, inset 0 0 0 6px var(--gm-btn-line), 3px 3px 0 0 #000 !important;
+    border: var(--ui-border-width, 2px) solid var(--gm-btn-line) !important;
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width, 2px) #05060a,
+        inset 0 0 0 calc(var(--ui-border-width, 2px) * 2) var(--gm-btn-line),
+        2px 2px 0 0 #000 !important;
     text-shadow: 1px 1px 0 #000;
     opacity: 1;
     animation: none !important;
@@ -23641,7 +24029,10 @@ html body .home-station-overlay .home-station-content .hs-subnav > .hs-tab {
     --gm-btn-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
     background: #05060a !important;
     color: #fff !important;
-    box-shadow: inset 0 0 0 3px #05060a, inset 0 0 0 6px var(--gm-btn-line), 5px 5px 0 0 #000 !important;
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width, 2px) #05060a,
+        inset 0 0 0 calc(var(--ui-border-width, 2px) * 2) var(--gm-btn-line),
+        3px 3px 0 0 #000 !important;
 }
 .action-button.gm-mission-btn .gm-mission-icon { filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a); }
 /* The station frame (::before = solid frame colour, ::after = inner fill)
@@ -23659,11 +24050,12 @@ html body .home-station-overlay .home-station-content .hs-subnav > .hs-tab {
 /* Sector card: settling factions as coloured chips. */
 .gm-faction-value { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .gm-faction-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--chip); text-shadow: 1px 1px 0 #05060a; }
-.gm-faction-dot { width: 7px; height: 7px; background: var(--chip); box-shadow: 0 0 0 1px #05060a; }
+.gm-faction-dot { width: 7px; height: 7px; background: var(--chip); box-shadow: 0 0 0 var(--ui-border-width, 2px) #05060a; }
 
-/* Wallet card: wider, roomier resource row. */
+/* Wallet card: roomier resource row; min-width must stay 0 so the header
+   can shrink instead of wrapping onto two lines. */
 html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
-    min-width: 440px;
+    min-width: 0;
     padding: 8px 12px 8px 22px;
     gap: 20px;
 }
@@ -23999,30 +24391,32 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 @media (max-width: 1100px) {
     html body .home-station-overlay .home-station-content .hs-header-split {
         flex-direction: row !important;
-        flex-wrap: wrap !important;
+        flex-wrap: nowrap !important;
         row-gap: 0;
     }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card {
         order: 0;
-        flex: 1 1 auto;
+        flex: 0 1 auto;
         width: auto;
         max-width: none;
+        min-width: 0;
     }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
-        order: 1;
+        order: 0;
         flex: 0 1 auto;
-        margin: 8px 0 0 !important;
+        margin: 8px 0 6px !important;
+        min-width: 0;
     }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
-        order: 2;
-        flex: 1 1 0 !important;
+        order: 0;
+        flex: 0 1 auto !important;
         width: auto !important;
         max-width: 132px !important;
         min-width: 0 !important;
     }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
-        order: 3;
-        flex: 5 1 0;
+        order: 0;
+        flex: 1 1 auto;
         width: auto;
         min-width: 0;
     }
@@ -24056,20 +24450,18 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label { display: none; }
 }
 @media (max-width: 1100px) {
-    /* Line break after pilot + wallet: PLAY + nav cards get their own row. */
+    /* Keep a single header row: no forced line break / reorder. */
     html body .home-station-overlay .home-station-content .hs-header-split::after {
-        content: '';
-        order: 2;
-        flex: 0 0 100%;
-        height: 0;
+        content: none;
+        display: none;
     }
-    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { order: 3; }
-    html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main { order: 4; }
-    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-pilot-card) { min-height: 76px; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { order: 0; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main { order: 0; }
+    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-pilot-card) { min-height: 0; }
 }
 @media (max-width: 640px) {
-    html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card { flex-basis: 100%; }
-    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { flex: 1 1 100%; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card { flex-basis: auto; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { flex: 0 1 auto; }
 }
 @media (max-width: 1100px) {
     /* Second row tall enough for PLAY's disc + label (no scaling). */
@@ -24145,7 +24537,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     align-items: center;
     justify-content: center;
     background: #05060a;
-    border: 2px solid var(--color-border);
+    border: var(--ui-border-width, 2px) solid var(--color-border);
     color: var(--color-text-secondary);
     cursor: pointer;
     opacity: 0.6;
@@ -24427,7 +24819,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 /* Terran — engineered plating: thick double rail, corner brackets, rivets. */
 .profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
     border-style: double;
-    border-width: 6px;
+    border-width: var(--ui-border-width, 2px);
     box-shadow: inset 0 0 0 2px #05060a, inset 0 0 0 4px color-mix(in srgb, var(--fp-accent) 45%, transparent);
     --fp-surface-opacity: 0.32;
     --fp-ornament:
@@ -24444,7 +24836,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 
 /* Kronax — war blades: heavy slab border, hazard band top, aggressive slant. */
 .profile-selection-content[data-faction="kronax"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
-    border-width: 6px;
+    border-width: var(--ui-border-width, 2px);
     border-style: solid;
     box-shadow: inset 0 -10px 0 color-mix(in srgb, var(--fp-accent) 22%, transparent);
     --fp-surface-opacity: 0.4;
@@ -24454,7 +24846,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 }
 .profile-selection-content[data-faction="kronax"] .action-button,
 .profile-selection-content[data-faction="kronax"] .profile-faction-swatch {
-    border-width: 4px;
+    border-width: var(--ui-border-width, 2px);
     clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
     padding-left: 22px;
     padding-right: 22px;
@@ -24467,7 +24859,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     border-radius: 28px 6px 28px 6px;
 }
 .profile-selection-content[data-faction="voidborn"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
-    border-width: 3px;
+    border-width: var(--ui-border-width, 2px);
     box-shadow: 0 0 18px color-mix(in srgb, var(--fp-accent) 55%, transparent),
         inset 0 0 28px color-mix(in srgb, var(--fp-accent) 35%, transparent);
     animation: fp-void-pulse 3.2s ease-in-out infinite;
@@ -24500,8 +24892,8 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 /* Machine — circuit board: dashed traces, node notches, scanning trace line. */
 .profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
     border-style: dashed;
-    border-width: 3px;
-    outline: 2px solid color-mix(in srgb, var(--fp-accent) 55%, transparent);
+    border-width: var(--ui-border-width, 2px);
+    outline: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fp-accent) 55%, transparent);
     outline-offset: -9px;
     --fp-surface-opacity: 0.38;
     --fp-ornament:
@@ -24810,7 +25202,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     z-index: 30;
     width: max-content;
     min-width: 100%;
-    max-width: min(360px, 90vw);
+    max-width: min(calc(360px * var(--zk)), calc(90 * var(--cw)));
     max-height: 260px;
     overflow-y: auto;
     margin: 4px 0 0;
@@ -25038,7 +25430,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     height: 0;
 }
 .galaxy-viewer-side { max-height: 100%; }
-.galaxy-viewer-list { flex: 0 1 auto; max-height: min(60vh, 520px); }
+.galaxy-viewer-list { flex: 0 1 auto; max-height: min(calc(60 * var(--ch)), calc(520px * var(--zk))); }
 .galaxy-viewer-detail {
     min-height: 0;
     height: 100%;
@@ -25134,7 +25526,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     list-style: none;
     margin: 0;
     padding: 0;
-    border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .galaxy-viewer-rows li {
     display: flex;
@@ -25145,7 +25537,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     line-height: 16px;
     letter-spacing: 1px;
     color: #d8dbe2;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
     cursor: pointer;
 }
 .galaxy-viewer-rows li:hover { background: color-mix(in srgb, var(--color-primary) 12%, #05060a); color: #fff; }
@@ -25207,6 +25599,22 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     letter-spacing: 1px;
     color: #fff;
 }
+.galaxy-viewer-stats { position: relative; overflow: hidden; }
+.galaxy-viewer-stats > * { position: relative; z-index: 1; }
+.galaxy-viewer-stats > .gv-planet-bg {
+    position: absolute; z-index: 0; pointer-events: none;
+    width: 360px; height: 360px; right: -140px; bottom: -60px;
+    opacity: 0.55; image-rendering: pixelated;
+}
+.galaxy-viewer-stats > .gv-space-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.gv-planet-bg.has-atmo::before {
+    content: ''; position: absolute; inset: -12%; pointer-events: none;
+    background: radial-gradient(circle closest-side, transparent 62%,
+        color-mix(in srgb, var(--atmo) 45%, transparent) 62%, color-mix(in srgb, var(--atmo) 45%, transparent) 67%,
+        color-mix(in srgb, var(--atmo) 25%, transparent) 67%, color-mix(in srgb, var(--atmo) 25%, transparent) 74%,
+        color-mix(in srgb, var(--atmo) 10%, transparent) 74%, color-mix(in srgb, var(--atmo) 10%, transparent) 84%, transparent 84%);
+}
+.gv-planet-bg .gm-planet-icon, .gv-planet-bg .gm-planet-icon-img { position: relative; display: block; width: 360px; height: 360px; }
 .gv-planet-head { display: flex; align-items: center; gap: 10px; }
 .gv-planet-icon { display: inline-flex; width: 48px; height: 48px; flex: none; }
 .gv-stat { display: flex; flex-direction: column; gap: 3px; }
@@ -25276,7 +25684,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     line-height: 16px;
     color: #6a7080;
     background: #0a0c12;
-    border: 2px solid #3a3f4a;
+    border: var(--ui-border-width, 2px) solid #3a3f4a;
 }
 .outcome-step-label { font-size: 8px; line-height: 8px; letter-spacing: 1px; color: #6a7080; white-space: nowrap; }
 .outcome-step.is-done .outcome-step-dot { color: #000; background: color-mix(in srgb, var(--outcome-accent) 70%, #000); border-color: var(--outcome-accent); }
@@ -25310,22 +25718,41 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
 .outcome-progress[data-result="lost"] .outcome-status { color: #ff8a8a; }
 .outcome-planet-text span { font-size: 16px; line-height: 16px; letter-spacing: 1px; }
 
-/* Planet card: wider, stats clustered as a 2-column tile grid, the planet
-   column slimmer, buttons across the full card width at the bottom. */
-.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
-    width: min(680px, 56%);
-}
+/* Planet segment inside the shared bottom bar. */
 .galaxy-map-panel-select {
     flex-wrap: wrap;
-    row-gap: 8px;
+    row-gap: 6px;
 }
 .galaxy-map-panel-select .gm-sector-planet-col {
-    width: 30%;
+    width: 28%;
+    min-width: 140px;
+    max-width: 220px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-col {
+    width: 32%;
+    min-width: 160px;
+    max-width: 240px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg {
+    left: -16px;
+    bottom: -48px;
+    width: 260px;
+    height: 260px;
+    max-width: none;
+    transform: none;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg .gm-planet-icon,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg svg {
+    width: 100%;
+    height: 100%;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-heading #gmSectorName {
+    font-size: 26px;
 }
 .galaxy-map-panel-select .gm-detail {
     display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px 8px;
     align-content: start;
     flex: 1 1 0;
 }
@@ -25335,7 +25762,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     gap: 2px;
     padding: 4px 8px;
     background: color-mix(in srgb, #05060a 60%, transparent) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--color-border) 60%, transparent) !important;
     min-width: 0;
 }
 .galaxy-map-panel-select .gm-detail .stat-row .stat-label {
@@ -25348,7 +25775,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     justify-content: flex-start;
     overflow-wrap: anywhere;
 }
-/* Faction (first row) spans both columns; stepper + hint too. */
+/* Faction spans full width; stepper + hint too. */
 .galaxy-map-panel-select .gm-detail .stat-row:first-child,
 .galaxy-map-panel-select .gm-detail .gm-stage-stepper,
 .galaxy-map-panel-select .gm-detail .gm-unlock-hint {
@@ -25361,14 +25788,15 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     padding-top: 0;
 }
 
-/* Planet markers remain selectable beneath the transparent portions of the
-   floating information cards. Only actual card controls intercept clicks. */
-.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-panel,
-.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-panel * {
-    pointer-events: none !important;
-}
-.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-panel :is(.gm-card-actions, .gm-card-actions *, .gm-locate-ship, .gm-locate-ship *) {
+/* Bottom bar is below the map — full hit targets on its controls. */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-panel-select,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-panel-select *,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions * {
     pointer-events: auto !important;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation {
+    pointer-events: auto;
 }
 
 /* Full-screen menu surfaces follow the same persistent scale as the game and station. */
@@ -25379,4 +25807,1311 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     zoom: var(--gui-zoom, 0.75);
     width: calc(var(--vw, 100vw) / var(--gui-zoom, 0.75));
     height: calc(var(--vh, 100dvh) / var(--gui-zoom, 0.75));
+}
+
+.enemy-size-row { grid-template-columns: 64px 1fr; grid-template-areas: "label label" "num range"; }
+.enemy-size-input {
+    grid-area: num;
+    width: 100%;
+    box-sizing: border-box;
+    height: 24px;
+    padding: 0 4px;
+    background: #05060a;
+    color: var(--color-primary);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    font: 700 12px var(--ui-font-family);
+    text-align: right;
+}
+.enemy-size-slider { grid-area: range; width: 100%; accent-color: var(--color-primary); margin: 0; }
+.enemy-size-unit { display: none; }
+
+/* Station header: stay on one row at every GUI / window scale. Children shrink
+   instead of wrapping (progress + wallet used to drop onto a second line). */
+html body .home-station-overlay .home-station-content .hs-header-split {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
+    margin-left: auto;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-progress-card {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-wallet-res {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+
+/* The tab hover rule resets `top: auto` on every descendant, which collapsed the
+   absolutely positioned relation-meter parts (fill, centre mark, value) to
+   nothing — the bar looked empty / 0 while hovering. Keep their offsets. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-faction-card:is(:hover, :focus, :focus-visible, :active, .nav-focused) :is(.hs-faction-meter-fill, .hs-faction-meter-val) { top: 0; }
+html body .home-station-overlay .home-station-content .hs-tab.hs-faction-card:is(:hover, :focus, :focus-visible, :active, .nav-focused) .hs-faction-meter-mid { top: -3px; }
+
+/* FACTIONS area: padding and margin 16px, gaps 8px (4px between chips / rows). */
+html body .home-station-overlay .home-station-content .hs-factions {
+    --fac-space: 16px;
+    --fac-gap: 8px;
+    --fac-gap-s: 4px;
+    gap: var(--fac-gap) !important;
+    padding: var(--fac-space) !important;
+    margin: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-hint, .hs-faction-tabpanel, .hs-fd, .hs-fd-hero, .hs-fd-block, .hs-fd-cols, .hs-fd-row, .hs-fd-chips, .hs-fd-tabs, .hs-faction-actions, .hs-faction-grid, .hs-fd-fleet, .hs-fd-fleet-list, .hs-fd-fleet-toolbar) {
+    gap: var(--fac-gap) !important;
+    margin: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-fd-chips, .hs-fd-row, .hs-fd-tabs, .hs-fd-fleet-toolbar) {
+    gap: var(--fac-gap-s) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-faction-tabpanel, .hs-fd-hero, .hs-fd-block, .hs-faction-actions) {
+    padding: var(--fac-space) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card,
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    padding: var(--fac-space) !important;
+    margin: 0 !important;
+}
+
+/* Relation value in the faction colour of its standing, right next to the name. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-name { flex: 0 1 auto; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-status { margin-left: auto; }
+.hs-faction-score {
+    flex: none;
+    font-size: 14px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    color: #e0a030;
+    text-shadow: 1px 0 0 #05060a, -1px 0 0 #05060a, 0 1px 0 #05060a, 0 -1px 0 #05060a;
+}
+.hs-faction-card.is-ally .hs-faction-score,
+.hs-faction-card.is-friend .hs-faction-score { color: #40d890; }
+.hs-faction-card.is-hostile .hs-faction-score { color: #e04848; }
+
+.hs-faction-planets { display: inline-flex; align-items: center; gap: 4px; }
+
+.hs-faction-trade-ico { display: inline-flex; align-items: center; }
+.hs-faction-trade-ico.is-open { color: #40d890; filter: drop-shadow(1px 1px 0 #05060a); }
+.hs-faction-trade-ico.is-closed { color: color-mix(in srgb, var(--color-text, #fff) 45%, transparent); }
+
+/* Wallet buttons (fullscreen / logout): symmetric padding so the glyph sits in the middle. */
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn {
+    padding: 8px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn {
+    width: 40px;
+    min-width: 40px;
+    box-sizing: border-box;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn :is(.vf-fs-icon, .hs-logout-icon, .hs-tab-pixel) {
+    width: 24px !important;
+    height: 24px !important;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn { flex: 0 0 40px; }
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn :is(.vf-fs-icon, .hs-logout-icon, .hs-tab-pixel) { flex: none; min-width: 24px; min-height: 24px; }
+
+/* Main nav (PLAY + area cards): split vertically in thirds — icon in the upper
+   two thirds, label on a dark strip in the lower third. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn {
+    display: grid !important;
+    grid-template-rows: 2fr 1fr;
+    grid-template-columns: 100%;
+    gap: 0 !important;
+    padding: 0 !important;
+    min-height: 100px !important;
+    overflow: hidden !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active { overflow: visible !important; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-icon {
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    justify-self: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn :is(.hs-tab-icon .ui-icon-tip, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) {
+    width: 64px !important;
+    height: 64px !important;
+    image-rendering: pixelated;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label {
+    grid-row: 2;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0 6px;
+    background: rgba(2, 2, 3, 0.88);
+    text-align: center;
+    white-space: nowrap;
+}
+/* PLAY: disc + triangle centre on the upper two thirds, label strip below. */
+html body .home-station-overlay .home-station-content .hs-play-launch::before,
+html body .home-station-overlay .home-station-content .hs-play-launch::after,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon { top: 33.333%; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 33.333%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 2, 3, 0.88);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn > .hs-tab-icon {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0;
+}
+/* Make the lower third read as exactly one third: opaque dark strip with a
+   frame-coloured line on its upper edge. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    box-sizing: border-box;
+    background: #020203;
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch { min-height: 100px; }
+
+/* Labels sit INSIDE the outline (the frame stays visible around the strip),
+   and the nav buttons get more height. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn { min-height: 120px !important; }
+html body .home-station-overlay .home-station-content .hs-play-launch { min-height: 120px; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label { margin: 0 5px 5px; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label { margin: 0 2px; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    height: calc(33.333% - 3px);
+}
+
+/* Nav icons: 2px dark outline (#05060a), same as the other glowing icons.
+   Put on the wrapper — the img itself already carries the tint filter. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-icon > .ui-icon-tip {
+    filter:
+        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
+        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+}
+
+/* Active PLAY joins the content below exactly like an active area tab:
+   open at the bottom (top + side lines only), panel-coloured, reaching 3px
+   down over the body's top line. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch.active {
+    z-index: 3;
+    margin-bottom: -20px;
+    border-bottom-width: 0;
+    clip-path: none;
+    background: var(--hs-tabpanel, #05060a);
+    box-shadow:
+        inset 0 2px 0 var(--color-primary),
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary);
+}
+/* The button reaches 26px lower than its siblings: keep icon + label where theirs are. */
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    left: 2px;
+    right: 2px;
+    bottom: 31px;
+    height: calc((100% - 26px) / 3 - 5px);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active::before,
+html body .home-station-overlay .home-station-content .hs-play-launch.active::after,
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-icon { top: calc((100% - 26px) / 3); }
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 31px;
+    background: #020203;
+}
+
+/* PLAY icon: same coarse 16×16 pixel art as the nav icons (octagon ring +
+   triangle), 64px = 4px per cell, coloured through a mask so hover / active
+   tinting keeps working. */
+html body .home-station-overlay .home-station-content .hs-play-launch::before,
+html body .home-station-overlay .home-station-content .hs-play-launch::after { display: none; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    width: 64px;
+    height: 64px;
+    border: 0;
+    left: 50%;
+    top: 33.333%;
+    transform: translate(-50%, -50%);
+    clip-path: none;
+    background: var(--color-primary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2016%2016%27%20shape-rendering=%27crispEdges%27%3E%3Crect%20x=%274%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2016%2016%27%20shape-rendering=%27crispEdges%27%3E%3Crect%20x=%274%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    image-rendering: pixelated;
+    filter: none;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon::before { content: none; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    filter:
+        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
+        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+}
+
+/* Background deco icons only on PLAY (its planets); area cards stay clean. */
+.hs-area-btn .hs-area-deco { display: none !important; }
+
+/* PLAY a bit wider than the area cards. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+    flex: 0 0 230px;
+    width: 230px;
+    min-width: 230px;
+}
+@media (min-width: 1101px) and (max-width: 1650px) {
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+        flex: 0 1 clamp(112px, 10.5vw, 172px) !important;
+        width: clamp(112px, 10.5vw, 172px) !important;
+        min-width: 0;
+    }
+}
+
+/* Nav labels a size up. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    font-size: 17px !important;
+    letter-spacing: 0.06em;
+}
+@media (min-width: 1101px) and (max-width: 1650px) {
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+    html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+        font-size: clamp(13px, 1.25vw, 17px) !important;
+    }
+}
+
+/* Profile list: no separators between pilots, no doubled side lines — the
+   selected pilot is marked by a tinted row instead of left/right borders. */
+html body .profile-list .profile-list-item,
+html body .profile-list .profile-list-item.selected {
+    border: 0;
+}
+html body .profile-list .profile-list-item.selected {
+    background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+/* The inline profile dialog carried a faction drop-shadow filter on the whole
+   box, which put a halo (and a ghost second line) around every text, emblem
+   and border. Off; the list keeps one crisp frame. */
+html body .profile-selection-overlay.is-inline .profile-selection-content { filter: none !important; }
+
+/* ==== Profile details: coarse tile layout, big type, icons ==== */
+.profile-details { padding: 16px !important; gap: 16px; text-align: left; }
+.pd-hero { display: flex; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: var(--ui-border-width, 2px) solid var(--color-border); }
+.pd-hero-emblem, .pd-hero-emblem img { width: 64px; height: 64px; flex: none; }
+.pd-hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pd-hero-name { font-size: 26px; letter-spacing: 3px; color: var(--color-text); overflow-wrap: anywhere; }
+.pd-hero-faction { font-style: normal; font-size: 14px; letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
+.pd-tiles { display: flex; flex-wrap: nowrap; align-items: center; gap: 0; background: color-mix(in srgb, var(--color-primary) 10%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.pd-tile { display: flex; align-items: center; gap: 12px; padding: 12px; min-width: 0; }
+.pd-tile.is-wide { flex: 1 1 auto; }
+.pd-tile:not(.is-wide) { flex: 0 0 auto; }
+.pd-tile-icon, .pd-tile-icon img { width: 32px; height: 32px; flex: none; }
+.pd-tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pd-tile-value { font-size: 20px; letter-spacing: 1px; color: var(--color-text); overflow-wrap: anywhere; }
+.pd-tile-cap { font-style: normal; font-size: 12px; letter-spacing: 2px; color: var(--color-text-secondary); }
+.pd-block-title { display: flex; align-items: center; gap: 8px; font-size: 14px; letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
+.pd-block-title img { width: 20px; height: 20px; }
+.pd-galaxies { display: flex; flex-direction: column; gap: 8px; }
+.pd-galaxy { display: grid; grid-template-columns: minmax(0, 1fr) auto 56px; align-items: center; gap: 12px; padding: 8px 12px; background: color-mix(in srgb, var(--color-primary) 6%, #05060a); font-size: 14px; letter-spacing: 1px; color: var(--color-text-secondary); }
+.pd-galaxy.is-station { color: var(--faction-accent, var(--color-primary)); background: color-mix(in srgb, var(--color-primary) 16%, #05060a); }
+.pd-galaxy-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-galaxy-count { text-align: right; color: var(--color-text); }
+.pd-bar { display: inline-flex; gap: 2px; }
+.pd-bar i { width: 8px; height: 12px; background: color-mix(in srgb, var(--color-text) 18%, transparent); }
+.pd-bar i.on { background: var(--faction-accent, var(--color-primary)); }
+.pd-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pd-res-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--color-primary) 8%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.pd-res-icon, .pd-res-icon img { width: 28px; height: 28px; flex: none; }
+.pd-res-value { font-size: 18px; letter-spacing: 1px; color: var(--color-text); }
+.pd-ships { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-ship { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 14px; letter-spacing: 1px; background: color-mix(in srgb, var(--color-primary) 8%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent); color: var(--color-text); }
+.pd-ship.is-active { border-color: var(--faction-accent, var(--color-primary)); color: var(--faction-accent, var(--color-primary)); }
+.pd-ship img { width: 20px; height: 20px; }
+/* Galaxies: two columns of chunky tiles (name + count on top, cell bar below). */
+.pd-galaxies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pd-galaxy { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name count" "bar bar"; row-gap: 8px; }
+.pd-galaxy-name { grid-area: name; }
+.pd-galaxy-count { grid-area: count; }
+.pd-bar { grid-area: bar; }
+.pd-bar i { flex: 1 1 0; max-width: 14px; }
+
+/* Galaxy tile: current planet as the galaxy's icon on the left. */
+.pd-galaxy { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "planet name count" "planet bar bar"; column-gap: 12px; row-gap: 8px; }
+.pd-galaxy-planet { grid-area: planet; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; align-self: center; }
+.pd-galaxy-planet > *, .pd-galaxy-planet img { width: 40px; height: 40px; }
+.pd-galaxy-count { display: inline-flex; align-items: center; gap: 4px; }
+.pd-galaxy-count img { width: 20px; height: 20px; }
+.pd-galaxy.is-station { box-shadow: inset 0 0 0 2px var(--faction-accent, var(--color-primary)); }
+
+/* UNIVERSE LOADER modal (galaxies page). */
+.galaxy-viewer-head-actions { display: flex; gap: 8px; align-items: center; }
+.galaxy-viewer { position: relative; }
+.galaxy-viewer-modal-backdrop { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(2, 2, 3, 0.78); }
+.galaxy-viewer-modal { width: min(420px, 90%); box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 16px; background: #05060a; border: var(--ui-border-width, 2px) solid var(--color-primary); text-align: left; }
+.galaxy-viewer-modal h3 { margin: 0; font-size: 18px; letter-spacing: 3px; color: var(--color-primary); }
+.galaxy-viewer-modal p { margin: 0; font-size: 13px; line-height: 1.5; letter-spacing: 1px; color: var(--color-text-secondary); }
+.galaxy-viewer-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.galaxy-viewer-modal-actions .galaxy-viewer-btn:first-child { margin-right: auto; }
+.galaxy-viewer-modal-actions .is-primary { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* Galaxy list runs down to the bottom of its column. */
+.galaxy-viewer-side { height: 100%; }
+.galaxy-viewer-list { flex: 1 1 0; min-height: 0; max-height: none; }
+
+.galaxy-viewer-btn { display: inline-flex; align-items: center; gap: 8px; }
+.galaxy-viewer-btn .ps-btn-icon, .galaxy-viewer-btn .gv-btn-ico, .galaxy-viewer-btn .gv-btn-ico img { width: 16px; height: 16px; flex: none; }
+
+/* UNIVERSE LOADER: drop area + app-style action buttons. */
+.galaxy-viewer-modal-actions .action-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.gv-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 16px; text-align: center; cursor: pointer; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-primary) 6%, #05060a); border: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.gv-drop:hover, .gv-drop:focus-visible, .gv-drop.is-over { color: var(--color-primary); border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 16%, #05060a); outline: none; }
+.gv-drop-icon { display: inline-flex; filter: drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a) drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a); }
+.gv-drop-title { font-size: 14px; letter-spacing: 3px; color: var(--color-text); }
+.gv-drop-sub { font-size: 12px; letter-spacing: 1px; }
+.galaxy-viewer-modal .action-button {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    color: var(--color-text);
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow: none;
+}
+.galaxy-viewer-modal .action-button:not(.secondary) {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
+}
+.galaxy-viewer-modal .action-button:hover,
+.galaxy-viewer-modal .action-button:focus-visible {
+    color: #05060a;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    outline: none;
+}
+.galaxy-viewer-modal .action-button .ps-btn-icon { width: 20px; height: 20px; }
+.galaxy-viewer-modal-actions .action-button:first-child { margin-right: auto; }
+
+/* DELETE GALAXY modal: target galaxy list. */
+.gv-target-list { max-height: 200px; }
+.gv-target-list li { cursor: pointer; }
+.galaxy-viewer-modal .gv-target-list { flex: none; height: auto; min-height: 0; max-height: 200px; overflow-y: auto; }
+
+/* Main nav icons: dim when idle, holographic flicker when selected. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active) .hs-tab-icon {
+    filter: brightness(0.28) saturate(0.5) !important;
+    transition: filter 0.2s ease;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active):is(:hover, :focus-visible, .nav-focused) .hs-tab-icon {
+    filter: brightness(0.85) saturate(0.9) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon {
+    position: relative;
+    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 0%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, transparent) 40%, transparent 65%) !important;
+    box-shadow: 0 0 8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent),
+        inset 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
+    background-size: 100% 100% !important;
+    animation: none;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px);
+    animation: hs-holo-scan 3.5s linear infinite;
+}
+@keyframes hs-holo-on {
+    /* Only a slight dimming, no blackout. */
+    0%   { opacity: 0.82; }
+    35%  { opacity: 1; }
+    55%  { opacity: 0.9; }
+    100% { opacity: 1; }
+}
+@keyframes hs-holo-flicker {
+    0%, 100% { opacity: 1; }
+    6% { opacity: 0.8; }
+    8% { opacity: 1; }
+    41% { opacity: 0.9; }
+    43% { opacity: 1; }
+    72% { opacity: 0.7; transform: translateX(1px); }
+    74% { opacity: 1; transform: none; }
+    90% { opacity: 0.92; }
+}
+@keyframes hs-holo-scan {
+    from { background-position: 0 0; }
+    to { background-position: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon::after { animation: none; }
+}
+
+/* MENU: calmer flicker (its wide bar icon made the full flicker too harsh). */
+@keyframes hs-holo-flicker-soft {
+    0%, 100% { opacity: 1; }
+    41% { opacity: 0.94; }
+    43% { opacity: 1; }
+    72% { opacity: 0.88; }
+    74% { opacity: 1; }
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn[data-open-menu].active .hs-tab-icon {
+    animation: none;
+}
+
+/* PLAY: dark when idle, powers on like the nav icons when active. */
+html body .home-station-overlay .home-station-content .hs-play-launch:not(.active) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    filter: brightness(0.3) saturate(0.5);
+    transition: filter 0.2s ease;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:not(.active):is(:hover, .nav-focused) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    filter: brightness(0.85) saturate(0.9);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn[data-open-menu].active .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-play-launch.active :is(.hs-play-launch-planets, .hs-play-launch-icon) { animation: none; }
+}
+
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active.holo-on .hs-tab-icon,
+html body .home-station-overlay .home-station-content .hs-play-launch.active.holo-on :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    animation: hs-holo-on 0.3s steps(1, end) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active.holo-on .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-play-launch.active.holo-on :is(.hs-play-launch-planets, .hs-play-launch-icon) { animation: none; }
+}
+
+/* Settings: text and controls scale with the panel's own width (container
+   queries), so the page fills whatever box it sits in. */
+.settings-panel {
+    container: sp / inline-size;
+    --sp-font: clamp(14px, 1.7cqw, 20px);
+}
+.settings-panel :is(.settings-row-label, .settings-row-value, .settings-hint, .settings-section-name, .volume-control label, .theme-dropdown-toggle) {
+    font-size: var(--sp-font);
+}
+.settings-panel .settings-section-title {
+    font-size: calc(var(--sp-font) * 1.1);
+}
+.settings-panel .settings-section-icon {
+    width: calc(var(--sp-font) * 1.4);
+    height: calc(var(--sp-font) * 1.4);
+}
+.settings-panel .settings-row {
+    padding-block: calc(var(--sp-font) * 0.4) !important;
+}
+.settings-panel .settings-cycle-btn {
+    width: calc(var(--sp-font) * 2);
+    height: calc(var(--sp-font) * 2);
+    font-size: var(--sp-font);
+}
+.settings-panel .settings-row-value {
+    min-width: calc(var(--sp-font) * 5);
+}
+@container sp (max-width: 640px) {
+    .settings-panel-clustered:not(.settings-panel-3col) {
+        grid-template-columns: 1fr;
+    }
+    .settings-panel .settings-row:not(.settings-row-theme):not(.settings-row-volume):not(.settings-row-youtube) {
+        flex-wrap: wrap;
+    }
+}
+
+/* Bottom bar under the map: planet segment keeps a readable min width. */
+.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels {
+    justify-content: flex-start;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    width: max(20vw, 380px) !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-width: 50vw;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    overflow: hidden;
+}
+
+/* Layout space under CSS zoom. Reference: 75% GUI scale.
+   --zk / --cw / --ch size elements in the zoomed layout coordinates. */
+:root {
+    --zk: calc(0.75 / var(--gui-zoom, 0.75));
+    --cw: calc(var(--vw, 100vw) / var(--gui-zoom, 0.75) / 100);
+    --ch: calc(var(--vh, 100dvh) / var(--gui-zoom, 0.75) / 100);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    width: calc(420px * var(--zk)) !important;
+    max-width: calc(50 * var(--cw));
+}
+.start-screen-content {
+    max-width: min(calc(94 * var(--cw)), calc(860px * var(--zk)));
+    max-height: calc(94 * var(--ch));
+}
+.start-screen-content:has(> .settings-panel) {
+    width: min(calc(94 * var(--cw)), calc(860px * var(--zk)));
+}
+.start-screen-content:has(> .settings-panel-3col) {
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    height: min(calc(86 * var(--ch)), calc(860px * var(--zk)));
+}
+
+/* Planet map container: fills the space under the header (the whole station
+   is one fixed-proportion stage, so that share is the same at every size). */
+.home-station-content .hs-body-play .galaxy-map-embedded .gm-map-stage {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+
+/* Station bezel: proportional to the real viewport (not a separate stage).
+   GUI scale stays on .home-station-content via zoom: var(--gui-zoom). */
+.home-station-overlay {
+    --u: min(calc(var(--vw, 100vw) / 1640), calc(var(--vh, 100vh) / 1110));
+    --bezel: calc(28 * var(--u));
+    --hs-frame-gap: calc(6 * var(--u));
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    box-shadow: none;
+    overflow: hidden !important;
+}
+.home-station-overlay .home-station-content {
+    --hs-pad-y: calc(14 * var(--u));
+}
+.home-station-overlay::after {
+    position: fixed !important;
+    inset: var(--hs-frame-gap) !important;
+    font-size: calc(11 * var(--u));
+    letter-spacing: 0.3em;
+    clip-path: polygon(
+        calc(16 * var(--u)) 0, calc(100% - 16 * var(--u)) 0, calc(100% - 16 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(16 * var(--u)), 100% calc(16 * var(--u)),
+        100% calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) 100%,
+        calc(16 * var(--u)) 100%, calc(16 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 16 * var(--u)), 0 calc(100% - 16 * var(--u)),
+        0 calc(16 * var(--u)), calc(8 * var(--u)) calc(16 * var(--u)), calc(8 * var(--u)) calc(8 * var(--u)), calc(16 * var(--u)) calc(8 * var(--u)));
+    background:
+        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#3dff6a 0 0) calc(100% - 62 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--hull-dark) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(8 * var(--u))) calc(40 * var(--u)) calc(12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(100% - 40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / calc(4 * var(--u)) 100% no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 0 100% / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 100% 0 / calc(4 * var(--u)) 100% no-repeat,
+        var(--hull);
+}
+.hs-frame-ui-scale {
+    position: fixed !important;
+    right: calc(var(--bezel) + 224 * var(--u));
+    bottom: calc(var(--hs-frame-gap) + 6 * var(--u));
+    font-size: calc(12 * var(--u));
+}
+.hs-frame-ui-scale input {
+    width: calc(180 * var(--u));
+}
+
+/* Settings sliders: much wider, they take most of the row. */
+.settings-panel .settings-look-controls {
+    flex: 1 1 60%;
+    max-width: none;
+}
+.settings-panel .settings-look-slider {
+    min-width: 160px;
+    height: calc(var(--sp-font, 14px) * 1);
+}
+
+/* All settings sliders share one width (set by the longest label's row). */
+.settings-panel .settings-look-controls {
+    flex: 0 0 auto;
+    width: 52%;
+    max-width: none;
+}
+
+/* Dev mode, top bar: handle to add a divider. */
+.hs-tabs.hs-tabs-editing .hs-tab-divider-handle {
+    align-self: center;
+    margin-left: 12px;
+    padding: 6px 10px;
+    border: var(--ui-border-width, 2px) dashed var(--color-primary);
+    color: var(--color-primary);
+    font-size: 14px;
+    letter-spacing: 2px;
+    cursor: grab;
+    user-select: none;
+}
+
+/* Planet-view header (situation / ship / progress): readable type, and the
+   16x16 icons shown at exactly 2x (32 px). Teleport button and crests keep
+   their own sizes. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-title { font-size: 20px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-panel-value { font-size: 18px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-status { font-size: 14px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-class { font-size: 14px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dt { font-size: 13px; letter-spacing: 0.08em; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd { font-size: 17px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd * { font-size: inherit; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-progress-text { font-size: 18px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-galaxy { font-size: 20px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-label { font-size: 15px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-holdings { font-size: 13px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-kind { font-size: 13px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-title { font-size: 17px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-sub { font-size: 13px; }
+html body .galaxy-map-embedded .galaxy-map-header :is(.gm-stat-icon, .gm-progress-icon),
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation img.profile-faction-emblem-img,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-emblem img.profile-faction-emblem-img {
+    width: 32px !important;
+    height: 32px !important;
+    image-rendering: pixelated;
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img,
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.hs-pixel,
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats img.hs-pixel {
+    width: 40px !important;
+    height: 40px !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats .gm-stat-chip,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd { align-items: center; }
+/* Invasion / conflict icon: its own slot instead of overlapping the text. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-emblem { flex: 0 0 auto; margin-right: 8px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-row { align-items: center; gap: 8px; }
+
+/* Start galaxy picker: the ruler's crest, large, in front of the galaxy name. */
+.profile-start-galaxy-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+.profile-start-galaxy-crest,
+.profile-start-galaxy-crest > *,
+.profile-start-galaxy-crest img,
+.profile-start-galaxy-crest svg {
+    width: 48px;
+    height: 48px;
+    flex: none;
+}
+.profile-start-galaxy-crest img { image-rendering: pixelated; }
+.profile-start-galaxy-ruler > span:first-child { width: auto; height: auto; }
+
+/* Ship bar: stacked name/class/status on the left, Weapons · Modules to the right. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar {
+    flex: 1 1 auto;
+    gap: 18px;
+    padding: 6px 20px;
+    align-items: center;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-art { width: 80px; height: 100px; display: flex; align-items: center; justify-content: center; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+    min-width: 0;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 5px;
+    padding-right: 20px;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info .gm-panel-value {
+    font-size: 18px;
+    line-height: 1.1;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-class {
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    opacity: 0.8;
+    line-height: 1.1;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-status {
+    padding: 2px 8px;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats {
+    flex: 1 1 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding-top: 0;
+    border-top: 0;
+    align-self: stretch;
+    align-content: center;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 20px;
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    min-width: 0;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div:first-child { border-left: 0; padding-left: 0; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats dd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 32px;
+    margin: 0;
+    white-space: nowrap;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats dd .gm-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-bar-cta {
+    flex: 0 0 auto;
+    margin-left: 4px;
+}
+
+/* Planet-view header: dark panel behind title, cards, ship bar and progress. */
+html body .galaxy-map-embedded .galaxy-map-header {
+    background: color-mix(in srgb, #05060a 88%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    padding: 8px 12px;
+    box-sizing: border-box;
+}
+
+/* Active nav button: bold label. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-tab.active .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    font-weight: 800 !important;
+    letter-spacing: 0.06em;
+}
+
+/* Ship bar opens the hangar. */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar { cursor: pointer; transition: background 0.15s ease; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    outline: none;
+}
+
+/* Ship bar = button: framed, lifts on hover, with the animated repair icon. */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link {
+    position: relative;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a;
+    padding-right: 80px;
+    transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship {
+    margin-right: 4px;
+    order: 3;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:is(:hover, :focus-visible) {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 20%, #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 14px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:active {
+    background: color-mix(in srgb, var(--color-primary) 30%, #05060a);
+    transform: translateY(1px);
+}
+.gm-ship-bar-cta {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 22%, #05060a), #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 2px 0 #000;
+    pointer-events: none;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+.gm-ship-bar-cta svg { display: block; overflow: visible; image-rendering: pixelated; }
+/* Gear: still at rest; while hovered it ticks between two positions. */
+.gm-cta-wrench {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+}
+.is-hangar-link:is(:hover, :focus-visible):not(:has(.gm-locate-ship:is(:hover, :focus-visible))) .gm-ship-bar-cta {
+    border-color: var(--color-primary);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 40%, #05060a), color-mix(in srgb, var(--color-primary) 12%, #05060a));
+}
+/* Gear ticks only when the hangar bar itself is hovered — not when FIND SHIP is. */
+.is-hangar-link:is(:hover, :focus-visible):not(:has(.gm-locate-ship:is(:hover, :focus-visible))) .gm-cta-wrench {
+    animation: gm-cta-gear 0.9s steps(1, end) infinite;
+}
+/* Two states only: the gear ticks between two positions (half a tooth apart). */
+@keyframes gm-cta-gear {
+    0%   { transform: rotate(0deg); }
+    50%  { transform: rotate(22.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .is-hangar-link:hover .gm-cta-wrench { animation: none; }
+}
+
+/* Planet-map progress ("1/5 CLEARED"): own card in the top bar, left of the wallet. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-progress-card {
+    flex: 0 0 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    margin: 8px 8px 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    background: color-mix(in srgb, var(--color-background, #050508) 80%, transparent);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-progress-card[hidden] { display: none !important; }
+.hs-progress-card .gm-progress-text {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+.hs-progress-card .gm-progress-icon { width: 32px !important; height: 32px !important; flex: none; }
+
+/* Situation card: clickable, opens the mission modal. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation { cursor: pointer; transition: filter 0.12s ease; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) { filter: brightness(1.25); outline: none; }
+
+.gm-mission-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.62);
+}
+.gm-mm-dialog {
+    width: min(560px, 80%);
+    box-sizing: border-box;
+    padding: 22px 26px;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    box-shadow: inset 0 0 0 2px #05060a, 0 0 0 2px #000, 0 0 28px color-mix(in srgb, var(--color-primary) 40%, transparent);
+    color: var(--color-text);
+}
+.gm-mm-title { margin: 0 0 14px; font-size: 22px; letter-spacing: 0.14em; color: var(--color-primary); }
+.gm-mm-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.gm-mm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    font-size: 15px;
+    letter-spacing: 0.06em;
+}
+.gm-mm-row span { color: var(--color-text-secondary); font-size: 12px; align-self: center; }
+.gm-mm-goal { margin: 0 0 18px; font-size: 15px; line-height: 1.5; opacity: 0.9; }
+.gm-mm-actions { display: flex; justify-content: space-between; gap: 12px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation { pointer-events: auto; }
+
+/* Teleport: a large tile as tall as the header row, big wormhole icon (4x the 16 px art) and a label. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    align-self: stretch;
+    width: 132px;
+    min-width: 132px;
+    height: auto;
+    min-height: 110px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn .gm-teleport-icon {
+    width: 64px !important;
+    height: 64px !important;
+    image-rendering: pixelated;
+    transform-origin: 50% 50%;
+}
+/* Same stepped tick as the hangar gear CTA. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn:is(:hover, :focus-visible) .gm-teleport-icon {
+    animation: gm-cta-gear 0.9s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn:is(:hover, :focus-visible) .gm-teleport-icon {
+        animation: none;
+    }
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn .gm-teleport-label {
+    position: static;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    color: var(--color-text);
+}
+
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler { gap: 10px; }
+.hs-menu-panel-brand:empty { display: none; }
+
+/* Profiles page inside the station menu: use the full height of the panel. */
+.hs-menu-panel-section .hs-menu-profile-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
+}
+.hs-menu-panel-section .hs-menu-profile-col {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.hs-menu-panel-section .hs-menu-profile-stats {
+    max-height: none;
+    height: auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    overflow-y: auto;
+    zoom: 1.2;
+}
+.hs-menu-panel-section .hs-menu-profile-row {
+    padding: 14px 16px;
+    font-size: 16px;
+}
+.hs-menu-panel-section .hs-menu-profile-row .hs-menu-profile-act { padding: 6px 14px; font-size: 13px; }
+
+/* Profile details: the hero (crest + name) stays pinned at the top; only what is below scrolls. */
+.profile-details > .pd-hero,
+.hs-menu-profile-stats > .pd-hero {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 0 -14px;
+    padding: 12px 14px 14px;
+    background: color-mix(in srgb, var(--color-background, #05060a) 96%, #000);
+    flex: 0 0 auto;
+}
+
+.profile-details:has(> .pd-hero) { padding-top: 0; }
+.profile-details.hs-menu-profile-stats:has(> .pd-hero),
+.hs-menu-panel-section .profile-details:has(> .pd-hero) { padding-top: 0 !important; }
+
+/* Profiles page: only the area below the faction filters scrolls (the page itself does not). */
+.hs-menu-panel-body:has(.hs-menu-profile-split) { overflow: hidden; }
+.hs-menu-panel-body .hs-menu-panel-section:has(.hs-menu-profile-split) { overflow: hidden; }
+
+/* Profile details: hero fixed on top, the scrollbar belongs to the part below it. */
+.profile-details:has(> .pd-scroll),
+.hs-menu-profile-stats:has(> .pd-scroll) {
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+.profile-details > .pd-hero,
+.hs-menu-profile-stats > .pd-hero {
+    position: static;
+    margin: 0 -14px;
+    flex: 0 0 auto;
+}
+.pd-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+}
+
+/* Profile galaxy rows: planet slots in the ruling faction's colour; unvisited galaxies stay neutral. */
+.pd-galaxy .pd-bar i.on { background: var(--gx, var(--faction-accent, var(--color-primary))); }
+.pd-galaxy .pd-bar i.open {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--gx, var(--faction-accent, var(--color-primary)));
+}
+.pd-galaxy.is-unvisited .pd-galaxy-planet { opacity: 0.55; filter: grayscale(0.6); }
+.pd-galaxy .pd-bar i.locked {
+    background: color-mix(in srgb, var(--gx, var(--color-text)) 38%, transparent);
+}
+.pd-galaxy .pd-bar i.on, .pd-galaxy .pd-bar i.open, .pd-galaxy .pd-bar i.locked { width: 10px; height: 14px; }
+
+/* Faction contracts: readable type and larger reward / action elements. */
+html body .hs-faction-contracts .hs-mission-type { font-size: 15px; letter-spacing: 0.12em; }
+html body .hs-faction-contracts .hs-line-name strong { font-size: 21px; letter-spacing: 0.04em; }
+html body .hs-faction-contracts .hs-mission-meta { font-size: 16px; line-height: 1.35; letter-spacing: 0.04em; }
+html body .hs-faction-contracts .hs-hint { font-size: 16px; line-height: 1.45; }
+html body .hs-faction-contracts .hs-fcontract-filters .hs-chip,
+html body .hs-faction-contracts .hs-fcontract-filters button { font-size: 16px; padding: 7px 14px; }
+html body .hs-faction-contracts .hs-mission-reward { font-size: 18px; gap: 10px; }
+html body .hs-faction-contracts .hs-mission-reward img { width: 32px !important; height: 32px !important; }
+html body .hs-faction-contracts .hs-line-action { font-size: 16px; padding: 10px 18px; min-width: 220px; }
+html body .hs-faction-contracts .hs-contract-emblem,
+html body .hs-faction-contracts .hs-contract-emblem img { width: 24px !important; height: 24px !important; }
+html body .hs-faction-contracts .hs-mission { padding-block: 10px; }
+html body .hs-faction-contracts .hs-panel-label { font-size: 20px; letter-spacing: 0.12em; }
+html body .hs-faction-contracts .hs-mission-reward * { font-size: 18px !important; }
+html body .hs-faction-contracts .hs-mission-reward > * { padding: 4px 10px; gap: 8px; align-items: center; }
+
+/* Station pages (storage, mission board, explorations, contracts …): readable type. */
+html body .hs-body .hs-panel .hs-panel-label { font-size: 20px; letter-spacing: 0.12em; }
+html body .hs-body .hs-panel :is(.hs-hint, .hs-muted, .hs-empty-slot) { font-size: 16px; line-height: 1.45; }
+html body .hs-body .hs-panel .hs-chip-label { font-size: 15px; }
+html body .hs-body .hs-panel :is(th, td) { font-size: 15px; }
+html body .hs-body .hs-panel td small, html body .hs-body .hs-panel td span { font-size: inherit; }
+html body .hs-body .hs-panel .hs-mission-type { font-size: 15px; letter-spacing: 0.12em; }
+html body .hs-body .hs-panel .hs-line-name strong { font-size: 21px; letter-spacing: 0.04em; }
+html body .hs-body .hs-panel .hs-mission-meta { font-size: 16px; line-height: 1.35; }
+html body .hs-body .hs-panel .hs-mission-reward * { font-size: 18px !important; }
+html body .hs-body .hs-panel .hs-mission-reward img { width: 32px !important; height: 32px !important; }
+html body .hs-body .hs-panel .hs-line-action { font-size: 16px; padding: 10px 18px; min-width: 200px; }
+html body .hs-body .hs-panel .hs-explore-cluster-title { font-size: 17px; letter-spacing: 0.14em; }
+html body .hs-body .hs-station-cover-kicker { font-size: 14px; }
+html body .hs-body .hs-mission { padding-block: 10px; }
+
+/* Mission modal: larger type and buttons. */
+.gm-mm-title { font-size: 26px; }
+.gm-mm-row { font-size: 17px; }
+.gm-mm-row span { font-size: 14px; }
+.gm-mm-goal { font-size: 18px; }
+.gm-mm-actions .action-button { font-size: 16px; padding: 10px 22px; min-width: 150px; }
+
+/* Station storage: three full-height columns — owned ships | blueprints | parts. */
+.hs-station-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+        "cover cover cover"
+        "stores stores stores"
+        "ships blueprints parts";
+    grid-template-rows: minmax(110px, auto) auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+.hs-body > .hs-station-grid,
+.hs-body > .hs-section .hs-station-grid { flex: 1 1 auto; }
+.hs-station-grid > .hs-panel-stack { display: contents; }
+.hs-station-grid .hs-panel-ships { grid-area: ships; }
+.hs-station-grid .hs-panel-bp { grid-area: blueprints; }
+.hs-station-grid .hs-panel-parts { grid-area: parts; }
+.hs-station-grid :is(.hs-panel-ships, .hs-panel-bp, .hs-panel-parts) {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* Station storage: draggable column borders. */
+.hs-col-resize {
+    position: absolute;
+    width: 12px;
+    cursor: col-resize;
+    z-index: 5;
+    touch-action: none;
+}
+.hs-col-resize::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--faction-accent, var(--color-primary, #3ddc97));
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.hs-col-resize:hover::after,
+.hs-col-resize.is-dragging::after { opacity: 0.7; }
+
+/* Hangar anatomy buttons: stats row, side by side and compact. */
+.hs-hangar-bay-tools.is-topbar {
+    flex: 0 0 auto;
+    align-self: center;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+.hs-hangar-bay-tools.is-topbar > .action-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 0;
+    padding: 10px 18px;
+    font-size: 15px;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Hangar area tiles: fill the frame's height, crisp pixel icons + switches. */
+.hs-hangar-stats.is-row .hs-hangar-areas {
+    align-self: stretch;
+    padding: 0 14px;
+    image-rendering: pixelated;
+}
+.hs-hangar-stats.is-row .hs-area-tile { padding: 0; }
+.hs-hangar-stats.is-row .hs-area-icon svg {
+    width: 55px;
+    height: 55px;
+    image-rendering: pixelated;
+    shape-rendering: crispEdges;
+}
+.hs-hangar-stats.is-row .hs-area-icon .is-lit { filter: drop-shadow(0 0 0 transparent) drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a); }
+.hs-hangar-stats.is-row .hs-area-switch .hs-area-switch-track {
+    width: 56px;
+    min-width: 56px;
+    height: 28px;
+    padding: 0 24px 0 6px;
+    font-family: var(--font-pixel, 'Silkscreen', monospace);
+    font-size: 10px;
+    border-radius: 0;
+    clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.hs-hangar-stats.is-row .hs-area-switch .hs-area-switch-track::before {
+    top: 4px;
+    width: 16px;
+    height: 16px;
+    left: calc(100% - 22px);
+}
+.hs-hangar-stats.is-row .hs-area-switch input:not(:checked) + .hs-area-switch-track { padding: 0 5px 0 24px; }
+.hs-hangar-stats.is-row .hs-area-switch input:not(:checked) + .hs-area-switch-track::before { left: 3px; }
+
+/* Hangar stat icons (slots, size, areas, speed, energy): larger, crisp. */
+.hs-hangar-stats.is-row .hs-stat-icon { width: 32px; height: 32px; }
+.hs-hangar-stats.is-row .hs-stat-icon img { width: 32px; height: 32px; image-rendering: pixelated; }
+
+/* --------------------------------------------------------------------------
+   Contour consistency (home station + galaxy map): every chrome stroke uses
+   --ui-border-width (2px grid). No stray 1px / 3px outlines.
+   -------------------------------------------------------------------------- */
+html body .home-station-overlay,
+html body .galaxy-map-embedded {
+    --gm-stroke: var(--ui-border-width, 2px);
+    --gm-stroke-gap: var(--ui-border-width, 2px);
+    --gm-stroke-inner: calc(var(--ui-border-width, 2px) * 2);
+}
+
+/* Panels / cards / header chrome */
+html body .galaxy-map-embedded .galaxy-map-header,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar,
+html body .home-station-overlay .hs-play-shell,
+html body .home-station-overlay .hs-wallet-card,
+html body .home-station-overlay .hs-progress-card,
+html body .home-station-overlay .hs-tab {
+    border-width: var(--gm-stroke) !important;
+}
+
+/* Ship bar + locate / hangar CTA: single 2px stroke, matching inset gap */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link {
+    border: var(--gm-stroke) solid color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:is(:hover, :focus-visible) {
+    border-color: var(--color-primary) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a, 0 0 14px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-bar-cta {
+    border-width: var(--gm-stroke) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a, 0 2px 0 #000 !important;
+}
+
+/* Bottom-bar internal dividers */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+    border-right-width: var(--gm-stroke) !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg + .galaxy-map-ruler-seg {
+    border-top-width: var(--gm-stroke) !important;
+}
+
+/* Stat cells inside the planet segment */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select .gm-detail .stat-row {
+    box-shadow: inset 0 0 0 var(--gm-stroke) color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+}
+
+/* Stage stepper tiles */
+html body .galaxy-map-embedded .gm-stage-stepper .gm-sector-stage {
+    border-width: var(--gm-stroke) !important;
+    box-shadow: 0 0 0 var(--gm-stroke) #05060a !important;
+}
+
+/* Mission / teleport / FROM START: same double outline recipe (outer + gap + inner) */
+html body .galaxy-map-embedded .gm-card-actions .action-button,
+html body .galaxy-map-embedded .action-button#gmConfirmStart,
+html body .galaxy-map-embedded .action-button.gm-mission-btn,
+html body .galaxy-map-embedded .gm-teleport-btn.action-button,
+html body .home-station-overlay .gm-card-actions .action-button,
+html body .home-station-overlay .action-button#gmConfirmStart,
+html body .home-station-overlay .action-button.gm-mission-btn {
+    border: var(--gm-stroke) solid var(--gm-btn-line, var(--color-primary)) !important;
+    box-shadow:
+        inset 0 0 0 var(--gm-stroke-gap) #05060a,
+        inset 0 0 0 var(--gm-stroke-inner) var(--gm-btn-line, var(--color-primary)),
+        2px 2px 0 0 #000 !important;
+}
+html body .galaxy-map-embedded .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused),
+html body .galaxy-map-embedded .action-button#gmConfirmStart:is(:hover, :focus-visible, .nav-focused),
+html body .galaxy-map-embedded .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .action-button#gmConfirmStart:is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused) {
+    box-shadow:
+        inset 0 0 0 var(--gm-stroke-gap) #05060a,
+        inset 0 0 0 var(--gm-stroke-inner) var(--gm-btn-line, var(--color-primary)),
+        3px 3px 0 0 #000 !important;
+}
+
+/* Ship-bar info / stats hairlines */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info {
+    border-right-width: var(--gm-stroke) !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div {
+    border-left-width: var(--gm-stroke) !important;
 }

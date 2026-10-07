@@ -43,15 +43,24 @@ extendClass(EnemyManager, {
             ? flightProfiles.resolve(entry.faction || 'pirate', entry.enemyClass || 'assault')
             : null;
         const sideSpeedMul = sideFlightProfile ? sideFlightProfile.speedMul : 1;
+        // Enter from above the playfield, then settle into cruise / escort.
+        const entryTargetY = 36 + Math.random() * Math.max(36, canvasHeight * 0.42);
+        const entryX = 24 + Math.random() * Math.max(40, canvasWidth - 48);
+        const cruiseSpeed = isEscort
+            ? 0
+            : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul;
+        const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul;
         const side = {
-            x: canvasWidth + 20,
-            y: 40 + Math.random() * Math.max(40, canvasHeight - 80),
+            x: entryX,
+            y: -18,
             width: 12,
             height: 10,
-            speed: isEscort
-                ? 0
-                : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul,
-            verticalSpeed: isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul,
+            speed: 0,
+            verticalSpeed: (0.75 + Math.random() * 0.45) * sideSpeedMul,
+            cruiseSpeed: cruiseSpeed,
+            cruiseVerticalSpeed: cruiseVSpeed,
+            entering: true,
+            entryTargetY: entryTargetY,
             flightProfile: sideFlightProfile,
             wobblePhase: Math.random() * Math.PI * 2,
             health: Math.round(baseHp * scale),
@@ -113,11 +122,18 @@ extendClass(EnemyManager, {
             drawScale: SIDE_DRAW_SCALE
         });
         if (isEscort && this.enemy && form) {
-            side.x = this.enemy.x + this.enemy.width * 0.5 + form.x - side.width * 0.5;
-            side.y = Math.max(10, Math.min(canvasHeight - side.height - 10,
+            // Dive in above the formation slot, then lock on once entered.
+            const slotX = this.enemy.x + this.enemy.width * 0.5 + form.x - side.width * 0.5;
+            const slotY = Math.max(10, Math.min(canvasHeight - side.height - 10,
                 this.enemy.y + this.enemy.height * 0.5 + form.y - side.height * 0.5));
+            side.x = slotX;
+            side.y = -side.height - 10 - Math.random() * 24;
+            side.entryTargetY = slotY;
+            side.verticalSpeed = 0.95 + Math.random() * 0.4;
         } else if (!isEscort) {
-            side.y = 40 + Math.random() * Math.max(40, canvasHeight - 80 - side.height);
+            side.x = Math.max(8, Math.min(canvasWidth - side.width - 8, entryX - side.width * 0.5));
+            side.y = -side.height - 10 - Math.random() * 28;
+            side.entryTargetY = Math.max(20, Math.min(canvasHeight - side.height - 20, entryTargetY));
         }
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
@@ -141,6 +157,8 @@ extendClass(EnemyManager, {
                     if (ai.speedMul && ai.speedMul !== 1) {
                         side.speed *= ai.speedMul;
                         side.verticalSpeed *= ai.speedMul;
+                        if (side.cruiseSpeed) side.cruiseSpeed *= ai.speedMul;
+                        if (side.cruiseVerticalSpeed) side.cruiseVerticalSpeed *= ai.speedMul;
                         if (side.bomberSpeed) side.bomberSpeed *= ai.speedMul;
                     }
                     if (ai.attackRateMul && side.shootInterval > 0) {
@@ -161,6 +179,8 @@ extendClass(EnemyManager, {
             side.health = side.maxHealth;
             side.speed *= ai.speedMul || 1;
             side.verticalSpeed *= ai.speedMul || 1;
+            if (side.cruiseSpeed) side.cruiseSpeed *= ai.speedMul || 1;
+            if (side.cruiseVerticalSpeed) side.cruiseVerticalSpeed *= ai.speedMul || 1;
         }
         this.sideEnemies.push(side);
         if (typeof profileManager !== 'undefined' && profileManager.discoverEnemyContents && entry.type) {

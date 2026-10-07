@@ -12,6 +12,16 @@ class InputHandler {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
         document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+        // FIRE TO START: mouse / pointer click (overlay is pointer-events: none)
+        document.addEventListener('pointerdown', (e) => {
+            if (e.button != null && e.button !== 0) return;
+            if (typeof missionStartManager === 'undefined' || !missionStartManager.isAwaitingFire()) return;
+            if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) return;
+            const stage = document.querySelector('.game-stage, .game-canvas-container, #gameCanvas, canvas');
+            if (stage && e.target && stage.contains(e.target)) {
+                missionStartManager.onFire();
+            }
+        });
     }
 
     handleKeyDown(event) {

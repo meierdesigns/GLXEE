@@ -51,7 +51,34 @@ extendClass(EnemyManager, {
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
 
-            if (e.fleeing) {
+            if (e.entering && !e.fleeing) {
+                // Dive in from above until the entry altitude / escort slot.
+                const ty = e.entryTargetY != null ? e.entryTargetY : 48;
+                e.y += Math.max(0.55, e.verticalSpeed || 0.9) * speedMul;
+                if (e.isEscort && (teamWithMain || teamPending) && mainAlive) {
+                    const tx = this.enemy.x + this.enemy.width * 0.5
+                        + (e.formOffsetX || 0) - e.width * 0.5;
+                    e.x += (tx - e.x) * Math.min(1, 0.1 * speedMul);
+                    e.entryTargetY = Math.max(8, Math.min(canvasHeight - e.height - 8,
+                        this.enemy.y + this.enemy.height * 0.5
+                        + (e.formOffsetY || 0) - e.height * 0.5));
+                }
+                if (e.y >= (e.entryTargetY != null ? e.entryTargetY : ty)) {
+                    e.y = e.entryTargetY != null ? e.entryTargetY : ty;
+                    e.entering = false;
+                    if (e.isEscort && (teamWithMain || teamPending)) {
+                        e.speed = 0;
+                        e.verticalSpeed = 0;
+                    } else {
+                        e.speed = e.cruiseSpeed != null
+                            ? e.cruiseSpeed
+                            : (-0.35 - Math.random() * 0.25);
+                        e.verticalSpeed = e.cruiseVerticalSpeed != null
+                            ? e.cruiseVerticalSpeed
+                            : (Math.random() - 0.5) * 0.25;
+                    }
+                }
+            } else if (e.fleeing) {
                 e.x += (e.speed || 0) * speedMul;
                 e.y += (e.verticalSpeed || -1) * speedMul;
             } else if (e.isEscort && (teamWithMain || teamPending)) {
@@ -167,7 +194,9 @@ extendClass(EnemyManager, {
             }
             const offScreen = e.x < -50 || e.x > canvasWidth + 50
                 || e.y < -50 || e.y > canvasHeight + 50;
-            if (e.fleeing && offScreen) {
+            if (e.entering) {
+                // Still diving in from above — never cull.
+            } else if (e.fleeing && offScreen) {
                 this.sideEnemies.splice(i, 1);
             } else if (!e.isEscort && role !== 'bomber' && e.x < -40) {
                 this.sideEnemies.splice(i, 1);

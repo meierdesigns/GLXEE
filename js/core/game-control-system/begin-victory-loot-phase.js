@@ -3,12 +3,20 @@
 // GameControlSystem methods, split from game-control-system.js.
 extendClass(GameControlSystem, {
     beginVictoryLootPhase() {
-        const grace = (typeof economyConfig !== 'undefined' && economyConfig.getVictoryLootGraceMs)
+        let grace = (typeof economyConfig !== 'undefined' && economyConfig.getVictoryLootGraceMs)
             ? economyConfig.getVictoryLootGraceMs()
             : 10000;
+        // Boss: slightly longer safety net only — victory ends as soon as the
+        // field is clear (map-wide vacuum pulls remaining drops in).
+        const lvl = this.coreLevelManager && this.coreLevelManager.getCurrentLevel
+            ? this.coreLevelManager.getCurrentLevel() : null;
+        if (lvl && lvl.isBoss) grace = Math.max(grace, 12000);
         this._victoryLootPhase = true;
         this._victoryLootTimer = grace;
-        this._victoryLootMinMs = Math.min(900, grace * 0.2);
+        this._victoryLootElapsed = 0;
+        this._victoryLootMinMs = 280;
+        this._victoryLootLastCount = -1;
+        this._victoryLootIdleMs = 0;
         this.lastVictoryLoot = null;
 
         if (typeof enemyManager !== 'undefined') {
@@ -56,6 +64,7 @@ extendClass(GameControlSystem, {
         const dt = Math.max(0, Number(deltaTime) || 0);
         this._victoryLootTimer -= dt;
         this._victoryLootMinMs -= dt;
+        this._victoryLootElapsed = (this._victoryLootElapsed || 0) + dt;
 
         const remaining = Math.max(0, this._victoryLootTimer);
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice
@@ -66,12 +75,39 @@ extendClass(GameControlSystem, {
             }
         }
 
-        const noPickups = !(typeof pickupManager !== 'undefined' && pickupManager.pickups
-            && pickupManager.pickups.some((p) => !p.powerUp));
+        let resourceCount = 0;
+        if (typeof pickupManager !== 'undefined' && pickupManager.pickups) {
+            for (let i = 0; i < pickupManager.pickups.length; i++) {
+                if (!pickupManager.pickups[i].powerUp) resourceCount++;
+            }
+        }
+        const noPickups = resourceCount === 0;
         const minElapsed = this._victoryLootMinMs <= 0;
 
-        // Done early once everything is scooped up; otherwise the timer is a
-        // hard limit — finalizeVictory() banks whatever is still floating.
+        // If the count has not dropped for a bit, bank leftovers and finish —
+        // stranded / cargo-capped drops must not hold the victory screen.
+        if (resourceCount === this._victoryLootLastCount) {
+            this._victoryLootIdleMs = (this._victoryLootIdleMs || 0) + dt;
+        } else {
+            this._victoryLootIdleMs = 0;
+            this._victoryLootLastCount = resourceCount;
+        }
+        if (!noPickups && this._victoryLootElapsed >= 900 && this._victoryLootIdleMs >= 700) {
+            if (typeof pickupManager !== 'undefined' && pickupManager.collectAll) {
+                // Only vacuum resources; leave power-ups alone.
+                for (let i = pickupManager.pickups.length - 1; i >= 0; i--) {
+                    const p = pickupManager.pickups[i];
+                    if (p.powerUp) continue;
+                    pickupManager.collectOne(p);
+                    pickupManager.pickups.splice(i, 1);
+                }
+            }
+            this.finalizeVictory();
+            return;
+        }
+
+        // Done as soon as the field is clear (tiny min delay for juice).
+        // Timer is only a hard safety net.
         if ((noPickups && minElapsed) || this._victoryLootTimer <= 0) {
             this.finalizeVictory();
         }

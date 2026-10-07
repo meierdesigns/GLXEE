@@ -8,11 +8,11 @@ extendClass(EnemyManager, {
      */
     resolveEnemyHitProfile(opts) {
         const o = opts || {};
-        // Footprint comes from displaySizeForClass × Enemy Size setting.
-        // No extra shrink — that made champions look like flecks.
+        // Footprint = displaySizeForClass (includes SIZES / sizePx) × drawScale × tier.
         const drawScale = (o.drawScale != null ? o.drawScale : 1);
         let model = null;
         let scaleMul = 1;
+        let enemyClass = o.enemyClass;
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual) {
             const visual = factionShipStyles.resolveFactionShipVisual({
                 faction: o.faction,
@@ -26,6 +26,7 @@ extendClass(EnemyManager, {
             if (visual && visual.model) {
                 model = visual.model;
                 scaleMul = visual.scaleMul != null ? visual.scaleMul : 1;
+                if (visual.enemyClass) enemyClass = visual.enemyClass;
             }
         }
         if (!model && typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getMergedModel && o.type) {
@@ -43,12 +44,29 @@ extendClass(EnemyManager, {
                 collision: null
             };
         }
+        // Authoritative playfield size from the SIZES setting — never the raw
+        // asset grid. Config fallbacks (getMergedModel) have tiny native sizes.
+        let baseW = model.width || 16;
+        let baseH = model.height || 12;
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.displaySizeForClass && enemyClass) {
+            const display = factionShipStyles.displaySizeForClass(enemyClass);
+            if (display && display.width > 0 && display.height > 0) {
+                baseW = display.width;
+                baseH = display.height;
+            }
+        }
         let fullScale = drawScale * scaleMul;
-        // Soft ceiling only — XXL capitals can approach half the playfield.
-        const maxW = 280 * Math.max(0.5, drawScale);
-        if ((model.width || 16) * fullScale > maxW) fullScale = maxW / (model.width || 16);
-        const drawW = Math.max(6, (model.width || 16) * fullScale);
-        const drawH = Math.max(6, (model.height || 12) * fullScale);
+        // Soft ceiling — allow SIZES overlay values up to the slider max (200),
+        // with headroom for tier mul; bosses apply their own mul afterwards.
+        const maxW = 420 * Math.max(0.5, drawScale);
+        if (baseW * fullScale > maxW) fullScale = maxW / baseW;
+        const drawW = Math.max(6, baseW * fullScale);
+        const drawH = Math.max(6, baseH * fullScale);
+        // Local model footprint for hit-mask bake / render sync (do not mutate
+        // shared getMergedModel instances).
+        if ((model.width || 16) !== baseW || (model.height || 12) !== baseH) {
+            model = Object.assign({}, model, { width: baseW, height: baseH });
+        }
         const sprite = model.sprite || null;
         const colors = model.colors || null;
         // Hit mask from the actually rendered ship (voxel segments / PNG crops,
@@ -188,6 +206,20 @@ extendClass(EnemyManager, {
                 type: this.enemy.type || this.currentShipType,
                 drawScale: 1
             });
+            // initBoss applies BOSS_SIZE_MUL (1.6) after spawn — re-apply it
+            // here or live SIZES tweaks strip the boss to champion footprint.
+            if (this.enemy.isBoss) {
+                const mul = 1.6;
+                const cx = this.enemy.x + this.enemy.width / 2;
+                const cy = this.enemy.y + this.enemy.height / 2;
+                this.enemy.width = Math.max(4, Math.round(this.enemy.width * mul));
+                this.enemy.height = Math.max(4, Math.round(this.enemy.height * mul));
+                this.enemy.x = cx - this.enemy.width / 2;
+                this.enemy.y = cy - this.enemy.height / 2;
+                if (this.enemy.collision) {
+                    this.enemy.collision = this.scaleEnemyCollision(this.enemy.collision, mul);
+                }
+            }
         }
         (this.sideEnemies || []).forEach((side) => {
             if (!side) return;
@@ -207,6 +239,7 @@ extendClass(EnemyManager, {
         if (typeof graphicsManager !== 'undefined' && graphicsManager._variantCache) {
             graphicsManager._variantCache.clear();
         }
+        if (this._hitMaskCache) this._hitMaskCache = Object.create(null);
     },
 
     roleForcesEscort(role) {

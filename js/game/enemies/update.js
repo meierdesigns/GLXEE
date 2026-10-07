@@ -64,12 +64,13 @@ extendClass(EnemyManager, {
         // Update enemy position (move left/right and up/down)
         // Calculate frame-rate independent speed multiplier
         let speedMultiplier = effectiveDeltaTime / 16.67; // 16.67ms = 60 FPS baseline
+        let bobY = 0;
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
             speedMultiplier *= beatSyncManager.getEnemySpeedMul();
-            this.enemy.y += beatSyncManager.getEnemyBobOffset() * 0.15;
+            bobY = beatSyncManager.getEnemyBobOffset() * 0.15;
         }
-        this.enemy.x += this.enemy.speed * speedMultiplier;
-        this.enemy.y += this.enemy.verticalSpeed * speedMultiplier;
+        let edx = this.enemy.speed * speedMultiplier;
+        let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;
 
         // Faction/class flight wobble, amplified on downbeats
         const enemyFlightProfile = this.enemy.flightProfile;
@@ -79,7 +80,14 @@ extendClass(EnemyManager, {
             if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                 wobbleBoost = beatSyncManager.getWobbleAmpMul();
             }
-            this.enemy.x += Math.sin(this.enemy.wobblePhase) * enemyFlightProfile.wobbleAmp * wobbleBoost * speedMultiplier;
+            edx += Math.sin(this.enemy.wobblePhase) * enemyFlightProfile.wobbleAmp * wobbleBoost * speedMultiplier;
+        }
+        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
+        if (cv && cv.active && cv.active() && cv.stepMove) {
+            cv.stepMove(this.enemy, edx, edy);
+        } else {
+            this.enemy.x += edx;
+            this.enemy.y += edy;
         }
 
         // Get current canvas dimensions with multiple fallbacks
@@ -170,8 +178,31 @@ extendClass(EnemyManager, {
         const steer = 14; // start turning this far from a wall
         const left = walls.left + margin;
         const right = walls.right - margin;
-        if (right - left < e.width) {
+        const gap = right - left;
+        if (gap < e.width) {
+            // Pinch (old sill/gate): slide vertically inside the flight band
+            // toward a wider row instead of locking the ship in place.
             e.x = (walls.left + walls.right - e.width) / 2;
+            const minY = e.minY != null ? e.minY : 2;
+            const maxY = e.maxY != null ? e.maxY : e.y;
+            let bestY = e.y;
+            let bestGap = gap;
+            const step = Math.max(6, Math.round(e.height * 0.35));
+            for (let y = minY; y <= maxY; y += step) {
+                const w = obstacleManager.terrainWallsOver(y - 8, y + e.height + 4, W);
+                if (!w) continue;
+                const g = (w.right - margin) - (w.left + margin);
+                if (g > bestGap) {
+                    bestGap = g;
+                    bestY = y;
+                }
+            }
+            if (bestY !== e.y) {
+                e.y += Math.max(-1.4, Math.min(1.4, bestY - e.y));
+                if (e.verticalSpeed != null) {
+                    e.verticalSpeed = bestY > e.y ? Math.abs(e.verticalSpeed || 0.4) : -Math.abs(e.verticalSpeed || 0.4);
+                }
+            }
             return;
         }
         if (e.x < left + steer) {

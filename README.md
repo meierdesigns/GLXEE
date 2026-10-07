@@ -82,11 +82,18 @@ npm start
 # http://localhost:3000
 ```
 
-Equivalent command:
+`npm start` / `npm run dev` / `npm run serve` run `tools/dev-server.py`: a threaded
+static server with `Cache-Control: no-cache` so F5 stays fast (304 when
+unchanged) while edits still appear. Equivalent plain server:
 
 ```bash
 python3 -m http.server 3000
 ```
+
+Silkscreen is **self-hosted** under `assets/fonts/` (no Google Fonts round trip),
+preloaded in `index.html`, and declared in `css/fonts.css`. A solid **boot veil**
+covers the shell until the start menu is restored, then drops without a fade so
+the first paint never flashes unstyled UI.
 
 Optional local tools:
 
@@ -97,7 +104,7 @@ npm run asset-gen       # asset-gen bridge on :8787
 npm run icons:preview   # render icon previews
 ```
 
-`npm start` is a static file server. It must be run from the repository root.
+Run the server from the repository root.
 
 <img src="assets/ui/readme-h-controls.svg" alt="CH.02 CONTROLS" width="960" />
 
@@ -220,14 +227,26 @@ reputation with the ally.
 **Custom galaxies:** the main-menu **GALAXIES** viewer browses every shared
 galaxy (ruler emblems, map, planets). Pilots can generate a named start galaxy
 at creation (planet count, difficulty tier, suns, rivals) or open NEW GALAXY
-from the viewer; unused generated galaxies can be deleted.
+from the viewer; unused generated galaxies can be deleted. The viewer remembers
+selected focus and column scroll positions across sessions.
+
+**Universe save:** from the GALAXIES viewer, download or upload a single
+`glxee-universe-*.json` that packages every galaxy, planet config, custom
+cluster/pattern, faction state, and pilot profile. Restoring writes the same
+localStorage keys the managers use and reloads cleanly.
+
+Trading posts remember which faction **built** them (`stationBuilders`), so a
+post keeps its builder's look after the anchor planet changes hands. Posts are
+placed with edge awareness so they sit on reachable lanes.
 
 Planet cards on the explore map show atmosphere haze from the live SVG palette.
 Border **checkpoints** between sectors use faction silhouette art (modular,
 spikes, rings, scrap, circuits). Route beams carry **bidirectional data-packet
 traffic**; foreground barriers sit in front of lower routes for depth. A **ship
-locator** recenters the map on the pilot. Selecting a border, planet, or station
-updates the confirm row:
+locator** recenters the map on the pilot. Explore budget sits in a progress chip
+beside the map chrome. The embedded map **ruler bar** stacks planet / situation /
+action segments on the stage. Selecting a border, planet, or station updates the
+confirm row:
 
 | Selection | Actions |
 |:----------|:--------|
@@ -281,15 +300,26 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 
 - Area upgrades add slots and frame bonuses.
 - Individual slots upgrade from **S → M → L**.
+- Module upgrade costs ramp harder at late levels so endgame spends matter.
 - Split wing mounts use mirrored half-size sockets.
 - Weapon sockets can be dragged between nose, core, and wings when space allows.
 - Area toggles can hide nose, aft, or wing sections and safely remap modules.
 - The hangar Parts view shows inventory, fit status, slot size, and drag targets.
 - Frame-edge resize keeps the grabbed handle under the pointer at every scale.
+- Station storage columns (ships / blueprints / parts) are drag-resizable with
+  remembered `fr` weights.
 
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
 connection settings, and disabled areas.
+
+### Menu and profiles
+
+The start menu leads with **NEW PILOT** and **LOAD** (LOAD locks when no
+profiles exist), plus GALAXIES, settings, and credits. HD menu icons cover
+new-pilot, floppy LOAD, hangar, factions, and explorations. Profile details use
+stat tiles and per-galaxy progress cell bars; faction filters narrow the list.
+Subtitle reads *…a MRDSN Production*.
 
 <div align="center">
 
@@ -324,9 +354,11 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Five factions × five hostile classes: scout, assault, heavy, elite, capital.
 - Faction silhouettes use topology and plating so shape communicates doctrine.
 - Champions can announce escorts: repair drones, shield batteries, gunners,
-  jammers, and tethers.
+  jammers, and tethers. Side-boss difficulty and faction boss kits are split so
+  champion pressure scales independently of the main wave.
 - **Scrolling terrain** walls carve flight lanes (canyons, narrows, teeth, reefs)
-  tinted by the planet and the holding faction.
+  tinted by the planet and the holding faction. Material weights mix rock,
+  metal, **crystal**, and magma; crystals prism and shatter into shards.
 - Rocks take **weapon-scaled damage**, splash, and shed collidable chunks; debris
   is visual-only chip FX in the rock's own colours.
 - **Planet tiers** (Easy → Nightmare) scale enemy health, speed, damage, and spawn
@@ -341,18 +373,34 @@ Combat is a vertical shooter with a readable pixel hierarchy:
   or **BARRIER** (half damage taken), each with HUD notice and icon glow.
 - Enemy waves use **seeded liveries** so ships of one faction still look distinct;
   renegade contract targets get outlaw markings (hazard slash, crossed badge).
+- Normal and escort spawns **dive in from above**, then lock into cruise /
+  formation slots.
 - Faction contracts can spawn **renegade captains** or **outlaw gangs** with their
   own callsigns and paint.
 - Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
 - Weapons, abilities, shields, charge, drive, pickups, and explosion FX form the
-  moment-to-moment combat layer.
+  moment-to-moment combat layer. Hit bursts stay compact so silhouette reads.
 - Victory loot pays resources, credits, blueprint progress, and active mission
-  rewards; the scoop phase ends early once the field is clear.
+  rewards; the scoop phase ends as soon as the field is clear (idle vacuum for
+  stranded drops; bosses keep a longer safety net).
 
-The combat renderer uses a shared ship voxel lattice, faction hull builders,
-Scale2x refinement on high-density displays, pixel snapping, and authored full
-sprites where segmented rendering would distort a faction silhouette. Enemies
-steer around predictive obstacle sweeps and terrain walls so lanes stay readable.
+### Playfield and VOXEL combat
+
+Viewport fit is **playfield-first**: the fight canvas takes nearly full column
+height, aspect sets width, leftover width feeds clamped side HUD panels, and
+VOXEL mode snaps CSS size to integer-divisor lattice steps.
+
+Ship Render **FLAT** / **VOXEL** shares one combat lattice cell (settings
+**Voxel Size** 1–4). Ships, modules, terrain, obstacles, particles, and debris
+snap to that cell; VOXEL lowers supersampling when cells are large. Destroyed
+hulls shed **silhouette-sampled voxel chips** with a hot core burst.
+
+### Size overlay
+
+Settings and the in-game **SIZES** overlay set exact pixel widths for player,
+enemy classes, and shot kinds, plus shot-speed percent for player / enemy /
+boss. Pixel border weights step NORMAL → THICK → HEAVY on an even grid; FX
+strength (glow, scanlines, CRT, chroma) is any whole percent 0–100.
 
 ## Screenshots
 
@@ -403,13 +451,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Home Station browser shell with proportional GUI zoom (default 75%, slider 50–125%) and a dedicated PLAY launch into the map.
 - Area-tab corner deco icons and keyboard focus that opens PLAY or the first area hub.
 - Galaxy explore: atmosphere planet cards, faction border checkpoints, fly / dock / raid / assault actions.
-- Bidirectional route traffic, ship locator, and zoom-aware map detail on the explore map.
+- Bidirectional route traffic, ship locator, explore progress chip, and zoom-aware map detail.
 - Shared world planet ownership, custom generated galaxies, and a main-menu GALAXIES viewer.
+- Universe JSON download/upload for galaxies, faction state, and every pilot profile.
 - Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
 - Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
+- Playfield-first viewport, FLAT/VOXEL combat lattice, and silhouette voxel debris.
+- Exact size/speed overlay for player, enemy classes, and shots; thicker pixel borders.
+- Crystal terrain and prism obstacles; dive-in enemy entries; faster victory scoop.
 - Fullscreen toggle, game-over wreck backdrop, and embedded-browser reload keys (F5 / Ctrl+R).
+- Self-hosted Silkscreen, boot veil, and revalidating local `npm start` server.
 - Angular Pirate emblem at 16px and `@4x`; faction fleet preview zoom in the station.
-- Profile score and ability-stat readouts for faster loadout decisions.
+- Profile score tiles, galaxy progress bars, NEW PILOT / locked LOAD, and HD menu icons.
 - Faction fleet previews in the station and high-definition navigation icons.
 - Animated planet spin frames and extra faction-specific planet treatments.
 - Guided start intro and embedded menu layouts that keep the station loop intact.
@@ -425,16 +478,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STATION ── GUI scale slider ── fleet zoom ── hangar edge drag ── PLAY launch
+BOOT    ── Silkscreen local ── boot veil ── no-cache npm start
    │
-TRAVEL  ── ship locator ── packet traffic ── border depth ── fly/dock/raid
+FIGHT   ── playfield-first ── VOXEL lattice ── crystal terrain ── dive entries
    │
-ICONS   ── pirate void-skull ── @4x crests ── faction viewer accents
+SIZES   ── exact px overlay ── shot speeds ── thicker borders ── FX %
+   │
+WORLD   ── universe JSON ── station builders ── map ruler bar ── explore chip
 ```
 
-Recent polish refreshes the Pirate seal, adds a persistent GUI scale slider,
-puts a ship locator and bidirectional traffic on the galaxy map, and lets the
-faction fleet preview zoom.
+Recent waves harden boot and fonts, fill the fight column first, share one VOXEL
+lattice across combat draws, expose exact size/speed controls, add crystal
+terrain and universe save/load, and refresh menu/profile chrome.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -446,18 +501,18 @@ split into focused folders while their public entry points remain stable.
 ```text
 index.html                 dependency-ordered entry point
 styles.css                 pixel UI, station, hangar, HUD, and faction chrome
-css/                       optimized variables and asset-generator styles
+css/                       fonts, optimized variables, asset-generator styles
 
-js/core/                   state, configs, input, economy, profiles, loop
+js/core/                   state, configs, input, economy, profiles, universe save, loop
 js/game/                   player, enemies, bullets, collisions, obstacles, audio
 js/graphics/               sprites, palettes, silhouettes, effects, renderers
 js/ui/                     station, hangar, editors, viewers, maps, menus
 js/abilities/              ability definitions and player abilities
-assets/                    sprites, ship models, modules, levels, metadata
+assets/                    fonts, sprites, ship models, modules, levels, metadata
 
 docs/                      architecture, technical notes, updates, devlogs
 rules/                     game rules and tactical design notes
-tools/                     ComfyUI, asset-gen, and icon-preview tooling
+tools/                     dev-server, ComfyUI, asset-gen, and icon-preview tooling
 packages/                  Cursed IDE packages
 ```
 
@@ -548,6 +603,21 @@ be reviewed or reverted independently.
 | 54E | Hangar edge drag | Pointer-locked frame resize at every existing scale |
 | 54F | Map and station chrome | GUI slider, ship locator, traffic, fleet zoom, and viewer accents |
 | 54G | README map polish | Document pirate seal, GUI slider, locator, and fleet zoom for 54A–54F |
+| 55A | Boot noise quiet | FOUC zoom, AudioContext, and YouTube cookie console noise |
+| 55B | Module cost ramp | Stronger late-level area and slot upgrade prices |
+| 55C | Hit explosion shrink | Compact hit bursts for clearer combat silhouette feedback |
+| 55D | Size settings overlay | Enemy, player, and shot size steps with in-game SIZE overlay |
+| 55E | Champion boss kits | Split side-boss difficulty and faction-specific boss kits |
+| 56A | Local fonts and server | Self-hosted Silkscreen, boot veil, revalidating `npm start` |
+| 56B | Playfield-first viewport | Fight canvas fills column height; leftover width feeds side HUD |
+| 56C | VOXEL combat lattice | Shared cell size, lower supersample, silhouette voxel debris |
+| 56D | Exact sizes and borders | Pixel width/speed overlay, thicker borders, FX percent strength |
+| 56E | Crystal terrain | Crystal/metal/magma materials, prism obstacles, shatter shards |
+| 56F | Menu and profile chrome | NEW PILOT, locked LOAD, HD icons, profile tiles, progress bars |
+| 56G | Map ruler and universe | Explore chip, stage ruler bar, galaxy viewer state, universe JSON |
+| 56H | Station builders | Trading-post builder memory, edge-aware posts, column resize |
+| 56I | Combat entry polish | Dive-in spawns, faster victory scoop, loot idle vacuum |
+| 56J | README archive | Document boot, VOXEL fight, sizes, crystals, and universe for 55–56 |
 
 The wave commit convention is:
 

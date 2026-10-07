@@ -95,6 +95,11 @@ preloaded in `index.html`, and declared in `css/fonts.css`. A solid **boot veil*
 covers the shell until the start menu is restored, then drops without a fade so
 the first paint never flashes unstyled UI.
 
+`js/core/stage-boot.js` runs in `<head>` and locks a fixed **1280×960 (4:3)**
+logical stage plus `--stage-scale` before first paint. The last known faction
+styles the outer **bezel** immediately (`data-vf-faction`), and `vf-loading`
+holds transitions off until load settles.
+
 Optional local tools:
 
 ```bash
@@ -280,19 +285,18 @@ carry corner deco icons so HOME STATION, HANGAR, FACTIONS, and EXPLORATIONS read
 as distinct hubs at a glance. Travel remains a modal over PLAY and is never
 restored after a reload.
 
-### Browser shell and GUI scale
+### Browser shell, stage, and resolution
 
-Home Station renders inside a dedicated `.vf-browser-shell` frame so the
-station content fills the live viewport without double-scaling. The shell uses
-a proportional `--gui-zoom` baseline (default **75%**) so tabs, labels, and the
-PLAY launch control stay readable while still matching the compact Game Boy
-presentation. A frame **GUI** slider (50–125%) writes the same `--gui-zoom`
-through `uiAppearanceManager` and reschedules viewport fit.
+The whole app lives on a fixed **4:3 stage** (logical 1280×960). Viewport fit
+scales that stage uniformly into the window with a ≥50 px margin (DPR-aware so
+browser zoom keeps physical size). An outer **faction bezel** frames the stage;
+its top strip holds **RES** (opens a resolution slider 640–2560 wide),
+fullscreen, and logout mirrors. Layout proportions never change with RES —
+only the displayed size does. Ship render defaults to **VOXEL**.
 
-- Native browser zoom stays available; GLXEE's shell zoom is separate.
-- Wide and Cursor-hosted viewports keep the same proportional content scale.
-- Header actions stay docked: crest, resources, LOGOUT, and PLAY in one strip.
-- Mobile-narrow layouts allow PLAY to wrap full-width under the header.
+Home Station still uses `.vf-browser-shell` inside the stage. Header actions
+stay docked: crest, resources, LOGOUT, and PLAY in one strip. Mobile-narrow
+layouts allow PLAY to wrap full-width under the header.
 
 ### Hull areas and slots
 
@@ -305,6 +309,10 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 - Weapon sockets can be dragged between nose, core, and wings when space allows.
 - Area toggles can hide nose, aft, or wing sections and safely remap modules.
 - The hangar Parts view shows inventory, fit status, slot size, and drag targets.
+- Hangar areas use an **area pager** (one open NOSE/CORE/AFT/WINGS at a time)
+  with prev/next pinned above the ship list instead of an accordion.
+- Hangar bay zoom steps in whole pixels-per-voxel above 1× and shrinks smoothly
+  below that (down to 12 %), with continuous easing while animating.
 - Frame-edge resize keeps the grabbed handle under the pointer at every scale.
 - Station storage columns (ships / blueprints / parts) are drag-resizable with
   remembered `fr` weights.
@@ -319,6 +327,7 @@ The start menu leads with **NEW PILOT** and **LOAD** (LOAD locks when no
 profiles exist), plus GALAXIES, settings, and credits. HD menu icons cover
 new-pilot, floppy LOAD, hangar, factions, and explorations. Profile details use
 stat tiles and per-galaxy progress cell bars; faction filters narrow the list.
+An unfinished New Pilot flow (faction / name step) restores after reload.
 Subtitle reads *…a MRDSN Production*.
 
 <div align="center">
@@ -456,10 +465,12 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Universe JSON download/upload for galaxies, faction state, and every pilot profile.
 - Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
 - Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
-- Playfield-first viewport, FLAT/VOXEL combat lattice, and silhouette voxel debris.
+- Fixed 4:3 stage with faction bezel, RES slider, and pre-paint `stage-boot`.
+- Playfield-first layout inside the stage, VOXEL-default combat lattice, silhouette debris.
 - Exact size/speed overlay for player, enemy classes, and shots; thicker pixel borders.
 - Crystal terrain and prism obstacles; dive-in enemy entries; faster victory scoop.
-- Fullscreen toggle, game-over wreck backdrop, and embedded-browser reload keys (F5 / Ctrl+R).
+- Hangar area pager and pixel-step bay zoom; game-over wreck flies into a free lane.
+- Fullscreen toggle and embedded-browser reload keys (F5 / Ctrl+R).
 - Self-hosted Silkscreen, boot veil, and revalidating local `npm start` server.
 - Angular Pirate emblem at 16px and `@4x`; faction fleet preview zoom in the station.
 - Profile score tiles, galaxy progress bars, NEW PILOT / locked LOAD, and HD menu icons.
@@ -478,18 +489,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-BOOT    ── Silkscreen local ── boot veil ── no-cache npm start
+STAGE   ── 4:3 fixed layout ── faction bezel ── RES slider ── stage-boot
    │
-FIGHT   ── playfield-first ── VOXEL lattice ── crystal terrain ── dive entries
+HANGAR  ── area pager ── pixel-step bay zoom ── smooth sub-pixel shrink
    │
-SIZES   ── exact px overlay ── shot speeds ── thicker borders ── FX %
+FIGHT   ── VOXEL default ── fine rock fireballs ── wreck fly-in lane
    │
-WORLD   ── universe JSON ── station builders ── map ruler bar ── explore chip
+PILOT   ── restore New Pilot steps ── profile tiles ── known toggle
 ```
 
-Recent waves harden boot and fonts, fill the fight column first, share one VOXEL
-lattice across combat draws, expose exact size/speed controls, add crystal
-terrain and universe save/load, and refresh menu/profile chrome.
+Recent waves lock a resolution-selectable 4:3 stage behind a faction bezel,
+replace the hangar accordion with an area pager, default combat to VOXEL, and
+polish wreck / fireball presentation.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -503,7 +514,7 @@ index.html                 dependency-ordered entry point
 styles.css                 pixel UI, station, hangar, HUD, and faction chrome
 css/                       fonts, optimized variables, asset-generator styles
 
-js/core/                   state, configs, input, economy, profiles, universe save, loop
+js/core/                   state, configs, stage-boot, input, economy, profiles, universe save, loop
 js/game/                   player, enemies, bullets, collisions, obstacles, audio
 js/graphics/               sprites, palettes, silhouettes, effects, renderers
 js/ui/                     station, hangar, editors, viewers, maps, menus
@@ -618,6 +629,12 @@ be reviewed or reverted independently.
 | 56H | Station builders | Trading-post builder memory, edge-aware posts, column resize |
 | 56I | Combat entry polish | Dive-in spawns, faster victory scoop, loot idle vacuum |
 | 56J | README archive | Document boot, VOXEL fight, sizes, crystals, and universe for 55–56 |
+| 57A | Fixed stage bezel | 4:3 logical stage, faction bezel, RES slider, pre-paint `stage-boot` |
+| 57B | Hangar area pager | One open hull area at a time; pinned prev/next above the ship list |
+| 57C | Hangar bay zoom | Whole-pixel zoom steps above 1×; smooth shrink to 12 % below |
+| 57D | Pilot flow restore | Resume unfinished New Pilot faction/name steps after reload |
+| 57E | Combat present polish | Fine rock fireballs, wreck fly-in lane, VOXEL default |
+| 57F | README stage archive | Document stage bezel, hangar pager, and zoom for waves 57A–57E |
 
 The wave commit convention is:
 

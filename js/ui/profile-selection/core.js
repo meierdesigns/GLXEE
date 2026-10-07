@@ -41,6 +41,7 @@ class ProfileSelectionManager {
     applyPendingFactionLook() {
         if (!this.overlay) return;
         const id = this.pendingFaction;
+        if (typeof menuStateManager !== 'undefined' && this.mode === 'create') menuStateManager.save({ pfaction: id });
         const box = this.overlay.querySelector('.profile-selection-name-mode');
         this.applyFactionVars(box, id);
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
@@ -167,6 +168,16 @@ class ProfileSelectionManager {
         box.style.setProperty('--color-text-secondary', (typeof themeContextManager !== 'undefined' && themeContextManager.lightenHex)
             ? themeContextManager.lightenHex(accent, 0.45) : light);
         box.dataset.faction = id;
+        // The screen bezel follows the faction while it is being chosen.
+        const bz = document.getElementById('vf-bezel');
+        if (bz && box.classList.contains('profile-selection-name-mode')) {
+            bz.setAttribute('data-faction', id);
+            bz.setAttribute('data-preview', '1');
+            bz.style.setProperty('--retro-ink', accent);
+            bz.style.setProperty('--color-primary', accent);
+            const crest = bz.querySelector('.vf-pilot-crest');
+            if (crest) crest.setAttribute('data-f', id);
+        }
     }
 
     /** Default player hull drawn in the faction's silhouette and colours. */
@@ -271,6 +282,14 @@ class ProfileSelectionManager {
     }
 
     createUI() {
+        // Remember where the pilot flow is, so a refresh returns to it (menu-state/restore.js).
+        const inStationUi = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+        if (typeof menuStateManager !== 'undefined' && !inStationUi && this.isVisible) {
+            menuStateManager.save({
+                pmode: this.mode, pstep: this.createStep || null,
+                pfaction: this.pendingFaction || null, pcreateOnly: !!this._createOnly
+            });
+        }
         const profiles = this.getProfiles();
         const activeId = typeof profileManager !== 'undefined' ? profileManager.activeProfileId : null;
         const reuse = !!this.overlay && this.overlay.isConnected;
@@ -377,9 +396,13 @@ class ProfileSelectionManager {
             ['salvage', 'SALVAGE', '+120 scrap, +40 ore, +15 crystal'],
             ['gunsmith', 'GUNSMITH', '+1 weapon slot on your ship']
         ];
+        const rk = (id) => (typeof homeStationUI !== 'undefined' && homeStationUI.resourceIconKey) ? homeStationUI.resourceIconKey(id) : null;
+        const kitKey = { balanced: 'menuShips', credits: rk('credits'), salvage: rk('scrap'), gunsmith: 'hsCraft' };
+        const kitIcon = (v) => (kitKey[v] && typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml)
+            ? `<span class="profile-kit-icon">${iconRenderer.imgHtml(kitKey[v], 24, 'hs-pixel')}</span>` : '';
         const chip = (group, value, label, tip) =>
             `<button type="button" class="profile-start-chip${o[group] === value ? ' selected' : ''}" data-start-opt="${group}"` +
-            ` data-value="${value}" aria-pressed="${o[group] === value}" tabindex="-1"${tip ? ` title="${tip}"` : ''}>${label}</button>`;
+            ` data-value="${value}" aria-pressed="${o[group] === value}" tabindex="-1"${tip ? ` title="${tip}"` : ''}>${group === 'kit' ? kitIcon(value) : ''}${label}</button>`;
         const galaxyName = (gid) => {
             const g = planetConfigManager.getGalaxy ? planetConfigManager.getGalaxy(gid) : null;
             return String((g && g.name) || gid).toUpperCase();

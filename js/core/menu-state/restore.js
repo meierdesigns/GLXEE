@@ -263,6 +263,15 @@ extendClass(MenuStateManager, {
                     startScreenManager._profilesThenStart = true;
                     startScreenManager.showProfiles = true;
                     startScreenManager.createStartScreenUI();
+                    // Back into an unfinished New Pilot flow (faction / name step).
+                    const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
+                    if (psm && psm.isVisible && s.pmode === 'create') {
+                        psm.mode = 'create';
+                        psm._createOnly = !!s.pcreateOnly;
+                        psm.createStep = s.pstep || 'faction';
+                        if (s.pfaction) psm.pendingFaction = s.pfaction;
+                        psm.createUI();
+                    }
                     return true;
                 }
                 break;

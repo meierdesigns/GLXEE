@@ -57,6 +57,24 @@ extendClass(ProfileSelectionManager, {
             return `<span class="pd-bar">${cells}</span>`;
         };
 
+        const knownOnly = this._pdKnownOnly !== false;
+        const px = (d) => `<svg viewBox="0 0 16 16" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="${d}"/></svg>`;
+        const EYE_ON = px('M5 4h6v1h2v1h2v4h-2v1h-2v1H5v-1H3v-1H1V6h2V5h2zM6 6v4h4V6zM7 7h2v2H7z');
+        const EYE_OFF = px('M5 4h6v1h2v1h2v4h-2v1h-2v1H5v-1H3v-1H1V6h2V5h2zM2 12l1 1 11-11-1-1z');
+        if (!ProfileSelectionManager._pdKnownBound) {
+            ProfileSelectionManager._pdKnownBound = true;
+            document.addEventListener('click', (e) => {
+                const b = e.target.closest && e.target.closest('[data-pd-known-toggle]');
+                if (!b) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const m = window.profileSelectionManager;
+                if (!m) return;
+                m._pdKnownOnly = m._pdKnownOnly === false;
+                m.refreshDetails();
+            }, true);
+        }
+
         return `
             <div class="pd-hero">
                 <span class="pd-hero-emblem">${this.getFactionEmblemHtml(profile.faction || 'pirate', 64)}</span>
@@ -86,9 +104,13 @@ extendClass(ProfileSelectionManager, {
                     <span class="pd-ship ${id === activeShip ? 'is-active' : ''}">${ico('menuShips', 20)}${this.shipName(id)}</span>
                 `).join('') : '<span class="pd-ship">NONE</span>'}
             </div>
-            <div class="pd-block-title">${ico('menuPlanets', 20)}GALAXIES</div>
+            <div class="pd-block-title">${ico('menuPlanets', 20)}GALAXIES
+                <button type="button" class="pd-known-toggle${knownOnly ? ' is-on' : ''}" data-pd-known-toggle
+                    title="${knownOnly ? 'Showing known galaxies only — click to show all' : 'Showing all galaxies — click to show only known'}"
+                    aria-label="Toggle known galaxies only" aria-pressed="${knownOnly}">${knownOnly ? EYE_ON : EYE_OFF}</button>
+            </div>
             <div class="pd-galaxies">
-                ${progressRows.map((r) => {
+                ${progressRows.filter((r) => !knownOnly || r.visited).map((r) => {
                     const here = r.id === stationGid;
                     const gm = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml ? galaxyMapManager : null;
                     const planet = gm && r.currentPlanetId && r.visited ? gm.planetIconHtml(r.currentPlanetId, 40, true) : ico('menuPlanets', 32);

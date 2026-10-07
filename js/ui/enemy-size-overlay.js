@@ -67,7 +67,10 @@ class EnemySizeOverlay {
             { id: 'capital', label: 'CAPITAL', kind: 'enemy' },
             { id: 'player', label: 'PLAYER SHOTS', kind: 'shot' },
             { id: 'enemy', label: 'ENEMY SHOTS', kind: 'shot' },
-            { id: 'boss', label: 'BOSS SHOTS', kind: 'shot' }
+            { id: 'boss', label: 'BOSS SHOTS', kind: 'shot' },
+            { id: 'player', label: 'PLAYER SHOTS', kind: 'shotspeed' },
+            { id: 'enemy', label: 'ENEMY SHOTS', kind: 'shotspeed' },
+            { id: 'boss', label: 'BOSS SHOTS', kind: 'shotspeed' }
         ];
     }
 
@@ -118,51 +121,74 @@ class EnemySizeOverlay {
                 lastKind = row.kind;
                 const div = document.createElement('div');
                 div.className = 'enemy-size-section';
-                div.textContent = row.kind === 'shot' ? 'SHOTS'
-                    : (row.kind === 'player' ? 'PLAYER' : 'ENEMIES');
+                div.textContent = row.kind === 'shotspeed' ? 'SHOT SPEEDS'
+                    : (row.kind === 'shot' ? 'SHOTS' : (row.kind === 'player' ? 'PLAYER' : 'ENEMIES'));
                 this.list.appendChild(div);
             }
-            const step = this.currentStep(row);
+            const range = this.pxRange(row.kind);
+            const px = this.currentPx(row);
             const el = document.createElement('div');
             el.className = 'enemy-size-row';
             el.dataset.class = row.id;
             el.dataset.kind = row.kind;
             el.innerHTML =
                 `<span class="enemy-size-label">${row.label}</span>` +
-                `<button type="button" class="enemy-size-step" data-eso-dir="-1" aria-label="Smaller">◀</button>` +
-                `<span class="enemy-size-value" data-eso-val>${step}</span>` +
-                `<button type="button" class="enemy-size-step" data-eso-dir="1" aria-label="Larger">▶</button>`;
-            el.querySelectorAll('[data-eso-dir]').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.nudge(row, Number(btn.getAttribute('data-eso-dir')) || 0);
-                });
+                `<input type="number" class="enemy-size-input" data-eso-num min="${range.min}" max="${range.max}" step="1" value="${px}" aria-label="${row.label} size in pixels">` +
+                `<input type="range" class="enemy-size-slider" data-eso-range min="${range.min}" max="${range.max}" step="1" value="${px}" aria-label="${row.label} size slider">` +
+                `<span class="enemy-size-unit">${row.kind === 'shotspeed' ? '%' : 'PX'}</span>`;
+            const num = el.querySelector('[data-eso-num]');
+            const rng = el.querySelector('[data-eso-range]');
+            rng.addEventListener('input', () => {
+                num.value = rng.value;
+                this.setPx(row, rng.value);
+            });
+            num.addEventListener('change', () => {
+                const v = Math.max(range.min, Math.min(range.max, Number(num.value) || range.min));
+                num.value = v;
+                rng.value = v;
+                this.setPx(row, v);
             });
             this.list.appendChild(el);
         });
     }
 
-    nudge(row, dir) {
-        const steps = this.steps(row.kind);
-        const cur = this.currentStep(row);
-        let idx = steps.indexOf(cur);
-        if (idx < 0) idx = steps.indexOf('L');
-        if (idx < 0) idx = 0;
-        idx = (idx + dir + steps.length) % steps.length;
-        const next = steps[idx];
-        if (typeof uiAppearanceManager !== 'undefined') {
-            if (row.kind === 'shot' && uiAppearanceManager.setShotSize) {
-                uiAppearanceManager.setShotSize(row.id, next);
-            } else if (row.kind === 'player' && uiAppearanceManager.setPlayerSize) {
-                uiAppearanceManager.setPlayerSize(next);
-            } else if (uiAppearanceManager.setEnemyClassSize) {
-                uiAppearanceManager.setEnemyClassSize(row.id, next);
-            }
+    /** Slider / input bounds in px per row kind. */
+    pxRange(kind) {
+        if (kind === 'shotspeed') return { min: 20, max: 300 };
+        if (kind === 'shot') return { min: 1, max: 40 };
+        if (kind === 'player') return { min: 6, max: 60 };
+        return { min: 12, max: 200 };
+    }
+
+    currentPx(row) {
+        if (row.kind === 'shotspeed') {
+            return typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSpeedPct ? uiAppearanceManager.getShotSpeedPct(row.id) : 100;
         }
-        const val = this.list && this.list.querySelector(
-            `.enemy-size-row[data-class="${row.id}"][data-kind="${row.kind}"] [data-eso-val]`
+        if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.getSizePx) return 0;
+        return Math.round(uiAppearanceManager.getSizePx(row.kind, row.id));
+    }
+
+    setPx(row, px) {
+        if (row.kind === 'shotspeed') {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setShotSpeedPct) uiAppearanceManager.setShotSpeedPct(row.id, px);
+            this.refreshFleetPreview();
+            return;
+        }
+        if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.setSizePx) return;
+        uiAppearanceManager.setSizePx(row.kind, row.id, px);
+        this.refreshFleetPreview();
+    }
+
+    /** Live-update the station FLEETS preview while tuning sizes. */
+    refreshFleetPreview() {
+        if (typeof homeStationUI === 'undefined' || !homeStationUI || homeStationUI.tab !== 'ffleet') return;
+        if (!homeStationUI.startFactionFleetPreview) return;
+        const canvas = homeStationUI.overlay && homeStationUI.overlay.querySelector('[data-fleet-preview]');
+        if (!canvas) return;
+        homeStationUI.startFactionFleetPreview(
+            canvas.getAttribute('data-faction'),
+            canvas.getAttribute('data-ship')
         );
-        if (val) val.textContent = next;
     }
 
     toggle() {
@@ -178,22 +204,36 @@ class EnemySizeOverlay {
             return;
         }
         this.active = true;
-        this._wasPaused = !!(typeof game !== 'undefined' && game.gameState && game.gameState.isPaused);
+        const inCombat = typeof game !== 'undefined' && game.gameState && game.gameState.gameRunning;
+        this._wasPaused = !!(inCombat && game.gameState.isPaused);
         this._pausedByUs = false;
 
         // Freeze combat without the dark pause menu / canvas dim.
-        if (typeof game !== 'undefined' && game.gameState && !game.gameState.isPaused) {
+        if (inCombat && !game.gameState.isPaused) {
             game.gameState.pauseGame();
             this._pausedByUs = true;
         }
         const pauseOverlay = document.getElementById('pauseOverlay');
         if (pauseOverlay) pauseOverlay.classList.add('hidden');
 
+        // Keep above the station/profile stack when opened from FLEETS.
+        if (this.root && this.root.parentElement !== document.body) {
+            document.body.appendChild(this.root);
+        }
+
         this.rebuild();
+        const hint = this.root.querySelector('.enemy-size-hint');
+        if (hint) {
+            const onFleet = typeof homeStationUI !== 'undefined' && homeStationUI && homeStationUI.tab === 'ffleet';
+            hint.textContent = onFleet
+                ? 'DEV · watch the fleet preview · no dim'
+                : 'PAUSED · watch the field · no dim';
+        }
         this.root.classList.remove('hidden');
         document.addEventListener('keydown', this._onKey, true);
         const btn = document.getElementById('enemySizeHudBtn');
         if (btn) btn.classList.add('is-active');
+        document.querySelectorAll('[data-fleet-sizes]').forEach((b) => b.classList.add('is-active'));
     }
 
     hide() {
@@ -203,6 +243,7 @@ class EnemySizeOverlay {
         document.removeEventListener('keydown', this._onKey, true);
         const btn = document.getElementById('enemySizeHudBtn');
         if (btn) btn.classList.remove('is-active');
+        document.querySelectorAll('[data-fleet-sizes]').forEach((b) => b.classList.remove('is-active'));
 
         if (this._pausedByUs && typeof game !== 'undefined' && game.gameState) {
             // We paused only for sizing — resume play.

@@ -84,6 +84,36 @@
             '................'] }
     };
 
+    // Per-faction pointer silhouettes (default arrow); terran keeps ART.arrow.
+    const FACTION_ARROWS = {
+        kronax: { hot: [1, 1], rows: [
+            '#...............', '##..............', '#o#.............', '#oa#............',
+            '#oa#............', '#oaa#...........', '#oaa#...........', '#oaaa#..........',
+            '#oaaa#..........', '#oaaaa#.........', '#oa#oa#.........', '#o#.#oa#........',
+            '##...#a#........', '#.....##........'] },
+        voidborn: { hot: [1, 1], rows: [
+            '#...............', '##..............', '#o#.............', '#oa#............',
+            '#oaa#...........', '#oaaa#..........', '#oaaaa#.........', '#oaaaaa#........',
+            '#oaaa####.......', '#oa#.#oa#.......', '#o#...#a#.......', '##.....##.......'] },
+        pirate: { hot: [1, 1], rows: [
+            '#...............', '##..............', '#o#.............', '#oa#............',
+            '#oaa#...........', '#oaaa#..........', '#oaaaa#.........', '#oaaaaa#........',
+            '#oaaaaaa#.......', '#oaaaa####......', '#oa#oa#.........', '#o#.#oa#........',
+            '##...#oa###.....', '......#oaaa#....', '.......####.....'] },
+        machine: { hot: [1, 1], rows: [
+            '##..............', '#o##............', '#oa##...........', '#oaa##..........',
+            '#oaaa##.........', '#oaaaa##........', '#oaaaaa##.......', '#oaaaaaaa#......',
+            '#oaaaaa###......', '#oaa#oa#........', '#oa#.#oa#.......', '#o#...#a#.......',
+            '##.....##.......'] }
+    };
+    /** Pointer (clickable) variant: same silhouette, accent/highlight swapped. */
+    const swapAO = (sprite) => ({ hot: sprite.hot, rows: sprite.rows.map((r) => r.replace(/[ao]/g, (c) => (c === 'a' ? 'o' : 'a'))) });
+    const FACTION_HANDS = {};
+    Object.keys(FACTION_ARROWS).forEach((f) => { FACTION_HANDS[f] = swapAO(FACTION_ARROWS[f]); });
+    const readFaction = () => String(document.documentElement.dataset.faction || '').toLowerCase();
+    const arrowSprite = () => FACTION_ARROWS[readFaction()] || ART.arrow;
+    const handSprite = () => FACTION_HANDS[readFaction()] || ART.hand;
+
     /** Blank 16×16 grid of '.'. */
     const blank = () => Array.from({ length: SIZE }, () => new Array(SIZE).fill('.'));
     const put = (g, x, y, c) => { if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) g[y][x] = c; };
@@ -172,9 +202,9 @@
 
     // CSS keyword → sprite. Keywords not listed keep the system cursor.
     const KEYWORDS = {
-        default: () => ART.arrow, auto: () => ART.arrow, help: () => ART.arrow,
-        'context-menu': () => ART.arrow, progress: () => ART.arrow,
-        pointer: () => ART.hand,
+        default: arrowSprite, auto: arrowSprite, help: arrowSprite,
+        'context-menu': arrowSprite, progress: arrowSprite,
+        pointer: handSprite,
         grab: () => ART.grab, grabbing: () => ART.grabbing,
         'not-allowed': () => generated.blocked, 'no-drop': () => generated.blocked,
         crosshair: () => generated.crosshair, cell: () => generated.crosshair,
@@ -215,9 +245,10 @@
     };
 
     let builtAccent = null;
+    const buildKey = () => readAccent() + '|' + readFaction();
     const buildValues = () => {
         const accent = readAccent();
-        builtAccent = accent;
+        builtAccent = buildKey();
         const cache = new Map();
         values = {};
         Object.keys(KEYWORDS).forEach((kw) => {
@@ -294,7 +325,7 @@
     };
 
     const refresh = (force) => {
-        if (force !== true && builtAccent !== null && readAccent() === builtAccent) return;
+        if (force !== true && builtAccent !== null && buildKey() === builtAccent) return;
         buildValues();
         writeBase();
         patchAllSheets();

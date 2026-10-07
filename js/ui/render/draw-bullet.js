@@ -21,10 +21,11 @@ extendClass(RenderManager, {
             );
         }
 
-        const x = Math.floor(bullet.x);
-        const y = Math.floor(bullet.y);
-        const w = Math.max(1, Math.ceil(bullet.width));
-        const h = Math.max(1, Math.ceil(bullet.height));
+        const cell = this.getCombatVoxelCell();
+        const x = cell ? this.snapCombat(bullet.x, cell) : Math.floor(bullet.x);
+        const y = cell ? this.snapCombat(bullet.y, cell) : Math.floor(bullet.y);
+        const w = cell ? this.quantizeCombatSize(bullet.width, cell) : Math.max(1, Math.ceil(bullet.width));
+        const h = cell ? this.quantizeCombatSize(bullet.height, cell) : Math.max(1, Math.ceil(bullet.height));
 
         // Shots that know their weapon get its shape, so the type reads at a glance.
         if (bullet.weaponId) {
@@ -35,15 +36,19 @@ extendClass(RenderManager, {
 
         // Outer glow then bright core — keep glow thin so shots stay small
         const glow = this.themeColor(['--color-highlight', '--color-text', '--current-text'], '#ffffff');
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = glow;
-        ctx.fillRect(x, y, w, h);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = bulletColor;
-        ctx.fillRect(x, y, w, h);
-        if (w >= 2 && h >= 3) {
+        if (!cell) {
+            ctx.globalAlpha = 0.35;
             ctx.fillStyle = glow;
-            ctx.fillRect(x + Math.floor(w / 4), y + 1, Math.max(1, Math.ceil(w / 2)), Math.max(1, h - 2));
+            ctx.fillRect(x, y, w, h);
+        }
+        this.fillCombatRect(ctx, x, y, w, h, bulletColor, 1);
+        if (w >= 2 && h >= 3) {
+            this.fillCombatRect(
+                ctx,
+                x + Math.floor(w / 4), y + (cell || 1),
+                Math.max(cell || 1, Math.ceil(w / 2)), Math.max(cell || 1, h - 2),
+                glow, 1
+            );
         }
 
         ctx.restore();
@@ -61,15 +66,14 @@ extendClass(RenderManager, {
         const lead = down ? y + h : y;           // tip end
         const dir = down ? 1 : -1;               // towards the tip
         const hot = '#ffffff';
+        const cell = this.getCombatVoxelCell();
         const rect = (rx, ry, rw, rh, c, a) => {
-            ctx.globalAlpha = a == null ? 1 : a;
-            ctx.fillStyle = c;
-            ctx.fillRect(Math.round(rx), Math.round(ry), Math.max(1, Math.round(rw)), Math.max(1, Math.round(rh)));
+            this.fillCombatRect(ctx, rx, ry, rw, rh, c, a == null ? 1 : a);
         };
         // Every shape stays inside the shot's own w×h box, so the drawn
         // shot is as big as the shot (which is sized to its gun's barrel).
-        // Soft halo only on wide shots — on thin ones it tripled the width.
-        if (w >= 3) rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
+        // Soft halo only on wide shots in FLAT — VOXEL keeps hard blocks.
+        if (!cell && w >= 3) rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
         const tipY = (len) => (down ? lead - len : lead);
         switch (id) {
             case 'plasma':
@@ -284,7 +288,8 @@ extendClass(RenderManager, {
         const centerX = x + width / 2;
         const centerY = y + height / 2;
 
-        const pixelSize = 4;
+        const cell = this.getCombatVoxelCell();
+        const pixelSize = cell || 4;
         const explosionRadius = Math.floor(explosionSize / pixelSize);
         const c0 = this.themeColor(['--color-highlight', '--color-text', '--current-text'], '#ffffff');
         const c1 = this.themeColor(['--color-explosion', '--color-particle', '--color-primary'], '#ff8844');
@@ -300,27 +305,21 @@ extendClass(RenderManager, {
             if (ring === 0) color = c0;
             else if (ring === 2) color = c2;
 
-            ctx.globalAlpha = Math.max(0.35, Math.min(1, alpha));
-            ctx.fillStyle = color;
-
             for (let angle = 0; angle < Math.PI * 2; angle += 0.2) {
-                const pixelX = Math.floor(centerX + Math.cos(angle) * ringRadius * pixelSize);
-                const pixelY = Math.floor(centerY + Math.sin(angle) * ringRadius * pixelSize);
-                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+                let pixelX = centerX + Math.cos(angle) * ringRadius * pixelSize;
+                let pixelY = centerY + Math.sin(angle) * ringRadius * pixelSize;
+                this.fillCombatRect(ctx, pixelX, pixelY, pixelSize, pixelSize, color, Math.max(0.35, Math.min(1, alpha)));
             }
         }
 
-        ctx.globalAlpha = 1;
         for (let i = 0; i < 8; i++) {
-            const sparkleX = Math.floor(centerX + (Math.random() - 0.5) * explosionSize);
-            const sparkleY = Math.floor(centerY + (Math.random() - 0.5) * explosionSize);
-            ctx.fillStyle = i % 2 ? c0 : c1;
-            ctx.fillRect(sparkleX, sparkleY, pixelSize, pixelSize);
+            const sparkleX = centerX + (Math.random() - 0.5) * explosionSize;
+            const sparkleY = centerY + (Math.random() - 0.5) * explosionSize;
+            this.fillCombatRect(ctx, sparkleX, sparkleY, pixelSize, pixelSize, i % 2 ? c0 : c1, 1);
         }
 
         if (explosionProgress < 0.35) {
-            ctx.fillStyle = c0;
-            ctx.fillRect(centerX - pixelSize, centerY - pixelSize, pixelSize * 2, pixelSize * 2);
+            this.fillCombatRect(ctx, centerX - pixelSize, centerY - pixelSize, pixelSize * 2, pixelSize * 2, c0, 1);
         }
     },
 

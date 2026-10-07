@@ -115,7 +115,8 @@ extendClass(StartScreenManager, {
             return menuItem;
         }
 
-        if (item.type === 'globalLook') {
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+            || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             menuItem.classList.add('settings-row-look');
             this.buildLookSliderRow(menuItem, item, index);
             return menuItem;
@@ -159,6 +160,7 @@ extendClass(StartScreenManager, {
         controls.appendChild(nextBtn);
         menuItem.appendChild(label);
         menuItem.appendChild(controls);
+        if (item.tip) menuItem.setAttribute('data-ui-tip', item.tip);
 
         menuItem.addEventListener('click', (e) => {
             if (e.target.closest('.settings-cycle-btn')) return;
@@ -181,10 +183,11 @@ extendClass(StartScreenManager, {
     },
 
     buildLookSliderRow(menuItem, item, index) {
+        const isSizePx = item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize';
         const min = item.min != null ? item.min : 0;
         const max = item.max != null ? item.max : 200;
-        const step = item.step != null ? item.step : 5;
-        const suffix = item.suffix || '%';
+        const step = item.step != null ? item.step : (isSizePx ? 1 : 5);
+        const suffix = item.suffix || (isSizePx ? 'px' : '%');
         const numeric = Math.max(min, Math.min(max, Number(item.value) || 0));
         item.value = String(Math.round(numeric));
 
@@ -222,6 +225,9 @@ extendClass(StartScreenManager, {
                     grayItem.value = item.value === '0' ? 'ON' : 'OFF';
                     this.refreshSettingsRow(this.settingsItems.indexOf(grayItem));
                 }
+            }
+            if (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined') {
+                uiAppearanceManager.setFx(item.fxKey, item.value);
             }
             this.applySettings();
         };

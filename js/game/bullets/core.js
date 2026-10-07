@@ -116,7 +116,8 @@ class BulletManager {
 
     update(deltaTime = 16.67, keys = null) { // Default to ~60 FPS if no deltaTime provided
         // Calculate frame-rate independent speed multiplier
-        const speedMultiplier = deltaTime / 16.67; // 16.67ms = 60 FPS baseline
+        const baseSpeedMultiplier = deltaTime / 16.67; // 16.67ms = 60 FPS baseline
+        const speedMultiplier = baseSpeedMultiplier;
 
         // Autofire / charge while space held
         if (keys && typeof playerManager !== 'undefined') {
@@ -149,20 +150,37 @@ class BulletManager {
             }
         }
 
+        // Shot speed settings (SIZES overlay), percent of each weapon's own speed.
+        const ui = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSpeedMul ? uiAppearanceManager : null;
+        const playerSpeed = ui ? ui.getShotSpeedMul('player') : 1;
+        const enemySpeed = ui ? ui.getShotSpeedMul('enemy') : 1;
+        const bossSpeed = ui ? ui.getShotSpeedMul('boss') : 1;
+
+        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
+        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
+
         // Update player bullets
         for (let i = this.bullets.length - 1; i >= 0; i--) {
             const bullet = this.bullets[i];
+            const speedMultiplier = baseSpeedMultiplier * playerSpeed;
+            let bdx = 0;
+            let bdy = 0;
 
-        // Handle angled bullets (spread shot) and wave sway
+            // Handle angled bullets (spread shot) and wave sway
             if (bullet.type === 'wave_beam' && bullet.waveAmp) {
                 bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
-                bullet.x += Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
-                bullet.y -= bullet.speed * speedMultiplier;
+                bdx = Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
+                bdy = -bullet.speed * speedMultiplier;
             } else if (bullet.angle !== undefined) {
-                bullet.x += Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bullet.y -= Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
+                bdy = -Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
             } else {
-                bullet.y -= bullet.speed * speedMultiplier;
+                bdy = -bullet.speed * speedMultiplier;
+            }
+            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
+            else {
+                bullet.x += bdx;
+                bullet.y += bdy;
             }
 
             // Remove bullets that are off screen
@@ -176,13 +194,21 @@ class BulletManager {
         // Update enemy bullets
         for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
             const bullet = this.enemyBullets[i];
+            const speedMultiplier = baseSpeedMultiplier * (bullet.isBossShot ? bossSpeed : enemySpeed);
+            let bdx = 0;
+            let bdy = 0;
 
             // Handle angled enemy bullets (after reflection)
             if (bullet.angle !== undefined) {
-                bullet.x += Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bullet.y += Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
+                bdy = Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
             } else {
-                bullet.y += bullet.speed * speedMultiplier;
+                bdy = bullet.speed * speedMultiplier;
+            }
+            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
+            else {
+                bullet.x += bdx;
+                bullet.y += bdy;
             }
 
             // Remove bullets that are off screen

@@ -61,10 +61,11 @@ extendClass(StartScreenManager, {
             return;
         }
 
-        if (item.type === 'globalLook') {
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+            || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             const min = item.min != null ? item.min : 0;
             const max = item.max != null ? item.max : 200;
-            const suffix = item.suffix || '%';
+            const suffix = item.suffix || (item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize' ? 'px' : '%');
             const valueEl = startScreen.querySelector(`[data-settings-value="${index}"]`);
             if (valueEl) valueEl.textContent = `${item.value}${suffix}`;
             const slider = startScreen.querySelector(`[data-settings-look="${index}"]`);
@@ -80,6 +81,150 @@ extendClass(StartScreenManager, {
                 valueEl.classList.toggle('settings-asset-ready', item.value === 'READY');
                 valueEl.classList.toggle('settings-asset-warn', item.value === 'BRIDGE · NO COMFY');
                 valueEl.classList.toggle('settings-asset-off', item.value === 'OFFLINE' || item.value === '…');
+            }
+        }
+        if ((item.type === 'shipRenderStyle' || item.type === 'voxelSize')
+            && this.refreshShipRenderPreview) {
+            this.refreshShipRenderPreview();
+        }
+    },
+
+    getSettingsPreviewShip() {
+        if (typeof galaxyMapUI !== 'undefined' && galaxyMapUI && galaxyMapUI.getActiveShipModel) {
+            const model = galaxyMapUI.getActiveShipModel();
+            if (model) return model;
+        }
+        let shipId = 'player_scrap';
+        if (typeof profileManager !== 'undefined' && profileManager.getActiveShipId) {
+            shipId = profileManager.getActiveShipId() || shipId;
+        } else if (typeof homeStationUI !== 'undefined' && homeStationUI && homeStationUI.hangarShipId) {
+            shipId = homeStationUI.hangarShipId || shipId;
+        }
+        if (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel) {
+            const model = shipConfigManager.getMergedModel(shipId);
+            if (model) {
+                if (!model.id) model.id = shipId;
+                return model;
+            }
+        }
+        if (typeof shipAssetLoader !== 'undefined' && shipAssetLoader.getPlayerShipModels) {
+            const ships = shipAssetLoader.getPlayerShipModels();
+            if (ships && ships.length) return ships[0];
+        }
+        return { id: shipId, name: shipId, type: shipId };
+    },
+
+    buildShipRenderPreview() {
+        const box = document.createElement('div');
+        box.className = 'settings-ship-render-preview';
+        box.setAttribute('aria-label', 'Ship render preview');
+
+        const canvas = document.createElement('canvas');
+        canvas.className = 'settings-ship-render-canvas';
+        canvas.width = 160;
+        canvas.height = 160;
+        canvas.id = 'settingsShipRenderCanvas';
+
+        const caption = document.createElement('span');
+        caption.className = 'settings-ship-render-caption';
+        caption.dataset.shipRenderCaption = '1';
+
+        box.appendChild(canvas);
+        box.appendChild(caption);
+        return box;
+    },
+
+    attachShipRenderPreview(cluster) {
+        if (!cluster) return;
+        const styleSec = cluster.querySelector('details.settings-section[data-section="style"]');
+        if (!styleSec) return;
+        const list = styleSec.querySelector('.settings-section-list');
+        if (!list || styleSec.querySelector('.settings-ship-render-preview')) return;
+
+        const body = document.createElement('div');
+        body.className = 'settings-style-body';
+        list.replaceWith(body);
+        body.appendChild(list);
+        body.appendChild(this.buildShipRenderPreview());
+
+        const paint = () => this.refreshShipRenderPreview();
+        styleSec.addEventListener('toggle', paint);
+        requestAnimationFrame(paint);
+    },
+
+    refreshShipRenderPreview() {
+        const host = this.getUIHost && this.getUIHost();
+        if (!host) return;
+        const canvas = host.querySelector('#settingsShipRenderCanvas');
+        if (!canvas) return;
+
+        const styleItem = this.settingsItems && this.settingsItems.find((s) => s && s.type === 'shipRenderStyle');
+        const style = (styleItem && styleItem.value)
+            || (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.shipRenderStyle)
+            || 'FLAT';
+        const voxelItem = this.settingsItems && this.settingsItems.find((s) => s && s.type === 'voxelSize');
+        let voxelSize = Number(
+            (voxelItem && voxelItem.value)
+            || (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.voxelSize)
+            || 1
+        );
+        if (!(voxelSize > 0)) voxelSize = 1;
+        voxelSize = Math.max(1, Math.min(4, Math.round(voxelSize)));
+
+        const caption = host.querySelector('[data-ship-render-caption]');
+        if (caption) {
+            caption.textContent = String(style).toUpperCase() === 'VOXEL'
+                ? ('VOXEL · ' + voxelSize)
+                : String(style);
+        }
+
+        if (typeof uiAppearanceManager !== 'undefined') {
+            if (uiAppearanceManager.setShipRenderStyle
+                && uiAppearanceManager.shipRenderStyle !== style) {
+                uiAppearanceManager.setShipRenderStyle(style);
+            }
+            if (uiAppearanceManager.setVoxelSize
+                && String(uiAppearanceManager.voxelSize) !== String(voxelSize)) {
+                uiAppearanceManager.setVoxelSize(voxelSize);
+            }
+        }
+
+        const ship = this.getSettingsPreviewShip();
+        if (!ship || typeof shipRenderer === 'undefined' || !shipRenderer.renderShipPreview) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(canvas.width * 0.3, canvas.height * 0.35, canvas.width * 0.4, canvas.height * 0.3);
+            }
+            return;
+        }
+        if (shipRenderer.init) shipRenderer.init();
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.imageSmoothingEnabled = false;
+            if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+            if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+        }
+        const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader)
+            || (typeof shipAssetLoader !== 'undefined' ? shipAssetLoader : null);
+        const prevGlobal = loader ? loader.globalVoxelCell : null;
+        const prevScale = loader ? loader.deviceScale : null;
+        if (loader && String(style).toUpperCase() === 'VOXEL') {
+            // Preview lattice follows Voxel Size (1–4). ×4 keeps blocks readable
+            // on the 160² canvas the same way combat uses render-scale.
+            loader.globalVoxelCell = Math.max(2, voxelSize * 4);
+            loader.deviceScale = 1;
+            canvas.style.imageRendering = 'pixelated';
+        } else if (loader) {
+            loader.globalVoxelCell = null;
+        }
+        try {
+            shipRenderer.renderShipPreview(canvas, ship, 1, 1);
+        } finally {
+            if (loader) {
+                loader.globalVoxelCell = prevGlobal;
+                loader.deviceScale = prevScale;
             }
         }
     },

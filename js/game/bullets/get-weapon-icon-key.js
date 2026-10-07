@@ -51,46 +51,59 @@ extendClass(BulletManager, {
             const k = 1 - age / DUR;
             const color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
                 && weaponConfigManager.getWeaponUiColor(f.id)) || '#ffffff';
-            const x = Math.round(player.x + f.muzzle.lx * sx);
-            const y = Math.round(player.y + f.muzzle.ly * sy);
+            const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+            const cell = cv && cv.cell ? cv.cell() : null;
+            const fill = (rx, ry, rw, rh, c, a) => {
+                if (cv && cv.fill) cv.fill(ctx, rx, ry, rw, rh, c, a);
+                else {
+                    ctx.globalAlpha = a == null ? 1 : a;
+                    ctx.fillStyle = c;
+                    ctx.fillRect(Math.round(rx), Math.round(ry), Math.max(1, Math.round(rw)), Math.max(1, Math.round(rh)));
+                }
+            };
+            let x = player.x + f.muzzle.lx * sx;
+            let y = player.y + f.muzzle.ly * sy;
+            if (cell) {
+                x = Math.round(x / cell) * cell;
+                y = Math.round(y / cell) * cell;
+            } else {
+                x = Math.round(x);
+                y = Math.round(y);
+            }
             // Sized for readability at game scale (was 2–3 px and easy to miss).
             const w = Math.max(4, f.muzzle.lw * sx);
             // Capped relative to the ship so large previews don't blow it up.
             const sMax = Math.max(3, Math.round(player.width * 0.07 * (f.charged ? 1.6 : 1)));
-            const s = Math.min(sMax, Math.max(3, Math.round(w * 1.1 * (f.charged ? 1.6 : 1) * (0.6 + 0.4 * k))));
-            const px = Math.max(2, Math.round(s / 3));
-            // Soft glow behind the shape.
-            ctx.globalAlpha = k * 0.25;
-            ctx.fillStyle = color;
-            ctx.fillRect(x - s * 0.7, y - s, s * 1.4, s * 1.4);
-            ctx.globalAlpha = k;
-            ctx.fillStyle = color;
+            let s = Math.min(sMax, Math.max(3, Math.round(w * 1.1 * (f.charged ? 1.6 : 1) * (0.6 + 0.4 * k))));
+            let px = Math.max(2, Math.round(s / 3));
+            if (cell) {
+                s = Math.max(cell, Math.round(s / cell) * cell);
+                px = Math.max(cell, Math.round(px / cell) * cell);
+            }
+            // Soft glow behind the shape — skipped in VOXEL.
+            if (!cell) {
+                ctx.globalAlpha = k * 0.25;
+                ctx.fillStyle = color;
+                ctx.fillRect(x - s * 0.7, y - s, s * 1.4, s * 1.4);
+            }
             const fam = String(f.id);
             if (fam === 'spread' || fam === 'spike_burst' || fam === 'claw_beam') {
-                // Fan of three sparks.
-                [-1, 0, 1].forEach((d) => ctx.fillRect(x + d * s - px / 2, y - s - Math.abs(d) * px, px, s));
+                [-1, 0, 1].forEach((d) => fill(x + d * s - px / 2, y - s - Math.abs(d) * px, px, s, color, k));
             } else if (fam === 'ion') {
-                // Triple ion stream: three parallel streaks, one per bolt.
-                const gap = Math.max(px + 1, Math.round(s * 0.6));
-                [-1, 0, 1].forEach((d) => ctx.fillRect(x + d * gap - px / 2, y - s * 1.8, px, s * 1.8));
-                ctx.fillRect(x - gap - px / 2, y - px / 2, gap * 2 + px, px);
+                const gap = Math.max(px + (cell || 1), Math.round(s * 0.6));
+                [-1, 0, 1].forEach((d) => fill(x + d * gap - px / 2, y - s * 1.8, px, s * 1.8, color, k));
+                fill(x - gap - px / 2, y - px / 2, gap * 2 + px, px, color, k);
             } else if (fam === 'plasma' || fam === 'nova' || fam === 'wave') {
-                // Round bloom / ring.
-                ctx.fillRect(x - s, y - px, s * 2, px * 2);
-                ctx.fillRect(x - px, y - s, px * 2, s * 2);
-                ctx.fillRect(x - s * 0.7, y - s * 0.7, s * 1.4, s * 1.4);
+                fill(x - s, y - px, s * 2, px * 2, color, k);
+                fill(x - px, y - s, px * 2, s * 2, color, k);
+                fill(x - s * 0.7, y - s * 0.7, s * 1.4, s * 1.4, color, k);
             } else if (fam === 'missile') {
-                // Launch smoke puff going back down.
-                ctx.fillRect(x - s * 0.6, y, s * 1.2, s * 1.4);
+                fill(x - s * 0.6, y, s * 1.2, s * 1.4, color, k);
             } else {
-                // Beam / kinetic: tall cross flash with a barrel streak.
-                ctx.fillRect(x - px / 2, y - s * 2, px, s * 2);
-                ctx.fillRect(x - s * 0.6, y - px / 2, s * 1.2, px);
+                fill(x - px / 2, y - s * 2, px, s * 2, color, k);
+                fill(x - s * 0.6, y - px / 2, s * 1.2, px, color, k);
             }
-            // White-hot core.
-            ctx.fillStyle = '#ffffff';
-            ctx.globalAlpha = k * 0.9;
-            ctx.fillRect(x - px / 2, y - px / 2, px, px);
+            fill(x - px / 2, y - px / 2, px, px, '#ffffff', k * 0.9);
         });
         ctx.restore();
     },

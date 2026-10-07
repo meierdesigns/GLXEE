@@ -65,16 +65,31 @@ extendClass(StartScreenManager, {
             uiAppearanceManager.setShipRenderStyle(shipRenderSetting.value);
         }
 
+        const voxelSizeSetting = this.settingsItems.find(item => item.type === 'voxelSize');
+        if (voxelSizeSetting && typeof uiAppearanceManager !== 'undefined'
+            && uiAppearanceManager.setVoxelSize) {
+            uiAppearanceManager.setVoxelSize(voxelSizeSetting.value);
+        }
+
         if (typeof uiAppearanceManager !== 'undefined') {
+            // Only push steps the player actually changed: the setters drop the
+            // exact px size from the SIZES overlay, so re-applying an unchanged
+            // step on every settings save would wipe it.
+            const ui = uiAppearanceManager;
             this.settingsItems.forEach((item) => {
-                if (item.type === 'enemyClassSize' && item.enemyClass) {
-                    uiAppearanceManager.setEnemyClassSize(item.enemyClass, item.value);
+                if (!ui.setSizePx || !ui.getSizePx) return;
+                const px = Math.round(Number(item.value));
+                if (!(px > 0)) return;
+                if (item.type === 'enemyClassSize' && item.enemyClass
+                    && px !== Math.round(ui.getSizePx('enemy', item.enemyClass))) {
+                    ui.setSizePx('enemy', item.enemyClass, px);
                 }
-                if (item.type === 'playerSize') {
-                    uiAppearanceManager.setPlayerSize(item.value);
+                if (item.type === 'playerSize' && px !== Math.round(ui.getSizePx('player'))) {
+                    ui.setSizePx('player', null, px);
                 }
-                if (item.type === 'shotSize' && item.shotKind) {
-                    uiAppearanceManager.setShotSize(item.shotKind, item.value);
+                if (item.type === 'shotSize' && item.shotKind
+                    && px !== Math.round(ui.getSizePx('shot', item.shotKind))) {
+                    ui.setSizePx('shot', item.shotKind, px);
                 }
             });
         }
@@ -89,13 +104,9 @@ extendClass(StartScreenManager, {
             uiAppearanceManager.setControlsHints(controlsSetting.value);
         }
 
-        if (typeof uiAppearanceManager !== 'undefined') {
-            this.settingsItems.forEach((item) => {
-                if (item.type === 'uiFx' && item.fxKey) {
-                    uiAppearanceManager.setFx(item.fxKey, item.value);
-                }
-            });
-        }
+        // UI effects (glow / scanlines / CRT / chroma / arcade) are written by their own
+        // control straight to uiAppearanceManager; re-applying every row's cached value
+        // here let stale rows switch the other effects off.
     },
 
     applyPaletteChange() {

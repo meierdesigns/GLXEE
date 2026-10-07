@@ -223,17 +223,85 @@ extendClass(HomeStationUI, {
     // resync only after scrolling stops (debounced), same reasoning as
     // the pan-end resync above — repositioning that DOM every wheel tick
     // would fight the in-progress gesture instead of following it.
+    /**
+     * One zoom step in (dir > 0) or out. Above one pixel per voxel the bay
+     * magnifies in whole pixels, so a step moves by at least one pixel;
+     * below that it shrinks smoothly (down to 12 %).
+     */
+    hangarBayZoomBy(dir) {
+        const ref = Math.max(1, this._hangarRefCell || 1);
+        const z = Math.max(0.12, Math.min(4, this._hangarZoomTarget || this._hangarBayZoom || 1));
+        let target;
+        if (ref * z <= 1.0001 && dir < 0) {
+            target = z / 1.15;
+        } else {
+            const cur = Math.max(1, Math.round(ref * z));
+            let next = Math.max(1, Math.round(ref * z * (dir > 0 ? 1.15 : 1 / 1.15)));
+            if (dir > 0 && next <= cur) next = cur + 1;
+            if (dir < 0 && next >= cur) next = cur - 1;
+            target = next < 1 ? z / 1.15 : next / ref;
+        }
+        this.hangarZoomTo(target);
+    },
+
+    /** Ease the bay zoom to a target factor (frame-rate independent). */
+    hangarZoomTo(target) {
+        this._hangarZoomTarget = Math.max(0.12, Math.min(4, target));
+        if (this._hangarZoomAnimating) return;
+        this._hangarZoomAnimating = true;
+        let last = performance.now();
+        const tick = (now) => {
+            const dt = Math.min(64, now - last);
+            last = now;
+            const cur = this._hangarBayZoom || 1;
+            const goal = this._hangarZoomTarget;
+            const k = 1 - Math.pow(0.001, dt / 1000 * 1.6); // ~180 ms settle
+            let next = cur + (goal - cur) * k;
+            const done = Math.abs(goal - cur) / goal < 0.004;
+            if (done) next = goal;
+            this._hangarBayZoom = next;
+            if (!this.isVisible || this.tab !== 'hangar') {
+                this._hangarZoomAnimating = false;
+                return;
+            }
+            if (done) this._hangarZoomAnimating = false;
+            this.drawHangarBay(!done);
+            if (!done) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    },
+
+    /** Slider position (0..100, logarithmic) <-> zoom factor (12 %..400 %). */
+    hangarZoomToSlider(z) {
+        return Math.round(100 * Math.log(z / 0.12) / Math.log(4 / 0.12));
+    },
+
+    syncHangarZoomSlider() {
+        const slider = this.overlay && this.overlay.querySelector('#hsBayZoomSlider');
+        if (!slider) return;
+        const z = Math.max(0.12, Math.min(4, this._hangarBayZoom || 1));
+        if (document.activeElement !== slider) slider.value = String(this.hangarZoomToSlider(z));
+        const out = this.overlay.querySelector('#hsBayZoomOut');
+        if (out) out.textContent = Math.round(z * 100) + '%';
+    },
+
+    /** Slider / FIT button. */
+    hangarBayZoomStep(mode, value) {
+        if (mode === 'fit') {
+            this._hangarZoomTarget = 1;
+            this._hangarBayZoom = 1;
+            this._hangarRecenter = true;
+            this.drawHangarBay();
+        } else if (mode === 'set') {
+            this.hangarZoomTo(0.12 * Math.pow(4 / 0.12, Number(value) / 100));
+        } else {
+            this.hangarBayZoomBy(mode === 'in' ? 1 : -1);
+        }
+    },
+
     onHangarBayWheel(e) {
         e.preventDefault();
-        const prevZoom = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
-        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-        this._hangarBayZoom = Math.max(0.4, Math.min(4, prevZoom * factor));
-        this.drawHangarBay(true);
-        if (this._hangarZoomEndTimer) clearTimeout(this._hangarZoomEndTimer);
-        this._hangarZoomEndTimer = setTimeout(() => {
-            this._hangarZoomEndTimer = null;
-            if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
-        }, 160);
+        this.hangarBayZoomBy(e.deltaY < 0 ? 1 : -1);
     },
 
     applyHangarSlotChoice(kind, slotIndex, moduleId, sourceEl) {

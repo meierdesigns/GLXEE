@@ -460,8 +460,10 @@ extendClass(HomeStationUI, {
         const scale = Math.max(1, this._hangarLastScale || 1);
         const px = (clientX - rect.left) * (canvas.width / Math.max(1, rect.width));
         const py = (clientY - rect.top) * (canvas.height / Math.max(1, rect.height));
-        const lw = Math.max(1, model.layout.width || model.width || 1);
-        const lh = Math.max(1, model.layout.height || model.height || 1);
+        // Same box the bay draws and positions the slot markers on
+        // (draw-hangar-bay: mw / mh), or the dropped socket lands elsewhere.
+        const lw = Math.max(8, model.width || 20);
+        const lh = Math.max(8, model.height || 16);
         const lx = (px - this._hangarLastOx) / scale;
         const ly = (py - this._hangarLastOy) / scale;
         const area = this.hangarAreaAt(model.layout, lx, ly);

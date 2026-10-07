@@ -43,18 +43,18 @@ class HomeStationUI {
         this._hangarCardDragState = null;
         this._hangarPanelResize = null;
         this._hangarLeftCollapsed = false;
-        this._hangarRightCollapsed = false;
+        this._hangarRightCollapsed = true;
         // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
         this._hangarLeftView = 'areas';
         try {
-            if (localStorage.getItem('vf_hs_hangar_left_view') === 'parts') this._hangarLeftView = 'parts';
+            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
         try {
             const raw = localStorage.getItem('vf_hs_hangar_sidebar_prefs_v1');
             const prefs = raw ? JSON.parse(raw) : null;
             if (prefs && typeof prefs === 'object') {
-                this._hangarLeftCollapsed = prefs.left === true;
-                this._hangarRightCollapsed = prefs.right === true;
+                this._hangarLeftCollapsed = false; // ship sidebar is always on
+                if (typeof prefs.right === 'boolean') this._hangarRightCollapsed = prefs.right;
             }
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();

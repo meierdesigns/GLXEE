@@ -62,9 +62,10 @@ extendClass(HomeStationUI, {
             `<input type="checkbox" data-area-toggle="${shipId}|${areaId}"${on ? ' checked' : ''} aria-label="${this.areaLabel(areaId)} on/off">` +
             `<span class="hs-area-switch-track"><span class="hs-area-switch-label">${on ? 'ON' : 'OFF'}</span></span></label>`;
         // The core has no ON/OFF switch, so it gets no tile.
-        const tiles = slm.getShipAreas().filter((area) => toggleable.indexOf(area.id) !== -1).map((area) => {
+        const tiles = slm.getShipAreas().map((area) => {
             // Icon (ship with this area lit) instead of the text label; label in the tooltip.
             const name = `<strong class="hs-area-icon" data-ui-tip="${area.label}">${this.hangarAreaIconSvg(area.id)}</strong>`;
+            if (toggleable.indexOf(area.id) === -1) return ''; // the core cannot be switched, so no tile
             if (slm.isAreaEnabled && !slm.isAreaEnabled(shipId, area.id)) {
                 return `<div class="hs-area-tile is-off" data-area="${area.id}">` +
                     `<span class="hs-area-name">${name}${switchHtml(area.id, false)}</span>` +
@@ -77,17 +78,17 @@ extendClass(HomeStationUI, {
         return `<div class="hs-hangar-areas" aria-label="Hull areas">${tiles}</div>`;
     },
 
-    /** 11×11 pixel ship: every area dim, `areaId` lit (front/center/back/wing). */
+    /** Area pictogram (same art as the sidebar's area bar); hull in light, details in the accent. */
     hangarAreaIconSvg(areaId) {
-        const parts = {
-            front: 'M5 0h1v1h1v3H4V1h1z',
-            center: 'M4 4h3v4H4z',
-            back: 'M4 8h3v1h1v2H3V9h1z',
-            wing: 'M0 5h4v3H1v1H0zM7 5h4v4h-1V8H7z'
+        const H = 'class="ai-hull"';
+        const A = 'class="ai-acc"';
+        const art = {
+            front: '<path ' + H + ' d="M7 1h2v2h1v2h1v2h1v3H4V7h1V5h1V3h1z"/><path ' + A + ' d="M7 4h2v3H7z"/><path ' + H + ' d="M3 12h10v2H3z"/>',
+            center: '<path ' + H + ' d="M3 2h10v12H3z"/><path d="M5 4h6v8H5z" fill="#05060a"/><path ' + A + ' d="M6 6h4v4H6z"/><path ' + H + ' d="M7 7h2v2H7z"/>',
+            wing: '<path ' + H + ' d="M1 4h4v2h2v2h2v2h2v2h4v2H1z"/><path ' + A + ' d="M2 12h4v1H2zM4 8h2v1H4z"/><path ' + H + ' d="M14 4h1v6h-1z"/>',
+            back: '<path ' + H + ' d="M3 2h10v6H3z"/><path d="M4 3h8v4H4z" fill="#05060a"/><path ' + H + ' d="M3 9h4v3H3zM9 9h4v3H9z"/><path ' + A + ' d="M4 13h2v2H4zM10 13h2v2h-2z"/>'
         };
-        return `<svg viewBox="0 0 11 11" width="55" height="55" shape-rendering="crispEdges" aria-hidden="true">` +
-            Object.keys(parts).map((k) => `<path class="${k === areaId ? 'is-lit' : 'is-dim'}" d="${parts[k]}"/>`).join('') +
-            `</svg>`;
+        return '<svg viewBox="0 0 16 16" width="44" height="44" shape-rendering="crispEdges" aria-hidden="true">' + (art[areaId] || art.center) + '</svg>';
     },
 
     /** Upgrade tab → SHIPS: per ship, its four hull areas. */

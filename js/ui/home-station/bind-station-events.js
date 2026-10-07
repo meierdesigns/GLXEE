@@ -169,6 +169,15 @@ extendClass(HomeStationUI, {
                 this.toggleHangarSidebar(btn.getAttribute('data-hangar-sidebar'));
             });
         });
+        // A collapsed live-preview strip opens from a click anywhere on it.
+        const collapsedPreview = this.overlay.querySelector('.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview');
+        if (collapsedPreview) {
+            collapsedPreview.style.cursor = 'pointer';
+            collapsedPreview.addEventListener('click', (e) => {
+                if (e.target.closest('[data-hangar-sidebar]')) return; // the button handles itself
+                this.toggleHangarSidebar('right');
+            });
+        }
         const resetAnatomy = this.overlay.querySelector('#hsResetAnatomy');
         if (resetAnatomy) resetAnatomy.addEventListener('click', () => this.resetHangarAnatomy());
         const saveAnatomy = this.overlay.querySelector('#hsSaveAnatomyDefault');
@@ -245,6 +254,16 @@ extendClass(HomeStationUI, {
                 });
                 this.drawHangarBay();
             });
+        });
+
+        // Zoom buttons in the bay (the mouse wheel zooms too).
+        const zoomSlider = this.overlay.querySelector('#hsBayZoomSlider');
+        if (zoomSlider) {
+            zoomSlider.addEventListener('input', () => this.hangarBayZoomStep('set', zoomSlider.value));
+            this.syncHangarZoomSlider();
+        }
+        this.overlay.querySelectorAll('[data-bay-zoom]').forEach((btn) => {
+            btn.addEventListener('click', () => this.hangarBayZoomStep(btn.getAttribute('data-bay-zoom')));
         });
 
         const openTest = this.overlay.querySelector('#hsOpenTestArea');

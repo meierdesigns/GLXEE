@@ -18,11 +18,11 @@ extendClass(HomeStationUI, {
     },
 
     renderHangarLeftViewToggle() {
-        const view = this._hangarLeftView === 'parts' ? 'parts' : 'areas';
+        const view = (this._hangarLeftView === 'parts' || this._hangarLeftView === 'ships') ? this._hangarLeftView : 'areas';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
             `${this.iconHtml(icon, 32, 'hs-pixel hs-pixel-32', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
 
     /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */

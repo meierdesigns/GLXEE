@@ -60,7 +60,18 @@ extendClass(HomeStationUI, {
                 }
                 // Occupied slots are pulled out by grabbing the part on the
                 // ship itself (startHangarModuleGrab), not via this marker.
-                if (modId) return;
+                if (modId) {
+                    // The marker sits on top of the part, so it forwards the
+                    // press: drag pulls the part out, a click selects the slot.
+                    const mods = model.layout.modules || [];
+                    const part = mods.find((m) => m.kind === kind && m.id === modId && String(m.face || '') === modFace)
+                        || mods.find((m) => m.kind === kind && m.id === modId);
+                    if (part && this.startHangarModuleGrab(part, e)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return;
+                }
                 if (!shipLoadoutManager.setModuleOffset) return;
                 // Two equipped modules can share the same id (e.g. the same
                 // weapon in both weapon slots) — match by face too, or

@@ -58,14 +58,14 @@ extendClass(HomeStationUI, {
             storageKey: 'hsHangarPanelWidths',
             leftVar: '--hs-hangar-left-w',
             rightVar: '--hs-hangar-right-w',
-            defaults: { left: 160, right: 220 },
+            defaults: { left: 210, right: 220 },
             mins: { left: 110, right: 160, center: 240 }
         });
     },
 
     toggleHangarSidebar(side) {
         if (side === 'left') {
-            this._hangarLeftCollapsed = !this._hangarLeftCollapsed;
+            return; // ship sidebar stays open
         } else if (side === 'right') {
             this._hangarRightCollapsed = !this._hangarRightCollapsed;
         }

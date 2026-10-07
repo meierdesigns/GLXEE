@@ -8,8 +8,11 @@ extendClass(HomeStationUI, {
         // Ignore clicks on hangar slot buttons - check if click coordinates hit a slot element
         const elementAtClick = document.elementFromPoint(e.clientX, e.clientY);
         const slotElement = elementAtClick?.closest('.hs-hangar-slot, [data-hangar-slot-toggle]');
+        // A marker over an installed part must not block pulling that part
+        // off the ship; only empty markers and non-part slots own the click.
         if (slotElement) {
-            return;
+            const target = slotElement.classList.contains('is-empty') ? null : this.hangarPointerTarget(h, e);
+            if (!target || target.type !== 'module') return;
         }
         // Ship areas have priority over the modules drawn inside them.
         // Clicking the hull must select/adjust the area, not move a module.
@@ -241,6 +244,16 @@ extendClass(HomeStationUI, {
         };
         this._hangarSelectedModule = null;
         this._hangarWingDragState = h.drag;
+        // Pin the frame/handle highlight to the grabbed edge for the whole
+        // drag, so it cannot flicker away while the pointer moves.
+        this._hangarSegmentHover = {
+            segment: hit.segment,
+            edge: hit.edge,
+            connector: !!hit.connector,
+            spine: hit.spine || null,
+            handle: null,
+            side: hit.left ? 'left' : 'right'
+        };
         h.canvas.classList.add(hit.edge ? 'is-wing-scaling' : 'is-wing-dragging');
         h.canvas.style.cursor = this.hangarDragCursor(hit);
         h.canvas.setPointerCapture(e.pointerId);

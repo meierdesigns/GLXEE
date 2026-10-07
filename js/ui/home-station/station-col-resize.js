@@ -79,13 +79,12 @@ extendClass(HomeStationUI, {
         if (window.ResizeObserver) new ResizeObserver(place).observe(grid);
     },
 
-    /** Hangar: RESET ANATOMY / SET AS DEFAULT sit in the stats row, between the area switches and the ship stats. */
+    /** Hangar: RESET ANATOMY / SET AS DEFAULT sit on the right of the ship's title row, so the stats row keeps its room. */
     moveHangarBayTools() {
         const tools = this.overlay && this.overlay.querySelector('.hs-hangar-bay-tools');
-        const stats = this.overlay && this.overlay.querySelector('.hs-hangar-stats.is-row');
-        if (!tools || !stats) return;
+        const title = this.overlay && this.overlay.querySelector('.hs-hangar-head-title');
+        if (!tools || !title) return;
         tools.classList.add('is-topbar');
-        const after = stats.querySelector('.hs-stat-group.is-stats');
-        stats.insertBefore(tools, after || null);
+        title.appendChild(tools);
     }
 });

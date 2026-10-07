@@ -325,9 +325,9 @@ extendClass(HomeStationUI, {
         // frame as well as into it. A proportional inner band collapsed to
         // a couple of pixels on a tightly cropped wing, which made those
         // parts practically unresizable.
-        const GRIP_PX = 9;
+        const GRIP_PX = 14;
         const reach = GRIP_PX / Math.max(1, h.scale);
-        const inward = (size) => Math.min(reach, size * 0.35);
+        const inward = (size) => Math.min(reach, size * 0.4);
         // Each segment is tested in its own space, so a rotated wing's
         // clickable area tilts with the frame drawn around it.
         const local = (seg) => this.hangarSegmentLocalPoint(pt, seg.id, h.model, h.scale);
@@ -378,7 +378,7 @@ extendClass(HomeStationUI, {
         // than the edge bands, matching the drawn corner bracket), so a
         // corner is easy to hit and never loses to a neighbouring part.
         // The area whose panel is open, or the one hovered, wins near-ties.
-        const CORNER_PX = 14;
+        const CORNER_PX = 22;
         const cReach = CORNER_PX / Math.max(1, h.scale);
         const prefId = this._hangarSelectedArea
             || (this._hangarSegmentHover && this._hangarSegmentHover.segment) || null;

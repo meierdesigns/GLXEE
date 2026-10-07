@@ -410,12 +410,17 @@ extendClass(ShipAssetLoader, {
         // Playfield VOXEL mode: one absolute cell for every ship/module so the
         // lattice matches terrain / obstacles / debris.
         let global = Number(this.globalVoxelCell);
-        if (!(Number.isFinite(global) && global > 0)
+        // The hangar bay sizes voxels from the ship's own voxel slider, not
+        // from the playfield's shared lattice.
+        const hangarRef = this._voxelRef;
+        const inHangar = !!(hangarRef && hangarRef.model === shipModel);
+        if (inHangar) global = NaN;
+        if (!inHangar && !(Number.isFinite(global) && global > 0)
             && typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell) {
             const shared = Number(window.combatVoxels.cell());
             if (Number.isFinite(shared) && shared > 0) global = shared;
         }
-        if (!(Number.isFinite(global) && global > 0)) {
+        if (!inHangar && !(Number.isFinite(global) && global > 0)) {
             const fromWin = Number(typeof window !== 'undefined' ? window.PLAYFIELD_VOXEL_CELL : NaN);
             if (Number.isFinite(fromWin) && fromWin > 0
                 && typeof uiAppearanceManager !== 'undefined'

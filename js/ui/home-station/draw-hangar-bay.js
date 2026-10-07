@@ -94,9 +94,9 @@ extendClass(HomeStationUI, {
             this._hangarFit = { key: fitKey, scale: fitScale };
             const vis = this.measureHangarShipVisible(model, fitScale);
             if (vis) {
-                const padTop = Math.max(90, Math.floor(h * 0.16));
-                const padBottom = Math.max(24, Math.floor(h * 0.1));
-                const padSide = Math.max(48, Math.floor(w * 0.15));
+                const padTop = Math.max(110, Math.floor(h * 0.22));
+                const padBottom = Math.max(40, Math.floor(h * 0.15));
+                const padSide = Math.max(80, Math.floor(w * 0.24));
                 const bw = vis.w / fitScale;
                 const bh = vis.h / fitScale;
                 const s = Math.max(2, Math.min(
@@ -110,6 +110,7 @@ extendClass(HomeStationUI, {
                 const cx = (vis.x + vis.w / 2) / fitScale * s;
                 const cy = (vis.y + vis.h / 2) / fitScale * s;
                 this._hangarBayZoom = 1;
+                this._hangarZoomTarget = 1;
                 this._hangarBayPanX = Math.round(w / 2 - (ox0 + cx));
                 this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (oy0 + cy));
             }
@@ -120,9 +121,9 @@ extendClass(HomeStationUI, {
             this._hangarRecenter = false;
             const vis = this.measureHangarShipVisible(model, baseScale);
             if (vis) {
-                const padTop = Math.max(90, Math.floor(h * 0.16));
-                const padBottom = Math.max(24, Math.floor(h * 0.1));
-                const z = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
+                const padTop = Math.max(110, Math.floor(h * 0.22));
+                const padBottom = Math.max(40, Math.floor(h * 0.15));
+                const z = Math.max(0.12, Math.min(4, this._hangarBayZoom || 1));
                 const s = baseScale * z;
                 const cx = (vis.x + vis.w / 2) / baseScale * s;
                 const cy = (vis.y + vis.h / 2) / baseScale * s;
@@ -134,7 +135,7 @@ extendClass(HomeStationUI, {
         // Scroll-wheel zoom (bindHangarWingDrag) multiplies the auto-fit
         // scale; drag-to-pan on empty canvas space offsets the centered
         // origin on top of that. Both persist per ship until reset.
-        const zoom = Math.max(0.4, Math.min(4, this._hangarBayZoom || 1));
+        const zoom = Math.max(0.12, Math.min(4, this._hangarBayZoom || 1));
         // Zoom in whole-pixel voxel steps: the ship is voxelised at the fit
         // scale with cell size c, then magnified so each voxel becomes
         // exactly k screen pixels. Any other factor made some voxels a
@@ -143,8 +144,15 @@ extendClass(HomeStationUI, {
         const refCell = zoomLoader && zoomLoader.shipVoxelCellAt
             ? Math.max(1, Math.round(zoomLoader.shipVoxelCellAt(model, baseScale)))
             : 1;
+        this._hangarRefCell = refCell;
         const cellPx = Math.max(1, Math.round(refCell * zoom));
-        let scale = Math.max(1, baseScale * cellPx / refCell);
+        // Below one screen pixel per voxel the ship shrinks smoothly instead.
+        // While the zoom eases between steps the scale is continuous (smooth);
+        // it settles on whole pixels per voxel when the motion ends.
+        let scale = (refCell * zoom < 1 || this._hangarZoomAnimating)
+            ? Math.max(0.2, baseScale * zoom)
+            : Math.max(1, baseScale * cellPx / refCell);
+        this.syncHangarZoomSlider();
         const panX = this._hangarBayPanX || 0;
         const panY = this._hangarBayPanY || 0;
         let ox = Math.floor((w - mw * scale) / 2) + panX;

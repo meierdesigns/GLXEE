@@ -75,7 +75,7 @@ extendClass(HomeStationUI, {
         const ownedHtml = owned.length
             ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
                 (id === profile.activeShipId
-                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">★</span>`
+                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
                     : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
                       `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
                 `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
@@ -201,6 +201,8 @@ extendClass(HomeStationUI, {
                             </div>
                         </div>
                     </div>
+                    <!-- Planet-map progress (filled by the embedded galaxy map): own card left of the wallet. -->
+                    <div class="hs-progress-card" id="hsMapProgress" hidden></div>
                     <!-- Wallet card right of both navbars: resources + logout. -->
                     <div class="hs-wallet-card">
                         <div class="hs-wallet-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
@@ -241,16 +243,17 @@ extendClass(HomeStationUI, {
             });
         }
         this.bindControlsToggle();
+        this.bindStationColumnResize();
+        this.moveHangarBayTools();
         this.syncTopbarResLayout();
         // MENU area button = same as pressing ESC.
-        const menuBtn = this.overlay.querySelector('[data-open-menu]');
-        if (menuBtn) {
+        this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
             menuBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.openMainMenuOverlay({ force: true });
+                this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
             });
-        }
+        });
         // Status messages show once as a toast (bottom centre), not as a line
         // under the tabs; consume it so re-renders don't repeat it.
         if (this.statusMsg) {

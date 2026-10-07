@@ -59,9 +59,8 @@ extendClass(HangarTestArena, {
         if (this.keyDown('ArrowUp')) p.y -= moveSpeed;
         if (this.keyDown('ArrowDown')) p.y += moveSpeed;
 
-        const minY = this.H * 0.33;
         p.x = Math.max(0, Math.min(this.W - p.width, p.x));
-        p.y = Math.max(minY, Math.min(this.H - (this.HUD_H || 0) - p.height, p.y));
+        p.y = Math.max(0, Math.min(this.H - (this.HUD_H || 0) - p.height, p.y));
 
         if (p.invuln > 0) p.invuln -= dtMs;
 

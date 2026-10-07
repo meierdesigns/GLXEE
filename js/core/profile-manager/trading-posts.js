@@ -66,9 +66,10 @@ extendClass(ProfileManager, {
                 pos = this.placeDeepSpacePost(n, other, map.nodes || [], placed, h);
                 anchors = [n.planetId, other.planetId];
             } else {
-                pos = this.placeTradingPost(map.nodes || [], n, placed, h);
+                pos = this.placeTradingPost(map.nodes || [], n, placed, h, map.edges || []);
             }
             placed.push(pos);
+            const faction = this.getTradingPostBuilder(id, gid, n.planetId);
             return {
                 id: id,
                 galaxyId: gid,
@@ -78,9 +79,53 @@ extendClass(ProfileManager, {
                 x: pos.x,
                 y: pos.y,
                 name: TRADING_POST_NAMES[h % TRADING_POST_NAMES.length],
+                faction: faction,
                 categories: this.getTradingPostCategories(id)
             };
         });
+    },
+
+    /**
+     * The faction that built a post: its anchor planet's own faction when first
+     * seen, remembered in the profile — so a post keeps its builder's look even
+     * after its planet is conquered or the galaxy changes hands.
+     */
+    getTradingPostBuilder(postId, galaxyId, planetId) {
+        const profile = this.getActiveProfile ? this.getActiveProfile() : null;
+        if (profile && profile.stationBuilders && profile.stationBuilders[postId]) return profile.stationBuilders[postId];
+        let fid = null;
+        try {
+            const native = planetConfigManager.getPlanetFactions ? planetConfigManager.getPlanetFactions(planetId) : [];
+            fid = native && native[0];
+            if (!fid && this.getFactionHoldings) {
+                const hold = this.getFactionHoldings(galaxyId);
+                fid = hold && hold.ruler;
+            }
+            if (!fid && planetConfigManager.getGalaxyFactionIds) fid = (planetConfigManager.getGalaxyFactionIds(galaxyId) || [])[0];
+        } catch (e) { /* ignore */ }
+        fid = fid || 'terran';
+        if (profile) {
+            if (!profile.stationBuilders) profile.stationBuilders = {};
+            profile.stationBuilders[postId] = fid;
+            if (this.save) this.save();
+        }
+        return fid;
+    },
+
+    /** Faction that built a galaxy's border stations: the ruler when first seen, kept afterwards. */
+    getBorderBuilder(galaxyId) {
+        const gid = String(galaxyId || '').toLowerCase();
+        const key = 'border|' + gid;
+        const profile = this.getActiveProfile ? this.getActiveProfile() : null;
+        if (profile && profile.stationBuilders && profile.stationBuilders[key]) return profile.stationBuilders[key];
+        const hold = this.getFactionHoldings ? this.getFactionHoldings(gid) : null;
+        const fid = hold && hold.ruler;
+        if (fid && profile) {
+            if (!profile.stationBuilders) profile.stationBuilders = {};
+            profile.stationBuilders[key] = fid;
+            if (this.save) this.save();
+        }
+        return fid || null;
     },
 
     /**
@@ -119,26 +164,49 @@ extendClass(ProfileManager, {
      * keeps the one furthest from every planet and already placed post.
      * Distances are measured in map pixels (map area is ~544x224).
      */
-    placeTradingPost(nodes, anchor, placed, seed) {
+    placeTradingPost(nodes, anchor, placed, seed, edges) {
         const SX = 544;
         const SY = 224;
-        const radius = 44; // just outside the planet icon: clearly its station
         const others = nodes.map((o) => ({ x: o.x, y: o.y })).concat(placed);
+        const byId = {};
+        nodes.forEach((n) => { byId[n.planetId] = n; });
+        // Lane segments in map pixels: a station must never sit on one.
+        const lanes = (edges || []).map((e) => [byId[e[0]], byId[e[1]]])
+            .filter((pr) => pr[0] && pr[1])
+            .map((pr) => [pr[0].x * SX, pr[0].y * SY, pr[1].x * SX, pr[1].y * SY]);
+        const segDist = (px, py, l) => {
+            const dx = l[2] - l[0], dy = l[3] - l[1];
+            const len2 = dx * dx + dy * dy || 1;
+            const t = Math.max(0, Math.min(1, ((px - l[0]) * dx + (py - l[1]) * dy) / len2));
+            return Math.hypot(px - (l[0] + t * dx), py - (l[1] + t * dy));
+        };
         let best = null;
         let bestScore = -Infinity;
-        for (let i = 0; i < 12; i++) {
-            const a = ((seed % 360) + i * 30) * Math.PI / 180;
-            const x = Math.min(1, Math.max(0, anchor.x + Math.cos(a) * radius / SX));
-            const y = Math.min(1, Math.max(0, anchor.y + Math.sin(a) * radius / SY));
-            let score = Infinity;
-            others.forEach((o) => {
-                score = Math.min(score, Math.hypot((o.x - x) * SX, (o.y - y) * SY));
-            });
-            if (score > bestScore) {
-                bestScore = score;
-                best = { x: x, y: y };
+        // Several rings around the planet; the first spot clear of every lane
+        // (and of other bodies) wins, else the one with the most clearance.
+        // Rings hug the planet: its drawn radius (map.js sizes planets 32..92 units
+        // across from the id) plus the (small) station and a gap, in these map pixels.
+        const idSum = String(anchor.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+        const planetR = (32 + (idSum % 7) * 10) / 4;
+        [planetR + 9, planetR + 14, planetR + 20].forEach((radius) => {
+            for (let i = 0; i < 24; i++) {
+                const a = ((seed % 360) + i * 15) * Math.PI / 180;
+                const x = Math.min(1, Math.max(0, anchor.x + Math.cos(a) * radius / SX));
+                const y = Math.min(1, Math.max(0, anchor.y + Math.sin(a) * radius / SY));
+                let bodies = Infinity;
+                others.forEach((o) => {
+                    bodies = Math.min(bodies, Math.hypot((o.x - x) * SX, (o.y - y) * SY));
+                });
+                let lane = Infinity;
+                lanes.forEach((l) => { lane = Math.min(lane, segDist(x * SX, y * SY, l)); });
+                // Lane clearance counts double; staying near the anchor is a small bonus.
+                const score = Math.min(bodies, lane * 2, 26) - radius * 0.3;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = { x: x, y: y };
+                }
             }
-        }
+        });
         return best || { x: anchor.x, y: anchor.y };
     },
 

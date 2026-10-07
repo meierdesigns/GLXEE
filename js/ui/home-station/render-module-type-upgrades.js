@@ -318,7 +318,7 @@ extendClass(HomeStationUI, {
             ? profileManager.getCredits(p)
             : Math.max(0, Math.round(Number((p && p.credits) || 0)));
         const creditChip = `<span class="hs-credit hs-res-credits${credits <= 0 ? ' hs-res-empty' : ''}">` +
-            `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey('credits'), 16, 'hs-pixel hs-pixel-16')}</span>` +
+            `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey('credits'), 32, 'hs-pixel hs-pixel-32')}</span>` +
             `<span class="hs-credit-amount" title="${credits}">${this.shortAmount(credits)}</span>` +
             `</span>`;
         const ids = (typeof economyConfig !== 'undefined')
@@ -328,7 +328,7 @@ extendClass(HomeStationUI, {
             const n = (map && map[id]) || 0;
             const empty = n <= 0 ? ' hs-res-empty' : '';
             return `<span class="hs-credit hs-res-${id}${empty}">` +
-                `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey(id), 16, 'hs-pixel hs-pixel-16')}</span>` +
+                `<span class="hs-credit-icon">${this.iconHtml(this.resourceIconKey(id), 32, 'hs-pixel hs-pixel-32')}</span>` +
                 `<span class="hs-credit-amount" title="${n}">${this.shortAmount(n)}</span>` +
                 `</span>`;
         });
@@ -371,7 +371,7 @@ extendClass(HomeStationUI, {
     /** Header + body for a ship table (thumb, name/class, core stats). */
     shipTableHtml(rowsHtml, withAction) {
         return `<table class="hs-ship-table">` +
-            `<thead><tr><th></th><th>SHIP</th><th>TIER</th><th>HP</th><th>ARM</th><th>DMG</th><th>SPD</th>${withAction ? '<th>WEAPONS</th><th></th>' : ''}</tr></thead>` +
+            `<thead><tr><th></th><th>SHIP</th><th>TIER</th><th>HP</th><th>ARM</th><th>DMG</th><th>SPD</th>${withAction ? '<th></th>' : ''}</tr></thead>` +
             `<tbody>${rowsHtml}</tbody></table>`;
     },
 
@@ -422,8 +422,7 @@ extendClass(HomeStationUI, {
             `<td>${val(cfg.tier)}</td><td>${val(cfg.maxHealth)}</td><td>${val(cfg.armor)}</td>` +
             `<td>${val(cfg.damage)}</td><td>${val(cfg.speed)}</td>` +
             (actionHtml != null
-                ? `<td><span class="hs-ship-table-weapons">${this.equippedWeaponsLabel(id)}</span></td>` +
-                  `<td class="hs-ship-table-action">${actionHtml}</td>`
+                ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +
             `</tr>`;
     },

@@ -255,18 +255,26 @@ extendClass(HomeStationUI, {
             !startScreenManager.devMode) return;
         const row = this.overlay.querySelector('.hs-tabs');
         if (!row) return;
-        const isEsc = this.isMenuRowTab();
-        const list = isEsc ? MENU_ORDER.esc : MENU_ORDER.main;
+        // Top bar of areas: items carry data-area-order-index into getAreaOrder().
+        const areaMode = !!row.querySelector('[data-area-order-index]');
+        const isEsc = !areaMode && this.isMenuRowTab();
+        const list = areaMode ? getAreaOrder() : (isEsc ? MENU_ORDER.esc : MENU_ORDER.main);
         const NEW_DIVIDER = -2;
         // Main row items carry their MENU_ORDER.main index; ESC row items are found by id.
-        const indexOf = (el) => isEsc
-            ? list.indexOf(el.getAttribute('data-menu-tab'))
-            : parseInt(el.getAttribute('data-order-index'), 10);
-        const items = Array.from(row.querySelectorAll(isEsc ? '[data-menu-tab]' : '[data-order-index]'))
+        const indexOf = (el) => areaMode
+            ? parseInt(el.getAttribute('data-area-order-index'), 10)
+            : (isEsc
+                ? list.indexOf(el.getAttribute('data-menu-tab'))
+                : parseInt(el.getAttribute('data-order-index'), 10));
+        const items = Array.from(row.querySelectorAll(areaMode ? '[data-area-order-index]' : (isEsc ? '[data-menu-tab]' : '[data-order-index]')))
             .filter((el) => indexOf(el) >= 0);
         const commit = () => {
-            saveMenuOrder();
-            this.applyMenuOrder();
+            if (areaMode) {
+                saveAreaOrder(list);
+            } else {
+                saveMenuOrder();
+                this.applyMenuOrder();
+            }
             this.createUI();
         };
 
@@ -360,7 +368,17 @@ extendClass(HomeStationUI, {
             if (!row.contains(e.relatedTarget)) hideMarker();
         });
 
-        // (The "+ |" divider handle is gone: the area row has its own dividers,
-        // and the menu layout lives in Menu → LAYOUT.)
+        // Top bar: a "+ |" handle adds a divider (drag it between buttons); a
+        // divider dragged out of the bar is removed.
+        if (areaMode) {
+            const handle = document.createElement('span');
+            handle.className = 'hs-tab-divider-handle';
+            handle.textContent = '+ |';
+            handle.draggable = true;
+            handle.title = 'Drag between buttons to add a divider';
+            handle.addEventListener('dragstart', (e) => startDrag(handle, NEW_DIVIDER, e));
+            handle.addEventListener('dragend', () => endDrag(handle));
+            row.appendChild(handle);
+        }
     },
 });

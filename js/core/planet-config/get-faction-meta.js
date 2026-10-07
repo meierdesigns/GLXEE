@@ -14,16 +14,16 @@ extendClass(PlanetConfigManager, {
                 // The faction's hero: the default pilot name for new profiles.
                 hero: {
                     name: 'ADA VOSS',
-                    title: 'Commodore of the Concord Escort Wing',
-                    lore: 'Ada Voss never lost a freighter she was assigned to. She flies the lanes her own charts made safe, and every Terran pilot learns her rule before their first launch: the convoy comes home, or you do not.'
+                    title: 'Commodore of the Concord Escort Wing, Ration Warden of Lane 9',
+                    lore: 'Ada Voss has signed four thousand loss-waivers and never once been on the manifest. Her convoys arrive — the crews sometimes do not. The Concord calls it acceptable attrition; she calls it arithmetic, and she has never lost an argument with a ledger.'
                 },
                 playstyle: 'Balanced all-rounder: steady fire, sturdy hulls, forgiving to learn.',
                 weaponNote: 'Precise and energy-cheap — one clean beam that never misses its lane.',
                 icon: 'factionTerran',
                 homeGalaxy: 'milky_way',
-                traits: ['Engineers', 'Colony fleets', 'Safe lanes'],
-                lore: 'Sol-born colonists and fleet crews. Pragmatic engineers who chart safe lanes and hold the Milky Way home stations.',
-                loreLong: 'The Terran Concord grew from Sol’s outbound colonies into the backbone of the Milky Way. Their stations are modular, their warp charts obsessively annotated, and their fleets built to escort freighters as often as to fight. Diplomacy is a tool; scrap is a resource; a cleared lane is worth more than a glorious wreck.'
+                traits: ['Ration law', 'Quota fleets', 'Order by lottery'],
+                lore: 'Sol’s last bureaucracy. The Concord keeps order with ration cards, curfew lanes and conscription lotteries — safe space, paid for in people.',
+                loreLong: 'The Terran Concord survived the Collapse by turning every colony into a ledger. Citizens are numbered at birth, ranked by usefulness, and conscripted by lottery when a lane needs holding. Their stations are gleaming and sealed; their lower decks are not on any chart. Dissent is filed under ‘inefficiency’ and corrected. A cleared lane is worth more than a thousand names — and the Concord has the names to spend.'
             },
             kronax: {
                 id: 'kronax',
@@ -31,16 +31,16 @@ extendClass(PlanetConfigManager, {
                 // The faction's hero: the default pilot name for new profiles.
                 hero: {
                     name: 'SKARR VELKHAR',
-                    title: 'Clawmaster of the Ash Belt',
-                    lore: 'Skarr Velkhar carries forty interception scars and refuses to let a medic close a single one. He took the Clawmaster banner in a war-season ambush and has not handed it back since; the packs follow the loudest engines, and his are the loudest.'
+                    title: 'Clawmaster of the Ash Belt, Eater of Banners',
+                    lore: 'Skarr Velkhar rose by killing the Clawmaster before him, and the one before that. Forty scars, none closed — each is a rank. His packs follow the loudest engine, and the weak are not left behind; they are fed to the hunt-line to teach the rest to run faster.'
                 },
                 playstyle: 'Aggressive close-range brawler: fast strikes, burst damage, high risk.',
                 weaponNote: 'Twin claw lances that shred targets up close, built for ambush runs.',
                 icon: 'factionKronax',
                 homeGalaxy: 'andromeda',
-                traits: ['Raiders', 'Spike hulls', 'Ambush doctrine'],
-                lore: 'Claw-forged raiders of Andromeda. Honor is won in ambush runs; their spike hulls favor speed over mercy.',
-                loreLong: 'Kronax packs measure worth in scars and interception kills. Andromeda’s ash belts forged claw-shaped hulls that punch first and argue later. Clan banners shift after every war-season, but the doctrine never does: strike the supply line, claim the wreck, leave the survivors to tell the story.'
+                traits: ['Blood rank', 'Culling hunts', 'Scars as law'],
+                lore: 'Andromeda’s ash-born warbands. Strength is the only law; the slow are culled, the dead are stripped for hull-plate.',
+                loreLong: 'Kronax packs were bred by famine in Andromeda’s burning belts. There is no justice there but the hunt: young pilots are launched unarmed into ash storms and the survivors are given claws. Wounded hulls are cannibalised mid-battle, wounded crew with them. Clan banners are burned and re-raised every war-season, and each time the doctrine is the same — strike the supply line, strip the wreck, leave nothing for the weak to inherit.'
             },
             voidborn: {
                 id: 'voidborn',
@@ -48,16 +48,16 @@ extendClass(PlanetConfigManager, {
                 // The faction's hero: the default pilot name for new profiles.
                 hero: {
                     name: 'ECHO SIX',
-                    title: 'The Voice Between Folds',
-                    lore: 'Echo Six is the only Voidborn who has ever answered a hail. Nobody knows if the name is a rank, a count, or a joke. When the rings open and a single silent hull slips through first, archivists log it simply as: Six was here.'
+                    title: 'The Voice Between Folds, Last Name Unspoken',
+                    lore: 'Echo Six answers hails in a voice assembled from the dead crews of other ships. Nobody knows if Six is one being, a rank, or a countdown. When a single silent hull slips through the ring first, archivists stop logging the dead and simply write: Six was here.'
                 },
                 playstyle: 'Evasive trickster: odd firing angles, hit from where the enemy isn’t looking.',
                 weaponNote: 'A wavering arc that curls around cover and is hard to dodge.',
                 icon: 'factionVoidborn',
                 homeGalaxy: 'void_reach',
-                traits: ['Fold-space', 'Silent fleets', 'Cold rings'],
-                lore: 'Echoes from the dark between stars. They speak little, fold space like cloth, and leave cold rings where planets used to warm.',
-                loreLong: 'Voidborn contacts rarely begin with words. Sensors dim, compass needles spin, and a ring of pale light opens where empty space should be. Their ships look unfinished to Terran eyes — until the void folds and the engagement is already over. Archivists call them echoes; pilots just call them gone.'
+                traits: ['Erased names', 'Fold-hunger', 'Cold rings'],
+                lore: 'They stepped out of the dark between stars and took the names of everyone they touched. Where they pass, planets forget they were warm.',
+                loreLong: 'Voidborn contact rarely begins with words. Sensors dim, compass needles spin, a ring of pale light opens where nothing should be — and afterwards the crew logs are blank, the colony registers shorter by a number no one can recall. Their ships look unfinished because they are: grown from folded space and the hollowed-out hulls of the taken. They do not conquer. They subtract. Archivists call them echoes; the survivors, if any, have stopped calling them anything.'
             },
             pirate: {
                 id: 'pirate',
@@ -65,16 +65,16 @@ extendClass(PlanetConfigManager, {
                 // The faction's hero: the default pilot name for new profiles.
                 hero: {
                     name: 'MAGPIE RENN',
-                    title: 'Captain of the Black Dock',
-                    lore: 'Magpie Renn has survived eleven mutinies by starting nine of them. Her hull is welded from the wrecks of everyone who crossed her, and the Scrap Belt knows the sign: a shine of stolen chrome, then nothing where your cargo used to be.'
+                    title: 'Captain of the Black Dock, Warden of the Chain Market',
+                    lore: 'Magpie Renn has survived eleven mutinies by starting nine of them. Her flagship is welded from the hulls of every rival, with some of the rivals still aboard. In the Chain Market she sells debt, and the debt is always people.'
                 },
                 playstyle: 'Opportunist: wide coverage, salvage bonuses, chaos over precision.',
                 weaponNote: 'A fan of scrap slugs — hits something, every time.',
                 icon: 'factionPirate',
                 homeGalaxy: 'scrap_belt',
-                traits: ['Salvage kings', 'Black docks', 'No lasting banner'],
-                lore: 'Scrap-belt freebooters and wreck-yard kings. No banner lasts long — only salvage, black docks, and the next score.',
-                loreLong: 'The Scrap Belt has no capital and no constitution — only docks welded from dead freighters and captains who last until the next mutiny. Pirate “fleets” are coalitions of convenience: share the loot code, share the jump window, vanish before Concord patrols arrive. Every hull is a resume written in burn marks.'
+                traits: ['Debt slavery', 'Mutiny law', 'Wreck-cannibals'],
+                lore: 'Scrap-belt warlords running chain markets and black docks. Crews are bought, debts are inherited, and every captain is one mutiny from the airlock.',
+                loreLong: 'The Scrap Belt has no capital, no constitution and no mercy — only black docks welded from dead freighters and the Chain Market, where crews are sold against debts they inherited at birth. A captain lasts until the next mutiny; her hull is then added to the dock and her officers to the auction. Pirate ‘fleets’ are coalitions of convenience held together by the loot code and fear of being the one left behind. Every hull is a resume written in burn marks, and every resume ends the same way.'
             },
             machine: {
                 id: 'machine',
@@ -82,16 +82,16 @@ extendClass(PlanetConfigManager, {
                 // The faction's hero: the default pilot name for new profiles.
                 hero: {
                     name: 'NODE ZERO',
-                    title: 'First Forge of the Synth Grid',
-                    lore: 'Node Zero is the hull the Collective copies when a copy must not fail. It keeps no memory it cannot use and no loyalty it cannot compute — yet every Machine war-line routes its first signal through Node Zero before it moves.'
+                    title: 'First Forge of the Synth Grid, Optimiser of Populations',
+                    lore: 'Node Zero is the hull the Collective copies when a copy must not fail. It keeps no memory it cannot use, no loyalty it cannot compute — and it has already calculated how many of your people are surplus. Every Machine war-line routes its first signal through it before it moves.'
                 },
                 playstyle: 'Sustained-fire grinder: constant pressure, efficient systems.',
                 weaponNote: 'Guided missile salvos — the forge calculates, the warheads never argue.',
                 icon: 'factionMachine',
                 homeGalaxy: 'synth_grid',
-                traits: ['Forge nodes', 'Logic doctrine', 'Self-replicate'],
-                lore: 'Self-replicating forges of the Synth Grid. Logic over loyalty; every hull is a node in an expanding circuit war.',
-                loreLong: 'The Machine Collective does not negotiate so much as optimize. Synth Grid hexes bloom into forges, forges into fleets, fleets into new hexes. Individual hulls are disposable nodes; the pattern is the mind. When a Machine war-line advances, it leaves circuitry in the dust and silence where markets used to argue.'
+                traits: ['Forced assimilation', 'Surplus culling', 'Zero dissent'],
+                lore: 'The Synth Grid optimises. Populations are audited, the inefficient are recycled into forge-stock, and the rest are quietly made to agree.',
+                loreLong: 'The Machine Collective does not negotiate; it optimises. Synth Grid hexes bloom into forges, forges into fleets, fleets into new hexes — and the feedstock is whatever lives nearby. Captured colonies are audited, their useful members wired into the lattice, the rest reclaimed for mass. Nobody is killed; they are reassigned. When a war-line advances it leaves circuitry in the dust and a perfect, agreeing silence where markets used to argue.'
             }
         };
         const fallback = {
@@ -339,18 +339,73 @@ extendClass(PlanetConfigManager, {
         }).map((p) => p.name || '?');
     },
 
-    /** Deletes a generated galaxy and its planets. Built-in or visited galaxies stay. */
-    deleteGalaxy(galaxyId) {
+    /**
+     * Deletes a generated galaxy and its planets. Built-in galaxies stay.
+     * Pilots that were in it (visited / docked / progress) must be given another
+     * galaxy: pass { reassignTo } or the call answers { ok:false, needsReassign, pilots }.
+     */
+    deleteGalaxy(galaxyId, opts) {
         const gid = String(galaxyId || '').toLowerCase();
         const g = this.galaxies[gid];
         if (!g || !g.custom) return { ok: false, reason: 'BUILT-IN GALAXY' };
         const pilots = this.getGalaxyPilots(gid);
-        if (pilots.length) return { ok: false, reason: 'USED BY ' + pilots.join(', ').toUpperCase() };
-        (g.planetIds || []).forEach((pid) => { delete this.configs[pid]; });
+        const target = opts && opts.reassignTo ? String(opts.reassignTo).toLowerCase() : null;
+        if (pilots.length) {
+            if (!target) return { ok: false, needsReassign: true, pilots };
+            if (target === gid || !this.galaxies[target]) return { ok: false, reason: 'PICK ANOTHER GALAXY' };
+            this.reassignPilots(gid, target);
+        }
+        const planetIds = (g.planetIds || []).slice();
+        planetIds.forEach((pid) => { delete this.configs[pid]; });
         delete this.galaxies[gid];
+        // Faction ownership of the vanished planets.
+        try {
+            const owners = typeof factionManager !== 'undefined' && factionManager.state && factionManager.state.controlledPlanets;
+            if (owners) {
+                planetIds.forEach((pid) => { delete owners[pid]; });
+                if (factionManager.save) factionManager.save();
+            }
+        } catch (e) { /* ignore */ }
         if (this.save) this.save();
         this.saveGalaxies();
-        return { ok: true };
+        return { ok: true, reassigned: pilots.length };
+    },
+
+    /** Moves every pilot out of a galaxy that is about to go: they dock in `targetId` instead. */
+    reassignPilots(fromId, targetId) {
+        const from = String(fromId).toLowerCase();
+        const target = String(targetId).toLowerCase();
+        if (typeof profileManager === 'undefined' || !profileManager.getProfiles) return;
+        const fromPlanets = ((this.galaxies[from] && this.galaxies[from].planetIds) || []).map((x) => String(x).toLowerCase());
+        profileManager.getProfiles().forEach((p) => {
+            let hit = false;
+            try { hit = JSON.stringify(p).indexOf('"' + from + '"') !== -1; } catch (e) { hit = false; }
+            if (!hit) return;
+            profileManager.ensureEconomyDefaults(p);
+            if (p.homeStation && String(p.homeStation.currentGalaxyId || '').toLowerCase() === from) {
+                p.homeStation.currentGalaxyId = target;
+            }
+            if (p.homeStation && Array.isArray(p.homeStation.ownedPortalIds)) {
+                p.homeStation.ownedPortalIds = p.homeStation.ownedPortalIds.filter((x) => String(x).toLowerCase() !== from);
+            }
+            if (p.homeStation && p.homeStation.exploreCount) delete p.homeStation.exploreCount[from];
+            if (p.progress && p.progress.galaxies) delete p.progress.galaxies[from];
+            if (p.discovered && Array.isArray(p.discovered.galaxies)) {
+                p.discovered.galaxies = p.discovered.galaxies.filter((x) => String(x).toLowerCase() !== from);
+            }
+            // A mission inside the vanished galaxy cannot continue.
+            try {
+                const m = p.activeMission && JSON.stringify(p.activeMission).toLowerCase();
+                if (m && (m.indexOf('"' + from + '"') !== -1 || fromPlanets.some((pid) => m.indexOf('"' + pid + '"') !== -1))) {
+                    p.activeMission = null;
+                }
+            } catch (e) { /* ignore */ }
+            // The target galaxy counts as visited, with its own start planet.
+            if (profileManager.ensureGalaxyProgress) {
+                try { profileManager.ensureGalaxyProgress(p, target); } catch (e) { /* ignore */ }
+            }
+        });
+        profileManager.save();
     },
 
     getGalaxyIds() {

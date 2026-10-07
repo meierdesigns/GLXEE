@@ -104,7 +104,7 @@ extendClass(HomeStationUI, {
             } catch (e) { /* ignore */ }
         }
         return `<div class="hs-hangar-stat${extraClass || ''}" title="${String(title || '').replace(/"/g, '&quot;')}">` +
-            `<span class="hs-stat-icon">${this.iconHtml(icon, 16, 'hs-pixel', label, color)}</span>` +
+            `<span class="hs-stat-icon">${this.iconHtml(icon, 32, 'hs-pixel', label, color)}</span>` +
             `<span class="hs-stat-body">` +
                 `<em>${label}</em>` +
                 `<strong class="hs-stat-value">${valueHtml}</strong>` +

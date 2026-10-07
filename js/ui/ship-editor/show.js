@@ -60,7 +60,7 @@ extendClass(ShipEditorUI, {
                 maxHealth: 100,
                 armor: 15,
                 damage: 25,
-                minY: 200,
+                minY: 0,
                 maxY: 284,
                 defaultWeapon: 'laser',
                 availableWeapons: ['laser'],

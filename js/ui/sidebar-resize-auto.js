@@ -80,6 +80,12 @@
 
     function attach(side) {
         if (side.__sbAuto || !side.isConnected) return;
+        // Elements that failed the size / placement checks are re-checked at
+        // most every 3 s (each check forces a layout; map planets swap their
+        // frames several times a second and trigger scans constantly).
+        const now = performance.now();
+        if (side.__sbTried && now - side.__sbTried < 3000) return;
+        side.__sbTried = now;
         const parent = side.parentElement;
         if (!parent || parent.querySelector(':scope > .pe-resize-handle')) return;
         if (side.closest('.pe-resize-handle')) return;
@@ -149,7 +155,8 @@
     const queue = () => {
         if (queued) return;
         queued = true;
-        requestAnimationFrame(scan);
+        // Coalesce bursts of mutations into one scan.
+        setTimeout(() => requestAnimationFrame(scan), 300);
     };
     const start = () => {
         // Screens are often shown by a class/style change, not new nodes.

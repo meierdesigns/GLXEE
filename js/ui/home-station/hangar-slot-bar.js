@@ -71,6 +71,52 @@ extendClass(HomeStationUI, {
         }
     },
 
+    /** Confirm dialog for buying the next weapon slot (reuses the area-upgrade modal look). */
+    openWeaponSlotBuyModal(shipId) {
+        const root = this.overlay && this.overlay.querySelector('.home-station-content');
+        if (!root) return;
+        this.closeAreaUpgradeModal();
+        const profile = this.getProfile();
+        const check = profileManager.canPurchaseWeaponSlot(shipId);
+        if (!check || check.reason === 'MAX SLOTS' || check.reason === 'N/A') return;
+        const short = !check.ok;
+        const modal = document.createElement('div');
+        modal.className = 'hs-res-buy-modal hs-area-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Buy weapon slot');
+        modal.innerHTML = `<div class="hs-res-buy-dialog">` +
+            `<div class="hs-res-buy-head"><h3>BUY WEAPON SLOT</h3>` +
+            `<p class="hs-res-buy-sub">${this.shipName(shipId)}</p></div>` +
+            `<ul class="hs-area-modal-list"><li>Adds <strong>+1 weapon slot</strong> — drag it onto the ship afterwards</li></ul>` +
+            `<div class="hs-res-buy-cost">${check.cost ? this.renderCostGrid(check.cost, (profile && profile.resources) || {}, profile) : ''}</div>` +
+            (short ? `<p class="hs-area-modal-short">NOT ENOUGH RESOURCES</p>` : '') +
+            `<div class="hs-res-buy-actions">` +
+            `<button type="button" class="action-button hs-res-buy-close" data-area-modal-cancel>CANCEL</button>` +
+            `<button type="button" class="action-button" data-area-modal-confirm ${short ? 'disabled' : ''}>CONFIRM</button>` +
+            `</div></div>`;
+        root.appendChild(modal);
+        const confirmBtn = modal.querySelector('[data-area-modal-confirm]');
+        const close = () => this.closeAreaUpgradeModal();
+        modal.querySelector('[data-area-modal-cancel]').addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        confirmBtn.addEventListener('click', () => {
+            close();
+            const res = profileManager.purchaseWeaponSlot(shipId);
+            this.setStatus(res.ok ? 'WEAPON SLOT BOUGHT — DRAG IT ONTO THE SHIP'
+                : (res.reason === 'RESOURCES' ? 'NOT ENOUGH RESOURCES FOR A WEAPON SLOT' : 'CANNOT BUY SLOT: ' + res.reason));
+        });
+        this._areaModalKeys = (e) => {
+            if (e.key === 'Escape' || e.key === 'Backspace') close();
+            else if (e.key === 'Enter' && !confirmBtn.disabled) confirmBtn.click();
+            else return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        };
+        document.addEventListener('keydown', this._areaModalKeys, true);
+        (confirmBtn.disabled ? modal.querySelector('[data-area-modal-cancel]') : confirmBtn).focus();
+    },
+
     onHangarSlotTileDown(e) {
         if (e.button !== 0) return;
         // ALL tile: its badge cycles the fire-all key; the tile itself is inert.
@@ -86,9 +132,7 @@ extendClass(HomeStationUI, {
         // Buy tile: purchase the next weapon slot for this ship.
         if (e.target.closest && e.target.closest('[data-buy-weapon-slot]')) {
             e.preventDefault();
-            const res = profileManager.purchaseWeaponSlot(this.hangarShipId);
-            this.setStatus(res.ok ? 'WEAPON SLOT BOUGHT — DRAG IT ONTO THE SHIP'
-                : (res.reason === 'RESOURCES' ? 'NOT ENOUGH RESOURCES FOR A WEAPON SLOT' : 'CANNOT BUY SLOT: ' + res.reason));
+            this.openWeaponSlotBuyModal(this.hangarShipId);
             return;
         }
         // Key badge: cycle this slot's fire key instead of dragging.

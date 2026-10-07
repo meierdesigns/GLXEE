@@ -52,7 +52,25 @@ extendClass(HomeStationUI, {
         this._navAnimPrev = { area: areaIdx, tab: this.tab, tabIdx: tabIdx };
         const anim = this._navAnim;
         const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
-        return MENU_AREAS.map((area, n) => {
+        const areaOrder = getAreaOrder();
+        const onProfiles = this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles';
+        const profilesBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${onProfiles ? ' active' : ''}${this.holoJustOn('profiles', onProfiles) ? ' holo-on' : ''}" data-open-menu="1" data-menu-open-tab="profiles" data-area-order-index="${oi}" data-nav-item title="${this.menuLabelFor('area:profiles', 'PROFILES')}">` +
+            this.areaDecoHtml('profiles') +
+            `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:profiles', 'menuProfiles'))}</span>` +
+            `<span class="hs-tab-label">${this.menuLabelFor('area:profiles', 'PROFILES')}</span>` +
+            `</button>`;
+        const menuOn = this.isMenuRowTab() && !onProfiles;
+        const menuBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${menuOn ? ' active' : ''}${this.holoJustOn('menu', menuOn) ? ' holo-on' : ''}" data-open-menu="1" data-area-order-index="${oi}" data-nav-item title="MENU (ESC)">` +
+            this.areaDecoHtml('menu') +
+            `<span class="hs-tab-icon">${this.navIconHtml('menu', 'menuSettings')}</span>` +
+            `<span class="hs-tab-label">MENU</span>` +
+            `</button>`;
+        return areaOrder.map((entry, oi) => {
+            if (entry === '|') return `<span class="hs-tab-divider" data-area-order-index="${oi}" aria-hidden="true"></span>`;
+            if (entry === 'profiles') return profilesBtn(oi);
+            if (entry === 'menu') return menuBtn(oi);
+            const area = MENU_AREAS.find((a) => a.id === entry);
+            if (!area) return '';
             const areaLabel = this.menuLabelFor('area:' + area.id, area.label);
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
@@ -65,22 +83,14 @@ extendClass(HomeStationUI, {
             const pages = tabs.filter((id) => !modal(id));
             const fallback = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
             const target = tabs.indexOf(last) !== -1 && !modal(last) ? last : fallback;
-            const divider = n > 0 ? '<span class="hs-tab-divider" aria-hidden="true"></span>' : '';
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
-            return divider + `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-nav-item title="${areaLabel}">` +
+            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item title="${areaLabel}">` +
                 this.areaDecoHtml(area.id) +
-                `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:' + area.id, area.icon))}</span>` +
+                `<span class="hs-tab-icon">${this.navIconHtml(area.id, this.menuIconFor('area:' + area.id, area.icon))}</span>` +
                 `<span class="hs-tab-label">${areaLabel}</span>` +
                 `</button>`;
-        }).join('') +
-            // 5th area: the ESC menu (profiles, settings, assets, components, credits).
-            '<span class="hs-tab-divider" aria-hidden="true"></span>' +
-            `<button type="button" class="hs-tab hs-area-btn${this.isMenuRowTab() ? ' active' : ''}" data-open-menu="1" data-nav-item title="MENU (ESC)">` +
-            this.areaDecoHtml('menu') +
-            `<span class="hs-tab-icon">${this.tabIconHtml('menuSettings')}</span>` +
-            `<span class="hs-tab-label">MENU</span>` +
-            `</button>`;
+        }).join('');
     },
 
     /** WIKI sub-nav: one tab per archive category; opens its viewer. */
@@ -105,6 +115,8 @@ extendClass(HomeStationUI, {
         // Menu: its tabs (profiles / settings / …) are the sub-nav row under
         // the normal area row, like any other area.
         if (this.isMenuRowTab()) {
+            // PROFILES stands on its own: no SETTINGS / CREDITS row under it.
+            if (this.tab === 'profiles' || (this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles')) return '';
             return `<nav class="hs-subnav hs-subnav-menu" aria-label="MENU">${this.renderMenuTabs()}</nav>`;
         }
         const area = this.getTabArea(this.tab);
@@ -142,7 +154,8 @@ extendClass(HomeStationUI, {
             hangar: ['hsShip', 'hsCraft', 'statWeapon', 'statArmor'],
             factions: ['menuPeoples', 'hsShip', 'statAbilities', 'statWeapon'],
             explore: ['hsExplore', 'hsBlueprint', 'statEnergy', res('voltex')],
-            menu: ['menuSettings', 'menuProfiles', 'menuCredits', 'hsLogout']
+            profiles: ['menuProfiles', 'menuLoad', 'menuNewPilot', 'hsShip'],
+            menu: ['menuSettings', 'menuCredits', 'hsLogout', 'hsComponents']
         };
         const keys = sets[areaId] || [];
         const items = keys.map((k, i) =>
@@ -151,6 +164,14 @@ extendClass(HomeStationUI, {
     },
 
     /** Big PLAY button left of both navbars (and in the main menu panel): planet miniatures + play icon. */
+    /** True only on the render where `key` turns on, so re-renders (hover/focus) don't replay the power-on flicker. */
+    holoJustOn(key, on) {
+        this._holoPrev = this._holoPrev || {};
+        const was = !!this._holoPrev[key];
+        this._holoPrev[key] = !!on;
+        return !!on && !was;
+    },
+
     renderPlayLaunch() {
         const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
         const planets = ids.map((id, i) => {
@@ -159,7 +180,7 @@ extendClass(HomeStationUI, {
         }).join('');
         const tint = this.factionTintFilter();
         const label = this.menuLabelFor('play', 'PLAY');
-        return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}" data-play-launch data-nav-item title="${label}">` +
+        return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}${this.holoJustOn('play', this.tab === 'play') ? ' holo-on' : ''}" data-play-launch data-nav-item title="${label}">` +
             (tint ? this.factionTintSvg(tint) : '') +
             `<span class="hs-play-launch-planets" aria-hidden="true">${planets}</span>` +
             `<span class="hs-play-launch-icon" aria-hidden="true"></span>` +
@@ -453,3 +474,11 @@ extendClass(HomeStationUI, {
         }
     },
 });
+
+// The power-on flicker is a one-shot: drop its class when it ends so no later
+// style change (hover, focus, mouse out) can replay it.
+document.addEventListener('animationend', (e) => {
+    if (e.animationName !== 'hs-holo-on') return;
+    const host = e.target && e.target.closest ? e.target.closest('.holo-on') : null;
+    if (host) host.classList.remove('holo-on');
+}, true);

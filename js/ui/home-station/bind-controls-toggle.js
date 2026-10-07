@@ -55,6 +55,12 @@ extendClass(HomeStationUI, {
         return this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
     },
 
+    /** Open options of a top-bar menu button (PROFILES opens the menu on its page). */
+    menuButtonOpts(el) {
+        const tab = el && el.getAttribute && el.getAttribute('data-menu-open-tab');
+        return tab ? { force: true, tab: tab } : { force: true };
+    },
+
     /** True while the menu tab row owns ←/→ (menu or a menu-only tab). */
     isMenuRowTab() {
         return this.tab === 'menu' || this._menuOnlyTabs.indexOf(this.tab) !== -1;
@@ -297,9 +303,9 @@ extendClass(HomeStationUI, {
         const hasSubnav = () => !!(this.overlay && this.overlay.querySelector('.hs-subnav-tab'));
         if (row === 'area') {
             if (el.hasAttribute('data-open-menu')) {
-                if (!this.isMenuRowTab()) {
-                    this._lastGameTab = this.tab;
-                    this.openMainMenuOverlay({ force: true });
+                if (!this.isMenuRowTab() || el.hasAttribute('data-menu-open-tab')) {
+                    if (!this.isMenuRowTab()) this._lastGameTab = this.tab;
+                    this.openMainMenuOverlay(this.menuButtonOpts(el));
                 }
             } else if (!el.classList.contains('active')) {
                 el.click();
@@ -379,7 +385,7 @@ extendClass(HomeStationUI, {
             if (key === 'ArrowDown') {
                 // MENU button: ↓ opens the menu (same as ENTER / ESC).
                 if (isMenuBtn) {
-                    this.openMainMenuOverlay({ force: true });
+                    this.openMainMenuOverlay(this.menuButtonOpts(focused));
                     return true;
                 }
                 if (hasSub) return this.focusNavRow('subnav');
@@ -437,9 +443,9 @@ extendClass(HomeStationUI, {
                 } else if (next.hasAttribute('data-open-menu')) {
                     // MENU is an area like the others: switching to it opens
                     // the menu, its tabs appear in the second row.
-                    if (!this.isMenuRowTab()) {
-                        this._lastGameTab = this.tab;
-                        this.openMainMenuOverlay({ force: true });
+                    if (!this.isMenuRowTab() || next.hasAttribute('data-menu-open-tab')) {
+                        if (!this.isMenuRowTab()) this._lastGameTab = this.tab;
+                        this.openMainMenuOverlay(this.menuButtonOpts(next));
                     }
                     this.focusNavRow('area');
                 }
@@ -705,7 +711,7 @@ extendClass(HomeStationUI, {
                     // Menu tab row: ENTER goes into the shown section (unless a
                     // different, not-yet-shown menu tab is focused).
                     if (level === 'tabs' && focused && focused.hasAttribute && focused.hasAttribute('data-open-menu')) {
-                        this.openMainMenuOverlay({ force: true });
+                        this.openMainMenuOverlay(this.menuButtonOpts(focused));
                         return;
                     }
                     if (focused && focused.hasAttribute && focused.hasAttribute('data-play-launch')) {

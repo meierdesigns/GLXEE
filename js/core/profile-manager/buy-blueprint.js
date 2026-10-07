@@ -243,20 +243,36 @@ extendClass(ProfileManager, {
         };
     },
 
+    /**
+     * Progress is saved under the planet's own galaxy (markStageCleared), which
+     * can differ from the galaxy the map shows it in — so look in both records.
+     */
+    _planetProgressRecords(profile, galaxyId, pid) {
+        const out = [this.ensureGalaxyProgress(profile, galaxyId)];
+        const own = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetGalaxyId
+            ? planetConfigManager.getPlanetGalaxyId(pid) : null;
+        if (own && own !== galaxyId) out.push(this.ensureGalaxyProgress(profile, own));
+        return out;
+    },
+
     isPlanetUnlocked(galaxyId, planetId) {
         const profile = this.getActiveProfile();
         if (!profile) return false;
-        const gp = this.ensureGalaxyProgress(profile, galaxyId);
         const pid = String(planetId || '').toLowerCase();
-        return gp.unlockedPlanetIds.indexOf(pid) !== -1;
+        if (this._planetProgressRecords(profile, galaxyId, pid).some((gp) => gp.unlockedPlanetIds.indexOf(pid) !== -1)) return true;
+        // A cleared neighbour along a map edge opens the way (also heals saves
+        // that stored the clear under another galaxy).
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyNeighbors) {
+            return planetConfigManager.getGalaxyNeighbors(galaxyId, pid).some((nid) => this.isPlanetCleared(galaxyId, nid));
+        }
+        return false;
     },
 
     isPlanetCleared(galaxyId, planetId) {
         const profile = this.getActiveProfile();
         if (!profile) return false;
-        const gp = this.ensureGalaxyProgress(profile, galaxyId);
         const pid = String(planetId || '').toLowerCase();
-        return gp.clearedPlanetIds.indexOf(pid) !== -1;
+        return this._planetProgressRecords(profile, galaxyId, pid).some((gp) => gp.clearedPlanetIds.indexOf(pid) !== -1);
     },
 
     getPlanetStageState(galaxyId, planetId) {

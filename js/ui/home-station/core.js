@@ -333,7 +333,7 @@ class HomeStationUI {
             return { id: id, label: meta.label, icon: meta.icon };
         });
         // COMPONENTS and LAYOUT are developer tools: only with dev mode (Shift+C).
-        const all = base.concat(extra).filter((t) => this.isDevTabVisible(t.id));
+        const all = base.concat(extra).filter((t) => t.id !== 'profiles' && this.isDevTabVisible(t.id));
         if (typeof MENU_ORDER === 'undefined') return all;
         const rank = (t) => {
             const i = MENU_ORDER.esc.indexOf(t.id);
@@ -381,6 +381,17 @@ class HomeStationUI {
 
     tabIconHtml(iconKey) {
         return this.iconHtml(this.tabIconKey(iconKey), 32, 'hs-tab-pixel', this.tabMetaLabel(iconKey));
+    }
+
+    /**
+     * Main nav icon: the 32×32 art (2×2 px per cell at 64 px). Falls back to the regular tab icon.
+     */
+    navIconHtml(areaId, fallbackKey) {
+        const hd = { station: 'navStation32', hangar: 'navHangar32', factions: 'navFactions32', explore: 'navExplore32', explorations: 'navExplore32', menu: 'navMenu32' }[areaId];
+        if (hd && typeof IconSprites !== 'undefined' && IconSprites[hd]) {
+            return this.iconHtml(hd, 64, 'hs-tab-pixel', areaId.toUpperCase());
+        }
+        return this.tabIconHtml(fallbackKey);
     }
 
     tabMetaLabel(iconKey) {

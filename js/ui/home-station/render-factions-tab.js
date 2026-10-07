@@ -11,6 +11,17 @@ extendClass(HomeStationUI, {
         return String((f && f.label) || id).toUpperCase();
     },
 
+    /** Two opposing arrows; crossed out and dimmed when the faction does not trade. */
+    factionTradeIconHtml(trades) {
+        const arrows = '<polygon points="1,4 10,4 10,2 15,5 10,8 10,6 1,6"/><polygon points="15,10 6,10 6,8 1,11 6,14 6,12 15,12"/>';
+        const label = trades ? 'TRADES' : 'NO TRADE';
+        return `<span class="hs-faction-trade-ico ${trades ? 'is-open' : 'is-closed'}" title="${label}" aria-label="${label}">` +
+            `<svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true">` +
+            `<g fill="currentColor">${arrows}</g>` +
+            (trades ? '' : '<path d="M2 14L14 2" stroke="#05060a" stroke-width="4"/><path d="M2 14L14 2" stroke="#e04848" stroke-width="2"/>') +
+            `</svg></span>`;
+    },
+
     factionMeterHtml(rel) {
         // −100 … 0 (centre mark) … +100, value printed on the bar.
         const pct = Math.round((rel.score + 100) / 2);
@@ -40,11 +51,12 @@ extendClass(HomeStationUI, {
                 `<div class="hs-faction-head">` +
                     `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: fid }, 48)}</span>` +
                     `<span class="hs-faction-name">${this.factionLabel(fid)}</span>` +
+                    `<span class="hs-faction-score">${rel.score > 0 ? '+' : ''}${rel.score}</span>` +
                     `<span class="hs-faction-status">${rel.label}</span>` +
                 `</div>` +
                 this.factionMeterHtml(rel) +
-                `<div class="hs-faction-stats"><span>RELATION ${rel.score > 0 ? '+' : ''}${rel.score}</span><span>PLANETS ${planets}</span>` +
-                `<span>${fm.isAllied(fid) ? 'TRADES' : 'NO TRADE'}</span></div>` +
+                `<div class="hs-faction-stats"><span class="hs-faction-planets" title="Planets held">${this.iconHtml('menuPlanets', 22, 'hs-pixel', 'Planets')}${planets}</span>` +
+                this.factionTradeIconHtml(fm.isAllied(fid)) + `</div>` +
                 `</button>`;
         }).join('');
         return `<div class="hs-factions hs-faction-detail is-${fm.getRelation(id).tone}">` +
@@ -204,6 +216,9 @@ extendClass(HomeStationUI, {
                             `<span class="hs-fd-fleet-zoom" data-fleet-zoom-label>${Math.round(zoom * 100)}%</span>` +
                             `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom="0.25" title="Zoom in">+</button>` +
                             `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom-reset title="Reset zoom">1:1</button>` +
+                            ((typeof startScreenManager !== 'undefined' && startScreenManager.devMode)
+                                ? `<button type="button" class="pe-btn pe-preview-btn hs-fd-sizes-btn" data-fleet-sizes data-ui-tip="SIZES · tune player, enemy and shot sizes">SIZES</button>`
+                                : '') +
                         `</div>` +
                         `<canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="240" height="135" style="--fleet-zoom:${zoom}"></canvas>` +
                     `</div>` +
@@ -313,6 +328,15 @@ extendClass(HomeStationUI, {
         };
         q('[data-fleet-zoom]', (btn) => setFleetZoom((Number(this._factionFleetZoom) || 1) + Number(btn.getAttribute('data-fleet-zoom'))));
         q('[data-fleet-zoom-reset]', () => setFleetZoom(1));
+        const sizesBtn = this.overlay.querySelector('[data-fleet-sizes]');
+        if (sizesBtn) {
+            sizesBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof enemySizeOverlay === 'undefined' || !enemySizeOverlay) return;
+                enemySizeOverlay.toggle();
+            });
+        }
         const fleetViewport = this.overlay.querySelector('[data-fleet-preview-viewport]');
         if (fleetViewport) {
             fleetViewport.addEventListener('wheel', (e) => {

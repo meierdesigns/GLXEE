@@ -21,7 +21,7 @@ extendClass(HomeStationUI, {
         const view = this._hangarLeftView === 'parts' ? 'parts' : 'areas';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
-            `${this.iconHtml(icon, 16, 'hs-pixel hs-pixel-16')}<span>${label}</span></button>`;
+            `${this.iconHtml(icon, 32, 'hs-pixel hs-pixel-32', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
         return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('areas', 'AREAS', 'hsShip')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
 

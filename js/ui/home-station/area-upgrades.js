@@ -61,7 +61,8 @@ extendClass(HomeStationUI, {
             `<label class="hs-area-switch" title="${on ? 'Switch off' : 'Switch on'}">` +
             `<input type="checkbox" data-area-toggle="${shipId}|${areaId}"${on ? ' checked' : ''} aria-label="${this.areaLabel(areaId)} on/off">` +
             `<span class="hs-area-switch-track"><span class="hs-area-switch-label">${on ? 'ON' : 'OFF'}</span></span></label>`;
-        const tiles = slm.getShipAreas().map((area) => {
+        // The core has no ON/OFF switch, so it gets no tile.
+        const tiles = slm.getShipAreas().filter((area) => toggleable.indexOf(area.id) !== -1).map((area) => {
             // Icon (ship with this area lit) instead of the text label; label in the tooltip.
             const name = `<strong class="hs-area-icon" data-ui-tip="${area.label}">${this.hangarAreaIconSvg(area.id)}</strong>`;
             if (slm.isAreaEnabled && !slm.isAreaEnabled(shipId, area.id)) {
@@ -84,7 +85,7 @@ extendClass(HomeStationUI, {
             back: 'M4 8h3v1h1v2H3V9h1z',
             wing: 'M0 5h4v3H1v1H0zM7 5h4v4h-1V8H7z'
         };
-        return `<svg viewBox="0 0 11 11" width="33" height="33" shape-rendering="crispEdges" aria-hidden="true">` +
+        return `<svg viewBox="0 0 11 11" width="55" height="55" shape-rendering="crispEdges" aria-hidden="true">` +
             Object.keys(parts).map((k) => `<path class="${k === areaId ? 'is-lit' : 'is-dim'}" d="${parts[k]}"/>`).join('') +
             `</svg>`;
     },

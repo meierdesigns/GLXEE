@@ -16,26 +16,26 @@ class StartScreenManager {
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
         ];
         this.title = "GLXEE";
-        this.subtitle = "Game Boy Edition";
+        this.subtitle = "...a MRDSN Production";
         this.menuClusters = [
             {
                 id: 'play',
                 label: '',
                 items: [
-                    { id: 'STATION', label: 'START', icon: 'hsStation', primary: true, desc: 'Start a new game with a new pilot' }
+                    { id: 'STATION', label: 'NEW PILOT', icon: 'menuNewPilot', primary: true, desc: 'Start a new game with a new pilot' }
                 ]
             },
             {
                 id: 'account',
                 items: [
-                    { id: 'PROFILES', label: 'LOAD', icon: 'menuProfiles', desc: 'Continue with an existing pilot' },
+                    { id: 'PROFILES', label: 'LOAD', icon: 'menuLoad', desc: 'Continue with an existing pilot' },
+                    { id: 'GALAXIES', icon: 'menuPlanets', desc: 'Browse and create galaxies' },
                     { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display, audio and controls' }
                 ]
             },
             {
                 id: 'info',
                 items: [
-                    { id: 'GALAXIES', icon: 'menuPlanets', desc: 'Browse and create galaxies' },
                     { id: 'CREDITS', icon: 'menuCredits', desc: 'Who made this game' }
                 ]
             }
@@ -138,91 +138,82 @@ class StartScreenManager {
                 type: 'shipRenderStyle'
             },
             {
-                name: 'Player Size',
+                name: 'Voxel Size',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getPlayerSize() : 'L',
+                    ? String(uiAppearanceManager.voxelSize || '1') : '1',
                 options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getPlayerSizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                    ? uiAppearanceManager.getVoxelSizeOptions()
+                    : ['1', '2', '3', '4'],
+                type: 'voxelSize'
+            },
+            {
+                name: 'Player Size',
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('player'))) : '18',
+                min: 6, max: 60, step: 1, suffix: 'px',
                 type: 'playerSize'
             },
             {
                 name: 'Scout Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemyClassSize('scout') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemySizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('enemy', 'scout'))) : '36',
+                min: 12, max: 200, step: 1, suffix: 'px',
                 type: 'enemyClassSize',
                 enemyClass: 'scout'
             },
             {
                 name: 'Assault Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemyClassSize('assault') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemySizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('enemy', 'assault'))) : '48',
+                min: 12, max: 200, step: 1, suffix: 'px',
                 type: 'enemyClassSize',
                 enemyClass: 'assault'
             },
             {
                 name: 'Heavy Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemyClassSize('heavy') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemySizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('enemy', 'heavy'))) : '58',
+                min: 12, max: 200, step: 1, suffix: 'px',
                 type: 'enemyClassSize',
                 enemyClass: 'heavy'
             },
             {
                 name: 'Elite Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemyClassSize('elite') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemySizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('enemy', 'elite'))) : '70',
+                min: 12, max: 200, step: 1, suffix: 'px',
                 type: 'enemyClassSize',
                 enemyClass: 'elite'
             },
             {
                 name: 'Capital Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemyClassSize('capital') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getEnemySizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('enemy', 'capital'))) : '84',
+                min: 12, max: 200, step: 1, suffix: 'px',
                 type: 'enemyClassSize',
                 enemyClass: 'capital'
             },
             {
                 name: 'Player Shots',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSize('player') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'player'))) : '4',
+                min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'player'
             },
             {
                 name: 'Enemy Shots',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSize('enemy') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'enemy'))) : '4',
+                min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'enemy'
             },
             {
                 name: 'Boss Shots',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSize('boss') : 'L',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getShotSizeOptions()
-                    : ['S', 'M', 'L', 'XL', 'XXL'],
+                value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'boss'))) : '4',
+                min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'boss'
             },
@@ -244,51 +235,68 @@ class StartScreenManager {
                 options: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getControlsHintsOptions()
                     : ['ON', 'OFF'],
-                type: 'controlsHints'
+                type: 'controlsHints',
+                tip: 'Show or hide on-screen control hints (Shift+H)'
             },
             {
                 name: 'UI Glow',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('glow')
-                    : 'OFF',
+                    ? String(uiAppearanceManager.getFxPercent('glow'))
+                    : '0',
                 options: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxOptions('glow')
                     : ['OFF', 'LOW', 'MED', 'HIGH'],
                 type: 'uiFx',
-                fxKey: 'glow'
+                fxKey: 'glow',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
             },
             {
                 name: 'Scanlines',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('scanlines')
-                    : 'OFF',
+                    ? String(uiAppearanceManager.getFxPercent('scanlines'))
+                    : '0',
                 options: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxOptions('scanlines')
                     : ['OFF', 'LOW', 'MED', 'HIGH'],
                 type: 'uiFx',
-                fxKey: 'scanlines'
+                fxKey: 'scanlines',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
             },
             {
                 name: 'CRT',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('crt')
-                    : 'OFF',
+                    ? String(uiAppearanceManager.getFxPercent('crt'))
+                    : '0',
                 options: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxOptions('crt')
                     : ['OFF', 'LOW', 'MED', 'HIGH'],
                 type: 'uiFx',
-                fxKey: 'crt'
+                fxKey: 'crt',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
             },
             {
                 name: 'Chroma',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('chroma')
-                    : 'OFF',
+                    ? String(uiAppearanceManager.getFxPercent('chroma'))
+                    : '0',
                 options: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxOptions('chroma')
                     : ['OFF', 'LOW', 'HIGH'],
                 type: 'uiFx',
-                fxKey: 'chroma'
+                fxKey: 'chroma',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
             },
             {
                 name: 'Arcade',

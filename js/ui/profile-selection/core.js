@@ -299,19 +299,27 @@ class ProfileSelectionManager {
             return;
         }
 
+        this._noVisibleProfile = false;
+        this._factionFilter = null;
         const selected = profiles[this.selectedIndex] || null;
         setHtml(`
             <div class="profile-selection-content profile-selection-floating" data-faction="${(selected && selected.faction) || (profiles[0] && profiles[0].faction) || 'pirate'}">
                 <h2 class="profile-selection-title">PROFILES</h2>
                 <div class="profile-selection-body">
                     <div class="profile-list">
+                        <div class="profile-faction-filter">
+                            ${this.getFactionIds().slice(0, 5).map((id) => `
+                                <button type="button" class="profile-faction-btn ${this._factionFilter === id ? 'is-active' : ''}" data-faction="${id}" title="${this.getFactionLabel(id)}">${this.getFactionEmblemHtml(id, 32)}</button>
+                            `).join('')}
+                        </div>
                         ${profiles.length ? profiles.map((p, i) => `
-                            <div class="profile-list-item ${i === this.selectedIndex ? 'selected' : ''} ${p.id === activeId ? 'active' : ''}" data-index="${i}">
+                            <div class="profile-list-item ${i === this.selectedIndex ? 'selected' : ''} ${p.id === activeId ? 'active' : ''}" data-index="${i}" data-faction="${p.faction || 'pirate'}"${this._factionFilter && (p.faction || 'pirate') !== this._factionFilter ? ' hidden' : ''}>
                                 <span class="profile-list-emblem">${this.getFactionEmblemHtml(p.faction || 'pirate', 28)}</span>
                                 <span class="profile-list-name">${p.name}</span>
                                 ${p.id === activeId ? '<span class="profile-list-badge">ACTIVE</span>' : ''}
                             </div>
                         `).join('') : '<div class="profile-list-empty">NO PROFILES — CREATE ONE</div>'}
+                        <div class="profile-list-empty profile-list-filter-empty" hidden>NO PROFILES FOR THIS FACTION</div>
                     </div>
                     <div class="profile-details" id="profileDetails">
                         ${this.renderProfileDetails(selected)}
@@ -763,7 +771,7 @@ class ProfileSelectionManager {
         }).join('');
         const control = pcm && pcm.getGalaxyControl ? pcm.getGalaxyControl(gid) : null;
         const ruler = control && control.main;
-        const emblem = ruler && this.getFactionEmblemHtml ? this.getFactionEmblemHtml(ruler, 20) : '';
+        const crest = ruler && this.getFactionEmblemHtml ? this.getFactionEmblemHtml(ruler, 48) : '';
         const state = control ? (control.control === 'contested' ? 'CONTESTED' : 'HELD') : '';
         return `
             <button type="button" class="profile-start-galaxy-nav" data-galaxy-step="-1" tabindex="-1" aria-label="Previous galaxy">‹</button>
@@ -780,10 +788,10 @@ class ProfileSelectionManager {
             </svg>
             <div class="profile-start-galaxy-info">
                 <button type="button" class="profile-start-galaxy-pick" data-galaxy-pick tabindex="-1" aria-haspopup="listbox" title="Choose a galaxy">
-                    <strong class="profile-start-galaxy-name">${name}</strong><span class="profile-start-galaxy-caret">▾</span>
+                    ${crest ? `<span class="profile-start-galaxy-crest" title="${String(ruler).toUpperCase()}">${crest}</span>` : ''}<strong class="profile-start-galaxy-name">${name}</strong><span class="profile-start-galaxy-caret">▾</span>
                 </button>
                 ${gid === home ? '<span class="profile-start-galaxy-home" title="Faction home galaxy">★ HOME</span>' : ''}
-                ${ruler ? `<span class="profile-start-galaxy-ruler">${emblem}<span>${String(ruler).toUpperCase()} · ${state}</span></span>` : ''}
+                ${ruler ? `<span class="profile-start-galaxy-ruler"><span>${String(ruler).toUpperCase()} · ${state}</span></span>` : ''}
                 <span class="profile-start-galaxy-meta">${nodes.length
                     ? nodes.length + ' PLANETS · START ' + String(map.startPlanetId || '—').toUpperCase()
                     : 'UNCHARTED · ARRIVAL SECTOR CHARTED ON START'}</span>
@@ -1109,12 +1117,74 @@ class ProfileSelectionManager {
                 const map = planetConfigManager.getGalaxyMap && planetConfigManager.getGalaxyMap(gid);
                 if (map && map.nodes && map.nodes.length) total = map.nodes.length;
             }
-            const cleared = (gp.clearedPlanetIds || []).length;
+            const clearedIds = (gp.clearedPlanetIds || []).map((x) => String(x).toLowerCase());
+            const unlockedIds = (gp.unlockedPlanetIds || []).map((x) => String(x).toLowerCase());
+            const cleared = clearedIds.length;
+            // Current planet = where THIS pilot stands in the galaxy: the planet being
+            // played (stages started, not cleared), else the newest unlocked one not yet
+            // cleared (the pilot's own start planet at first), else the last cleared one.
+            // Falls back to the galaxy's shared start planet if the pilot never entered it.
+            let currentPlanetId = null;
+            const open = unlockedIds.filter((id) => clearedIds.indexOf(id) === -1);
+            const stages = gp.stages || {};
+            const started = (id) => {
+                const st = stages[id] || stages[String(id).toUpperCase()] || {};
+                return (Number(st.highestStage) || 0) > 0;
+            };
+            currentPlanetId = open.slice().reverse().find(started)
+                || open[open.length - 1]
+                || clearedIds[clearedIds.length - 1]
+                || null;
+            if (!currentPlanetId && typeof planetConfigManager !== 'undefined') {
+                const map = planetConfigManager.getGalaxyMap && planetConfigManager.getGalaxyMap(gid);
+                const g = planetConfigManager.getGalaxy && planetConfigManager.getGalaxy(gid);
+                currentPlanetId = (map && (map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId)))
+                    || (g && g.planetIds && g.planetIds[0]) || null;
+                if (currentPlanetId) currentPlanetId = String(currentPlanetId).toLowerCase();
+            }
+            // Visited = this pilot has been there. Unvisited galaxies have no active planet.
+            const visited = (typeof profileManager !== 'undefined' && profileManager.hasDiscoveredGalaxy
+                ? profileManager.hasDiscoveredGalaxy(gid, profile) : false) || unlockedIds.length > 0 || cleared > 0;
+            if (!visited) currentPlanetId = null;
+            // One slot per planet of the map, in map order: cleared / open / locked.
+            let slots = [];
+            const gmap = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyMap ? planetConfigManager.getGalaxyMap(gid) : null;
+            if (visited && gmap && gmap.nodes && gmap.nodes.length) {
+                const accentOf = (fid) => {
+                    const st = fid && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(fid) : null;
+                    return (st && st.accent) || '';
+                };
+                const ctl0 = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl ? planetConfigManager.getGalaxyControl(gid) : null;
+                slots = gmap.nodes.map((n) => {
+                    const pid = String(n.planetId).toLowerCase();
+                    const isStart = String(gmap.startPlanetId || '').toLowerCase() === pid;
+                    const state = clearedIds.indexOf(pid) !== -1 ? 'cleared' : ((unlockedIds.indexOf(pid) !== -1 || isStart) ? 'open' : 'locked');
+                    // The faction that rules this very planet (conquests included), else its native one, else the galaxy's ruler.
+                    let owner = null;
+                    try {
+                        owner = (typeof factionManager !== 'undefined' && factionManager.getPlanetOwner ? factionManager.getPlanetOwner(pid) : null)
+                            || ((planetConfigManager.getPlanetFactions ? planetConfigManager.getPlanetFactions(pid) : [])[0])
+                            || (ctl0 && ctl0.main) || null;
+                    } catch (e) { /* ignore */ }
+                    return { state: state, faction: owner, color: accentOf(owner) };
+                });
+            }
+            // Ruling faction's colour for the slots.
+            let color = '';
+            try {
+                const ctl = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl ? planetConfigManager.getGalaxyControl(gid) : null;
+                const st = ctl && ctl.main && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(ctl.main) : null;
+                color = (st && st.accent) || '';
+            } catch (e) { /* ignore */ }
             return {
                 id: gid,
                 name: this.galaxyName(gid),
                 cleared,
                 total,
+                currentPlanetId,
+                visited,
+                slots,
+                color,
                 label: `${cleared}/${total || '?'}`
             };
         });
@@ -1129,8 +1199,10 @@ ProfileSelectionManager.btnIconHtml = function (kind) {
         cancel: 'M1 1h2v1h1v1h1v1h2V3h1V2h1V1h2v2h-1v1h-1v1H8v2h1v1h1v1h1v2H9v-1H8v-1H7v-1H5v1H4v1H3v1H1V9h1V8h1V7h1V5H3V4H2V3H1z',
         save: 'M1 6h2v1h1v1h1V7h1V6h1V5h1V4h1V3h1V2h2v2h-1v1H9v1H8v1H7v1H6v1H5v1H3V9H2V8H1z',
         create: 'M5 1h2v4h4v2H7v4H5V7H1V5h4z',
+        upload: 'M5 1h2v1h1v1h1v1h1v1H8v5H4V6H2V5h1V4h1V3h1z',
+        download: 'M5 11h2v-1h1v-1h1v-1h1v-1H8V1H4v4H2v1h1v1h1v1h1z',
         rename: 'M8 1h2v1h1v2h-1v1H9v1H8v1H7v1H6v1H5v1H4v1H1V8h1V7h1V6h1V5h1V4h1V3h1V2h1z',
         delete: 'M4 1h4v1h3v2H1V2h3zM2 5h8v6H2zM4 6v4h1V6zm3 0v4h1V6z'
     };
-    return `<svg class="ps-btn-icon" viewBox="0 0 12 12" width="12" height="12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[kind] || paths.next}"/></svg>`;
+    return `<svg class="ps-btn-icon" viewBox="0 0 12 12" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[kind] || paths.next}"/></svg>`;
 };

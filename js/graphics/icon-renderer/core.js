@@ -30,6 +30,10 @@ class IconRenderer {
     /** Large draws of sprites with hand-drawn 32x32 art get the @2x/@4x key. */
     detailKey(key, size) {
         const k = String(key || '');
+        // VOXEL combat: keep authored pixels as hard blocks — no Scale2x slopes.
+        const voxel = typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell
+            && window.combatVoxels.cell();
+        if (voxel) return k.replace(/@[24]x$/, '');
         if (/@[24]x$/.test(k) || typeof IconSprites === 'undefined' || !IconSprites[k + 'Hi']) return key;
         const s = Number(size) || 16;
         return s >= 48 ? k + '@4x' : (s >= 24 ? k + '@2x' : key);
@@ -84,13 +88,22 @@ class IconRenderer {
 
     drawKey(ctx, key, x, y, size, tint, contrast, brightness, saturation) {
         key = this.detailKey(key, size);
-        const png = this.getPngOverride(key);
+        const voxel = typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell
+            && window.combatVoxels.cell();
+        // VOXEL: prefer indexed hard cells over PNG stretch.
+        const png = voxel ? null : this.getPngOverride(key);
         if (png) {
             this.drawPng(ctx, png, x, y, size);
             return true;
         }
         const sprite = this.getSprite(key);
         if (!sprite) return false;
+        if (voxel) {
+            const cell = voxel;
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+            size = Math.max(cell, Math.round(size / cell) * cell);
+        }
         this.drawSprite(ctx, sprite, x, y, size, tint, contrast, brightness, saturation);
         return true;
     }
@@ -267,9 +280,13 @@ class IconRenderer {
         const ic = raw ? 50 : (Number.isFinite(Number(contrast)) ? Number(contrast) : this.getIconContrast());
         const ib = raw ? 50 : (Number.isFinite(Number(brightness)) ? Number(brightness) : this.getIconBrightness());
         const is = raw ? 50 : (Number.isFinite(Number(saturation)) ? Number(saturation) : this.getIconSaturation());
-        const x0 = Math.round(x);
-        const y0 = Math.round(y);
-        const dim = Math.max(1, Math.round(size));
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        const x0 = cell ? Math.round(x / cell) * cell : Math.round(x);
+        const y0 = cell ? Math.round(y / cell) * cell : Math.round(y);
+        const dim = cell
+            ? Math.max(cell, Math.round(size / cell) * cell)
+            : Math.max(1, Math.round(size));
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const idx = sprite[r][c];
@@ -283,8 +300,11 @@ class IconRenderer {
                 const pw = (x0 + Math.floor(((c + 1) * dim) / cols)) - px;
                 const ph = (y0 + Math.floor(((r + 1) * dim) / rows)) - py;
                 if (pw < 1 || ph < 1) continue;
-                ctx.fillStyle = color;
-                ctx.fillRect(px, py, pw, ph);
+                if (cv && cv.fill) cv.fill(ctx, px, py, pw, ph, color, 1);
+                else {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(px, py, pw, ph);
+                }
             }
         }
     }

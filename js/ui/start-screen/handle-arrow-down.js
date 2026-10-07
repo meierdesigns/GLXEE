@@ -171,12 +171,17 @@ extendClass(StartScreenManager, {
             return;
         }
 
-        if (item.type === 'globalLook') {
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+            || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             const min = item.min != null ? item.min : 0;
             const max = item.max != null ? item.max : 200;
-            const step = item.step != null ? item.step : 5;
+            const isSizePx = item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize';
+            const step = item.type === 'uiFx' ? 5 : (item.step != null ? item.step : (isSizePx ? 1 : 5));
             const next = Math.max(min, Math.min(max, (Number(item.value) || 0) + direction * step));
             item.value = String(Math.round(next));
+            if (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined') {
+                uiAppearanceManager.setFx(item.fxKey, item.value);
+            }
             if (item.lookKey === 'saturation') {
                 const grayItem = this.settingsItems.find((i) => i.type === 'grayscale');
                 if (grayItem) {
@@ -211,6 +216,9 @@ extendClass(StartScreenManager, {
             }
         }
 
+        if (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined') {
+            uiAppearanceManager.setFx(item.fxKey, item.value);
+        }
         this.applySettings();
         this.refreshSettingsRow(this.settingsIndex);
         this.updateMenuSelection();

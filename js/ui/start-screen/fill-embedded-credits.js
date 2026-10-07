@@ -147,6 +147,20 @@ extendClass(StartScreenManager, {
     },
 
     /** Guarantee the five enemy-class size rows exist (survives stale caches). */
+    sizePxDefaults(kind, id) {
+        if (kind === 'player') return { min: 6, max: 60, fallback: 18 };
+        if (kind === 'shot') return { min: 1, max: 40, fallback: 4 };
+        return { min: 12, max: 200, fallback: ({ scout: 36, assault: 48, heavy: 58, elite: 70, capital: 84 })[id] || 48 };
+    },
+
+    readSizePxSetting(kind, id) {
+        const def = this.sizePxDefaults(kind, id);
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx) {
+            return String(Math.round(uiAppearanceManager.getSizePx(kind, id)));
+        }
+        return String(def.fallback);
+    },
+
     ensureEnemyClassSizeSettings() {
         if (!Array.isArray(this.settingsItems)) this.settingsItems = [];
         const classes = [
@@ -156,52 +170,52 @@ extendClass(StartScreenManager, {
             { id: 'elite', name: 'Elite Size' },
             { id: 'capital', name: 'Capital Size' }
         ];
-        const opts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getEnemySizeOptions)
-            ? uiAppearanceManager.getEnemySizeOptions()
-            : ['S', 'M', 'L', 'XL', 'XXL'];
         // Drop legacy single "Enemy Size" row if present.
         this.settingsItems = this.settingsItems.filter((item) => item && item.type !== 'enemySize');
         let insertAt = this.settingsItems.findIndex((item) => item && item.type === 'shipRenderStyle');
         insertAt = insertAt >= 0 ? insertAt + 1 : this.settingsItems.length;
 
         let playerItem = this.settingsItems.find((s) => s && s.type === 'playerSize');
-        const playerOpts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getPlayerSizeOptions)
-            ? uiAppearanceManager.getPlayerSizeOptions()
-            : opts.slice();
+        const playerDef = this.sizePxDefaults('player');
         if (!playerItem) {
             playerItem = {
                 name: 'Player Size',
-                value: 'L',
-                options: playerOpts.slice(),
+                value: this.readSizePxSetting('player'),
+                min: playerDef.min, max: playerDef.max, step: 1, suffix: 'px',
                 type: 'playerSize'
             };
             this.settingsItems.splice(insertAt, 0, playerItem);
             insertAt += 1;
         } else {
             playerItem.name = 'Player Size';
-            playerItem.options = playerOpts.slice();
-            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getPlayerSize) {
-                playerItem.value = uiAppearanceManager.getPlayerSize();
-            }
+            playerItem.min = playerDef.min;
+            playerItem.max = playerDef.max;
+            playerItem.step = 1;
+            playerItem.suffix = 'px';
+            delete playerItem.options;
+            playerItem.value = this.readSizePxSetting('player');
         }
 
         classes.forEach((cls, i) => {
+            const def = this.sizePxDefaults('enemy', cls.id);
             let item = this.settingsItems.find((s) => s && s.type === 'enemyClassSize' && s.enemyClass === cls.id);
             if (!item) {
                 item = {
                     name: cls.name,
-                    value: 'L',
-                    options: opts.slice(),
+                    value: this.readSizePxSetting('enemy', cls.id),
+                    min: def.min, max: def.max, step: 1, suffix: 'px',
                     type: 'enemyClassSize',
                     enemyClass: cls.id
                 };
                 this.settingsItems.splice(insertAt + i, 0, item);
             } else {
                 item.name = cls.name;
-                item.options = opts.slice();
-            }
-            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getEnemyClassSize) {
-                item.value = uiAppearanceManager.getEnemyClassSize(cls.id);
+                item.min = def.min;
+                item.max = def.max;
+                item.step = 1;
+                item.suffix = 'px';
+                delete item.options;
+                item.value = this.readSizePxSetting('enemy', cls.id);
             }
         });
     },
@@ -214,29 +228,29 @@ extendClass(StartScreenManager, {
             { id: 'enemy', name: 'Enemy Shots' },
             { id: 'boss', name: 'Boss Shots' }
         ];
-        const opts = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSizeOptions)
-            ? uiAppearanceManager.getShotSizeOptions()
-            : ['S', 'M', 'L', 'XL', 'XXL'];
         let insertAt = this.settingsItems.findIndex((item) => item && item.type === 'enemyClassSize'
             && item.enemyClass === 'capital');
         insertAt = insertAt >= 0 ? insertAt + 1 : this.settingsItems.length;
         kinds.forEach((kind, i) => {
+            const def = this.sizePxDefaults('shot', kind.id);
             let item = this.settingsItems.find((s) => s && s.type === 'shotSize' && s.shotKind === kind.id);
             if (!item) {
                 item = {
                     name: kind.name,
-                    value: 'L',
-                    options: opts.slice(),
+                    value: this.readSizePxSetting('shot', kind.id),
+                    min: def.min, max: def.max, step: 1, suffix: 'px',
                     type: 'shotSize',
                     shotKind: kind.id
                 };
                 this.settingsItems.splice(insertAt + i, 0, item);
             } else {
                 item.name = kind.name;
-                item.options = opts.slice();
-            }
-            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSize) {
-                item.value = uiAppearanceManager.getShotSize(kind.id);
+                item.min = def.min;
+                item.max = def.max;
+                item.step = 1;
+                item.suffix = 'px';
+                delete item.options;
+                item.value = this.readSizePxSetting('shot', kind.id);
             }
         });
     },
@@ -252,19 +266,25 @@ extendClass(StartScreenManager, {
         if (typeof uiAppearanceManager !== 'undefined') {
             this.settingsItems.forEach((item) => {
                 if (item.type === 'uiFx' && item.fxKey) {
-                    item.value = uiAppearanceManager.getFxValue(item.fxKey);
+                    item.value = item.fxKey === 'arcade' ? uiAppearanceManager.getFxValue(item.fxKey) : String(uiAppearanceManager.getFxPercent(item.fxKey));
                 }
                 if (item.type === 'shipRenderStyle') {
                     item.value = uiAppearanceManager.shipRenderStyle;
                 }
+                if (item.type === 'voxelSize') {
+                    item.value = String(uiAppearanceManager.voxelSize || '1');
+                    item.options = uiAppearanceManager.getVoxelSizeOptions
+                        ? uiAppearanceManager.getVoxelSizeOptions()
+                        : ['1', '2', '3', '4'];
+                }
                 if (item.type === 'enemyClassSize' && item.enemyClass) {
-                    item.value = uiAppearanceManager.getEnemyClassSize(item.enemyClass);
+                    item.value = this.readSizePxSetting('enemy', item.enemyClass);
                 }
                 if (item.type === 'playerSize') {
-                    item.value = uiAppearanceManager.getPlayerSize();
+                    item.value = this.readSizePxSetting('player');
                 }
                 if (item.type === 'shotSize' && item.shotKind) {
-                    item.value = uiAppearanceManager.getShotSize(item.shotKind);
+                    item.value = this.readSizePxSetting('shot', item.shotKind);
                 }
             });
         }
@@ -388,7 +408,8 @@ extendClass(StartScreenManager, {
             item.type === 'fontMenu' ||
             item.type === 'bgParallax' ||
             item.type === 'controlsHints' ||
-            item.type === 'shipRenderStyle'
+            item.type === 'shipRenderStyle' ||
+            item.type === 'voxelSize'
         );
         addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx');
         addSection(right, 'sound', 'SOUND', (item) =>
@@ -409,6 +430,8 @@ extendClass(StartScreenManager, {
             (item.type === 'action' && item.action !== 'difficultyEditor'
                 && item.action !== 'factionCommand') || item.type === 'assetStatus'
         );
+
+        this.attachShipRenderPreview(bare ? left : middle);
 
         panel.appendChild(left);
         if (!bare) {

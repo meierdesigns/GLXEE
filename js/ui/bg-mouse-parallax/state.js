@@ -124,13 +124,23 @@
         }
     }
 
-    function isHostVisible(host) {
+    // getComputedStyle forces a style recalc when the DOM is dirty; per-frame callers
+    // (applyTransforms) share a short-lived answer instead of recalculating 60x/s.
+    var visCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+
+    function isHostVisible(host, fresh) {
         if (!host || !host.isConnected) return false;
         if (host.classList.contains('hidden')) return false;
+        var now = performance.now();
+        if (!fresh && visCache) {
+            var hit = visCache.get(host);
+            if (hit && now - hit.t < 600) return hit.v;
+        }
         var style = getComputedStyle(host);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
         // Do not check opacity — vf-menu-enter fades from 0 and would skip BG handoff.
-        return true;
+        var visible = !(style.display === 'none' || style.visibility === 'hidden');
+        if (visCache) visCache.set(host, { t: now, v: visible });
+        return visible;
     }
 
     BG.HOST_SELECTOR = HOST_SELECTOR;

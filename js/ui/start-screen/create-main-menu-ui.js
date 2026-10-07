@@ -8,13 +8,18 @@ extendClass(StartScreenManager, {
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
         }
+        // Don't land on a greyed-out entry (e.g. LOAD with no pilots).
+        if (this.isMenuItemLocked(this.menuItems[this.selectedIndex])) {
+            const first = this.menuItems.findIndex((id) => !this.isMenuItemLocked(id));
+            if (first >= 0) this.selectedIndex = first;
+        }
 
         const title = document.createElement('h1');
         title.textContent = 'GLXEE';
         title.className = 'start-screen-title';
 
         const subtitle = document.createElement('p');
-        subtitle.textContent = 'RETRO SPACE SHOOTER';
+        subtitle.textContent = '...a MRDSN Production';
         subtitle.className = 'start-screen-subtitle';
 
         const menu = document.createElement('div');
@@ -37,18 +42,21 @@ extendClass(StartScreenManager, {
                 const index = flatIndex;
                 flatIndex += 1;
                 const itemId = entry.id;
+                const locked = this.isMenuItemLocked(itemId);
                 const menuItem = document.createElement('div');
                 const primaryClass = entry.primary ? ' menu-item-primary' : '';
-                menuItem.className = `menu-item${primaryClass}${index === this.selectedIndex ? ' selected' : ''}`;
+                const lockedClass = locked ? ' locked' : '';
+                menuItem.className = `menu-item${primaryClass}${lockedClass}${index === this.selectedIndex ? ' selected' : ''}`;
                 menuItem.dataset.menuIndex = String(index);
                 menuItem.dataset.cluster = cluster.id;
+                if (locked) menuItem.setAttribute('aria-disabled', 'true');
 
                 const iconWrap = document.createElement('span');
                 iconWrap.className = 'menu-item-icon';
                 const iconKey = entry.icon || this.menuIconById[itemId];
                 if (typeof iconRenderer !== 'undefined' && iconKey) {
                     // Big chunky variant where one exists, shown at 64 px.
-                    const hdKey = { hsStation: 'menuStationHd', menuProfiles: 'menuProfilesHd', menuSettings: 'menuSettingsHd', menuCredits: 'menuCreditsHd' }[iconKey];
+                    const hdKey = { hsStation: 'menuStationHd', menuProfiles: 'menuProfilesHd', menuLoad: 'menuLoadHd', menuNewPilot: 'menuNewPilotHd', menuSettings: 'menuSettingsHd', menuCredits: 'menuCreditsHd' }[iconKey];
                     const hd = hdKey && typeof IconSprites !== 'undefined' && IconSprites[hdKey];
                     iconWrap.innerHTML = iconRenderer.imgHtml(hd ? hdKey : iconKey, hd ? 64 : 48, 'menu-pixel-icon');
                 }
@@ -60,7 +68,11 @@ extendClass(StartScreenManager, {
                 label.textContent = entry.label || itemId;
                 text.appendChild(label);
                 // Description lives in the tooltip, not as a subline
-                if (entry.desc) menuItem.dataset.uiTip = entry.desc;
+                if (locked && itemId === 'PROFILES') {
+                    menuItem.dataset.uiTip = 'No pilots to load — create a new pilot first';
+                } else if (entry.desc) {
+                    menuItem.dataset.uiTip = entry.desc;
+                }
 
                 menuItem.appendChild(iconWrap);
                 menuItem.appendChild(text);
@@ -69,6 +81,7 @@ extendClass(StartScreenManager, {
                     this.updateMenuSelection();
                 });
                 menuItem.addEventListener('click', () => {
+                    if (locked) return;
                     this.selectedIndex = index;
                     this.updateMenuSelection();
                     this.selectMenuItem();
@@ -188,38 +201,9 @@ extendClass(StartScreenManager, {
         const header = document.createElement('div');
         header.className = 'hs-menu-panel-header';
 
+        // The MENU panel no longer lists the game title / profile line (the pilot card shows it).
         const brand = document.createElement('div');
         brand.className = 'hs-menu-panel-brand';
-        const title = document.createElement('h1');
-        title.className = 'start-screen-title hs-menu-panel-title';
-        title.textContent = 'GLXEE';
-        const profileLine = document.createElement('p');
-        profileLine.className = 'start-screen-profile hs-menu-panel-profile';
-        if (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
-            const p = profileManager.getActiveProfile();
-            profileLine.textContent = `PROFILE: ${p.name}`;
-        } else {
-            profileLine.textContent = 'PROFILE: NONE';
-            profileLine.classList.add('no-profile');
-        }
-        brand.appendChild(title);
-        brand.appendChild(profileLine);
-        // PLAY lives in the menu (not the station nav): straight into the map.
-        const station = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible ? homeStationUI : null;
-        if (station && station.renderPlayLaunch) {
-            const wrap = document.createElement('div');
-            wrap.innerHTML = station.renderPlayLaunch();
-            Array.from(wrap.children).forEach((el) => {
-                if (el.matches('[data-play-launch]')) {
-                    el.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        station.launchPlay();
-                    });
-                }
-                brand.appendChild(el);
-            });
-        }
         header.appendChild(brand);
 
         const tabs = document.createElement('div');
@@ -320,7 +304,7 @@ extendClass(StartScreenManager, {
                     row.hidden = !!f && row.getAttribute('data-faction') !== f;
                 });
                 filterBar.querySelectorAll('[data-profile-filter]').forEach((b) => {
-                    const on = b.getAttribute('data-profile-filter') === (f || '');
+                    const on = !!f && b.getAttribute('data-profile-filter') === f;
                     b.classList.toggle('is-active', on);
                     b.setAttribute('aria-pressed', on ? 'true' : 'false');
                 });
@@ -329,24 +313,26 @@ extendClass(StartScreenManager, {
             filterBar.className = 'hs-menu-profile-filters';
             filterBar.setAttribute('role', 'group');
             filterBar.setAttribute('aria-label', 'Filter by faction');
-            ['', ...factions].forEach((f) => {
+            // The five faction buttons are the only filter: one at a time, none = show all.
+            factions.forEach((f) => {
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'hs-menu-profile-filter';
                 b.setAttribute('data-profile-filter', f);
-                const count = f ? profiles.filter((p) => (p.faction || 'pirate') === f).length : profiles.length;
+                const count = profiles.filter((p) => (p.faction || 'pirate') === f).length;
                 const emblem = f && typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
                     ? profileSelectionManager.getFactionEmblemHtml(f, 24)
                     : '';
                 b.innerHTML = emblem ? `<span class="hs-menu-profile-filter-ico">${emblem}</span>` : '';
-                b.appendChild(document.createTextNode(f ? f.toUpperCase() : 'ALL'));
+                b.appendChild(document.createTextNode(f.toUpperCase()));
                 if (!count) b.classList.add('is-empty');
                 if (f && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
                     const st = factionShipStyles.getFactionStyle(f);
                     if (st && st.accent) b.style.setProperty('--row-accent', st.accent);
                 }
                 b.addEventListener('click', () => {
-                    this._profileFactionFilter = f || null;
+                    // Clicking the active faction again clears the filter.
+                    this._profileFactionFilter = this._profileFactionFilter === f ? null : f;
                     applyFilter();
                 });
                 filterBar.appendChild(b);

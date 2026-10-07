@@ -24,7 +24,6 @@ const MENU_ORDER = {
         'shop'
     ],
     esc: [
-        'profiles',
         'settings',
         'layout',
         'assets',
@@ -40,12 +39,12 @@ const MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // tabs of the active area show up next to it as small icon tabs.
 // The first tab of an area is where a click on the area lands first.
 const MENU_AREAS = [
-    { id: 'station', label: 'HOME STATION', icon: 'hsStation', tabs: ['station', 'hangar'], defaultTab: 'station' },
+    { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station', 'hangar'], defaultTab: 'station' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
     { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
     { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
-    { id: 'explore', label: 'EXPLORATIONS', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
+    { id: 'explore', label: 'WIKI', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
 ];
 
 const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
@@ -78,6 +77,32 @@ const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
         MENU_ORDER.esc = saved.esc.concat(MENU_ORDER.esc.filter(isNew)).filter((id) => id !== 'station');
     } catch (e) { /* ignore */ }
 })();
+
+// ---- Top bar order (dev mode: drag the area buttons and '|' dividers) ----
+// A list of area ids, 'profiles', 'menu' and '|' dividers; normalised on every read so
+// areas added or removed in the LAYOUT editor always appear exactly once.
+const MENU_AREA_ORDER_KEY = 'vf.areaOrder';
+
+function getAreaOrder() {
+    const ids = MENU_AREAS.map((a) => a.id).concat(['profiles', 'menu']);
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(MENU_AREA_ORDER_KEY) || 'null'); } catch (e) { /* ignore */ }
+    const out = [];
+    (Array.isArray(saved) ? saved : []).forEach((id) => {
+        if (id === '|') out.push('|');
+        else if (ids.indexOf(id) !== -1 && out.indexOf(id) === -1) out.push(id);
+    });
+    ids.forEach((id) => {
+        if (out.indexOf(id) !== -1) return;
+        if (out.length && out[out.length - 1] !== '|') out.push('|');
+        out.push(id);
+    });
+    return out;
+}
+
+function saveAreaOrder(list) {
+    try { localStorage.setItem(MENU_AREA_ORDER_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+}
 
 function saveMenuOrder() {
     try {

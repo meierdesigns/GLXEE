@@ -15,7 +15,7 @@ const VFStartIntro = {
         style.id = 'vf-start-intro-style';
         style.textContent = `
 .vf-start-intro { position: fixed; inset: 0; z-index: 100000; background: #05060a; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; transition: opacity 400ms steps(4); }
+    display: flex; align-items: center; justify-content: center; transition: opacity 600ms ease-out; }
 .vf-start-intro.is-leaving { opacity: 0; pointer-events: none; }
 .vf-start-intro canvas { width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
 .vf-start-intro::after { content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -203,7 +203,7 @@ const VFStartIntro = {
                     window.removeEventListener('resize', resize);
                     if (root.parentNode) root.parentNode.removeChild(root);
                     this.active = false;
-                }, 450);
+                }, 650);
             };
             const onKey = (e) => {
                 // Swallow the skip input so it does not also trigger a menu action
@@ -213,7 +213,8 @@ const VFStartIntro = {
             };
             window.addEventListener('keydown', onKey, true);
             root.addEventListener('pointerdown', onKey);
-            const timer = setTimeout(finish, opts.duration || this.duration);
+            // Stays until the player clicks / presses a key (only auto-leaves if a duration is passed)
+            const timer = opts.duration ? setTimeout(finish, opts.duration) : 0;
         });
     }
 };

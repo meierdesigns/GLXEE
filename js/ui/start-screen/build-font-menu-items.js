@@ -129,6 +129,17 @@ extendClass(StartScreenManager, {
         return typeof profileManager !== 'undefined' && profileManager.hasActiveProfile();
     },
 
+    hasAnyProfiles() {
+        return typeof profileManager !== 'undefined'
+            && typeof profileManager.getProfiles === 'function'
+            && profileManager.getProfiles().length > 0;
+    },
+
+    isMenuItemLocked(itemId) {
+        if (itemId === 'PROFILES') return !this.hasAnyProfiles();
+        return false;
+    },
+
     /** Hub after leave/quit: Station when profile loaded, else start menu. */
     returnToHub(options) {
         const opts = options || {};

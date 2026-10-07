@@ -121,16 +121,23 @@
                 if (mutationsAreSelfOnly(mutations)) return;
 
                 var urgent = false;
+                var relevant = false;
                 for (var i = 0; i < mutations.length; i++) {
                     var m = mutations[i];
                     if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
-                        urgent = true;
-                        break;
+                        // Only hosts being added / removed matter; planet frames, map
+                        // nodes etc. swap children constantly and must not re-sync.
+                        if (touchesHost(m.addedNodes) || touchesHost(m.removedNodes)) {
+                            urgent = true;
+                            break;
+                        }
+                        continue;
                     }
                     if (m.type === 'attributes' && m.attributeName === 'data-hs-tab') {
                         urgent = true;
                         break;
                     }
+                    if (m.type === 'attributes') relevant = true;
                 }
                 // New overlays / tab BGs: sync in the same turn (before paint) so ::before never flashes.
                 if (urgent) {
@@ -141,6 +148,7 @@
                     collectHosts();
                     return;
                 }
+                if (!relevant) return;
                 if (obsTimer) return;
                 obsTimer = setTimeout(function () {
                     obsTimer = 0;
@@ -154,6 +162,15 @@
                 attributeFilter: ['class', 'style', 'data-hs-tab', 'hidden']
             });
         }
+    }
+
+    function touchesHost(list) {
+        for (var i = 0; i < list.length; i++) {
+            var n = list[i];
+            if (n.nodeType !== 1) continue;
+            if (n.matches(BG.HOST_SELECTOR) || n.querySelector(BG.HOST_SELECTOR)) return true;
+        }
+        return false;
     }
 
     function schedule() {

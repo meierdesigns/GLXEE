@@ -128,6 +128,7 @@ extendClass(StartScreenManager, {
 
     selectMenuItem() {
         const selectedItem = this.menuItems[this.selectedIndex];
+        if (this.isMenuItemLocked(selectedItem)) return;
 
         switch (selectedItem) {
             case 'PROFILES':

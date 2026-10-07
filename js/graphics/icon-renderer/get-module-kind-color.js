@@ -167,7 +167,21 @@ extendClass(IconRenderer, {
         return Math.round((16 * k / dpr) * 1000) / 1000;
     },
 
+    /** Resource icons: fixed resource color (16x16 sprite grid, shown at 16·k px), never theme/faction tinted. */
+    resourceIconColor(key) {
+        const ids = { menuCredits: 'credits', resScrap: 'scrap', resOre: 'ore', resCrystal: 'crystal', resVoltex: 'voltex' };
+        const id = ids[key];
+        if (!id) return null;
+        if (id === 'credits') return '#e8c85a';
+        try {
+            if (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor) return economyConfig.getResourceColor(id);
+        } catch (e) { /* ignore */ }
+        return null;
+    },
+
     imgHtml(key, size, className, tint, tipLabel) {
+        const resTint = this.resourceIconColor(key);
+        if (resTint) tint = resTint;
         const resolvedTint = tint === undefined ? this.getThemeTint() : tint;
         // HTML UI icons: nearest-neighbor only — no contrast/brightness/saturation remapping
         const packed = this.toDataUrl(key, size || 16, resolvedTint || null, false, false, false);

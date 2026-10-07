@@ -56,12 +56,21 @@ class UiTooltipManager {
 
     resolveTip(target) {
         if (!target || !target.closest) return null;
-        const el = target.closest('[data-ui-tip]');
+        // Prefer data-ui-tip; also adopt native title= so browser chrome never shows.
+        const el = target.closest('[data-ui-tip], [title]');
         if (!el || !el.isConnected) return null;
         // Rich host tooltips (upgrade tree) own their hover chrome.
         if (el.closest('.hs-upg-node')) return null;
-        const tip = el.getAttribute('data-ui-tip');
-        if (!tip || !String(tip).trim()) return null;
+        // <title> inside SVG is not an attribute tip.
+        if (el.tagName === 'title') return null;
+        let tip = el.getAttribute('data-ui-tip');
+        if (!tip || !String(tip).trim()) {
+            tip = el.getAttribute('title');
+            if (!tip || !String(tip).trim()) return null;
+            // Move title → data-ui-tip once so the OS tooltip never appears.
+            el.setAttribute('data-ui-tip', tip);
+            el.removeAttribute('title');
+        }
         return { el: el, tip: String(tip).trim() };
     }
 

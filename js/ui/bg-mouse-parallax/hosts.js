@@ -26,7 +26,7 @@
         var glow = host.querySelector(':scope > .vf-bg-parallax-glow');
         if (!base || !glow) return;
 
-        var visible = isHostVisible(host);
+        var visible = isHostVisible(host, true);
         if (!visible) {
             host.dataset.vfBgWasHidden = '1';
             clearIncoming(host);
@@ -203,7 +203,7 @@
             var top = getTopVisibleHost(list);
             for (var i = 0; i < list.length; i++) {
                 var h = list[i];
-                if (!isHostVisible(h)) {
+                if (!isHostVisible(h, true)) {
                     h.dataset.vfBgWasHidden = '1';
                     clearIncoming(h);
                     continue;

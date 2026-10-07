@@ -40,16 +40,303 @@
         };
     }
 
+    const STAGE_ASPECT = 4 / 3;
+    const STAGE_MARGIN = 50;
+    const LAYOUT_W = 1280;
+
+    // Selectable resolutions (4:3). The layout is always identical (LAYOUT_W); the
+    // resolution only sets the displayed size of the screen, capped by the window.
+    const RES_STEPS = [640, 800, 1024, 1280, 1440, 1600, 1920, 2560];
+    const RES_KEY = 'vf-stage-res';
+    let resIndex = 5;
+    try {
+        const saved = parseInt(localStorage.getItem(RES_KEY), 10);
+        if (saved >= 0 && saved < RES_STEPS.length) resIndex = saved;
+    } catch (e) { /* storage unavailable */ }
+
+    // The layout always runs at the chosen logical resolution (RES x RES*3/4);
+    // the whole stage is then scaled uniformly (CSS transform) to fit the window
+    // with at least STAGE_MARGIN px on every side. Proportions never change.
     function viewportSize() {
         const vv = window.visualViewport;
+        let w = window.innerWidth || document.documentElement.clientWidth || 800;
+        let h = window.innerHeight || document.documentElement.clientHeight || 600;
         if (vv && vv.width > 0 && vv.height > 0) {
-            return { vw: vv.width, vh: vv.height };
+            w = vv.width;
+            h = vv.height;
         }
-        return {
-            vw: window.innerWidth || document.documentElement.clientWidth || 800,
-            vh: window.innerHeight || document.documentElement.clientHeight || 600
-        };
+        // Layout is ALWAYS LAYOUT_W x LAYOUT_H, so every resolution looks identical;
+        // the chosen resolution only sets the displayed size (capped by the window).
+        const lw = LAYOUT_W;
+        const lh = LAYOUT_W / STAGE_ASPECT;
+        // Browser zoom changes devicePixelRatio: measure margin and resolution in device
+        // pixels so the screen keeps its physical size when the page is zoomed.
+        const dpr = window.devicePixelRatio || 1;
+        const m = STAGE_MARGIN / dpr;
+        const fit = Math.min((w - m * 2) / lw, (h - m * 2) / lh);
+        const scale = Math.max(0.05, Math.min(fit, RES_STEPS[resIndex] / LAYOUT_W / dpr));
+        return { vw: lw, vh: Math.round(lh), scale: scale };
     }
+
+    function resLabel(real) {
+        return RES_STEPS[resIndex] + '×' + Math.round(RES_STEPS[resIndex] * 3 / 4);
+    }
+
+    // Global bezel around the stage with the resolution slider.
+    function ensureBezel() {
+        let el = document.getElementById('vf-res');
+        if (el) return el;
+        // The frame is static in index.html (painted with the first frame); create only as a fallback.
+        if (!document.getElementById('vf-bezel')) {
+            const frame = document.createElement('div');
+            frame.id = 'vf-bezel';
+            frame.className = 'vf-bezel';
+            const back = document.createElement('div');
+            back.className = 'vf-bezel-back';
+            back.setAttribute('aria-hidden', 'true');
+            frame.appendChild(back);
+            document.body.appendChild(frame);
+        }
+        el = document.createElement('label');
+        el.id = 'vf-res';
+        el.className = 'vf-bezel-res';
+        el.style.display = 'none';
+        el.innerHTML = '<span>RES</span>' +
+            '<input type="range" id="vfResSlider" min="0" max="' + (RES_STEPS.length - 1) + '" step="1" aria-label="Resolution">' +
+            '<output id="vfResValue"></output>';
+        // Child of <html>, not of the scaled body, so the slider keeps its pixel size.
+        document.documentElement.appendChild(el);
+        const input = el.querySelector('input');
+        const out = el.querySelector('output');
+        const fill = function () { input.style.setProperty('--look-fill', (input.value / (RES_STEPS.length - 1) * 100) + '%'); };
+        input.value = String(resIndex);
+        fill();
+        // Dragging only previews the label; the stage resizes on release so the
+        // slider never moves under the cursor.
+        input.addEventListener('input', function () {
+            fill();
+            const i = parseInt(input.value, 10) || 0;
+            out.textContent = RES_STEPS[i] + '×' + Math.round(RES_STEPS[i] * 3 / 4);
+        });
+        input.addEventListener('change', function () {
+            resIndex = parseInt(input.value, 10) || 0;
+            try { localStorage.setItem(RES_KEY, String(resIndex)); } catch (e) { /* ignore */ }
+            update(true);
+        });
+        ['keydown', 'keyup'].forEach(function (t) {
+            input.addEventListener(t, function (e) { e.stopPropagation(); });
+        });
+        return el;
+    }
+
+    // All tool icons are drawn on the same 16x16 pixel grid.
+    // Every icon: 16x16 grid, 2px strokes, square caps, no fills.
+    const svg16 = function (body) {
+        return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true">' + body + '</svg>';
+    };
+    const RES_ICON = svg16('<rect x="2" y="3" width="12" height="8"/><path d="M8 11v3M5 14h6"/>');
+    const FS_ON = svg16('<path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4"/>');
+    const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
+    const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
+    let resOpen = false;
+
+    // Bezel tools (top strip): RES icon (opens the slider), fullscreen (every screen),
+    // logout (station only). Fullscreen / logout mirror the real buttons.
+    function syncBezelTools() {
+        const frame = document.getElementById('vf-bezel');
+        if (!frame) return;
+        let tools = frame.querySelector('.vf-bezel-tools');
+        const fs = document.querySelector('#vfFullscreenBtn') || document.querySelector('.home-station-overlay .hs-fullscreen-btn');
+        const lo = document.querySelector('.home-station-overlay #hsLogout');
+        const srcs = [fs, lo].filter(Boolean);
+        const sig = srcs.map(function (x) { return (x.id || '') + '|' + x.innerHTML; }).join(',');
+        if (tools && tools.dataset.sig === sig) return;
+        const first = !tools;
+        if (tools) tools.remove();
+        tools = document.createElement('div');
+        tools.className = 'vf-bezel-tools';
+        tools.dataset.sig = sig;
+        const mk = function (title, html, onClick) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+            btn.innerHTML = html;
+            btn.addEventListener('click', function (e) { e.stopPropagation(); onClick(); });
+            tools.appendChild(btn);
+            return btn;
+        };
+        const resBtn = mk('Resolution', RES_ICON, function () {
+            resOpen = !resOpen;
+            resBtn.classList.toggle('is-open', resOpen);
+            placeResPlate();
+        });
+        resBtn.classList.toggle('is-open', resOpen);
+        srcs.forEach(function (src) {
+            const isFs = src === fs;
+            const html = isFs ? (src.innerHTML.indexOf('M3 0h1') !== -1 ? FS_ON : FS_OFF) : (src === lo ? POWER : src.innerHTML);
+            mk(src.title || src.getAttribute('aria-label') || '', html, function () { src.click(); });
+        });
+        frame.appendChild(tools);
+        tools.style.pointerEvents = 'auto';
+        if (first || true) requestAnimationFrame(placeResPlate);
+    }
+    new MutationObserver(function () { syncBezelTools(); })
+        .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+
+    // The slider plate (fixed pixel size, outside the scaled stage) unfolds to the
+    // left of the tool buttons, inside the bezel's top strip.
+    function placeResPlate() {
+        const plate = document.getElementById('vf-res');
+        const tools = document.querySelector('.vf-bezel-tools');
+        if (!plate) return;
+        plate.style.display = resOpen && tools ? 'inline-flex' : 'none';
+        if (!resOpen || !tools) return;
+        const r = tools.getBoundingClientRect();
+        const hh = Math.max(14, Math.min(22, Math.round(r.height)));
+        plate.style.height = hh + 'px';
+        plate.style.top = Math.round(r.top + (r.height - hh) / 2) + 'px';
+        plate.style.left = Math.round(r.left - 8 - plate.offsetWidth) + 'px';
+    }
+
+    // Cables running from the bezel out to the window edge (decor, window space only).
+    function drawCables(w, h, real) {
+        let svg = document.getElementById('vf-cables');
+        if (!svg) {
+            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = 'vf-cables';
+            svg.setAttribute('aria-hidden', 'true');
+            svg.setAttribute('shape-rendering', 'crispEdges');
+            document.documentElement.insertBefore(svg, document.body);
+        }
+        const k = real.scale;
+        const sw = real.vw * k, sh = real.vh * k;
+        const sx = (w - sw) / 2, sy = (h - sh) / 2;
+        svg.setAttribute('width', w);
+        svg.setAttribute('height', h);
+        svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+        const MIN = 28;
+        const t = Math.max(10, Math.round(16 * k));
+        let out = '';
+        // axis: 'h' cables leave left/right sides, 'v' leave top/bottom; frac = position along the edge
+        const cable = function (pts, key) {
+            const d = 'M' + pts.map(function (q) { return Math.round(q[0]) + ' ' + Math.round(q[1]); }).join('L');
+            out += '<path d="' + d + '" fill="none" stroke="#05060a" stroke-width="' + (t + 4) + '" stroke-linejoin="miter"/>' +
+                '<path d="' + d + '" fill="none" stroke="#3a4150" stroke-width="' + t + '" stroke-linejoin="miter"/>' +
+                '<path d="' + d + '" fill="none" stroke="#6a7488" stroke-width="' + Math.max(2, Math.round(t / 4)) +
+                '" stroke-linejoin="miter" transform="translate(' + (key === 'v' ? -Math.round(t / 4) + ' 0' : '0 ' + -Math.round(t / 4)) + ')"/>';
+        };
+        const plug = function (x, y, horiz, dir) {
+            const L = Math.round(20 * k + 8), T = t + 8;
+            const rx = horiz ? (dir < 0 ? x - L : x) : x - T / 2;
+            const ry = horiz ? y - T / 2 : (dir < 0 ? y - L : y);
+            const rw = horiz ? L : T, rh = horiz ? T : L;
+            out += '<rect x="' + Math.round(rx) + '" y="' + Math.round(ry) + '" width="' + Math.round(rw) + '" height="' + Math.round(rh) + '" fill="#0c0e12" stroke="#2c313b" stroke-width="2"/>' +
+                '<rect x="' + Math.round(horiz ? rx + (dir < 0 ? 2 : rw - 6) : rx + 2) + '" y="' + Math.round(horiz ? ry + 2 : ry + (dir < 0 ? 2 : rh - 6)) + '" width="' + (horiz ? 4 : Math.round(rw - 4)) + '" height="' + (horiz ? Math.round(rh - 4) : 4) + '" fill="var(--color-primary, #3dff6a)"/>';
+        };
+        [[0.2, 0.55, 0.8], [0.3, 0.7]].forEach(function (fr, i) {
+            // left (i=0) / right (i=1)
+            const m = i === 0 ? sx : w - (sx + sw);
+            if (m < MIN) return;
+            fr.forEach(function (f, j) {
+                const y = sy + sh * f, dy = (j % 2 ? 1 : -1) * Math.min(40, m * 0.5);
+                const x0 = i === 0 ? sx : sx + sw;
+                const dir = i === 0 ? -1 : 1;
+                const xe = i === 0 ? 0 : w;
+                const xm = x0 + dir * m * 0.45;
+                plug(x0, y, true, dir);
+                const xp = x0 + dir * (Math.round(20 * k + 8));
+                cable([[xp, y], [xm, y], [xm, y + dy], [xe, y + dy]], 'h');
+            });
+        });
+        [[0.25, 0.75], [0.5]].forEach(function (fr, i) {
+            const m = i === 0 ? sy : h - (sy + sh);
+            if (m < MIN) return;
+            fr.forEach(function (f, j) {
+                const x = sx + sw * f, dx = (j % 2 ? 1 : -1) * Math.min(40, m * 0.5);
+                const y0 = i === 0 ? sy : sy + sh;
+                const dir = i === 0 ? -1 : 1;
+                const ye = i === 0 ? 0 : h;
+                const ym = y0 + dir * m * 0.45;
+                plug(x, y0, false, dir);
+                const yp = y0 + dir * (Math.round(20 * k + 8));
+                cable([[x, yp], [x, ym], [x + dx, ym], [x + dx, ye]], 'v');
+            });
+        });
+        svg.innerHTML = out;
+    }
+
+    // Pilot display in the bezel's top strip: crest, name, resources of the active pilot,
+    // or an "empty screen" graphic when none is selected.
+    function pilotPlateHtml() {
+        let p = null;
+        try { p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null; } catch (e) { p = null; }
+        if (!p) {
+            return '<span class="vf-pilot-empty" title="No pilot selected"><i></i><b>NO SIGNAL</b></span>';
+        }
+        const esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+        const ico = function (key) {
+            return (typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml && key) ? iconRenderer.imgHtml(key, 16, 'hs-pixel') : '';
+        };
+        const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds) ? economyConfig.resourceIds : ['scrap', 'ore', 'crystal', 'voltex'];
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits) ? profileManager.getCredits(p) : (Number(p.credits) || 0);
+        const res = ['credits'].concat(ids).map(function (id) {
+            const key = (typeof homeStationUI !== 'undefined' && homeStationUI.resourceIconKey) ? homeStationUI.resourceIconKey(id) : null;
+            const v = id === 'credits' ? credits : Math.round(Number((p.resources || {})[id]) || 0);
+            return '<span class="vf-pilot-res" title="' + esc(id.toUpperCase()) + '">' + ico(key) + '<b>' + v + '</b></span>';
+        }).join('');
+        const fac = String(p.faction || 'pirate').toLowerCase();
+        const big = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
+            ? profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64) : '';
+        return '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>' + res;
+    }
+    let pilotSig = '';
+    function syncPilotPlate() {
+        const frame = document.getElementById('vf-bezel');
+        if (!frame) return;
+        const frameEl = document.getElementById('vf-bezel');
+        let fac = 'terran';
+        try {
+            const ap = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null;
+            if (ap && ap.faction) fac = String(ap.faction).toLowerCase();
+        } catch (e) { /* default */ }
+        // While a faction is being picked, the picker drives the bezel; release it afterwards.
+        if (frameEl && frameEl.hasAttribute('data-preview')) {
+            if (document.querySelector('.profile-selection-name-mode')) fac = frameEl.getAttribute('data-faction') || fac;
+            else {
+                frameEl.removeAttribute('data-preview');
+                frameEl.style.removeProperty('--retro-ink');
+                frameEl.style.removeProperty('--color-primary');
+            }
+        }
+        if (frameEl && frameEl.getAttribute('data-faction') !== fac) {
+            // Cross-fade between faction frames (clip-paths cannot be tweened).
+            if (frameEl.dataset.fresh) {
+                frameEl.classList.add('is-switching');
+                setTimeout(function () { frameEl.setAttribute('data-faction', fac); frameEl.classList.remove('is-switching'); }, 140);
+            } else {
+                frameEl.setAttribute('data-faction', fac);
+                frameEl.dataset.fresh = '1';
+            }
+        } else if (frameEl) { frameEl.dataset.fresh = '1'; }
+        if (ROOT.getAttribute('data-vf-faction') !== fac) ROOT.setAttribute('data-vf-faction', fac);
+        try { if (!frameEl.hasAttribute('data-preview')) localStorage.setItem('vf-faction', fac); } catch (e) { /* ignore */ }
+        if (frameEl && !frameEl.querySelector('.vf-bezel-deco')) {
+            const d = document.createElement('div');
+            d.className = 'vf-bezel-deco';
+            frameEl.insertBefore(d, frameEl.firstChild);
+        }
+        const html = pilotPlateHtml();
+        let el = frame.querySelector('.vf-pilot-plate');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'vf-pilot-plate';
+            frame.appendChild(el);
+            pilotSig = '';
+        }
+        if (html !== pilotSig) { pilotSig = html; el.innerHTML = html; }
+    }
+    setInterval(syncPilotPlate, 700);
 
     function guiZoom() {
         return clamp(readCssNumber('--gui-zoom', 1), 0.25, 4);
@@ -161,7 +448,22 @@
 
         ROOT.style.setProperty('--vw', real.vw + 'px');
         ROOT.style.setProperty('--vh', real.vh + 'px');
-        const zoom = guiZoom();
+        if (document.body) {
+            ensureBezel();
+            syncBezelTools();
+            syncPilotPlate();
+            requestAnimationFrame(placeResPlate);
+            drawCables(window.innerWidth, window.innerHeight, real);
+            const out = document.getElementById('vfResValue');
+            if (out) out.textContent = resLabel(real);
+        }
+        // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size
+        ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
+        // The fight HUD is taller than the menus: zoom out a little while it is on screen.
+        const gc = document.querySelector('.game-container');
+        const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
+        const zoom = guiZoom() * (inFight ? 0.85 : 1);
+        ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
         const vw = real.vw / zoom;
         const vh = real.vh / zoom;
 

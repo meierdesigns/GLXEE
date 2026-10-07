@@ -1,0 +1,39 @@
+"use strict";
+// Runs in <head>: sets the stage size/scale before the first paint so a refresh
+// never flashes the unscaled layout. Same math as viewport-fit.js.
+(function () {
+    var STEPS = [640, 800, 1024, 1280, 1440, 1600, 1920, 2560];
+    var idx = 5;
+    try {
+        var saved = parseInt(localStorage.getItem('vf-stage-res'), 10);
+        if (saved >= 0 && saved < STEPS.length) idx = saved;
+    } catch (e) { /* ignore */ }
+    var vv = window.visualViewport;
+    var w = (vv && vv.width) || window.innerWidth || 800;
+    var h = (vv && vv.height) || window.innerHeight || 600;
+    var LW = 1280, LH = 960, M = 50;
+    var dpr = window.devicePixelRatio || 1;
+    var m = M / dpr;
+    var fit = Math.min((w - m * 2) / LW, (h - m * 2) / LH);
+    var scale = Math.max(0.05, Math.min(fit, STEPS[idx] / LW / dpr));
+    // Last known faction: styles the frame from the very first paint (no terran -> faction jump).
+    try {
+        var f = localStorage.getItem('vf-faction');
+        if (f) {
+            document.documentElement.setAttribute('data-vf-faction', f);
+            document.addEventListener('DOMContentLoaded', function () {
+                var b = document.getElementById('vf-bezel');
+                if (b) b.setAttribute('data-faction', f);
+            });
+        }
+    } catch (e) { /* ignore */ }
+    // Animations/transitions stay off until the first render has settled (no load-time jumping).
+    document.documentElement.classList.add('vf-loading');
+    window.addEventListener('load', function () {
+        setTimeout(function () { document.documentElement.classList.remove('vf-loading'); }, 900);
+    });
+    var r = document.documentElement.style;
+    r.setProperty('--vw', LW + 'px');
+    r.setProperty('--vh', LH + 'px');
+    r.setProperty('--stage-scale', String(Number(scale.toFixed(5))));
+})();

@@ -7,14 +7,17 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="preload" href="assets/fonts/Silkscreen-700.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="css/fonts.css">
-    <link rel="stylesheet" href="styles.css?v=fight-fill-1">
+    <link rel="stylesheet" href="styles.css?v=stage-2">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
+    <script src="js/core/stage-boot.js"></script>
     <script src="js/core/reload-keys.js?v=f4-3"></script>
     <script src="js/core/zoom-rect-fix.js"></script>
     <script src="js/graphics/pixel-cursors.js?v=pull-1"></script>
 </head>
 <body>
+    <div id="vf-bezel" class="vf-bezel"><div class="vf-bezel-back" aria-hidden="true"></div></div>
+    <script>try{var f=localStorage.getItem("vf-faction");if(f)document.getElementById("vf-bezel").setAttribute("data-faction",f)}catch(e){}</script>
     <!-- Pre-boot cover: solid dark until the menu is built (core.js reuses and later fades it) -->
     <div id="vf-boot-veil" class="vf-boot-veil" style="width:100%;height:100%"></div>
     <div class="game-container">
@@ -288,7 +291,7 @@
     <script src="js/core/cheat-system.js"></script>
     <script src="js/core/settings-manager.js"></script>
     <script src="js/core/render-manager.js?v=enemy-size-3"></script>
-    <script src="js/core/viewport-fit.js?v=fight-fill-1"></script>
+    <script src="js/core/viewport-fit.js?v=stage-1"></script>
     <script src="js/core/core/core.js"></script>
     <script src="js/core/core/show-start-screen.js"></script>
     <script src="js/core/core.js"></script>
@@ -604,6 +607,7 @@
     <script src="js/ui/home-station/station-col-resize.js?v=1"></script>
     <script src="js/ui/home-station/bind-station-events.js?v=pull-1"></script>
     <script src="js/ui/home-station/render-component-tree.js?v=sdrop-2"></script>
+    <script src="js/ui/home-station/area-pager.js"></script>
     <script src="js/ui/home-station/area-upgrades.js?v=nocenter-1"></script>
     <script src="js/ui/home-station/slot-upgrades.js?v=stats-1"></script>
     <script src="js/ui/home-station.js?v=faction-gui-4"></script>

@@ -101,19 +101,23 @@ extendClass(ObstacleManager, {
             ctx.globalCompositeOperation = 'lighter';
             fl.forEach((f) => {
                 const t = f.life / f.ttl;
-                const alpha = (1 - t) * 0.55;
-                let r = f.r * (0.6 + t * 0.8);
-                if (cell) r = Math.max(cell, Math.round(r / cell) * cell);
-                // Pixel "disc": two crossed boxes, no smooth gradient.
-                if (cv && cv.fill) {
-                    cv.fill(ctx, f.x - r, f.y - r * 0.5, r * 2, r, '#ffd98a', alpha);
-                    cv.fill(ctx, f.x - r * 0.5, f.y - r, r, r * 2, '#ffd98a', alpha);
-                } else {
-                    ctx.globalAlpha = alpha;
-                    ctx.fillStyle = '#ffd98a';
-                    ctx.fillRect(Math.round(f.x - r), Math.round(f.y - r * 0.5), Math.round(r * 2), Math.round(r));
-                    ctx.fillRect(Math.round(f.x - r * 0.5), Math.round(f.y - r), Math.round(r), Math.round(r * 2));
-                }
+                const alpha = 1 - t;
+                const r = f.r * (0.6 + t * 0.8);
+                // Fine pixel fireball: small steps, nested discs from a pale
+                // core out to an orange rim, so big rocks get no blocky plus.
+                const step = Math.max(1, cell ? cell * 0.5 : 1);
+                const layers = [[1, '#ff8a2a', 0.55], [0.72, '#ffc15a', 0.7], [0.4, '#fff2c8', 0.9]];
+                layers.forEach((L) => {
+                    const lr = r * L[0];
+                    ctx.globalAlpha = alpha * L[2];
+                    ctx.fillStyle = L[1];
+                    for (let dy = -lr; dy < lr; dy += step) {
+                        const half = Math.sqrt(Math.max(0, lr * lr - (dy + step / 2) * (dy + step / 2)));
+                        const x0 = Math.round((f.x - half) / step) * step;
+                        const x1 = Math.round((f.x + half) / step) * step;
+                        if (x1 > x0) ctx.fillRect(x0, Math.round((f.y + dy) / step) * step, x1 - x0, step);
+                    }
+                });
             });
             ctx.restore();
         }

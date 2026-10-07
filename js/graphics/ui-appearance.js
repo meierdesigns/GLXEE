@@ -106,7 +106,7 @@ class UIAppearanceManager {
         this.uiScaleOptions = ['50', '55', '60', '65', '70', '75', '80', '85', '90', '95', '100', '105', '110', '115', '120', '125'];
         this.borderWeight = 'NORMAL';
         this.indicatorWeight = '2';
-        this.shipRenderStyle = 'FLAT';
+        this.shipRenderStyle = 'VOXEL';
         this.voxelSize = '1';
         this.uiScale = '75';
         this.font = 'COURIER';

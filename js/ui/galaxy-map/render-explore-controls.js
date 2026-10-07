@@ -1319,7 +1319,7 @@ extendClass(GalaxyMapManager, {
             const r = Number(slot.getAttribute('data-frame-r')) || 16;
             const ry = slot.hasAttribute('data-frame-ry') ? Number(slot.getAttribute('data-frame-ry')) : null;
             const post = slot.hasAttribute('data-frame-post');
-            const gap = post ? 8 : 12, arm = post ? 10 : 16, thick = post ? 3 : 4;
+            const gap = post ? 8 : 12, arm = post ? 10 : 16, thick = post ? 2 : 2;
             // Corner sits `gap` px outside the surface (a square frame around a disc).
             const f = r + px(gap);
             slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick), ry == null ? null : ry + px(gap));

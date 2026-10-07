@@ -313,34 +313,25 @@ extendClass(RenderManager, {
             }
             return hit;
         };
-        // Paint into a 1× logical offscreen, then one drawImage — far cheaper
-        // than tens of thousands of fillRect calls on the supersampled canvas.
-        let buf = this._terrainBuf;
-        if (!buf) {
-            buf = document.createElement('canvas');
-            this._terrainBuf = buf;
-        }
-        if (buf.width !== W || buf.height !== H) {
-            buf.width = W;
-            buf.height = H;
-        }
-        const bctx = buf.getContext('2d', { alpha: false });
-        if (!bctx) return;
-        bctx.imageSmoothingEnabled = false;
-        bctx.fillStyle = '#0a0c10';
-        bctx.fillRect(0, 0, W, H);
+        const rowsN = Math.ceil(H / cell) + 3;
 
-        // color → flat [x,y,w,h,…] runs (horizontal RLE).
-        // Ground and walls stay in separate batches so obstacles can sit
-        // between them (under the canyon lip) or on top (over the walls).
+        // color → flat [x,y,w,h,…] runs (horizontal RLE) in lattice cells.
+        // Layers are painted at one pixel per voxel and scaled up, so every
+        // voxel is exactly the same size no matter the scroll phase.
+        // Ground, slope shading and walls stay in separate batches so
+        // obstacles can sit between them or on top of the walls.
         const groundBatch = Object.create(null);
+        const overlayBatch = Object.create(null);
         const wallBatch = Object.create(null);
         let batch = groundBatch;
+        let curPhase = 0;
         const pushRun = (col, x, y, w, h) => {
             if (!col || !(w > 0) || !(h > 0)) return;
             let a = batch[col];
             if (!a) batch[col] = a = [];
-            a.push(x, y, w, h);
+            // y is r * cell + phase with r starting at -1 → row index r + 1.
+            a.push(Math.round(x / cell), Math.round((y - curPhase) / cell) + 1,
+                Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)));
         };
         const flushBatch = (target, into) => {
             for (const col in target) {
@@ -373,6 +364,7 @@ extendClass(RenderManager, {
         // Ground: a far layer, scrolls at half speed (parallax under the walls).
         const gOff = offset * GROUND_PARALLAX;
         const gPhase = gOff % cell;
+        curPhase = gPhase;
         const gBase = Math.floor(gOff / cell);
         const rowCols = new Array(cols);
         for (let r = -1; r * cell + gPhase < H; r++) {
@@ -395,6 +387,8 @@ extendClass(RenderManager, {
             flushRow(rowCols, y);
         }
         // Canyon slope
+        batch = overlayBatch;
+        curPhase = phase;
         const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
         for (let r = -1; r * cell + phase < H; r++) {
             const y = r * cell + phase;
@@ -427,6 +421,7 @@ extendClass(RenderManager, {
         }
         // Walls (own batch → drawn after under-wall obstacles)
         batch = wallBatch;
+        curPhase = phase;
         const mats = this.terrainMaterialPalettes(env, pal);
         for (let r = -1; r * cell + phase < H; r++) {
             const y = r * cell + phase;
@@ -472,43 +467,54 @@ extendClass(RenderManager, {
             }
         }
 
-        flushBatch(groundBatch, bctx);
+        const layer = (name, target, dy, opaque) => {
+            let c = this[name];
+            if (!c) c = this[name] = document.createElement('canvas');
+            if (c.width !== cols || c.height !== rowsN) {
+                c.width = cols;
+                c.height = rowsN;
+            }
+            const lc = c.getContext('2d', { alpha: !opaque });
+            if (!lc) return null;
+            lc.setTransform(1, 0, 0, 1, 0, 0);
+            lc.globalAlpha = 1;
+            lc.globalCompositeOperation = 'source-over';
+            lc.imageSmoothingEnabled = false;
+            if (opaque) {
+                lc.fillStyle = '#0a0c10';
+                lc.fillRect(0, 0, cols, rowsN);
+            } else {
+                lc.clearRect(0, 0, cols, rowsN);
+            }
+            flushBatch(target, lc);
+            return { canvas: c, y: dy - cell };
+        };
+        const groundLayer = layer('_terrainBuf', groundBatch, gPhase, true);
+        const overlayLayer = layer('_terrainOverlayBuf', overlayBatch, phase, false);
+        const wallLayer = layer('_terrainWallBuf', wallBatch, phase, false);
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(buf, 0, 0);
+        // Fill the strip the shifted layers leave uncovered at the edges.
+        ctx.fillStyle = '#0a0c10';
+        ctx.fillRect(0, 0, W, H);
+        [groundLayer, overlayLayer].forEach((l) => {
+            if (l) ctx.drawImage(l.canvas, 0, l.y, cols * cell, rowsN * cell);
+        });
         ctx.restore();
-
-        // Wall layer kept transparent so under-wall obstacles show through
-        // the corridor; blit later via drawScrollTerrainWalls.
-        let wbuf = this._terrainWallBuf;
-        if (!wbuf) {
-            wbuf = document.createElement('canvas');
-            this._terrainWallBuf = wbuf;
-        }
-        if (wbuf.width !== W || wbuf.height !== H) {
-            wbuf.width = W;
-            wbuf.height = H;
-        }
-        const wctx = wbuf.getContext('2d', { alpha: true });
-        if (wctx) {
-            wctx.setTransform(1, 0, 0, 1, 0, 0);
-            wctx.globalAlpha = 1;
-            wctx.globalCompositeOperation = 'source-over';
-            wctx.imageSmoothingEnabled = false;
-            wctx.clearRect(0, 0, W, H);
-            flushBatch(wallBatch, wctx);
-            this._terrainWallReady = true;
-        } else {
-            this._terrainWallReady = false;
-        }
+        // Wall layer stays separate so under-wall obstacles show through the
+        // corridor; blitted later via drawScrollTerrainWalls.
+        this._terrainWallDraw = wallLayer;
+        this._terrainWallReady = !!wallLayer;
+        this._terrainWallDims = { w: cols * cell, h: rowsN * cell };
     },
 
     /** Blit canyon walls prepared by the last drawScrollTerrain call. */
     drawScrollTerrainWalls(ctx) {
-        if (!this._terrainWallReady || !this._terrainWallBuf) return;
+        const wl = this._terrainWallDraw;
+        if (!this._terrainWallReady || !wl) return;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(this._terrainWallBuf, 0, 0);
+        ctx.drawImage(wl.canvas, 0, wl.y, this._terrainWallDims.w, this._terrainWallDims.h);
         ctx.restore();
         this._terrainWallReady = false;
     },

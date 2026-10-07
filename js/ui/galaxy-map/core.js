@@ -522,8 +522,9 @@ class GalaxyMapManager {
                 : 'FLY THERE AND WIN A STAGE TO REPEL IT';
             return `<div class="galaxy-map-ruler-seg galaxy-map-situation is-invasion" role="button" tabindex="0" data-ui-tip="${invSub}" style="--ruler-accent:${invAccent}">` +
                 `<span class="galaxy-map-situation-kind">${inv.ally ? 'ALLY UNDER ATTACK' : 'INVASION'}</span>` +
-                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 14)}</span>` +
+                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 32)}</span>` +
                 `<span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span></span>` +
+                `<span class="galaxy-map-situation-sub">${invSub}</span>` +
                 `</div>`;
         }
         const m = p && p.activeMission;
@@ -541,6 +542,7 @@ class GalaxyMapManager {
             return `<div class="galaxy-map-ruler-seg galaxy-map-situation is-mission" role="button" tabindex="0" data-ui-tip="${missionTip}" style="--ruler-accent:${accent}">` +
                 `<span class="galaxy-map-situation-kind">ACTIVE MISSION</span>` +
                 `<span class="galaxy-map-situation-title">${esc(String(m.type || 'MISSION').toUpperCase())} · ${esc(planet)}</span>` +
+                `<span class="galaxy-map-situation-sub">${missionTip}</span>` +
                 `</div>`;
         }
         if (c.control === 'contested' && c.rivals && c.rivals.length) {
@@ -553,7 +555,7 @@ class GalaxyMapManager {
             const rivalStyle = styleOf(c.rivals[0]);
             const accent = (rivalStyle && rivalStyle.accent) || 'var(--color-primary)';
             this._situationAccent = accent;
-            const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 14)}</span>`).join('');
+            const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 32)}</span>`).join('');
             this._situation = { kind: 'CONFLICT', planetId: null, rivals: c.rivals.slice(), front: front,
                 objective: front ? front + ' frontline planet' + (front === 1 ? '' : 's') + ' held by the invaders. Take them back.' : 'Raids on the border. Clear planets to push the invaders back.' };
             const conflictSub = front ? front + ' FRONTLINE PLANET' + (front === 1 ? '' : 'S') : 'RAIDS ON THE BORDER';
@@ -561,12 +563,14 @@ class GalaxyMapManager {
                 `<span class="galaxy-map-situation-kind">CONFLICT</span>` +
                 `<span class="galaxy-map-situation-row">${emblems}` +
                 `<span class="galaxy-map-situation-title">${esc(c.rivals.map((f) => String(f).toUpperCase()).join(' · '))} INVASION</span></span>` +
+                `<span class="galaxy-map-situation-sub">${conflictSub}</span>` +
                 `</div>`;
         }
         this._situationAccent = null;
         this._situation = { kind: 'NO ACTIVE MISSION', planetId: null, objective: 'Take a mission at the HANGAR mission board.' };
         return `<div class="galaxy-map-ruler-seg galaxy-map-situation is-calm" role="button" tabindex="0" data-ui-tip="TAKE ONE AT THE HANGAR MISSION BOARD">` +
             `<span class="galaxy-map-situation-kind">NO ACTIVE MISSION</span>` +
+            `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
             `</div>`;
     }
 

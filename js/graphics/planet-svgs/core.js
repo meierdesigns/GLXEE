@@ -281,9 +281,14 @@ class PlanetSVGManager {
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         // Light from upper-left, slightly in front (or this._lightVec, see
         // planetLightVector: map planets lit from their nearest sun).
-        const L = this._lightVec || [-0.55, -0.6, 0.58];
-        const l2 = Math.hypot(L[0], L[1]) || 1;
-        const flat = [L[0] / l2 * 0.495, L[1] / l2 * 0.495];
+        // Several suns: this._lights = [{ v, w }]; their light adds up.
+        const lights = this._lights || [{ v: this._lightVec || [-0.55, -0.6, 0.58], w: 1 }];
+        const flat = [0, 0];
+        lights.forEach((l) => {
+            const l2 = Math.hypot(l.v[0], l.v[1]) || 1;
+            flat[0] += l.v[0] / l2 * 0.495 * l.w;
+            flat[1] += l.v[1] / l2 * 0.495 * l.w;
+        });
         const grid = [];
         for (let y = 0; y < n; y++) {
             const row = [];
@@ -300,7 +305,12 @@ class PlanetSVGManager {
                 let light;
                 if (kk > 1) {
                     const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-                    const lambert = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+                    let lambert = 0;
+                    for (let li = 0; li < lights.length; li++) {
+                        const Lv = lights[li].v;
+                        lambert += lights[li].w * Math.max(0, nx * Lv[0] + ny * Lv[1] + nz * Lv[2]);
+                    }
+                    lambert = Math.min(1, lambert);
                     const dither = (bayer[(y % 4) * 4 + (x % 4)] / 16 - 0.5) * 0.12;
                     light = 0.1 + lambert * 0.72 + dither + (rng() - 0.5) * 0.03;
                 } else {

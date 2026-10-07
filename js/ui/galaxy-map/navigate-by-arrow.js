@@ -84,6 +84,8 @@ extendClass(GalaxyMapManager, {
         if (!best) return;
         if (best.kind === 'post') this.selectPost(best.id);
         else this.selectPlanet(best.id);
+        // The camera follows: selection and ship stay in view, zooming out with the distance.
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
 
     selectPlanet(planetId) {
@@ -243,18 +245,18 @@ extendClass(GalaxyMapManager, {
         const opts = this.getStartOptions(info && info.id);
         // Dev mode: the stage picked in the stepper is what launches.
         const pick = this.isDevMode && this.isDevMode() && this.getDevStagePick ? this.getDevStagePick(info && info.id) : null;
+        const fromStartBtn = opts.canChoose
+            ? `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">${this.btnIconHtml('menuRetry', 28)}FROM START</button>`
+            : `<button class="action-button secondary disabled" id="gmConfirmStart" data-nav-item disabled data-ui-tip="Only after progress on this planet">${this.btnIconHtml('menuRetry', 28)}FROM START</button>`;
         if (pick) {
             const n = this.getStagesPerPlanet(info.id);
             const label = pick > n ? `BOSS ${n + 1}/${n + 1}` : `STAGE ${pick}/${n + 1}`;
-            return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}${label}</button>`;
+            return fromStartBtn +
+                `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${label}</button>`;
         }
-        if (opts.canChoose) {
-            return `
-                <button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">${this.btnIconHtml('menuRetry')}FROM START</button>
-                <button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}${opts.resumeLabel}</button>
-            `;
-        }
-        return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
+        const resumeLabel = opts.canChoose ? (opts.resumeLabel || 'START MISSION') : 'START MISSION';
+        return fromStartBtn +
+            `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${resumeLabel}</button>`;
     },
 
     /** One faction as a coloured name (faction accent, dark outline). */
@@ -303,7 +305,8 @@ extendClass(GalaxyMapManager, {
         // The stage row reads the same progress as the button: rebuild it
         // with it, else it kept the state from when the map was opened.
         const stepper = this.overlay.querySelector('#gmStageStepper');
-        if (stepper && info) stepper.innerHTML = info.unlocked ? this.planetStagesHtml(info.id) : '';
+        // A selected station / border gate shows no planet stages.
+        if (stepper && info) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
     },
 
     bindConfirmActions() {
@@ -311,7 +314,7 @@ extendClass(GalaxyMapManager, {
         const startBtn = this.overlay.querySelector('#gmConfirmStart');
         const confirmBtn = this.overlay.querySelector('#gmConfirm');
         const backBtn = this.overlay.querySelector('#gmBack');
-        if (startBtn) {
+        if (startBtn && !startBtn.disabled && !startBtn.classList.contains('disabled')) {
             startBtn.addEventListener('click', () => this.confirm(startBtn.getAttribute('data-start-mode') || 'start'));
         }
         if (confirmBtn) {
@@ -403,7 +406,7 @@ extendClass(GalaxyMapManager, {
         set('gmSectorName', info.name || '—');
         const planetBg = this.overlay.querySelector('.gm-sector-planet-bg');
         if (planetBg) {
-            const icon = this.planetIconHtml(info.id, 240);
+            const icon = this.planetIconHtml(info.id, 260);
             const atmo = this.planetAtmoColor(icon);
             planetBg.innerHTML = icon + (info.unlocked ? '' : this.lockBadgeHtml());
             planetBg.classList.toggle('has-atmo', !!atmo);
@@ -420,7 +423,7 @@ extendClass(GalaxyMapManager, {
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
         set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED');
         const stepper = this.overlay.querySelector('#gmStageStepper');
-        if (stepper) stepper.innerHTML = info.unlocked ? this.planetStagesHtml(info.id) : '';
+        if (stepper) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
         const unlockHint = this.overlay.querySelector('#gmUnlockHint');
         if (unlockHint) {
             const unlockFrom = !info.unlocked
@@ -431,9 +434,12 @@ extendClass(GalaxyMapManager, {
                 ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
                 : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
         }
-        const progressBar = this.overlay.querySelector('.galaxy-map-progress-bar .gm-progress-text')
+        const progressBar = this.overlay.querySelector('.gm-explore-progress .gm-progress-text')
+            || this.overlay.querySelector('.galaxy-map-progress-bar .gm-progress-text')
             || this.overlay.querySelector('.galaxy-map-progress-bar');
-        if (progressBar) progressBar.textContent = this.getGalaxyProgressLabel();
+        if (progressBar) {
+            progressBar.textContent = this.getExploreProgressLabel() || this.getGalaxyProgressLabel();
+        }
     },
 
     confirm(startMode) {
@@ -504,18 +510,19 @@ extendClass(GalaxyMapManager, {
 
     /** Launch icon for the mission buttons (pixel, tinted in the accent). */
     /** Small icon before a card button label ('lock' = pixel padlock). */
-    btnIconHtml(name) {
+    btnIconHtml(name, size) {
+        const px = size || 16;
         if (name === 'lock') {
             return '<svg class="gm-mission-icon gm-btn-lock" viewBox="0 0 12 14" shape-rendering="crispEdges" aria-hidden="true">' +
                 '<path class="gm-lock-shackle" d="M3 6V3h1V2h1V1h2v1h1v1h1v3H8V3H7V2H5v1H4v3z"/>' +
                 '<rect class="gm-lock-body" x="1" y="6" width="10" height="7"/></svg>';
         }
         if (typeof iconRenderer === 'undefined' || !iconRenderer.imgHtml) return '';
-        return iconRenderer.imgHtml(name, 16, 'gm-mission-icon', undefined, false);
+        return iconRenderer.imgHtml(name, px, 'gm-mission-icon', undefined, false);
     },
 
-    missionIconHtml() {
+    missionIconHtml(size) {
         if (typeof iconRenderer === 'undefined' || !iconRenderer.imgHtml) return '';
-        return iconRenderer.imgHtml('menuStart', 16, 'gm-mission-icon', undefined, false);
+        return iconRenderer.imgHtml('menuStart', size || 32, 'gm-mission-icon', undefined, false);
     },
 });

@@ -53,15 +53,16 @@ extendClass(GalaxyMapManager, {
             else if (check.reason === 'HANDCRAFTED') reason = '';
             else reason = check.reason || '';
         }
-        const meta = `<span class="gm-explore-meta">EXPLORES ${used}/${budget}` +
-            (reason ? ` · ${reason}` : '') + `</span>`;
-        // Map header shows the meta line under the progress label instead
-        // (exploreMetaHtml); elsewhere it stays under the button.
-        this._exploreMetaHtml = meta;
+        const exploreLabel = `EXPLORES ${used}/${budget}`;
+        const progress = `<div class="gm-explore-progress" title="Explore budget in this galaxy">` +
+            `${this.progressPlanetIconHtml()}<span class="gm-progress-text">${exploreLabel}</span></div>`;
+        const meta = reason ? `<span class="gm-explore-meta">${reason}</span>` : '';
+        this._exploreMetaHtml = '';
         return `<div class="galaxy-map-explore">` +
+            progress +
             `<button class="action-button gm-explore-btn" id="gmExplore" ${disabled}${costLabel ? ` data-ui-tip="COST · ${costLabel}"` : ''}>EXPLORE NEW SECTOR` +
             (costIcons ? `<span class="gm-explore-costs">${costIcons}</span>` : (costLabel ? ` (${costLabel})` : '')) +
-            `</button>` + (splitMeta ? '' : meta) + `</div>`;
+            `</button>` + (meta ? meta : '') + `</div>`;
     },
 
     /** Planet-to-planet lines (lit, dim, or fading towards a locked planet). */
@@ -103,31 +104,12 @@ extendClass(GalaxyMapManager, {
             const devLit = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
             const okA = devLit || this.isUnlocked(edge[0]);
             const okB = devLit || this.isUnlocked(edge[1]);
-            // Border of the reachable space (exactly one end open): a border
-            // station sits on the middle of the line.
-            if (okA !== okB) {
-                const open = okA ? edge[0] : edge[1];
-                const shut = okA ? edge[1] : edge[0];
-                // Details show in the planet card when selected (no tooltip).
-                const block = this.blockadeSvg((x1 + x2) / 2, (y1 + y2) / 2, open, shut);
-                // The map's lower half is visually closer to the camera:
-                // foreground barriers cover beams, while upper ones remain
-                // behind them. This preserves depth when routes overlap.
-                if ((y1 + y2) / 2 >= H / 2) frontBlocks += block;
-                else backBlocks += block;
-            }
-            if (okA === okB) {
-                edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA ? 'lit' : 'dim'));
-                return;
-            }
-            // Reachable → locked: lit only up to the border station in the
-            // middle, dark beyond it (slices of one line tile without seams).
-            const from = okA ? { x: x1, y: y1 } : { x: x2, y: y2 };
-            const to = okA ? { x: x2, y: y2 } : { x: x1, y: y1 };
-            edgesHtml += this.pixelLineSvg([from, to], 'gm-edge lit', { range: [0, 0.5] }) +
-                this.pixelLineSvg([from, to], 'gm-edge dim', { range: [0.5, 1] });
+            // A lane is lit only when travel along it is possible (both ends
+            // reachable). A lane to a still-locked planet stays dim: no gate on it.
+            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB ? 'lit' : 'dim'));
         });
-        return backBlocks + edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + frontBlocks;
+        // Border stations always sit on top of the beams (a beam never runs across one).
+        return edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + backBlocks + frontBlocks;
     },
 
     /**
@@ -211,10 +193,11 @@ extendClass(GalaxyMapManager, {
 
     /** Galaxy's ruling faction style (faction-holdings.js), or null. */
     borderRulerStyle() {
-        const holdings = (typeof profileManager !== 'undefined' && profileManager.getFactionHoldings)
-            ? profileManager.getFactionHoldings(this.galaxyId) : null;
-        if (!holdings || !holdings.ruler || typeof factionShipStyles === 'undefined' || !factionShipStyles.getFactionStyle) return null;
-        return factionShipStyles.getFactionStyle(holdings.ruler);
+        // The builder is remembered: conquering the galaxy does not restyle its stations.
+        const fid = (typeof profileManager !== 'undefined' && profileManager.getBorderBuilder)
+            ? profileManager.getBorderBuilder(this.galaxyId) : null;
+        if (!fid || typeof factionShipStyles === 'undefined' || !factionShipStyles.getFactionStyle) return null;
+        return factionShipStyles.getFactionStyle(fid);
     },
 
     blockadeSvg(cx, cy, focusPlanet, shutPlanet) {
@@ -416,15 +399,15 @@ extendClass(GalaxyMapManager, {
             // Base cell = one planet pixel at zoom detail 1; the station's own
             // sub-pixel detail then follows the zoom like the planets do.
             const pp = this.planetPixelSize(post.planetId) * this.getMapObjectScale();
-            const half = 6 * pp;
+            const half = 4.4 * pp;
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
-                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.factionStation ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
+                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
                     <rect class="gm-post-hit" x="${-half - 2}" y="${-half - 2}" width="${2 * half + 4}" height="${2 * half + 4}"/>
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
-                    ${post.factionStation ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${pp.toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
+                    ${post.faction ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
+                    <g class="gm-post-art" transform="scale(${(pp * 0.7).toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
                 </g>
             `;
         });
@@ -868,25 +851,36 @@ extendClass(GalaxyMapManager, {
         return { x: pose.x + Math.cos(a) * pose.amp, y: pose.y + Math.sin(a) * pose.amp * 0.6 };
     },
 
-    /** Light direction step (0 … 15) from the suns for a planet at x, y; null = default. */
+    /**
+     * Light spec for a planet at x, y: every sun within reach adds a light
+     * ("10" = one sun, "10+3:40" = a second at 40% strength). A sun counts
+     * while the planet is inside ~2.6 of its radii (its weight r²/d² ≥ 0.15);
+     * the strongest one always counts. null = default light.
+     */
     planetLightDir(x, y) {
         const drift = this._sunDrift || [];
         if (!drift.length) return null;
         const t = performance.now() / 1000;
-        let vx = 0;
-        let vy = 0;
-        drift.forEach((pose) => {
+        const list = drift.map((pose) => {
             const p = this.sunDriftPos(pose, t);
             const dx = p.x - x;
             const dy = p.y - y;
             const d = Math.hypot(dx, dy) || 1;
             const w = (pose.r * pose.r) / (d * d);
-            vx += dx / d * w;
-            vy += dy / d * w;
+            const step = ((Math.round(Math.atan2(dy, dx) / (Math.PI * 2) * 16) % 16) + 16) % 16;
+            return { w: w, step: step };
+        }).sort((a, b) => b.w - a.w);
+        const top = list[0];
+        if (!top) return null;
+        const lights = [];
+        list.forEach((l, i) => {
+            if (i > 0 && l.w < 0.15) return;
+            const rel = Math.max(0.2, Math.min(1, l.w / top.w));
+            const found = lights.find((o) => o.step === l.step);
+            if (found) { found.w = Math.min(1, found.w + rel); return; }
+            if (lights.length < 3) lights.push({ step: l.step, w: rel });
         });
-        if (!vx && !vy) return null;
-        const step = Math.round(Math.atan2(vy, vx) / (Math.PI * 2) * 16);
-        return ((step % 16) + 16) % 16;
+        return lights.map((l) => l.step + (l.w < 0.95 ? ':' + (Math.round(l.w * 10) * 10) : '')).join('+');
     },
 
     startSunDrift() {
@@ -1195,9 +1189,11 @@ extendClass(GalaxyMapManager, {
     },
 
     getMapObjectScale() {
-        const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom))
-            ? Math.max(1, this.mapZoom) : 1;
-        return 1 / Math.sqrt(z);
+        // Constant: objects are only baked once per full render, while zooming
+        // later just scales the view. A zoom-dependent factor here made planets
+        // come out smaller after a reload at high zoom than the same zoom reached
+        // by scrolling.
+        return 1;
     },
 
     /**
@@ -1533,6 +1529,7 @@ extendClass(GalaxyMapManager, {
         if (!a) return;
         // Callers can opt into framing the selected target and the ship together.
         const pts = b && withShip ? [a, b] : [a];
+        // Same spot as the ship (or nothing to compare): just centre on it.
         const margin = 110;
         const x0 = Math.min(...pts.map((p) => p.x)) - margin;
         const x1 = Math.max(...pts.map((p) => p.x)) + margin;
@@ -1542,9 +1539,20 @@ extendClass(GalaxyMapManager, {
         const from = [cur.x, cur.y, cur.width, cur.height];
         const aspect = cur.width / Math.max(1, cur.height);
         let w = cur.width;
-        // Selecting a single target only pans: keep the user's zoom. Widen
-        // the frame only when the ship has to fit in as well.
-        if (pts.length > 1) {
+        if (withShip === 'follow' && pts.length > 1) {
+            // Keyboard navigation: centre between ship and target and zoom to fit both —
+            // further apart = further out, never closer than the player's own zoom.
+            const baseW = cur.width * (this.mapZoom || 1);
+            const wFit = Math.max(x1 - x0, (y1 - y0) * aspect);
+            if (this._userMapZoom == null) this._userMapZoom = this.mapZoom || 1; // remember the player's own zoom
+            const userZ = this._userMapZoom;
+            // Target on the ship itself: no need to fit anything, keep the player's zoom.
+            const apart = Math.hypot(a.x - b.x, a.y - b.y) > 4;
+            const z = apart ? Math.max(0.35, Math.min(userZ, baseW / Math.max(1, wFit))) : userZ;
+            w = baseW / z;
+        } else if (pts.length > 1) {
+            // Selecting a single target only pans: keep the user's zoom. Widen
+            // the frame only when the ship has to fit in as well.
             if (x1 - x0 > w) w = x1 - x0;
             if ((y1 - y0) * aspect > w) w = (y1 - y0) * aspect;
         }
@@ -1756,6 +1764,7 @@ extendClass(GalaxyMapManager, {
                 this.mapPan.y += (pt.y - cy) * f;
             }
             this.mapZoom = next;
+            this._userMapZoom = next; // the zoom the keyboard camera may not exceed
             apply();
         };
         // A camera glide writes its own viewBox; adopt that as the zoom/pan
@@ -1789,6 +1798,22 @@ extendClass(GalaxyMapManager, {
             }
             requestAnimationFrame(runZoom);
         };
+        // The view box is fitted to the map area's aspect. The embedded map is laid
+        // out after the first render (fonts, header, stage size), so refit whenever the
+        // area changes size — otherwise a reload at another zoom keeps a stale aspect
+        // and the planets come out smaller than at the same zoom reached by scrolling.
+        const mapArea = this.overlay && this.overlay.querySelector('#gmMapArea');
+        if (this._mapAreaRO) { this._mapAreaRO.disconnect(); this._mapAreaRO = null; }
+        if (mapArea && typeof ResizeObserver !== 'undefined') {
+            let lastW = 0, lastH = 0; // first callback always refits (the render may predate the final size)
+            this._mapAreaRO = new ResizeObserver(() => {
+                if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
+                lastW = mapArea.clientWidth;
+                lastH = mapArea.clientHeight;
+                if (!this._flight && !this._zoomAnim && !this._camAnim) apply();
+            });
+            this._mapAreaRO.observe(mapArea);
+        }
         svg.addEventListener('wheel', (e) => {
             e.preventDefault();
             stopGlide();
@@ -2378,6 +2403,119 @@ extendClass(GalaxyMapManager, {
         return fid ? factionShipStyles.getFactionStyle(fid) : null;
     },
 
+    /**
+     * Station parts [kind, x, y, w, h] on the -12..12 grid, shaped by the builder's
+     * lore: Kronax = bone spikes and claws, Voidborn = organic folded tissue,
+     * Pirates = welded scrap, Machines = hex lattice. null = use the modular kit.
+     */
+    stationDesign(silhouette, hash, big) {
+        const parts = [];
+        const rnd = (n) => { hash = (Math.imul(hash, 1103515245) + 12345) >>> 0; return (hash >>> 8) % n; };
+        const px = (k, x, y, w, h) => { if (w > 0 && h > 0) parts.push([k, Math.round(x), Math.round(y), Math.round(w), Math.round(h)]); };
+        const disc = (k, cx, cy, rx, ry) => {
+            ry = ry == null ? rx : ry;
+            for (let y = -Math.floor(ry); y <= Math.floor(ry); y++) {
+                const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry + 0.0001))));
+                px(k, cx - half, cy + y, 2 * half + 1, 1);
+            }
+        };
+        // Stair-stepped tapered stroke from (x0,y0) to (x1,y1), width w0 → w1.
+        const stroke = (k, x0, y0, x1, y1, w0, w1) => {
+            const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+            for (let i = 0; i <= n; i++) {
+                const t = i / n;
+                const w = Math.max(1, Math.round(w0 + (w1 - w0) * t));
+                px(k, x0 + (x1 - x0) * t - (w - 1) / 2, y0 + (y1 - y0) * t, w, 1);
+            }
+        };
+        const sc = big ? 1 : 0.8;
+        if (silhouette === 'spikes') {
+            // Kronax: armoured core, cracked bone horns, claw prongs.
+            disc('h', 0, 0, 4 * sc + 1, 5 * sc + 1);
+            disc('d', 0, 1, 2, 3);
+            for (let i = 0; i < 3 + (big ? 1 : 0); i++) {
+                const dir = i % 2 ? 1 : -1;
+                const len = 6 + rnd(4);
+                stroke('h', dir * 4, -2 + i * 2, dir * (4 + len), -7 + i * 5 - rnd(3), 3, 1);
+            }
+            stroke('h', 0, -5, 0, -12, 3, 1);
+            stroke('h', -2, -5, -5, -11, 2, 1);
+            stroke('h', 2, -5, 5, -11, 2, 1);
+            stroke('d', -1, 6, -3, 11, 2, 1);
+            stroke('d', 1, 6, 3, 11, 2, 1);
+            px('l', 0, -1, 1, 2);
+            px('r', -1, -3, 1, 1);
+            px('r', 1, -3, 1, 1);
+        } else if (silhouette === 'rings') {
+            // Voidborn: a pale grown body with trailing tendrils, a hollow fold ring.
+            const rx = 4 * sc + 1, ry = 3 * sc + 2;
+            disc('h', 0, 0, rx, ry);
+            disc('d', 0, 1, Math.max(1, rx - 3), Math.max(1, ry - 3));
+            disc('l', 0, 0, 1, 1);
+            const arms = 4 + rnd(3);
+            for (let a = 0; a < arms; a++) {
+                const ang = (a / arms) * Math.PI * 2 + rnd(30) / 30;
+                let x = Math.cos(ang) * (rx - 1), y = Math.sin(ang) * (ry - 1);
+                const steps = 5 + rnd(4);
+                for (let i = 0; i < steps; i++) {
+                    const wob = Math.sin(i * 0.9 + a) * 0.9;
+                    x += Math.cos(ang + wob) * 1.2;
+                    y += Math.sin(ang + wob) * 1.2;
+                    const r = Math.max(0.5, 1.6 - i * 0.22);
+                    disc(i % 3 === 2 ? 'd' : 'h', x, y, r, r);
+                }
+                disc('l', x, y, 0.5, 0.5);
+            }
+            // Cold ring that tears the picture open around the body.
+            for (let a = 0; a < 20; a++) {
+                const ang = (a / 20) * Math.PI * 2;
+                if (a % 4 === 3) continue;
+                px('d', Math.cos(ang) * (rx + 4), Math.sin(ang) * (ry + 4), 1, 1);
+            }
+        } else if (silhouette === 'scrap') {
+            // Pirates: welded wrecks, crooked beams, a flag.
+            px('h', -5, -3, 8 + rnd(3), 6);
+            px('h', -9, -1, 5, 4);
+            px('c', 3, -6, 5, 4);
+            px('c', 4, 1, 6, 4 + rnd(2));
+            px('d', -8, -5, 3, 3);
+            stroke('d', -9, 5, 3, 9, 2, 2);
+            stroke('d', -6, -4, -10, -9, 1, 1);
+            stroke('d', 2, -4, 9, -10, 1, 1);
+            px('h', -2, 4, 3, 3 + rnd(3));
+            px('p', -12, -4, 3, 2);
+            px('s', 3, -8, 5, 1);
+            px('d', 7, -11, 1, 4);
+            px('c', 8, -11, 3, 2);
+            px('l', -3, -1, 1, 1);
+            px('r', -9, 0, 1, 1);
+            px('a', 9, 4, 1, 1);
+        } else if (silhouette === 'circuit') {
+            // Machines: hex core, radial traces ending in processor nodes.
+            const hexR = big ? 5 : 4;
+            for (let y = -hexR; y <= hexR; y++) {
+                const half = Math.round(hexR - Math.abs(y) * 0.5);
+                px('h', -half, y, 2 * half + 1, 1);
+            }
+            for (let y = -hexR + 2; y <= hexR - 2; y++) {
+                const half = Math.round(hexR - 2 - Math.abs(y) * 0.5);
+                px('d', -half, y, 2 * half + 1, 1);
+            }
+            px('l', -1, -1, 3, 3);
+            for (let i = 0; i < 6; i++) {
+                const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
+                const ex = Math.round(Math.cos(ang) * (hexR + 5)), ey = Math.round(Math.sin(ang) * (hexR + 4));
+                stroke('d', Math.round(Math.cos(ang) * hexR), Math.round(Math.sin(ang) * hexR), ex, ey, 1, 1);
+                px('p', ex - 1, ey - 1, 3, 3);
+                px('l', ex, ey, 1, 1);
+            }
+            px('g', 0, hexR + 6, 1, 1);
+        } else {
+            return null;
+        }
+        return parts;
+    },
+
     stationPixelsSvgRaw(post, detail) {
         const id = String((post && post.id) || '');
         let hash = 0;
@@ -2431,7 +2569,9 @@ extendClass(GalaxyMapManager, {
         const facShapes = {'modular': [[['d', -12, -1, 24, 2], ['p', -12, -7, 3, 5], ['p', -12, 2, 3, 5], ['p', 9, -7, 3, 5], ['p', 9, 2, 3, 5], ['h', -4, -6, 8, 12], ['h', -8, -3, 4, 6], ['h', 4, -3, 4, 6], ['h', -2, -10, 4, 4], ['d', 0, -12, 1, 2], ['h', -3, 6, 6, 3], ['d', -2, 9, 4, 2], ['d', -4, 0, 8, 1], ['d', -8, 0, 4, 1], ['d', 4, 0, 4, 1], ['l', -3, -3, 1, 1], ['l', 2, -3, 1, 1], ['l', -1, -8, 2, 1], ['r', -12, -1, 1, 1], ['g', 11, -1, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['p', -12, -8, 4, 3], ['p', 8, -8, 4, 3], ['d', -8, -7, 4, 1], ['d', 4, -7, 4, 1], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'spikes': [[['d', -12, 2, 24, 1], ['d', -11, -6, 1, 8], ['d', 10, -6, 1, 8], ['h', -3, -8, 6, 14], ['h', -2, -10, 4, 2], ['h', -1, -12, 2, 2], ['h', -6, -4, 3, 8], ['h', -8, -2, 2, 6], ['h', -10, 0, 2, 4], ['h', 3, -4, 3, 8], ['h', 6, -2, 2, 6], ['h', 8, 0, 2, 4], ['h', -2, 6, 4, 3], ['d', -3, 9, 6, 2], ['d', -3, -2, 6, 1], ['d', -3, 3, 6, 1], ['d', -6, 1, 3, 1], ['d', 3, 1, 3, 1], ['l', -1, -6, 2, 1], ['r', -12, 2, 1, 1], ['g', 11, 2, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['d', -8, -6, 2, 2], ['d', -10, -8, 2, 2], ['d', 6, -6, 2, 2], ['d', 8, -8, 2, 2], ['h', -1, -10, 2, 2], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'rings': [[['h', -6, -11, 12, 2], ['h', -6, 9, 12, 2], ['h', -11, -6, 2, 12], ['h', 9, -6, 2, 5], ['h', 9, 3, 2, 3], ['h', -9, -9, 3, 2], ['h', -9, -9, 2, 3], ['h', 6, -9, 3, 2], ['h', 7, -9, 2, 3], ['h', -9, 7, 3, 2], ['h', -9, 6, 2, 3], ['h', 6, 7, 3, 2], ['h', 7, 6, 2, 3], ['d', -1, -9, 2, 4], ['d', -1, 5, 2, 4], ['d', -9, -1, 4, 2], ['d', 5, -1, 4, 2], ['h', -4, -4, 8, 8], ['h', -5, -3, 10, 6], ['h', -3, -5, 6, 10], ['p', -2, -2, 4, 4], ['l', -1, -1, 2, 2], ['r', -11, 0, 1, 1], ['g', 10, -6, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['d', -9, -10, 18, 1], ['d', -9, -10, 1, 5], ['d', 8, -10, 1, 3], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'scrap': [[['p', -12, -6, 3, 4], ['d', -9, -5, 3, 1], ['h', -6, -4, 10, 8], ['h', -9, -2, 3, 5], ['h', -2, -9, 4, 5], ['d', 2, -10, 1, 6], ['d', 2, -10, 6, 1], ['d', 7, -10, 1, 3], ['c', 4, -3, 4, 3], ['c', 4, 1, 5, 3], ['c', -10, 4, 4, 3], ['d', -6, 0, 10, 1], ['h', -4, 4, 5, 3], ['d', -3, 7, 3, 2], ['l', -1, -7, 2, 1], ['l', -4, -2, 1, 1], ['r', -9, 0, 1, 1], ['g', 8, 1, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['c', 3, -10, 3, 2], ['d', -8, -7, 2, 3], ['h', -9, -6, 3, 2], ['d', 5, -8, 1, 2], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]], 'circuit': [[['d', -6, -9, 12, 1], ['d', -6, 8, 12, 1], ['d', -9, -6, 1, 12], ['d', 8, -6, 1, 12], ['h', -11, -11, 5, 5], ['h', 6, -11, 5, 5], ['h', -11, 6, 5, 5], ['h', 6, 6, 5, 5], ['h', -4, -4, 8, 8], ['d', -1, -6, 2, 2], ['d', -1, 4, 2, 2], ['d', -6, -1, 2, 2], ['d', 4, -1, 2, 2], ['p', -10, -10, 3, 3], ['p', 7, -10, 3, 3], ['p', -10, 7, 3, 3], ['p', 7, 7, 3, 3], ['p', -2, -2, 4, 4], ['r', -11, 8, 1, 1], ['g', 10, -11, 1, 1]], [['d', -12, 1, 24, 2], ['h', -6, -4, 12, 8], ['h', -4, -8, 8, 4], ['s', -5, -1, 10, 1], ['d', -6, 2, 12, 1], ['c', -11, -3, 4, 3], ['c', -11, 3, 4, 3], ['c', 7, -3, 4, 3], ['c', 7, 3, 4, 3], ['h', -3, 4, 6, 4], ['d', -2, 8, 4, 2], ['d', 0, -11, 1, 3], ['d', -4, -5, 8, 1], ['l', -3, -7, 1, 1], ['l', -1, -7, 1, 1], ['l', 1, -7, 1, 1], ['l', 3, -7, 1, 1], ['p', -10, -8, 3, 3], ['p', 7, -8, 3, 3], ['d', -7, -7, 3, 1], ['d', 4, -7, 3, 1], ['r', -12, 1, 1, 1], ['g', 11, 1, 1, 1]]]};
         const owner = this.stationFactionStyle(post);
         const own = owner && facShapes[owner.silhouette];
-        const builds = own ? [own[post && post.factionStation ? 0 : 1]] : ((post && post.factionStation) ? stations : shops);
+        // Per-faction architecture (lore), generated per station; terran keeps its modular kit.
+        const designed = owner ? this.stationDesign(owner.silhouette, hash, !!(post && post.factionStation)) : null;
+        const builds = designed ? [designed] : (own ? [own[post && post.factionStation ? 0 : 1]] : ((post && post.factionStation) ? stations : shops));
         const cls = {
             h: 'gm-station-hull', d: 'gm-station-dark', p: 'gm-station-panel', c: 'gm-station-crate',
             s: 'gm-station-sign', l: 'gm-station-light',
@@ -2515,6 +2655,33 @@ extendClass(GalaxyMapManager, {
         return `<g class="gm-station${st ? ' is-faction' : ''}"${stAttr} shape-rendering="crispEdges">` + outline + base + fineG + `</g>`;
     },
 
+    /** 16x16 pixel gear (8 teeth, centre hole), drawn per pixel with lit / shaded edges. */
+    wrenchIconSvg() {
+        const N = 16, C = 8;
+        const box = (x, y, x0, x1, y0, y1) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+        const gear = (x, y) => {
+            const d = Math.hypot(x + 0.5 - C, y + 0.5 - C);
+            if (d < 2.4) return false;                       // axle hole
+            if (d <= 5.4) return true;                       // body
+            // 4 straight teeth (4 wide) and 4 diagonal teeth (3x3).
+            return box(x, y, 6, 9, 1, 2) || box(x, y, 6, 9, 13, 14) || box(x, y, 1, 2, 6, 9) || box(x, y, 13, 14, 6, 9) ||
+                box(x, y, 2, 4, 2, 4) || box(x, y, 11, 13, 2, 4) || box(x, y, 2, 4, 11, 13) || box(x, y, 11, 13, 11, 13);
+        };
+        const at = (x, y) => x >= 0 && y >= 0 && x < N && y < N && gear(x, y);
+        let body = '';
+        for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+                if (!gear(x, y)) continue;
+                const lit = !at(x - 1, y) || !at(x, y - 1);
+                const dark = !at(x + 1, y) || !at(x, y + 1);
+                const fill = lit && !dark ? '#ffd27a' : (dark && !lit ? '#c46a12' : '#ffa733');
+                body += `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>`;
+            }
+        }
+        return '<svg viewBox="0 0 16 16" width="44" height="44" shape-rendering="crispEdges">' +
+            `<g class="gm-cta-wrench">${body}</g></svg>`;
+    },
+
     syncNodeHighlight() {
         if (!this.overlay) return;
         this.overlay.querySelectorAll('.gm-post-node[data-post]').forEach(node => {
@@ -2590,6 +2757,48 @@ extendClass(GalaxyMapManager, {
                 e.preventDefault();
                 e.stopPropagation();
                 this.returnCameraToShip();
+            });
+            // Ship bar also opens hangar — keep keyboard from bubbling into that.
+            locateShipBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+            });
+        }
+
+        // Situation card: a click opens the mission modal.
+        const sitCard = this.overlay.querySelector('.galaxy-map-situation');
+        if (sitCard) {
+            sitCard.addEventListener('click', () => this.openSituationModal());
+            sitCard.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.openSituationModal(); }
+            });
+        }
+
+        // Ship bar: a click opens the hangar to configure the ship.
+        const shipBar = this.overlay.querySelector('.galaxy-map-header .gm-ship-bar');
+        if (shipBar) {
+            shipBar.setAttribute('role', 'button');
+            shipBar.setAttribute('tabindex', '0');
+            shipBar.title = 'OPEN HANGAR · configure your ship';
+            shipBar.classList.add('is-hangar-link');
+            if (!shipBar.querySelector('.gm-ship-bar-cta')) {
+                // Wrench in its own framed key; it spins (on its own centre) only while hovered.
+                const cta = document.createElement('span');
+                cta.className = 'gm-ship-bar-cta';
+                cta.setAttribute('aria-hidden', 'true');
+                cta.innerHTML = this.wrenchIconSvg();
+                shipBar.appendChild(cta);
+            }
+            const openHangar = () => {
+                if (typeof homeStationUI === 'undefined') return;
+                homeStationUI.tab = 'hangar';
+                homeStationUI.statusMsg = '';
+                homeStationUI._navLevel = 'tabs';
+                if (homeStationUI.persistTab) homeStationUI.persistTab();
+                homeStationUI.createUI();
+            };
+            shipBar.addEventListener('click', openHangar);
+            shipBar.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHangar(); }
             });
         }
 

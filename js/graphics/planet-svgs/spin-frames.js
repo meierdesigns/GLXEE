@@ -7,28 +7,38 @@
 // features drift left → right, stretch at the limb and come back over the
 // horizon. Lighting and rings stay fixed like on a real planet.
 extendClass(PlanetSVGManager, {
+    /** True when that model is already built (so asking for it is cheap). */
+    hasSpinModel(planetName, detail, lightDir) {
+        const id = String(planetName || '').toLowerCase();
+        const spec = this.parseLightSpec(lightDir);
+        const k = Math.max(1, Math.round(detail || 1));
+        return !!(this.spinModels && this.spinModels[id + '@' + k + (spec ? '#' + spec.key : '')]);
+    },
+
     /** Build (once) the base / detail grids a planet's spin frames sample from. */
     getPlanetSpinModel(planetName, detail, lightDir) {
         const id = String(planetName || '').toLowerCase();
-        const dir = lightDir == null || lightDir === '' || isNaN(lightDir) ? null : ((Number(lightDir) % 16) + 16) % 16;
+        // lightDir: one step (0 … 15) or several suns, "10+3:40" (step[:weight %]).
+        const spec = this.parseLightSpec(lightDir);
+        const dir = spec ? spec.key : null;
         const k = Math.max(1, Math.round(detail || 1));
         if (!id) return null;
         this.getPlanetSVG(id);
-        const spec = this.planetSpecs && this.planetSpecs[id];
-        if (!spec) return null;
+        const pspec = this.planetSpecs && this.planetSpecs[id];
+        if (!pspec) return null;
         this.spinModels = this.spinModels || {};
         const key = id + '@' + k + (dir == null ? '' : '#' + dir);
         if (this.spinModels[key]) return this.spinModels[key];
-        const style = String(spec.style || 'banded').toLowerCase();
-        const seedKey = String(spec.seed != null ? spec.seed : this.hashId(id));
-        const feat = spec.features || { rings: style === 'ringed' };
+        const style = String(pspec.style || 'banded').toLowerCase();
+        const seedKey = String(pspec.seed != null ? pspec.seed : this.hashId(id));
+        const feat = pspec.features || { rings: style === 'ringed' };
         // Same recipe as createPixelPlanetSVG, keeping the bare sphere too.
         const n = (feat.rings ? Math.max(this.gridSize, 18) : this.gridSize) * k;
         let radiusBias = ((this.hashId(id + '|r') % 5) - 2) * 0.15;
         if (feat.rings) radiusBias -= 1.1;
-        this._lightVec = dir == null ? null : this.planetLightVector(dir);
+        this._lights = spec ? spec.lights.map((l) => ({ v: this.planetLightVector(l.step), w: l.w })) : null;
         const built = this.buildBaseGrid(n, seedKey + '|' + id, radiusBias, k, (feat.rings ? 2 : 1) * k);
-        this._lightVec = null;
+        this._lights = null;
         built.moons = feat.moons;
         const base = built.grid.map((row) => row.slice());
         this.applyStyleDetails(built.grid, style, seedKey + '|' + style, built, feat);
@@ -46,8 +56,8 @@ extendClass(PlanetSVGManager, {
             cy: built.cy,
             r: built.r,
             n: built.grid.length,
-            palette: this.buildPalette(spec.baseColor || this.namedPalettes[id] || '#808080', feat.altColor, feat),
-            uid: 'spin_' + id.replace(/[^a-z0-9]/g, '') + '_' + k + (dir == null ? '' : 'l' + dir),
+            palette: this.buildPalette(pspec.baseColor || this.namedPalettes[id] || '#808080', feat.altColor, feat),
+            uid: 'spin_' + id.replace(/[^a-z0-9]/g, '') + '_' + k + (dir == null ? '' : 'l' + String(dir).replace(/[^0-9]/g, '_')),
             // One frame per pixel of travel at the equator.
             count: Math.max(24, Math.round(2 * Math.PI * built.r)),
             frames: []
@@ -60,6 +70,20 @@ extendClass(PlanetSVGManager, {
      * Light vector for direction step `dir` (0 … 15, clockwise from +x in
      * screen space: 10 ≈ upper left, the classic look), slightly in front.
      */
+    /** "10" or "10+3:40" → { lights: [{ step, w }], key } or null. */
+    parseLightSpec(raw) {
+        if (raw == null || raw === '') return null;
+        const lights = String(raw).split('+').map((part) => {
+            const [st, wt] = part.split(':');
+            const step = Number(st);
+            if (!Number.isFinite(step)) return null;
+            const w = wt == null ? 1 : Math.max(0.1, Math.min(1, Number(wt) / 100 || 1));
+            return { step: ((Math.round(step) % 16) + 16) % 16, w: w };
+        }).filter(Boolean).slice(0, 3);
+        if (!lights.length) return null;
+        return { lights: lights, key: lights.map((l) => l.step + (l.w < 1 ? ':' + Math.round(l.w * 100) : '')).join('+') };
+    },
+
     planetLightVector(dir) {
         const a = (dir / 16) * Math.PI * 2;
         return [Math.cos(a) * 0.81, Math.sin(a) * 0.81, 0.58];
@@ -151,7 +175,10 @@ extendClass(PlanetSVGManager, {
             .replace(/width="[^"]*"/, `width="${n + 2 * pad}"`)
             .replace(/height="[^"]*"/, `height="${n + 2 * pad}"`);
         if (out.indexOf('xmlns=') === -1) out = out.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
-        return { url: 'data:image/svg+xml,' + encodeURIComponent(out), scale: (n + 2 * pad) / n };
+        // base64 is ~20x cheaper than encodeURIComponent on these large rect lists.
+        let url;
+        try { url = 'data:image/svg+xml;base64,' + btoa(out); } catch (e) { url = 'data:image/svg+xml,' + encodeURIComponent(out); }
+        return { url: url, scale: (n + 2 * pad) / n };
     },
 
     startPlanetSpin(periodMs) {
@@ -165,8 +192,12 @@ extendClass(PlanetSVGManager, {
                 return;
             }
             if (document.hidden) return;
+            // New high-detail models are built a few per tick (frame budget) so the
+            // map never freezes; planets show a cheap low-detail globe meanwhile.
+            const t0 = performance.now();
             els.forEach((el) => {
                 const [id, d, l] = String(el.getAttribute('data-planet-spin')).split('|');
+                if (performance.now() - t0 > 10 && !this.hasSpinModel(id, Number(d) || 1, l)) return;
                 const model = this.getPlanetSpinModel(id, Number(d) || 1, l);
                 if (!model) return;
                 const f = this.getPlanetSpinIndex(id, model);

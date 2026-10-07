@@ -21,7 +21,7 @@ extendClass(GalaxyMapManager, {
         }
 
         const info = this.getPlanetInfo(this.selectedPlanetId);
-        const progressLabel = this.getGalaxyProgressLabel();
+        const progressLabel = this.getExploreProgressLabel() || this.getGalaxyProgressLabel();
         const exploreUi = this.renderExploreControls(!!mountEl);
         const panelsHtml = this.renderPanelsHtml(info);
         const emptyHint = (!(this.map.nodes || []).length)
@@ -46,16 +46,13 @@ extendClass(GalaxyMapManager, {
                 <div class="galaxy-map-toolbar">
                     ${this.shipBarHtml()}
                     <div class="gm-progress-col">
-                    <div class="galaxy-map-progress-bar">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('menuPlanets', 16, 'gm-progress-icon', undefined, false) : ''}<span class="gm-progress-text">${progressLabel}</span></div>
-                    ${this._exploreMetaHtml || ''}
                     ${exploreUi}
                     </div>
-                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="TELEPORT · Travel to another galaxy" aria-label="Teleport to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('gmWormhole', 32, 'gm-teleport-icon', '#ffb347', false) : ''}</button>` : ''}
+                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="TELEPORT · Travel to another galaxy" aria-label="Teleport to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('gmWormhole', 32, 'gm-teleport-icon', '#ffb347', false) : ''}<span class="gm-teleport-label">TELEPORT</span></button>` : ''}
                 </div>
-                ${this.renderGalaxyRulerBadge()}
                 </div>
                 ${emptyHint}
-                <!-- Map + floating corner cards (planet bottom-left, ship bottom-right). -->
+                <!-- Map above; bottom bar (planet / ruler / actions) sits under it. -->
                 <div class="gm-map-stage">
                 <div class="galaxy-map-area" id="gmMapArea">
                     ${this.renderMapSvg()}
@@ -75,7 +72,6 @@ extendClass(GalaxyMapManager, {
                     <div class="galaxy-map-progress-bar">${progressLabel}</div>
                     <div class="galaxy-map-toolbar">
                     </div>
-                    ${this.renderGalaxyRulerBadge()}
                     </div>
                     ${emptyHint}
                     <div class="galaxy-map-area" id="gmMapArea">
@@ -92,6 +88,12 @@ extendClass(GalaxyMapManager, {
             `;
         }
         this._mountEl = mountEl;
+        // Explore budget sits above EXPLORE NEW SECTOR — keep the station top card clear.
+        const progressCard = embedded ? document.getElementById('hsMapProgress') : null;
+        if (progressCard) {
+            progressCard.innerHTML = '';
+            progressCard.hidden = true;
+        }
         if (mountEl) {
             mountEl.appendChild(this.overlay);
             this.overlay.classList.toggle('is-input-active', this._inputActive);
@@ -105,14 +107,40 @@ extendClass(GalaxyMapManager, {
         this.scheduleShipGraphicsRefresh();
     },
 
+    /** GPS pin with a ship silhouette: find / return camera to the ship. */
+    shipLocatorIconSvg() {
+        // Filled 1px rects only (no strokes) so it stays crisp at UI scale.
+        // GPS teardrop pin (point down) + small ship nose-up inside the head.
+        const pin = [
+            // Pin head ring
+            [5,1,6,1],[4,2,2,1],[10,2,2,1],[3,3,1,1],[12,3,1,1],
+            [3,4,1,2],[12,4,1,2],[3,6,1,1],[12,6,1,1],
+            [4,7,1,1],[11,7,1,1],[5,8,2,1],[9,8,2,1],
+            // Pin stem / point
+            [6,9,4,1],[7,10,2,1],[7,11,2,1],[7,12,2,1],[8,13,1,1]
+        ];
+        const ship = [
+            // Nose
+            [7,2,2,1],
+            // Body / wings
+            [6,3,4,1],[5,4,6,1],[6,5,4,1],
+            // Engine notch
+            [7,6,2,1]
+        ];
+        const ticks = [
+            // Cardinal GPS ticks outside the pin
+            [7,0,2,1],[0,5,2,1],[14,5,2,1]
+        ];
+        const rects = (list, op) => list.map(([x, y, w, h]) =>
+            `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="currentColor"${op ? ` opacity="${op}"` : ''}/>`
+        ).join('');
+        return `<svg class="gm-locate-map-icon" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true">` +
+            `${rects(ticks, 0.55)}${rects(pin)}${rects(ship)}</svg>`;
+    },
+
     shipLocatorButtonHtml() {
-        const ship = this.getShipIconUrl ? this.getShipIconUrl(1) : null;
-        const shipHtml = ship
-            ? `<img src="${ship}" alt="" class="gm-locate-ship-art">`
-            : '<span class="gm-locate-ship-fallback">▲</span>';
-        return `<button type="button" class="gm-locate-ship" id="gmLocateShip" title="RETURN TO SHIP" aria-label="Return to ship">` +
-            `<span class="gm-locate-ship-icon">${shipHtml}</span>` +
-            `<svg class="gm-locate-pin" viewBox="0 0 16 16" aria-hidden="true"><path d="M7 0h2v5h5v2H9v2h5v2H9v5H7V9H2V7h5V5H2V3h5z"/></svg>` +
+        return `<button type="button" class="gm-locate-ship" id="gmLocateShip" title="FIND SHIP · center map on your ship" aria-label="Find ship on map" data-nav-item>` +
+            this.shipLocatorIconSvg() +
             `</button>`;
     },
 
@@ -150,7 +178,7 @@ extendClass(GalaxyMapManager, {
         const tint = (kind && typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor)
             ? iconRenderer.getModuleKindColor(kind)
             : undefined;
-        return `<span class="gm-stat-chip">${this.iconHtml(iconKey, 32, tint)}<span>${value}</span></span>`;
+        return `<span class="gm-stat-chip">${this.iconHtml(iconKey, 40, tint)}<span>${value}</span></span>`;
     },
 
     frameHtml(ship) {
@@ -183,10 +211,10 @@ extendClass(GalaxyMapManager, {
                 : { key: 'statWeapon', tint: undefined, name: String(id).toUpperCase() };
             // Same module icon as the hangar editor's parts grid.
             const icon = (typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
-                ? homeStationUI.moduleIconHtml('weapon', id, 32, 'hs-pixel gm-stat-icon', false)
-                : this.iconHtml(info.key, 32, info.tint || undefined);
+                ? homeStationUI.moduleIconHtml('weapon', id, 40, 'hs-pixel gm-stat-icon', false)
+                : this.iconHtml(info.key, 40, info.tint || undefined);
             const n = (ship.weaponCounts && ship.weaponCounts[id]) || 1;
-            return `<span class="gm-stat-chip" title="${info.name}${n > 1 ? ' ×' + n : ''}">${icon}<span>${n > 1 ? '×' + n : ''}</span></span>`;
+            return `<span class="gm-stat-chip" data-ui-tip="${info.name}${n > 1 ? ' ×' + n : ''}">${icon}<span>${n > 1 ? '×' + n : ''}</span></span>`;
         }).join('');
     },
 
@@ -246,6 +274,31 @@ extendClass(GalaxyMapManager, {
      * Active ship summary, shown bare (no panel) in the header toolbar
      * between EXPLORE NEW SECTOR and TELEPORT.
      */
+    /** 16x16 pixel planet with a tilted ring, for the EXPLORES counter (drawn per pixel, 2x). */
+    progressPlanetIconHtml() {
+        const N = 16, cx = 7.5, cy = 7.5, R = 5.6;
+        const tilt = -0.42, ca = Math.cos(tilt), sa = Math.sin(tilt);
+        const rx = 7.9, ry = 2.9;
+        let body = '', light = '', ring = '', ringFront = '';
+        for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+                const dx = x + 0.5 - (cx + 0.5), dy = y + 0.5 - (cy + 0.5);
+                const inDisc = Math.hypot(dx, dy) <= R;
+                const u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
+                const e = (u / rx) * (u / rx) + (v / ry) * (v / ry);
+                const onRing = e <= 1 && e >= 0.55;
+                const cell = `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+                if (onRing && v > 0) ringFront += cell;           // front half crosses the planet
+                else if (onRing && !inDisc) ring += cell;         // back half only outside it
+                else if (inDisc) {
+                    if (dx * -0.6 + dy * -0.8 > 1.6) light += cell; else body += cell;
+                }
+            }
+        }
+        return '<svg class="gm-progress-icon" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true">' +
+            `<g fill="#ffb347" opacity="0.7">${ring}</g><g fill="#5f93e6">${body}</g><g fill="#bfe0ff">${light}</g><g fill="#ffd27a">${ringFront}</g></svg>`;
+    },
+
     shipBarHtml() {
         const ship = this.getShipPanelInfo();
         return `
@@ -254,18 +307,16 @@ extendClass(GalaxyMapManager, {
                         <canvas class="gm-ship-mini-canvas" id="gmShipCanvas" width="84" height="120" aria-label="Selected ship"></canvas>
                     </div>
                     <div class="gm-ship-card-main">
-                        <div class="gm-ship-card-head">
+                        <div class="gm-ship-card-info">
                             <span class="gm-panel-value" id="gmShipName">${String(ship.name).toUpperCase()}</span>
-                            <span class="gm-ship-card-status" id="gmShipStatus">${ship.status}</span>
+                            <span class="gm-ship-card-class" id="gmShipClass">${ship.modelClass}</span>
                         </div>
-                        <div class="gm-ship-card-class" id="gmShipClass">${ship.modelClass}</div>
                         <dl class="gm-ship-card-stats">
-                            <div><dt>Frame</dt><dd id="gmShipFrame">${this.frameHtml(ship)}</dd></div>
-                            <div><dt>Guns</dt><dd id="gmShipGuns">${ship.gunCount}</dd></div>
-                            <div class="gm-ship-card-wide"><dt>Weapons</dt><dd class="gm-ship-loadout" id="gmShipLoadout">${this.weaponsHtml(ship)}</dd></div>
-                            <div class="gm-ship-card-wide"><dt>Modules</dt><dd id="gmShipModules">${this.loadoutModulesHtml(ship)}</dd></div>
+                            <div><dt>Weapons</dt><dd class="gm-ship-loadout" id="gmShipLoadout">${this.weaponsHtml(ship)}</dd></div>
+                            <div><dt>Modules</dt><dd id="gmShipModules">${this.loadoutModulesHtml(ship)}</dd></div>
                         </dl>
                     </div>
+                    ${this.shipLocatorButtonHtml()}
                 </div>
         `;
     },
@@ -289,12 +340,15 @@ extendClass(GalaxyMapManager, {
         const unlockHint = unlockFrom
             ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
             : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
-        const planetIcon = this.planetIconHtml(info.id, 240);
+        const planetIcon = this.planetIconHtml(info.id, 260);
         const planetAtmo = this.planetAtmoColor(planetIcon);
+        this._barAccent = null;
+        const rulerSegs = this.renderGalaxyRulerBadge() || '';
+        const barAccent = this._barAccent || 'var(--color-primary)';
         return `
             <div class="galaxy-map-panels">
-                <div class="galaxy-map-panel galaxy-map-panel-select">
-                    ${this.shipLocatorButtonHtml()}
+                <div class="galaxy-map-ruler is-bar" style="--ruler-accent:${barAccent}">
+                <div class="galaxy-map-panel galaxy-map-panel-select galaxy-map-ruler-seg is-planet">
                     <div class="gm-sector-planet-col">
                         <div class="gm-sector-heading">
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
@@ -310,10 +364,13 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-stage-stepper" id="gmStageStepper">${info.unlocked ? this.planetStagesHtml(info.id) : ''}</div>
                         <div class="gm-unlock-hint" id="gmUnlockHint">${unlockHint}</div>
                     </div>
-                    <!-- Start / continue / fly / dock actions at the bottom of the sector card. -->
+                </div>
+                ${rulerSegs ? `<div class="galaxy-map-ruler-stack">${rulerSegs}</div>` : ''}
+                <div class="galaxy-map-ruler-seg is-actions">
                     <div class="galaxy-map-actions gm-actions-row gm-card-actions" id="gmActions">
                         ${this.renderConfirmActionsHtml(info)}
                     </div>
+                </div>
                 </div>
             </div>
         `;
@@ -358,11 +415,8 @@ extendClass(GalaxyMapManager, {
             if (el) el.innerHTML = html;
         };
         setText('gmShipClass', ship.modelClass);
-        setHtml('gmShipFrame', this.frameHtml(ship));
         setHtml('gmShipLoadout', this.weaponsHtml(ship));
-        setText('gmShipGuns', String(ship.gunCount));
         setHtml('gmShipModules', this.loadoutModulesHtml(ship));
-        setText('gmShipStatus', ship.status);
         if (!canvas || !model) return;
         if (typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {
             shipRenderer.renderShipPreview(canvas, model, 1);

@@ -236,15 +236,18 @@ class ComponentTree {
      * Get icon for a structural ship area.
      */
     iconForArea(area) {
+        // Little pixel pictograms of the ship part (8×8), so an area reads
+        // as a hull piece and not as another expand arrow.
+        const svg = (d) => `<svg class="hs-area-glyph" viewBox="0 0 8 8" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
         const icons = {
-            front: '▲',
-            center: '◆',
-            wingLeft: '◀',
-            wingRight: '▶',
-            wings: '◀▶',
-            back: '▼'
+            front: svg('M3 0h2v1h1v2h1v3H1V3h1V1h1zM3 6h2v2H3z'),
+            center: svg('M2 0h4v1h1v6H6v1H2V7H1V1h1zM3 2v3h2V2z'),
+            wingLeft: svg('M0 3h2v1h1v1h2v2H3V6H2V5H1V4H0zM5 1h2v6H5z'),
+            wingRight: svg('M6 3h2v1H7v1H6v1H5v1H3V5h2V4h1zM1 1h2v6H1z'),
+            wings: svg('M0 2h2v4H0zM6 2h2v4H6zM2 3h4v2H2z'),
+            back: svg('M1 0h6v4H6v1H5v1H3V5H2V4H1zM2 6h1v2H2zM5 6h1v2H5z')
         };
-        return icons[area] || '◆';
+        return icons[area] || icons.center;
     }
 
     /**

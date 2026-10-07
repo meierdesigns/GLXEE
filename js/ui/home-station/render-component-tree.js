@@ -12,7 +12,7 @@ extendClass(HomeStationUI, {
             treeContainer.querySelectorAll('.hs-tree-branch, .hs-tree-item').forEach((node) => {
                 window.componentTree.setNodeExpanded(node.id, node.open);
                 // Accordion: opening a section closes its open siblings.
-                if (node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
+                if (!this._areaPager && node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
                     Array.from(node.parentElement.children).forEach((sib) => {
                         if (sib !== node && sib.classList.contains('hs-tree-branch') && sib.open) sib.open = false;
                     });
@@ -432,7 +432,7 @@ extendClass(HomeStationUI, {
                 }
                 window.componentTree.setNodeExpanded(node.id, node.open);
                 // Accordion: opening a section closes its open siblings.
-                if (node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
+                if (!this._areaPager && node.open && node.classList.contains('hs-tree-branch') && node.parentElement) {
                     Array.from(node.parentElement.children).forEach((sib) => {
                         if (sib !== node && sib.classList.contains('hs-tree-branch') && sib.open) sib.open = false;
                     });

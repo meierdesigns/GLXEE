@@ -45,7 +45,8 @@ extendClass(HomeStationUI, {
                     : null));
         const frameMaxed = frameLevel >= frameMax;
 
-        const shipButtons = owned.map((id) => {
+        // Areas view: only the current ship's tree. Ships view: a plain picker.
+        const shipButtons = (this._hangarLeftView === 'ships' ? [] : owned.filter((id) => id === shipId)).map((id) => {
             const selected = id === profile.activeShipId ? ' ★' : '';
             return `
                 <details class="hs-hangar-ship-tree" data-ship-tree="${id}"${id === shipId ? ' open' : ''}>
@@ -58,6 +59,12 @@ extendClass(HomeStationUI, {
                         <div class="hs-component-tree" data-ship-id="${id}"></div>
                     </div>
                 </details>`;
+        }).join('');
+        const shipPicker = owned.map((id) => {
+            const selected = id === profile.activeShipId ? ' ★' : '';
+            return `<button type="button" class="hs-hangar-ship hs-hangar-ship-pick${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">` +
+                `<span class="hs-btn-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>` +
+                `<span>${this.shipName(id)}${selected}</span></button>`;
         }).join('');
 
         const powerBudget = (typeof shipLoadoutManager !== 'undefined'
@@ -128,22 +135,6 @@ extendClass(HomeStationUI, {
                         <input type="range" data-voxel-scale data-hangar-voxel min="0.2" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
                         <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
                     </label>
-                    <span class="hs-hangar-sidebar-actions">
-                        <button type="button" class="hs-sidebar-toggle hs-sidebar-toggle-wide" data-hangar-sidebar="left"
-                            aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
-                            aria-expanded="${!this._hangarLeftCollapsed}">
-                            <span class="hs-sidebar-toggle-arrow">${this._hangarLeftCollapsed ? '›' : '‹'}</span>
-                            ${this.iconHtml('hsShip', 20, 'hs-pixel')}
-                            <span class="hs-sidebar-toggle-text">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'}</span>
-                        </button>
-                        <button type="button" class="hs-sidebar-toggle hs-sidebar-toggle-wide" data-hangar-sidebar="right"
-                            aria-label="${this._hangarRightCollapsed ? 'Expand' : 'Collapse'} live preview"
-                            aria-expanded="${!this._hangarRightCollapsed}">
-                            ${this.iconHtml('hsShip', 20, 'hs-pixel')}
-                            <span class="hs-sidebar-toggle-text">LIVE PREVIEW</span>
-                            <span class="hs-sidebar-toggle-arrow">${this._hangarRightCollapsed ? '‹' : '›'}</span>
-                        </button>
-                    </span>
                 </h3>
                 <div class="hs-hangar-detail-head hs-panel">
                     <div class="hs-hangar-head-title">
@@ -189,12 +180,13 @@ extendClass(HomeStationUI, {
                             <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'}</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
                             ${this.renderHangarLeftViewToggle()}
-                            <button type="button" class="hs-sidebar-toggle" data-hangar-sidebar="left"
-                                aria-label="${this._hangarLeftCollapsed ? 'Expand' : 'Collapse'} ship list"
-                                aria-expanded="${!this._hangarLeftCollapsed}">${this._hangarLeftCollapsed ? '›' : '‹'}</button>
+                            <button type="button" class="hs-sidebar-toggle hs-sidebar-strip" data-hangar-sidebar="left"
+                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'} ›</span></button>
                         </h3>
                         ${this._hangarLeftView === 'parts'
                             ? this.renderHangarPartsGrid(inventory, loadout)
+                            : this._hangarLeftView === 'ships'
+                            ? `<div class="hs-actions-col hs-hangar-ships is-picker" id="hsHangarShipsContainer">${shipPicker}</div>`
                             : `<div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>`}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
@@ -208,6 +200,11 @@ extendClass(HomeStationUI, {
                         <div class="hs-hangar-bay hs-panel">
                             <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
+                                <div class="hs-bay-zoom" role="group" aria-label="Zoom">
+                                    <input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">
+                                    <output id="hsBayZoomOut" class="hs-bay-zoom-out">100%</output>
+                                    <button type="button" class="hs-bay-zoom-btn is-fit" data-bay-zoom="fit" title="Fit ship" aria-label="Fit ship">FIT</button>
+                                </div>
                                 <div class="hs-slot-bar" id="hsSlotBar" role="group" aria-label="Weapon slots"></div>
                                 <button type="button" class="hs-slot-move-handle" id="hsSlotMoveHandle" hidden
                                     aria-label="Move slot" title="Drag to move this slot (keeps the weapon)">
@@ -242,7 +239,7 @@ extendClass(HomeStationUI, {
                             <span class="hs-panel-scan" aria-hidden="true"></span>
                             <button type="button" class="hs-sidebar-toggle" data-hangar-sidebar="right"
                                 aria-label="${this._hangarRightCollapsed ? 'Expand' : 'Collapse'} live preview"
-                                aria-expanded="${!this._hangarRightCollapsed}">${this._hangarRightCollapsed ? '‹' : '›'}</button>
+                                aria-expanded="${!this._hangarRightCollapsed}">${this._hangarRightCollapsed ? '<span class="hs-collapsed-label">‹ LIVE PREVIEW</span>' : '›'}</button>
                         </h3>
                         <div class="hs-hangar-preview-toolbar" id="hsHangarZoomBar">
                             <label class="hs-hangar-zoom-label" for="hsHangarZoom">ZOOM</label>

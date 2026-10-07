@@ -2,14 +2,24 @@
 
 /**
  * Scales app content to fill the viewport while preserving aspect ratios.
- * Measures real chrome height so canvas + HUD always fit without clipping.
- * Per-planet playfield aspect + view zoom come from CSS vars set by planet-config.
+ * Playfield-first: maximize the fight canvas (full center-column height), then
+ * give leftover width to the side HUD panels.
  */
 (function () {
     const ROOT = document.documentElement;
-    const DEFAULT_ASPECT = 0.8; // display width / height (~480x600)
+    const DEFAULT_ASPECT = 0.8;
     const DEFAULT_DESIGN_W = 480;
     const DEFAULT_DESIGN_H = 600;
+    const SIZE_EPS = 2;
+    const RO_SUPPRESS_MS = 80;
+    const SIDE_MIN = 140;
+    const SIDE_MAX = 280;
+    // Compact overlay chrome (title + ?) — not measured from DOM (would under-size fight)
+    const OVERLAY_CHROME = 8;
+
+    let lastApplied = { canvasW: 0, canvasH: 0, sidePanel: 0 };
+    let suppressROUntil = 0;
+    let secondPassToken = 0;
 
     function clamp(n, min, max) {
         return Math.max(min, Math.min(max, n));
@@ -22,11 +32,9 @@
     }
 
     function playfieldParams() {
-        // Aspect follows the current map; design box stays fixed so UI scale is stable.
-        // Planet viewZoom is content scale (ships/bosses), NOT CSS frame zoom.
         const aspect = clamp(readCssNumber('--playfield-aspect', DEFAULT_ASPECT), 0.45, 1.4);
         return {
-            aspect,
+            aspect: aspect,
             designW: DEFAULT_DESIGN_W,
             designH: Math.max(240, Math.round(DEFAULT_DESIGN_W / aspect))
         };
@@ -43,39 +51,30 @@
         };
     }
 
-    /**
-     * .game-container is CSS-zoomed (--gui-zoom) and stretched to vw/zoom, so
-     * canvas sizes set inside it live in that zoomed layout space.
-     */
     function guiZoom() {
         return clamp(readCssNumber('--gui-zoom', 1), 0.25, 4);
     }
 
-    function measureChromeHeight() {
-        const container = document.querySelector('.game-canvas-container');
-        const canvas = document.getElementById('gameCanvas');
-        if (!container || !canvas) return 0;
-
-        let h = 0;
-        for (let i = 0; i < container.children.length; i++) {
-            const el = container.children[i];
-            if (el === canvas) continue;
-            // Stage wraps the playfield canvas; height tracked via canvas sizing
-            if (el.classList && el.classList.contains('game-stage')) continue;
-            const cs = getComputedStyle(el);
-            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-            // Rects are visual px; convert back to zoomed layout px.
-            h += el.getBoundingClientRect().height / guiZoom();
-            h += parseFloat(cs.marginTop) || 0;
-            h += parseFloat(cs.marginBottom) || 0;
-        }
-        return h;
+    function sizesClose(a, b, eps) {
+        return Math.abs(a - b) < eps;
     }
 
-    function applyCanvasSize(canvasW, canvasH, sidePanel, padX, gap, fontBase, appScale, gameScale, fillScale) {
+    function applyCanvasSize(canvasW, canvasH, sidePanel, padX, gap, fontBase, appScale, gameScale, fillScale, force) {
+        if (!force && lastApplied.canvasW > 0) {
+            if (
+                sizesClose(canvasW, lastApplied.canvasW, SIZE_EPS) &&
+                sizesClose(canvasH, lastApplied.canvasH, SIZE_EPS) &&
+                sizesClose(sidePanel, lastApplied.sidePanel, 1)
+            ) {
+                return false;
+            }
+        }
+
+        suppressROUntil = performance.now() + RO_SUPPRESS_MS;
+
         ROOT.style.setProperty('--canvas-w', Math.floor(canvasW) + 'px');
         ROOT.style.setProperty('--canvas-h', Math.floor(canvasH) + 'px');
-        ROOT.style.setProperty('--side-panel-w', sidePanel + 'px');
+        ROOT.style.setProperty('--side-panel-w', Math.floor(sidePanel) + 'px');
         ROOT.style.setProperty('--ui-pad', padX + 'px');
         ROOT.style.setProperty('--ui-gap', gap + 'px');
         ROOT.style.setProperty('--game-scale', String(Number(gameScale.toFixed(4))));
@@ -83,45 +82,107 @@
         ROOT.style.setProperty('--fill-scale', String(Number(fillScale.toFixed(4))));
         ROOT.style.setProperty('--font-base', fontBase + 'px');
 
+        lastApplied = { canvasW: canvasW, canvasH: canvasH, sidePanel: sidePanel };
+
         if (typeof window.renderManager !== 'undefined' && window.renderManager && typeof window.renderManager.syncViewportScale === 'function') {
             window.renderManager.syncViewportScale(gameScale);
         }
+        return true;
     }
 
-    function computeCanvas(vw, vh, chromeH, sidePanel, padX, padY, gap, aspect) {
-        const sideChrome = sidePanel * 2 + padX * 2 + gap * 2;
-        const availW = Math.max(120, vw - sideChrome);
-        const availH = Math.max(160, vh - chromeH - padY * 2);
-        // Always fit the entire map into the playfield frame (no mid-game zoom).
-        let canvasH = Math.min(availH, availW / aspect);
+    /**
+     * Playfield-first layout:
+     * 1) use nearly full viewport height for the fight
+     * 2) width follows aspect
+     * 3) leftover width split into side panels (clamped)
+     * 4) if sides would go below SIDE_MIN, shrink playfield to fit
+     */
+    function computeLayout(vw, vh, padX, padY, gap, aspect) {
+        const shellW = Math.max(200, vw - padX * 2);
+        const shellH = Math.max(180, vh - padY * 2);
+        const availH = Math.max(160, shellH - OVERLAY_CHROME);
+
+        // Ideal fight size: full height
+        let canvasH = availH;
         let canvasW = canvasH * aspect;
-        return { canvasW, canvasH, availW, availH };
+
+        // Width left for both side panels + gaps between the three columns
+        let leftForSides = shellW - canvasW - gap * 2;
+        let sidePanel = leftForSides / 2;
+
+        if (sidePanel > SIDE_MAX) {
+            sidePanel = SIDE_MAX;
+            // Extra width goes to the fight (still height-capped)
+            const maxW = shellW - sidePanel * 2 - gap * 2;
+            canvasW = Math.min(maxW, availH * aspect);
+            canvasH = canvasW / aspect;
+        } else if (sidePanel < SIDE_MIN) {
+            sidePanel = SIDE_MIN;
+            const maxW = Math.max(120, shellW - sidePanel * 2 - gap * 2);
+            canvasW = Math.min(maxW, availH * aspect);
+            canvasH = canvasW / aspect;
+        }
+
+        return {
+            canvasW: canvasW,
+            canvasH: canvasH,
+            sidePanel: sidePanel,
+            availW: canvasW,
+            availH: availH
+        };
     }
 
-    function update() {
+    /** Largest integer-divisor CSS size that fits maxW×maxH. */
+    function snapVoxel(aspect, maxW, maxH) {
+        const k = Number(window.PLAYFIELD_RENDER_SCALE);
+        const scaleK = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+        const mapW = readCssNumber('--map-w', 240);
+        const mapH = readCssNumber('--map-h', Math.round(mapW / aspect));
+        const backingW = Math.max(1, Math.round(mapW * scaleK));
+        const backingH = Math.max(1, Math.round(mapH * scaleK));
+
+        let step = 1;
+        while (step < 128 && (backingW / step > maxW + 0.5 || backingH / step > maxH + 0.5)) {
+            step++;
+        }
+        let w = backingW / step;
+        let h = backingH / step;
+        if (w > maxW || h > maxH) {
+            const s = Math.min(maxW / backingW, maxH / backingH);
+            w = backingW * s;
+            h = backingH * s;
+        }
+        return { canvasW: w, canvasH: h };
+    }
+
+    function update(force) {
         const real = viewportSize();
         const { aspect, designW, designH } = playfieldParams();
 
         ROOT.style.setProperty('--vw', real.vw + 'px');
         ROOT.style.setProperty('--vh', real.vh + 'px');
-        // Everything below is laid out inside the zoomed container.
         const zoom = guiZoom();
         const vw = real.vw / zoom;
         const vh = real.vh / zoom;
 
-        const sidePanel = clamp(Math.round(vw * 0.19), 220, 300); // wide enough for full HUD labels
-        const padX = clamp(Math.round(vw * 0.012), 6, 14);
-        const padY = clamp(Math.round(vh * 0.012), 4, 10);
-        const gap = clamp(Math.round(vw * 0.01), 6, 14);
+        const padX = clamp(Math.round(vw * 0.01), 4, 10);
+        const padY = clamp(Math.round(vh * 0.008), 2, 8);
+        const gap = clamp(Math.round(vw * 0.008), 4, 10);
 
-        // Estimate first, then refine from measured chrome
-        let chromeH = clamp(Math.round(vh * 0.30), 170, 300);
-        const measured = measureChromeHeight();
-        if (measured > 40) {
-            chromeH = measured + 8;
+        let layout = computeLayout(vw, vh, padX, padY, gap, aspect);
+        let canvasW = layout.canvasW;
+        let canvasH = layout.canvasH;
+        let sidePanel = layout.sidePanel;
+
+        if (ROOT.getAttribute('data-vf-ship-render') === 'VOXEL') {
+            const snapped = snapVoxel(aspect, canvasW, canvasH);
+            canvasW = snapped.canvasW;
+            canvasH = snapped.canvasH;
+            // Reclaim unused width into side panels after snap
+            const shellW = Math.max(200, vw - padX * 2);
+            const leftForSides = shellW - canvasW - gap * 2;
+            sidePanel = clamp(leftForSides / 2, SIDE_MIN, SIDE_MAX);
         }
-
-        let { canvasW, canvasH } = computeCanvas(vw, vh, chromeH, sidePanel, padX, padY, gap, aspect);
 
         const fillH = Math.max(160, vh - padY * 2);
         const fillW = Math.max(120, vw - padX * 2);
@@ -130,40 +191,63 @@
         const appScale = clamp(Math.min(vw / 1100, vh / 800), 0.5, 2.5);
         const fontBase = clamp(Math.round(11 + appScale * 4), 11, 18);
 
-        applyCanvasSize(canvasW, canvasH, sidePanel, padX, gap, fontBase, appScale, gameScale, fillScale);
+        applyCanvasSize(
+            canvasW,
+            canvasH,
+            sidePanel,
+            padX,
+            gap,
+            fontBase,
+            appScale,
+            gameScale,
+            fillScale,
+            !!force
+        );
 
-        // Second pass after layout: chrome height can change with canvas width / clamps
+        // Settle once after first paint (fonts / zoom)
+        const token = ++secondPassToken;
         requestAnimationFrame(function () {
-            const measured2 = measureChromeHeight();
-            if (measured2 <= 40) return;
-
-            const chrome2 = measured2 + 8;
-            const size2 = computeCanvas(vw, vh, chrome2, sidePanel, padX, padY, gap, aspect);
-            if (Math.abs(size2.canvasH - canvasH) < 2 && Math.abs(size2.canvasW - canvasW) < 2) {
+            if (token !== secondPassToken) return;
+            let layout2 = computeLayout(vw, vh, padX, padY, gap, aspect);
+            let w2 = layout2.canvasW;
+            let h2 = layout2.canvasH;
+            let side2 = layout2.sidePanel;
+            if (ROOT.getAttribute('data-vf-ship-render') === 'VOXEL') {
+                const snapped = snapVoxel(aspect, w2, h2);
+                w2 = snapped.canvasW;
+                h2 = snapped.canvasH;
+                const shellW = Math.max(200, vw - padX * 2);
+                side2 = clamp((shellW - w2 - gap * 2) / 2, SIDE_MIN, SIDE_MAX);
+            }
+            if (
+                sizesClose(w2, canvasW, SIZE_EPS) &&
+                sizesClose(h2, canvasH, SIZE_EPS) &&
+                sizesClose(side2, sidePanel, 1)
+            ) {
                 return;
             }
-
-            const gameScale2 = size2.canvasW / designW;
             applyCanvasSize(
-                size2.canvasW,
-                size2.canvasH,
-                sidePanel,
+                w2,
+                h2,
+                side2,
                 padX,
                 gap,
                 fontBase,
                 appScale,
-                gameScale2,
-                fillScale
+                w2 / designW,
+                fillScale,
+                true
             );
         });
     }
 
     let raf = 0;
     function scheduleUpdate() {
+        if (performance.now() < suppressROUntil) return;
         if (raf) return;
         raf = requestAnimationFrame(function () {
             raf = 0;
-            update();
+            update(false);
         });
     }
 
@@ -171,17 +255,17 @@
     window.addEventListener('orientationchange', scheduleUpdate);
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', scheduleUpdate);
-        window.visualViewport.addEventListener('scroll', scheduleUpdate);
     }
 
     function observeLayout() {
         if (typeof ResizeObserver === 'undefined') return;
-        const ro = new ResizeObserver(scheduleUpdate);
+        const ro = new ResizeObserver(function () {
+            if (performance.now() < suppressROUntil) return;
+            scheduleUpdate();
+        });
         const watch = function () {
             const container = document.querySelector('.game-container');
-            const canvasBox = document.querySelector('.game-canvas-container');
             if (container) ro.observe(container);
-            if (canvasBox) ro.observe(canvasBox);
         };
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', watch);
@@ -192,15 +276,15 @@
     observeLayout();
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', update);
+        document.addEventListener('DOMContentLoaded', function () { update(true); });
     } else {
-        update();
+        update(true);
     }
 
-    window.addEventListener('load', update);
+    window.addEventListener('load', function () { update(true); });
 
     window.viewportFit = {
-        update: update,
+        update: function () { update(true); },
         scheduleUpdate: scheduleUpdate
     };
 })();

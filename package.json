@@ -4,9 +4,9 @@
   "description": "GLXEE - Game Boy Style Space Shooter",
   "main": "index.html",
   "scripts": {
-    "start": "python -m http.server 3000",
-    "dev": "python -m http.server 3000",
-    "serve": "python -m http.server 3000",
+    "start": "python3 tools/dev-server.py 3000",
+    "dev": "python3 tools/dev-server.py 3000",
+    "serve": "python3 tools/dev-server.py 3000",
     "comfy": "bash tools/comfyui/start.sh",
     "comfy:stop": "bash tools/comfyui/stop.sh",
     "asset-gen": "bash tools/asset-gen/start.sh",

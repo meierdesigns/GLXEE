@@ -49,8 +49,12 @@ class GameCore {
         if (typeof menuStateManager !== 'undefined') {
             this.showBootVeil(menuStateManager.get());
             setTimeout(() => {
-                this.restoreMenuWhenReady();
+                Promise.resolve(this.restoreMenuWhenReady())
+                    .catch((err) => console.error('[boot] menu restore failed:', err))
+                    .finally(() => this.dismissBootVeil());
             }, 0);
+            // Failsafe: never stay black, whatever fails above
+            setTimeout(() => this.dismissBootVeil(), 4000);
         } else {
             this.showStartScreen({ skipPersist: true });
         }
@@ -65,6 +69,7 @@ class GameCore {
             document.body.appendChild(veil);
         }
         veil.className = 'vf-boot-veil';
+        document.documentElement.classList.add('vf-booting');
         veil.removeAttribute('data-hs-tab');
         const screen = state && state.screen;
         if (screen === 'home-station') {
@@ -75,6 +80,7 @@ class GameCore {
             screen === 'start' ||
             screen === 'settings' ||
             screen === 'credits' ||
+            screen === 'profiles' ||
             screen === 'ingame'
         ) {
             // Same art as .start-screen (ships in hangar)
@@ -86,21 +92,19 @@ class GameCore {
         }
     }
 
+    // No fade: the menu is already fully built under the veil, so just drop it.
     dismissBootVeil() {
         const veil = document.getElementById('vf-boot-veil');
         if (!veil) return;
-        veil.classList.add('is-leaving');
-        const done = () => {
-            if (veil.parentNode) veil.parentNode.removeChild(veil);
-        };
-        veil.addEventListener('transitionend', done, { once: true });
-        setTimeout(done, 420);
+        document.querySelectorAll('.vf-menu-enter').forEach((el) => el.classList.remove('vf-menu-enter'));
+        if (veil.parentNode) veil.parentNode.removeChild(veil);
+        setTimeout(() => document.documentElement.classList.remove('vf-booting'), 800);
     }
 
     async restoreMenuWhenReady() {
         const state = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : null;
         const screen = state && state.screen;
-        const lightMenu = !screen || screen === 'start' || screen === 'settings' || screen === 'credits' || screen === 'ingame';
+        const lightMenu = !screen || screen === 'start' || screen === 'settings' || screen === 'credits' || screen === 'profiles' || screen === 'ingame';
 
         if (!lightMenu) {
             // Short wait for icons/ships — boot veil already shows destination art
@@ -208,29 +212,7 @@ class GameCore {
     }
 
     restart() {
-        // Reset obstacle spawn timer
-        this.obstacleSpawnTimer = 0;
-        this.gameRunning = true;
-        this.isPaused = false;
-
-        // Hide victory screen if visible
-        const victoryScreen = document.getElementById('victoryScreen');
-        if (victoryScreen) {
-            victoryScreen.classList.add('hidden');
-        }
-
-        // Reset all managers
-        if (typeof bulletManager !== 'undefined') bulletManager.reset();
-        if (typeof enemyManager !== 'undefined') enemyManager.reset();
-        if (typeof playerManager !== 'undefined') playerManager.reset();
-        if (typeof obstacleManager !== 'undefined') obstacleManager.reset();
-        if (typeof pickupManager !== 'undefined') pickupManager.reset(true);
-
-        // Hide game over screen
-        const gameOverScreen = document.getElementById('gameOver');
-        if (gameOverScreen) {
-            gameOverScreen.classList.add('hidden');
-        }
+        return this.restartGame();
     }
 
     restartGame() {

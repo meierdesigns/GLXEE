@@ -1,0 +1,3 @@
+/* Silkscreen, self-hosted: no network round trip, so the pixel font is there on first paint. */
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: block; src: url('../assets/fonts/Silkscreen-400.ttf') format('truetype'); }
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 700; font-display: block; src: url('../assets/fonts/Silkscreen-700.ttf') format('truetype'); }

@@ -92,8 +92,9 @@ extendClass(CollisionManager, {
                 const playerY = player.y + player.height / 2;
                 const obstacleX = obstacles[i].x + obstacles[i].width / 2;
                 const obstacleY = obstacles[i].y + obstacles[i].height / 2;
-                const dmg = Math.max(1, obstacles[i].collisionDamage != null ? obstacles[i].collisionDamage : 15);
-                const explosionId = obstacles[i].explosionId || 'asteroid_burst';
+                const obs = obstacles[i];
+                const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 15);
+                const explosionId = obs.explosionId || 'asteroid_burst';
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
@@ -101,7 +102,7 @@ extendClass(CollisionManager, {
                 // Damage player
                 const playerDefeated = playerManager.takeDamage(dmg);
 
-                this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId);
+                this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
                 if (typeof graphicsManager !== 'undefined') {
                     graphicsManager.createHitEffect(playerX, playerY, 10);
                 }
@@ -130,8 +131,9 @@ extendClass(CollisionManager, {
                 const enemyY = enemy.y + enemy.height / 2;
                 const obstacleX = obstacles[i].x + obstacles[i].width / 2;
                 const obstacleY = obstacles[i].y + obstacles[i].height / 2;
-                const dmg = Math.max(1, obstacles[i].collisionDamage != null ? obstacles[i].collisionDamage : 20);
-                const explosionId = obstacles[i].explosionId || 'asteroid_burst';
+                const obs = obstacles[i];
+                const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 20);
+                const explosionId = obs.explosionId || 'asteroid_burst';
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
@@ -139,7 +141,7 @@ extendClass(CollisionManager, {
                 // Damage enemy
                 const enemyDefeated = enemyManager.takeDamage(dmg);
 
-                this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId);
+                this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
                 if (typeof graphicsManager !== 'undefined') {
                     graphicsManager.createHitEffect(enemyX, enemyY, 12);
                 }

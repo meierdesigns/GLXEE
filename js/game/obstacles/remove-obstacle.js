@@ -16,30 +16,41 @@ extendClass(ObstacleManager, {
         const cx = o.x + o.width / 2;
         const cy = o.y + o.height / 2;
         const size = Math.max(o.width, o.height);
-        const n = Math.min(28, 6 + Math.round(size * 0.7));
+        // Big rocks: many fine chips. Small ones keep a few chunkier flecks.
+        const fine = size >= 14;
+        const n = Math.min(fine ? 64 : 28, Math.round((fine ? 12 : 6) + size * (fine ? 1.55 : 0.7)));
         const cell = this.terrainCell ? this.terrainCell() : 2.5;
+        const grit = fine ? Math.max(1, cell * 0.5) : cell;
         for (let i = 0; i < n; i++) {
             const a = Math.random() * Math.PI * 2;
             const sp = 0.4 + Math.random() * (1.2 + size * 0.03);
+            const roll = Math.random();
+            let s;
+            if (fine) {
+                s = roll < 0.68 ? grit : roll < 0.92 ? cell : cell * 1.25;
+            } else {
+                s = cell * (roll < 0.25 ? 2 : 1);
+            }
             this.debris.push({
                 x: cx + (Math.random() - 0.5) * o.width * 0.6,
                 y: cy + (Math.random() - 0.5) * o.height * 0.6,
                 vx: Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5,
                 vy: Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5,
-                s: cell * (Math.random() < 0.25 ? 2 : 1),
+                s: s,
                 c: colors[Math.floor(Math.random() * colors.length)],
                 life: 0,
                 ttl: 350 + Math.random() * 450
             });
         }
         // Hot core flash: a few bright chips that die fast.
-        for (let i = 0; i < 6; i++) {
+        const hotN = fine ? 10 : 6;
+        for (let i = 0; i < hotN; i++) {
             const a = Math.random() * Math.PI * 2;
             this.debris.push({ x: cx, y: cy, vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 2.2,
-                s: cell, c: i % 2 ? '#ffe9a8' : '#ffffff', life: 0, ttl: 160 + Math.random() * 120 });
+                s: grit, c: i % 2 ? '#ffe9a8' : '#ffffff', life: 0, ttl: 160 + Math.random() * 120 });
         }
         this.flashes = this.flashes || [];
-        this.flashes.push({ x: cx, y: cy, r: size * 0.9, life: 0, ttl: 140 });
+        this.flashes.push({ x: cx, y: cy, r: size * (fine ? 0.7 : 0.9), life: 0, ttl: 140 });
         if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
     },
 
@@ -81,29 +92,54 @@ extendClass(ObstacleManager, {
     },
 
     renderDebris(ctx) {
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
         const fl = this.flashes || [];
         if (fl.length) {
             ctx.save();
+            ctx.imageSmoothingEnabled = false;
             ctx.globalCompositeOperation = 'lighter';
             fl.forEach((f) => {
                 const t = f.life / f.ttl;
-                ctx.globalAlpha = (1 - t) * 0.55;
-                ctx.fillStyle = '#ffd98a';
-                const r = f.r * (0.6 + t * 0.8);
+                const alpha = (1 - t) * 0.55;
+                let r = f.r * (0.6 + t * 0.8);
+                if (cell) r = Math.max(cell, Math.round(r / cell) * cell);
                 // Pixel "disc": two crossed boxes, no smooth gradient.
-                ctx.fillRect(Math.round(f.x - r), Math.round(f.y - r * 0.5), Math.round(r * 2), Math.round(r));
-                ctx.fillRect(Math.round(f.x - r * 0.5), Math.round(f.y - r), Math.round(r), Math.round(r * 2));
+                if (cv && cv.fill) {
+                    cv.fill(ctx, f.x - r, f.y - r * 0.5, r * 2, r, '#ffd98a', alpha);
+                    cv.fill(ctx, f.x - r * 0.5, f.y - r, r, r * 2, '#ffd98a', alpha);
+                } else {
+                    ctx.globalAlpha = alpha;
+                    ctx.fillStyle = '#ffd98a';
+                    ctx.fillRect(Math.round(f.x - r), Math.round(f.y - r * 0.5), Math.round(r * 2), Math.round(r));
+                    ctx.fillRect(Math.round(f.x - r * 0.5), Math.round(f.y - r), Math.round(r), Math.round(r * 2));
+                }
             });
             ctx.restore();
         }
         const list = this.debris || [];
         if (!list.length) return;
         ctx.save();
+        ctx.imageSmoothingEnabled = false;
         list.forEach((p) => {
             const t = p.life / p.ttl;
-            ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-            ctx.fillStyle = p.c;
-            ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s);
+            const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+            let s = Math.max(1, p.s);
+            let px = p.x;
+            let py = p.y;
+            if (cell) {
+                // Keep sub-cell grit for big-rock bursts; only inflate chunkier chips.
+                const step = s < cell ? Math.max(1, cell * 0.5) : cell;
+                s = Math.max(step, Math.round(s / step) * step);
+                px = Math.round(px / step) * step;
+                py = Math.round(py / step) * step;
+            }
+            if (cv && cv.fill) cv.fill(ctx, px, py, s, s, p.c, alpha);
+            else {
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = p.c;
+                ctx.fillRect(Math.round(px), Math.round(py), s, s);
+            }
         });
         ctx.restore();
     },
@@ -191,7 +227,8 @@ extendClass(ObstacleManager, {
                 sprite: isCrystal ? 'crystal' : 'obstacleSmall',
                 opacity: 1,
                 lightIntensity: isCrystal ? 0.3 : 0,
-                lightColor: isCrystal ? 'var(--color-highlight)' : null
+                lightColor: isCrystal ? 'var(--color-highlight)' : null,
+                wallDepth: parent.wallDepth || (Math.random() < 0.55 ? 'under' : 'over')
             });
             spawned++;
         }

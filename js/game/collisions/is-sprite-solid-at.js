@@ -145,7 +145,7 @@ extendClass(CollisionManager, {
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
-                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId);
+                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
                         } else {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
@@ -159,7 +159,7 @@ extendClass(CollisionManager, {
                         const destroyed = obstacleManager.damageObstacle(j, rockDmg, hx, hy);
                         obstacleManager.splashObstacles(hx, hy, splash, Math.max(1, Math.ceil(rockDmg * 0.6)), destroyed ? null : obstacle);
                         if (destroyed) {
-                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId);
+                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.85);
                         } else {
                             this.createDetailedHitEffect(bulletX, bulletY, 'damage');
@@ -220,7 +220,7 @@ extendClass(CollisionManager, {
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
-                            this.createExplosion(bulletX, bulletY, explosionId);
+                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
                         }
                     } else if (obstacle.isDestructible) {
@@ -228,7 +228,7 @@ extendClass(CollisionManager, {
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
-                            this.createExplosion(bulletX, bulletY, explosionId);
+                            this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.85);
                         } else if (typeof soundManager !== 'undefined') {
                             soundManager.playHit();

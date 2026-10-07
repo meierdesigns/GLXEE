@@ -110,12 +110,27 @@ extendClass(ObstacleManager, {
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        // Soft pulsing glow so crates read as loot, not rocks.
-        ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t * 0.006);
-        ctx.fillStyle = '#ffcf3a';
-        ctx.fillRect(Math.round(o.x) - 2, Math.round(o.y) - 2, o.width + 4, o.height + 4);
-        ctx.globalAlpha = 1;
-        ctx.drawImage(this.crateImage(), Math.round(o.x), Math.round(o.y), o.width, o.height);
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        let x = o.x;
+        let y = o.y;
+        let w = o.width;
+        let h = o.height;
+        if (cell) {
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+            w = Math.max(cell, Math.round(w / cell) * cell);
+            h = Math.max(cell, Math.round(h / cell) * cell);
+        } else {
+            x = Math.round(x);
+            y = Math.round(y);
+            // Soft pulsing glow so crates read as loot, not rocks.
+            ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t * 0.006);
+            ctx.fillStyle = '#ffcf3a';
+            ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+            ctx.globalAlpha = 1;
+        }
+        ctx.drawImage(this.crateImage(), x, y, w, h);
         ctx.restore();
     },
 });
@@ -187,51 +202,72 @@ extendClass(PickupManager, {
     drawPowerUp(ctx, p, x, y) {
         const def = POWER_UPS[p.powerUp] || POWER_UPS.power_shot;
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        const r = 5 + Math.round(Math.sin(t * 0.01) * 1);
-        x = Math.round(x);
-        y = Math.round(y);
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        let r = 5 + Math.round(Math.sin(t * 0.01) * 1);
+        if (cell) {
+            x = Math.round(x / cell) * cell;
+            y = Math.round(y / cell) * cell;
+            r = Math.max(cell, Math.round(r / cell) * cell);
+        } else {
+            x = Math.round(x);
+            y = Math.round(y);
+        }
+        const step = cell || 1;
         // Silhouette as pixel rows: half-width per row offset dy.
         const half = (dy, rr) => {
             const a = Math.abs(dy);
             if (def.shape === 'diamond') return rr - a;
-            if (def.shape === 'hex') return Math.min(rr - 1, (rr - a) * 2);
+            if (def.shape === 'hex') return Math.min(rr - step, (rr - a) * 2);
             return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
         };
-        const shape = (rr, color) => {
+        const shape = (rr, color, alpha) => {
+            if (alpha != null) ctx.globalAlpha = alpha;
             ctx.fillStyle = color;
-            for (let dy = -rr; dy <= rr; dy++) {
+            for (let dy = -rr; dy <= rr; dy += step) {
                 const h = half(dy, rr);
-                if (h >= 0) ctx.fillRect(x - h, y + dy, h * 2 + 1, 1);
+                if (h >= 0) {
+                    const hw = cell ? Math.max(cell, Math.round(h / cell) * cell) : h;
+                    if (cv && cv.fill) cv.fill(ctx, x - hw, y + dy, hw * 2 + step, step, color, alpha == null ? 1 : alpha);
+                    else ctx.fillRect(x - hw, y + dy, hw * 2 + step, step);
+                }
             }
+            if (alpha != null) ctx.globalAlpha = 1;
         };
         ctx.save();
-        // Coloured halo so the type reads even when tiny.
-        ctx.globalAlpha = 0.35;
-        shape(r + 3, def.color);
-        ctx.globalAlpha = 1;
-        shape(r + 1, '#05060a');
+        ctx.imageSmoothingEnabled = false;
+        // Coloured halo so the type reads even when tiny — skipped in VOXEL.
+        if (!cell) {
+            ctx.globalAlpha = 0.35;
+            shape(r + 3, def.color);
+            ctx.globalAlpha = 1;
+        }
+        shape(r + step, '#05060a');
         shape(r, def.color);
-        shape(Math.max(1, r - 3), def.light);
-        ctx.fillStyle = '#05060a';
+        shape(Math.max(step, r - 3 * step), def.light);
+        const mark = (mx, my, mw, mh) => {
+            if (cv && cv.fill) cv.fill(ctx, mx, my, mw, mh, '#05060a', 1);
+            else {
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(mx, my, mw, mh);
+            }
+        };
         if (def.glyph === 'arrow') {
-            // Arrow up: "stronger".
-            ctx.fillRect(x, y - 2, 1, 5);
-            ctx.fillRect(x - 1, y - 1, 3, 1);
-            ctx.fillRect(x - 2, y, 5, 1);
+            mark(x, y - 2 * step, step, 5 * step);
+            mark(x - step, y - step, 3 * step, step);
+            mark(x - 2 * step, y, 5 * step, step);
         } else if (def.glyph === 'chevrons') {
-            // Double chevron: "faster".
             for (let k = 0; k < 2; k++) {
-                const yy = y - 2 + k * 3;
-                ctx.fillRect(x, yy, 1, 1);
-                ctx.fillRect(x - 1, yy + 1, 1, 1);
-                ctx.fillRect(x + 1, yy + 1, 1, 1);
-                ctx.fillRect(x - 2, yy + 2, 1, 1);
-                ctx.fillRect(x + 2, yy + 2, 1, 1);
+                const yy = y - 2 * step + k * 3 * step;
+                mark(x, yy, step, step);
+                mark(x - step, yy + step, step, step);
+                mark(x + step, yy + step, step, step);
+                mark(x - 2 * step, yy + 2 * step, step, step);
+                mark(x + 2 * step, yy + 2 * step, step, step);
             }
         } else {
-            // Plus: "protect".
-            ctx.fillRect(x, y - 2, 1, 5);
-            ctx.fillRect(x - 2, y, 5, 1);
+            mark(x, y - 2 * step, step, 5 * step);
+            mark(x - 2 * step, y, 5 * step, step);
         }
         ctx.restore();
     },

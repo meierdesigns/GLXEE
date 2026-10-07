@@ -52,7 +52,10 @@ extendClass(ObstacleManager, {
             explosionId: obstacleType.includes('shield') ? 'small_pop' : 'asteroid_burst',
             fragmentGeneration: 0,
             sprite: this.doesObstacleReflect(obstacleType) ? 'shield' : 'obstacle',
-            opacity: 1
+            opacity: 1,
+            wallDepth: this.pickWallDepth
+                ? this.pickWallDepth(-size.width, size.width, gameState)
+                : (Math.random() < 0.55 ? 'under' : 'over')
         };
         this.obstacles.push(this.maybeBoulder(obstacle));
     },
@@ -110,11 +113,11 @@ extendClass(ObstacleManager, {
             case 'small_asteroid':
                 return 1;
             case 'medium_asteroid':
-                return 2;
+                return 1;
             case 'large_asteroid':
-                return 3;
+                return 2;
             case 'fragmented_asteroid':
-                return 2; // Fragmented asteroids are medium health
+                return 1;
             case 'small_shield':
             case 'medium_shield':
             case 'large_shield':
@@ -215,7 +218,8 @@ extendClass(ObstacleManager, {
                 health: this.getObstacleHealth(obstacleType),
                 maxHealth: this.getObstacleHealth(obstacleType),
                 isDestructible: this.isObstacleDestructible(obstacleType),
-                reflectsShots: this.doesObstacleReflect(obstacleType)
+                reflectsShots: this.doesObstacleReflect(obstacleType),
+                wallDepth: Math.random() < 0.55 ? 'under' : 'over'
             };
             this.obstacles.push(obstacle);
         }
@@ -245,7 +249,8 @@ extendClass(ObstacleManager, {
                 health: this.getObstacleHealth(obstacleType),
                 maxHealth: this.getObstacleHealth(obstacleType),
                 isDestructible: this.isObstacleDestructible(obstacleType),
-                reflectsShots: this.doesObstacleReflect(obstacleType)
+                reflectsShots: this.doesObstacleReflect(obstacleType),
+                wallDepth: Math.random() < 0.55 ? 'under' : 'over'
             };
             this.obstacles.push(obstacle);
         }
@@ -272,7 +277,8 @@ extendClass(ObstacleManager, {
                 health: this.getObstacleHealth(obstacleType),
                 maxHealth: this.getObstacleHealth(obstacleType),
                 isDestructible: this.isObstacleDestructible(obstacleType),
-                reflectsShots: this.doesObstacleReflect(obstacleType)
+                reflectsShots: this.doesObstacleReflect(obstacleType),
+                wallDepth: Math.random() < 0.55 ? 'under' : 'over'
             };
             this.obstacles.push(obstacle);
         }

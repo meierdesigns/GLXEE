@@ -210,10 +210,15 @@ class PickupManager {
 
             p.vx *= 0.96;
             p.vy = p.vy * 0.96 + 0.015 * speedMul;
-            p.x += p.vx * speedMul;
-            p.y += p.vy * speedMul;
+            let pdx = p.vx * speedMul;
+            let pdy = p.vy * speedMul;
 
-            if (px == null || py == null) continue;
+            if (px == null || py == null) {
+                const cv0 = (typeof window !== 'undefined') ? window.combatVoxels : null;
+                if (cv0 && cv0.active && cv0.active() && cv0.stepMove) cv0.stepMove(p, pdx, pdy);
+                else { p.x += pdx; p.y += pdy; }
+                continue;
+            }
             const dx = px - p.x;
             const dy = py - p.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
@@ -224,14 +229,33 @@ class PickupManager {
                 continue;
             }
 
-            if (dist <= magnetR) {
-                const pull = magnetSpeed * (1 - dist / magnetR) * speedMul;
-                p.x += (dx / dist) * pull * 2.2;
-                p.y += (dy / dist) * pull * 2.2;
-                if (dist <= collectR) {
+            // Victory scoop: pull every resource across the whole map so leftover
+            // drops cannot stall the victory screen.
+            if (this.lootPhase && !p.powerUp) {
+                const pull = Math.min(14, 3.2 + dist * 0.12) * speedMul;
+                pdx += (dx / dist) * pull;
+                pdy += (dy / dist) * pull;
+                const cv1 = (typeof window !== 'undefined') ? window.combatVoxels : null;
+                if (cv1 && cv1.active && cv1.active() && cv1.stepMove) cv1.stepMove(p, pdx, pdy);
+                else { p.x += pdx; p.y += pdy; }
+                if (dist <= collectR * 1.35) {
                     this.collectOne(p);
                     this.pickups.splice(i, 1);
                 }
+                continue;
+            }
+
+            if (dist <= magnetR) {
+                const pull = magnetSpeed * (1 - dist / magnetR) * speedMul;
+                pdx += (dx / dist) * pull * 2.2;
+                pdy += (dy / dist) * pull * 2.2;
+            }
+            const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
+            if (cv && cv.active && cv.active() && cv.stepMove) cv.stepMove(p, pdx, pdy);
+            else { p.x += pdx; p.y += pdy; }
+            if (dist <= magnetR && dist <= collectR) {
+                this.collectOne(p);
+                this.pickups.splice(i, 1);
             }
         }
 
@@ -289,11 +313,22 @@ class PickupManager {
     render(ctx) {
         if (!ctx || !this.pickups.length) return;
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
         this.pickups.forEach((p) => {
-            const bob = Math.sin((t + p.age) * 0.008) * 1.5;
-            const x = Math.round(p.x);
-            const y = Math.round(p.y + bob);
-            const size = Math.max(6, Math.round(p.size));
+            const bob = cell ? 0 : Math.sin((t + p.age) * 0.008) * 1.5;
+            let x = p.x;
+            let y = p.y + bob;
+            let size = Math.max(6, Math.round(p.size));
+            if (cell) {
+                x = Math.round(x / cell) * cell;
+                y = Math.round(y / cell) * cell;
+                // Icon spans whole cells on the shared lattice (same cell size).
+                size = Math.max(cell * 4, Math.round(size / cell) * cell);
+            } else {
+                x = Math.round(x);
+                y = Math.round(y);
+            }
             if (p.powerUp && this.drawPowerUp) {
                 ctx.save();
                 this.drawPowerUp(ctx, p, x, y);
@@ -304,9 +339,12 @@ class PickupManager {
             const tint = this.resourceColor(p.id);
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;
             ctx.save();
+            ctx.imageSmoothingEnabled = false;
             ctx.globalAlpha = fade;
             if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
                 iconRenderer.drawKey(ctx, key, x - size / 2, y - size / 2, size, tint);
+            } else if (cv && cv.fill) {
+                cv.fill(ctx, x - size / 2, y - size / 2, size, size, tint, fade);
             } else {
                 ctx.fillStyle = tint;
                 ctx.fillRect(x - 3, y - 3, 6, 6);

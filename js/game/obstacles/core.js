@@ -184,8 +184,18 @@ class ObstacleManager {
             sprite: d.sprite || (isFog ? 'fog' : kind === 'shield' ? 'shield' : kind === 'crystal' ? 'crystal' : 'obstacle'),
             opacity: d.opacity != null ? d.opacity : (isFog ? 0.4 : 1),
             lightIntensity: kind === 'crystal' ? 0.4 : 0,
-            lightColor: kind === 'crystal' ? 'var(--color-highlight)' : null
+            lightColor: kind === 'crystal' ? 'var(--color-highlight)' : null,
+            // under = tucked behind canyon walls; over = sits on top of them
+            wallDepth: ov.wallDepth || (isFog ? 'over' : (Math.random() < 0.55 ? 'under' : 'over'))
         };
+    }
+
+    /** Pick under/over wall layer (biased under near canyon lips). */
+    pickWallDepth(x, width, gameState) {
+        const W = (gameState && gameState.width) || 240;
+        const cx = (x || 0) + (width || 0) / 2;
+        const nearWall = cx < W * 0.28 || cx > W * 0.72;
+        return Math.random() < (nearWall ? 0.7 : 0.45) ? 'under' : 'over';
     }
 
     update(deltaTime, gameState) {

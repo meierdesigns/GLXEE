@@ -22,12 +22,14 @@ const TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel'
 const TERRAIN_SEGMENT_ROWS = 40; // wall rows per material segment
 const TERRAIN_MATERIALS = {
     rock: { id: 'rock', hp: 1, score: 2 },
-    metal: { id: 'metal', hp: 3, score: 6 },
+    metal: { id: 'metal', hp: 1, score: 6 },
     crystal: { id: 'crystal', hp: 1, score: 4 },
-    magma: { id: 'magma', hp: 2, score: 3 }
+    magma: { id: 'magma', hp: 1, score: 3 }
 };
 const TERRAIN_SILL_ROWS = 5;     // rows of the threshold at an area change
-const TERRAIN_SILL_REACH = 0.13; // how far it juts in from each side (x W)
+// Visual marker only — keep the upper flight band open (was 0.13 and stacked
+// with the gate, which sealed the passage).
+const TERRAIN_SILL_REACH = 0.05; // how far it juts in from each side (x W)
 const OBSTACLE_LAYER_SPACING = 160; // px of scroll between obstacle rows
 // Areas that squeeze or stab into the passage; later stages favour them.
 const TERRAIN_HARSH_ZONES = ['narrows', 'teeth', 'zigzag', 'gorge', 'spires', 'icefall', 'ribs', 'chasm', 'funnel'];
@@ -128,7 +130,10 @@ extendClass(ObstacleManager, {
                 width: w,
                 height: h,
                 horizontalSpeed: speeds.horizontalSpeed * (pt.speedMul || 1),
-                verticalSpeed: speeds.verticalSpeed * (pt.speedMul || 1)
+                verticalSpeed: speeds.verticalSpeed * (pt.speedMul || 1),
+                wallDepth: (!def || def.kind === 'fog')
+                    ? 'over'
+                    : (this.pickWallDepth ? this.pickWallDepth(x, w, gameState) : undefined)
             });
             obs.entering = true;
             obs.age = 0;
@@ -341,6 +346,11 @@ extendClass(ObstacleManager, {
                 obs.verticalSpeed = vSpeed;
                 obs.entering = true;
                 obs.age = 0;
+                // Depth vs canyon walls: near lips prefer tucked under.
+                if (!obs.isFog && this.pickWallDepth) {
+                    const midX = dir > 0 ? along : (W - along);
+                    obs.wallDepth = this.pickWallDepth(midX, obs.width, gameState);
+                }
                 this.obstacles.push(obs);
                 spawned++;
                 groupEnd = Math.max(groupEnd, along + obs.width);
@@ -568,6 +578,10 @@ extendClass(ObstacleManager, {
 
     /** Terrain art cell in logical px (shared by walls, ground and obstacles). */
     terrainCell() {
+        if (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell) {
+            const cell = renderManager.getCombatVoxelCell();
+            if (cell != null && cell > 0) return cell;
+        }
         return typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
     },
 
@@ -609,10 +623,10 @@ extendClass(ObstacleManager, {
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
         const zone = this.terrainZoneAt(wr, prof);
-        // Area threshold: both walls step in to flat gate pillars.
+        // Area threshold: light pillars — floor stripe still marks the seam.
         const gd = this.terrainGateRow(wr, prof);
-        // Pillar reaches ~10% of W; its top/bottom rows taper by one cell.
-        const gate = gd == null ? 0 : Math.round((W * 0.1) / cell) - (Math.abs(gd) === 3 ? 1 : 0);
+        // Pillar reaches ~4% of W; never seal the enemy band.
+        const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
         // Occasional big outcrop reaching far into the passage (one side per slot).
         const outcrop = (side) => {
             const slot = Math.floor(wr / 70);
@@ -655,14 +669,15 @@ extendClass(ObstacleManager, {
             return Math.round((W * v) / cell);
         };
         const out = {};
-        // Always leave a flyable passage (~35% of the width).
-        const maxCells = Math.floor((W * 0.65) / cell);
-        // Threshold at every area change: a sill juts in from both sides for
-        // a few rows (sloped ends, flat top), marking the new area.
+        // Always leave a flyable passage (~45% of the width) so the upper
+        // enemy band stays usable even at zone seams.
+        const maxCells = Math.floor((W * 0.55) / cell);
+        // Threshold sill marks the new area — skip when a gate is already
+        // active so the two never stack into a sealed wall.
         const zi = this.terrainZoneIndex(wr, prof);
         const local = wr - zi * prof.zoneRows;
         let sill = 0;
-        if (zi >= 1 && local < TERRAIN_SILL_ROWS) {
+        if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
             const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
             sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
         }
@@ -683,13 +698,13 @@ extendClass(ObstacleManager, {
             const { mat, base, full } = fullOf[side];
             const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + wr) || 0) : 0;
             const eroded = Math.floor(dmg / mat.hp);
-            // The outermost cell is bedrock: walls never vanish entirely.
-            const width = Math.max(1, full - eroded);
+            // Fully carveable — blast the wall away to open the corridor.
+            const width = Math.max(0, full - eroded);
             const k = side ? 'right' : 'left';
             out[k] = width;
             out[k + 'Base'] = Math.min(base, width);
             out[k + 'Mat'] = mat;
-            out[k + 'Cracked'] = (dmg % mat.hp) > 0; // edge cell already hit
+            out[k + 'Cracked'] = width > 0 && (dmg % mat.hp) > 0; // edge cell already hit
             // Sill cells (between the base wall and the edge) get their own look.
             out[k + 'Sill'] = fullOf[side].sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
         }
@@ -712,28 +727,28 @@ extendClass(ObstacleManager, {
     terrainWeaponProfile(bullet) {
         const type = String((bullet && bullet.type) || '').replace(/^enemy_/, '');
         const base = {
-            missile_shot: { power: 5, radius: 3 },
-            nova_shot: { power: 4, radius: 3 },
-            plasma_beam: { power: 3, radius: 2 },
-            plasma: { power: 3, radius: 2 },
-            ion_beam: { power: 2, radius: 1, vsMetal: 3 },
-            pierce_beam: { power: 2, radius: 0, pierce: true },
-            laser_beam: { power: 2, radius: 1 },
-            laser: { power: 2, radius: 1 },
-            wave_beam: { power: 2, radius: 1 },
-            spread_beam: { power: 1, radius: 0 },
-            spread: { power: 1, radius: 0 },
-            rapid_beam: { power: 1, radius: 0 },
-            rapid: { power: 1, radius: 0 },
-            burst_shot: { power: 1, radius: 1 }
-        }[type] || { power: 2, radius: 1 };
+            missile_shot: { power: 10, radius: 5 },
+            nova_shot: { power: 9, radius: 5 },
+            plasma_beam: { power: 7, radius: 3 },
+            plasma: { power: 7, radius: 3 },
+            ion_beam: { power: 5, radius: 2, vsMetal: 3 },
+            pierce_beam: { power: 5, radius: 2, pierce: true },
+            laser_beam: { power: 5, radius: 2 },
+            laser: { power: 5, radius: 2 },
+            wave_beam: { power: 5, radius: 2 },
+            spread_beam: { power: 5, radius: 2 },
+            spread: { power: 5, radius: 2 },
+            rapid_beam: { power: 4, radius: 1 },
+            rapid: { power: 4, radius: 1 },
+            burst_shot: { power: 5, radius: 2 }
+        }[type] || { power: 5, radius: 2 };
         const dmg = Number(bullet && bullet.damage);
-        const scale = Number.isFinite(dmg) && dmg > 0 ? Math.max(0.6, Math.min(3, dmg / 10)) : 1;
+        const scale = Number.isFinite(dmg) && dmg > 0 ? Math.max(1, Math.min(4, dmg / 6)) : 1;
         return {
-            power: Math.max(1, Math.round(base.power * scale)),
+            power: Math.max(3, Math.round(base.power * scale)),
             radius: base.radius,
             pierce: !!base.pierce,
-            vsMetal: base.vsMetal || 1
+            vsMetal: base.vsMetal || 2
         };
     },
 
@@ -743,7 +758,7 @@ extendClass(ObstacleManager, {
      */
     damageTerrain(y, side, profile) {
         if (!this.terrainDamage) this.terrainDamage = new Map();
-        const pr = profile || { power: 1, radius: 0, vsMetal: 1 };
+        const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
         const wr = this.terrainRowAtY(y);
         let broken = 0;
         for (let d = -pr.radius; d <= pr.radius; d++) {
@@ -753,8 +768,8 @@ extendClass(ObstacleManager, {
             // with a little randomness so the edge looks torn.
             const fall = 1 - Math.abs(d) / (pr.radius + 1);
             let pts = pr.power * fall * (mat.id === 'metal' ? pr.vsMetal : 1);
-            pts = Math.floor(pts + Math.random() * 0.8);
-            if (pts <= 0) continue;
+            // Always break at least one cell on the impact row.
+            pts = Math.max(d === 0 ? 2 : 1, Math.floor(pts + Math.random() * 0.9));
             const k = side + ':' + row;
             const before = this.terrainDamage.get(k) || 0;
             this.terrainDamage.set(k, before + pts);

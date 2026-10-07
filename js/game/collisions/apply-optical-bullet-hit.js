@@ -101,7 +101,7 @@ extendClass(CollisionManager, {
         obstacle.health--;
         if (obstacle.health <= 0) {
             obstacleManager.removeObstacle(obstacleIndex);
-            this.createDetailedHitEffect(x, y, 'destroy', explosionId || 'crystal_shatter');
+            this.createDetailedHitEffect(x, y, 'destroy', explosionId || 'crystal_shatter', obstacle);
             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
             if (typeof game !== 'undefined') game.score += 12;
         } else {
@@ -134,9 +134,21 @@ extendClass(CollisionManager, {
         }
     },
 
-    createDetailedHitEffect(x, y, effectType, presetId) {
+    createDetailedHitEffect(x, y, effectType, presetId, source) {
         if (effectType === 'destroy' && typeof explosionSystem !== 'undefined') {
-            explosionSystem.play(presetId || 'asteroid_burst', x, y, { silent: true, scale: 0.85 });
+            const w = source && source.width != null ? Number(source.width) : 14;
+            const h = source && source.height != null ? Number(source.height) : 14;
+            const size = Math.max(w, h);
+            // Spread with the rock; particle pixels stay fine on big ones.
+            const spread = Math.min(1.85, 0.75 + size / 26);
+            const pSizeMul = size >= 16 ? Math.max(0.5, 12 / size) : 0.85;
+            explosionSystem.play(presetId || 'asteroid_burst', x, y, {
+                silent: true,
+                scale: spread,
+                particleSizeScale: pSizeMul,
+                width: w,
+                height: h
+            });
             return;
         }
         // Light hits: small particle flecks only — no stacked ring burst.

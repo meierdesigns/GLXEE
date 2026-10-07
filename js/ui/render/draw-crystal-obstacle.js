@@ -3,6 +3,12 @@
 // RenderManager methods, split from render.js.
 extendClass(RenderManager, {
     drawCrystalObstacle(ctx, obstacle) {
+        const cell = this.getCombatVoxelCell();
+        if (cell != null && cell > 0) {
+            this.drawCrystalObstacleVoxel(ctx, obstacle, cell);
+            return;
+        }
+
         const x = obstacle.x;
         const y = obstacle.y;
         const w = obstacle.width;
@@ -88,6 +94,76 @@ extendClass(RenderManager, {
         ctx.fillStyle = c0;
         ctx.globalAlpha = 0.9;
         ctx.fillRect(-1, -1, 2, 2);
+        ctx.restore();
+    },
+
+    /** VOXEL: hard lattice crystal — no soft path fills / strokes. */
+    drawCrystalObstacleVoxel(ctx, obstacle, cell) {
+        const x = obstacle.x;
+        const y = obstacle.y;
+        const w = obstacle.width;
+        const h = obstacle.height;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const mode = obstacle.opticalMode || 'prism';
+        const t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.001;
+        const rot = (obstacle.rotation || 0) + (mode === 'kaleidoscope' ? t * 0.4 : t * 0.15);
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
+        const facets = mode === 'kaleidoscope' ? 6 : (mode === 'prism' ? 5 : 4);
+        const rx = w * 0.48;
+        const ry = h * 0.48;
+        const c0 = this.themeColor(['--color-highlight', '--color-text'], '#e8ffff');
+        const c1 = this.themeColor(['--color-accent', '--color-secondary'], '#88ddff');
+        const c2 = this.themeColor(['--color-primary', '--color-particle'], '#aaffee');
+        const c3 = this.themeColor(['--color-explosion', '--color-warning'], '#ffcc88');
+        const palette = [c0, c1, c2, c3];
+
+        const verts = [];
+        for (let i = 0; i < facets; i++) {
+            const a = (Math.PI * 2 * i) / facets - Math.PI / 2;
+            const lx = Math.cos(a) * rx;
+            const ly = Math.sin(a) * ry;
+            verts.push({ x: cx + lx * cos - ly * sin, y: cy + lx * sin + ly * cos });
+        }
+        const inside = (px, py) => {
+            let odd = false;
+            for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+                const xi = verts[i].x;
+                const yi = verts[i].y;
+                const xj = verts[j].x;
+                const yj = verts[j].y;
+                if (((yi > py) !== (yj > py))
+                    && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi)) {
+                    odd = !odd;
+                }
+            }
+            return odd;
+        };
+        const x0 = Math.floor(x / cell) * cell;
+        const y0 = Math.floor(y / cell) * cell;
+        const x1 = Math.ceil((x + w) / cell) * cell;
+        const y1 = Math.ceil((y + h) / cell) * cell;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        for (let py = y0; py < y1; py += cell) {
+            for (let px = x0; px < x1; px += cell) {
+                const mx = px + cell * 0.5;
+                const my = py + cell * 0.5;
+                if (!inside(mx, my)) continue;
+                const dx = mx - cx;
+                const dy = my - cy;
+                const ang = Math.atan2(dy * cos - dx * sin, dx * cos + dy * sin);
+                let fi = Math.floor(((ang + Math.PI / 2) / (Math.PI * 2)) * facets);
+                fi = ((fi % facets) + facets) % facets;
+                const edge = Math.hypot(dx, dy) > Math.min(rx, ry) * 0.72;
+                ctx.fillStyle = edge ? c0 : palette[fi % palette.length];
+                ctx.globalAlpha = edge ? 0.95 : 0.75;
+                ctx.fillRect(px, py, cell, cell);
+            }
+        }
+        // Core
+        this.fillCombatRect(ctx, cx - cell, cy - cell, cell * 2, cell * 2, c0, 1);
         ctx.restore();
     },
 

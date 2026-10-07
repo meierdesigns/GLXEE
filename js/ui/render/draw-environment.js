@@ -73,7 +73,10 @@ extendClass(RenderManager, {
     },
 
     bakeObstacleImage(obstacle, isShield) {
-        const d = OBSTACLE_ART_DENSITY;
+        const cell = (typeof obstacleManager !== 'undefined' && obstacleManager.terrainCell)
+            ? obstacleManager.terrainCell()
+            : (1 / OBSTACLE_ART_DENSITY);
+        const d = 1 / Math.max(0.5, cell);
         const gw = Math.max(4, Math.round(obstacle.width * d));
         const gh = Math.max(4, Math.round(obstacle.height * d));
         let seed = Math.floor(Math.random() * 1e9);
@@ -250,11 +253,16 @@ extendClass(RenderManager, {
      */
     drawScrollTerrain(ctx, width, height) {
         if (typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
-            || !(obstacleManager.hasTerrain ? obstacleManager.hasTerrain() : obstacleManager.isScrollStage())) return;
+            || !(obstacleManager.hasTerrain ? obstacleManager.hasTerrain() : obstacleManager.isScrollStage())) {
+            this._terrainWallReady = false;
+            return;
+        }
         const env = this.getCombatEnvironment();
         const W = width || 240;
         const H = height || 300;
-        const cell = 1 / OBSTACLE_ART_DENSITY;
+        const cell = (typeof obstacleManager !== 'undefined' && obstacleManager.terrainCell)
+            ? obstacleManager.terrainCell()
+            : (1 / OBSTACLE_ART_DENSITY);
         const offset = obstacleManager.terrainOffset || 0;
         // Later stages look harsher: darker floor, walls drift towards red,
         // more glowing veins (stageDanger 0..1, kept subtle).
@@ -305,12 +313,68 @@ extendClass(RenderManager, {
             }
             return hit;
         };
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
+        // Paint into a 1× logical offscreen, then one drawImage — far cheaper
+        // than tens of thousands of fillRect calls on the supersampled canvas.
+        let buf = this._terrainBuf;
+        if (!buf) {
+            buf = document.createElement('canvas');
+            this._terrainBuf = buf;
+        }
+        if (buf.width !== W || buf.height !== H) {
+            buf.width = W;
+            buf.height = H;
+        }
+        const bctx = buf.getContext('2d', { alpha: false });
+        if (!bctx) return;
+        bctx.imageSmoothingEnabled = false;
+        bctx.fillStyle = '#0a0c10';
+        bctx.fillRect(0, 0, W, H);
+
+        // color → flat [x,y,w,h,…] runs (horizontal RLE).
+        // Ground and walls stay in separate batches so obstacles can sit
+        // between them (under the canyon lip) or on top (over the walls).
+        const groundBatch = Object.create(null);
+        const wallBatch = Object.create(null);
+        let batch = groundBatch;
+        const pushRun = (col, x, y, w, h) => {
+            if (!col || !(w > 0) || !(h > 0)) return;
+            let a = batch[col];
+            if (!a) batch[col] = a = [];
+            a.push(x, y, w, h);
+        };
+        const flushBatch = (target, into) => {
+            for (const col in target) {
+                if (!Object.prototype.hasOwnProperty.call(target, col)) continue;
+                into.fillStyle = col;
+                const a = target[col];
+                for (let i = 0; i < a.length; i += 4) {
+                    into.fillRect(a[i], a[i + 1], a[i + 2], a[i + 3]);
+                }
+            }
+        };
+        const flushRow = (colsArr, y) => {
+            let runCol = null;
+            let runX = 0;
+            let runW = 0;
+            for (let cx = 0; cx < cols; cx++) {
+                const col = colsArr[cx];
+                if (col === runCol) {
+                    runW += cell;
+                } else {
+                    if (runCol) pushRun(runCol, runX, y, runW, cell);
+                    runCol = col;
+                    runX = cx * cell;
+                    runW = cell;
+                }
+            }
+            if (runCol) pushRun(runCol, runX, y, runW, cell);
+        };
+
         // Ground: a far layer, scrolls at half speed (parallax under the walls).
         const gOff = offset * GROUND_PARALLAX;
         const gPhase = gOff % cell;
         const gBase = Math.floor(gOff / cell);
+        const rowCols = new Array(cols);
         for (let r = -1; r * cell + gPhase < H; r++) {
             const y = r * cell + gPhase;
             const wr = gBase - r;
@@ -318,7 +382,6 @@ extendClass(RenderManager, {
                 const n = this.envNoise(cx, wr);
                 let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
                 if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.04 : 0.018) * pal.veinMul) col = pal.special;
-                // The area overhead (wall row at this screen y) picks the floor.
                 const floor = obstacleManager.terrainFloorAt
                     ? obstacleManager.terrainFloorAt(baseRow - r, cx) : 'craters';
                 if (floor === 'craters') {
@@ -327,31 +390,26 @@ extendClass(RenderManager, {
                 } else {
                     col = this.terrainFloorCell(floor, pal, cx, wr, n) || col;
                 }
-                ctx.fillStyle = col;
-                ctx.fillRect(cx * cell, y, cell, cell);
+                rowCols[cx] = col;
             }
+            flushRow(rowCols, y);
         }
-        // Canyon slope: the ground darkens and steps down towards the walls,
-        // following their contour, so the back layer reads as the canyon floor
-        // below them (outcrops and narrows cast their shape onto it).
+        // Canyon slope
         const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
         for (let r = -1; r * cell + phase < H; r++) {
             const y = r * cell + phase;
             const walls = obstacleManager.terrainWallCells(baseRow - r, W);
             for (let side = 0; side < 2; side++) {
                 const width = walls[side ? 'right' : 'left'];
-                // Wider slope under bigger walls.
                 const reach = Math.min(slope.length, 2 + Math.floor(width / 4));
                 for (let i = 0; i < reach; i++) {
                     const cx = side ? cols - width - 1 - i : width + i;
                     if (cx < 0 || cx >= cols) continue;
-                    ctx.fillStyle = 'rgba(0,0,0,' + slope[i + slope.length - reach] + ')';
-                    ctx.fillRect(cx * cell, y, cell, cell);
+                    pushRun('rgba(0,0,0,' + slope[i + slope.length - reach] + ')', cx * cell, y, cell, cell);
                 }
             }
         }
-        // Area threshold on the floor: dark seam with a lit lip and accent
-        // lights, at wall speed so it lines up with the gate pillars.
+        // Area threshold on the floor
         if (obstacleManager.terrainGateRow) {
             for (let r = -1; r * cell + phase < H; r++) {
                 const gd = obstacleManager.terrainGateRow(baseRow - r);
@@ -360,14 +418,15 @@ extendClass(RenderManager, {
                 for (let cx = 0; cx < cols; cx++) {
                     let col;
                     if (gd === 0) col = (cx % 6 === 3) ? pal.accent : '#05060a';
-                    else if (gd === 1) col = pal.craterLit;      // upper lip catches the light
-                    else col = pal.ground[3];                     // lower shadow
-                    ctx.fillStyle = col;
-                    ctx.fillRect(cx * cell, y, cell, cell);
+                    else if (gd === 1) col = pal.craterLit;
+                    else col = pal.ground[3];
+                    rowCols[cx] = col;
                 }
+                flushRow(rowCols, y);
             }
         }
-        // Walls: the solid near layer at full scroll speed (matches collisions).
+        // Walls (own batch → drawn after under-wall obstacles)
+        batch = wallBatch;
         const mats = this.terrainMaterialPalettes(env, pal);
         for (let r = -1; r * cell + phase < H; r++) {
             const y = r * cell + phase;
@@ -379,26 +438,79 @@ extendClass(RenderManager, {
                 const base = walls[k + 'Base'];
                 const mat = walls[k + 'Mat'];
                 const mp = mats[mat.id];
-                // Cells from the canyon edge outwards; -1 = shadow on the ground.
+                let runCol = null;
+                let runX = 0;
+                let runW = 0;
+                const flushWall = () => {
+                    if (runCol) pushRun(runCol, runX, y, runW, cell);
+                    runCol = null;
+                    runW = 0;
+                };
                 for (let edge = -1; edge < width; edge++) {
                     const cx = side ? cols - width + edge : width - 1 - edge;
                     let col;
                     if (edge < 0) col = 'rgba(0,0,0,0.55)';
                     else if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                     else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
-                        // Area threshold: lit lip, then hazard stripes in the faction colour.
                         col = edge === 1 ? '#e8e2d0'
                             : ((((cx + wr) % 4) + 4) % 4) < 2 ? pal.accent : '#1a1c22';
                     }
                     else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                     else if (edge < width - base) col = (env.style === 'tech' && ((wr & 3) < 2)) || env.style === 'organic' ? pal.accent : pal.wall[1];
                     else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
-                    ctx.fillStyle = col;
-                    ctx.fillRect(cx * cell, y, cell, cell);
+                    const px = cx * cell;
+                    if (col === runCol && px === runX + runW) {
+                        runW += cell;
+                    } else {
+                        flushWall();
+                        runCol = col;
+                        runX = px;
+                        runW = cell;
+                    }
                 }
+                flushWall();
             }
         }
+
+        flushBatch(groundBatch, bctx);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(buf, 0, 0);
         ctx.restore();
+
+        // Wall layer kept transparent so under-wall obstacles show through
+        // the corridor; blit later via drawScrollTerrainWalls.
+        let wbuf = this._terrainWallBuf;
+        if (!wbuf) {
+            wbuf = document.createElement('canvas');
+            this._terrainWallBuf = wbuf;
+        }
+        if (wbuf.width !== W || wbuf.height !== H) {
+            wbuf.width = W;
+            wbuf.height = H;
+        }
+        const wctx = wbuf.getContext('2d', { alpha: true });
+        if (wctx) {
+            wctx.setTransform(1, 0, 0, 1, 0, 0);
+            wctx.globalAlpha = 1;
+            wctx.globalCompositeOperation = 'source-over';
+            wctx.imageSmoothingEnabled = false;
+            wctx.clearRect(0, 0, W, H);
+            flushBatch(wallBatch, wctx);
+            this._terrainWallReady = true;
+        } else {
+            this._terrainWallReady = false;
+        }
+    },
+
+    /** Blit canyon walls prepared by the last drawScrollTerrain call. */
+    drawScrollTerrainWalls(ctx) {
+        if (!this._terrainWallReady || !this._terrainWallBuf) return;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(this._terrainWallBuf, 0, 0);
+        ctx.restore();
+        this._terrainWallReady = false;
     },
 
     /** Floor patterns for the canyon areas (null = keep the noise colour). */
@@ -516,7 +628,10 @@ extendClass(RenderManager, {
 
     drawAnimatedFog(ctx, o) {
         const W = this._fieldW || 240;
-        const cell = this.planetPixelSize(W);
+        const shared = (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell)
+            ? renderManager.getCombatVoxelCell()
+            : null;
+        const cell = (shared != null && shared > 0) ? shared : this.planetPixelSize(W);
         const t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
         if (o._fogSeed == null) o._fogSeed = Math.random() * 1000;
         const seed = o._fogSeed;

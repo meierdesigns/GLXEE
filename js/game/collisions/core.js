@@ -25,24 +25,50 @@ class CollisionManager {
     checkTerrainCollisions(gameState) {
         if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver) return;
         const W = (gameState && gameState.width) || 240;
+        const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const player = playerManager.getPosition();
         if (player) {
             const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
             if (walls) {
                 let hitX = null;
-                if (player.x < walls.left) { hitX = walls.left; player.x = walls.left + 1; }
-                else if (player.x + player.width > walls.right) { hitX = walls.right; player.x = walls.right - player.width - 1; }
+                let hitSide = -1;
+                if (player.x < walls.left) {
+                    hitX = walls.left;
+                    hitSide = 0;
+                    player.x = walls.left + 1;
+                } else if (player.x + player.width > walls.right) {
+                    hitX = walls.right;
+                    hitSide = 1;
+                    player.x = walls.right - player.width - 1;
+                }
+                if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.snapEntity) {
+                    window.combatVoxels.snapEntity(player);
+                }
                 const now = Date.now();
-                if (hitX != null && now - (this._terrainHitAt || 0) > 600) {
+                if (hitX != null && hitSide >= 0 && now - (this._terrainHitAt || 0) > 600) {
                     this._terrainHitAt = now;
                     const hy = player.y + player.height / 2;
-                    this.createDetailedHitEffect(hitX, hy, 'impact');
-                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
-                    if (playerManager.takeDamage(10) && typeof game !== 'undefined') game.gameOver();
+                    const wr = obstacleManager.terrainRowAtY(hy);
+                    const cells = obstacleManager.terrainWallCells
+                        ? obstacleManager.terrainWallCells(wr, W) : null;
+                    const thick = cells ? (hitSide ? cells.right : cells.left) : 2;
+                    // Carved / missing wall: no scrape damage. Thin lip: light tap.
+                    if (thick > 0) {
+                        const dmg = thick <= 1 ? 3 : 8;
+                        this.createDetailedHitEffect(hitX, hy, 'impact');
+                        if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+                        // Scraping the wall also chips it so you can grind an escape.
+                        if (obstacleManager.damageTerrain) {
+                            obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
+                        }
+                    }
                 }
             }
         }
         // Shots chip the wall they hit; player shots that break a cell score.
+        // Also carve when a shot is within one cell of the wall lip (VOXEL
+        // stepping often lands on the corridor edge without entering the rock).
         const burst = (list, remove, byPlayer) => {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
@@ -50,11 +76,20 @@ class CollisionManager {
                 const cx = b.x + (b.width || 0) / 2;
                 const cy = b.y + (b.height || 0) / 2;
                 const w = obstacleManager.terrainWallsAtY(cy, W);
-                if (!w || (cx >= w.left && cx <= w.right)) continue;
-                const side = cx < W / 2 ? 0 : 1;
+                if (!w) continue;
+                let side = -1;
+                if (cx <= w.left + cell) side = 0;
+                else if (cx >= w.right - cell) side = 1;
+                else continue;
+                // Skip if that side is already fully carved away.
+                const wrCheck = obstacleManager.terrainRowAtY(cy);
+                const cells = obstacleManager.terrainWallCells
+                    ? obstacleManager.terrainWallCells(wrCheck, W) : null;
+                if (cells && ((side === 0 && cells.left <= 0) || (side === 1 && cells.right <= 0))) {
+                    continue;
+                }
                 const profile = obstacleManager.terrainWeaponProfile(b);
-                // Piercing shots tunnel on (once per wall row they cross).
-                const row = obstacleManager.terrainRowAtY(cy);
+                const row = wrCheck;
                 if (profile.pierce && b._terrainRow === row) continue;
                 b._terrainRow = row;
                 if (!profile.pierce) remove(i);
@@ -131,6 +166,16 @@ class CollisionManager {
                     }
                     if (killedByHit) {
                         const killed = sides[j];
+                        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
+                            explosionSystem.play('small_pop', sx, sy, {
+                                width: killed.width,
+                                height: killed.height,
+                                silent: true,
+                                ship: killed,
+                                voxelPower: 0.85,
+                                scale: 0.75
+                            });
+                        }
                         sides.splice(j, 1);
                         if (typeof enemyManager !== 'undefined' && enemyManager.notifyKill) {
                             enemyManager.notifyKill({

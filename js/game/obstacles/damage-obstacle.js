@@ -10,16 +10,17 @@ extendClass(ObstacleManager, {
     /** Rock damage from a bullet: stronger weapons chew through faster. */
     bulletRockDamage(bullet) {
         const dmg = Number(bullet && bullet.damage) || 8;
-        return Math.max(1, Math.round(dmg / 7));
+        return Math.max(2, Math.round(dmg / 3.5));
     },
 
     /** Splash radius around the impact; missiles / heavy shots blast wider. */
     bulletSplashRadius(bullet) {
         const kind = String((bullet && (bullet.weaponType || bullet.type || bullet.weapon)) || '').toLowerCase();
         const dmg = Number(bullet && bullet.damage) || 8;
-        let r = Math.min(14, 4 + dmg * 0.4);
-        if (kind.includes('missile') || (bullet && bullet.homing)) r = Math.max(r, 24);
-        else if (kind.includes('plasma') || kind.includes('nova')) r = Math.max(r, 16);
+        let r = Math.min(20, 6 + dmg * 0.55);
+        if (kind.includes('missile') || (bullet && bullet.homing)) r = Math.max(r, 28);
+        else if (kind.includes('plasma') || kind.includes('nova')) r = Math.max(r, 20);
+        else if (kind.includes('spread')) r = Math.max(r, 12);
         return r;
     },
 
@@ -88,8 +89,11 @@ extendClass(ObstacleManager, {
         const bite = this.carveBoulder(o, ca, sa);
         const bx = bite ? bite.x : cx + ca * o.width * 0.4;
         const by = bite ? bite.y : cy + sa * o.height * 0.4;
-        const cw = bite ? bite.w : CHUNK_SIZE;
-        const ch = bite ? bite.h : CHUNK_SIZE;
+        const shared = (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell)
+            ? renderManager.getCombatVoxelCell() : null;
+        const unit = (shared != null && shared > 0) ? shared : CHUNK_SIZE;
+        const cw = bite ? bite.w : unit;
+        const ch = bite ? bite.h : unit;
         this.obstacles.push({
             x: bx - cw / 2,
             y: by - ch / 2,
@@ -116,6 +120,7 @@ extendClass(ObstacleManager, {
             explosionId: o.explosionId || 'asteroid_burst',
             sprite: 'obstacleSmall',
             opacity: 1,
+            wallDepth: o.wallDepth || (Math.random() < 0.55 ? 'under' : 'over'),
             _hiRes: bite ? bite.art : undefined
         });
     },
@@ -265,8 +270,8 @@ extendClass(ObstacleManager, {
         o.width = w;
         o.height = Math.round(s * (0.7 + Math.random() * 0.25));
         o.isBoulder = true;
-        o.shedSteps = huge ? 7 : 4;
-        o.health = o.maxHealth = Math.round((8 + Math.random() * 5) * (huge ? 1.8 : 1));
+        o.shedSteps = huge ? 5 : 3;
+        o.health = o.maxHealth = Math.round((4 + Math.random() * 3) * (huge ? 1.45 : 1));
         o.fragmentOnDestroy = true;
         o.fragmentCount = huge ? 4 : 3;
         o.fragmentSizeRatio = 0.5;

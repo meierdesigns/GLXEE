@@ -96,9 +96,10 @@ covers the shell until the start menu is restored, then drops without a fade so
 the first paint never flashes unstyled UI.
 
 `js/core/stage-boot.js` runs in `<head>` and locks a fixed **1280×960 (4:3)**
-logical stage plus `--stage-scale` before first paint. The last known faction
-styles the outer **bezel** immediately (`data-vf-faction`), and `vf-loading`
-holds transitions off until load settles.
+logical stage plus `--stage-scale` before first paint, sizing the stage to
+**95 %** of the window (same fill rule as `viewport-fit.js`). The last known
+faction styles the outer **bezel** immediately (`data-vf-faction`), and
+`vf-loading` holds transitions off until load settles.
 
 Optional local tools:
 
@@ -288,15 +289,18 @@ restored after a reload.
 ### Browser shell, stage, and resolution
 
 The whole app lives on a fixed **4:3 stage** (logical 1280×960). Viewport fit
-scales that stage uniformly into the window with a ≥50 px margin (DPR-aware so
-browser zoom keeps physical size). An outer **faction bezel** frames the stage;
-its top strip holds **RES** (opens a resolution slider 640–2560 wide),
-fullscreen, and logout mirrors. Layout proportions never change with RES —
-only the displayed size does. Ship render defaults to **VOXEL**.
+scales that stage uniformly to fill **95 %** of the window (width or height,
+whichever limits first) so proportions never change. An outer **faction bezel**
+frames the stage; its top strip holds **RES**, fullscreen, and logout mirrors.
+Ship render defaults to **VOXEL**.
 
-Home Station still uses `.vf-browser-shell` inside the stage. Header actions
-stay docked: crest, resources, LOGOUT, and PLAY in one strip. Mobile-narrow
-layouts allow PLAY to wrap full-width under the header.
+Home Station still uses `.vf-browser-shell` inside the stage. The area-tab row
+(including PLAY) aligns to the first content panel below it, with hysteresis so
+it does not jitter while loading. Inactive nav cards keep faction shape without
+extra inset frames; PLAY uses a calmer shell without translucent outer glow
+rings. Tooltips skip controls that already show their own label (including area
+tabs). Header actions stay docked: crest, resources, LOGOUT, and PLAY in one
+strip. Mobile-narrow layouts allow PLAY to wrap full-width under the header.
 
 ### Hull areas and slots
 
@@ -465,8 +469,10 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Universe JSON download/upload for galaxies, faction state, and every pilot profile.
 - Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
 - Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
-- Fixed 4:3 stage with faction bezel, RES slider, and pre-paint `stage-boot`.
+- Fixed 4:3 stage filling 95 % of the window, faction bezel, and pre-paint `stage-boot`.
+- Station tabs aligned to content; quieter tooltips; calmer PLAY shell without glow rings.
 - Playfield-first layout inside the stage, VOXEL-default combat lattice, silhouette debris.
+- Side enemies leave the field when off-screen so HUD bars and clear checks stay honest.
 - Exact size/speed overlay for player, enemy classes, and shots; thicker pixel borders.
 - Crystal terrain and prism obstacles; dive-in enemy entries; faster victory scoop.
 - Hangar area pager and pixel-step bay zoom; game-over wreck flies into a free lane.
@@ -489,18 +495,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STAGE   ── 4:3 fixed layout ── faction bezel ── RES slider ── stage-boot
+STAGE   ── 4:3 @ 95% window fill ── faction bezel ── stage-boot
    │
-HANGAR  ── area pager ── pixel-step bay zoom ── smooth sub-pixel shrink
+STATION ── tab-row align ── quiet tooltips ── calmer PLAY shell
    │
-FIGHT   ── VOXEL default ── fine rock fireballs ── wreck fly-in lane
+HANGAR  ── area pager ── pixel-step bay zoom
    │
-PILOT   ── restore New Pilot steps ── profile tiles ── known toggle
+FIGHT   ── off-screen side cull ── VOXEL default ── wreck fly-in
 ```
 
-Recent waves lock a resolution-selectable 4:3 stage behind a faction bezel,
-replace the hangar accordion with an area pager, default combat to VOXEL, and
-polish wreck / fireball presentation.
+Recent waves fill the fixed 4:3 stage to 95 % of the window, align station tabs
+to content without tooltip noise, calm the PLAY chrome, and drop side enemies
+once they leave the screen.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -635,6 +641,11 @@ be reviewed or reverted independently.
 | 57D | Pilot flow restore | Resume unfinished New Pilot faction/name steps after reload |
 | 57E | Combat present polish | Fine rock fireballs, wreck fly-in lane, VOXEL default |
 | 57F | README stage archive | Document stage bezel, hangar pager, and zoom for waves 57A–57E |
+| 58A | Stage window fill | Scale the 4:3 stage to 95 % of the window in boot and viewport-fit |
+| 58B | Station tab align | Align tab/PLAY row to content; skip redundant nav tooltips |
+| 58C | Side enemy cull | Drop off-screen side enemies so HUD bars and clear checks finish |
+| 58D | PLAY shell chrome | Calmer PLAY frames, nav cards without inset glow rings |
+| 58E | README station archive | Document 95 % fill, tab align, and PLAY chrome for 58A–58D |
 
 The wave commit convention is:
 

@@ -196,11 +196,9 @@ extendClass(EnemyManager, {
                 || e.y < -50 || e.y > canvasHeight + 50;
             if (e.entering) {
                 // Still diving in from above — never cull.
-            } else if (e.fleeing && offScreen) {
-                this.sideEnemies.splice(i, 1);
-            } else if (!e.isEscort && role !== 'bomber' && e.x < -40) {
-                this.sideEnemies.splice(i, 1);
-            } else if (role === 'bomber' && offScreen) {
+            } else if (offScreen || (!e.isEscort && role !== 'bomber' && e.x < -40)) {
+                // Anything that left the screen is gone: drop it so its HUD
+                // life bar disappears and the field-clear check can pass.
                 this.sideEnemies.splice(i, 1);
             }
         }

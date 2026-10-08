@@ -101,6 +101,12 @@ logical stage plus `--stage-scale` before first paint, sizing the stage to
 faction styles the outer **bezel** immediately (`data-vf-faction`), and
 `vf-loading` holds transitions off until load settles.
 
+A **loading screen** paints with the first frame (critical CSS in `index.html`):
+GLXEE brand, VOLTEX channel line, progress bar, and phase status
+(`OPENING CHANNEL` → `LINKING SYSTEMS` → `FONT LOCK` → `RESTORING MENU`).
+`js/core/boot-loader.js` tracks stylesheet/script resource progress; `GameCore`
+advances phases while restoring the menu, then fades the veil out.
+
 Optional local tools:
 
 ```bash
@@ -477,7 +483,7 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Crystal terrain and prism obstacles; dive-in enemy entries; faster victory scoop.
 - Hangar area pager and pixel-step bay zoom; game-over wreck flies into a free lane.
 - Fullscreen toggle and embedded-browser reload keys (F5 / Ctrl+R).
-- Self-hosted Silkscreen, boot veil, and revalidating local `npm start` server.
+- Self-hosted Silkscreen, boot loading screen with progress, and revalidating local `npm start` server.
 - Angular Pirate emblem at 16px and `@4x`; faction fleet preview zoom in the station.
 - Profile score tiles, galaxy progress bars, NEW PILOT / locked LOAD, and HD menu icons.
 - Faction fleet previews in the station and high-definition navigation icons.
@@ -495,7 +501,7 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-STAGE   ── 4:3 @ 95% window fill ── faction bezel ── stage-boot
+BOOT    ── loading screen ── progress phases ── stage-boot @ 95%
    │
 STATION ── tab-row align ── quiet tooltips ── calmer PLAY shell
    │
@@ -504,9 +510,8 @@ HANGAR  ── area pager ── pixel-step bay zoom
 FIGHT   ── off-screen side cull ── VOXEL default ── wreck fly-in
 ```
 
-Recent waves fill the fixed 4:3 stage to 95 % of the window, align station tabs
-to content without tooltip noise, calm the PLAY chrome, and drop side enemies
-once they leave the screen.
+Recent work adds a first-paint boot loading screen with resource progress, keeps
+the 4:3 stage at 95 % window fill, and calms station / PLAY chrome.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -646,6 +651,7 @@ be reviewed or reverted independently.
 | 58C | Side enemy cull | Drop off-screen side enemies so HUD bars and clear checks finish |
 | 58D | PLAY shell chrome | Calmer PLAY frames, nav cards without inset glow rings |
 | 58E | README station archive | Document 95 % fill, tab align, and PLAY chrome for 58A–58D |
+| 59A | Boot loading screen | First-paint progress panel with resource phases until menu restore |
 
 The wave commit convention is:
 

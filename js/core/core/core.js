@@ -48,15 +48,17 @@ class GameCore {
 
         if (typeof menuStateManager !== 'undefined') {
             this.showBootVeil(menuStateManager.get());
+            if (window.vfBootLoader) window.vfBootLoader.setPhase('menu', 0.9);
             setTimeout(() => {
                 Promise.resolve(this.restoreMenuWhenReady())
                     .catch((err) => console.error('[boot] menu restore failed:', err))
                     .finally(() => this.dismissBootVeil());
             }, 0);
-            // Failsafe: never stay black, whatever fails above
-            setTimeout(() => this.dismissBootVeil(), 4000);
+            // Failsafe: never leave the loader stuck, whatever fails above
+            setTimeout(() => this.dismissBootVeil(), 8000);
         } else {
             this.showStartScreen({ skipPersist: true });
+            this.dismissBootVeil();
         }
 
     }
@@ -68,9 +70,13 @@ class GameCore {
             veil.id = 'vf-boot-veil';
             document.body.appendChild(veil);
         }
-        veil.className = 'vf-boot-veil';
+        // Keep the loading panel; layer destination art behind it while systems finish.
+        const loader = document.getElementById('vf-boot-loader');
+        veil.className = 'vf-boot-veil vf-boot-veil-loading';
+        if (loader) veil.appendChild(loader);
         document.documentElement.classList.add('vf-booting');
         veil.removeAttribute('data-hs-tab');
+        veil.style.pointerEvents = 'auto';
         const screen = state && state.screen;
         if (screen === 'home-station') {
             veil.classList.add('vf-boot-veil-hs');
@@ -90,13 +96,30 @@ class GameCore {
         } else {
             veil.classList.add('vf-boot-veil-menu');
         }
+        if (window.vfBootLoader) window.vfBootLoader.setPhase('assets', 0.86);
     }
 
-    // No fade: the menu is already fully built under the veil, so just drop it.
+    // Menu is built under the veil — finish the loader, then drop the cover.
     dismissBootVeil() {
         const veil = document.getElementById('vf-boot-veil');
-        if (!veil) return;
+        if (!veil) {
+            if (window.vfBootLoader && !window.vfBootLoader.isFinished()) {
+                window.vfBootLoader.finish({ instant: true });
+            }
+            return;
+        }
+        if (veil.dataset.vfDismissed === '1') return;
+        veil.dataset.vfDismissed = '1';
         document.querySelectorAll('.vf-menu-enter').forEach((el) => el.classList.remove('vf-menu-enter'));
+        if (window.vfBootLoader && !window.vfBootLoader.isFinished()) {
+            window.vfBootLoader.setPhase('ready', 1);
+            window.vfBootLoader.finish();
+            setTimeout(() => {
+                if (veil.parentNode) veil.parentNode.removeChild(veil);
+                document.documentElement.classList.remove('vf-booting');
+            }, 360);
+            return;
+        }
         if (veil.parentNode) veil.parentNode.removeChild(veil);
         setTimeout(() => document.documentElement.classList.remove('vf-booting'), 800);
     }
@@ -107,6 +130,7 @@ class GameCore {
         const lightMenu = !screen || screen === 'start' || screen === 'settings' || screen === 'credits' || screen === 'profiles' || screen === 'ingame';
 
         if (!lightMenu) {
+            if (window.vfBootLoader) window.vfBootLoader.setPhase('assets', 0.88);
             // Short wait for icons/ships — boot veil already shows destination art
             const deadline = Date.now() + 600;
             while (Date.now() < deadline) {
@@ -128,12 +152,14 @@ class GameCore {
 
         // Pixel font must be ready before the menu paints, otherwise the
         // fallback→Silkscreen swap makes the layout jump under the veil fade
+        if (window.vfBootLoader) window.vfBootLoader.setPhase('font', 0.9);
         if (document.fonts && document.fonts.load) {
             await Promise.race([
                 document.fonts.load("700 16px 'Silkscreen'").catch(() => {}),
                 new Promise((resolve) => setTimeout(resolve, 800))
             ]);
         }
+        if (window.vfBootLoader) window.vfBootLoader.setPhase('menu', 0.95);
 
         const restored = menuStateManager.restore();
         if (!restored) {

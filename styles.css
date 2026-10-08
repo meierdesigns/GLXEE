@@ -373,7 +373,11 @@ body {
    the bare background art without its menu; the finished menu fades in. */
 html.vf-booting .vf-bg-parallax-base,
 html.vf-booting .vf-bg-parallax-glow { transition: none !important; }
-.vf-boot-veil[class] { background-image: none !important; background-color: #05060a; }
+.vf-boot-veil[class] { background-color: #05060a; }
+/* Solid cover only while the progress panel has no destination art class yet */
+.vf-boot-veil.vf-boot-veil-loading:not(.vf-boot-veil-start):not(.vf-boot-veil-hs):not(.vf-boot-veil-menu) {
+    background-image: none !important;
+}
 
 .vf-boot-veil {
     position: fixed;
@@ -390,8 +394,110 @@ html.vf-booting .vf-bg-parallax-glow { transition: none !important; }
     isolation: isolate;
     --vf-bg-overscan: 112%;
 }
+.vf-boot-veil.vf-boot-veil-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
 .vf-boot-veil.is-leaving {
     opacity: 0;
+    pointer-events: none;
+}
+#vf-boot-loader {
+    position: relative;
+    z-index: 2;
+    width: min(420px, 86vw);
+    padding: 28px 24px 22px;
+    border: 4px solid color-mix(in srgb, var(--color-primary, #3A6EA5) 35%, #2a3340);
+    background: color-mix(in srgb, #0a0d12 88%, var(--color-primary, #3A6EA5) 12%);
+    box-shadow:
+        0 0 0 2px #05060a,
+        0 0 0 6px color-mix(in srgb, var(--color-primary, #3A6EA5) 22%, #1a222c),
+        0 12px 40px rgba(0, 0, 0, 0.55);
+    text-align: center;
+    letter-spacing: 0.06em;
+    font-family: var(--ui-font-family, 'Silkscreen', ui-monospace, monospace);
+    color: var(--color-text, #c8d0d8);
+}
+#vf-boot-loader .vf-boot-brand {
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 700;
+    color: #f2f4f7;
+    margin: 0 0 6px;
+    text-shadow: 0 0 18px color-mix(in srgb, var(--color-primary, #3A6EA5) 55%, transparent);
+}
+#vf-boot-loader .vf-boot-channel {
+    font-size: 11px;
+    color: #6f7f92;
+    margin: 0 0 22px;
+    text-transform: uppercase;
+}
+#vf-boot-track {
+    position: relative;
+    height: 14px;
+    border: 3px solid #3a4656;
+    background: #05070b;
+    padding: 2px;
+    box-sizing: border-box;
+    margin: 0 0 12px;
+    overflow: hidden;
+}
+#vf-boot-track::after {
+    content: '';
+    position: absolute;
+    inset: 2px auto 2px 0;
+    width: 28%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    animation: vf-boot-sweep 1.2s linear infinite;
+    pointer-events: none;
+}
+#vf-boot-loader.is-done #vf-boot-track::after { display: none; }
+@keyframes vf-boot-sweep {
+    from { transform: translateX(-120%); }
+    to { transform: translateX(380%); }
+}
+#vf-boot-bar {
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--color-primary, #3A6EA5) 80%, #111),
+        color-mix(in srgb, var(--color-primary, #3A6EA5) 40%, #b8d8ff) 55%,
+        #e8f2ff
+    );
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary, #3A6EA5) 40%, transparent);
+    transition: width 0.12s linear;
+}
+#vf-boot-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: #8fa0b4;
+    text-transform: uppercase;
+}
+#vf-boot-pct { color: #d7e6f7; min-width: 3.2em; text-align: right; }
+#vf-boot-loader.is-done #vf-boot-status { color: #7dff9a; }
+/* Dim destination art behind the loader panel once restore knows the target */
+.vf-boot-veil-loading.vf-boot-veil-start,
+.vf-boot-veil-loading.vf-boot-veil-hs,
+.vf-boot-veil-loading.vf-boot-veil-menu {
+    background-color: #05060a;
+}
+.vf-boot-veil-loading.vf-boot-veil-start::after,
+.vf-boot-veil-loading.vf-boot-veil-hs::after,
+.vf-boot-veil-loading.vf-boot-veil-menu::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: rgba(5, 6, 10, 0.55);
+    pointer-events: none;
 }
 .vf-boot-veil-start {
     background-image:
@@ -482,6 +588,8 @@ html.vf-booting .vf-bg-parallax-glow { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
     .vf-boot-veil { transition: none; }
     .vf-menu-enter { animation: none; }
+    #vf-boot-bar { transition: none; }
+    #vf-boot-track::after { animation: none; display: none; }
 }
 
 /* UI BG mouse-follow parallax (WoodChunk-style, light) */

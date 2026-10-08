@@ -99,7 +99,9 @@ covers the shell until the start menu is restored.
 logical stage plus `--stage-scale` before first paint, sizing the stage to
 **95 %** of the window (same fill rule as `viewport-fit.js`). The last known
 faction styles the outer **bezel** immediately (`data-vf-faction`), and
-`vf-loading` holds transitions off until load settles.
+`vf-loading` holds transitions off until load settles. Cached **GUI voxel** and
+**pixel-frame** look apply before first paint so the bezel never starts smooth
+and then snaps.
 
 A **loading screen** paints with the first frame (critical CSS in `index.html`):
 GLXEE brand, VOLTEX channel line, progress bar, and phase status
@@ -209,7 +211,9 @@ both the 16px HUD badge and the enlarged `@4x` crest.
 The Home Station Factions area has focused views:
 
 - **Relations:** reputation meter, allegiance, pacts, controlled planets, and lore.
-- **Fleets:** live formation preview with zoom controls (− / + / reset and wheel).
+- **Fleets:** live formation preview with zoom; the pilot's ship fights back at
+  the bottom. Faction colour overrides update the preview live; a **player-only**
+  filter focuses the active hull.
 - **Trade:** faction specialties, demanded resources, buy/sell quotes, and relation discounts.
 - **Contracts:** faction jobs and bounty hunts in reachable galaxies.
 
@@ -254,13 +258,13 @@ post keeps its builder's look after the anchor planet changes hands. Posts are
 placed with edge awareness so they sit on reachable lanes.
 
 Planet cards on the explore map show atmosphere haze from the live SVG palette.
-Border **checkpoints** between sectors use faction silhouette art (modular,
-spikes, rings, scrap, circuits). Route beams carry **bidirectional data-packet
-traffic**; foreground barriers sit in front of lower routes for depth. A **ship
-locator** recenters the map on the pilot. Explore budget sits in a progress chip
-beside the map chrome. The embedded map **ruler bar** stacks planet / situation /
-action segments on the stage. Selecting a border, planet, or station updates the
-confirm row:
+Map art is built from a shared **pixel unit** so zoom keeps edges crisp. Nebulae
+are sun-gated with free-floating vortices; fine patches snap to a tile grid so
+small pans reuse finished work. Border **checkpoints** use faction silhouette
+art. Route beams carry **bidirectional data-packet traffic**. A **ship locator**
+recenters the map. Explore budget sits in a progress chip; the **ruler bar**
+stacks planet / situation / action segments. Selecting a border, planet, or
+station updates the confirm row:
 
 | Selection | Actions |
 |:----------|:--------|
@@ -301,19 +305,18 @@ scales that stage uniformly to fill **95 %** of the window (width or height,
 whichever limits first) so proportions never change. An outer **faction bezel**
 frames the stage using a shared **screen-frame** mechanic (`css/screen-frame.css`):
 stacked plates clipped to `--fr-shape` form the bevel so each faction only
-supplies silhouette tokens and colours. Cable plugs reach into the screen
-opening. The top strip holds **RES**, fullscreen, logout, and a two-screen
-**pilot HUD** (`css/pilot-hud.css`): crest + name on one plate, resources on
-another. Ship render defaults to **VOXEL**.
+supplies silhouette tokens and colours. Optional **pixel-frame** mode rasterises
+that silhouette onto a lattice with lit/shade edges. Per-faction bevel / hull
+colours are editable and persisted. Cable plugs reach into the screen opening.
+The top strip holds **RES**, **FX** (visual settings), fullscreen, logout, and a
+two-screen **pilot HUD** (`css/pilot-hud.css`). Ship render defaults to **VOXEL**.
+Faction colour tokens cross-fade on switch (`@property` typed colours).
 
 Home Station still uses `.vf-browser-shell` inside the stage. The area-tab row
-(including PLAY) aligns to the first content panel below it, with hysteresis so
-it does not jitter while loading. When an area has no sub-nav (e.g. PROFILES),
-the active card bridges straight into the body box. Inactive nav cards keep
-faction shape without extra inset frames; PLAY uses a calmer shell without
-translucent outer glow rings. Tooltips skip controls that already show their own
-label. Header actions stay docked: crest, resources, LOGOUT, and PLAY in one
-strip. Mobile-narrow layouts allow PLAY to wrap full-width under the header.
+(including PLAY) aligns to the first content panel below it. When an area has no
+sub-nav (e.g. PROFILES), the active card bridges into the body box. Tooltips skip
+controls that already show their own label. Mobile-narrow layouts allow PLAY to
+wrap full-width under the header.
 
 ### Hull areas and slots
 
@@ -392,7 +395,8 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - **Stage count** varies by planet difficulty (roughly 2–5 stages + boss); later
   stages raise terrain danger and harsh flight zones.
 - Victory and defeat screens show an **outcome stepper** for the planet just
-  fought (cleared / current WON·LOST / locked).
+  fought (cleared / current WON·LOST / locked). A refresh restores the same
+  end overlay (score / time / kills) instead of dumping back to the menu.
 - **Boss stages** after the regular clear: multiphase patterns, escort calls, and
   a dedicated HP bar — bosses ignore the normal lane shooter loop.
 - **Supply crates** drop random timed power-ups: **POWER SHOT**, **RAPID FIRE**,
@@ -421,16 +425,18 @@ height, aspect sets width, leftover width feeds clamped side HUD panels, and
 VOXEL mode snaps CSS size to integer-divisor lattice steps.
 
 Ship Render **FLAT** / **VOXEL** shares one combat lattice cell (settings
-**Voxel Size** 1–4). Ships, modules, terrain, obstacles, particles, and debris
-snap to that cell; VOXEL lowers supersampling when cells are large. Destroyed
-hulls shed **silhouette-sampled voxel chips** with a hot core burst.
+**Voxel Size** from 0.25–8). Ships, modules, terrain, obstacles, particles, and
+debris snap to that cell; VOXEL lowers supersampling when cells are large.
+Destroyed hulls shed **silhouette-sampled voxel chips** with a hot core burst.
+**GUI voxel** can pixelate chrome lines independently of ship render style.
 
-### Size overlay
+### Look FX and size overlay
 
-Settings and the in-game **SIZES** overlay set exact pixel widths for player,
-enemy classes, and shot kinds, plus shot-speed percent for player / enemy /
-boss. Pixel border weights step NORMAL → THICK → HEAVY on an even grid; FX
-strength (glow, scanlines, CRT, chroma) is any whole percent 0–100.
+Bezel **FX** and Settings expose glow, scanlines, CRT, chroma, **vignette**,
+**noise**, **flicker**, **bloom**, and **HDR** (percent strength; area SCREEN /
+FRAME / BOTH). Font sizes cover h1–small plus a separate **game HUD** scale;
+families can override per size. The in-game **SIZES** overlay sets exact pixel
+widths for player, enemy classes, and shots, plus shot-speed percent.
 
 ## Screenshots
 
@@ -468,26 +474,27 @@ Live captures from the current build (station shell, factions, travel, combat).
 
 Short index — details live in the sections above.
 
-- Five factions / galaxies with relations, contracts, trade, and shared ownership.
+- Five factions / galaxies with relations, contracts, trade, fleet preview, universe save.
 - Home Station loop: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
-- Modular loadouts (NOSE / CORE / AFT / WINGS), area pager, and hangar bay zoom.
-- Galaxy explore with border checkpoints, route traffic, ship locator, universe save.
-- Vertical combat: VOXEL lattice, crystal terrain, champions, crates, field presence.
-- Fixed 4:3 stage, faction screen-frame bezel, pilot HUD, boot loading screen.
-- Local HTTP/1.1 `npm start`, self-hosted Silkscreen, optional ComfyUI / YouTube layer.
+- Modular loadouts, area pager, hangar bay zoom, VOXEL combat with field presence.
+- Galaxy explore: pixel-stable map, nebulae, checkpoints, traffic, ship locator.
+- 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
+- Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
 
 ### Current build focus
 
 ```text
-FIGHT   ── on-screen only ── hard flee kick ── no off-field shots
+LOOK    ── FX plate (bloom/HDR/vignette) ── pixel frame ── GUI voxel ── font scales
    │
-FRAME   ── screen-frame plates ── pilot HUD ── calm refresh veil
+MAP     ── pixel units ── tiled nebula patches ── sun-gated swirls
    │
-BOOT    ── loading screen (first visit) ── HTTP/1.1 keep-alive
+FLEET   ── player ship in preview ── live colour overrides
+   │
+MATCH   ── restore victory/game-over after refresh
 ```
 
-Recent waves lock combat to full playfield presence (no rim-fire, faster flee
-culls), keep the tokenized bezel / pilot HUD, and speed local boot.
+Recent waves expand bezel FX and pixel-frame look, harden galaxy-map pixels,
+put the pilot into the faction fleet preview, and persist end screens on reload.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -561,15 +568,7 @@ be reviewed or reverted independently.
 | 47A | Pilot readouts | Profile scoring, ability stats, combat progression, and loadout feedback |
 | 47B | Planet theaters | Galaxy navigation, animated planet frames, and faction visual treatments |
 | 47C | Station presentation | Fleet previews, HD navigation icons, start intro, and hangar shell polish |
-| 48C | GLXEE scale baseline | Proportional 75% shell zoom for the normal browser view and compact HUD presentation |
-| 48D | Browser zoom compatibility | Keep native browser zoom controls while the GLXEE shell uses its compact 75% baseline |
-| 48E | Station header fit | Keep PLAY compact and dock LOGOUT beside the resource strip above the navigation tabs |
-| 48F | Station content scale | Match the visible Home Station layout to the browser's 75% presentation at normal browser zoom |
-| 48G | Wide viewport response | Keep the full responsive shell without changing the proportional GUI baseline |
-| 48H | Cursor viewport fit | Use the full Cursor browser area at its measured responsive width |
-| 48I | Compact viewport baseline | Preserve the proportional 75% station content scale across wide Cursor viewports |
-| 48J | Browser shell frame | Wrap Home Station content in `.vf-browser-shell` so the station fills the live viewport cleanly |
-| 48K | Station readability | Uniform GUI zoom geometry, fixed PLAY launch width, larger tab labels, and mobile wrap |
+| 48C–48K | Shell zoom era | 75% GUI baseline, browser zoom coexistence, Cursor viewport fit, `.vf-browser-shell` |
 | 49A | README visual refresh | Live sprite strips for fleet, planets, and weapons plus updated terminal banner chrome |
 | 49B | Live README screenshots | Capture station, factions, galaxy travel, and Mars combat into the GitHub archive |
 | 50 | Live README strips | Replace old planet/weapon/ship gallery sprites with combat-renderer and SVG exports |
@@ -635,6 +634,13 @@ be reviewed or reverted independently.
 | 59F | README frame archive | Document screen-frame, pilot HUD, and calm refresh for 59B–59E |
 | 60A | Field presence combat | On-screen-only shots/roles, hard flee kick, stop sides after win |
 | 60B | README cleanup | Trim Features index; document field presence for wave 60A |
+| 61A | Pixel frame and FX plate | Raster bezel lattice, frame style editor, bezel FX tool, typed colour fades |
+| 61B | Look FX expand | Vignette/noise/flicker/bloom/HDR, GUI voxel, finer Voxel Size, font/game scales |
+| 61C | Map pixel nebulae | Shared map pixel unit, tiled nebula patches, sun-gated swirls |
+| 61D | Fleet preview player | Pilot ship in faction preview, live colour overrides, player-only filter |
+| 61E | End screen restore | Persist and restore victory/game-over across refresh |
+| 61F | Shot sweep and terrain | Bullet sweep hit tests; boss arenas keep scrolling terrain |
+| 61G | README look archive | Document pixel frame, FX, map, fleet preview; compress shell-zoom wave rows |
 
 The wave commit convention is:
 

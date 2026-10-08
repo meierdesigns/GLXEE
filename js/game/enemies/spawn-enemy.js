@@ -110,9 +110,11 @@ extendClass(EnemyManager, {
         const enemyMinY = 2;
         const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.38));
         const spawnY = enemyMinY + Math.max(0, Math.round((enemyMaxY - enemyMinY - shipHeight) * 0.35));
+        const spawnX = Math.max(0, Math.min(Math.max(0, canvasWidth - shipWidth),
+            canvasWidth / 2 - shipWidth / 2));
         this.enemy = {
-            x: canvasWidth / 2 - shipWidth / 2,
-            y: spawnY,
+            x: spawnX,
+            y: Math.max(enemyMinY, Math.min(enemyMaxY, spawnY)),
             width: shipWidth,
             height: shipHeight,
             speed: enemySpeed,

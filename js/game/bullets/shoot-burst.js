@@ -192,6 +192,16 @@ extendClass(BulletManager, {
     },
 
     enemyShoot(enemy) {
+        if (!enemy) return;
+        // Never spawn shots from hulls that are still / already off the playfield.
+        const W = (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 240;
+        const H = (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300;
+        if (enemy.entering
+            || enemy.x + (enemy.width || 0) < 0 || enemy.x > W
+            || enemy.y + (enemy.height || 0) < 0 || enemy.y > H) {
+            return;
+        }
+
         const currentTime = Date.now();
 
         // Check cooldown - prevent shooting too frequently

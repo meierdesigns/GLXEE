@@ -200,11 +200,21 @@ extendClass(EnemyManager, {
             else if (shape === 'column') dx = n * 22;
             else { dx = n * 16; dy = (n % 2 ? 12 : -12); }
             if (shape === 'line') dy = k * 16;
-            s.x = fromLeft ? -20 - dx : W + 20 + dx;
+            // Active only while inside: spawn fully on the playfield rim.
+            s.entering = false;
+            s.arrived = true;
+            s.isEscort = false;
+            s.fleeing = false;
+            const sw = s.width || 12;
+            s.x = fromLeft
+                ? Math.max(4, 4 + dx)
+                : Math.min(W - sw - 4, W - sw - 4 - dx);
             s.y = Math.max(10, Math.min(H * 0.5, baseY + dy));
-            const speed = Math.abs(s.speed || 0.45);
+            const speed = Math.max(0.45, Math.abs(s.cruiseSpeed || s.speed || 0.45));
             s.speed = fromLeft ? speed : -speed;
+            s.cruiseSpeed = s.speed;
             s.verticalSpeed = 0;
+            s.cruiseVerticalSpeed = 0;
         });
         if (spawned.length) {
             d.sinceWaveMs = 0;

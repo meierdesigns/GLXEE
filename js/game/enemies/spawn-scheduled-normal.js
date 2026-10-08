@@ -126,12 +126,13 @@ extendClass(EnemyManager, {
             const slotX = this.enemy.x + this.enemy.width * 0.5 + form.x - side.width * 0.5;
             const slotY = Math.max(10, Math.min(canvasHeight - side.height - 10,
                 this.enemy.y + this.enemy.height * 0.5 + form.y - side.height * 0.5));
-            side.x = slotX;
+            // Keep the dive column on-playfield even if formation offset is wide.
+            side.x = Math.max(4, Math.min(canvasWidth - side.width - 4, slotX));
             side.y = -side.height - 10 - Math.random() * 24;
             side.entryTargetY = slotY;
             side.verticalSpeed = 0.95 + Math.random() * 0.4;
         } else if (!isEscort) {
-            side.x = Math.max(8, Math.min(canvasWidth - side.width - 8, entryX - side.width * 0.5));
+            side.x = Math.max(4, Math.min(canvasWidth - side.width - 4, entryX - side.width * 0.5));
             side.y = -side.height - 10 - Math.random() * 28;
             side.entryTargetY = Math.max(20, Math.min(canvasHeight - side.height - 20, entryTargetY));
         }
@@ -234,7 +235,11 @@ extendClass(EnemyManager, {
         this.scheduleElapsedMs += deltaTime;
         const elapsedSec = this.scheduleElapsedMs / 1000;
         const holdNormals = this.sideFleeing || this.exploding
-            || (typeof objectiveManager !== 'undefined' && objectiveManager.awaitingFieldClear);
+            || (typeof objectiveManager !== 'undefined' && (
+                objectiveManager.awaitingFieldClear
+                || objectiveManager.won
+                || objectiveManager.completed
+            ));
 
         // Cluster wave times: earliest spawnAt per cluster
         const clusterWaveAt = {};

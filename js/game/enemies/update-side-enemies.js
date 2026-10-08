@@ -25,7 +25,8 @@ extendClass(EnemyManager, {
             ? beatSyncManager.getEnemyBobOffset()
             : 0;
         const mainAlive = this.enemy && !this.exploding;
-        if (!mainAlive && !this.sideFleeing && this.sideEnemies.length) {
+        // Keep calling while the field is clearing so late / stuck sides also flee.
+        if (!mainAlive && this.sideEnemies.length) {
             this.beginSideEnemyFlee(gameState);
         }
         const pendingCluster = this.pendingChampionEntry
@@ -51,21 +52,41 @@ extendClass(EnemyManager, {
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
 
+            const pad = 4;
+            const w = e.width || 8;
+            const h = e.height || 8;
+            const clampX = (x) => Math.max(pad, Math.min(canvasWidth - w - pad, x));
+            const clampY = (y) => Math.max(pad, Math.min(canvasHeight - h - pad, y));
+            // Binary presence: inside = active, outside = fled / irrelevant.
+            const fullyInside = e.x >= 0 && e.x + w <= canvasWidth
+                && e.y >= 0 && e.y + h <= canvasHeight;
+
+            if (e.lifetimeMs != null && e.lifetimeMs <= 0 && !e.fleeing && !e.entering) {
+                // Lifetime flyby done → flee out (then cull as outside).
+                e.fleeing = true;
+                e.isEscort = false;
+                e.entering = false;
+                const awayX = (e.x + w * 0.5) < canvasWidth * 0.5 ? -1 : 1;
+                e.speed = awayX * (1.55 + Math.random() * 0.85);
+                e.verticalSpeed = -(1.55 + Math.random() * 0.75);
+            }
+
             if (e.entering && !e.fleeing) {
-                // Dive in from above until the entry altitude / escort slot.
+                // Spawn transit only — not combat-relevant until fully inside.
                 const ty = e.entryTargetY != null ? e.entryTargetY : 48;
                 e.y += Math.max(0.55, e.verticalSpeed || 0.9) * speedMul;
                 if (e.isEscort && (teamWithMain || teamPending) && mainAlive) {
-                    const tx = this.enemy.x + this.enemy.width * 0.5
-                        + (e.formOffsetX || 0) - e.width * 0.5;
+                    const tx = clampX(this.enemy.x + this.enemy.width * 0.5
+                        + (e.formOffsetX || 0) - e.width * 0.5);
                     e.x += (tx - e.x) * Math.min(1, 0.1 * speedMul);
-                    e.entryTargetY = Math.max(8, Math.min(canvasHeight - e.height - 8,
-                        this.enemy.y + this.enemy.height * 0.5
-                        + (e.formOffsetY || 0) - e.height * 0.5));
+                    e.entryTargetY = clampY(this.enemy.y + this.enemy.height * 0.5
+                        + (e.formOffsetY || 0) - e.height * 0.5);
                 }
+                e.x = clampX(e.x);
                 if (e.y >= (e.entryTargetY != null ? e.entryTargetY : ty)) {
-                    e.y = e.entryTargetY != null ? e.entryTargetY : ty;
+                    e.y = clampY(e.entryTargetY != null ? e.entryTargetY : ty);
                     e.entering = false;
+                    e.arrived = true;
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;
@@ -79,31 +100,32 @@ extendClass(EnemyManager, {
                     }
                 }
             } else if (e.fleeing) {
-                e.x += (e.speed || 0) * speedMul;
-                e.y += (e.verticalSpeed || -1) * speedMul;
-            } else if (e.isEscort && (teamWithMain || teamPending)) {
+                // Exit flight — no combat; remove as soon as fully outside.
+                const fx = e.speed || ((e.x + w * 0.5) < canvasWidth * 0.5 ? -1.6 : 1.6);
+                const fy = (e.verticalSpeed != null && e.verticalSpeed < -0.2)
+                    ? e.verticalSpeed
+                    : -1.6;
+                e.speed = fx;
+                e.verticalSpeed = fy;
+                e.x += fx * speedMul;
+                e.y += fy * speedMul;
+            } else if (e.isEscort && mainAlive && (teamWithMain || teamPending)) {
                 const formationTightness = e.flightProfile ? e.flightProfile.formationTightness : 1;
                 const formationPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
                     ? beatSyncManager.getFormationPulseMul()
                     : 1;
-                if (mainAlive) {
-                    const tx = this.enemy.x + this.enemy.width * 0.5
-                        + (e.formOffsetX || 0) - e.width * 0.5;
-                    const ty = Math.max(8, Math.min(canvasHeight - e.height - 8,
-                        this.enemy.y + this.enemy.height * 0.5
-                        + (e.formOffsetY || 0) - e.height * 0.5));
-                    const follow = Math.min(1, 0.08 * speedMul * formationTightness * formationPulse);
-                    e.x += (tx - e.x) * follow;
-                    e.y += (ty - e.y) * follow;
-                } else {
-                    const tx = canvasWidth * 0.55 + (e.formOffsetX || 0) - e.width * 0.5;
-                    const ty = 40 + (e.formOffsetY || 0);
-                    const follow = Math.min(1, 0.04 * speedMul * formationTightness * formationPulse);
-                    e.x += (tx - e.x) * follow;
-                    e.y += (ty - e.y) * follow;
-                }
+                const tx = clampX(this.enemy.x + this.enemy.width * 0.5
+                    + (e.formOffsetX || 0) - e.width * 0.5);
+                const ty = clampY(this.enemy.y + this.enemy.height * 0.5
+                    + (e.formOffsetY || 0) - e.height * 0.5);
+                const follow = Math.min(1, 0.08 * speedMul * formationTightness * formationPulse);
+                e.x += (tx - e.x) * follow;
+                e.y += (ty - e.y) * follow;
+                e.x = clampX(e.x);
+                e.y = clampY(e.y);
                 e.speed = 0;
                 e.verticalSpeed = 0;
+                e.arrived = true;
             } else {
                 if (e.isEscort) {
                     e.isEscort = false;
@@ -121,7 +143,6 @@ extendClass(EnemyManager, {
                     e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
                 }
                 if (bobY) e.y += bobY * 0.12;
-                // Free-flying side enemies steer around obstacles too.
                 const push = this.computeObstacleAvoidance(e);
                 if (push) {
                     e.x += push.x * 1.6 * speedMul;
@@ -129,18 +150,17 @@ extendClass(EnemyManager, {
                 }
                 if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
                 if (e.x > canvasWidth - 8 && e.speed > 0) e.speed = -Math.abs(e.speed);
-                if (e.x < 8 && e.speed < 0 && e.lifetimeMs > 4000) {
+                if (e.x < 8 && e.speed < 0 && (e.lifetimeMs == null || e.lifetimeMs > 4000)) {
                     e.speed = Math.abs(e.speed) * 0.85;
                 }
-                if (e.lifetimeMs != null) {
-                    e.lifetimeMs -= deltaTime;
-                    if (e.lifetimeMs <= 0) {
-                        e.speed = -Math.max(0.45, Math.abs(e.speed));
-                    }
-                }
+                if (e.lifetimeMs != null) e.lifetimeMs -= deltaTime;
+                // Active craft stay fully inside — never half-off the rim.
+                e.x = clampX(e.x);
+                e.y = clampY(e.y);
+                e.arrived = true;
             }
 
-            if (mainAlive && !e.fleeing && (role === 'repair' || role === 'shieldBattery')) {
+            if (mainAlive && !e.fleeing && !e.entering && (role === 'repair' || role === 'shieldBattery')) {
                 const dx = (e.x + e.width / 2) - (this.enemy.x + this.enemy.width / 2);
                 const dy = (e.y + e.height / 2) - (this.enemy.y + this.enemy.height / 2);
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -160,13 +180,12 @@ extendClass(EnemyManager, {
                 }
             }
 
-            // Fire while fighting and while fleeing (even during champion explosion)
-            if (role === 'gunner' || role === 'assault' || role === 'blocker' || role === 'bomber') {
+            // Combat only while fully inside (not entering, not fleeing).
+            if (fullyInside && !e.entering && !e.fleeing
+                && (role === 'gunner' || role === 'assault' || role === 'blocker' || role === 'bomber')) {
                 e.shootTimer = (e.shootTimer || 0) + deltaTime;
                 let interval = e.shootInterval || 1900;
-                if (e.fleeing) interval = Math.max(900, interval * 0.75);
                 if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
-                    // Fire on downbeats when timer is ready enough
                     const beatMs = beatSyncManager.beatDurationMs();
                     interval = Math.max(beatMs * 2, interval * 0.85);
                     if (e.shootTimer >= interval * 0.7 && beatSyncManager.justDownbeat) {
@@ -181,8 +200,8 @@ extendClass(EnemyManager, {
                 }
             }
 
-            if (!e.fleeing && role === 'jammer') hasJammer = true;
-            if (!e.fleeing && role === 'tether') hasTether = true;
+            if (!e.fleeing && !e.entering && role === 'jammer') hasJammer = true;
+            if (!e.fleeing && !e.entering && role === 'tether') hasTether = true;
 
             if (e.shieldMax > 0 && e.shield < e.shieldMax && e.shieldRegen > 0) {
                 const mechs = e.abilities || e.defenseMechanisms || [];
@@ -192,13 +211,11 @@ extendClass(EnemyManager, {
                     e.shield = Math.min(e.shieldMax, e.shield + e.shieldRegen * (deltaTime / 1000));
                 }
             }
-            const offScreen = e.x < -50 || e.x > canvasWidth + 50
-                || e.y < -50 || e.y > canvasHeight + 50;
-            if (e.entering) {
-                // Still diving in from above — never cull.
-            } else if (offScreen || (!e.isEscort && role !== 'bomber' && e.x < -40)) {
-                // Anything that left the screen is gone: drop it so its HUD
-                // life bar disappears and the field-clear check can pass.
+
+            // Outside = fled / irrelevant → drop (re-check after this frame's move).
+            const nowOutside = e.x + w < 0 || e.x > canvasWidth
+                || e.y + h < 0 || e.y > canvasHeight;
+            if (!(e.entering && !e.fleeing) && nowOutside) {
                 this.sideEnemies.splice(i, 1);
             }
         }

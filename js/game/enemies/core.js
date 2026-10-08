@@ -52,16 +52,24 @@ class EnemyManager {
         const midX = canvasWidth * 0.5;
         for (let i = 0; i < this.sideEnemies.length; i++) {
             const e = this.sideEnemies[i];
-            if (!e || e.fleeing) continue;
+            if (!e) continue;
+            // Re-kick ships that never got flee velocity (late spawns / stuck escorts).
+            const needsKick = !e.fleeing
+                || !e.speed
+                || Math.abs(e.speed) < 0.35
+                || !(e.verticalSpeed < -0.35);
             e.fleeing = true;
+            e.entering = false;
             e.isEscort = false;
+            e.escortSlot = -1;
             e.repairBeamActive = false;
+            e.lifetimeMs = 0;
+            if (!needsKick) continue;
             const cx = e.x + (e.width || 0) * 0.5;
             const awayX = cx < midX ? -1 : 1;
-            const fleeSpd = 0.85 + Math.random() * 0.55;
+            const fleeSpd = 1.55 + Math.random() * 0.85;
             e.speed = awayX * fleeSpd;
-            e.verticalSpeed = -(0.95 + Math.random() * 0.55);
-            e.lifetimeMs = 0;
+            e.verticalSpeed = -(1.55 + Math.random() * 0.75);
         }
     }
 

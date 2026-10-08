@@ -411,7 +411,10 @@ extendClass(HomeStationUI, {
             if (!root || !root.isConnected) return;
             let bridge = root.querySelector(':scope > .hs-tab-bridge');
             const btn = root.querySelector('.hs-area-btn.active');
-            const sub = root.querySelector('.hs-subnav');
+            let sub = root.querySelector('.hs-subnav');
+            // No sub-nav (e.g. PROFILES): the card opens into the body box.
+            const bodyBox = sub ? null : (root.querySelector('.hs-body .start-screen-content-embedded, .hs-body .hs-components-root') || root.querySelector('.hs-body'));
+            if (!sub && bodyBox) sub = bodyBox;
             if (!btn || !sub) {
                 if (bridge) bridge.remove();
                 return;
@@ -422,6 +425,7 @@ extendClass(HomeStationUI, {
                 bridge.setAttribute('aria-hidden', 'true');
                 root.appendChild(bridge);
             }
+            bridge.classList.toggle('is-body-bridge', !!bodyBox);
             const r = root.getBoundingClientRect();
             const b = btn.getBoundingClientRect();
             const s = sub.getBoundingClientRect();
@@ -439,6 +443,7 @@ extendClass(HomeStationUI, {
             bridge.style.top = Math.round(top) + 'px';
             bridge.style.height = Math.max(0, Math.round((s.top - r.top) / z + 2 - top)) + 'px';
             // Sub-nav top line has a gap right under the active tab.
+            if (bodyBox) return;
             sub.style.setProperty('--hs-gap-l', Math.round((b.left - s.left) / z + 2) + 'px');
             sub.style.setProperty('--hs-gap-r', Math.round((b.right - s.left) / z - 2) + 'px');
         };

@@ -330,8 +330,26 @@ class GalaxyMapManager {
         }, true);
     }
 
+    /** Click a cleared stage in the stepper: start the mission again from that stage. */
+    bindReplayPicks() {
+        if (this._replayBound) return;
+        this._replayBound = true;
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.closest && e.target.closest('.gm-sector-stage[data-replay-stage]');
+            if (!el || this.isDevMode()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const pid = el.getAttribute('data-replay-planet');
+            const i = Number(el.getAttribute('data-replay-stage')) || 1;
+            if (!this.isShipAt || !this.isShipAt('planet', pid)) return;
+            this._replayLevelId = i > this.getStagesPerPlanet(pid) ? `${pid}-boss` : `${pid}-${i}`;
+            this.confirm('start');
+        }, true);
+    }
+
     planetStagesHtml(planetId) {
         this.bindDevStagePicks();
+        this.bindReplayPicks();
         const pid = String(planetId || '').toLowerCase();
         if (!pid) return '';
         const stages = this.getStagesPerPlanet(pid);
@@ -343,6 +361,7 @@ class GalaxyMapManager {
         const pick = dev ? this.getDevStagePick(pid) : null;
         const current = pick ? pick : (cleared ? -1 : (p.boss ? total : p.done + 1));
         const ship = this.getShipIconUrl ? this.getShipIconUrl(1) : null;
+        const canReplay = !!(this.isShipAt && this.isShipAt('planet', pid));
         let html = '';
         for (let i = 1; i <= total; i++) {
             const isBoss = i === total;
@@ -361,9 +380,10 @@ class GalaxyMapManager {
             // Player ship hovers above the stage it fights next.
             if (here && ship) inner += `<img src="${ship}" alt="" class="gm-stage-ship">`;
             const tag = isBoss ? 'BOSS' : String(i);
-            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}"` +
+            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
                 (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
-                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}">` +
+                (!dev && done && canReplay ? ` data-replay-stage="${i}" data-replay-planet="${pid}"` : '') +
+                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;
@@ -522,9 +542,9 @@ class GalaxyMapManager {
                 : 'FLY THERE AND WIN A STAGE TO REPEL IT';
             return `<div class="galaxy-map-ruler-seg galaxy-map-situation is-invasion" role="button" tabindex="0" data-ui-tip="${invSub}" style="--ruler-accent:${invAccent}">` +
                 `<span class="galaxy-map-situation-kind">${inv.ally ? 'ALLY UNDER ATTACK' : 'INVASION'}</span>` +
-                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-emblem">${emblemOf(inv.attacker, 32)}</span>` +
-                `<span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span></span>` +
-                `<span class="galaxy-map-situation-sub">${invSub}</span>` +
+                `<span class="galaxy-map-situation-row"><span class="galaxy-map-situation-go">${this.btnIconHtml ? this.btnIconHtml('navScroll', 32) : emblemOf(inv.attacker, 32)}</span>` +
+                `<span class="galaxy-map-situation-text"><span class="galaxy-map-situation-title">${esc(String(inv.attacker).toUpperCase())} ATTACKS ${esc(iplanet)}</span>` +
+                `<span class="galaxy-map-situation-sub">${invSub}</span></span></span>` +
                 `</div>`;
         }
         const m = p && p.activeMission;
@@ -620,7 +640,14 @@ class GalaxyMapManager {
         return m ? m[1] : '';
     }
 
-    planetIconHtml(planetId, size, asImage, lightDir) {
+    /** Disc size of a planet SVG relative to the 0.76 (haze starts at the limb) the haze rings were drawn for (ringed planets sit smaller in their grid). */
+    planetAtmoScale(iconHtml) {
+        const m = /data-disc="([\d.]+)"/.exec(iconHtml || '');
+        const d = m ? Number(m[1]) : 0.76;
+        return (Number.isFinite(d) && d > 0.2 ? d / 0.76 : 1).toFixed(3);
+    }
+
+    planetIconHtml(planetId, size, asImage, lightDir, mapNode) {
         const sid = String(planetId || 'mars').toLowerCase();
         const px = size || 48;
         if (typeof planetSVGManager !== 'undefined') {
@@ -631,7 +658,9 @@ class GalaxyMapManager {
             // Map nodes follow the zoom (shared with the ship, getMapDetail);
             // big views (sector card) always get a fine grid.
             const zoomDetail = this.getMapDetail ? this.getMapDetail() : 1;
-            const detail = px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
+            const detail = mapNode && this.planetDetailMul
+                ? Math.min(8, zoomDetail * this.planetDetailMul(sid))
+                : (px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail));
             // Current rotation frame, so zoom re-renders don't jump.
             // First paint must be instant: when the fine model isn't built yet, show the
             // cheap coarse globe now; the spin timer swaps the fine one in (data-spin-frame -1).

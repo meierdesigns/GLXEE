@@ -360,7 +360,7 @@ extendClass(PlanetSVGManager, {
         // Moons in front are drawn after the planet.
         rects.push.apply(rects, moons);
         return `
-            <svg width="64" height="64" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" style="overflow: visible; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;" data-planet-uid="${uid}">
+            <svg width="64" height="64" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" style="overflow: visible; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;" data-planet-uid="${uid}"${geo && geo.r ? ` data-disc="${(geo.r / (n / 2)).toFixed(3)}"` : ''}>
                 ${rects.join('')}
             </svg>
         `;

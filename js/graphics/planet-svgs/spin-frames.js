@@ -204,6 +204,12 @@ extendClass(PlanetSVGManager, {
                 // Fresh elements already carry the current frame (data-spin-frame);
                 // a new light direction (l) is a different model, so redraw.
                 const fk = model.uid + ':' + f;
+                // Fine grids are costly to turn: they advance a frame at most every 1.2 s.
+                if (model.n > 96 && el._spinFrame != null && el._spinFrame !== fk) {
+                    const nowT = performance.now();
+                    if (el._lastSpinT && nowT - el._lastSpinT < 1200) return;
+                    el._lastSpinT = nowT;
+                }
                 if (el._spinFrame == null) el._spinFrame = model.uid + ':' + el.getAttribute('data-spin-frame');
                 if (el._spinFrame === fk) return;
                 el._spinFrame = fk;

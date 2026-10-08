@@ -245,18 +245,13 @@ extendClass(GalaxyMapManager, {
         const opts = this.getStartOptions(info && info.id);
         // Dev mode: the stage picked in the stepper is what launches.
         const pick = this.isDevMode && this.isDevMode() && this.getDevStagePick ? this.getDevStagePick(info && info.id) : null;
-        const fromStartBtn = opts.canChoose
-            ? `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="start">${this.btnIconHtml('menuRetry', 28)}FROM START</button>`
-            : `<button class="action-button secondary disabled" id="gmConfirmStart" data-nav-item disabled data-ui-tip="Only after progress on this planet">${this.btnIconHtml('menuRetry', 28)}FROM START</button>`;
         if (pick) {
             const n = this.getStagesPerPlanet(info.id);
             const label = pick > n ? `BOSS ${n + 1}/${n + 1}` : `STAGE ${pick}/${n + 1}`;
-            return fromStartBtn +
-                `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${label}</button>`;
+            return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${label}</button>`;
         }
         const resumeLabel = opts.canChoose ? (opts.resumeLabel || 'START MISSION') : 'START MISSION';
-        return fromStartBtn +
-            `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${resumeLabel}</button>`;
+        return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${resumeLabel}</button>`;
     },
 
     /** One faction as a coloured name (faction accent, dark outline). */
@@ -411,6 +406,7 @@ extendClass(GalaxyMapManager, {
             planetBg.innerHTML = icon + (info.unlocked ? '' : this.lockBadgeHtml());
             planetBg.classList.toggle('has-atmo', !!atmo);
             planetBg.style.setProperty('--atmo', atmo || 'transparent');
+            planetBg.style.setProperty('--dk', this.planetAtmoScale(icon));
         }
         set('gmDiff', info.unlocked ? (info.difficulty || '—') : '???');
         set('gmStages', info.unlocked
@@ -479,7 +475,10 @@ extendClass(GalaxyMapManager, {
         const mode = startMode === 'start' ? 'start' : 'resume';
         const opts = this.getStartOptions(info.id);
         // Dev mode: a stage picked in the stepper overrides progress.
-        const levelId = (this.getDevStageLevelId && this.getDevStageLevelId(info.id))
+        // A cleared stage clicked in the stepper replays from that stage.
+        const replayId = this._replayLevelId;
+        this._replayLevelId = null;
+        const levelId = replayId || (this.getDevStageLevelId && this.getDevStageLevelId(info.id))
             || (mode === 'start'
                 ? (opts.startLevelId || `${info.id}-1`)
                 : (opts.resumeLevelId || `${info.id}-1`));

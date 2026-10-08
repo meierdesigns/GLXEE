@@ -353,7 +353,7 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-sector-heading">
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
                         </div>
-                        <div class="gm-sector-planet-bg${planetAtmo ? ' has-atmo' : ''}" style="--atmo:${planetAtmo || 'transparent'}">${planetIcon}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
+                        <div class="gm-sector-planet-bg${planetAtmo ? ' has-atmo' : ''}" style="--atmo:${planetAtmo || 'transparent'};--dk:${this.planetAtmoScale(planetIcon)}">${planetIcon}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
                     </div>
                     <div class="gm-detail">
                         <div class="stat-row"><span class="stat-label" id="gmFactionLabel">Faction</span><span class="stat-value gm-faction-value" id="gmFaction">${this.planetFactionsLabelHtml ? this.planetFactionsLabelHtml(info.id) : ''}</span></div>

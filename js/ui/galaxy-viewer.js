@@ -291,7 +291,7 @@ class GalaxyViewer {
         const g = pcm.getGalaxy(this.selected);
         const owner = g && g.owners && g.owners[f.id];
         return this.spaceBgHtml(this.selected) +
-            `<span class="gv-planet-bg${atmo ? ' has-atmo' : ''}" style="--atmo:${atmo || 'transparent'}" aria-hidden="true">${bgIcon}</span><div class="gv-planet-head"><span class="gv-planet-icon">${icon}</span><h3 class="gv-title">${String(cfg.name || f.id).toUpperCase()}</h3></div>` +
+            `<span class="gv-planet-bg${atmo ? ' has-atmo' : ''}" style="--atmo:${atmo || 'transparent'};--dk:${galaxyMapManager.planetAtmoScale ? galaxyMapManager.planetAtmoScale(bgIcon) : 1}" aria-hidden="true">${bgIcon}</span><div class="gv-planet-head"><span class="gv-planet-icon">${icon}</span><h3 class="gv-title">${String(cfg.name || f.id).toUpperCase()}</h3></div>` +
             line('HELD BY', owner
                 ? this.emblem(owner.faction, 16) + String(owner.faction).toUpperCase() + ' · ' + String(owner.pilot || '?').toUpperCase()
                 : 'NOT CONQUERED') +

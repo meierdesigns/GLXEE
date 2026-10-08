@@ -2,14 +2,22 @@
 
 // Stations / checkpoints stop refining past this zoom detail (perf).
 const GM_ART_DETAIL_MAX = 4;
+// Map units per art pixel at zoom detail 1: the single pixel size every map object is built from.
+const GM_PIXEL_U0 = 32 / 18;
 
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
-const NEB_SCALE = 0.0042;
+const NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
-const NEB_PIXEL_BUDGET = 520000;
+const NEB_PIXEL_BUDGET = 450000;
 // How steeply nebula density drops with distance from the suns (higher = faster).
 const NEB_SUN_FALLOFF = 1.8;
+// Free-floating static vortices in the nebula: one candidate per cell of this size.
+const SWIRL_CELL = 900;
+const swirlHash = (gx, gy) => {
+    const h = (k) => { let v = Math.imul(gx * 73856093 ^ gy * 19349663 ^ k * 83492791, 2654435761); v ^= v >>> 15; v = Math.imul(v, 2246822519); v ^= v >>> 13; return (v >>> 0) / 4294967296; };
+    return { p: h(1), a: 0.2 + h(2) * 0.6, b: 0.2 + h(3) * 0.6, c: h(4), dir: h(5) < 0.5 ? -1 : 1 };
+};
 
 // GalaxyMapManager methods, split from galaxy-map.js.
 extendClass(GalaxyMapManager, {
@@ -341,8 +349,7 @@ extendClass(GalaxyMapManager, {
             const hovered = n.planetId === this.hoveredPlanetId;
             // Progress label only while there's still something to fight.
             const stageProgress = !unlocked || cleared ? null : this.getPlanetStageProgress(n.planetId);
-            const sizeSeed = String(n.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-            const baseSize = 32 + (sizeSeed % 7) * 10;
+            const baseSize = this.planetNodeSize(n.planetId);
             const size = baseSize * this.getMapObjectScale();
             const frame = size / 2 + 10;
             const stateClass = [
@@ -358,7 +365,7 @@ extendClass(GalaxyMapManager, {
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit" data-lit-x="${x}" data-lit-y="${y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
-                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y))}
+                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y), true)}
                         </div>
                     </foreignObject>
                     ${this.planetFactionsSvg(n.planetId, size)}
@@ -369,7 +376,7 @@ extendClass(GalaxyMapManager, {
                             ${this.baseFortressSvg(size, holdings.ruler)}
                         </g>
                     ` : ''}
-                    ${stageProgress ? `<g class="gm-stage-anchor" transform="translate(0,${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}) scale(${this.getMapObjectScale().toFixed(4)})">
+                    ${stageProgress ? `<g class="gm-stage-anchor" data-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}" transform="translate(0,${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}) scale(${(this.getMapObjectScale() * this.stageTextScale()).toFixed(4)})">
                         ${stageProgress.boss
                             // Boss stage: skull + "/4". The skull sits clear of the text's
                             // dark outline stroke, which used to paint over its right edge.
@@ -544,11 +551,16 @@ extendClass(GalaxyMapManager, {
         let fine = null;
         if (this.getMapViewBox) {
             const v = this.getMapViewBox(W, H, typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48);
-            const mx = v[2] * 0.3, my = v[3] * 0.3; // small margin: less to compute
-            const g8 = (n) => Math.floor(n / 8) * 8;
-            fine = { x: g8(v[0] - mx), y: g8(v[1] - my) };
-            fine.w = g8(v[2] + 2 * mx) + 16;
-            fine.h = g8(v[3] + 2 * my) + 16;
+            // The patch snaps to a tile grid, so small pans reuse the same finished patch
+            // (no recompute while dragging); only crossing a tile edge builds a new one.
+            const tile = 8 * Math.pow(2, Math.max(0, Math.round(Math.log2(Math.max(8, v[2] * 0.25) / 8))));
+            const mx = v[2] * 0.1, my = v[3] * 0.1;
+            fine = { x: Math.floor((v[0] - mx) / tile) * tile, y: Math.floor((v[1] - my) / tile) * tile };
+            fine.w = Math.ceil((v[0] + v[2] + mx) / tile) * tile - fine.x;
+            fine.h = Math.ceil((v[1] + v[3] + my) / tile) * tile - fine.y;
+            // Screen pixels per map unit right now: the cell size follows it.
+            const svgEl = typeof document !== 'undefined' ? document.querySelector('.galaxy-map-svg') : null;
+            fine.spx = ((svgEl && svgEl.clientWidth) || 900) / Math.max(1, v[2]);
             this._nebulaRegion = fine;
         } else {
             this._nebulaRegion = null;
@@ -611,10 +623,18 @@ extendClass(GalaxyMapManager, {
             y: H / 2 + (sn.y - 0.5) * (H - pad0 * 2) * 2.0,
             reach: Math.max(24, sn.r * (W - pad0 * 2) / 1.3) * 7,
             rgb: toRgb(sn.color) || [255, 190, 120]
-        }));
+        })).map((sn, si) => {
+            // Only some suns carry a nebula (stable per galaxy and sun).
+            let h = 2166136261;
+            String(gid).split('').concat(['#', String(si)]).forEach((ch) => { h = Math.imul(h ^ ch.charCodeAt(0), 16777619); });
+            sn.neb = ((h >>> 0) % 100) < 45;
+            return sn;
+        });
+        if (suns.length && !suns.some((sn) => sn.neb)) suns[0].neb = true;
         const sunLight = (x, y) => {
             let best = 0, rgb = null;
             suns.forEach((sn) => {
+                if (!sn.neb) return;
                 const k = Math.exp(-Math.hypot(x - sn.x, y - sn.y) / sn.reach * 2.2);
                 if (k > best) { best = k; rgb = sn.rgb; }
             });
@@ -639,7 +659,7 @@ extendClass(GalaxyMapManager, {
             const ctx = cv.getContext('2d');
             const img = ctx.createImageData(cols, rows);
             const px = img.data;
-            const toneAlpha = [0.1, 0.18, 0.28, 0.36];
+            const toneAlpha = [0.05, 0.08, 0.12, 0.16];
             const job = { opaque: !!opaque, cancel: false };
             this._nebJobs[jobKey] = job;
             let r = 0;
@@ -657,54 +677,121 @@ extendClass(GalaxyMapManager, {
                 if (opaque) this._nebLastFine = { key: jobKey, tag: tag(url) };
                 document.querySelectorAll(`image[data-neb-key="${jobKey}"]`).forEach((el) => el.setAttribute('href', url));
             };
+            // Swirl centres that can touch this patch, found once (not per pixel).
+            const swirls = [];
+            {
+                const gxa = Math.floor(bx / SWIRL_CELL) - 1, gxb = Math.floor((bx + cols * cell) / SWIRL_CELL) + 1;
+                const gya = Math.floor(by / SWIRL_CELL) - 1, gyb = Math.floor((by + rows * cell) / SWIRL_CELL) + 1;
+                for (let gy = gya; gy <= gyb; gy++) {
+                    for (let gx = gxa; gx <= gxb; gx++) {
+                        const hh = swirlHash(gx, gy);
+                        if (hh.p > 0.16) continue;
+                        const R0 = SWIRL_CELL * (0.14 + hh.c * 0.12);
+                        swirls.push({ sx: (gx + hh.a) * SWIRL_CELL, sy: (gy + hh.b) * SWIRL_CELL, R2: R0 * R0, k: hh.dir * (0.45 + hh.c * 0.5) });
+                    }
+                }
+            }
+            // Slow fields (sun light, wisps, banks, veils …) vary over hundreds of map units:
+            // computed once per 4x4 block of cells instead of per pixel.
+            const BLK = 4;
+            let lowRow = -1;
+            let low = [];
+            const lowAt = (r, c) => {
+                const rg = r >> 2;
+                if (rg !== lowRow) { lowRow = rg; low = []; }
+                const bi = c >> 2;
+                let o = low[bi];
+                if (o) return o;
+                const x = bx + (bi * BLK + BLK / 2) * cell, y = by + (rg * BLK + BLK / 2) * cell;
+                const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.9;
+                const envBase = (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d));
+                const sl = suns.length ? sunLight(x, y) : { k: 0, rgb: null };
+                // Light wisps: broad, faint veils drift through the space between systems.
+                const wisp = sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)) * 0.5;
+                const freeCloud = Math.max(sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)) * 0.35, wisp);
+                const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
+                o = {
+                    sl, wisp, wispK: wisp / 0.5, envNear: envBase * sunFade,
+                    grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
+                    bank: 0.1 + 0.6 * sstep(0.32, 0.58, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    gm: sstep(0.6, 0.74, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
+                    veil: layers.map((_, li) => 0.18 + 0.82 * sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2))),
+                    ang: Math.atan2((y - cym) / H, (x - cxm) / W)
+                };
+                low[bi] = o;
+                return o;
+            };
             const paintRow = (r) => {
                 const y = by + r * cell;
                 for (let c = 0; c < cols; c++) {
                     const x = bx + c * cell;
-                    const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.9;
-                    const envBase = (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d));
-                    const sl = suns.length ? sunLight(x, y) : { k: 0, rgb: null };
-                    // Away from the suns the clouds thin out fast: density
-                    // follows sun proximity (steep curve), so dark space
-                    // between systems stays mostly clear.
-                    const sunFade = suns.length
-                        ? Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2)
-                        : 1;
-                    const envNear = envBase * sunFade;
-                    if (envNear < 0.02 && sl.k < 0.05) continue;
+                    const lw = lowAt(r, c);
+                    const sl = lw.sl, wisp = lw.wisp, wispK = lw.wispK, envNear = lw.envNear;
+                    if (envNear < 0.02 && sl.k < 0.05 && wisp < 0.02) continue;
                     const th = (bayer[(r % 4) * 4 + (c % 4)] / 16 - 0.5) * 0.035;
+                    // Static vortices: coordinates twist around scattered centres, so clouds curl into swirls.
+                    let wx = x, wy = y;
+                    for (let si = 0; si < swirls.length; si++) {
+                        const sw = swirls[si];
+                        const dx = x - sw.sx, dy = y - sw.sy;
+                        const d2 = (dx * dx + dy * dy) / sw.R2;
+                        if (d2 > 4) continue;
+                        const ang = sw.k * Math.exp(-d2);
+                        const ca = Math.cos(ang), sa = Math.sin(ang);
+                        wx = sw.sx + dx * ca - dy * sa; wy = sw.sy + dx * sa + dy * ca;
+                    }
                     let R = 0, G = 0, B = 0, A = 0;
                     for (let li = 0; li < layers.length; li++) {
                         const L = layers[li];
-                        let env = Math.max(envNear, sl.k * 0.9);
+                        let env = Math.max(envNear, sl.k * 0.9, wisp * 2.2);
                         if (L.ang != null && layers.length > 2) {
-                            const a2 = Math.atan2((y - cym) / H, (x - cxm) / W);
-                            env *= 0.25 + 0.75 * Math.max(0, Math.cos(a2 - L.ang));
+                            env *= 0.25 + 0.75 * Math.max(0, Math.cos(lw.ang - L.ang));
                         }
-                        if (env < 0.02) continue;
-                        const X = x * L.sc + L.off, Y = y * L.sc * 1.3 + L.off;
-                        const q = fbm(X * 0.8, Y * 0.8, 2);
-                        const base = fbm(X + q * 2.4, Y - q * 2.4, oct);
-                        const ridge = 1 - Math.abs(fbm(X * 2.6 + 3, Y * 2.6 - q, oct - 1) * 2 - 1);
-                        const v = (base * 0.75 + ridge * ridge * ridge * 0.45 - (1 - L.cover) * 1.05) * env + sl.k * 0.12;
+                        // Even the densest cloud cannot reach the lowest tone below this: skip the noise work.
+                        if (env < 0.02 || (env * lw.bank < 0.06 && sl.k < 0.55)) continue;
+                        const grain = lw.grain;
+                        const cloudV = (mul) => {
+                            const X = wx * L.sc * mul + L.off, Y = wy * L.sc * mul * 1.3 + L.off;
+                            const q = fbm(X * 0.8, Y * 0.8, 2);
+                            const base = fbm(X + q * 2.4, Y - q * 2.4, oct);
+                            const ridge = 1 - Math.abs(fbm(X * 2.6 + 3, Y * 2.6 - q, oct - 1) * 2 - 1);
+                            return base * 0.88 + ridge * ridge * ridge * 0.08;
+                        };
+                        let cv = grain < 0.02 ? cloudV(0.45) : grain > 0.98 ? cloudV(1.5) : cloudV(0.45) * (1 - grain) + cloudV(1.5) * grain;
+                        // Big dark voids and bright banks: contrast + a very low-frequency density mask.
+                        cv = 0.5 + (cv - 0.5) * 1.25;
+                        const bank = lw.bank;
+                        const v = (cv - (1 - L.cover) * 1.05 * (1 - wispK * 0.7)) * env * bank + sl.k * 0.12;
                         let l = v > 0.34 + th ? 3 : v > 0.25 + th ? 2 : v > 0.15 + th ? 1 : v > 0.07 + th ? 0 : -1;
                         if (l < 0) continue;
                         if (L.dust && l > 1) l = 1;
                         // Tone colour; near a sun lifted a level and tinted by it.
-                        const lit = sl.k;
-                        const lift = [0, 14, 40, 70][l] + lit * 90;
+                        // Self-luminous pockets: a few scattered clouds glow on their own, not tied to a sun.
+                        const gm = lw.gm;
+                        const lit = Math.max(sl.k, gm * 0.55);
+                        const lift = [0, 6, 14, 22][l] + lit * 14 + gm * [4, 10, 16, 20][l];
                         const mulc = [1, 1.1, 1.15, 1.1][l];
                         let cr = L.rgb[0] * mulc + lift, cg = L.rgb[1] * mulc + lift, cb = L.rgb[2] * mulc + lift;
                         if (sl.rgb && lit > 0.02) {
-                            const t = Math.min(0.7, lit * 0.9);
+                            const t = Math.min(0.9, sl.k * 1.6);
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
-                        const a = Math.min(0.75, (L.dust ? [0.11, 0.16][Math.min(1, l)] : toneAlpha[l]) * (1 + lit * 1.4));
+                        // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
+                        const shine = 0.35 + 0.65 * Math.min(1, Math.max(sl.k * 1.8, gm));
+                        cr *= shine; cg *= shine; cb *= shine;
+                        // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
+                        const veil = lw.veil[li];
+                        const a = 0.8 * veil * Math.min(0.6, (L.dust ? [0.11, 0.16][Math.min(1, l)] : toneAlpha[l]) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
                     }
                     const o = (r * cols + c) * 4;
+                    // Soft cap: overlapping layers + suns must never wash out to white.
+                    if (A > 0) {
+                        const mx = Math.max(R, G, B) / A;
+                        if (mx > 150) { const k = 150 / mx; R *= k; G *= k; B *= k; }
+                    }
                     if (opaque) {
                         // Over black: premultiplied colour, fully opaque.
                         px[o] = Math.min(255, R); px[o + 1] = Math.min(255, G); px[o + 2] = Math.min(255, B);
@@ -728,11 +815,12 @@ extendClass(GalaxyMapManager, {
             // big for the budget do the cells grow.
             // At full zoom the nebula goes well below the planet pixels (close
             // to screen pixels); the pixel budget below caps the cost.
-            const unit = (this.mapPixelUnit ? this.mapPixelUnit() : 8 / detail) / (detail >= 8 ? 4 : 1);
+            // Target: about 2 screen pixels per cell, as fine as the budget allows.
+            const unit = this.mapPixelUnitGlobal();
             const want = Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
             // Cell = 8 / 2^k: nests exactly in the coarse 8-unit grid (patch
             // origin is a multiple of 8), so pixels never shift between patches.
-            const cell = 8 / Math.pow(2, Math.max(0, Math.floor(Math.log2(8 / want))));
+            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / want))));
             // Same base octaves as the coarse field; finer cells add detail on top.
             const oct = Math.min(7, 5 + Math.max(0, Math.round(Math.log2(8 / cell)) - 1));
             const fk = `${gid}|f${cell}|${fine.x}|${fine.y}|${fine.w}|${fine.h}`;
@@ -800,13 +888,57 @@ extendClass(GalaxyMapManager, {
             // Star pixels follow the zoom detail (planet pixel size, so the sun
             // sharpens with the planets); glow rings stay a few steps coarser.
             const detail = this.getMapDetail ? this.getMapDetail() : 1;
-            const unit = this.mapPixelUnit ? this.mapPixelUnit() : 0;
-            const px = Math.max(unit > 0 ? unit : 0.25, Math.min(Math.max(2, Math.round(r / 14)), r / (14 * detail)));
+            // The sun is built from the map's one pixel (power-of-two step, same as the nebula cell).
+            const px = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / this.mapPixelUnitGlobal()))));
             const gp = Math.max(px * 2, Math.round(r / 4) / detail);
             const disc = pixelCircle(r, px);
             // Limb darkening: a slightly smaller, brighter inner disc.
             const inner = pixelCircle(Math.round(r * 0.72), px);
             const core = pixelCircle(Math.round(r * 0.38), px);
+            // Surface: granulation + sunspots from layered value noise. Zooming in (finer px)
+            // adds octaves, so the star gains detail instead of just a smoother edge.
+            const hash = (x, y) => { let h = Math.imul(x * 374761393 + y * 668265263 + (i + 1) * 982451653, 1274126177); h = Math.imul(h ^ (h >>> 13), 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+            const vnoise = (x, y) => {
+                const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+                const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+                return (hash(x0, y0) * (1 - u) + hash(x0 + 1, y0) * u) * (1 - v) + (hash(x0, y0 + 1) * (1 - u) + hash(x0 + 1, y0 + 1) * u) * v;
+            };
+            // The surface is painted once into a tiny canvas and shown as one pixelated <image>:
+            // thousands of SVG rects per sun repainted on every zoom frame were the slow part.
+            const sp = Math.max(px, (2 * r) / 90);
+            const octaves = Math.max(2, Math.min(5, 2 + Math.floor(Math.log2(Math.max(1, detail)))));
+            const n = Math.max(2, Math.ceil((2 * r) / sp));
+            let surface = '';
+            if (typeof document !== 'undefined') {
+                const skey = `${this.galaxyId}|${i}|${n}|${octaves}`;
+                this._sunSurf = this._sunSurf || {};
+                let url = this._sunSurf[skey];
+                if (!url) {
+                    const cv = document.createElement('canvas');
+                    cv.width = n; cv.height = n;
+                    const cx2 = cv.getContext('2d');
+                    const img = cx2.createImageData(n, n);
+                    for (let yy = 0; yy < n; yy++) {
+                        for (let xx = 0; xx < n; xx++) {
+                            const dx = (xx + 0.5) * sp - n * sp / 2, dy = (yy + 0.5) * sp - n * sp / 2;
+                            const q = Math.sqrt(dx * dx + dy * dy) / r;
+                            if (q > 0.98) continue;
+                            let v = 0, amp = 0.5, f = 3, tot = 0;
+                            for (let o = 0; o < octaves; o++) { v += vnoise(dx / r * f + 40 * i, dy / r * f) * amp; tot += amp; amp *= 0.55; f *= 2; }
+                            v /= tot;
+                            const k = (yy * n + xx) * 4;
+                            if (v < 0.34) { img.data[k] = img.data[k + 1] = img.data[k + 2] = 0; img.data[k + 3] = 41; }
+                            else if (v > 0.66) { img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = 31; }
+                        }
+                    }
+                    cx2.putImageData(img, 0, 0);
+                    url = this._sunSurf[skey] = cv.toDataURL();
+                    const keys = Object.keys(this._sunSurf);
+                    if (keys.length > 24) delete this._sunSurf[keys[0]];
+                }
+                const side = n * sp;
+                surface = `<image href="${url}" x="${-side / 2}" y="${-side / 2}" width="${side}" height="${side}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges"/>`;
+            }
             // No rays: the star itself animates (breathing body, flickering
             // surface, pulsing glow) — see .gm-sun-body in styles.css.
             const delay = `animation-delay:${(-i * 1.7).toFixed(1)}s`;
@@ -819,6 +951,7 @@ extendClass(GalaxyMapManager, {
                         <g class="gm-sun-disc">${disc}</g>
                         <g class="gm-sun-inner" style="${delay}">${inner}</g>
                         <g class="gm-sun-core" style="${delay}">${core}</g>
+                        <g class="gm-sun-surface" shape-rendering="crispEdges">${surface}</g>
                     </g>
                 </g>`;
         }).join('');
@@ -1047,8 +1180,7 @@ extendClass(GalaxyMapManager, {
      * the ring / atmosphere margin of the pixel grid (planet-svgs).
      */
     planetSurfaceRadius(planetId) {
-        const seed = String(planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-        const size = 32 + (seed % 7) * 10;
+        const size = this.planetNodeSize(planetId);
         let frac = 0.37;
         try {
             const sid = String(planetId || '').toLowerCase();
@@ -1171,6 +1303,12 @@ extendClass(GalaxyMapManager, {
     getLineDetail() {
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
         return Math.pow(2, Math.round(Math.log2(Math.max(1, Math.min(12, z))) * 4) / 4);
+    },
+
+    /** Stage counter size: big when zoomed out (readable), settling down as you zoom in. */
+    stageTextScale() {
+        const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? Math.max(1, this.mapZoom) : 1;
+        return 1 + 1.5 / z;
     },
 
     getMapDetail() {
@@ -1386,8 +1524,7 @@ extendClass(GalaxyMapManager, {
                 const at = this.locationPoint && this.locationPoint({ kind: 'planet', id: pid });
                 if (!ctm || !at) return true;
                 const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-                const seed = String(pid).split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-                return Math.hypot(pt.x - at.x, pt.y - at.y) <= (32 + (seed % 7) * 10) / 2;
+                return Math.hypot(pt.x - at.x, pt.y - at.y) <= this.planetNodeSize(pid) / 2;
             };
             svg.addEventListener('pointermove', (e) => {
                 const pid = this.hoveredPlanetId;
@@ -1679,7 +1816,7 @@ extendClass(GalaxyMapManager, {
                 const size = Number(node.getAttribute('data-size')) || 48;
                 const lit = node.querySelector('.gm-planet-lit');
                 const dir = lit ? this.planetLightDir(+lit.getAttribute('data-lit-x'), +lit.getAttribute('data-lit-y')) : null;
-                if (pid && icon) icon.innerHTML = this.planetIconHtml(pid, size, true, dir);
+                if (pid && icon) icon.innerHTML = this.planetIconHtml(pid, size, true, dir, true);
                 // Faction emblems follow the zoom detail (finer art).
                 const facs = node.querySelector('.gm-node-factions');
                 if (pid && facs) {
@@ -1708,6 +1845,8 @@ extendClass(GalaxyMapManager, {
             // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
             const shipScale = cur.querySelector('.gm-ship-scale');
             if (shipScale) shipScale.setAttribute('transform', `scale(${(1 / Math.sqrt(Math.max(1, this.mapZoom || 1))).toFixed(4)})`);
+            const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
+            cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
             if (this._mapArtDetail === this.getMapDetail()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
@@ -2151,7 +2290,30 @@ extendClass(GalaxyMapManager, {
     /** Map size of a planet node (same seed as renderMapSvg). */
     planetNodeSize(planetId) {
         const seed = String(planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-        return 32 + (seed % 7) * 10;
+        const raw = 32 + (seed % 7) * 10;
+        // Quantised to whole multiples of the global map pixel, so every planet, whatever its
+        // size, is built from exactly the same pixel (bigger planet = more pixels, not bigger ones).
+        const cells = this.planetGridCells(planetId);
+        return cells * this.planetDetailMul(planetId) * GM_PIXEL_U0;
+    },
+
+    /** Art grid cells across a planet at detail 1 (22 with rings, else 18). */
+    planetGridCells(planetId) {
+        const pid = String(planetId || '').toLowerCase();
+        const spec = typeof planetSVGManager !== 'undefined' && planetSVGManager.planetSpecs && planetSVGManager.planetSpecs[pid];
+        return (spec && spec.features && spec.features.rings) ? 22 : 18;
+    },
+
+    /** Grid multiplier of this planet's size class (1, 2, 3 …) on top of the zoom detail. */
+    planetDetailMul(planetId) {
+        const seed = String(planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+        const raw = 32 + (seed % 7) * 10;
+        return Math.max(1, Math.round(raw / (this.planetGridCells(planetId) * GM_PIXEL_U0)));
+    },
+
+    /** The one pixel size of the whole map (map units per art pixel) at the current zoom detail. */
+    mapPixelUnitGlobal() {
+        return GM_PIXEL_U0 / (this.getMapDetail ? this.getMapDetail() : 1);
     },
 
     /**
@@ -2159,18 +2321,8 @@ extendClass(GalaxyMapManager, {
      * drawn right now (object scale + zoom detail). Stations, border
      * blockades and the nebula use it so everything shares one resolution.
      */
-    mapPixelUnit(planetId) {
-        let base;
-        if (planetId) {
-            base = this.planetPixelSize(planetId);
-        } else {
-            const ids = Object.keys(this.nodeById || {});
-            base = ids.length
-                ? ids.reduce((sum, id) => sum + this.planetPixelSize(id), 0) / ids.length
-                : this.planetNodeSize('') / 18;
-        }
-        const detail = this.getMapDetail ? this.getMapDetail() : 1;
-        return base * this.getMapObjectScale() / detail;
+    mapPixelUnit() {
+        return this.mapPixelUnitGlobal();
     },
 
     /** Map units per art pixel of a planet (grid 16 + margin; 22 with rings). */
@@ -2208,17 +2360,29 @@ extendClass(GalaxyMapManager, {
      */
     pixelTextSvg(str, x, y, anchor, px) {
         const P = px || 1.5;
-        const chars = String(str).split('').map((c) => this.PIXEL_GLYPHS[c] || this.PIXEL_GLYPHS[' ']);
-        const cols = chars.length * 4 - 1;
-        const x0 = anchor === 'middle' ? x - (cols * P) / 2 : x;
-        const y0 = y - 5 * P;
+        // Zoomed in the text switches to finer bitmap fonts (3x5 → 5x7 → 7x9) of the same
+        // height, so the pixels get smaller but stay square and the digits stay legible.
+        const detail = this.getMapDetail ? this.getMapDetail() : 1;
+        const lvl = detail >= 4 ? 2 : (detail >= 2 ? 1 : 0);
+        const text = String(str).split('');
+        let glyphs, gw, gh;
+        if (lvl === 0) {
+            glyphs = text.map((c) => this.PIXEL_GLYPHS[c] || this.PIXEL_GLYPHS[' ']); gw = 3; gh = 5;
+        } else {
+            const font = lvl === 1 ? this.PIXEL_GLYPHS_5X7 : this.PIXEL_GLYPHS_7X9;
+            glyphs = text.map((c) => (font[c] || font[' ']).split(',')); gw = lvl === 1 ? 5 : 7; gh = lvl === 1 ? 7 : 9;
+        }
+        const F = (5 * P) / gh;
+        const step = gw + 1, cols = glyphs.length * step - 1;
         const on = new Set();
-        chars.forEach((g, i) => g.forEach((row, ry) => row.split('').forEach((b, rx) => {
-            if (b === '1') on.add((i * 4 + rx) + ',' + ry);
+        glyphs.forEach((g, i) => g.forEach((row, ry) => row.split('').forEach((b, rx) => {
+            if (b === '1') on.add((i * step + rx) + ',' + ry);
         })));
+        const x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
+        const y0 = y - gh * F;
         let outline = '', fill = '';
-        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * P).toFixed(2)}" y="${(y0 + cy * P).toFixed(2)}" width="${P}" height="${P}" class="${cls}"/>`;
-        for (let cy = -1; cy <= 5; cy++) {
+        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F).toFixed(3)}" y="${(y0 + cy * F).toFixed(3)}" width="${F.toFixed(3)}" height="${F.toFixed(3)}" class="${cls}"/>`;
+        for (let cy = -1; cy <= gh; cy++) {
             for (let cx = -1; cx <= cols; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
                 let edge = false;
@@ -2228,6 +2392,9 @@ extendClass(GalaxyMapManager, {
         }
         return `<g class="gm-stage-progress-px" shape-rendering="crispEdges">${outline}${fill}</g>`;
     },
+
+    PIXEL_GLYPHS_5X7: { '0': '01110,10001,10011,10101,11001,10001,01110', '1': '00100,01100,00100,00100,00100,00100,01110', '2': '01110,10001,00001,00010,00100,01000,11111', '3': '11110,00001,00001,01110,00001,00001,11110', '4': '00010,00110,01010,10010,11111,00010,00010', '5': '11111,10000,11110,00001,00001,10001,01110', '6': '00110,01000,10000,11110,10001,10001,01110', '7': '11111,00001,00010,00100,01000,01000,01000', '8': '01110,10001,10001,01110,10001,10001,01110', '9': '01110,10001,10001,01111,00001,00010,01100', '/': '00001,00001,00010,00100,01000,10000,10000', '-': '00000,00000,00000,11111,00000,00000,00000', '+': '00000,00100,00100,11111,00100,00100,00000', ' ': '00000,00000,00000,00000,00000,00000,00000' },
+    PIXEL_GLYPHS_7X9: { '0': '0111110,1000001,1000011,1000101,1001001,1010001,1100001,1000001,0111110', '1': '0001000,0011000,0101000,0001000,0001000,0001000,0001000,0001000,0111110', '2': '0111110,1000001,0000001,0000010,0000100,0001000,0010000,0100000,1111111', '3': '0111110,1000001,0000001,0000001,0011110,0000001,0000001,1000001,0111110', '4': '0000010,0000110,0001010,0010010,0100010,1000010,1111111,0000010,0000010', '5': '1111111,1000000,1000000,1111110,0000001,0000001,0000001,1000001,0111110', '6': '0011110,0100000,1000000,1000000,1111110,1000001,1000001,1000001,0111110', '7': '1111111,0000001,0000010,0000010,0000100,0001000,0001000,0010000,0010000', '8': '0111110,1000001,1000001,0111110,1000001,1000001,1000001,1000001,0111110', '9': '0111110,1000001,1000001,1000001,0111111,0000001,0000001,0000010,0111100', '/': '0000001,0000001,0000010,0000010,0000100,0001000,0010000,0100000,1000000', '-': '0000000,0000000,0000000,0000000,1111111,0000000,0000000,0000000,0000000', '+': '0000000,0000000,0001000,0001000,1111111,0001000,0001000,0000000,0000000', ' ': '0000000,0000000,0000000,0000000,0000000,0000000,0000000,0000000,0000000' },
 
     /**
      * Sub-pixel silhouette helpers (zoom detail d): a mask of solid

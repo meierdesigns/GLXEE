@@ -80,6 +80,9 @@
         return RES_STEPS[resIndex] + '×' + Math.round(RES_STEPS[resIndex] * 3 / 4);
     }
 
+    // Plates of the screen frame (mechanic: css/screen-frame.css). Same markup as index.html.
+    const FRAME_PLATES_HTML = '<div class="vf-fr" aria-hidden="true"><i class="vf-fr-p vf-fr-dark"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-lit"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-hullA"><i class="vf-fr-p vf-fr-hullB"><b class="vf-fr-hole"></b></i></i></div>';
+
     // Global bezel around the stage with the resolution slider.
     function ensureBezel() {
         let el = document.getElementById('vf-res');
@@ -93,6 +96,7 @@
             back.className = 'vf-bezel-back';
             back.setAttribute('aria-hidden', 'true');
             frame.appendChild(back);
+            frame.insertAdjacentHTML('beforeend', FRAME_PLATES_HTML);
             document.body.appendChild(frame);
         }
         el = document.createElement('label');
@@ -214,6 +218,11 @@
         svg.setAttribute('height', h);
         svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
         const MIN = 28;
+        // Plugs sit over the bezel and reach into the screen opening.
+        const bz = document.querySelector('.vf-bezel');
+        const br = bz ? bz.getBoundingClientRect() : null;
+        const u = br && br.width ? Math.min(br.width / 1640, br.height / 1110) : k * 0.6;
+        const reachH = 64 * u, reachTop = 86 * u, reachBot = 64 * u;
         const t = Math.max(10, Math.round(16 * k));
         let out = '';
         // axis: 'h' cables leave left/right sides, 'v' leave top/bottom; frac = position along the edge
@@ -242,8 +251,9 @@
                 const dir = i === 0 ? -1 : 1;
                 const xe = i === 0 ? 0 : w;
                 const xm = x0 + dir * m * 0.45;
-                plug(x0, y, true, dir);
-                const xp = x0 + dir * (Math.round(20 * k + 8));
+                const xin = x0 - dir * reachH;
+                plug(xin, y, true, dir);
+                const xp = xin + dir * (Math.round(20 * k + 8));
                 cable([[xp, y], [xm, y], [xm, y + dy], [xe, y + dy]], 'h');
             });
         });
@@ -256,8 +266,9 @@
                 const dir = i === 0 ? -1 : 1;
                 const ye = i === 0 ? 0 : h;
                 const ym = y0 + dir * m * 0.45;
-                plug(x, y0, false, dir);
-                const yp = y0 + dir * (Math.round(20 * k + 8));
+                const yin = y0 - dir * (i === 0 ? reachTop : reachBot);
+                plug(x, yin, false, dir);
+                const yp = yin + dir * (Math.round(20 * k + 8));
                 cable([[x, yp], [x, ym], [x + dx, ym], [x + dx, ye]], 'v');
             });
         });
@@ -270,7 +281,7 @@
         let p = null;
         try { p = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null; } catch (e) { p = null; }
         if (!p) {
-            return '<span class="vf-pilot-empty" title="No pilot selected"><i></i><b>NO SIGNAL</b></span>';
+            return { plate: '<span class="vf-pilot-empty" title="No pilot selected"><i></i><b>NO SIGNAL</b></span>', res: '' };
         }
         const esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
         const ico = function (key) {
@@ -286,7 +297,7 @@
         const fac = String(p.faction || 'pirate').toLowerCase();
         const big = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
             ? profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64) : '';
-        return '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>' + res;
+        return { plate: '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>', res: res };
     }
     let pilotSig = '';
     function syncPilotPlate() {
@@ -324,15 +335,25 @@
             d.className = 'vf-bezel-deco';
             frameEl.insertBefore(d, frameEl.firstChild);
         }
-        const html = pilotPlateHtml();
-        let el = frame.querySelector('.vf-pilot-plate');
-        if (!el) {
-            el = document.createElement('div');
-            el.className = 'vf-pilot-plate';
-            frame.appendChild(el);
+        const hud = pilotPlateHtml();
+        const sig = hud.plate + '|' + hud.res;
+        let plate = frame.querySelector('.vf-pilot-plate');
+        let ress = frame.querySelector('.vf-pilot-ress');
+        if (!plate) {
+            plate = document.createElement('div');
+            plate.className = 'vf-pilot-plate vf-pilot-screen';
+            frame.appendChild(plate);
+            ress = document.createElement('div');
+            ress.className = 'vf-pilot-ress vf-pilot-screen';
+            frame.appendChild(ress);
             pilotSig = '';
         }
-        if (html !== pilotSig) { pilotSig = html; el.innerHTML = html; }
+        if (sig !== pilotSig) {
+            pilotSig = sig;
+            plate.innerHTML = hud.plate;
+            ress.innerHTML = hud.res;
+            ress.hidden = !hud.res;
+        }
     }
     setInterval(syncPilotPlate, 700);
 

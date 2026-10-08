@@ -27530,7 +27530,7 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-ma
     position: fixed;
     left: 0;
     top: 0;
-    z-index: 0;
+    z-index: 0;  /* behind the bezel; plugs still reach into the screen opening */
     pointer-events: none;
 }
 
@@ -27692,41 +27692,6 @@ html body .profile-selection-content.profile-selection-floating:not(.profile-sel
 .pd-known-toggle.is-on { color: var(--color-primary); border-color: var(--color-primary); }
 .pd-known-toggle:hover, .pd-known-toggle:focus-visible { color: #fff; outline: none; }
 
-/* Pilot display in the bezel's top strip */
-.vf-pilot-plate {
-    position: absolute;
-    left: calc(150 * var(--bz-u));
-    right: calc(300 * var(--bz-u));
-    top: calc(5 * var(--bz-u));
-    height: calc(34 * var(--bz-u));
-    z-index: 9995;
-    display: flex;
-    align-items: center;
-    gap: calc(14 * var(--bz-u));
-    padding: 0 calc(10 * var(--bz-u));
-    box-sizing: border-box;
-    overflow: hidden;
-    background: #05060a;
-    border: calc(2 * var(--bz-u)) solid #2c313b;
-    box-shadow: inset 0 0 calc(10 * var(--bz-u)) color-mix(in srgb, var(--color-primary, #3dff6a) 25%, transparent);
-    font-family: 'Silkscreen', var(--ui-font-family);
-    font-size: calc(16 * var(--bz-u));
-    color: var(--color-text, #fff);
-    white-space: nowrap;
-}
-.vf-pilot-plate::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 3px);
-}
-.vf-pilot-emblem { display: inline-flex; width: calc(26 * var(--bz-u)); height: calc(26 * var(--bz-u)); flex: none; }
-.vf-pilot-emblem > * { width: 100% !important; height: 100% !important; }
-.vf-pilot-name { color: var(--color-primary, #3dff6a); letter-spacing: 0.1em; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
-.vf-pilot-res { display: inline-flex; align-items: center; gap: calc(4 * var(--bz-u)); flex: none; }
-.vf-pilot-res img { width: calc(18 * var(--bz-u)) !important; height: calc(18 * var(--bz-u)) !important; image-rendering: pixelated; }
-.vf-pilot-res b { font-weight: normal; }
 /* empty screen: static noise + label */
 .vf-pilot-empty { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); letter-spacing: 0.3em; }
 .vf-pilot-empty i {
@@ -27748,7 +27713,6 @@ html body .profile-selection-content.profile-selection-floating:not(.profile-sel
 }
 .vf-bezel::before { top: calc((44 + var(--bz-extra)) * var(--u)); }
 .vf-bezel-tools { top: calc(13 * var(--bz-u)); }
-.vf-pilot-plate { top: calc(16 * var(--bz-u)); }
 html body .game-container { padding-top: calc(22 * var(--bz-u) / var(--gui-zoom-eff, var(--gui-zoom, 0.75))); box-sizing: border-box; }
 html body .home-station-overlay .home-station-content { margin-top: calc(22 * var(--bz-u)) !important; }
 html body .start-screen .start-screen-content.start-screen-retro { padding-top: calc(70 * var(--bz-u)) !important; }
@@ -27778,13 +27742,10 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 
 /* Terran: stepped military plating (default), blue steel */
-.vf-bezel[data-faction="terran"] { --hull: #1b2330; --hull-lit: #34445a; --hull-dark: #0a0e14; }
 
 /* Kronax: heavy chamfered armour, red/orange hazard bands */
-.vf-bezel[data-faction="kronax"] { --hull: #2a1612; --hull-lit: #5a2e22; --hull-dark: #0e0605; }
 .vf-bezel[data-faction="kronax"]::after,
 .vf-bezel[data-faction="kronax"] .vf-bezel-deco {
-    clip-path: polygon(calc(46 * var(--u)) 0, calc(100% - 46 * var(--u)) 0, 100% calc(46 * var(--u)), 100% calc(100% - 46 * var(--u)), calc(100% - 46 * var(--u)) 100%, calc(46 * var(--u)) 100%, 0 calc(100% - 46 * var(--u)), 0 calc(46 * var(--u)));
 }
 .vf-bezel[data-faction="kronax"] .vf-bezel-deco {
     background:
@@ -27795,9 +27756,8 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 
 /* Voidborn: smooth organic curves, pulsing veins */
-.vf-bezel[data-faction="voidborn"] { --hull: #1c1230; --hull-lit: #3a2860; --hull-dark: #08040f; }
 .vf-bezel[data-faction="voidborn"]::after,
-.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { clip-path: inset(0 round calc(56 * var(--u))); }
+.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { }
 .vf-bezel[data-faction="voidborn"]::before { border-radius: calc(26 * var(--u)); }
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
     background:
@@ -27810,10 +27770,8 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 @keyframes vf-bz-pulse { from { opacity: 0.45; } to { opacity: 1; } }
 
 /* Pirate: scavenged, rusty patched plates with rivets and jagged cuts */
-.vf-bezel[data-faction="pirate"] { --hull: #2b2013; --hull-lit: #5a4424; --hull-dark: #0f0a04; }
 .vf-bezel[data-faction="pirate"]::after,
 .vf-bezel[data-faction="pirate"] .vf-bezel-deco {
-    clip-path: polygon(0 calc(20 * var(--u)), calc(30 * var(--u)) 0, 22% calc(8 * var(--u)), 41% 0, 63% calc(10 * var(--u)), 80% 0, calc(100% - 26 * var(--u)) calc(6 * var(--u)), 100% calc(34 * var(--u)), calc(100% - 8 * var(--u)) 55%, 100% calc(100% - 30 * var(--u)), calc(100% - 34 * var(--u)) 100%, 70% calc(100% - 8 * var(--u)), 48% 100%, 26% calc(100% - 10 * var(--u)), calc(30 * var(--u)) 100%, 0 calc(100% - 26 * var(--u)), calc(9 * var(--u)) 45%);
 }
 .vf-bezel[data-faction="pirate"] .vf-bezel-deco {
     background:
@@ -27824,7 +27782,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 
 /* Machine: thin precise plating with circuit traces */
-.vf-bezel[data-faction="machine"] { --hull: #0f1d1c; --hull-lit: #1f4a45; --hull-dark: #040a0a; }
 .vf-bezel[data-faction="machine"] .vf-bezel-deco {
     background:
         repeating-linear-gradient(90deg, color-mix(in srgb, var(--retro-ink) 55%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(18 * var(--u))) 0 calc(14 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
@@ -27834,62 +27791,10 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 .vf-bezel[data-faction="machine"]::after,
 .vf-bezel[data-faction="machine"] .vf-bezel-deco {
-    clip-path: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
 }
 @media (prefers-reduced-motion: reduce) { .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: none; } }
 .vf-bezel .vf-bezel-deco { z-index: 3; }
 
-/* Pilot display: bigger, its own recessed screen in the top strip */
-.vf-pilot-plate {
-    top: calc(9 * var(--bz-u));
-    height: calc(48 * var(--bz-u));
-    left: calc(130 * var(--bz-u));
-    right: calc(240 * var(--bz-u));
-    gap: calc(18 * var(--bz-u));
-    padding: 0 calc(16 * var(--bz-u));
-    font-size: calc(22 * var(--bz-u));
-    border: calc(3 * var(--bz-u)) solid var(--hull-dark, #0c0e12);
-    outline: calc(2 * var(--bz-u)) solid var(--hull-lit, #2c313b);
-    background: radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--retro-ink, var(--color-primary)) 14%, #05060a), #020304 75%);
-    box-shadow: inset 0 0 calc(14 * var(--bz-u)) color-mix(in srgb, var(--retro-ink, var(--color-primary)) 35%, transparent), inset 0 calc(3 * var(--bz-u)) 0 #0008;
-}
-.vf-pilot-emblem { width: calc(38 * var(--bz-u)); height: calc(38 * var(--bz-u)); filter: drop-shadow(0 0 calc(4 * var(--bz-u)) var(--retro-ink, var(--color-primary))); }
-.vf-pilot-name { font-size: calc(26 * var(--bz-u)); text-shadow: 0 0 calc(6 * var(--bz-u)) color-mix(in srgb, var(--retro-ink, var(--color-primary)) 70%, transparent); }
-.vf-pilot-res { gap: calc(6 * var(--bz-u)); }
-.vf-pilot-res img { width: calc(26 * var(--bz-u)) !important; height: calc(26 * var(--bz-u)) !important; }
-.vf-bezel-tools { top: calc(13 * var(--bz-u)); }
-.vf-pilot-plate { right: calc(300 * var(--bz-u)); }
-
-/* Faction crest (Wappen) at the left end of the pilot display */
-.vf-pilot-plate { overflow: visible; padding-left: calc(84 * var(--bz-u)); }
-.vf-pilot-crest {
-    position: absolute;
-    left: calc(8 * var(--bz-u));
-    top: 50%;
-    width: calc(64 * var(--bz-u));
-    height: calc(72 * var(--bz-u));
-    transform: translateY(-50%);
-    z-index: 4;
-    display: block;
-    background: var(--retro-ink, var(--color-primary));
-    --shape: polygon(0 0, 100% 0, 100% 58%, 50% 100%, 0 58%);
-    clip-path: var(--shape);
-    filter: drop-shadow(0 calc(2 * var(--bz-u)) 0 #000);
-}
-.vf-pilot-crest-in {
-    position: absolute;
-    inset: calc(4 * var(--bz-u));
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: calc(8 * var(--bz-u));
-    box-sizing: border-box;
-    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--retro-ink, var(--color-primary)) 28%, #05060a), #03040a 80%);
-    clip-path: var(--shape);
-}
-.vf-pilot-crest-in > * { width: calc(40 * var(--bz-u)) !important; height: calc(40 * var(--bz-u)) !important; image-rendering: pixelated; }
-.vf-pilot-crest-in img, .vf-pilot-crest-in svg { width: 100% !important; height: 100% !important; }
-.vf-pilot-crest-in > span { display: block; width: calc(40 * var(--bz-u)); height: calc(40 * var(--bz-u)); }
 /* Terran: classic heater shield with a flat top */
 .vf-pilot-crest[data-f="terran"] { --shape: polygon(0 0, 100% 0, 100% 55%, 82% 78%, 50% 100%, 18% 78%, 0 55%); }
 /* Kronax: heavy angular bastion, chevron-cut top */
@@ -27903,8 +27808,7 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 .vf-pilot-crest[data-f="machine"] { --shape: polygon(50% 0, 100% 18%, 100% 78%, 50% 100%, 0 78%, 0 18%); }
 
 /* ───── Darker, more distinct faction bezels ───── */
-.vf-bezel[data-faction="terran"]::after, .vf-bezel[data-faction="terran"] .vf-bezel-deco { clip-path: polygon(calc(30 * var(--u)) calc(14 * var(--u)), 36% calc(14 * var(--u)), 42% calc(8 * var(--u)), 46% calc(8 * var(--u)), 50% 0, 54% calc(8 * var(--u)), 58% calc(8 * var(--u)), 64% calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) 0, 100% 0, 100% calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(100% - calc(30 * var(--u))), 100% calc(100% - calc(30 * var(--u))), 100% 100%, calc(100% - calc(30 * var(--u))) 100%, calc(100% - calc(30 * var(--u))) calc(100% - calc(14 * var(--u))), 64% calc(100% - calc(14 * var(--u))), 58% calc(100% - calc(8 * var(--u))), 42% calc(100% - calc(8 * var(--u))), 36% calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) 100%, 0 100%, 0 calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(30 * var(--u)), 0 calc(30 * var(--u)), 0 0, calc(30 * var(--u)) 0); }
-.vf-bezel[data-faction="terran"] { --hull: #131a26; --hull-lit: #2a3a52; --hull-dark: #05080e; --gold: #c9a24a; }
+.vf-bezel[data-faction="terran"]::after, .vf-bezel[data-faction="terran"] .vf-bezel-deco { }
 .vf-bezel[data-faction="terran"] .vf-bezel-deco {
     background:
         /* gold double rule along the top and bottom (the law is written in the walls) */
@@ -27920,8 +27824,7 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 .vf-bezel[data-faction="terran"] .vf-pilot-crest { --shape: polygon(0 0, 100% 0, 100% 50%, 80% 80%, 50% 100%, 20% 80%, 0 50%); }
 
-.vf-bezel[data-faction="kronax"] { --hull: #1c0d0a; --hull-lit: #4a1d14; --hull-dark: #060202; }
-.vf-bezel[data-faction="kronax"]::after, .vf-bezel[data-faction="kronax"] .vf-bezel-deco { clip-path: polygon(0.0% calc(0 * var(--u)), 4.2% calc(16 * var(--u)), 8.3% calc(0 * var(--u)), 12.5% calc(16 * var(--u)), 16.7% calc(0 * var(--u)), 20.8% calc(16 * var(--u)), 25.0% calc(0 * var(--u)), 29.2% calc(16 * var(--u)), 33.3% calc(0 * var(--u)), 37.5% calc(16 * var(--u)), 41.7% calc(0 * var(--u)), 45.8% calc(16 * var(--u)), 50.0% calc(0 * var(--u)), 54.2% calc(16 * var(--u)), 58.3% calc(0 * var(--u)), 62.5% calc(16 * var(--u)), 66.7% calc(0 * var(--u)), 70.8% calc(16 * var(--u)), 75.0% calc(0 * var(--u)), 79.2% calc(16 * var(--u)), 83.3% calc(0 * var(--u)), 87.5% calc(16 * var(--u)), 91.7% calc(0 * var(--u)), 95.8% calc(16 * var(--u)), 100.0% calc(0 * var(--u)), 100% calc(40 * var(--u)), calc(100% - calc(10 * var(--u))) 30%, 100% 50%, calc(100% - calc(10 * var(--u))) 70%, 100% calc(100% - calc(40 * var(--u))), 100.0% calc(100% - calc(0 * var(--u))), 95.8% calc(100% - calc(16 * var(--u))), 91.7% calc(100% - calc(0 * var(--u))), 87.5% calc(100% - calc(16 * var(--u))), 83.3% calc(100% - calc(0 * var(--u))), 79.2% calc(100% - calc(16 * var(--u))), 75.0% calc(100% - calc(0 * var(--u))), 70.8% calc(100% - calc(16 * var(--u))), 66.7% calc(100% - calc(0 * var(--u))), 62.5% calc(100% - calc(16 * var(--u))), 58.3% calc(100% - calc(0 * var(--u))), 54.2% calc(100% - calc(16 * var(--u))), 50.0% calc(100% - calc(0 * var(--u))), 45.8% calc(100% - calc(16 * var(--u))), 41.7% calc(100% - calc(0 * var(--u))), 37.5% calc(100% - calc(16 * var(--u))), 33.3% calc(100% - calc(0 * var(--u))), 29.2% calc(100% - calc(16 * var(--u))), 25.0% calc(100% - calc(0 * var(--u))), 20.8% calc(100% - calc(16 * var(--u))), 16.7% calc(100% - calc(0 * var(--u))), 12.5% calc(100% - calc(16 * var(--u))), 8.3% calc(100% - calc(0 * var(--u))), 4.2% calc(100% - calc(16 * var(--u))), 0.0% calc(100% - calc(0 * var(--u))), 0 calc(100% - calc(40 * var(--u))), calc(10 * var(--u)) 70%, 0 50%, calc(10 * var(--u)) 30%, 0 calc(40 * var(--u))); }
+.vf-bezel[data-faction="kronax"]::after, .vf-bezel[data-faction="kronax"] .vf-bezel-deco { }
 .vf-bezel[data-faction="kronax"] .vf-bezel-deco {
     background:
         /* claw gashes raked across the plates */
@@ -27938,8 +27841,7 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 .vf-bezel[data-faction="kronax"] .vf-pilot-crest { --shape: polygon(0 0, 22% 14%, 50% 0, 78% 14%, 100% 0, 92% 52%, 100% 74%, 62% 82%, 50% 100%, 38% 82%, 0 74%, 8% 52%); }
 
-.vf-bezel[data-faction="voidborn"] { --hull: #0e0818; --hull-lit: #2a1a48; --hull-dark: #030108; }
-.vf-bezel[data-faction="voidborn"]::after, .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { clip-path: inset(0 round calc(120 * var(--u)) calc(34 * var(--u)) calc(96 * var(--u)) calc(64 * var(--u)) / calc(60 * var(--u)) calc(110 * var(--u)) calc(46 * var(--u)) calc(90 * var(--u))); }
+.vf-bezel[data-faction="voidborn"]::after, .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { }
 .vf-bezel[data-faction="voidborn"]::before { border-radius: calc(70 * var(--u)) calc(20 * var(--u)) calc(54 * var(--u)) calc(38 * var(--u)) / calc(34 * var(--u)) calc(60 * var(--u)) calc(28 * var(--u)) calc(50 * var(--u)); }
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
     background:
@@ -27959,8 +27861,7 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 .vf-bezel[data-faction="voidborn"] .vf-pilot-crest { --shape: polygon(50% 0, 70% 6%, 90% 24%, 100% 46%, 88% 70%, 70% 82%, 56% 100%, 44% 88%, 24% 82%, 8% 62%, 0 40%, 12% 20%, 30% 8%); }
 
-.vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; }
-.vf-bezel[data-faction="pirate"]::after, .vf-bezel[data-faction="pirate"] .vf-bezel-deco { clip-path: polygon(0.0% calc(6 * var(--u)), 3.3% calc(10 * var(--u)), 6.7% calc(0 * var(--u)), 10.0% calc(0 * var(--u)), 13.3% calc(4 * var(--u)), 16.7% calc(4 * var(--u)), 20.0% calc(6 * var(--u)), 23.3% calc(0 * var(--u)), 26.7% calc(3 * var(--u)), 30.0% calc(0 * var(--u)), 33.3% calc(4 * var(--u)), 36.7% calc(0 * var(--u)), 40.0% calc(0 * var(--u)), 43.3% calc(4 * var(--u)), 46.7% calc(3 * var(--u)), 50.0% calc(4 * var(--u)), 53.3% calc(0 * var(--u)), 56.7% calc(0 * var(--u)), 60.0% calc(4 * var(--u)), 63.3% calc(3 * var(--u)), 66.7% calc(0 * var(--u)), 70.0% calc(0 * var(--u)), 73.3% calc(0 * var(--u)), 76.7% calc(3 * var(--u)), 80.0% calc(0 * var(--u)), 83.3% calc(10 * var(--u)), 86.7% calc(14 * var(--u)), 90.0% calc(0 * var(--u)), 93.3% calc(10 * var(--u)), 96.7% calc(4 * var(--u)), 100.0% calc(14 * var(--u)), calc(100% - calc(12 * var(--u))) 8%, calc(100% - calc(0 * var(--u))) 16%, calc(100% - calc(0 * var(--u))) 24%, calc(100% - calc(3 * var(--u))) 32%, calc(100% - calc(12 * var(--u))) 40%, calc(100% - calc(0 * var(--u))) 48%, calc(100% - calc(0 * var(--u))) 56%, calc(100% - calc(3 * var(--u))) 64%, calc(100% - calc(5 * var(--u))) 72%, calc(100% - calc(12 * var(--u))) 80%, calc(100% - calc(3 * var(--u))) 88%, 100.0% calc(100% - calc(10 * var(--u))), 96.7% calc(100% - calc(12 * var(--u))), 93.3% calc(100% - calc(7 * var(--u))), 90.0% calc(100% - calc(12 * var(--u))), 86.7% calc(100% - calc(2 * var(--u))), 83.3% calc(100% - calc(5 * var(--u))), 80.0% calc(100% - calc(5 * var(--u))), 76.7% calc(100% - calc(16 * var(--u))), 73.3% calc(100% - calc(10 * var(--u))), 70.0% calc(100% - calc(7 * var(--u))), 66.7% calc(100% - calc(10 * var(--u))), 63.3% calc(100% - calc(16 * var(--u))), 60.0% calc(100% - calc(5 * var(--u))), 56.7% calc(100% - calc(3 * var(--u))), 53.3% calc(100% - calc(12 * var(--u))), 50.0% calc(100% - calc(3 * var(--u))), 46.7% calc(100% - calc(16 * var(--u))), 43.3% calc(100% - calc(7 * var(--u))), 40.0% calc(100% - calc(10 * var(--u))), 36.7% calc(100% - calc(10 * var(--u))), 33.3% calc(100% - calc(7 * var(--u))), 30.0% calc(100% - calc(2 * var(--u))), 26.7% calc(100% - calc(10 * var(--u))), 23.3% calc(100% - calc(3 * var(--u))), 20.0% calc(100% - calc(0 * var(--u))), 16.7% calc(100% - calc(5 * var(--u))), 13.3% calc(100% - calc(5 * var(--u))), 10.0% calc(100% - calc(7 * var(--u))), 6.7% calc(100% - calc(3 * var(--u))), 3.3% calc(100% - calc(5 * var(--u))), 0.0% calc(100% - calc(12 * var(--u))), calc(12 * var(--u)) 92%, calc(0 * var(--u)) 84%, calc(0 * var(--u)) 76%, calc(4 * var(--u)) 68%, calc(4 * var(--u)) 60%, calc(2 * var(--u)) 52%, calc(2 * var(--u)) 44%, calc(2 * var(--u)) 36%, calc(4 * var(--u)) 28%, calc(12 * var(--u)) 20%, calc(4 * var(--u)) 12%); }
+.vf-bezel[data-faction="pirate"]::after, .vf-bezel[data-faction="pirate"] .vf-bezel-deco { }
 .vf-bezel[data-faction="pirate"] .vf-bezel-deco {
     background:
         /* row of teeth along the bottom */
@@ -27979,7 +27880,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 }
 .vf-bezel[data-faction="pirate"] .vf-pilot-crest { --shape: polygon(18% 6%, 50% 0, 82% 6%, 100% 34%, 88% 58%, 78% 62%, 80% 82%, 62% 80%, 58% 100%, 50% 92%, 42% 100%, 38% 80%, 20% 82%, 22% 62%, 12% 58%, 0 34%); }
 
-.vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; }
 
 /* ───── Faction-styled GUI: panels, tabs and buttons follow the pilot's faction ───── */
 html[data-vf-faction="terran"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
@@ -28034,7 +27934,7 @@ html[data-vf-faction="voidborn"][data-vf-faction] body :is(.home-station-overlay
     animation: vf-void-gui 6s ease-in-out infinite;
 }
 .vf-bezel[data-faction="voidborn"] .vf-pilot-crest { animation: vf-void-crest 5s ease-in-out infinite; }
-@keyframes vf-void-crest { 0%, 100% { transform: translateY(-50%) scale(1, 1); } 50% { transform: translateY(-50%) scale(1.06, 0.95) rotate(2deg); } }
+@keyframes vf-void-crest { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, 0.95) rotate(2deg); } }
 @media (prefers-reduced-motion: reduce) {
     .vf-bezel[data-faction="voidborn"]::after, .vf-bezel[data-faction="voidborn"]::before, .vf-bezel[data-faction="voidborn"] .vf-bezel-deco, .vf-bezel[data-faction="voidborn"] .vf-pilot-crest,
     html[data-vf-faction="voidborn"] body * { animation: none !important; }
@@ -28081,7 +27981,7 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
 /* Voidborn bezel: lumpy flesh outline that slowly shifts between two shapes */
 @keyframes vf-void-flesh { 0%, 100% { clip-path: polygon(calc(0.0% + 0.0 * var(--u)) calc(0.0% + 35.4 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(0.0% + 17.1 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(0.0% + 9.9 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(0.0% + 19.7 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(0.0% + 20.7 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(0.0% + 0.9 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(0.0% + 0.1 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(0.0% + 31.2 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(0.0% + 6.0 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(0.0% + 5.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(0.0% + 39.8 * var(--u)), calc(100.0% + -43.9 * var(--u)) calc(0.0% + 0.0 * var(--u)), calc(100.0% + -31.2 * var(--u)) calc(9.1% + 0.0 * var(--u)), calc(100.0% + -14.2 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(100.0% + -21.4 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(100.0% + -2.8 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(100.0% + -21.2 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(100.0% + -32.8 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(100.0% + -16.2 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(100.0% + -26.3 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(100.0% + -22.9 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(100.0% + -0.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(100.0% + 0.0 * var(--u)) calc(100.0% + -57.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(100.0% + -19.2 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(100.0% + -7.5 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(100.0% + -0.3 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(100.0% + -32.7 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(100.0% + -14.0 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(100.0% + -25.2 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(100.0% + -33.4 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(100.0% + -25.0 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(100.0% + -35.7 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(100.0% + -10.9 * var(--u)), calc(0.0% + 59.3 * var(--u)) calc(100.0% + 0.0 * var(--u)), calc(0.0% + 12.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(0.0% + 36.4 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(0.0% + 33.4 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(0.0% + 1.5 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(0.0% + 2.4 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(0.0% + 4.7 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(0.0% + 38.1 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(0.0% + 12.5 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(0.0% + 20.8 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(0.0% + 7.4 * var(--u)) calc(9.1% + 0.0 * var(--u))); } 50% { clip-path: polygon(calc(0.0% + 0.0 * var(--u)) calc(0.0% + 35.0 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(0.0% + 37.9 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(0.0% + 2.2 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(0.0% + 24.5 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(0.0% + 1.3 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(0.0% + 5.7 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(0.0% + 40.0 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(0.0% + 4.5 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(0.0% + 21.5 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(0.0% + 13.5 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(0.0% + 13.2 * var(--u)), calc(100.0% + -44.9 * var(--u)) calc(0.0% + 0.0 * var(--u)), calc(100.0% + -4.0 * var(--u)) calc(9.1% + 0.0 * var(--u)), calc(100.0% + -30.8 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(100.0% + -1.4 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(100.0% + -5.2 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(100.0% + -0.2 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(100.0% + -6.3 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(100.0% + -11.4 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(100.0% + -34.6 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(100.0% + -10.3 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(100.0% + -1.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(100.0% + 0.0 * var(--u)) calc(100.0% + -36.0 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(100.0% + -39.5 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(100.0% + -0.8 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(100.0% + -20.5 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(100.0% + -10.2 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(100.0% + -22.4 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(100.0% + -8.8 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(100.0% + -23.9 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(100.0% + -15.1 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(100.0% + -21.9 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(100.0% + -34.6 * var(--u)), calc(0.0% + 48.7 * var(--u)) calc(100.0% + 0.0 * var(--u)), calc(0.0% + 2.6 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(0.0% + 0.9 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(0.0% + 37.0 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(0.0% + 14.7 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(0.0% + 4.0 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(0.0% + 37.0 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(0.0% + 18.6 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(0.0% + 25.7 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(0.0% + 33.5 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(0.0% + 6.9 * var(--u)) calc(9.1% + 0.0 * var(--u))); } }
 .vf-bezel[data-faction="voidborn"]::after,
-.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { clip-path: polygon(calc(0.0% + 0.0 * var(--u)) calc(0.0% + 35.4 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(0.0% + 17.1 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(0.0% + 9.9 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(0.0% + 19.7 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(0.0% + 20.7 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(0.0% + 0.9 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(0.0% + 0.1 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(0.0% + 31.2 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(0.0% + 6.0 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(0.0% + 5.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(0.0% + 39.8 * var(--u)), calc(100.0% + -43.9 * var(--u)) calc(0.0% + 0.0 * var(--u)), calc(100.0% + -31.2 * var(--u)) calc(9.1% + 0.0 * var(--u)), calc(100.0% + -14.2 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(100.0% + -21.4 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(100.0% + -2.8 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(100.0% + -21.2 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(100.0% + -32.8 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(100.0% + -16.2 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(100.0% + -26.3 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(100.0% + -22.9 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(100.0% + -0.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(100.0% + 0.0 * var(--u)) calc(100.0% + -57.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(100.0% + -19.2 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(100.0% + -7.5 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(100.0% + -0.3 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(100.0% + -32.7 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(100.0% + -14.0 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(100.0% + -25.2 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(100.0% + -33.4 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(100.0% + -25.0 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(100.0% + -35.7 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(100.0% + -10.9 * var(--u)), calc(0.0% + 59.3 * var(--u)) calc(100.0% + 0.0 * var(--u)), calc(0.0% + 12.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(0.0% + 36.4 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(0.0% + 33.4 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(0.0% + 1.5 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(0.0% + 2.4 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(0.0% + 4.7 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(0.0% + 38.1 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(0.0% + 12.5 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(0.0% + 20.8 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(0.0% + 7.4 * var(--u)) calc(9.1% + 0.0 * var(--u))); animation: vf-void-flesh 9s ease-in-out infinite; }
+.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: vf-void-flesh 9s ease-in-out infinite; }
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: vf-void-flesh 9s ease-in-out infinite, vf-bz-pulse 2.6s ease-in-out infinite alternate; }
 .vf-bezel[data-faction="voidborn"]::before { animation: none; border-radius: calc(34 * var(--u)) calc(60 * var(--u)) calc(30 * var(--u)) calc(52 * var(--u)) / calc(50 * var(--u)) calc(28 * var(--u)) calc(56 * var(--u)) calc(32 * var(--u)); }
 
@@ -28138,7 +28038,7 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
 }
 /* Heartbeat on the pilot crest only (one small element) */
 .vf-bezel[data-faction="voidborn"] .vf-pilot-crest { animation: vf-void-crest 2.4s ease-in-out infinite; }
-@keyframes vf-void-crest { 0%, 50%, 100% { transform: translateY(-50%) scale(1); } 12% { transform: translateY(-50%) scale(1.1); } 34% { transform: translateY(-50%) scale(1.06); } }
+@keyframes vf-void-crest { 0%, 50%, 100% { transform: scale(1); } 12% { transform: scale(1.1); } 34% { transform: scale(1.06); } }
 
 /* Name step: icons on kit chips + use the whole screen */
 .profile-start-chips .profile-start-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -28258,7 +28158,6 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
    and the inner screen edge keeps a calm, modest corner radius. */
 .vf-bezel[data-faction="voidborn"]::after,
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
-    clip-path: inset(0 round calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)) calc(40 * var(--u)) / calc(40 * var(--u)) calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)));
     animation: none;
 }
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: vf-bz-pulse 2.6s ease-in-out infinite alternate; }
@@ -28341,11 +28240,6 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
 /* The stage is cut to the bezel's own outer outline, so nothing of the
    screen content (especially its background) shows past the hull corners;
    the window background image stays visible behind the screen instead. */
-body:has(> .vf-bezel[data-faction="kronax"]) { clip-path: polygon(0.0% calc(0 * var(--bz-u)), 4.2% calc(16 * var(--bz-u)), 8.3% calc(0 * var(--bz-u)), 12.5% calc(16 * var(--bz-u)), 16.7% calc(0 * var(--bz-u)), 20.8% calc(16 * var(--bz-u)), 25.0% calc(0 * var(--bz-u)), 29.2% calc(16 * var(--bz-u)), 33.3% calc(0 * var(--bz-u)), 37.5% calc(16 * var(--bz-u)), 41.7% calc(0 * var(--bz-u)), 45.8% calc(16 * var(--bz-u)), 50.0% calc(0 * var(--bz-u)), 54.2% calc(16 * var(--bz-u)), 58.3% calc(0 * var(--bz-u)), 62.5% calc(16 * var(--bz-u)), 66.7% calc(0 * var(--bz-u)), 70.8% calc(16 * var(--bz-u)), 75.0% calc(0 * var(--bz-u)), 79.2% calc(16 * var(--bz-u)), 83.3% calc(0 * var(--bz-u)), 87.5% calc(16 * var(--bz-u)), 91.7% calc(0 * var(--bz-u)), 95.8% calc(16 * var(--bz-u)), 100.0% calc(0 * var(--bz-u)), 100% calc(40 * var(--bz-u)), calc(100% - calc(10 * var(--bz-u))) 30%, 100% 50%, calc(100% - calc(10 * var(--bz-u))) 70%, 100% calc(100% - calc(40 * var(--bz-u))), 100.0% calc(100% - calc(0 * var(--bz-u))), 95.8% calc(100% - calc(16 * var(--bz-u))), 91.7% calc(100% - calc(0 * var(--bz-u))), 87.5% calc(100% - calc(16 * var(--bz-u))), 83.3% calc(100% - calc(0 * var(--bz-u))), 79.2% calc(100% - calc(16 * var(--bz-u))), 75.0% calc(100% - calc(0 * var(--bz-u))), 70.8% calc(100% - calc(16 * var(--bz-u))), 66.7% calc(100% - calc(0 * var(--bz-u))), 62.5% calc(100% - calc(16 * var(--bz-u))), 58.3% calc(100% - calc(0 * var(--bz-u))), 54.2% calc(100% - calc(16 * var(--bz-u))), 50.0% calc(100% - calc(0 * var(--bz-u))), 45.8% calc(100% - calc(16 * var(--bz-u))), 41.7% calc(100% - calc(0 * var(--bz-u))), 37.5% calc(100% - calc(16 * var(--bz-u))), 33.3% calc(100% - calc(0 * var(--bz-u))), 29.2% calc(100% - calc(16 * var(--bz-u))), 25.0% calc(100% - calc(0 * var(--bz-u))), 20.8% calc(100% - calc(16 * var(--bz-u))), 16.7% calc(100% - calc(0 * var(--bz-u))), 12.5% calc(100% - calc(16 * var(--bz-u))), 8.3% calc(100% - calc(0 * var(--bz-u))), 4.2% calc(100% - calc(16 * var(--bz-u))), 0.0% calc(100% - calc(0 * var(--bz-u))), 0 calc(100% - calc(40 * var(--bz-u))), calc(10 * var(--bz-u)) 70%, 0 50%, calc(10 * var(--bz-u)) 30%, 0 calc(40 * var(--bz-u))); }
-body:has(> .vf-bezel[data-faction="voidborn"]) { clip-path: inset(0 round calc(56 * var(--bz-u)) calc(34 * var(--bz-u)) calc(48 * var(--bz-u)) calc(40 * var(--bz-u)) / calc(40 * var(--bz-u)) calc(56 * var(--bz-u)) calc(34 * var(--bz-u)) calc(48 * var(--bz-u))); }
-body:has(> .vf-bezel[data-faction="pirate"]) { clip-path: polygon(0.0% calc(6 * var(--bz-u)), 3.3% calc(10 * var(--bz-u)), 6.7% calc(0 * var(--bz-u)), 10.0% calc(0 * var(--bz-u)), 13.3% calc(4 * var(--bz-u)), 16.7% calc(4 * var(--bz-u)), 20.0% calc(6 * var(--bz-u)), 23.3% calc(0 * var(--bz-u)), 26.7% calc(3 * var(--bz-u)), 30.0% calc(0 * var(--bz-u)), 33.3% calc(4 * var(--bz-u)), 36.7% calc(0 * var(--bz-u)), 40.0% calc(0 * var(--bz-u)), 43.3% calc(4 * var(--bz-u)), 46.7% calc(3 * var(--bz-u)), 50.0% calc(4 * var(--bz-u)), 53.3% calc(0 * var(--bz-u)), 56.7% calc(0 * var(--bz-u)), 60.0% calc(4 * var(--bz-u)), 63.3% calc(3 * var(--bz-u)), 66.7% calc(0 * var(--bz-u)), 70.0% calc(0 * var(--bz-u)), 73.3% calc(0 * var(--bz-u)), 76.7% calc(3 * var(--bz-u)), 80.0% calc(0 * var(--bz-u)), 83.3% calc(10 * var(--bz-u)), 86.7% calc(14 * var(--bz-u)), 90.0% calc(0 * var(--bz-u)), 93.3% calc(10 * var(--bz-u)), 96.7% calc(4 * var(--bz-u)), 100.0% calc(14 * var(--bz-u)), calc(100% - calc(12 * var(--bz-u))) 8%, calc(100% - calc(0 * var(--bz-u))) 16%, calc(100% - calc(0 * var(--bz-u))) 24%, calc(100% - calc(3 * var(--bz-u))) 32%, calc(100% - calc(12 * var(--bz-u))) 40%, calc(100% - calc(0 * var(--bz-u))) 48%, calc(100% - calc(0 * var(--bz-u))) 56%, calc(100% - calc(3 * var(--bz-u))) 64%, calc(100% - calc(5 * var(--bz-u))) 72%, calc(100% - calc(12 * var(--bz-u))) 80%, calc(100% - calc(3 * var(--bz-u))) 88%, 100.0% calc(100% - calc(10 * var(--bz-u))), 96.7% calc(100% - calc(12 * var(--bz-u))), 93.3% calc(100% - calc(7 * var(--bz-u))), 90.0% calc(100% - calc(12 * var(--bz-u))), 86.7% calc(100% - calc(2 * var(--bz-u))), 83.3% calc(100% - calc(5 * var(--bz-u))), 80.0% calc(100% - calc(5 * var(--bz-u))), 76.7% calc(100% - calc(16 * var(--bz-u))), 73.3% calc(100% - calc(10 * var(--bz-u))), 70.0% calc(100% - calc(7 * var(--bz-u))), 66.7% calc(100% - calc(10 * var(--bz-u))), 63.3% calc(100% - calc(16 * var(--bz-u))), 60.0% calc(100% - calc(5 * var(--bz-u))), 56.7% calc(100% - calc(3 * var(--bz-u))), 53.3% calc(100% - calc(12 * var(--bz-u))), 50.0% calc(100% - calc(3 * var(--bz-u))), 46.7% calc(100% - calc(16 * var(--bz-u))), 43.3% calc(100% - calc(7 * var(--bz-u))), 40.0% calc(100% - calc(10 * var(--bz-u))), 36.7% calc(100% - calc(10 * var(--bz-u))), 33.3% calc(100% - calc(7 * var(--bz-u))), 30.0% calc(100% - calc(2 * var(--bz-u))), 26.7% calc(100% - calc(10 * var(--bz-u))), 23.3% calc(100% - calc(3 * var(--bz-u))), 20.0% calc(100% - calc(0 * var(--bz-u))), 16.7% calc(100% - calc(5 * var(--bz-u))), 13.3% calc(100% - calc(5 * var(--bz-u))), 10.0% calc(100% - calc(7 * var(--bz-u))), 6.7% calc(100% - calc(3 * var(--bz-u))), 3.3% calc(100% - calc(5 * var(--bz-u))), 0.0% calc(100% - calc(12 * var(--bz-u))), calc(12 * var(--bz-u)) 92%, calc(0 * var(--bz-u)) 84%, calc(0 * var(--bz-u)) 76%, calc(4 * var(--bz-u)) 68%, calc(4 * var(--bz-u)) 60%, calc(2 * var(--bz-u)) 52%, calc(2 * var(--bz-u)) 44%, calc(2 * var(--bz-u)) 36%, calc(4 * var(--bz-u)) 28%, calc(12 * var(--bz-u)) 20%, calc(4 * var(--bz-u)) 12%); }
-body:has(> .vf-bezel[data-faction="machine"]) { clip-path: polygon(calc(24 * var(--bz-u)) 0, calc(100% - 24 * var(--bz-u)) 0, 100% calc(24 * var(--bz-u)), 100% calc(100% - 24 * var(--bz-u)), calc(100% - 24 * var(--bz-u)) 100%, calc(24 * var(--bz-u)) 100%, 0 calc(100% - 24 * var(--bz-u)), 0 calc(24 * var(--bz-u))); }
-body:has(> .vf-bezel[data-faction="terran"]) { clip-path: polygon(calc(30 * var(--bz-u)) calc(14 * var(--bz-u)), 36% calc(14 * var(--bz-u)), 42% calc(8 * var(--bz-u)), 46% calc(8 * var(--bz-u)), 50% 0, 54% calc(8 * var(--bz-u)), 58% calc(8 * var(--bz-u)), 64% calc(14 * var(--bz-u)), calc(100% - calc(30 * var(--bz-u))) calc(14 * var(--bz-u)), calc(100% - calc(30 * var(--bz-u))) 0, 100% 0, 100% calc(30 * var(--bz-u)), calc(100% - calc(14 * var(--bz-u))) calc(30 * var(--bz-u)), calc(100% - calc(14 * var(--bz-u))) calc(100% - calc(30 * var(--bz-u))), 100% calc(100% - calc(30 * var(--bz-u))), 100% 100%, calc(100% - calc(30 * var(--bz-u))) 100%, calc(100% - calc(30 * var(--bz-u))) calc(100% - calc(14 * var(--bz-u))), 64% calc(100% - calc(14 * var(--bz-u))), 58% calc(100% - calc(8 * var(--bz-u))), 42% calc(100% - calc(8 * var(--bz-u))), 36% calc(100% - calc(14 * var(--bz-u))), calc(30 * var(--bz-u)) calc(100% - calc(14 * var(--bz-u))), calc(30 * var(--bz-u)) 100%, 0 100%, 0 calc(100% - calc(30 * var(--bz-u))), calc(14 * var(--bz-u)) calc(100% - calc(30 * var(--bz-u))), calc(14 * var(--bz-u)) calc(30 * var(--bz-u)), 0 calc(30 * var(--bz-u)), 0 0, calc(30 * var(--bz-u)) 0); }
 
 /* Window backdrop behind the screen shows the active faction's world.
    Only a margin around the 4:3 stage is visible, so the home planet sits
@@ -28839,4 +28733,12 @@ html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-b
    cut its side lines off at the lower corners (slanted stubs). No clip here. */
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
     clip-path: none !important;
+}
+
+
+/* Nav bar must not change height when the active card changes: inactive cards
+   reserve the same bottom margin the active card uses, so nothing below jumps. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn,
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    margin-bottom: -3px !important;
 }

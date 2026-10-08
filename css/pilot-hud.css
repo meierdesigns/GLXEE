@@ -1,0 +1,136 @@
+/* ==========================================================================
+   PILOT HUD — the two screens in the bezel's top strip.
+     .vf-pilot-plate  = crest + name screen      (.vf-pilot-crest, .vf-pilot-name)
+     .vf-pilot-ress   = resources screen         (.vf-pilot-res × n)
+   Both carry .vf-pilot-screen (shared frame look). Markup: js/core/viewport-fit.js
+   Faction crest shapes / animations stay in styles.css (.vf-pilot-crest[data-f]).
+   Tune everything through the --ph-* variables below; units are --bz-u.
+   ========================================================================== */
+
+.vf-bezel {
+    --ph-accent: var(--retro-ink, var(--color-primary));
+    --ph-top: 5;            /* distance from bezel top */
+    --ph-height: 54;
+    --ph-left: 130;         /* plate left edge */
+    --ph-plate-w: 360;
+    --ph-gap: 24;           /* space between the two screens */
+    --ph-rim-top: 9;        /* dither rim thickness */
+    --ph-rim-side: 4;
+    --ph-line: 2;           /* accent line */
+    --ph-crest-w: 54;
+    --ph-crest-h: 60;
+    --ph-crest-top: -2;     /* crest offset inside plate (must end above the game screen) */
+    --ph-crest-left: -6;
+    --ph-name-size: 22;
+    --ph-res-icon: 22;
+    --ph-tab-up: 14;        /* grey tab: how far it reaches above / around the screen */
+    --ph-tab-side: 10;
+    --ph-tab-down: 9;
+    --ph-hull: #2b3240;
+    --ph-dither-a: #2a64b4;
+    --ph-dither-b: #123566;
+    --ph-tab-a: #4a5366;
+    --ph-tab-b: #333a4a;
+}
+
+/* ---- shared screen frame ---------------------------------------------- */
+.vf-pilot-screen {
+    position: absolute;
+    top: calc(var(--ph-top) * var(--bz-u));
+    height: calc(var(--ph-height) * var(--bz-u));
+    z-index: 9995;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    isolation: isolate;
+    overflow: visible;
+    white-space: nowrap;
+    font-family: 'Silkscreen', var(--ui-font-family);
+    color: var(--color-text, #fff);
+    outline: calc(var(--ph-line) * var(--bz-u)) solid var(--ph-accent);
+    outline-offset: calc(-1 * var(--ph-line) * var(--bz-u));
+}
+/* black display inside, pixel-dither rim around it (above the tab, below content) */
+.vf-pilot-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    box-sizing: border-box;
+    border-style: solid;
+    border-color: transparent;
+    border-width: calc(var(--ph-rim-top) * var(--bz-u)) calc(var(--ph-rim-side) * var(--bz-u)) calc(var(--ph-rim-side) * var(--bz-u));
+    background:
+        linear-gradient(#000 0 0) padding-box,
+        conic-gradient(var(--ph-dither-a) 25%, var(--ph-dither-b) 0 50%, var(--ph-dither-a) 0 75%, var(--ph-dither-b) 0) 0 0 / calc(6 * var(--bz-u)) calc(6 * var(--bz-u)) border-box;
+    background-repeat: no-repeat, repeat;
+}
+/* grey frame tab: wraps the screen and reaches above the bezel edge */
+.vf-pilot-screen::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--ph-tab-up) * var(--bz-u)) calc(-1 * var(--ph-tab-side) * var(--bz-u)) calc(-1 * var(--ph-tab-down) * var(--bz-u));
+    z-index: -2;
+    pointer-events: none;
+    border: calc(var(--ph-line) * var(--bz-u)) solid var(--ph-accent);
+    border-bottom-color: transparent;
+    background:
+        linear-gradient(var(--ph-hull) 0 0) padding-box,
+        conic-gradient(var(--ph-tab-a) 25%, var(--ph-tab-b) 0 50%, var(--ph-tab-a) 0 75%, var(--ph-tab-b) 0) 0 0 / calc(6 * var(--bz-u)) calc(6 * var(--bz-u));
+}
+
+/* ---- crest + name screen ---------------------------------------------- */
+.vf-pilot-plate {
+    left: calc(var(--ph-left) * var(--bz-u));
+    width: calc(var(--ph-plate-w) * var(--bz-u));
+    padding-left: calc(72 * var(--bz-u));
+}
+.vf-pilot-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: calc(var(--ph-name-size) * var(--bz-u));
+    letter-spacing: 0.1em;
+    color: var(--ph-accent);
+    text-shadow: 0 0 calc(6 * var(--bz-u)) color-mix(in srgb, var(--ph-accent) 70%, transparent);
+}
+.vf-pilot-crest {
+    position: absolute;
+    left: calc(var(--ph-crest-left) * var(--bz-u));
+    top: calc(var(--ph-crest-top) * var(--bz-u));
+    width: calc(var(--ph-crest-w) * var(--bz-u));
+    height: calc(var(--ph-crest-h) * var(--bz-u));
+    z-index: 4;
+    display: block;
+    background: var(--ph-accent);
+    --shape: polygon(0 0, 100% 0, 100% 58%, 50% 100%, 0 58%);
+    clip-path: var(--shape);
+    filter: drop-shadow(0 calc(3 * var(--bz-u)) 0 #05060a);
+}
+.vf-pilot-crest-in {
+    position: absolute;
+    inset: calc(3 * var(--bz-u));
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: calc(6 * var(--bz-u));
+    box-sizing: border-box;
+    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ph-accent) 28%, #05060a), #03040a 80%);
+    clip-path: var(--shape);
+}
+.vf-pilot-crest-in > * { width: calc(32 * var(--bz-u)) !important; height: calc(32 * var(--bz-u)) !important; image-rendering: pixelated; }
+.vf-pilot-crest-in img, .vf-pilot-crest-in svg { width: 100% !important; height: 100% !important; }
+.vf-pilot-crest-in > span { display: block; }
+
+/* ---- resources screen --------------------------------------------------- */
+.vf-pilot-ress {
+    left: calc((var(--ph-left) + var(--ph-plate-w) + var(--ph-gap)) * var(--bz-u));
+    gap: calc(18 * var(--bz-u));
+    padding: 0 calc(16 * var(--bz-u));
+    font-size: calc(var(--ph-name-size) * var(--bz-u));
+}
+.vf-pilot-res { display: inline-flex; align-items: center; gap: calc(6 * var(--bz-u)); flex: none; }
+.vf-pilot-res img { width: calc(var(--ph-res-icon) * var(--bz-u)) !important; height: calc(var(--ph-res-icon) * var(--bz-u)) !important; image-rendering: pixelated; }
+.vf-pilot-res b { font-weight: normal; }

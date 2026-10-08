@@ -1,0 +1,134 @@
+/* ==========================================================================
+   SCREEN FRAME (bezel) — one mechanic, factions only set tokens.
+
+   A faction supplies (on .vf-bezel[data-faction="…"]):
+     --fr-shape    clip-path of the OUTER silhouette (polygon / inset round …)
+     --fr-hole-r   border-radius of the screen opening (one to four radii)
+     --hull / --hull-lit / --hull-dark   plate colours
+     --fr-bevel    optional, bevel width (default 3 * --u)
+   Decoration (.vf-bezel-deco, per-faction art in styles.css) is clipped by the
+   same --fr-shape.
+
+   Mechanic (DOM: #vf-bezel > .vf-fr, built in index.html / viewport-fit.js):
+     .vf-fr clips three stacked plates to the silhouette. Each plate paints the
+     hull as the giant outer shadow of the opening (.vf-fr-hole), so the opening
+     keeps its own rounded corners. Plates differ only by the clip being shifted:
+       dark  : silhouette in place                (shows on bottom/right band)
+       lit   : silhouette shifted up-left         (shows on top/left band)
+       hull  : silhouette shifted down-right AND shifted up-left (the middle)
+     The uncovered bands ARE the bevel; they follow every corner and notch of
+     --fr-shape by construction, so a new faction shape needs no bevel code.
+     The opening's own edge bevel is drawn on ::before (follows --fr-hole-r).
+   ========================================================================== */
+
+.vf-bezel {
+    --fr-bevel: calc(5 * var(--u));
+    --fr-hole-r: 0;
+    --fr-shape: none;
+    /* screen opening (glass edge): left/right/bottom 44u, top 44u + strip */
+    --fr-ol: calc(44 * var(--u));
+    --fr-or: calc(44 * var(--u));
+    --fr-ob: calc(44 * var(--u));
+    --fr-ot: calc((44 + var(--bz-extra, 22)) * var(--u));
+    --glass-r: var(--fr-hole-r);
+}
+
+/* ── Faction tokens ───────────────────────────────────────────────────── */
+/* Silhouettes live on :root so the stage (body) is clipped by the very same shape. */
+:root {
+    --u: var(--bz-u);
+    --fr-shape-terran: polygon(calc(30 * var(--u)) calc(14 * var(--u)), 36% calc(14 * var(--u)), 42% calc(8 * var(--u)), 46% calc(8 * var(--u)), 50% 0, 54% calc(8 * var(--u)), 58% calc(8 * var(--u)), 64% calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) 0, 100% 0, 100% calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(100% - calc(30 * var(--u))), 100% calc(100% - calc(30 * var(--u))), 100% 100%, calc(100% - calc(30 * var(--u))) 100%, calc(100% - calc(30 * var(--u))) calc(100% - calc(14 * var(--u))), 64% calc(100% - calc(14 * var(--u))), 58% calc(100% - calc(8 * var(--u))), 42% calc(100% - calc(8 * var(--u))), 36% calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) 100%, 0 100%, 0 calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(30 * var(--u)), 0 calc(30 * var(--u)), 0 0, calc(30 * var(--u)) 0);
+    --fr-shape-kronax: polygon(0.0% calc(0 * var(--u)), 4.2% calc(16 * var(--u)), 8.3% calc(0 * var(--u)), 12.5% calc(16 * var(--u)), 16.7% calc(0 * var(--u)), 20.8% calc(16 * var(--u)), 25.0% calc(0 * var(--u)), 29.2% calc(16 * var(--u)), 33.3% calc(0 * var(--u)), 37.5% calc(16 * var(--u)), 41.7% calc(0 * var(--u)), 45.8% calc(16 * var(--u)), 50.0% calc(0 * var(--u)), 54.2% calc(16 * var(--u)), 58.3% calc(0 * var(--u)), 62.5% calc(16 * var(--u)), 66.7% calc(0 * var(--u)), 70.8% calc(16 * var(--u)), 75.0% calc(0 * var(--u)), 79.2% calc(16 * var(--u)), 83.3% calc(0 * var(--u)), 87.5% calc(16 * var(--u)), 91.7% calc(0 * var(--u)), 95.8% calc(16 * var(--u)), 100.0% calc(0 * var(--u)), 100% calc(40 * var(--u)), calc(100% - calc(10 * var(--u))) 30%, 100% 50%, calc(100% - calc(10 * var(--u))) 70%, 100% calc(100% - calc(40 * var(--u))), 100.0% calc(100% - calc(0 * var(--u))), 95.8% calc(100% - calc(16 * var(--u))), 91.7% calc(100% - calc(0 * var(--u))), 87.5% calc(100% - calc(16 * var(--u))), 83.3% calc(100% - calc(0 * var(--u))), 79.2% calc(100% - calc(16 * var(--u))), 75.0% calc(100% - calc(0 * var(--u))), 70.8% calc(100% - calc(16 * var(--u))), 66.7% calc(100% - calc(0 * var(--u))), 62.5% calc(100% - calc(16 * var(--u))), 58.3% calc(100% - calc(0 * var(--u))), 54.2% calc(100% - calc(16 * var(--u))), 50.0% calc(100% - calc(0 * var(--u))), 45.8% calc(100% - calc(16 * var(--u))), 41.7% calc(100% - calc(0 * var(--u))), 37.5% calc(100% - calc(16 * var(--u))), 33.3% calc(100% - calc(0 * var(--u))), 29.2% calc(100% - calc(16 * var(--u))), 25.0% calc(100% - calc(0 * var(--u))), 20.8% calc(100% - calc(16 * var(--u))), 16.7% calc(100% - calc(0 * var(--u))), 12.5% calc(100% - calc(16 * var(--u))), 8.3% calc(100% - calc(0 * var(--u))), 4.2% calc(100% - calc(16 * var(--u))), 0.0% calc(100% - calc(0 * var(--u))), 0 calc(100% - calc(40 * var(--u))), calc(10 * var(--u)) 70%, 0 50%, calc(10 * var(--u)) 30%, 0 calc(40 * var(--u)));
+    --fr-shape-voidborn: inset(0 round calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)) calc(40 * var(--u)) / calc(40 * var(--u)) calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)));
+    --fr-shape-pirate: polygon(0.0% calc(6 * var(--u)), 3.3% calc(10 * var(--u)), 6.7% calc(0 * var(--u)), 10.0% calc(0 * var(--u)), 13.3% calc(4 * var(--u)), 16.7% calc(4 * var(--u)), 20.0% calc(6 * var(--u)), 23.3% calc(0 * var(--u)), 26.7% calc(3 * var(--u)), 30.0% calc(0 * var(--u)), 33.3% calc(4 * var(--u)), 36.7% calc(0 * var(--u)), 40.0% calc(0 * var(--u)), 43.3% calc(4 * var(--u)), 46.7% calc(3 * var(--u)), 50.0% calc(4 * var(--u)), 53.3% calc(0 * var(--u)), 56.7% calc(0 * var(--u)), 60.0% calc(4 * var(--u)), 63.3% calc(3 * var(--u)), 66.7% calc(0 * var(--u)), 70.0% calc(0 * var(--u)), 73.3% calc(0 * var(--u)), 76.7% calc(3 * var(--u)), 80.0% calc(0 * var(--u)), 83.3% calc(10 * var(--u)), 86.7% calc(14 * var(--u)), 90.0% calc(0 * var(--u)), 93.3% calc(10 * var(--u)), 96.7% calc(4 * var(--u)), 100.0% calc(14 * var(--u)), calc(100% - calc(12 * var(--u))) 8%, calc(100% - calc(0 * var(--u))) 16%, calc(100% - calc(0 * var(--u))) 24%, calc(100% - calc(3 * var(--u))) 32%, calc(100% - calc(12 * var(--u))) 40%, calc(100% - calc(0 * var(--u))) 48%, calc(100% - calc(0 * var(--u))) 56%, calc(100% - calc(3 * var(--u))) 64%, calc(100% - calc(5 * var(--u))) 72%, calc(100% - calc(12 * var(--u))) 80%, calc(100% - calc(3 * var(--u))) 88%, 100.0% calc(100% - calc(10 * var(--u))), 96.7% calc(100% - calc(12 * var(--u))), 93.3% calc(100% - calc(7 * var(--u))), 90.0% calc(100% - calc(12 * var(--u))), 86.7% calc(100% - calc(2 * var(--u))), 83.3% calc(100% - calc(5 * var(--u))), 80.0% calc(100% - calc(5 * var(--u))), 76.7% calc(100% - calc(16 * var(--u))), 73.3% calc(100% - calc(10 * var(--u))), 70.0% calc(100% - calc(7 * var(--u))), 66.7% calc(100% - calc(10 * var(--u))), 63.3% calc(100% - calc(16 * var(--u))), 60.0% calc(100% - calc(5 * var(--u))), 56.7% calc(100% - calc(3 * var(--u))), 53.3% calc(100% - calc(12 * var(--u))), 50.0% calc(100% - calc(3 * var(--u))), 46.7% calc(100% - calc(16 * var(--u))), 43.3% calc(100% - calc(7 * var(--u))), 40.0% calc(100% - calc(10 * var(--u))), 36.7% calc(100% - calc(10 * var(--u))), 33.3% calc(100% - calc(7 * var(--u))), 30.0% calc(100% - calc(2 * var(--u))), 26.7% calc(100% - calc(10 * var(--u))), 23.3% calc(100% - calc(3 * var(--u))), 20.0% calc(100% - calc(0 * var(--u))), 16.7% calc(100% - calc(5 * var(--u))), 13.3% calc(100% - calc(5 * var(--u))), 10.0% calc(100% - calc(7 * var(--u))), 6.7% calc(100% - calc(3 * var(--u))), 3.3% calc(100% - calc(5 * var(--u))), 0.0% calc(100% - calc(12 * var(--u))), calc(12 * var(--u)) 92%, calc(0 * var(--u)) 84%, calc(0 * var(--u)) 76%, calc(4 * var(--u)) 68%, calc(4 * var(--u)) 60%, calc(2 * var(--u)) 52%, calc(2 * var(--u)) 44%, calc(2 * var(--u)) 36%, calc(4 * var(--u)) 28%, calc(12 * var(--u)) 20%, calc(4 * var(--u)) 12%);
+    --fr-shape-machine: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
+}
+
+.vf-bezel[data-faction="terran"] { --hull: #131a26; --hull-lit: #2a3a52; --hull-dark: #05080e; --gold: #c9a24a; --fr-shape: var(--fr-shape-terran); }
+.vf-bezel[data-faction="kronax"] { --hull: #1c0d0a; --hull-lit: #4a1d14; --hull-dark: #060202; --fr-shape: var(--fr-shape-kronax); }
+.vf-bezel[data-faction="voidborn"] { --hull: #0e0818; --hull-lit: #2a1a48; --hull-dark: #030108; --fr-shape: var(--fr-shape-voidborn); }
+.vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; --fr-shape: var(--fr-shape-pirate); }
+.vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; --fr-shape: var(--fr-shape-machine); }
+.vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)) calc(16 * var(--u)) calc(22 * var(--u)) calc(18 * var(--u)); }
+
+/* ── Plates ───────────────────────────────────────────────────────────── */
+.vf-fr {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    clip-path: var(--fr-shape);
+}
+.vf-fr-p {
+    position: absolute;
+    inset: 0;
+    clip-path: var(--fr-shape);
+}
+.vf-fr-hole {
+    position: absolute;
+    left: var(--fr-ol);
+    right: var(--fr-or);
+    top: var(--fr-ot);
+    bottom: var(--fr-ob);
+    border-radius: var(--fr-hole-r);
+    box-shadow: 0 0 0 200vmax var(--fr-c);
+}
+.vf-fr-dark { --fr-c: var(--hull-dark); }
+.vf-fr-lit  { --fr-c: color-mix(in srgb, var(--hull-lit) 40%, #fff); transform: translate(calc(-1 * var(--fr-bevel)), calc(-1 * var(--fr-bevel))); }
+.vf-fr-lit .vf-fr-hole { transform: translate(var(--fr-bevel), var(--fr-bevel)); }   /* opening stays put */
+.vf-fr-hullA { transform: translate(var(--fr-bevel), var(--fr-bevel)); }
+.vf-fr-hullA > .vf-fr-p { --fr-c: var(--hull); transform: translate(calc(-2 * var(--fr-bevel)), calc(-2 * var(--fr-bevel))); }
+.vf-fr-hullA > .vf-fr-p .vf-fr-hole { transform: translate(calc(var(--fr-bevel)), calc(var(--fr-bevel))); }
+
+/* ── Hull texture (bolts, vents, hazard strips, grain): no base fill any more,
+      the plates paint the hull. ──────────────────────────────────────────── */
+.vf-bezel::after {
+    background:
+        /* bolts: dark socket + lit head, four corners */
+        linear-gradient(#fff3 0 0) calc(21 * var(--u)) calc(21 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(19 * var(--u)) calc(19 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(100% - 27 * var(--u)) calc(21 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 27 * var(--u)) calc(19 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(21 * var(--u)) calc(100% - 27 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(19 * var(--u)) calc(100% - 27 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(100% - 27 * var(--u)) calc(100% - 27 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 27 * var(--u)) calc(100% - 27 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* status lamps, top right */
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#3dff6a 0 0) calc(100% - 62 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* vent slots, top left */
+        repeating-linear-gradient(90deg, var(--hull-dark) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(8 * var(--u))) calc(40 * var(--u)) calc(12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* hazard strips, bottom corners */
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(100% - 40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* seams: panel joints every ~1/4 along the top and bottom */
+        repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), #0006 calc(25% - 1px) 25%) 0 calc(6 * var(--u)) / 100% calc(6 * var(--u)) no-repeat,
+        /* inner lip: thin dim trim line right at the screen opening */
+        linear-gradient(color-mix(in srgb, var(--retro-ink) 55%, #000) 0 0) 0 calc(100% - 2 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
+        /* brushed metal: fine horizontal grain over a vertical gradient */
+        repeating-linear-gradient(0deg, #ffffff08 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(3 * var(--u))) !important;
+}
+
+/* ── Screen opening: rounded glass edge + bevel that follows --fr-hole-r ── */
+.vf-bezel::before,
+.vf-bezel-back { border-radius: var(--fr-hole-r) !important; }
+.vf-bezel::before {
+    animation: none !important;
+    box-shadow:
+        inset 0 0 0 calc(2 * var(--u)) color-mix(in srgb, var(--retro-ink) 45%, #000),
+        inset 0 0 calc(18 * var(--u)) calc(2 * var(--u)) #000a,
+        calc(3 * var(--u)) calc(3 * var(--u)) 0 0 color-mix(in srgb, var(--hull-lit) 70%, #fff),
+        calc(-3 * var(--u)) calc(-3 * var(--u)) 0 0 var(--hull-dark);
+}
+
+/* ── Texture + decoration share the silhouette ────────────────────────── */
+.vf-bezel::after,
+.vf-bezel-deco { clip-path: var(--fr-shape); }
+
+/* The stage is cut to the frame's own outline (same token, so the bevel is never clipped). */
+body:has(> .vf-bezel[data-faction="terran"]) { clip-path: var(--fr-shape-terran); }
+body:has(> .vf-bezel[data-faction="kronax"]) { clip-path: var(--fr-shape-kronax); }
+body:has(> .vf-bezel[data-faction="voidborn"]) { clip-path: var(--fr-shape-voidborn); }
+body:has(> .vf-bezel[data-faction="pirate"]) { clip-path: var(--fr-shape-pirate); }
+body:has(> .vf-bezel[data-faction="machine"]) { clip-path: var(--fr-shape-machine); }

@@ -179,8 +179,11 @@ class HomeStationUI {
      * station screen's faction identity so the whole station reads in the
      * player's faction palette, not just the ship preview.
      */
-    currentFactionStyle() {
+    currentFactionStyle(previewId) {
         try {
+            if (previewId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+                return factionShipStyles.getFactionStyle(previewId);
+            }
             const profile = (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile
                 && profileManager.hasActiveProfile()) ? profileManager.getActiveProfile() : null;
             const factionId = (profile && profile.faction) || 'terran';
@@ -204,9 +207,9 @@ class HomeStationUI {
     /** Stamp the overlay root with the active faction's id + colors so CSS
      * can reskin station chrome (cover art tint, panel accents, patterns)
      * without touching the player's own UI theme palette. */
-    applyFactionTheme() {
+    applyFactionTheme(previewId) {
         if (!this.overlay) return;
-        const style = this.currentFactionStyle();
+        const style = this.currentFactionStyle(previewId);
         if (!style) {
             delete this.overlay.dataset.hsFaction;
             return;
@@ -235,7 +238,7 @@ class HomeStationUI {
         // Same identity on the document root, so the in-game HUD keeps it
         // after the station overlay closes.
         if (factionShipStyles.applyDocumentFactionTheme) {
-            factionShipStyles.applyDocumentFactionTheme(style.id);
+            factionShipStyles.applyDocumentFactionTheme(previewId || style.id);
         }
     }
 

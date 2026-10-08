@@ -109,7 +109,146 @@ class FactionShipStyles {
         };
     }
 
-    getFactionStyle(factionId) {
+    /** Hue (0-359) of a #rrggbb colour. */
+    hueOf(hex) {
+        const [h] = this.hexToHsl(hex);
+        return Math.round(h);
+    }
+
+    hexToHsl(hex) {
+        const n = parseInt(String(hex).slice(1, 7), 16);
+        const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        let h = 0, sat = 0;
+        if (d) {
+            sat = d / (1 - Math.abs(2 * l - 1));
+            if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+            h *= 60; if (h < 0) h += 360;
+        }
+        return [h, sat, l];
+    }
+
+    hslToHex(h, sat, l) {
+        const c = (1 - Math.abs(2 * l - 1)) * sat, hp = (((h % 360) + 360) % 360) / 60;
+        const x = c * (1 - Math.abs((hp % 2) - 1)), m = l - c / 2;
+        const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x];
+        const to = (v) => Math.max(0, Math.min(255, Math.round((v + m) * 255))).toString(16).padStart(2, '0');
+        return '#' + to(r) + to(g) + to(b);
+    }
+
+    /**
+     * Adjust a default colour: adj.h = new hue (0-359), adj.s = saturation in % of the
+     * default (0 = grey), adj.l = lightness shift in points (-50 darker … +50 lighter).
+     * Missing parts keep the default, so no adjustment returns the colour unchanged.
+     */
+    adjustColor(hex, adj) {
+        const [h0, s0, l0] = this.hexToHsl(hex);
+        const a = adj || {};
+        const h = Number.isFinite(a.h) ? a.h : h0;
+        const sat = Math.max(0, Math.min(1, s0 * (Number.isFinite(a.s) ? a.s : 100) / 100));
+        const l = Math.max(0, Math.min(1, l0 + (Number.isFinite(a.l) ? a.l : 0) / 100));
+        return this.hslToHex(h, sat, l);
+    }
+
+    /** The three SAT / LIGHT steps (middle = the faction's default). */
+    get satSteps() { return [35, 100, 160]; }
+    get lightSteps() { return [-22, 0, 22]; }
+
+    /** Unsaved slider positions per faction ({key: {h, s, l}}); they show live until saved or reset. */
+    getColorDrafts(factionId) {
+        this._colorDrafts = this._colorDrafts || {};
+        return this._colorDrafts[String(factionId || '').toLowerCase()] || {};
+    }
+
+    /** Baked enemy / ship sprites carry the old colours: drop them whenever a faction colour changes. */
+    invalidateColorCaches() {
+        // The station / HUD chrome reads the active faction's colours from the document root: refresh it live.
+        if (typeof requestAnimationFrame === 'function' && !this._themeRaf) {
+            this._themeRaf = requestAnimationFrame(() => {
+                this._themeRaf = null;
+                try { this.applyDocumentFactionTheme(); } catch (e) { /* theme not ready */ }
+            });
+        }
+        if (typeof graphicsManager === 'undefined' || !graphicsManager) return;
+        if (graphicsManager._variantCache && graphicsManager._variantCache.clear) graphicsManager._variantCache.clear();
+        if (graphicsManager._voxelShipBake) graphicsManager._voxelShipBake = Object.create(null);
+    }
+
+    hasColorDraft(factionId) { return Object.keys(this.getColorDrafts(factionId)).length > 0; }
+
+    setColorDraft(factionId, key, adj) {
+        const id = String(factionId || '').toLowerCase();
+        this._colorDrafts = this._colorDrafts || {};
+        this._colorDrafts[id] = Object.assign({}, this._colorDrafts[id], { [key]: adj });
+        this.invalidateColorCaches();
+    }
+
+    clearColorDraft(factionId, key) {
+        const id = String(factionId || '').toLowerCase();
+        if (!this._colorDrafts || !this._colorDrafts[id]) return;
+        if (key) delete this._colorDrafts[id][key]; else delete this._colorDrafts[id];
+        this.invalidateColorCaches();
+    }
+
+    /** Write the unsaved slider positions to storage. */
+    commitColorDrafts(factionId) {
+        const d = this.getColorDrafts(factionId);
+        Object.keys(d).forEach((k) => {
+            ['h', 's', 'l'].forEach((part) => this.setColorOverride(factionId, k, part, d[k][part]));
+        });
+        this.clearColorDraft(factionId);
+    }
+
+    /** Saved adjustments only (no drafts). */
+    getSavedColorOverrides(factionId) {
+        // Parsed once and reused: this runs several times per ship per frame.
+        if (!this._savedColors) {
+            try { this._savedColors = JSON.parse(localStorage.getItem('vf-faction-hsl') || '{}') || {}; } catch (e) { this._savedColors = {}; }
+        }
+        try {
+            const all = this._savedColors;
+            const o = all[String(factionId || '').toLowerCase()] || {};
+            const out = {};
+            ['hull', 'edge', 'accent', 'engine'].forEach((k) => {
+                const v = o[k];
+                if (!v || typeof v !== 'object') return;
+                const r = {};
+                if (Number.isFinite(v.h)) r.h = ((Math.round(v.h) % 360) + 360) % 360;
+                if (Number.isFinite(v.s)) r.s = Math.max(0, Math.min(200, Math.round(v.s)));
+                if (Number.isFinite(v.l)) r.l = Math.max(-50, Math.min(50, Math.round(v.l)));
+                if (Object.keys(r).length) out[k] = r;
+            });
+            return out;
+        } catch (e) { return {}; }
+    }
+
+    /** Saved adjustments with any live (unsaved) slider positions on top. */
+    getColorOverrides(factionId) {
+        const out = this.getSavedColorOverrides(factionId);
+        const d = this.getColorDrafts(factionId);
+        Object.keys(d).forEach((k) => { out[k] = Object.assign({}, d[k]); });
+        return out;
+    }
+
+    /** part: 'h' | 's' | 'l'; value null (or part null) resets. */
+    setColorOverride(factionId, key, part, value) {
+        try {
+            this.getSavedColorOverrides(factionId);
+            const all = this._savedColors;
+            const id = String(factionId || '').toLowerCase();
+            all[id] = all[id] || {};
+            if (!part) delete all[id][key];
+            else {
+                all[id][key] = all[id][key] || {};
+                if (value == null) delete all[id][key][part]; else all[id][key][part] = Math.round(value);
+            }
+            localStorage.setItem('vf-faction-hsl', JSON.stringify(all));
+        } catch (e) { /* storage unavailable */ }
+        this.invalidateColorCaches();
+    }
+
+    /** Un-customised style (theme hull, no hue overrides). */
+    getDefaultFactionStyle(factionId) {
         const id = String(factionId || 'pirate').toLowerCase();
         const base = this.styles[id] || this.styles.pirate;
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionPlanetTheme) {
@@ -119,6 +258,16 @@ class FactionShipStyles {
             }
         }
         return base;
+    }
+
+    getFactionStyle(factionId) {
+        const style = this.getDefaultFactionStyle(factionId);
+        const over = this.getColorOverrides(factionId);
+        const keys = Object.keys(over);
+        if (!keys.length) return style;
+        const out = Object.assign({}, style);
+        keys.forEach((k) => { if (/^#[0-9a-f]{6}$/i.test(style[k] || '')) out[k] = this.adjustColor(style[k], over[k]); });
+        return out;
     }
 
     /** Per-part size multipliers (front/center/back/wing × x/y) for player hulls. */
@@ -170,6 +319,12 @@ class FactionShipStyles {
         const id = factionId ? this.normalizeFaction(factionId) : this.resolveActiveFaction();
         const style = this.getFactionStyle(id);
         const root = document.documentElement;
+        // Switching faction on a live screen: fade colours instead of snapping.
+        if (root.dataset.faction && root.dataset.faction !== id) {
+            root.classList.add('vf-faction-fade');
+            clearTimeout(this._factionFadeTimer);
+            this._factionFadeTimer = setTimeout(() => root.classList.remove('vf-faction-fade'), 600);
+        }
         root.dataset.faction = id;
         root.style.setProperty('--faction-hull', style.hull || '#7a8490');
         root.style.setProperty('--faction-edge', style.edge || '#2a3038');

@@ -116,7 +116,8 @@ extendClass(HomeStationUI, {
         // the normal area row, like any other area.
         if (this.isMenuRowTab()) {
             // PROFILES stands on its own: no SETTINGS / CREDITS row under it.
-            if (this.tab === 'profiles' || (this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles')) return '';
+            // The empty bar keeps the row's height, so the page below never shifts between tabs.
+            if (this.tab === 'profiles' || (this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles')) return `<nav class="hs-subnav hs-subnav-menu hs-subnav-empty" aria-hidden="true">${this.renderMenuTabs()}</nav>`;
             return `<nav class="hs-subnav hs-subnav-menu" aria-label="MENU">${this.renderMenuTabs()}</nav>`;
         }
         const area = this.getTabArea(this.tab);

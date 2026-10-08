@@ -11,6 +11,13 @@ extendClass(HomeStationUI, {
         return String((f && f.label) || id).toUpperCase();
     },
 
+    /** Inline tokens that give a faction card its own faction colour (shape comes from CSS via data-faction). */
+    factionCardStyle(id) {
+        const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(id) : null;
+        const c = st && st.accent;
+        return c ? `--faction-accent:${c};--color-primary:${c};` : '';
+    },
+
     /** Two opposing arrows; crossed out and dimmed when the faction does not trade. */
     factionTradeIconHtml(trades) {
         const arrows = '<polygon points="1,4 10,4 10,2 15,5 10,8 10,6 1,6"/><polygon points="15,10 6,10 6,8 1,11 6,14 6,12 15,12"/>';
@@ -28,8 +35,7 @@ extendClass(HomeStationUI, {
         const val = (rel.score > 0 ? '+' : '') + rel.score;
         return `<div class="hs-faction-meter" title="Relation ${val} (−100 hostile · 0 neutral · +100 allied)">` +
             `<span class="hs-faction-meter-fill" style="width:${pct}%"></span>` +
-            `<i class="hs-faction-meter-mid" aria-hidden="true"></i>` +
-            `<b class="hs-faction-meter-val">${val}</b></div>`;
+            `<i class="hs-faction-meter-mid" aria-hidden="true"></i></div>`;
     },
 
     renderFactionsTab(profile) {
@@ -47,15 +53,19 @@ extendClass(HomeStationUI, {
         const tabs = ids.map((fid) => {
             const rel = fm.getRelation(fid);
             const planets = Object.keys(owners).filter((p) => owners[p] === fid).length;
-            return `<button type="button" class="hs-tab hs-subnav-tab hs-faction-card is-${rel.tone}${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
-                `<div class="hs-faction-head">` +
-                    `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: fid }, 48)}</span>` +
-                    `<span class="hs-faction-name">${this.factionLabel(fid)}</span>` +
-                    `<span class="hs-faction-score">${rel.score > 0 ? '+' : ''}${rel.score}</span>` +
-                    `<span class="hs-faction-status">${rel.label}</span>` +
+            return `<button type="button" class="hs-tab hs-subnav-tab hs-faction-card is-${rel.tone}${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-faction="${fid}" style="${this.factionCardStyle(fid)}" data-nav-item title="${this.factionLabel(fid)}">` +
+                `<div class="hs-faction-top">` +
+                    `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: fid }, 64)}</span>` +
+                    `<div class="hs-faction-main">` +
+                        `<div class="hs-faction-head">` +
+                            `<span class="hs-faction-name">${this.factionLabel(fid)}</span>` +
+                            `<span class="hs-faction-score">${rel.score > 0 ? '+' : ''}${rel.score}</span>` +
+                        `</div>` +
+                        this.factionMeterHtml(rel) +
+                    `</div>` +
                 `</div>` +
-                this.factionMeterHtml(rel) +
                 `<div class="hs-faction-stats"><span class="hs-faction-planets" title="Planets held">${this.iconHtml('menuPlanets', 22, 'hs-pixel', 'Planets')}${planets}</span>` +
+                `<span class="hs-faction-status">${rel.label}</span>` +
                 this.factionTradeIconHtml(fm.isAllied(fid)) + `</div>` +
                 `</button>`;
         }).join('');
@@ -190,12 +200,13 @@ extendClass(HomeStationUI, {
         const style = fss.getFactionStyle(id);
         const up = (v) => String(v || '').replace(/_/g, ' ').toUpperCase();
         const classes = fss.classes;
-        const sel = classes.indexOf(this._factionFleetShip) !== -1 ? this._factionFleetShip : 'all';
+        const sel = classes.indexOf(this._factionFleetShip) !== -1 || this._factionFleetShip === 'player' ? this._factionFleetShip : 'all';
         const zoom = Math.max(0.5, Math.min(2.5, Number(this._factionFleetZoom) || 1));
         const item = (cid, label, img) =>
             `<button type="button" class="hs-fd-fleet-item${sel === cid ? ' active' : ''}" data-faction-fleet="${cid}" data-nav-item>` +
             `<span class="hs-fd-fleet-thumb">${img}</span><span>${label}</span></button>`;
-        const list = item('all', 'ALL', '') + classes.map((cls) => {
+        const playerThumb = this.factionEmblemHtml({ faction: id }, 24);
+        const list = item('all', 'ALL', '') + item('player', 'PLAYER', playerThumb) + classes.map((cls) => {
             const src = this.factionShipSrc(id, cls);
             return item(cls, up(cls), src ? `<img src="${src}" alt="">` : '');
         }).join('');
@@ -220,10 +231,40 @@ extendClass(HomeStationUI, {
                                 ? `<button type="button" class="pe-btn pe-preview-btn hs-fd-sizes-btn" data-fleet-sizes data-ui-tip="SIZES · tune player, enemy and shot sizes">SIZES</button>`
                                 : '') +
                         `</div>` +
-                        `<canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="240" height="135" style="--fleet-zoom:${zoom}"></canvas>` +
+                        `<canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="480" height="290" style="--fleet-zoom:${zoom}"></canvas>` +
                     `</div>` +
                 `</div>` +
-                `<div class="hs-fd-chips">${swatch('HULL', style.hull)}${swatch('EDGE', style.edge)}${swatch('ACCENT', style.accent)}${swatch('ENGINE', style.engine)}</div>` +
+                `<div class="hs-fd-colors-wrap${this._factionColorsOpen ? ' is-open' : ''}">` +
+                `<button type="button" class="pe-btn pe-preview-btn hs-fd-colors-toggle" data-faction-colors-toggle data-nav-item>COLORS ${this._factionColorsOpen ? '▼' : '▲'}</button>` +
+                `<div class="hs-fd-colors">` +
+                    `<div class="hs-fd-colors-head"><span>FACTION COLORS</span></div>` +
+                    [['hull', 'HULL (BASE)'], ['edge', 'EDGE'], ['accent', 'ACCENT'], ['engine', 'ENGINE']].map(([k, label]) => {
+                        const c = style[k];
+                        if (!c) return '';
+                        const dflt = fss.getDefaultFactionStyle(id)[k];
+                        const ov = fss.getColorOverrides(id)[k] || {};
+                        const [h0] = fss.hexToHsl(dflt);
+                        const nearest = (steps, v) => steps.reduce((bi, x, i) => (Math.abs(x - v) < Math.abs(steps[bi] - v) ? i : bi), 0);
+                        const sl = (part, min, max, val, title) =>
+                            `<span class="hs-fd-slider-tag">${title}</span>` +
+                            `<input type="range" class="hs-fd-adj hs-fd-adj-${part}" min="${min}" max="${max}" step="1" value="${val}" data-faction-adj="${part}" data-faction-key="${k}" data-faction-id="${id}" data-nav-item aria-label="${label} ${title}">`;
+                        const satIdx = nearest(fss.satSteps, ov.s != null ? ov.s : 100);
+                        const lightIdx = nearest(fss.lightSteps, ov.l != null ? ov.l : 0);
+                        return `<div class="hs-fd-color-block" data-faction-color-block="${k}">` +
+                            `<div class="hs-fd-color-row"><i class="hs-fd-color-chip" style="background:${c}"></i><span class="hs-fd-color-label">${label}</span><em>${String(c).toUpperCase()}</em></div>` +
+                            `<div class="hs-fd-sliders">` +
+                                sl('h', 0, 359, ov.h != null ? ov.h : Math.round(h0), 'HUE') +
+                                sl('s', 0, 2, satIdx, 'SAT') +
+                                sl('l', 0, 2, lightIdx, 'LIGHT') +
+                                `<button type="button" class="pe-btn pe-preview-btn" ${Object.keys(ov).length ? '' : 'disabled'} data-faction-color-reset="${k}" data-faction-id="${id}" data-nav-item>RESET</button>` +
+                            `</div></div>`;
+                    }).join('') +
+                    `<div class="hs-fd-colors-actions">` +
+                        `<button type="button" class="pe-btn pe-preview-btn" ${fss.hasColorDraft(id) ? '' : 'disabled'} data-faction-colors-cancel="${id}" data-nav-item>CANCEL</button>` +
+                        `<button type="button" class="pe-btn pe-preview-btn" ${fss.hasColorDraft(id) ? '' : 'disabled'} data-faction-colors-save="${id}" data-nav-item>SAVE</button>` +
+                    `</div>` +
+                `</div>` +
+                `</div>` +
                 (style.prompt ? `<p class="hs-fd-text">${style.prompt.charAt(0).toUpperCase() + style.prompt.slice(1)}.</p>` : '') +
             `</section>` +
             `</div>`;
@@ -314,20 +355,88 @@ extendClass(HomeStationUI, {
             this._factionDetail = btn.getAttribute('data-faction-open');
             this.createUI();
         });
+        q('[data-faction-colors-toggle]', () => {
+            this._factionColorsOpen = !this._factionColorsOpen;
+            const w = this.overlay.querySelector('.hs-fd-colors-wrap');
+            if (w) w.classList.toggle('is-open', this._factionColorsOpen);
+            const t = this.overlay.querySelector('[data-faction-colors-toggle]');
+            if (t) t.textContent = 'COLORS ' + (this._factionColorsOpen ? '▼' : '▲');
+        });
+        q('[data-faction-color-reset]', (btn) => {
+            factionShipStyles.clearColorDraft(btn.getAttribute('data-faction-id'), btn.getAttribute('data-faction-color-reset'));
+            factionShipStyles.setColorOverride(btn.getAttribute('data-faction-id'), btn.getAttribute('data-faction-color-reset'), null, null);
+            this.createUI();
+        });
+        // HUE is continuous; SAT and LIGHT are three steps (low / default / high).
+        const stepValue = (part, v) => part === 's' ? factionShipStyles.satSteps[Number(v)]
+            : part === 'l' ? factionShipStyles.lightSteps[Number(v)] : Number(v);
+        this.overlay.querySelectorAll('[data-faction-adj]').forEach((inp) => {
+            const fid = inp.getAttribute('data-faction-id'), key = inp.getAttribute('data-faction-key'), part = inp.getAttribute('data-faction-adj');
+            // The open panel covers the preview: fade it while dragging so the live result shows.
+            const wrap = inp.closest('.hs-fd-colors-wrap');
+            const endDrag = () => {
+                if (wrap) wrap.classList.remove('is-dragging');
+                window.removeEventListener('pointerup', endDrag);
+                window.removeEventListener('pointercancel', endDrag);
+            };
+            inp.addEventListener('pointerdown', () => {
+                if (wrap) wrap.classList.add('is-dragging');
+                window.addEventListener('pointerup', endDrag);
+                window.addEventListener('pointercancel', endDrag);
+            });
+            // Live: recolour chip + hex while dragging; save and rebuild (preview, RESET) on release.
+            inp.addEventListener('input', () => {
+                const block = inp.closest('[data-faction-color-block]');
+                const adj = {};
+                block.querySelectorAll('[data-faction-adj]').forEach((r) => { adj[r.getAttribute('data-faction-adj')] = stepValue(r.getAttribute('data-faction-adj'), r.value); });
+                const col = factionShipStyles.adjustColor(factionShipStyles.getDefaultFactionStyle(fid)[key], adj);
+                block.querySelector('.hs-fd-color-chip').style.background = col;
+                block.querySelector('em').textContent = col.toUpperCase();
+                factionShipStyles.setColorDraft(fid, key, adj);
+                this.overlay.querySelectorAll('[data-faction-colors-save], [data-faction-colors-cancel]').forEach((b) => { b.disabled = false; });
+                const rst = block.querySelector('[data-faction-color-reset]');
+                if (rst) rst.disabled = false;
+                // Live preview: restart the fleet sim with the new colours (one per frame).
+                if (this._factionColorRaf) return;
+                this._factionColorRaf = requestAnimationFrame(() => {
+                    this._factionColorRaf = null;
+                    if (typeof graphicsManager !== 'undefined' && graphicsManager._voxelShipBake) graphicsManager._voxelShipBake = Object.create(null);
+                    const cv = this.overlay && this.overlay.querySelector('[data-fleet-preview]');
+                    if (cv) this.startFactionFleetPreview(cv.getAttribute('data-faction'), cv.getAttribute('data-ship'));
+                });
+            });
+        });
+        q('[data-faction-colors-cancel]', (btn) => {
+            factionShipStyles.clearColorDraft(btn.getAttribute('data-faction-colors-cancel'));
+            this.createUI();
+        });
+        q('[data-faction-colors-save]', (btn) => {
+            factionShipStyles.commitColorDrafts(btn.getAttribute('data-faction-colors-save'));
+            this.createUI();
+        });
         q('[data-faction-fleet]', (btn) => {
             this._factionFleetShip = btn.getAttribute('data-faction-fleet');
             this.createUI();
         });
         const fleetCanvas = this.overlay.querySelector('[data-fleet-preview]');
+        // Pan: drag the preview (useful when zoomed in on the player ship at the bottom).
+        const setFleetPan = (x, y) => {
+            this._factionFleetPan = { x: x, y: y };
+            if (fleetCanvas) {
+                fleetCanvas.style.setProperty('--fleet-px', x + 'px');
+                fleetCanvas.style.setProperty('--fleet-py', y + 'px');
+            }
+        };
         const setFleetZoom = (value) => {
             this._factionFleetZoom = Math.max(0.5, Math.min(2.5, Math.round(value * 100) / 100));
             if (!fleetCanvas) return;
             fleetCanvas.style.setProperty('--fleet-zoom', this._factionFleetZoom);
+            if (this._factionFleetZoom <= 1) setFleetPan(0, 0);
             const label = this.overlay.querySelector('[data-fleet-zoom-label]');
             if (label) label.textContent = `${Math.round(this._factionFleetZoom * 100)}%`;
         };
         q('[data-fleet-zoom]', (btn) => setFleetZoom((Number(this._factionFleetZoom) || 1) + Number(btn.getAttribute('data-fleet-zoom'))));
-        q('[data-fleet-zoom-reset]', () => setFleetZoom(1));
+        q('[data-fleet-zoom-reset]', () => { setFleetZoom(1); setFleetPan(0, 0); });
         const sizesBtn = this.overlay.querySelector('[data-fleet-sizes]');
         if (sizesBtn) {
             sizesBtn.addEventListener('click', (e) => {
@@ -338,6 +447,31 @@ extendClass(HomeStationUI, {
             });
         }
         const fleetViewport = this.overlay.querySelector('[data-fleet-preview-viewport]');
+        if (fleetViewport && fleetCanvas) {
+            const pan0 = this._factionFleetPan || { x: 0, y: 0 };
+            setFleetPan(pan0.x, pan0.y);
+            fleetViewport.addEventListener('pointerdown', (e) => {
+                if (e.target.closest && e.target.closest('.hs-fd-fleet-toolbar')) return;
+                const z = Number(this._factionFleetZoom) || 1;
+                const start = { x: e.clientX, y: e.clientY, p: Object.assign({}, this._factionFleetPan || { x: 0, y: 0 }) };
+                const lim = (n, span) => Math.max(-span * (z - 0.0) , Math.min(span * (z - 0.0), n));
+                fleetViewport.setPointerCapture && fleetViewport.setPointerCapture(e.pointerId);
+                fleetViewport.classList.add('is-panning');
+                const move = (ev) => {
+                    const r = fleetViewport.getBoundingClientRect();
+                    setFleetPan(Math.round(lim(start.p.x + ev.clientX - start.x, r.width * 0.6)), Math.round(lim(start.p.y + ev.clientY - start.y, r.height * 0.6)));
+                };
+                const up = () => {
+                    fleetViewport.classList.remove('is-panning');
+                    fleetViewport.removeEventListener('pointermove', move);
+                    fleetViewport.removeEventListener('pointerup', up);
+                    fleetViewport.removeEventListener('pointercancel', up);
+                };
+                fleetViewport.addEventListener('pointermove', move);
+                fleetViewport.addEventListener('pointerup', up);
+                fleetViewport.addEventListener('pointercancel', up);
+            });
+        }
         if (fleetViewport) {
             fleetViewport.addEventListener('wheel', (e) => {
                 e.preventDefault();

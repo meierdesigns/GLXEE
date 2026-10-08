@@ -400,7 +400,11 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Enemy waves use **seeded liveries** so ships of one faction still look distinct;
   renegade contract targets get outlaw markings (hazard slash, crossed badge).
 - Normal and escort spawns **dive in from above**, then lock into cruise /
-  formation slots.
+  formation slots. Active craft stay **fully inside** the playfield rim.
+- **Field presence:** combat (shots, jammer, tether) only while fully on-screen.
+  Entering and fleeing hulls do not fire; off-screen ships are culled so HUD bars
+  and clear checks finish. Late / stuck escorts get a hard flee kick.
+- Scheduled sides stop spawning once the objective is won or awaiting field clear.
 - Faction contracts can spawn **renegade captains** or **outlaw gangs** with their
   own callsigns and paint.
 - Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
@@ -462,65 +466,28 @@ Live captures from the current build (station shell, factions, travel, combat).
 
 ## Features
 
-- Five faction identities with emblems, lore, relations, pacts, contracts, and trade.
-- Five galaxies with procedural foreign-galaxy arrival sectors.
-- Home Station progression: shop, craft, upgrade, hangar, travel, missions, and archives.
-- Persistent profile progression with resources, credits, discoveries, missions, and loadouts.
-- Four upgradeable hull areas plus individual S/M/L slot upgrades.
-- Weapon slots can be purchased per ship, mounted in the nose, core, or wings,
-  and protected from overlapping through bounded drag placement.
-- Drag-and-drop hangar Parts workspace and movable weapon sockets.
-- Mirrored wing placement, faction weapon mounts, visual module integration, and cosmetic skins.
-- Faction-specific weapon mount art and full-sprite fallback rendering for
-  procedural ships.
-- Resizable station sidebars with remembered widths and responsive hangar panels.
-- Home Station browser shell with proportional GUI zoom (default 75%, slider 50–125%) and a dedicated PLAY launch into the map.
-- Area-tab corner deco icons and keyboard focus that opens PLAY or the first area hub.
-- Galaxy explore: atmosphere planet cards, faction border checkpoints, fly / dock / raid / assault actions.
-- Bidirectional route traffic, ship locator, explore progress chip, and zoom-aware map detail.
-- Shared world planet ownership, custom generated galaxies, and a main-menu GALAXIES viewer.
-- Universe JSON download/upload for galaxies, faction state, and every pilot profile.
-- Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
-- Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
-- Fixed 4:3 stage filling 95 % of the window, tokenized screen-frame bezel, pilot HUD plates.
-- HTTP/1.1 keep-alive local server; refresh keeps a calm veil without the progress panel.
-- Station tabs aligned to content; body bridge when no sub-nav; quieter tooltips; calmer PLAY shell.
-- Playfield-first layout inside the stage, VOXEL-default combat lattice, silhouette debris.
-- Side enemies leave the field when off-screen so HUD bars and clear checks stay honest.
-- Exact size/speed overlay for player, enemy classes, and shots; thicker pixel borders.
-- Crystal terrain and prism obstacles; dive-in enemy entries; faster victory scoop.
-- Hangar area pager and pixel-step bay zoom; game-over wreck flies into a free lane.
-- Fullscreen toggle and embedded-browser reload keys (F5 / Ctrl+R).
-- Self-hosted Silkscreen, boot loading screen with progress, and revalidating local `npm start` server.
-- Angular Pirate emblem at 16px and `@4x`; faction fleet preview zoom in the station.
-- Profile score tiles, galaxy progress bars, NEW PILOT / locked LOAD, and HD menu icons.
-- Faction fleet previews in the station and high-definition navigation icons.
-- Animated planet spin frames and extra faction-specific planet treatments.
-- Guided start intro and embedded menu layouts that keep the station loop intact.
-- Procedural planet SVGs, parallax station decks, palette editors, and global look persistence.
-- Combat events, champion escorts, patterned obstacles, pickups, loot, and Web Audio SFX.
-- Scrolling planet terrain, destructible rocks, boss stages, and timed supply crates.
-- Hand-shaded hi-res faction emblems and resource icons for large UI draws.
-- Zoom-safe pointer hit testing across Chromium and embedded Electron viewports.
-- Optional YouTube soundtrack / beat-sync layer.
-- Optional ComfyUI and asset-generation bridge.
-- Cursed IDE packages under `packages/`.
+Short index — details live in the sections above.
+
+- Five factions / galaxies with relations, contracts, trade, and shared ownership.
+- Home Station loop: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
+- Modular loadouts (NOSE / CORE / AFT / WINGS), area pager, and hangar bay zoom.
+- Galaxy explore with border checkpoints, route traffic, ship locator, universe save.
+- Vertical combat: VOXEL lattice, crystal terrain, champions, crates, field presence.
+- Fixed 4:3 stage, faction screen-frame bezel, pilot HUD, boot loading screen.
+- Local HTTP/1.1 `npm start`, self-hosted Silkscreen, optional ComfyUI / YouTube layer.
 
 ### Current build focus
 
 ```text
-BOOT    ── loading screen (first visit) ── calm refresh veil ── HTTP/1.1 server
+FIGHT   ── on-screen only ── hard flee kick ── no off-field shots
    │
-FRAME   ── screen-frame plates ── faction --fr-shape tokens ── pilot HUD screens
+FRAME   ── screen-frame plates ── pilot HUD ── calm refresh veil
    │
-STATION ── tab align ── body bridge (no sub-nav) ── calmer PLAY shell
-   │
-FIGHT   ── VOXEL default ── off-screen side cull
+BOOT    ── loading screen (first visit) ── HTTP/1.1 keep-alive
 ```
 
-Recent waves speed local boot with HTTP/1.1 keep-alive, split the bezel into a
-shared screen-frame mechanic plus a two-screen pilot HUD, and keep refreshes
-calm without replaying the progress panel.
+Recent waves lock combat to full playfield presence (no rim-fire, faster flee
+culls), keep the tokenized bezel / pilot HUD, and speed local boot.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -666,6 +633,8 @@ be reviewed or reverted independently.
 | 59D | Calm refresh veil | Hide progress panel on same-tab refresh; keep bezel above the cover |
 | 59E | Sub-nav body bridge | Active area card opens into the body when no sub-nav exists |
 | 59F | README frame archive | Document screen-frame, pilot HUD, and calm refresh for 59B–59E |
+| 60A | Field presence combat | On-screen-only shots/roles, hard flee kick, stop sides after win |
+| 60B | README cleanup | Trim Features index; document field presence for wave 60A |
 
 The wave commit convention is:
 

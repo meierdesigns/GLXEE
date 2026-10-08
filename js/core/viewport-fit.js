@@ -41,7 +41,7 @@
     }
 
     const STAGE_ASPECT = 4 / 3;
-    const STAGE_MARGIN = 50;
+    const STAGE_FILL = 0.95;
     const LAYOUT_W = 1280;
 
     // Selectable resolutions (4:3). The layout is always identical (LAYOUT_W); the
@@ -56,7 +56,7 @@
 
     // The layout always runs at the chosen logical resolution (RES x RES*3/4);
     // the whole stage is then scaled uniformly (CSS transform) to fit the window
-    // with at least STAGE_MARGIN px on every side. Proportions never change.
+    // to fill STAGE_FILL (95 %) of the window. Proportions never change.
     function viewportSize() {
         const vv = window.visualViewport;
         let w = window.innerWidth || document.documentElement.clientWidth || 800;
@@ -66,15 +66,13 @@
             h = vv.height;
         }
         // Layout is ALWAYS LAYOUT_W x LAYOUT_H, so every resolution looks identical;
-        // the chosen resolution only sets the displayed size (capped by the window).
+        // the stage is always scaled to the window.
         const lw = LAYOUT_W;
         const lh = LAYOUT_W / STAGE_ASPECT;
-        // Browser zoom changes devicePixelRatio: measure margin and resolution in device
-        // pixels so the screen keeps its physical size when the page is zoomed.
-        const dpr = window.devicePixelRatio || 1;
-        const m = STAGE_MARGIN / dpr;
-        const fit = Math.min((w - m * 2) / lw, (h - m * 2) / lh);
-        const scale = Math.max(0.05, Math.min(fit, RES_STEPS[resIndex] / LAYOUT_W / dpr));
+        // The stage always fills FILL of the window, horizontally or vertically
+        // (whichever limits first), with the 4:3 proportions untouched.
+        const fit = Math.min(w * STAGE_FILL / lw, h * STAGE_FILL / lh);
+        const scale = Math.max(0.05, fit);
         return { vw: lw, vh: Math.round(lh), scale: scale };
     }
 

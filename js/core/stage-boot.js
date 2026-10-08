@@ -11,11 +11,8 @@
     var vv = window.visualViewport;
     var w = (vv && vv.width) || window.innerWidth || 800;
     var h = (vv && vv.height) || window.innerHeight || 600;
-    var LW = 1280, LH = 960, M = 50;
-    var dpr = window.devicePixelRatio || 1;
-    var m = M / dpr;
-    var fit = Math.min((w - m * 2) / LW, (h - m * 2) / LH);
-    var scale = Math.max(0.05, Math.min(fit, STEPS[idx] / LW / dpr));
+    var LW = 1280, LH = 960, FILL = 0.95;
+    var scale = Math.max(0.05, Math.min(w * FILL / LW, h * FILL / LH));
     // Last known faction: styles the frame from the very first paint (no terran -> faction jump).
     try {
         var f = localStorage.getItem('vf-faction');

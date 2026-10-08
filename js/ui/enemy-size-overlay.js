@@ -180,13 +180,13 @@ class EnemySizeOverlay {
     }
 
     /** Live-update the station FLEETS preview while tuning sizes. */
-    refreshFleetPreview() {
-        if (typeof homeStationUI === 'undefined' || !homeStationUI || homeStationUI.tab !== 'ffleet') return;
+    refreshFleetPreview(factionId) {
+        if (typeof homeStationUI === 'undefined' || !homeStationUI || !homeStationUI.overlay) return;
         if (!homeStationUI.startFactionFleetPreview) return;
         const canvas = homeStationUI.overlay && homeStationUI.overlay.querySelector('[data-fleet-preview]');
         if (!canvas) return;
         homeStationUI.startFactionFleetPreview(
-            canvas.getAttribute('data-faction'),
+            factionId || canvas.getAttribute('data-faction'),
             canvas.getAttribute('data-ship')
         );
     }

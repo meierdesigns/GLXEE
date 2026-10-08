@@ -124,6 +124,9 @@ extendClass(StartScreenManager, {
         this.fontMenuItems.filter(i => i.type === 'fontSize').forEach((item) => {
             uiAppearanceManager.setFontSize(item.sizeKey, item.value);
         });
+        this.fontMenuItems.filter(i => i.type === 'fontFamilyType').forEach((item) => {
+            uiAppearanceManager.setFontFamily(item.sizeKey, item.value);
+        });
     },
 
     selectMenuItem() {

@@ -266,7 +266,7 @@ extendClass(StartScreenManager, {
         if (typeof uiAppearanceManager !== 'undefined') {
             this.settingsItems.forEach((item) => {
                 if (item.type === 'uiFx' && item.fxKey) {
-                    item.value = item.fxKey === 'arcade' ? uiAppearanceManager.getFxValue(item.fxKey) : String(uiAppearanceManager.getFxPercent(item.fxKey));
+                    item.value = uiAppearanceManager.isEnumFx(item.fxKey) ? uiAppearanceManager.getFxValue(item.fxKey) : String(uiAppearanceManager.getFxPercent(item.fxKey));
                 }
                 if (item.type === 'shipRenderStyle') {
                     item.value = uiAppearanceManager.shipRenderStyle;
@@ -407,11 +407,13 @@ extendClass(StartScreenManager, {
             item.type === 'indicatorWeight' ||
             item.type === 'fontMenu' ||
             item.type === 'bgParallax' ||
-            item.type === 'controlsHints' ||
-            item.type === 'shipRenderStyle' ||
-            item.type === 'voxelSize'
+            item.type === 'controlsHints'
         );
-        addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx');
+        const isVoxelItem = (item) => item.type === 'shipRenderStyle' || item.type === 'voxelSize'
+            || (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined'
+                && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
+        addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
+        addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx' && !isVoxelItem(item));
         addSection(right, 'sound', 'SOUND', (item) =>
             item.type === 'volume' ||
             item.name === 'Sound' ||

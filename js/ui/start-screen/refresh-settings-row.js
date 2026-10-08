@@ -61,7 +61,7 @@ extendClass(StartScreenManager, {
             return;
         }
 
-        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && !(typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.isEnumFx(item.fxKey)))
             || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             const min = item.min != null ? item.min : 0;
             const max = item.max != null ? item.max : 200;
@@ -169,7 +169,7 @@ extendClass(StartScreenManager, {
             || 1
         );
         if (!(voxelSize > 0)) voxelSize = 1;
-        voxelSize = Math.max(1, Math.min(4, Math.round(voxelSize)));
+        voxelSize = Math.max(0.25, Math.min(4, voxelSize));
 
         const caption = host.querySelector('[data-ship-render-caption]');
         if (caption) {
@@ -211,9 +211,9 @@ extendClass(StartScreenManager, {
         const prevGlobal = loader ? loader.globalVoxelCell : null;
         const prevScale = loader ? loader.deviceScale : null;
         if (loader && String(style).toUpperCase() === 'VOXEL') {
-            // Preview lattice follows Voxel Size (1–4). ×4 keeps blocks readable
+            // Preview lattice follows Voxel Size (0.25–4). ×4 keeps blocks readable
             // on the 160² canvas the same way combat uses render-scale.
-            loader.globalVoxelCell = Math.max(2, voxelSize * 4);
+            loader.globalVoxelCell = Math.max(1, voxelSize * 4);
             loader.deviceScale = 1;
             canvas.style.imageRendering = 'pixelated';
         } else if (loader) {
@@ -249,6 +249,7 @@ extendClass(StartScreenManager, {
             <div class="type-h1">H1 TITLE</div>
             <div class="type-h2">H2 LABELS</div>
             <div class="type-text">Text sample body</div>
+            <div class="type-small">Small print, hints and captions</div>
         `;
 
         const menu = document.createElement('div');

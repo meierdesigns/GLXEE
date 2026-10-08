@@ -173,6 +173,17 @@ extendClass(ColorPaletteSystem, {
         root.style.setProperty('--color-error', palette.error || palette.border);
         root.style.setProperty('--color-info', palette.info || palette.textSecondary);
         root.style.setProperty('--color-explosion', palette.explosion || palette.primary);
+        // Remember the applied theme so the next load paints it from the first frame (stage-boot.js).
+        setTimeout(() => {
+            try {
+                const o = {};
+                for (let i = 0; i < root.style.length; i++) {
+                    const k = root.style[i];
+                    if (k.indexOf('--color-') === 0 || k.indexOf('--theme-') === 0) o[k] = root.style.getPropertyValue(k);
+                }
+                localStorage.setItem('vf_boot_theme', JSON.stringify(o));
+            } catch (e) { /* ignore */ }
+        }, 0);
         root.style.setProperty('--color-particle', palette.particle || palette.secondary);
         root.style.setProperty('--color-glow', palette.glow || palette.border);
         root.style.setProperty('--color-shadow', palette.shadow || '#202020');

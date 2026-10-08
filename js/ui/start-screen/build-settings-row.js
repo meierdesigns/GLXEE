@@ -115,7 +115,7 @@ extendClass(StartScreenManager, {
             return menuItem;
         }
 
-        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && !(typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.isEnumFx(item.fxKey)))
             || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             menuItem.classList.add('settings-row-look');
             this.buildLookSliderRow(menuItem, item, index);

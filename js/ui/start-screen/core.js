@@ -299,7 +299,112 @@ class StartScreenManager {
                 suffix: '%'
             },
             {
-                name: 'Arcade',
+                name: 'Vignette',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('vignette'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('vignette')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'vignette',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Noise',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('noise'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('noise')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'noise',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Flicker',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('flicker'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('flicker')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'flicker',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Bloom',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('bloom'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('bloom')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'bloom',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Bloom Spread',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('bloomSpread'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('bloomSpread')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'bloomSpread',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Bloom Threshold',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('bloomThreshold'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('bloomThreshold')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'bloomThreshold',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'HDR',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? String(uiAppearanceManager.getFxPercent('hdr'))
+                    : '0',
+                options: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxOptions('hdr')
+                    : ['OFF'],
+                type: 'uiFx',
+                fxKey: 'hdr',
+                min: 0,
+                max: 100,
+                step: 1,
+                suffix: '%'
+            },
+            {
+                name: 'Select Pulse',
                 value: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxValue('arcade')
                     : 'OFF',
@@ -308,6 +413,86 @@ class StartScreenManager {
                     : ['OFF', 'ON'],
                 type: 'uiFx',
                 fxKey: 'arcade'
+            },
+            {
+                name: 'GUI Voxel',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('guiVoxel') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'guiVoxel'
+            },
+            {
+                name: 'Frame Pixel',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('framePx') : 'OFF',
+                options: ['OFF', '3', '5', '7', '9', '13', '17'],
+                type: 'uiFx',
+                fxKey: 'framePx'
+            },
+            {
+                name: 'Frame Round',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('frameRound') : '3',
+                options: ['0', '1', '2', '3', '4', '5', '6', '7', '8'],
+                type: 'uiFx',
+                fxKey: 'frameRound'
+            },
+            {
+                name: 'GUI Cell',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvCell') : 'AUTO',
+                options: ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'],
+                type: 'uiFx',
+                fxKey: 'gvCell'
+            },
+            {
+                name: 'GUI Lines',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvLines') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'gvLines'
+            },
+            {
+                name: 'GUI Corners',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvCorners') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'gvCorners'
+            },
+            {
+                name: 'GUI Text',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvText') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'gvText'
+            },
+            {
+                name: 'GUI Images',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvImages') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'gvImages'
+            },
+            {
+                name: 'GUI SVG',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('gvSvg') : 'ON',
+                options: ['OFF', 'ON'],
+                type: 'uiFx',
+                fxKey: 'gvSvg'
+            },
+            {
+                name: 'FX Area',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('fxArea') : 'ALL',
+                options: ['SCREEN', 'FRAME', 'ALL'],
+                type: 'uiFx',
+                fxKey: 'fxArea'
             },
             { name: 'Volume', type: 'volume' },
             { name: 'Sound', value: 'ON', options: ['ON', 'OFF'] },

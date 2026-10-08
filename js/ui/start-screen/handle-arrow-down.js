@@ -171,7 +171,7 @@ extendClass(StartScreenManager, {
             return;
         }
 
-        if (item.type === 'globalLook' || (item.type === 'uiFx' && item.fxKey !== 'arcade')
+        if (item.type === 'globalLook' || (item.type === 'uiFx' && !(typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.isEnumFx(item.fxKey)))
             || item.type === 'playerSize' || item.type === 'enemyClassSize' || item.type === 'shotSize') {
             const min = item.min != null ? item.min : 0;
             const max = item.max != null ? item.max : 200;

@@ -32,7 +32,10 @@ class UIAppearanceManager {
         this.fontSizeOptions = {
             h1: ['20', '24', '28', '32', '36', '40', '48'],
             h2: ['10', '11', '12', '14', '16', '18', '20', '24'],
-            text: ['8', '9', '10', '11', '12', '14', '16', '18']
+            text: ['8', '9', '10', '11', '12', '14', '16', '18'],
+            small: ['7', '8', '9', '10', '11', '12'],
+            // In-game HUD: size in % of the menu sizes.
+            game: ['70', '85', '100', '115', '130', '150']
         };
         const fxSteps = (max) => {
             const levels = { OFF: 0 };
@@ -43,16 +46,24 @@ class UIAppearanceManager {
         };
         // Effect strength is any whole percent 0–100 (stored as 'N%' / 'OFF'); these
         // are the 100% values.
-        this.fxMax = { glow: 2.2, scanlines: 1.0, crt: 1.25, chroma: 1.1 };
+        this.fxMax = { glow: 2.2, scanlines: 1.0, crt: 1.25, chroma: 1.1, vignette: 1.0, noise: 1.0, flicker: 1.0, bloom: 1.0, bloomSpread: 1.0, bloomThreshold: 1.0, hdr: 1.0 };
         this.fxLevels = {
             glow: fxSteps(2.2),
             scanlines: fxSteps(1.0),
             crt: fxSteps(1.25),
-            chroma: fxSteps(1.1)
+            chroma: fxSteps(1.1),
+            vignette: fxSteps(1.0),
+            noise: fxSteps(1.0),
+            flicker: fxSteps(1.0),
+            bloom: fxSteps(1.0),
+            bloomSpread: fxSteps(1.0),
+            bloomThreshold: fxSteps(1.0),
+            hdr: fxSteps(1.0)
         };
         this.shipRenderStyles = ['FLAT', 'VOXEL'];
         // Shared combat lattice cell in logical playfield px (VOXEL mode).
-        this.voxelSizeOptions = ['1', '2', '3', '4'];
+        // Below 1 = finer than the old minimum ('0.5' is twice as fine as '1').
+        this.voxelSizeOptions = ['0.25', '0.5', '0.75', '1', '2', '3', '4', '5', '6', '7', '8'];
         this.voxelSize = '1';
         // Per-class scale steps — wide gaps so S→XXL is obvious on the field.
         this.enemySizeScaleSteps = {
@@ -113,14 +124,36 @@ class UIAppearanceManager {
         this.fontSizes = {
             h1: '28',
             h2: '14',
-            text: '12'
+            text: '12',
+            small: '10',
+            game: '100'
         };
+        // Per-size family override ('GLOBAL' follows the main font).
+        this.fontFamilies = { h1: 'GLOBAL', h2: 'GLOBAL', text: 'GLOBAL', small: 'GLOBAL', game: 'GLOBAL' };
         this.controlsHints = 'ON';
         this.glow = 'OFF';
         this.scanlines = 'OFF';
         this.crt = 'OFF';
         this.chroma = 'OFF';
+        this.vignette = 'OFF';
+        this.noise = 'OFF';
+        this.flicker = 'OFF';
+        this.bloom = 'OFF';
+        this.bloomSpread = 'OFF';
+        this.bloomThreshold = 'OFF';
+        this.hdr = 'OFF';
         this.arcade = 'OFF';
+        // Where the FX overlay shows: inside the screen, on the frame outside it, or both.
+        this.fxArea = 'SCREEN';
+        // Pixel-lattice GUI lines (independent of the ship render style).
+        this.guiVoxel = 'ON';
+        // GUI voxel tuning: lattice cell (AUTO follows Voxel Size) and which parts it affects.
+        this.guiVoxelCell = 'AUTO';
+        // Pixel grid (px) for the frame outside the screen; OFF = smooth.
+        this.framePx = 'OFF';
+        // Corner radius of the pixel frame's screen opening, in grid cells.
+        this.frameRound = '3';
+        this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
         this.load();
         this.apply();
     }
@@ -267,11 +300,37 @@ class UIAppearanceManager {
     }
 
     getFxOptions(fxKey) {
-        if (fxKey === 'arcade') return ['OFF', 'ON'];
+        if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
+        if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
+        if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
+        if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
+        if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
+        if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
         return this.fxLevels[fxKey] ? Object.keys(this.fxLevels[fxKey]) : ['OFF'];
     }
 
+    /** 'gvCorners' -> 'corners' for the GUI-voxel part toggles, else ''. */
+    gvPartKey(fxKey) {
+        const m = /^gv(Lines|Corners|Text|Images|Svg)$/.exec(String(fxKey));
+        return m ? m[1].toLowerCase() : '';
+    }
+
+    /** Fx keys that are choice rows (cycle options) rather than 0–100 sliders. */
+    isEnumFx(fxKey) {
+        return fxKey === 'arcade' || fxKey === 'guiVoxel' || fxKey === 'fxArea'
+            || fxKey === 'gvCell' || fxKey === 'framePx' || fxKey === 'frameRound' || !!this.gvPartKey(fxKey);
+    }
+
+    getGuiVoxelCell() {
+        // The GUI lattice stays on whole pixels even when the ship voxels go finer than 1.
+        return this.guiVoxelCell === 'AUTO' ? Math.max(1, this.getVoxelSize()) : Number(this.guiVoxelCell);
+    }
+
     getFxValue(fxKey) {
+        if (fxKey === 'gvCell') return this.guiVoxelCell;
+        if (fxKey === 'framePx') return this.framePx;
+        if (fxKey === 'frameRound') return this.frameRound;
+        if (this.gvPartKey(fxKey)) return this.guiVoxelParts[this.gvPartKey(fxKey)];
         return this[fxKey] || 'OFF';
     }
 
@@ -347,17 +406,23 @@ class UIAppearanceManager {
                 this.font = data.font;
             }
             if (data.fontSizes && typeof data.fontSizes === 'object') {
-                ['h1', 'h2', 'text'].forEach((key) => {
+                ['h1', 'h2', 'text', 'small', 'game'].forEach((key) => {
                     const val = String(data.fontSizes[key] || '');
                     if (this.fontSizeOptions[key].includes(val)) {
                         this.fontSizes[key] = val;
                     }
                 });
             }
+            if (data.fontFamilies && typeof data.fontFamilies === 'object') {
+                Object.keys(this.fontFamilies).forEach((key) => {
+                    const f = data.fontFamilies[key];
+                    if (f === 'GLOBAL' || this.fonts[f]) this.fontFamilies[key] = f;
+                });
+            }
             if (data.controlsHints === 'ON' || data.controlsHints === 'OFF') {
                 this.controlsHints = data.controlsHints;
             }
-            ['glow', 'scanlines', 'crt', 'chroma'].forEach((key) => {
+            ['glow', 'scanlines', 'crt', 'chroma', 'vignette', 'noise', 'flicker', 'bloom', 'bloomSpread', 'bloomThreshold', 'hdr'].forEach((key) => {
                 const val = String(data[key] || '').toUpperCase();
                 const pct = /^(\d+)%$/.exec(val);
                 if (this.fxLevels[key] && pct) {
@@ -372,6 +437,24 @@ class UIAppearanceManager {
             });
             if (data.arcade === 'ON' || data.arcade === 'OFF') {
                 this.arcade = data.arcade;
+            }
+            if (data.guiVoxelCell === 'AUTO' || /^[1-8]$/.test(String(data.guiVoxelCell))) {
+                this.guiVoxelCell = String(data.guiVoxelCell);
+            }
+            if (data.guiVoxelParts && typeof data.guiVoxelParts === 'object') {
+                Object.keys(this.guiVoxelParts).forEach((k) => {
+                    if (data.guiVoxelParts[k] === 'ON' || data.guiVoxelParts[k] === 'OFF') this.guiVoxelParts[k] = data.guiVoxelParts[k];
+                });
+            }
+            if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
+                this.framePx = String(data.framePx);
+            }
+            if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
+            if (data.guiVoxel === 'ON' || data.guiVoxel === 'OFF') {
+                this.guiVoxel = data.guiVoxel;
+            }
+            if (['ALL', 'SCREEN', 'FRAME'].indexOf(data.fxArea) !== -1) {
+                this.fxArea = data.fxArea;
             }
         } catch (e) {
             /* ignore */
@@ -393,12 +476,26 @@ class UIAppearanceManager {
                 uiScale: this.uiScale,
                 font: this.font,
                 fontSizes: this.fontSizes,
+                fontFamilies: this.fontFamilies,
                 controlsHints: this.controlsHints,
                 glow: this.glow,
                 scanlines: this.scanlines,
                 crt: this.crt,
                 chroma: this.chroma,
-                arcade: this.arcade
+                vignette: this.vignette,
+                noise: this.noise,
+                flicker: this.flicker,
+                bloom: this.bloom,
+                bloomSpread: this.bloomSpread,
+                bloomThreshold: this.bloomThreshold,
+                hdr: this.hdr,
+                arcade: this.arcade,
+                fxArea: this.fxArea,
+                guiVoxel: this.guiVoxel,
+                guiVoxelCell: this.guiVoxelCell,
+                framePx: this.framePx,
+                frameRound: this.frameRound,
+                guiVoxelParts: Object.assign({}, this.guiVoxelParts)
             }));
         } catch (e) {
             /* ignore */
@@ -496,6 +593,18 @@ class UIAppearanceManager {
         this.apply();
     }
 
+    getFontFamilyOptions() {
+        return ['GLOBAL'].concat(Object.keys(this.fonts));
+    }
+
+    setFontFamily(type, fontId) {
+        if (!this.fontFamilies[type]) return;
+        if (fontId !== 'GLOBAL' && !this.fonts[fontId]) return;
+        this.fontFamilies[type] = fontId;
+        this.persist();
+        this.apply();
+    }
+
     setFontSize(type, size) {
         const val = String(size);
         if (!this.fontSizeOptions[type] || !this.fontSizeOptions[type].includes(val)) return;
@@ -519,9 +628,99 @@ class UIAppearanceManager {
         return this.controlsHints;
     }
 
+    setGuiVoxel(value) {
+        const val = String(value || '').toUpperCase();
+        if (val !== 'ON' && val !== 'OFF') return;
+        this.guiVoxel = val;
+        this.persist();
+        this.apply();
+    }
+
+    setFxArea(area) {
+        const val = String(area || '').toUpperCase();
+        if (['ALL', 'SCREEN', 'FRAME'].indexOf(val) === -1) return;
+        this.fxArea = val;
+        this.persist();
+        this.applyFxArea();
+    }
+
+    /** Screen opening rect via an invisible probe (the frame's own hole elements can collapse to 0x0). */
+    measureScreenOpening() {
+        const bezel = document.getElementById('vf-bezel');
+        if (!bezel) return null;
+        let probe = document.getElementById('vfFxProbe');
+        if (!probe) {
+            probe = document.createElement('b');
+            probe.id = 'vfFxProbe';
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;'
+                + 'left:var(--fr-ol);right:var(--fr-or);top:var(--fr-ot);bottom:var(--fr-ob);border-radius:var(--fr-hole-r)';
+            bezel.appendChild(probe);
+        }
+        const r = probe.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width,
+            radius: Math.max(0, parseFloat(getComputedStyle(probe).borderTopLeftRadius) || 0) };
+    }
+
+    /** Clip the FX overlay to the screen opening (inside), the frame (outside) or nothing (all). */
+    applyFxArea() {
+        const ov = document.getElementById('vfFxOverlay');
+        if (!ov) return;
+        // Clip each layer, not the container: a clip-path on the container becomes a
+        // backdrop root and the layers' backdrop-filters (chroma/bloom/HDR/CRT) would see nothing.
+        const layers = ov.children;
+        const setClip = (v) => {
+            for (let i = 0; i < layers.length; i++) layers[i].style.clipPath = v;
+        };
+        ov.style.clipPath = '';
+        const r = this.measureScreenOpening();
+        const rad = r ? r.radius : 0;
+        if (this.fxArea === 'ALL' || !r || !r.width) {
+            setClip('');
+            return;
+        }
+        const W = window.innerWidth, H = window.innerHeight;
+        const x1 = Math.round(r.left), y1 = Math.round(r.top);
+        const x2 = Math.round(r.right), y2 = Math.round(r.bottom);
+        setClip(this.fxArea === 'SCREEN'
+            ? `inset(${y1}px ${W - x2}px ${H - y2}px ${x1}px round ${rad}px)`
+            : `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`);
+    }
+
     setFx(fxKey, value) {
         const key = String(fxKey || '');
         const val = String(value || '').toUpperCase();
+        if (key === 'guiVoxel') return this.setGuiVoxel(val);
+        if (key === 'frameRound') {
+            if (!this.getFxOptions('frameRound').includes(val)) return;
+            this.frameRound = val;
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (key === 'framePx') {
+            if (val !== 'OFF' && !this.getFxOptions('framePx').includes(val)) return;
+            this.framePx = val;
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (key === 'gvCell') {
+            if (val !== 'AUTO' && !/^[1-8]$/.test(val)) return;
+            this.guiVoxelCell = val;
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (this.gvPartKey(key)) {
+            if (val !== 'ON' && val !== 'OFF') return;
+            this.guiVoxelParts[this.gvPartKey(key)] = val;
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (key === 'fxArea') return this.setFxArea(val);
         if (key === 'arcade') {
             if (val !== 'ON' && val !== 'OFF') return;
             this.arcade = val;
@@ -541,6 +740,15 @@ class UIAppearanceManager {
         }
         this.persist();
         this.apply();
+    }
+
+    /** SVG pixelate filter: one sample per c x c block, then dilated back to full blocks. */
+    /** SVG pixelate + top-left light filter (built by the boot script in index.html). */
+    ensureFramePxFilter(c) {
+        const odd = Math.floor(c / 2) * 2 + 1;
+        if (this._framePxBuilt === odd && document.getElementById('vfFramePx')) return;
+        if (typeof window.vfBuildFramePxFilter === 'function') window.vfBuildFramePxFilter(odd);
+        this._framePxBuilt = odd;
     }
 
     ensureFxOverlay() {
@@ -570,10 +778,24 @@ class UIAppearanceManager {
                 '<feTurbulence type="fractalNoise" baseFrequency="0.11 0.17" numOctaves="1" seed="3" result="map"/>' +
                 '<feDisplacementMap id="vfCrtDisp" in="SourceGraphic" in2="map" scale="0" xChannelSelector="R" yChannelSelector="G"/>' +
             '</filter></svg>',
+            // Bloom: only pixels above the cut-off glow. Threshold -> blur -> gain -> added to the picture.
+            '<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="vfBloomFx" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">' +
+                '<feComponentTransfer in="SourceGraphic" result="bright"><feFuncR id="vfBloomTR" type="linear" slope="3" intercept="-1"/><feFuncG id="vfBloomTG" type="linear" slope="3" intercept="-1"/><feFuncB id="vfBloomTB" type="linear" slope="3" intercept="-1"/></feComponentTransfer>' +
+                '<feGaussianBlur id="vfBloomBlur" in="bright" stdDeviation="6" result="soft"/>' +
+                '<feComponentTransfer in="soft" result="glow"><feFuncR id="vfBloomGR" type="linear" slope="1"/><feFuncG id="vfBloomGG" type="linear" slope="1"/><feFuncB id="vfBloomGB" type="linear" slope="1"/></feComponentTransfer>' +
+                '<feComposite in="SourceGraphic" in2="glow" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>' +
+            '</filter></svg>',
+            '<div class="vf-fx-hdr"></div>',
+            '<div class="vf-fx-hdr-shadow"></div>',
+            '<div class="vf-fx-bloom"></div>',
             '<div class="vf-fx-crt"></div>',
-            '<div class="vf-fx-scanlines"></div>'
+            '<div class="vf-fx-scanlines"></div>',
+            '<div class="vf-fx-vignette"></div>',
+            '<div class="vf-fx-noise"></div>',
+            '<div class="vf-fx-flicker"></div>'
         ].join('');
-        document.body.appendChild(el);
+        // On <html>, not <body>: the body is scaled/offset by the stage fit, which would skew the overlay and its clip.
+        document.documentElement.appendChild(el);
         return el;
     }
 
@@ -582,7 +804,16 @@ class UIAppearanceManager {
         const bw = this.borderWeights[this.borderWeight] || this.borderWeights.NORMAL;
         const font = this.fonts[this.font] || this.fonts.COURIER;
         // One stroke size everywhere — weight never mixes thin/thick contours.
-        const stroke = bw.width || '2px';
+        let stroke = bw.width || '2px';
+        // VOXEL: GUI contours sit on the same lattice as the playfield.
+        if (this.guiVoxel === 'ON') {
+            const cell = this.getGuiVoxelCell();
+            if (this.guiVoxelParts.lines === 'ON') {
+                const steps = Math.max(1, Math.round(parseFloat(stroke) / cell));
+                stroke = (steps * cell) + 'px';
+            }
+            root.style.setProperty('--ui-voxel', cell + 'px');
+        }
         root.style.setProperty('--ui-border-width', stroke);
         root.style.setProperty('--ui-border-width-thin', stroke);
         root.style.setProperty('--ui-border-width-thick', stroke);
@@ -593,7 +824,22 @@ class UIAppearanceManager {
         root.style.setProperty('--font-h1', `${this.fontSizes.h1}px`);
         root.style.setProperty('--font-h2', `${this.fontSizes.h2}px`);
         root.style.setProperty('--font-text', `${this.fontSizes.text}px`);
+        root.style.setProperty('--font-small', `${this.fontSizes.small}px`);
+        root.style.setProperty('--font-text-small', `${this.fontSizes.small}px`);
+        Object.keys(this.fontFamilies).forEach((k) => {
+            const id = this.fontFamilies[k];
+            root.style.setProperty('--ui-font-' + k, id === 'GLOBAL' ? font : (this.fonts[id] || font));
+        });
         root.style.setProperty('--font-base', `${this.fontSizes.text}px`);
+        // In-game HUD: own family + size scale (see .game-container in styles.css).
+        const gk = Number(this.fontSizes.game) / 100 || 1;
+        const gfam = this.fontFamilies.game;
+        root.style.setProperty('--game-font-family', gfam === 'GLOBAL' ? font : (this.fonts[gfam] || font));
+        root.style.setProperty('--game-font-h1', `${(this.fontSizes.h1 * gk).toFixed(1)}px`);
+        root.style.setProperty('--game-font-h2', `${(this.fontSizes.h2 * gk).toFixed(1)}px`);
+        root.style.setProperty('--game-font-text', `${(this.fontSizes.text * gk).toFixed(1)}px`);
+        root.style.setProperty('--game-font-small', `${(this.fontSizes.small * gk).toFixed(1)}px`);
+        root.setAttribute('data-game-font', gfam === 'GLOBAL' ? 'global' : 'custom');
         root.setAttribute('data-ui-controls', this.controlsHints === 'OFF' ? 'off' : 'on');
 
         const glow = this.fxLevel('glow');
@@ -601,15 +847,20 @@ class UIAppearanceManager {
         const crt = this.fxLevel('crt');
         const chroma = this.fxLevel('chroma');
         const arcadeOn = this.arcade === 'ON';
-        const arcadeBoost = arcadeOn ? 1.55 : 1;
-        const effectiveGlow = glow > 0
-            ? glow * arcadeBoost
-            : (arcadeOn ? 0.85 : 0);
+        const effectiveGlow = glow;
 
         root.style.setProperty('--vf-glow', String(effectiveGlow));
         root.style.setProperty('--vf-scan', String(scan));
         root.style.setProperty('--vf-crt', String(crt));
-        root.style.setProperty('--vf-chroma', String(chroma * arcadeBoost));
+        root.style.setProperty('--vf-chroma', String(chroma));
+        root.style.setProperty('--vf-vignette', String(this.fxLevel('vignette')));
+        root.style.setProperty('--vf-noise', String(this.fxLevel('noise')));
+        root.style.setProperty('--vf-flicker', String(this.fxLevel('flicker')));
+        root.style.setProperty('--vf-bloom', String(this.fxLevel('bloom')));
+        root.style.setProperty('--vf-bloom-spread', String(this.fxLevel('bloomSpread')));
+        root.style.setProperty('--vf-bloom-thr', String(this.fxLevel('bloomThreshold')));
+        root.style.setProperty('--vf-hdr', String(this.fxLevel('hdr')));
+        root.setAttribute('data-vf-hdr', this.hdr === 'OFF' ? 'off' : 'on');
 
         const glowAttr = effectiveGlow > 0
             ? (this.glow === 'OFF' ? 'low' : this.glow.toLowerCase())
@@ -617,9 +868,31 @@ class UIAppearanceManager {
         root.setAttribute('data-vf-glow', glowAttr);
         root.setAttribute('data-vf-scanlines', this.scanlines === 'OFF' ? 'off' : this.scanlines.toLowerCase());
         root.setAttribute('data-vf-crt', this.crt === 'OFF' ? 'off' : this.crt.toLowerCase());
+        ['vignette', 'noise', 'flicker', 'bloom'].forEach((k) => {
+            root.setAttribute('data-vf-' + k, this[k] === 'OFF' ? 'off' : 'on');
+        });
         root.setAttribute('data-vf-chroma', this.chroma === 'OFF' ? 'off' : this.chroma.toLowerCase());
         root.setAttribute('data-vf-arcade', arcadeOn ? 'on' : 'off');
         root.setAttribute('data-vf-ship-render', String(this.shipRenderStyle || 'FLAT').toUpperCase());
+        Object.keys(this.guiVoxelParts).forEach((k) => {
+            root.setAttribute('data-vf-gv-' + k, this.guiVoxelParts[k] === 'ON' ? 'on' : 'off');
+        });
+        root.setAttribute('data-vf-frame-px', this.framePx === 'OFF' ? 'off' : 'on');
+        if (this.framePx !== 'OFF') {
+            this.ensureFramePxFilter(Number(this.framePx));
+            // Odd cell actually used by the filter; frame bands are widened to at least one cell.
+            const odd = Math.floor(Number(this.framePx) / 2) * 2 + 1;
+            root.style.setProperty('--fr-px', odd + 'px');
+            const rad = odd * 2 * Number(this.frameRound);
+            root.style.setProperty('--fr-rad', rad + 'px');
+            // Outer corner radius of the whole frame: concentric with the opening (+ band width).
+            root.style.setProperty('--fr-out', (rad > 0 ? rad + odd * 3 : 0) + 'px');
+        } else {
+            root.style.removeProperty('--fr-px');
+            root.style.removeProperty('--fr-rad');
+            root.style.removeProperty('--fr-out');
+        }
+        root.setAttribute('data-vf-gui-voxel', this.guiVoxel === 'ON' ? 'on' : 'off');
         root.setAttribute('data-vf-voxel-size', String(this.getVoxelSize()));
         // One shared lattice for the whole playfield (ships, terrain, FX…).
         window.PLAYFIELD_VOXEL_CELL = this.getVoxelSize();
@@ -628,12 +901,40 @@ class UIAppearanceManager {
         }
 
         this.ensureFxOverlay();
+        this.applyFxArea();
+        if (!this._fxAreaBound) {
+            this._fxAreaBound = true;
+            const refit = () => this.applyFxArea();
+            window.addEventListener('resize', refit);
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(refit);
+                ['#vf-bezel', 'body'].forEach((sel) => {
+                    const el = document.querySelector(sel);
+                    if (el) ro.observe(el);
+                });
+            }
+            // Bezel size settles after boot / layout changes: re-measure a few times.
+            [50, 300, 1000, 2500].forEach((ms) => setTimeout(refit, ms));
+        }
+        requestAnimationFrame(() => this.applyFxArea());
         // Chroma = real channel split: up to ~5 px red/blue offset at full strength.
-        const shift = Math.round(chroma * arcadeBoost * 4.5 * 10) / 10;
+        const isVoxel = String(this.shipRenderStyle).toUpperCase() === 'VOXEL';
+        // VOXEL keeps whole-pixel offsets so the lattice stays crisp.
+        const shift = isVoxel ? Math.round(chroma * 4.5) : Math.round(chroma * 4.5 * 10) / 10;
         const r = document.getElementById('vfChromaR');
         const b = document.getElementById('vfChromaB');
         const crtDisp = document.getElementById('vfCrtDisp');
-        if (crtDisp) crtDisp.setAttribute('scale', String(Math.round(crt * 7 * 10) / 10));
+        // Bloom values: cut-off 0.25..0.85, glow width 1..30 px, strength up to x3.
+        const thr = 0.25 + 0.6 * this.fxLevel('bloomThreshold');
+        const bs = document.getElementById('vfBloomBlur');
+        if (bs) bs.setAttribute('stdDeviation', String(Math.round((1 + 29 * this.fxLevel('bloomSpread')) * 10) / 10));
+        ['R', 'G', 'B'].forEach((c) => {
+            const t = document.getElementById('vfBloomT' + c);
+            if (t) { t.setAttribute('slope', String(1 / (1 - thr))); t.setAttribute('intercept', String(-thr / (1 - thr))); }
+            const g = document.getElementById('vfBloomG' + c);
+            if (g) g.setAttribute('slope', String(Math.round(3 * this.fxLevel('bloom') * 100) / 100));
+        });
+        if (crtDisp) crtDisp.setAttribute('scale', isVoxel ? '0' : String(Math.round(crt * 7 * 10) / 10));
         if (r) { r.setAttribute('dx', String(shift)); r.setAttribute('dy', String(shift * 0.25)); }
         if (b) { b.setAttribute('dx', String(-shift)); b.setAttribute('dy', String(-shift * 0.25)); }
     }

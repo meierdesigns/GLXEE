@@ -12,25 +12,60 @@ extendClass(StartScreenManager, {
                 type: 'font'
             },
             {
-                name: 'H1',
+                name: 'H1 Size',
                 value: ua ? ua.fontSizes.h1 : '28',
                 options: ua ? ua.getFontSizeOptions('h1') : ['20', '24', '28', '32', '36', '40', '48'],
                 type: 'fontSize',
                 sizeKey: 'h1'
             },
             {
-                name: 'H2 Labels',
+                name: 'H1 Font',
+                value: ua ? ua.fontFamilies.h1 : 'GLOBAL',
+                options: ua ? ua.getFontFamilyOptions() : ['GLOBAL', 'COURIER', 'MONO', 'SYSTEM', 'SERIF'],
+                type: 'fontFamilyType',
+                sizeKey: 'h1'
+            },
+            {
+                name: 'H2 Labels Size',
                 value: ua ? ua.fontSizes.h2 : '14',
                 options: ua ? ua.getFontSizeOptions('h2') : ['10', '11', '12', '14', '16', '18', '20', '24'],
                 type: 'fontSize',
                 sizeKey: 'h2'
             },
             {
-                name: 'Text',
+                name: 'H2 Labels Font',
+                value: ua ? ua.fontFamilies.h2 : 'GLOBAL',
+                options: ua ? ua.getFontFamilyOptions() : ['GLOBAL', 'COURIER', 'MONO', 'SYSTEM', 'SERIF'],
+                type: 'fontFamilyType',
+                sizeKey: 'h2'
+            },
+            {
+                name: 'Text Size',
                 value: ua ? ua.fontSizes.text : '12',
                 options: ua ? ua.getFontSizeOptions('text') : ['8', '9', '10', '11', '12', '14', '16', '18'],
                 type: 'fontSize',
                 sizeKey: 'text'
+            },
+            {
+                name: 'Text Font',
+                value: ua ? ua.fontFamilies.text : 'GLOBAL',
+                options: ua ? ua.getFontFamilyOptions() : ['GLOBAL', 'COURIER', 'MONO', 'SYSTEM', 'SERIF'],
+                type: 'fontFamilyType',
+                sizeKey: 'text'
+            },
+            {
+                name: 'Small Size',
+                value: ua ? ua.fontSizes.small : '10',
+                options: ua ? ua.getFontSizeOptions('small') : ['7', '8', '9', '10', '11', '12'],
+                type: 'fontSize',
+                sizeKey: 'small'
+            },
+            {
+                name: 'Small Font',
+                value: ua ? ua.fontFamilies.small : 'GLOBAL',
+                options: ua ? ua.getFontFamilyOptions() : ['GLOBAL', 'COURIER', 'MONO', 'SYSTEM', 'SERIF'],
+                type: 'fontFamilyType',
+                sizeKey: 'small'
             }
         ];
     },

@@ -288,9 +288,8 @@ class ObstacleManager {
         return (lm && lm.getCurrentLevel && lm.getCurrentLevel()) || null;
     }
 
-    /** Canyon walls + planet ground: scroll stages, but not space ambushes. */
+    /** Canyon walls + planet ground: scroll stages and boss arenas (static there), but not space ambushes. */
     hasTerrain() {
-        if (!this.isScrollStage()) return false;
         const level = this.getCurrentLevel();
         const pid = String((level && level.planetId) || '');
         return pid.indexOf('ambush_') !== 0;

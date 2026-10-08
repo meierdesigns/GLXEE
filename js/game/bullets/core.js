@@ -177,11 +177,14 @@ class BulletManager {
             } else {
                 bdy = -bullet.speed * speedMultiplier;
             }
+            const px0 = bullet.x, py0 = bullet.y;
             if (voxelMove) cv.stepMove(bullet, bdx, bdy);
             else {
                 bullet.x += bdx;
                 bullet.y += bdy;
             }
+            bullet._sweepDx = bullet.x - px0;
+            bullet._sweepDy = bullet.y - py0;
 
             // Remove bullets that are off screen
             // Get canvas width from game if available
@@ -205,11 +208,14 @@ class BulletManager {
             } else {
                 bdy = bullet.speed * speedMultiplier;
             }
+            const px0 = bullet.x, py0 = bullet.y;
             if (voxelMove) cv.stepMove(bullet, bdx, bdy);
             else {
                 bullet.x += bdx;
                 bullet.y += bdy;
             }
+            bullet._sweepDx = bullet.x - px0;
+            bullet._sweepDy = bullet.y - py0;
 
             // Remove bullets that are off screen
             // Get canvas dimensions from game if available

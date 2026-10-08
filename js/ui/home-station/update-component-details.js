@@ -164,7 +164,7 @@ extendClass(HomeStationUI, {
                 <input type="range" data-voxel-scale min="0.2" max="1.5" step="0.01" value="${this.getVoxelScaleValue(shipId)}">
             </label>` +
             (isWing ? `<div class="hs-floating-area-crop">
-                <label><span>ROTATION</span><input type="range" data-wing-rotation min="-60" max="60" step="1" value="${this.getWingRotationValue(shipId)}"></label>
+                <label><span>ROTATION</span><input type="range" data-wing-rotation min="-180" max="180" step="1" value="${this.getWingRotationValue(shipId)}"></label>
             </div>
             <button type="button" class="hs-floating-panel-link" data-open-connection>EDIT CONNECTION →</button>`
                 : `<button type="button" class="hs-floating-panel-link" data-open-spine>EDIT CONNECTION →</button>`);

@@ -208,7 +208,7 @@ class ShipLoadoutManager {
             // Where the bridge meets the wing root: −1..1 of the wing's height.
             wingConnectionYEnd: Math.max(-1, Math.min(1, Number(src.wingConnectionYEnd) || 0)),
             wingConnectionWidth: Math.max(0.02, Math.min(0.5, Number(src.wingConnectionWidth) || 0.1)),
-            wingRotation: Math.max(-60, Math.min(60, Number(src.wingRotation) || 0)),
+            wingRotation: Math.max(-180, Math.min(180, Number(src.wingRotation) || 0)),
             voxelScale: Math.max(0.2, Math.min(1.5, Number(src.voxelScale) || 0.5)),
             // 0 = follow the hull's voxelScale instead of its own value.
             wingConnectionVoxelScale: Math.max(0, Math.min(10, Number(src.wingConnectionVoxelScale) || 0)),

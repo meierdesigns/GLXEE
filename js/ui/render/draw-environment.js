@@ -252,8 +252,8 @@ extendClass(RenderManager, {
      * raised canyon plateaus carrying faction structures. Pure scenery.
      */
     drawScrollTerrain(ctx, width, height) {
-        if (typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
-            || !(obstacleManager.hasTerrain ? obstacleManager.hasTerrain() : obstacleManager.isScrollStage())) {
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.hasTerrain
+            || !obstacleManager.hasTerrain()) {
             this._terrainWallReady = false;
             return;
         }
@@ -388,6 +388,12 @@ extendClass(RenderManager, {
         }
         // Canyon slope
         batch = overlayBatch;
+        curPhase = phase;
+        // Calm the floor: a dark veil keeps its patterns well below the ships' brightness.
+        curPhase = gPhase;
+        for (let r = -1; r * cell + gPhase < H; r++) {
+            pushRun('rgba(2,6,8,0.5)', 0, r * cell + gPhase, cols * cell, cell);
+        }
         curPhase = phase;
         const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
         for (let r = -1; r * cell + phase < H; r++) {

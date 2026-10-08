@@ -178,7 +178,7 @@ extendClass(HomeStationUI, {
         const path = this.hangarConnectionPaths(model, scale).find((p) => p.id === id);
         if (!path) return null;
         const loadout = model.layout.loadout || {};
-        const deg = Math.max(-60, Math.min(60, Number(loadout.wingRotation) || 0));
+        const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
         const left = id === 'wingLeft';
         // Same frame renderHullSegments uses for the wing-side edge.
         const ang = deg * Math.PI / 180 * (left ? -1 : 1);

@@ -190,7 +190,7 @@ extendClass(ShipLoadoutManager, {
     /** buildLayout phase 6: sync wing panels, normalize to bbox and assemble the result. */
     /** Rotate a layout point with its wing around the wing root (renderProceduralWing pivot). */
     rotateOnWing(seg, degrees, x, y) {
-        const deg = Math.max(-60, Math.min(60, Number(degrees) || 0));
+        const deg = Math.max(-180, Math.min(180, Number(degrees) || 0));
         if (!seg || Math.abs(deg) < 0.001) return { x: x, y: y };
         const isLeft = seg.id === 'wingLeft';
         const px = isLeft ? seg.x + seg.width : seg.x;

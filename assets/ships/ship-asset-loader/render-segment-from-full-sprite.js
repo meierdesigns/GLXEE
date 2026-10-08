@@ -546,7 +546,7 @@ extendClass(ShipAssetLoader, {
         const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
         this.applyWingCrop(grid, seg, crop);
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
-        const angle = Math.max(-60, Math.min(60, Number(rotation) || 0)) * Math.PI / 180;
+        const angle = Math.max(-180, Math.min(180, Number(rotation) || 0)) * Math.PI / 180;
         if (Math.abs(angle) < 0.001) {
             this.drawPixelGridHull(ctx, grid, colors, x, y, w, h, cell);
         } else {

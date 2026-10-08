@@ -148,7 +148,7 @@ extendClass(HomeStationUI, {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         if (!loader || !loader.wingAttachPoint) return null;
         const loadout = model && model.layout && model.layout.loadout;
-        const degrees = Math.max(-60, Math.min(60, Number(loadout && loadout.wingRotation) || 0));
+        const degrees = Math.max(-180, Math.min(180, Number(loadout && loadout.wingRotation) || 0));
         if (!degrees) return null;
         const seg = ((model.layout && model.layout.segments) || []).find((s) => s.id === segId);
         if (!seg) return null;
@@ -202,7 +202,7 @@ extendClass(HomeStationUI, {
                 const left = seg.id === 'wingLeft';
                 const attach = graphicsManager.shipAssetLoader.wingAttachPoint(seg, model, scale);
                 // Same wing-end shift as renderHullSegments (along the turned root).
-                const deg = Math.max(-60, Math.min(60, Number(loadout.wingRotation) || 0));
+                const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
                 const ang = deg * Math.PI / 180 * (left ? -1 : 1);
                 const dX = (left ? -1 : 1) * Math.cos(ang);
                 const dY = (left ? -1 : 1) * Math.sin(ang);

@@ -372,7 +372,7 @@ extendClass(ShipAssetLoader, {
                 };
                 // Wing-side frame turned with the wing: struts offset from the
                 // joint's centre land on the tilted root, not on a fixed row.
-                const wingDeg = Math.max(-60, Math.min(60,
+                const wingDeg = Math.max(-180, Math.min(180,
                     Number(layout.loadout && layout.loadout.wingRotation) || 0));
                 const ang = wingDeg * Math.PI / 180 * (isLeft ? -1 : 1);
                 const dirX = (isLeft ? -1 : 1) * Math.cos(ang);

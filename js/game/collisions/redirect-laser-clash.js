@@ -167,7 +167,14 @@ extendClass(CollisionManager, {
                                b1.y < b2.y + b2.height &&
                                b1.y + b1.height > b2.y;
 
-        if (!basicCollision) return false;
+        if (!basicCollision) {
+            // Fast shots: also test the strip swept since last frame so they cannot jump over a target.
+            const sx = obj1 && obj1._sweepDx, sy = obj1 && obj1._sweepDy;
+            if (!(sx || sy) || (obj2 && obj2._mask)) return false;
+            const x0 = Math.min(b1.x, b1.x - sx), x1 = Math.max(b1.x + b1.width, b1.x + b1.width - sx);
+            const y0 = Math.min(b1.y, b1.y - sy), y1 = Math.max(b1.y + b1.height, b1.y + b1.height - sy);
+            return x0 < b2.x + b2.width && x1 > b2.x && y0 < b2.y + b2.height && y1 > b2.y;
+        }
         // Carved boulders: only their remaining pixels are solid.
         if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
             if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, b1)) return false;

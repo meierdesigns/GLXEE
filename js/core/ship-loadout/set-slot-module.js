@@ -112,7 +112,7 @@ extendClass(ShipLoadoutManager, {
 
     setWingRotation(shipId, degrees) {
         const loadout = this.getLoadout(shipId);
-        loadout.wingRotation = Math.max(-60, Math.min(60, Number(degrees) || 0));
+        loadout.wingRotation = Math.max(-180, Math.min(180, Number(degrees) || 0));
         const saved = this.setLoadout(shipId, loadout);
         return { ok: true, loadout: saved };
     },

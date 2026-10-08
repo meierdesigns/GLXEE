@@ -227,6 +227,7 @@ extendClass(GameControlSystem, {
             if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
                 VFBgMouseParallax.refresh();
             }
+            this.persistEndScreen('gameover', { endLoot: lost || {} });
         }
     },
 

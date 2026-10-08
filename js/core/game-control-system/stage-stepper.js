@@ -15,7 +15,7 @@ extendClass(GameControlSystem, {
         const gid = pcm && (pcm.getWorldGalaxyOfPlanet ? pcm.getWorldGalaxyOfPlanet(pid) : pcm.getPlanetGalaxyId(pid));
         const galaxy = gid && pcm.getGalaxy ? pcm.getGalaxy(gid) : null;
         const icon = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml
-            ? galaxyMapManager.planetIconHtml(pid, 56, true) : '';
+            ? galaxyMapManager.planetIconHtml(pid, 112, true) : '';
         const name = String(level.planetName || (cfg && cfg.name) || pid).toUpperCase();
         const isAmbush = pid.indexOf('ambush_') === 0;
 

@@ -7,8 +7,18 @@ extendClass(MenuStateManager, {
      */
     restore() {
         const s = this.state;
-        if (!s || !s.screen || s.screen === 'ingame' || s.screen === 'start') {
-            if (s && s.screen === 'ingame') {
+        if (s && s.screen === 'ingame' && s.levelId && typeof game !== 'undefined' && game.startGame) {
+            // Refresh during a match: the same match starts again
+            this.hideStartShell();
+            if (game.startGame(s.levelId)) return true;
+        }
+        if (s && s.screen === 'endscreen' && typeof game !== 'undefined' && game.gameControl) {
+            // Refresh on a victory / game-over screen: show it again
+            this.hideStartShell();
+            if (game.gameControl.restoreEndScreen(s)) return true;
+        }
+        if (!s || !s.screen || s.screen === 'ingame' || s.screen === 'endscreen' || s.screen === 'start') {
+            if (s && (s.screen === 'ingame' || s.screen === 'endscreen')) {
                 this.setScreen('start');
             }
             return false;

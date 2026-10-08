@@ -127,7 +127,7 @@ class GameCore {
     async restoreMenuWhenReady() {
         const state = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : null;
         const screen = state && state.screen;
-        const lightMenu = !screen || screen === 'start' || screen === 'settings' || screen === 'credits' || screen === 'profiles' || screen === 'ingame';
+        const lightMenu = !screen || screen === 'start' || screen === 'settings' || screen === 'credits' || screen === 'profiles';
 
         if (!lightMenu) {
             if (window.vfBootLoader) window.vfBootLoader.setPhase('assets', 0.88);

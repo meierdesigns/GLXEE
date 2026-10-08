@@ -77,6 +77,24 @@ class ProfileSelectionManager {
         this.renderFactionShipPreview(id);
     }
 
+    /** Random pilot name in the faction's voice ("FIRST LAST", max 16 characters). */
+    generatePilotName(faction) {
+        const sets = {
+            terran: [['MARCUS', 'ELENA', 'JONAS', 'IRIS', 'TOBIAS', 'NADIA', 'CALEB', 'MIRA', 'DEXTER', 'LENA'], ['HALE', 'VOSS', 'REYES', 'KANE', 'ORTEGA', 'BRIGHT', 'STONE', 'WELLS', 'ARDEN', 'CROSS']],
+            kronax: [['SKARR', 'GORRAK', 'THRAX', 'VOLKA', 'KRAZ', 'DRUUM', 'ZARKO', 'BRUTA', 'KHORN', 'RAGOS'], ['VELKHAR', 'ASHFANG', 'BONEMAW', 'GRIMCLAW', 'SCARHIDE', 'DUSKRAK', 'BLOODMANE']],
+            voidborn: [['ILLUN', 'ESHARA', 'VOHL', 'NYXA', 'ORUUM', 'SELEH', 'ZIRAEL', 'UMBRA', 'KETHE', 'AYLUN'], ['HOLLOW', 'RIFTBORN', 'ASHEN', 'WHISPER', 'DEEPSTILL', 'NULL', 'VEILED', 'ENDLESS']],
+            pirate: [['REDBEARD', 'SALTY', 'ONE-EYE', 'MAD', 'BLACK', 'CAPTAIN', 'JACKAL', 'SCURVY', 'RUSTY', 'GREY'], ['JACK', 'MORGAN', 'FLINT', 'SILVER', 'BONES', 'KIDD', 'TEACH', 'DOGGER', 'HOOK', 'STORM']],
+            machine: [['UNIT', 'NODE', 'AXIOM', 'CORE', 'VECTOR', 'CIPHER', 'MODULE', 'SIGMA', 'KERNEL', 'DELTA'], ['7', '0X1A', '404', 'PRIME', '9-B', 'ALPHA', 'X-12', 'ZERO', '88', 'OMEGA']]
+        };
+        const set = sets[String(faction || '').toLowerCase()] || sets.terran;
+        const pick = (a) => a[Math.floor(Math.random() * a.length)];
+        for (let i = 0; i < 30; i++) {
+            const name = pick(set[0]) + ' ' + pick(set[1]);
+            if (name.length <= 16) return name;
+        }
+        return pick(set[0]).slice(0, 16);
+    }
+
     /**
      * Lore as structure: the short summary as a lead line, the long text
      * split into paragraphs of ~2 sentences, the hero's title as a footer.
@@ -905,7 +923,8 @@ class ProfileSelectionManager {
                 </div>
             </div>` : '';
         const inputHtml = pickFaction ? ''
-            : '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>';
+            : '<div class="profile-name-row"><input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'
+                + '<div class="profile-selection-actions profile-name-gen-wrap"><button type="button" class="action-button profile-name-gen" id="psGenName" title="Generate a name">GENERATE NAME</button></div></div>';
         const btnIcon = (kind) => ProfileSelectionManager.btnIconHtml(kind);
         const primary = pickFaction ? 'NEXT' : 'SAVE';
         const secondary = create && !pickFaction ? 'BACK' : 'CANCEL';
@@ -934,6 +953,14 @@ class ProfileSelectionManager {
             input.value = profiles[this.selectedIndex].name;
         }
         if (create) this.applyPendingFactionLook();
+        const genBtn = this.overlay.querySelector('#psGenName');
+        if (genBtn && input) {
+            genBtn.addEventListener('click', () => {
+                input.value = this.generatePilotName(this.pendingFaction);
+                input.focus();
+                input.select();
+            });
+        }
         const saveBtn = this.overlay.querySelector('#psSave');
         const cancelBtn = this.overlay.querySelector('#psCancelMode');
         // Start galaxy card: arrows cycle through the galaxies in place.

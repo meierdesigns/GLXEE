@@ -188,4 +188,48 @@ extendClass(GameControlSystem, {
             lootList.innerHTML = this.renderVictoryLootHtml(this.lastVictoryLoot);
         }
     },
+
+    /** Remember an end screen so a page refresh lands on it again (menu-state/restore.js). */
+    persistEndScreen(kind, extra) {
+        if (typeof menuStateManager === 'undefined') return;
+        const stats = this.gameState.getStats ? this.gameState.getStats() : {};
+        menuStateManager.setScreen('endscreen', Object.assign({
+            endKind: kind,
+            levelId: this.getRestartLevelId(),
+            endStats: { score: stats.score || 0, levelTime: stats.levelTime || 0, enemiesKilled: stats.enemiesKilled || 0 },
+            endLoot: null
+        }, extra || {}));
+    },
+
+    /**
+     * Refresh on a victory / game-over screen: load the level (no match), put the
+     * saved numbers back and show the same overlay again. Returns false if impossible.
+     */
+    restoreEndScreen(s) {
+        if (!s || !s.levelId || (s.endKind !== 'victory' && s.endKind !== 'gameover')) return false;
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) gameContainer.style.display = 'flex';
+        if (typeof window.viewportFit !== 'undefined' && window.viewportFit.update) window.viewportFit.update();
+        if (!this.coreLevelManager.startLevel(s.levelId)) return false;
+        const stats = s.endStats || {};
+        const lim = this.systemManager.getSubsystem('levelInfoManager');
+        if (typeof game !== 'undefined') game.score = stats.score || 0;
+        if (lim && lim.stats) {
+            lim.stats.score = stats.score || 0;
+            lim.stats.levelTime = stats.levelTime || 0;
+            lim.stats.enemiesKilled = stats.enemiesKilled || 0;
+            lim.stats.startTime = null;
+        }
+        if (s.endKind === 'victory') {
+            this.lastVictoryLoot = s.endLoot || null;
+            this.showVictoryOverlay();
+        } else {
+            const overlay = document.getElementById('gameOver');
+            if (!overlay) return false;
+            this.applyGameOverFaction(overlay, s.endLoot || {});
+            overlay.classList.remove('hidden');
+            if (typeof VFGameOverWreck !== 'undefined') VFGameOverWreck.start(overlay);
+        }
+        return true;
+    },
 });

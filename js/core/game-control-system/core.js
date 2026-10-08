@@ -22,7 +22,8 @@ class GameControlSystem {
         this.cancelVictoryLootPhase();
 
         if (typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('ingame');
+            // levelId lets a page refresh start the same match again
+            menuStateManager.setScreen('ingame', { levelId: levelId, endKind: null, endStats: null, endLoot: null });
         }
 
         if (typeof soundManager !== 'undefined' && soundManager.stopMenuMusic) {
@@ -143,18 +144,12 @@ class GameControlSystem {
         return true;
     }
 
-    restartGame() {
-
-        // Stop current game
-        this.stopGame();
-
-        // Hide victory overlay
-        this.hideVictoryOverlay();
-
+    /** Id that restarts the current level (boss stages carry stageIndex = stages + 1, so use their boss id). */
+    getRestartLevelId() {
         const currentLevel = this.coreLevelManager.getCurrentLevel();
         // Boss stages carry stageIndex = stages + 1, which parseLevelId would
         // clamp to the last regular stage — restart them by their boss id.
-        const levelId = currentLevel && currentLevel.isBoss && currentLevel.planetId
+        return currentLevel && currentLevel.isBoss && currentLevel.planetId
             ? `${currentLevel.planetId}-boss`
             : currentLevel
             ? (currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
@@ -165,6 +160,17 @@ class GameControlSystem {
                 || currentLevel.planetId
                 || 'mars-1'))
             : 'mars-1';
+    }
+
+    restartGame() {
+
+        // Stop current game
+        this.stopGame();
+
+        // Hide victory overlay
+        this.hideVictoryOverlay();
+
+        const levelId = this.getRestartLevelId();
 
         return this.startGame(levelId);
     }

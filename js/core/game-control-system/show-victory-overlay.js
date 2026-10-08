@@ -104,6 +104,7 @@ extendClass(GameControlSystem, {
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }
+        this.persistEndScreen('victory', { endLoot: this.lastVictoryLoot || null });
     },
 
     /** Faction-specific victory wording; the look comes from html[data-faction]. */

@@ -54,13 +54,13 @@ extendClass(HomeStationUI, {
         const dirClass = anim.dir < 0 ? ' hs-anim-from-right' : ' hs-anim-from-left';
         const areaOrder = getAreaOrder();
         const onProfiles = this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles';
-        const profilesBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${onProfiles ? ' active' : ''}${this.holoJustOn('profiles', onProfiles) ? ' holo-on' : ''}" data-open-menu="1" data-menu-open-tab="profiles" data-area-order-index="${oi}" data-nav-item title="${this.menuLabelFor('area:profiles', 'PROFILES')}">` +
+        const profilesBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${onProfiles ? ' active' : ''}${this.holoJustOn('profiles', onProfiles) ? ' holo-on' : ''}" data-open-menu="1" data-menu-open-tab="profiles" data-area-order-index="${oi}" data-nav-item>` +
             this.areaDecoHtml('profiles') +
-            `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:profiles', 'menuProfiles'))}</span>` +
+            `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:profiles', 'menuProfiles'), true)}</span>` +
             `<span class="hs-tab-label">${this.menuLabelFor('area:profiles', 'PROFILES')}</span>` +
             `</button>`;
         const menuOn = this.isMenuRowTab() && !onProfiles;
-        const menuBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${menuOn ? ' active' : ''}${this.holoJustOn('menu', menuOn) ? ' holo-on' : ''}" data-open-menu="1" data-area-order-index="${oi}" data-nav-item title="MENU (ESC)">` +
+        const menuBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${menuOn ? ' active' : ''}${this.holoJustOn('menu', menuOn) ? ' holo-on' : ''}" data-open-menu="1" data-area-order-index="${oi}" data-nav-item>` +
             this.areaDecoHtml('menu') +
             `<span class="hs-tab-icon">${this.navIconHtml('menu', 'menuSettings')}</span>` +
             `<span class="hs-tab-label">MENU</span>` +
@@ -85,7 +85,7 @@ extendClass(HomeStationUI, {
             const target = tabs.indexOf(last) !== -1 && !modal(last) ? last : fallback;
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
-            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item title="${areaLabel}">` +
+            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
                 this.areaDecoHtml(area.id) +
                 `<span class="hs-tab-icon">${this.navIconHtml(area.id, this.menuIconFor('area:' + area.id, area.icon))}</span>` +
                 `<span class="hs-tab-label">${areaLabel}</span>` +

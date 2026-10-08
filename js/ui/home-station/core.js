@@ -379,8 +379,8 @@ class HomeStationUI {
         return typeof getMenuLabel === 'function' ? getMenuLabel(key, fallback) : fallback;
     }
 
-    tabIconHtml(iconKey) {
-        return this.iconHtml(this.tabIconKey(iconKey), 32, 'hs-tab-pixel', this.tabMetaLabel(iconKey));
+    tabIconHtml(iconKey, noTip) {
+        return this.iconHtml(this.tabIconKey(iconKey), 32, 'hs-tab-pixel', noTip ? false : this.tabMetaLabel(iconKey));
     }
 
     /**
@@ -389,9 +389,9 @@ class HomeStationUI {
     navIconHtml(areaId, fallbackKey) {
         const hd = { station: 'navStation32', hangar: 'navHangar32', factions: 'navFactions32', explore: 'navExplore32', explorations: 'navExplore32', menu: 'navMenu32' }[areaId];
         if (hd && typeof IconSprites !== 'undefined' && IconSprites[hd]) {
-            return this.iconHtml(hd, 64, 'hs-tab-pixel', areaId.toUpperCase());
+            return this.iconHtml(hd, 64, 'hs-tab-pixel', false);
         }
-        return this.tabIconHtml(fallbackKey);
+        return this.tabIconHtml(fallbackKey, true);
     }
 
     tabMetaLabel(iconKey) {

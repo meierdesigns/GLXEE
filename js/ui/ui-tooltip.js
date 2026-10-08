@@ -28,7 +28,6 @@ class UiTooltipManager {
         this._bound = true;
         document.addEventListener('pointerover', (e) => this.onOver(e), true);
         document.addEventListener('pointerout', (e) => this.onOut(e), true);
-        document.addEventListener('focusin', (e) => this.onOver(e), true);
         document.addEventListener('focusout', (e) => this.onFocusOut(e), true);
         document.addEventListener('pointerdown', () => this.hide(), true);
         document.addEventListener('keydown', (e) => {
@@ -61,6 +60,8 @@ class UiTooltipManager {
         if (!el || !el.isConnected) return null;
         // Rich host tooltips (upgrade tree) own their hover chrome.
         if (el.closest('.hs-upg-node')) return null;
+        // Navbar area buttons carry their own label; no tooltip.
+        if (el.closest('.hs-area-btn')) return null;
         // <title> inside SVG is not an attribute tip.
         if (el.tagName === 'title') return null;
         let tip = el.getAttribute('data-ui-tip');
@@ -71,7 +72,13 @@ class UiTooltipManager {
             el.setAttribute('data-ui-tip', tip);
             el.removeAttribute('title');
         }
-        return { el: el, tip: String(tip).trim() };
+        tip = String(tip).trim();
+        // Only icon-only controls and ones needing a longer explanation get a
+        // tip; a button that already shows its own text label stays quiet.
+        const rich = el.hasAttribute('data-ui-tip-head') || tip.length > 40 || tip.indexOf('\n') >= 0;
+        const hasLabel = (el.textContent || '').replace(/\s+/g, '').length > 0;
+        if (hasLabel && !rich) return null;
+        return { el: el, tip: tip };
     }
 
     onOver(e) {

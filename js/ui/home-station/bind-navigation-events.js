@@ -238,11 +238,41 @@ extendClass(HomeStationUI, {
         const root = header && header.closest('.home-station-content');
         if (!tabs || !root) return;
         const measure = () => {
-            const offset = tabs.getBoundingClientRect().left - header.getBoundingClientRect().left;
+            // Shift the whole tab row (PLAY button included) so its left edge
+            // lines up with the first container below it.
+            const body = header.nextElementSibling;
+            const first = body && body.firstElementChild;
+            const play = header.querySelector('[data-play-launch]') || tabs;
+            if (first) {
+                const zoom = window.vfEffectiveZoom ? window.vfEffectiveZoom(header) : 1;
+                const cur = parseFloat(header.dataset.alignPad) || 0;
+                const base = play.getBoundingClientRect().left - cur * zoom;
+                const pad = Math.round((first.getBoundingClientRect().left - base) / zoom);
+                // Hysteresis: ignore sub-2px differences so the row never jitters.
+                if (Math.abs(pad) <= 30 && Math.abs(pad - cur) >= 2) {
+                    header.dataset.alignPad = String(pad);
+                    header.style.paddingLeft = pad + 'px';
+                }
+            }
+            // Exclude the alignment padding itself, else offset and padding feed
+            // each other and the row swings left/right while loading.
+            const zoom2 = window.vfEffectiveZoom ? window.vfEffectiveZoom(header) : 1;
+            const offset = (tabs.getBoundingClientRect().left - header.getBoundingClientRect().left) / zoom2 - (parseFloat(header.dataset.alignPad) || 0);
             root.style.setProperty('--hs-tabs-offset', Math.max(0, Math.round(offset)) + 'px');
         };
         measure();
         requestAnimationFrame(measure);
+        // The content below builds up and the window / zoom can change after
+        // this point: measure again so the row stays flush with it.
+        // Re-measure only on a real window resize (debounced), never in a loop.
+        if (!this._tabsAlignResizeBound) {
+            this._tabsAlignResizeBound = true;
+            let t = 0;
+            window.addEventListener('resize', () => {
+                clearTimeout(t);
+                t = setTimeout(() => { const h = this.overlay && this.overlay.querySelector('.hs-header'); if (h) this.alignCreditsBarToTabs(); }, 200);
+            });
+        }
     },
 
     /**

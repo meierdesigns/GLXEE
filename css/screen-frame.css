@@ -39,7 +39,7 @@
     --u: var(--bz-u);
     --fr-shape-terran: polygon(calc(30 * var(--u)) calc(14 * var(--u)), 36% calc(14 * var(--u)), 42% calc(8 * var(--u)), 46% calc(8 * var(--u)), 50% 0, 54% calc(8 * var(--u)), 58% calc(8 * var(--u)), 64% calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) 0, 100% 0, 100% calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(100% - calc(30 * var(--u))), 100% calc(100% - calc(30 * var(--u))), 100% 100%, calc(100% - calc(30 * var(--u))) 100%, calc(100% - calc(30 * var(--u))) calc(100% - calc(14 * var(--u))), 64% calc(100% - calc(14 * var(--u))), 58% calc(100% - calc(8 * var(--u))), 42% calc(100% - calc(8 * var(--u))), 36% calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) 100%, 0 100%, 0 calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(30 * var(--u)), 0 calc(30 * var(--u)), 0 0, calc(30 * var(--u)) 0);
     --fr-shape-kronax: polygon(0.0% calc(0 * var(--u)), 4.2% calc(16 * var(--u)), 8.3% calc(0 * var(--u)), 12.5% calc(16 * var(--u)), 16.7% calc(0 * var(--u)), 20.8% calc(16 * var(--u)), 25.0% calc(0 * var(--u)), 29.2% calc(16 * var(--u)), 33.3% calc(0 * var(--u)), 37.5% calc(16 * var(--u)), 41.7% calc(0 * var(--u)), 45.8% calc(16 * var(--u)), 50.0% calc(0 * var(--u)), 54.2% calc(16 * var(--u)), 58.3% calc(0 * var(--u)), 62.5% calc(16 * var(--u)), 66.7% calc(0 * var(--u)), 70.8% calc(16 * var(--u)), 75.0% calc(0 * var(--u)), 79.2% calc(16 * var(--u)), 83.3% calc(0 * var(--u)), 87.5% calc(16 * var(--u)), 91.7% calc(0 * var(--u)), 95.8% calc(16 * var(--u)), 100.0% calc(0 * var(--u)), 100% calc(40 * var(--u)), calc(100% - calc(10 * var(--u))) 30%, 100% 50%, calc(100% - calc(10 * var(--u))) 70%, 100% calc(100% - calc(40 * var(--u))), 100.0% calc(100% - calc(0 * var(--u))), 95.8% calc(100% - calc(16 * var(--u))), 91.7% calc(100% - calc(0 * var(--u))), 87.5% calc(100% - calc(16 * var(--u))), 83.3% calc(100% - calc(0 * var(--u))), 79.2% calc(100% - calc(16 * var(--u))), 75.0% calc(100% - calc(0 * var(--u))), 70.8% calc(100% - calc(16 * var(--u))), 66.7% calc(100% - calc(0 * var(--u))), 62.5% calc(100% - calc(16 * var(--u))), 58.3% calc(100% - calc(0 * var(--u))), 54.2% calc(100% - calc(16 * var(--u))), 50.0% calc(100% - calc(0 * var(--u))), 45.8% calc(100% - calc(16 * var(--u))), 41.7% calc(100% - calc(0 * var(--u))), 37.5% calc(100% - calc(16 * var(--u))), 33.3% calc(100% - calc(0 * var(--u))), 29.2% calc(100% - calc(16 * var(--u))), 25.0% calc(100% - calc(0 * var(--u))), 20.8% calc(100% - calc(16 * var(--u))), 16.7% calc(100% - calc(0 * var(--u))), 12.5% calc(100% - calc(16 * var(--u))), 8.3% calc(100% - calc(0 * var(--u))), 4.2% calc(100% - calc(16 * var(--u))), 0.0% calc(100% - calc(0 * var(--u))), 0 calc(100% - calc(40 * var(--u))), calc(10 * var(--u)) 70%, 0 50%, calc(10 * var(--u)) 30%, 0 calc(40 * var(--u)));
-    --fr-shape-voidborn: inset(0 round calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)) calc(40 * var(--u)) / calc(40 * var(--u)) calc(56 * var(--u)) calc(34 * var(--u)) calc(48 * var(--u)));
+    --fr-shape-voidborn: inset(0 round calc(56 * var(--u)));
     --fr-shape-pirate: polygon(0.0% calc(6 * var(--u)), 3.3% calc(10 * var(--u)), 6.7% calc(0 * var(--u)), 10.0% calc(0 * var(--u)), 13.3% calc(4 * var(--u)), 16.7% calc(4 * var(--u)), 20.0% calc(6 * var(--u)), 23.3% calc(0 * var(--u)), 26.7% calc(3 * var(--u)), 30.0% calc(0 * var(--u)), 33.3% calc(4 * var(--u)), 36.7% calc(0 * var(--u)), 40.0% calc(0 * var(--u)), 43.3% calc(4 * var(--u)), 46.7% calc(3 * var(--u)), 50.0% calc(4 * var(--u)), 53.3% calc(0 * var(--u)), 56.7% calc(0 * var(--u)), 60.0% calc(4 * var(--u)), 63.3% calc(3 * var(--u)), 66.7% calc(0 * var(--u)), 70.0% calc(0 * var(--u)), 73.3% calc(0 * var(--u)), 76.7% calc(3 * var(--u)), 80.0% calc(0 * var(--u)), 83.3% calc(10 * var(--u)), 86.7% calc(14 * var(--u)), 90.0% calc(0 * var(--u)), 93.3% calc(10 * var(--u)), 96.7% calc(4 * var(--u)), 100.0% calc(14 * var(--u)), calc(100% - calc(12 * var(--u))) 8%, calc(100% - calc(0 * var(--u))) 16%, calc(100% - calc(0 * var(--u))) 24%, calc(100% - calc(3 * var(--u))) 32%, calc(100% - calc(12 * var(--u))) 40%, calc(100% - calc(0 * var(--u))) 48%, calc(100% - calc(0 * var(--u))) 56%, calc(100% - calc(3 * var(--u))) 64%, calc(100% - calc(5 * var(--u))) 72%, calc(100% - calc(12 * var(--u))) 80%, calc(100% - calc(3 * var(--u))) 88%, 100.0% calc(100% - calc(10 * var(--u))), 96.7% calc(100% - calc(12 * var(--u))), 93.3% calc(100% - calc(7 * var(--u))), 90.0% calc(100% - calc(12 * var(--u))), 86.7% calc(100% - calc(2 * var(--u))), 83.3% calc(100% - calc(5 * var(--u))), 80.0% calc(100% - calc(5 * var(--u))), 76.7% calc(100% - calc(16 * var(--u))), 73.3% calc(100% - calc(10 * var(--u))), 70.0% calc(100% - calc(7 * var(--u))), 66.7% calc(100% - calc(10 * var(--u))), 63.3% calc(100% - calc(16 * var(--u))), 60.0% calc(100% - calc(5 * var(--u))), 56.7% calc(100% - calc(3 * var(--u))), 53.3% calc(100% - calc(12 * var(--u))), 50.0% calc(100% - calc(3 * var(--u))), 46.7% calc(100% - calc(16 * var(--u))), 43.3% calc(100% - calc(7 * var(--u))), 40.0% calc(100% - calc(10 * var(--u))), 36.7% calc(100% - calc(10 * var(--u))), 33.3% calc(100% - calc(7 * var(--u))), 30.0% calc(100% - calc(2 * var(--u))), 26.7% calc(100% - calc(10 * var(--u))), 23.3% calc(100% - calc(3 * var(--u))), 20.0% calc(100% - calc(0 * var(--u))), 16.7% calc(100% - calc(5 * var(--u))), 13.3% calc(100% - calc(5 * var(--u))), 10.0% calc(100% - calc(7 * var(--u))), 6.7% calc(100% - calc(3 * var(--u))), 3.3% calc(100% - calc(5 * var(--u))), 0.0% calc(100% - calc(12 * var(--u))), calc(12 * var(--u)) 92%, calc(0 * var(--u)) 84%, calc(0 * var(--u)) 76%, calc(4 * var(--u)) 68%, calc(4 * var(--u)) 60%, calc(2 * var(--u)) 52%, calc(2 * var(--u)) 44%, calc(2 * var(--u)) 36%, calc(4 * var(--u)) 28%, calc(12 * var(--u)) 20%, calc(4 * var(--u)) 12%);
     --fr-shape-machine: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
 }
@@ -49,7 +49,7 @@
 .vf-bezel[data-faction="voidborn"] { --hull: #0e0818; --hull-lit: #2a1a48; --hull-dark: #030108; --fr-shape: var(--fr-shape-voidborn); }
 .vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; --fr-shape: var(--fr-shape-pirate); }
 .vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; --fr-shape: var(--fr-shape-machine); }
-.vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)) calc(16 * var(--u)) calc(22 * var(--u)) calc(18 * var(--u)); }
+.vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)); }
 
 /* ── Plates ───────────────────────────────────────────────────────────── */
 .vf-fr {
@@ -132,3 +132,63 @@ body:has(> .vf-bezel[data-faction="kronax"]) { clip-path: var(--fr-shape-kronax)
 body:has(> .vf-bezel[data-faction="voidborn"]) { clip-path: var(--fr-shape-voidborn); }
 body:has(> .vf-bezel[data-faction="pirate"]) { clip-path: var(--fr-shape-pirate); }
 body:has(> .vf-bezel[data-faction="machine"]) { clip-path: var(--fr-shape-machine); }
+
+/* Faction switch: the colour tokens are typed so the browser cross-fades them
+   (shapes/clip-paths cannot interpolate). Every consumer follows the token. */
+@property --faction-hull { syntax: '<color>'; inherits: true; initial-value: #7a8490; }
+@property --faction-edge { syntax: '<color>'; inherits: true; initial-value: #2a3038; }
+@property --faction-accent { syntax: '<color>'; inherits: true; initial-value: #c8d0d8; }
+@property --color-primary { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-secondary { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-accent { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-background { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --color-background-light { syntax: '<color>'; inherits: true; initial-value: #101010; }
+@property --color-surface { syntax: '<color>'; inherits: true; initial-value: #101010; }
+@property --color-border { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-text { syntax: '<color>'; inherits: true; initial-value: #e0e0e0; }
+@property --color-text-secondary { syntax: '<color>'; inherits: true; initial-value: #a0a0a0; }
+@property --color-hover { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-active { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-glow { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-basecolor { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --color-second-basecolor { syntax: '<color>'; inherits: true; initial-value: #e0e0e0; }
+@property --current-primary { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --current-secondary { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --current-accent { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --current-background { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --current-surface { syntax: '<color>'; inherits: true; initial-value: #101010; }
+@property --current-border { syntax: '<color>'; inherits: true; initial-value: #808080; }
+@property --current-text { syntax: '<color>'; inherits: true; initial-value: #e0e0e0; }
+:root.vf-faction-fade {
+    transition: --faction-hull .45s ease,
+        --faction-edge .45s ease,
+        --faction-accent .45s ease,
+        --color-primary .45s ease,
+        --color-secondary .45s ease,
+        --color-accent .45s ease,
+        --color-background .45s ease,
+        --color-background-light .45s ease,
+        --color-surface .45s ease,
+        --color-border .45s ease,
+        --color-text .45s ease,
+        --color-text-secondary .45s ease,
+        --color-hover .45s ease,
+        --color-active .45s ease,
+        --color-glow .45s ease,
+        --color-basecolor .45s ease,
+        --color-second-basecolor .45s ease,
+        --current-primary .45s ease,
+        --current-secondary .45s ease,
+        --current-accent .45s ease,
+        --current-background .45s ease,
+        --current-surface .45s ease,
+        --current-border .45s ease,
+        --current-text .45s ease;
+}
+
+/* The station overlay carries its own copy of the tokens — fade those too. */
+.vf-faction-fade [data-hs-faction] {
+    transition: --faction-hull .45s ease, --faction-edge .45s ease, --faction-accent .45s ease,
+        --color-primary .45s ease, --color-secondary .45s ease, --color-accent .45s ease,
+        --color-border .45s ease, --color-selected .45s ease, --color-active .45s ease, --color-hover .45s ease;
+}

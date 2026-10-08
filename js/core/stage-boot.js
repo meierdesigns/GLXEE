@@ -13,6 +13,17 @@
     var h = (vv && vv.height) || window.innerHeight || 600;
     var LW = 1280, LH = 960, FILL = 0.95;
     var scale = Math.max(0.05, Math.min(w * FILL / LW, h * FILL / LH));
+    // Last applied theme colours: the frame's light edge etc. paint right on the first frame
+    // instead of jumping once the palette system runs.
+    try {
+        var th = JSON.parse(localStorage.getItem('vf_boot_theme') || 'null');
+        if (th) for (var k in th) if (Object.prototype.hasOwnProperty.call(th, k)) document.documentElement.style.setProperty(k, th[k]);
+    } catch (e) { /* ignore */ }
+    // Logged-in pilot known from the first paint: the bezel's logout key is lit at once.
+    try {
+        var pr = JSON.parse(localStorage.getItem('vf_profiles_v1') || 'null');
+        if (pr && pr.activeProfileId) document.documentElement.setAttribute('data-vf-logged', '1');
+    } catch (e) { /* ignore */ }
     // Last known faction: styles the frame from the very first paint (no terran -> faction jump).
     try {
         var f = localStorage.getItem('vf-faction');

@@ -83,7 +83,8 @@ npm start
 ```
 
 `npm start` / `npm run dev` / `npm run serve` run `tools/dev-server.py`: a threaded
-static server with `Cache-Control: no-cache` so F5 stays fast (304 when
+**HTTP/1.1** static server with keep-alive (the page pulls hundreds of files),
+quiet request logs, and `Cache-Control: no-cache` so F5 stays fast (304 when
 unchanged) while edits still appear. Equivalent plain server:
 
 ```bash
@@ -92,8 +93,7 @@ python3 -m http.server 3000
 
 Silkscreen is **self-hosted** under `assets/fonts/` (no Google Fonts round trip),
 preloaded in `index.html`, and declared in `css/fonts.css`. A solid **boot veil**
-covers the shell until the start menu is restored, then drops without a fade so
-the first paint never flashes unstyled UI.
+covers the shell until the start menu is restored.
 
 `js/core/stage-boot.js` runs in `<head>` and locks a fixed **1280×960 (4:3)**
 logical stage plus `--stage-scale` before first paint, sizing the stage to
@@ -105,7 +105,9 @@ A **loading screen** paints with the first frame (critical CSS in `index.html`):
 GLXEE brand, VOLTEX channel line, progress bar, and phase status
 (`OPENING CHANNEL` → `LINKING SYSTEMS` → `FONT LOCK` → `RESTORING MENU`).
 `js/core/boot-loader.js` tracks stylesheet/script resource progress; `GameCore`
-advances phases while restoring the menu, then fades the veil out.
+advances phases while restoring the menu, then fades the veil out. On a plain
+**refresh** in the same tab session the progress panel stays hidden — only a
+calm veil covers the stage (under the bezel) so the UI never visibly rebuilds.
 
 Optional local tools:
 
@@ -297,15 +299,20 @@ restored after a reload.
 The whole app lives on a fixed **4:3 stage** (logical 1280×960). Viewport fit
 scales that stage uniformly to fill **95 %** of the window (width or height,
 whichever limits first) so proportions never change. An outer **faction bezel**
-frames the stage; its top strip holds **RES**, fullscreen, and logout mirrors.
-Ship render defaults to **VOXEL**.
+frames the stage using a shared **screen-frame** mechanic (`css/screen-frame.css`):
+stacked plates clipped to `--fr-shape` form the bevel so each faction only
+supplies silhouette tokens and colours. Cable plugs reach into the screen
+opening. The top strip holds **RES**, fullscreen, logout, and a two-screen
+**pilot HUD** (`css/pilot-hud.css`): crest + name on one plate, resources on
+another. Ship render defaults to **VOXEL**.
 
 Home Station still uses `.vf-browser-shell` inside the stage. The area-tab row
 (including PLAY) aligns to the first content panel below it, with hysteresis so
-it does not jitter while loading. Inactive nav cards keep faction shape without
-extra inset frames; PLAY uses a calmer shell without translucent outer glow
-rings. Tooltips skip controls that already show their own label (including area
-tabs). Header actions stay docked: crest, resources, LOGOUT, and PLAY in one
+it does not jitter while loading. When an area has no sub-nav (e.g. PROFILES),
+the active card bridges straight into the body box. Inactive nav cards keep
+faction shape without extra inset frames; PLAY uses a calmer shell without
+translucent outer glow rings. Tooltips skip controls that already show their own
+label. Header actions stay docked: crest, resources, LOGOUT, and PLAY in one
 strip. Mobile-narrow layouts allow PLAY to wrap full-width under the header.
 
 ### Hull areas and slots
@@ -475,8 +482,9 @@ Live captures from the current build (station shell, factions, travel, combat).
 - Universe JSON download/upload for galaxies, faction state, and every pilot profile.
 - Ally-galaxy invasions to defend, renegade/gang contracts, and seeded enemy liveries.
 - Variable stage counts with an outcome stepper; crates grant power shot, rapid fire, or barrier.
-- Fixed 4:3 stage filling 95 % of the window, faction bezel, and pre-paint `stage-boot`.
-- Station tabs aligned to content; quieter tooltips; calmer PLAY shell without glow rings.
+- Fixed 4:3 stage filling 95 % of the window, tokenized screen-frame bezel, pilot HUD plates.
+- HTTP/1.1 keep-alive local server; refresh keeps a calm veil without the progress panel.
+- Station tabs aligned to content; body bridge when no sub-nav; quieter tooltips; calmer PLAY shell.
 - Playfield-first layout inside the stage, VOXEL-default combat lattice, silhouette debris.
 - Side enemies leave the field when off-screen so HUD bars and clear checks stay honest.
 - Exact size/speed overlay for player, enemy classes, and shots; thicker pixel borders.
@@ -501,17 +509,18 @@ Live captures from the current build (station shell, factions, travel, combat).
 ### Current build focus
 
 ```text
-BOOT    ── loading screen ── progress phases ── stage-boot @ 95%
+BOOT    ── loading screen (first visit) ── calm refresh veil ── HTTP/1.1 server
    │
-STATION ── tab-row align ── quiet tooltips ── calmer PLAY shell
+FRAME   ── screen-frame plates ── faction --fr-shape tokens ── pilot HUD screens
    │
-HANGAR  ── area pager ── pixel-step bay zoom
+STATION ── tab align ── body bridge (no sub-nav) ── calmer PLAY shell
    │
-FIGHT   ── off-screen side cull ── VOXEL default ── wreck fly-in
+FIGHT   ── VOXEL default ── off-screen side cull
 ```
 
-Recent work adds a first-paint boot loading screen with resource progress, keeps
-the 4:3 stage at 95 % window fill, and calms station / PLAY chrome.
+Recent waves speed local boot with HTTP/1.1 keep-alive, split the bezel into a
+shared screen-frame mechanic plus a two-screen pilot HUD, and keep refreshes
+calm without replaying the progress panel.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -522,10 +531,10 @@ split into focused folders while their public entry points remain stable.
 
 ```text
 index.html                 dependency-ordered entry point
-styles.css                 pixel UI, station, hangar, HUD, and faction chrome
-css/                       fonts, optimized variables, asset-generator styles
+styles.css                 pixel UI, station, hangar, and faction chrome
+css/                       fonts, screen-frame, pilot-hud, variables, asset-gen
 
-js/core/                   state, configs, stage-boot, input, economy, profiles, universe save, loop
+js/core/                   state, configs, stage-boot, boot-loader, viewport-fit, loop
 js/game/                   player, enemies, bullets, collisions, obstacles, audio
 js/graphics/               sprites, palettes, silhouettes, effects, renderers
 js/ui/                     station, hangar, editors, viewers, maps, menus
@@ -534,7 +543,7 @@ assets/                    fonts, sprites, ship models, modules, levels, metadat
 
 docs/                      architecture, technical notes, updates, devlogs
 rules/                     game rules and tactical design notes
-tools/                     dev-server, ComfyUI, asset-gen, and icon-preview tooling
+tools/                     HTTP/1.1 dev-server, ComfyUI, asset-gen, icon-preview
 packages/                  Cursed IDE packages
 ```
 
@@ -652,6 +661,11 @@ be reviewed or reverted independently.
 | 58D | PLAY shell chrome | Calmer PLAY frames, nav cards without inset glow rings |
 | 58E | README station archive | Document 95 % fill, tab align, and PLAY chrome for 58A–58D |
 | 59A | Boot loading screen | First-paint progress panel with resource phases until menu restore |
+| 59B | HTTP/1.1 dev server | Keep-alive, quiet logs, daemon threads for hundreds of static files |
+| 59C | Screen frame and HUD | Shared `--fr-shape` bezel plates plus split pilot crest/resource screens |
+| 59D | Calm refresh veil | Hide progress panel on same-tab refresh; keep bezel above the cover |
+| 59E | Sub-nav body bridge | Active area card opens into the body when no sub-nav exists |
+| 59F | README frame archive | Document screen-frame, pilot HUD, and calm refresh for 59B–59E |
 
 The wave commit convention is:
 

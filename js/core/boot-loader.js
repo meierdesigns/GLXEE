@@ -6,6 +6,20 @@
  * until #vf-boot-veil exists.
  */
 (function () {
+    // Loading screen only on the first load of a tab session; a plain refresh
+    // hides the progress panel only; the veil stays as a calm cover so the UI
+    // never visibly builds up or jumps, then fades out like on first load. The veil
+    // sits under the bezel (z 9990) so the frame stays put while only the screen is covered.
+    try {
+        if (sessionStorage.getItem('vf-booted') === '1') {
+            const st = document.createElement('style');
+            st.textContent = '#vf-boot-loader{visibility:hidden!important}#vf-boot-veil{z-index:9980!important}';
+            (document.head || document.documentElement).appendChild(st);
+        } else {
+            sessionStorage.setItem('vf-booted', '1');
+        }
+    } catch (e) { /* storage blocked: always show */ }
+
     const PHASES = {
         open: { label: 'OPENING CHANNEL', weight: 0.05 },
         shell: { label: 'LOADING SHELL', weight: 0.2 },

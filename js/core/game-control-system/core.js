@@ -59,6 +59,7 @@ class GameControlSystem {
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) {
             gameContainer.style.display = 'flex';
+            document.documentElement.classList.add('vf-game-shown');
         }
 
         if (typeof window.viewportFit !== 'undefined' && window.viewportFit.update) {

@@ -70,6 +70,14 @@ extendClass(GameControlSystem, {
 
     // Level selection (planet map) — default exit after a run
     showLevelSelection() {
+        // The planet just fought on: the map opens with it already selected.
+        let foughtPlanet = null;
+        try {
+            const lvl = this.coreLevelManager && this.coreLevelManager.getCurrentLevel
+                ? this.coreLevelManager.getCurrentLevel() : null;
+            const pid = lvl && String(lvl.planetId || (lvl.id && String(lvl.id).split('-')[0]) || '').toLowerCase();
+            if (pid && pid.indexOf('ambush_') !== 0) foughtPlanet = pid;
+        } catch (e) { foughtPlanet = null; }
         this.leaveGameSession();
 
         if (typeof startScreenManager !== 'undefined') {
@@ -89,6 +97,17 @@ extendClass(GameControlSystem, {
                     }
                 }
             });
+            if (foughtPlanet && typeof galaxyMapManager !== 'undefined') {
+                const selectFought = () => {
+                    if (galaxyMapManager.nodeById && galaxyMapManager.nodeById[foughtPlanet] && galaxyMapManager.selectPlanet) {
+                        galaxyMapManager.selectPlanet(foughtPlanet);
+                        if (galaxyMapManager.frameSelectionCamera) galaxyMapManager.frameSelectionCamera('follow');
+                        return true;
+                    }
+                    return false;
+                };
+                if (!selectFought()) requestAnimationFrame(selectFought);
+            }
             // Ambush lost: show the flight back to the last station.
             if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._ambushLost
                 && galaxyMapManager._postAmbushFlight && galaxyMapManager.retreatAfterAmbush) {
@@ -209,6 +228,7 @@ extendClass(GameControlSystem, {
         if (!s || !s.levelId || (s.endKind !== 'victory' && s.endKind !== 'gameover')) return false;
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) gameContainer.style.display = 'flex';
+        if (gameContainer) document.documentElement.classList.add('vf-game-shown');
         if (typeof window.viewportFit !== 'undefined' && window.viewportFit.update) window.viewportFit.update();
         if (!this.coreLevelManager.startLevel(s.levelId)) return false;
         const stats = s.endStats || {};

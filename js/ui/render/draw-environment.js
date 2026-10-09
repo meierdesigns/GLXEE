@@ -447,13 +447,15 @@ extendClass(RenderManager, {
                     runCol = null;
                     runW = 0;
                 };
-                for (let edge = -1; edge < width; edge++) {
+                /* edge starts at 0 — no corridor-side rgba shadow column
+                   (that read as semi-transparent "frame contours" over the playfield). */
+                for (let edge = 0; edge < width; edge++) {
                     const cx = side ? cols - width + edge : width - 1 - edge;
                     let col;
-                    if (edge < 0) col = 'rgba(0,0,0,0.55)';
-                    else if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
+                    if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                     else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
-                        col = edge === 1 ? '#e8e2d0'
+                        /* Soft sill, not a bright cream hairline. */
+                        col = edge === 1 ? mp.lit[0]
                             : ((((cx + wr) % 4) + 4) % 4) < 2 ? pal.accent : '#1a1c22';
                     }
                     else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];

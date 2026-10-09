@@ -232,7 +232,7 @@ class GalaxyViewer {
         const stationRows = posts.map((post) => row('post', post.id,
             `<i class="gv-station-icon${post.factionStation ? ' is-faction' : ''}"></i>`,
             this.stationName(post), post.factionStation ? 'FACTION' : 'TRADE')).join('');
-        const pilots = pcm.getGalaxyPilots(gid);
+        const pilots = [...new Set(pcm.getGalaxyPilots(gid))];
         const own = pcm.getGalaxyOwnership ? pcm.getGalaxyOwnership(gid) : { byFaction: {} };
         const held = Object.keys(own.byFaction).sort((a, b) => own.byFaction[b] - own.byFaction[a]);
         const warp = typeof economyConfig !== 'undefined' && economyConfig.getGalaxyWarpTier ? economyConfig.getGalaxyWarpTier(gid) : null;
@@ -240,11 +240,13 @@ class GalaxyViewer {
             <div class="galaxy-viewer-map">${svg ? svg.outerHTML : ''}</div>
             <div class="galaxy-viewer-info">
                 <strong class="galaxy-viewer-name">${String(g.name || gid).toUpperCase()}</strong>
-                <span>${this.emblem(c.main, 20)}${String(c.main).toUpperCase()} · ${c.control === 'contested' ? 'CONTESTED' : 'HELD'}</span>
-                ${c.rivals.length ? `<span class="vs">VS ${c.rivals.map((f) => this.emblem(f, 16) + f.toUpperCase()).join(' · ')}</span>` : ''}
-                <span>${nodes.length} PLANETS · ${posts.length} STATIONS${g.custom ? ' · STARTS ' + tiers[g.difficultyTier || 0] : ''}${warp != null && warp < 99 ? ' · WARP TIER ' + warp : ''}</span>
-                ${held.length ? `<span>CONQUERED ${held.map((f) => this.emblem(f, 16) + own.byFaction[f] + '/' + own.total).join(' ')}${g.originalFaction && g.originalFaction !== c.main ? ' · TAKEN FROM ' + this.emblem(g.originalFaction, 16) + String(g.originalFaction).toUpperCase() : ''}</span>` : ''}
-                <span class="muted">${pilots.length ? 'PILOTS: ' + pilots.join(', ').toUpperCase() : 'NO PILOT HAS BEEN HERE'}</span>
+                <div class="galaxy-viewer-meta">
+                    <span>${this.emblem(c.main, 20)}${String(c.main).toUpperCase()} · ${c.control === 'contested' ? 'CONTESTED' : 'HELD'}</span>
+                    ${c.rivals.length ? `<span class="vs">VS ${c.rivals.map((f) => this.emblem(f, 16) + f.toUpperCase()).join(' · ')}</span>` : ''}
+                    <span>${nodes.length} PLANETS · ${posts.length} STATIONS${g.custom ? ' · STARTS ' + tiers[g.difficultyTier || 0] : ''}${warp != null && warp < 99 ? ' · WARP TIER ' + warp : ''}</span>
+                    ${held.length ? `<span>CONQUERED ${held.map((f) => this.emblem(f, 16) + own.byFaction[f] + '/' + own.total).join(' ')}${g.originalFaction && g.originalFaction !== c.main ? ' · TAKEN FROM ' + this.emblem(g.originalFaction, 16) + String(g.originalFaction).toUpperCase() : ''}</span>` : ''}
+                </div>
+                <span class="muted galaxy-viewer-pilots">${pilots.length ? 'PILOTS: ' + pilots.join(', ').toUpperCase() : 'NO PILOT HAS BEEN HERE'}</span>
                 ${g.custom ? `<button type="button" class="galaxy-viewer-btn danger" data-gv-delete${pilots.length ? ' title="Pilots in this galaxy will be moved to another one"' : ''}>DELETE</button>` : ''}
             </div>
             <div class="galaxy-viewer-directory">

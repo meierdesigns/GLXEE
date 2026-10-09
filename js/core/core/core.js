@@ -54,6 +54,10 @@ class GameCore {
                     .catch((err) => console.error('[boot] menu restore failed:', err))
                     .finally(() => this.dismissBootVeil());
             }, 0);
+            // The map's nebula is prepared (or loaded from its stored copy) while the menu builds.
+            setTimeout(() => {
+                if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.prewarmNebula) galaxyMapManager.prewarmNebula();
+            }, 60);
             // Failsafe: never leave the loader stuck, whatever fails above
             setTimeout(() => this.dismissBootVeil(), 8000);
         } else {

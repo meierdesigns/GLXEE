@@ -7,6 +7,8 @@ const GM_PIXEL_U0 = 32 / 18;
 
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
+// Bump when the nebula look changes: invalidates the copies stored across reloads.
+const NEB_VERSION = 14;
 const NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 const NEB_PIXEL_BUDGET = 450000;
@@ -87,6 +89,16 @@ extendClass(GalaxyMapManager, {
         const objScale = this.nodeObjScale();
         const planetRadius = (planetId) => this.planetSurfaceRadius(planetId) * objScale;
         let edgesHtml = '';
+        // Lanes leaving the ship's current spot (planet, or the anchor planets of a post) are the
+        // next jump: they get the strong beam, the other reachable lanes a weaker one.
+        const shipLoc = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
+            ? profileManager.getShipLocation(this.galaxyId) : null;
+        const hereIds = [];
+        if (shipLoc && shipLoc.kind === 'planet') hereIds.push(shipLoc.id);
+        else if (shipLoc && shipLoc.kind === 'post' && profileManager.getTradingPost) {
+            const hp = profileManager.getTradingPost(shipLoc.id);
+            if (hp) (hp.anchors || [hp.planetId]).forEach((id) => hereIds.push(id));
+        }
         edges.forEach(edge => {
             const a = this.nodeById[edge[0]];
             const b = this.nodeById[edge[1]];
@@ -114,7 +126,9 @@ extendClass(GalaxyMapManager, {
             const okB = devLit || this.isUnlocked(edge[1]);
             // A lane is lit only when travel along it is possible (both ends
             // reachable). A lane to a still-locked planet stays dim: no gate on it.
-            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB ? 'lit' : 'dim'));
+            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB
+                ? (hereIds.indexOf(edge[0]) !== -1 || hereIds.indexOf(edge[1]) !== -1 ? 'lit next' : 'lit')
+                : 'dim'));
         });
         // Border stations always sit on top of the beams (a beam never runs across one).
         return edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + backBlocks + frontBlocks;
@@ -542,6 +556,17 @@ extendClass(GalaxyMapManager, {
      * outside, dithered into 3 opacity steps on a coarse pixel grid.
      * Cached per galaxy (it's big and never changes).
      */
+    /** Starts the current galaxy's nebula job early (boot), so the map already has it when opened. */
+    prewarmNebula() {
+        try {
+            if (typeof profileManager === 'undefined' || !profileManager.hasActiveProfile || !profileManager.hasActiveProfile()) return;
+            const gid = profileManager.getCurrentGalaxyId(profileManager.getActiveProfile());
+            if (!gid) return;
+            this.galaxyId = gid;
+            this.galaxyNebulaSvg(GM_MAP_W, GM_MAP_H, -3 * GM_MAP_W, -3 * GM_MAP_H);
+        } catch (e) { /* the map builds it itself later */ }
+    },
+
     galaxyNebulaSvg(W, H, x0, y0) {
         const gid = String(this.galaxyId || '');
         this._nebulaCache = this._nebulaCache || {};
@@ -647,9 +672,28 @@ extendClass(GalaxyMapManager, {
         // over the black space backdrop (fine patch covers the coarse field).
         this._nebJobs = this._nebJobs || {};
         this._nebUrls = this._nebUrls || {};
+        // Everything the nebula picture depends on: same signature = same picture, so a stored copy is valid.
+        const nebSig = (() => {
+            const raw = JSON.stringify([NEB_VERSION, gid, W, H, NEB_SCALE, layers.map((l) => [l.rgb, l.cover, l.sc, l.off, l.ang, !!l.dust]),
+                suns.map((sn) => [Math.round(sn.x), Math.round(sn.y), Math.round(sn.reach), sn.rgb, !!sn.neb])]);
+            let h = 2166136261;
+            for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); }
+            return (h >>> 0).toString(36);
+        })();
         const paint = (jobKey, cell, bx, by, cols, rows, oct, opaque) => {
             const tag = (href) => `<image data-neb-key="${jobKey}"${href ? ` href="${href}"` : ''} x="${bx}" y="${by}" width="${cols * cell}" height="${rows * cell}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges"/>`;
             if (this._nebUrls[jobKey]) return tag(this._nebUrls[jobKey]);
+            // The finished coarse field is kept across reloads (keyed by everything that shapes it).
+            const storeKey = opaque ? null : 'vf-neb:' + jobKey + ':' + nebSig;
+            if (storeKey) {
+                try {
+                    const saved = localStorage.getItem(storeKey);
+                    if (saved && saved.indexOf('data:image/png') === 0) {
+                        this._nebUrls[jobKey] = saved;
+                        return tag(saved);
+                    }
+                } catch (e) { /* storage unavailable */ }
+            }
             if (typeof document === 'undefined' || this._nebJobs[jobKey]) return tag('');
             // Only the newest fine patch keeps computing.
             if (opaque) Object.keys(this._nebJobs).forEach((k) => { if (this._nebJobs[k].opaque) this._nebJobs[k].cancel = true; });
@@ -671,6 +715,15 @@ extendClass(GalaxyMapManager, {
                 ctx.putImageData(img, 0, 0);
                 const url = cv.toDataURL();
                 this._nebUrls[jobKey] = url;
+                if (storeKey) {
+                    try {
+                        // Keep a few galaxies only; drop the oldest.
+                        const mine = [];
+                        for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf('vf-neb:') === 0 && k !== storeKey) mine.push(k); }
+                        mine.slice(0, Math.max(0, mine.length - 5)).forEach((k) => localStorage.removeItem(k));
+                        localStorage.setItem(storeKey, url);
+                    } catch (e) { /* quota / storage unavailable */ }
+                }
                 const fines = Object.keys(this._nebUrls).filter((k) => k.indexOf('|f') !== -1);
                 if (fines.length > 4) fines.slice(0, fines.length - 4).forEach((k) => { if (k !== jobKey) delete this._nebUrls[k]; });
                 delete this._nebJobs[jobKey];
@@ -691,41 +744,59 @@ extendClass(GalaxyMapManager, {
                     }
                 }
             }
-            // Slow fields (sun light, wisps, banks, veils …) vary over hundreds of map units:
-            // computed once per 4x4 block of cells instead of per pixel.
+            // Slow fields (wisps, banks, veils …) vary over hundreds of map units: sampled on a lattice
+            // every BLK cells and interpolated per pixel (no blocks), then cut into hard steps.
             const BLK = 4;
-            let lowRow = -1;
-            let low = [];
-            const lowAt = (r, c) => {
-                const rg = r >> 2;
-                if (rg !== lowRow) { lowRow = rg; low = []; }
-                const bi = c >> 2;
-                let o = low[bi];
+            const lat = new Map();
+            const latAt = (bi, bj) => {
+                const key = bi * 100003 + bj;
+                let o = lat.get(key);
                 if (o) return o;
-                const x = bx + (bi * BLK + BLK / 2) * cell, y = by + (rg * BLK + BLK / 2) * cell;
+                const x = bx + bi * BLK * cell, y = by + bj * BLK * cell;
                 const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.9;
-                const envBase = (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d));
-                const sl = suns.length ? sunLight(x, y) : { k: 0, rgb: null };
-                // Light wisps: broad, faint veils drift through the space between systems.
-                const wisp = sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)) * 0.5;
-                const freeCloud = Math.max(sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)) * 0.35, wisp);
-                const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 o = {
-                    sl, wisp, wispK: wisp / 0.5, envNear: envBase * sunFade,
+                    envBase: (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d)),
+                    wisp: sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
+                    free: sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
-                    bank: 0.1 + 0.6 * sstep(0.32, 0.58, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    bank: sstep(0.32, 0.58, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
                     gm: sstep(0.6, 0.74, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
-                    veil: layers.map((_, li) => 0.18 + 0.82 * sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2))),
-                    ang: Math.atan2((y - cym) / H, (x - cxm) / W)
+                    veil: layers.map((_, li) => sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
-                low[bi] = o;
+                if (lat.size > 6000) lat.clear();
+                lat.set(key, o);
                 return o;
+            };
+            const lw = { sl: null, wisp: 0, wispK: 0, envNear: 0, grain: 0, bank: 0, gm: 0, veil: [], ang: 0 };
+            const lowAt = (r, c, x, y) => {
+                const bi = Math.floor(c / BLK), bj = Math.floor(r / BLK);
+                const fx = (c - bi * BLK) / BLK, fy = (r - bj * BLK) / BLK;
+                const A = latAt(bi, bj), B = latAt(bi + 1, bj), C = latAt(bi, bj + 1), D = latAt(bi + 1, bj + 1);
+                const mix = (k) => (A[k] * (1 - fx) + B[k] * fx) * (1 - fy) + (C[k] * (1 - fx) + D[k] * fx) * fy;
+                const slRaw = suns.length ? sunLight(x, y) : { k: 0, rgb: null };
+                // Hard steps only (pixel art): sun light comes in 5 levels, never as a smooth gradient.
+                const sl = lw.sl && lw.sl.rgb === slRaw.rgb ? lw.sl : (lw.sl = { k: 0, rgb: slRaw.rgb });
+                sl.k = Math.round(slRaw.k * 5) / 5; sl.rgb = slRaw.rgb;
+                lw.wisp = Math.round(mix('wisp') * 4) / 4 * 0.5;
+                lw.wispK = lw.wisp / 0.5;
+                const freeCloud = Math.max(mix('free') * 0.35, lw.wisp);
+                const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
+                lw.envNear = mix('envBase') * sunFade;
+                lw.grain = mix('grain');
+                lw.bank = 0.1 + 0.6 * mix('bank');
+                lw.gm = Math.round(mix('gm') * 3) / 3;
+                for (let li = 0; li < layers.length; li++) {
+                    const v = (A.veil[li] * (1 - fx) + B.veil[li] * fx) * (1 - fy) + (C.veil[li] * (1 - fx) + D.veil[li] * fx) * fy;
+                    lw.veil[li] = 0.18 + 0.82 * Math.round(v * 3) / 3;
+                }
+                lw.ang = Math.atan2((y - cym) / H, (x - cxm) / W);
+                return lw;
             };
             const paintRow = (r) => {
                 const y = by + r * cell;
                 for (let c = 0; c < cols; c++) {
                     const x = bx + c * cell;
-                    const lw = lowAt(r, c);
+                    const lw = lowAt(r, c, x, y);
                     const sl = lw.sl, wisp = lw.wisp, wispK = lw.wispK, envNear = lw.envNear;
                     if (envNear < 0.02 && sl.k < 0.05 && wisp < 0.02) continue;
                     const th = (bayer[(r % 4) * 4 + (c % 4)] / 16 - 0.5) * 0.035;
@@ -745,7 +816,7 @@ extendClass(GalaxyMapManager, {
                         const L = layers[li];
                         let env = Math.max(envNear, sl.k * 0.9, wisp * 2.2);
                         if (L.ang != null && layers.length > 2) {
-                            env *= 0.25 + 0.75 * Math.max(0, Math.cos(lw.ang - L.ang));
+                            env *= 0.6 + 0.4 * Math.max(0, Math.cos(lw.ang - L.ang));
                         }
                         // Even the densest cloud cannot reach the lowest tone below this: skip the noise work.
                         if (env < 0.02 || (env * lw.bank < 0.06 && sl.k < 0.55)) continue;
@@ -777,7 +848,7 @@ extendClass(GalaxyMapManager, {
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
                         // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.35 + 0.65 * Math.min(1, Math.max(sl.k * 1.8, gm));
+                        const shine = 0.35 + 0.65 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 3) / 3;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];

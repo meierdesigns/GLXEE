@@ -227,9 +227,6 @@ extendClass(HomeStationUI, {
                             `<span class="hs-fd-fleet-zoom" data-fleet-zoom-label>${Math.round(zoom * 100)}%</span>` +
                             `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom="0.25" title="Zoom in">+</button>` +
                             `<button type="button" class="pe-btn pe-preview-btn" data-fleet-zoom-reset title="Reset zoom">1:1</button>` +
-                            ((typeof startScreenManager !== 'undefined' && startScreenManager.devMode)
-                                ? `<button type="button" class="pe-btn pe-preview-btn hs-fd-sizes-btn" data-fleet-sizes data-ui-tip="SIZES · tune player, enemy and shot sizes">SIZES</button>`
-                                : '') +
                         `</div>` +
                         `<canvas data-fleet-preview data-faction="${id}" data-ship="${sel}" width="480" height="290" style="--fleet-zoom:${zoom}"></canvas>` +
                     `</div>` +
@@ -437,15 +434,6 @@ extendClass(HomeStationUI, {
         };
         q('[data-fleet-zoom]', (btn) => setFleetZoom((Number(this._factionFleetZoom) || 1) + Number(btn.getAttribute('data-fleet-zoom'))));
         q('[data-fleet-zoom-reset]', () => { setFleetZoom(1); setFleetPan(0, 0); });
-        const sizesBtn = this.overlay.querySelector('[data-fleet-sizes]');
-        if (sizesBtn) {
-            sizesBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof enemySizeOverlay === 'undefined' || !enemySizeOverlay) return;
-                enemySizeOverlay.toggle();
-            });
-        }
         const fleetViewport = this.overlay.querySelector('[data-fleet-preview-viewport]');
         if (fleetViewport && fleetCanvas) {
             const pan0 = this._factionFleetPan || { x: 0, y: 0 };

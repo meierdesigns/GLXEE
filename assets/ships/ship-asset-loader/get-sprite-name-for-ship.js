@@ -147,8 +147,17 @@ extendClass(ShipAssetLoader, {
             ctx.translate(-(x + pivotW / 2), -(y + pivotH / 2));
         }
 
+        let glowColor = engineGlow.color || '#f0f0f0';
+        if (typeof glowColor === 'string' && glowColor.indexOf('var(') === 0) {
+            const match = glowColor.match(/var\(\s*(--[^),\s]+)/);
+            if (match && typeof getComputedStyle !== 'undefined') {
+                glowColor = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim() || '#f0f0f0';
+            } else {
+                glowColor = '#f0f0f0';
+            }
+        }
         engineGlow.positions.forEach((pos) => {
-            ctx.fillStyle = engineGlow.color;
+            ctx.fillStyle = glowColor;
             for (let i = 0; i < 3; i++) {
                 ctx.globalAlpha = pos.intensity * (0.8 - i * 0.2);
                 ctx.fillRect(

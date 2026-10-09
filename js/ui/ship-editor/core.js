@@ -13,7 +13,7 @@ class ShipEditorUI {
         this.previewCanvas = null;
         this.previewCtx = null;
         this.previewAnimId = null;
-        this.previewBaseWidth = 200;
+        this.previewBaseWidth = 360;
         this.previewBaseHeight = 300;
         this.previewBackingScale = 1;
         this.previewZoom = 1;
@@ -83,7 +83,7 @@ class ShipEditorUI {
                             <button type="button" class="pe-btn pe-preview-btn" id="seRerollShape" title="Generate new part shapes">REROLL SHAPE</button>
                         </div>
                         <div class="pe-preview-viewport" id="sePreviewViewport">
-                            <canvas id="sePreview" width="200" height="300"></canvas>
+                            <canvas id="sePreview" width="360" height="300"></canvas>
                         </div>
                         <div class="pe-preview-label">LIVE PREVIEW</div>
                     </div>

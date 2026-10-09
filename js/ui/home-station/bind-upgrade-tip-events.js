@@ -103,7 +103,7 @@ extendClass(HomeStationUI, {
             maxX = Math.max(maxX, tx);
             maxY = Math.max(maxY, ty);
         });
-        const nodeSize = 76;
+        const nodeSize = 92;
         const half = nodeSize / 2;
         const padX = 56;
         const padY = 56;
@@ -197,7 +197,7 @@ extendClass(HomeStationUI, {
                 (canBuy ? ` data-upgrade="${node.id}"` : '') +
                 ` aria-label="${node.label} ${level}/${node.maxLevel}">` +
                 `<span class="hs-upg-face" aria-hidden="true"></span>` +
-                `<span class="hs-upg-icon">${this.iconHtml(node.icon || 'hsUpgrade', 40, 'hs-pixel')}</span>` +
+                `<span class="hs-upg-icon">${this.iconHtml((node.icon || 'hsUpgrade') + '@d', 64, 'hs-pixel')}</span>` +
                 this.buildUpgradeSlotBadges(level, node.maxLevel) +
                 tip +
                 `</button>`;

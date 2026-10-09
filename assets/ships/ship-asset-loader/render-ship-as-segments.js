@@ -267,8 +267,11 @@ extendClass(ShipAssetLoader, {
         }
 
         const skipFx = typeof graphicsManager !== 'undefined' && graphicsManager._shieldSilhouetteBake;
+        const wantGlow = !(renderOptions && renderOptions.showThrusterGlow === false);
 
-        if (!skipFx && shipModel.engineGlow) {
+        // Modular hulls already show drives as parts; the base model's engineGlow
+        // is sprite-grid coords and draws as a stray white bar under the core.
+        if (!skipFx && wantGlow && shipModel.engineGlow && !layout.segments) {
             const srcW = shipModel.sprite && shipModel.sprite[0] ? shipModel.sprite[0].length : (shipModel.coreWidth || core.width);
             const srcH = shipModel.sprite ? shipModel.sprite.length : (shipModel.coreHeight || core.height);
             const gx = coreX;

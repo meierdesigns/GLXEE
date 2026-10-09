@@ -79,7 +79,15 @@ extendClass(HomeStationUI, {
         const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
         if (!keys.length) {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT')}` +
-                `<div class="hs-tab-fill"><p class="hs-muted hs-hint">No blueprints in station. Collect drops in missions and teleport cargo.</p></div></div>`;
+                `<div class="hs-tab-fill"><div class="hs-empty-state">` +
+                `<span class="hs-empty-icon">${this.iconHtml('hsBlueprint@d', 64, 'hs-pixel')}</span>` +
+                `<strong class="hs-empty-title">NO BLUEPRINTS YET</strong>` +
+                `<p class="hs-empty-text">Blueprints unlock new ships for the forge.</p>` +
+                `<ul class="hs-empty-steps">` +
+                `<li><b>1</b><span>Fly missions and defeat bosses - they drop blueprints.</span></li>` +
+                `<li><b>2</b><span>Teleport cargo to the station to keep them.</span></li>` +
+                `<li><b>3</b><span>Come back here and craft the ship.</span></li>` +
+                `</ul></div></div></div>`;
         }
         const rows = keys.map((id) => {
             if (profile.ownedShipIds.indexOf(id) !== -1) {

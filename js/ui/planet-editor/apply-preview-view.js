@@ -14,8 +14,8 @@ extendClass(PlanetEditorUI, {
             const pad = 8;
             const availW = Math.max(140, viewport.clientWidth - pad);
             const availH = Math.max(200, viewport.clientHeight - pad);
-            // Match playfield aspect (240×300 → 0.8), fill panel proportionally
-            const aspect = this.previewCanvas.width / this.previewCanvas.height || 0.8;
+            // Match playfield aspect (map-w × map-h), fill panel proportionally
+            const aspect = this.previewCanvas.width / this.previewCanvas.height || 1.35;
             let fitW = availW;
             let fitH = fitW / aspect;
             if (fitH > availH) {

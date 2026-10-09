@@ -265,27 +265,48 @@ extendClass(HomeStationUI, {
             const model = shipConfigManager.getMergedModel(shipId);
             if (model) return model;
         }
+        // Assets not ready yet — never hand combat a white stub sprite.
+        // Prefer whatever the asset loader already has, then apply loadout.
+        let base = null;
+        if (typeof graphicsManager !== 'undefined') {
+            const loader = graphicsManager.shipAssetLoader;
+            const key = (typeof shipConfigManager !== 'undefined' && shipConfigManager.resolveAssetKey)
+                ? shipConfigManager.resolveAssetKey(shipId) : 'player';
+            if (loader && loader.isLoaded && loader.isLoaded()) base = loader.getShip(key);
+            if (!base && graphicsManager.shipModels) base = graphicsManager.shipModels.getShipModel(key);
+        }
+        if (base) {
+            const model = Object.assign({}, base, { id: shipId, type: 'player', name: shipId });
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+                shipLoadoutManager.applyLayoutToModel(model, shipId);
+            }
+            return model;
+        }
         return {
+            id: shipId,
             name: shipId,
             type: 'player',
             modelClass: 'starfighter',
-            width: 20,
-            height: 16,
+            width: 30,
+            height: 24,
             speed: 4,
             weaponSpeed: 8,
             weaponCooldown: 300,
             defaultWeapon: 'laser',
+            availableWeapons: ['laser'],
             sprite: [
-                [0, 0, 1, 1, 0, 0],
-                [0, 1, 2, 2, 1, 0],
-                [1, 2, 3, 3, 2, 1],
-                [0, 1, 2, 2, 1, 0]
+                [0, 0, 0, 1, 1, 0, 0, 0],
+                [0, 0, 1, 2, 2, 1, 0, 0],
+                [0, 1, 2, 3, 3, 2, 1, 0],
+                [1, 2, 3, 3, 3, 3, 2, 1],
+                [0, 1, 2, 3, 3, 2, 1, 0],
+                [0, 0, 1, 2, 2, 1, 0, 0]
             ],
             colors: {
                 0: 'transparent',
-                1: 'var(--current-text-secondary)',
-                2: 'var(--current-text)',
-                3: 'var(--current-text)'
+                1: '#4a5560',
+                2: '#8a96a0',
+                3: '#c8d0d8'
             }
         };
     },

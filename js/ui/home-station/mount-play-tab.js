@@ -100,9 +100,14 @@ extendClass(HomeStationUI, {
     startMission(planet) {
         if (!planet) return;
         const shipId = this.getActivePlayShipId();
-        const ship = this.getHangarShipModel(shipId);
+        let ship = this.getHangarShipModel(shipId);
         if (ship && !ship.id) ship.id = shipId;
         if (ship && !ship.type) ship.type = shipId;
+        // Ensure modular layout + weapons before combat (assets may have just loaded).
+        if (ship && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel
+            && (!ship.modular || !ship.layout || !ship.layout.segments)) {
+            shipLoadoutManager.applyLayoutToModel(ship, shipId);
+        }
 
         const planetId = String(planet.planetId || planet.id || '').toLowerCase();
         let levelId = String(planet.levelId || '').toLowerCase();

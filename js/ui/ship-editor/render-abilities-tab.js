@@ -220,8 +220,8 @@ extendClass(ShipEditorUI, {
     },
 
     resetPreviewSim() {
-        const w = 200;
-        const h = 300;
+        const w = this.previewBaseWidth || 360;
+        const h = this.previewBaseHeight || 300;
         const model = this.getPreviewModel();
         const shipW = Math.round((model.width || 20) * 1.5);
         const shipH = Math.round((model.height || 16) * 1.5);

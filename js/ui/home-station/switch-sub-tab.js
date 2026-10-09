@@ -236,23 +236,28 @@ extendClass(HomeStationUI, {
             this.hideUpgradeTip();
             return;
         }
-        // Visual px throughout; converted to CSS px on write (zoomed host).
+        // Visual px throughout; converted to CSS px on write. <body> carries the stage
+        // transform (scale), so a fixed child lives in body space, not the viewport.
+        const body = document.body;
+        const br = body.getBoundingClientRect();
+        const bs = (br.width / (body.offsetWidth || br.width)) || 1;
         const hz = window.vfEffectiveZoom ? window.vfEffectiveZoom(host) : 1;
-        const tw = host.offsetWidth * hz;
-        const th = host.offsetHeight * hz;
+        const tw = host.offsetWidth * hz * bs;
+        const th = host.offsetHeight * hz * bs;
         let left = r.left + (r.width / 2) - (tw / 2);
         let top = r.top - th - 12;
         host.classList.remove('below');
-        if (top < 8) {
+        if (top < br.top + 8) {
             top = r.bottom + 12;
             host.classList.add('below');
         }
-        left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-        if (top + th > window.innerHeight - 8 && !host.classList.contains('below')) {
-            top = Math.max(8, window.innerHeight - th - 8);
+        left = Math.max(br.left + 8, Math.min(left, br.right - tw - 8));
+        if (top + th > br.bottom - 8 && !host.classList.contains('below')) {
+            top = Math.max(br.top + 8, br.bottom - th - 8);
         }
-        host.style.left = Math.round(window.vfToCssPx ? window.vfToCssPx(host, left) : left) + 'px';
-        host.style.top = Math.round(window.vfToCssPx ? window.vfToCssPx(host, top) : top) + 'px';
+        const toCss = (v) => (window.vfToCssPx ? window.vfToCssPx(host, v) : v) / bs;
+        host.style.left = Math.round(toCss(left - br.left)) + 'px';
+        host.style.top = Math.round(toCss(top - br.top)) + 'px';
     },
 
     hideUpgradeTip() {

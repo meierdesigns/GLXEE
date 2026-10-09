@@ -13,13 +13,15 @@ extendClass(ShipEditorUI, {
         const p = sim.player;
         p.width = shipW;
         p.height = shipH;
+        const w = this.previewBaseWidth || 360;
+        const h = this.previewBaseHeight || 300;
         const speed = Math.max(0.5, Number(d.speed) || 4) * 0.35;
         p.x += p.dir * speed * frameScale;
-        if (p.x <= 8 || p.x + p.width >= 192) {
+        if (p.x <= 8 || p.x + p.width >= w - 8) {
             p.dir *= -1;
-            p.x = Math.max(8, Math.min(192 - p.width, p.x));
+            p.x = Math.max(8, Math.min(w - 8 - p.width, p.x));
         }
-        p.y = 300 - 50 + Math.sin(sim.starPhase * 1.5) * 3;
+        p.y = h - 50 + Math.sin(sim.starPhase * 1.5) * 3;
         sim.starPhase += dtMs * 0.004;
 
         sim.shootAcc += dtMs;

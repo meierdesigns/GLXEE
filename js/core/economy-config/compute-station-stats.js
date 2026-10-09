@@ -39,6 +39,20 @@ extendClass(EconomyConfig, {
         return this.resourceColors[key] || '#b8b0a0';
     },
 
+    /** Push resource + vital bar colours onto :root for HUD CSS. */
+    applyResourceCssVars(root) {
+        const el = root || (typeof document !== 'undefined' && document.documentElement);
+        if (!el || !el.style || !el.style.setProperty) return;
+        const ids = this.resourceIds || ['scrap', 'ore', 'crystal', 'voltex'];
+        ids.forEach((id) => {
+            el.style.setProperty('--res-' + id, this.getResourceColor(id));
+        });
+        // Hull ← scrap, Energy ← voltex, Shield ← crystal
+        el.style.setProperty('--vital-hull', this.getResourceColor('scrap'));
+        el.style.setProperty('--vital-energy', this.getResourceColor('voltex'));
+        el.style.setProperty('--vital-shield', this.getResourceColor('crystal'));
+    },
+
     getResourceIconKey(id) {
         const key = String(id || '').toLowerCase();
         return this.resourceIconKeys[key] || 'resScrap';

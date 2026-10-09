@@ -105,24 +105,61 @@
     z-index: 4;
     display: block;
     background: var(--ph-accent);
-    --shape: polygon(0 0, 100% 0, 100% 58%, 50% 100%, 0 58%);
+    /* Default heater: coarse 4·bz-u voxel stairs. */
+    --u4: calc(4 * var(--bz-u));
+    --shape: polygon(
+        0 0, 100% 0,
+        100% calc(28 * var(--bz-u)),
+        calc(100% - var(--u4)) calc(28 * var(--bz-u)),
+        calc(100% - var(--u4)) calc(36 * var(--bz-u)),
+        calc(100% - 2 * var(--u4)) calc(36 * var(--bz-u)),
+        calc(100% - 2 * var(--u4)) calc(44 * var(--bz-u)),
+        calc(100% - 3 * var(--u4)) calc(44 * var(--bz-u)),
+        calc(100% - 3 * var(--u4)) calc(52 * var(--bz-u)),
+        calc(50% + var(--u4)) calc(52 * var(--bz-u)),
+        calc(50% + var(--u4)) 100%,
+        calc(50% - var(--u4)) 100%,
+        calc(50% - var(--u4)) calc(52 * var(--bz-u)),
+        calc(3 * var(--u4)) calc(52 * var(--bz-u)),
+        calc(3 * var(--u4)) calc(44 * var(--bz-u)),
+        calc(2 * var(--u4)) calc(44 * var(--bz-u)),
+        calc(2 * var(--u4)) calc(36 * var(--bz-u)),
+        var(--u4) calc(36 * var(--bz-u)),
+        var(--u4) calc(28 * var(--bz-u)),
+        0 calc(28 * var(--bz-u))
+    );
     clip-path: var(--shape);
-    filter: drop-shadow(0 calc(3 * var(--bz-u)) 0 #05060a);
+    filter: drop-shadow(0 calc(2 * var(--bz-u)) 0 #05060a);
 }
 .vf-pilot-crest-in {
     position: absolute;
-    inset: calc(3 * var(--bz-u));
+    inset: calc(2 * var(--bz-u));
     display: flex;
     align-items: flex-start;
     justify-content: center;
     padding-top: calc(6 * var(--bz-u));
     box-sizing: border-box;
-    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ph-accent) 28%, #05060a), #03040a 80%);
+    background: #03040a;
     clip-path: var(--shape);
 }
-.vf-pilot-crest-in > * { width: calc(32 * var(--bz-u)) !important; height: calc(32 * var(--bz-u)) !important; image-rendering: pixelated; }
-.vf-pilot-crest-in img, .vf-pilot-crest-in svg { width: 100% !important; height: 100% !important; }
+.vf-pilot-crest-in > * {
+    width: calc(32 * var(--bz-u)) !important;
+    height: calc(32 * var(--bz-u)) !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+}
+.vf-pilot-crest-in img, .vf-pilot-crest-in svg {
+    width: 100% !important;
+    height: 100% !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+}
 .vf-pilot-crest-in > span { display: block; }
+/* VOXEL: kill soft glow / smooth drop-shadow on the crest rim. */
+html[data-vf-ship-render="VOXEL"] .vf-pilot-crest,
+html[data-vf-gui-voxel="on"] .vf-pilot-crest {
+    filter: drop-shadow(0 calc(2 * var(--bz-u)) 0 #05060a);
+}
 
 /* ---- resources screen --------------------------------------------------- */
 .vf-pilot-ress {

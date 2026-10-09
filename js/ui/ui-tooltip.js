@@ -210,9 +210,12 @@ class UiTooltipManager {
         // Work in visual px; convert when writing (the tip may sit inside a
         // zoomed container, see zoom-rect-fix.js).
         const tz = window.vfEffectiveZoom ? window.vfEffectiveZoom(tip) : 1;
-        const toCss = (v) => (window.vfToCssPx ? window.vfToCssPx(tip, v) : v);
-        const tw = tip.offsetWidth * tz;
-        const th = tip.offsetHeight * tz;
+        // <body> carries the stage scale transform: a fixed tip lives in body space, not the viewport.
+        const br = document.body.getBoundingClientRect();
+        const bs = (br.width / (document.body.offsetWidth || br.width)) || 1;
+        const toCss = (v, axis) => (window.vfToCssPx ? window.vfToCssPx(tip, (v - (axis === 'y' ? br.top : br.left)) / bs) : (v - (axis === 'y' ? br.top : br.left)) / bs);
+        const tw = tip.offsetWidth * tz * bs;
+        const th = tip.offsetHeight * tz * bs;
         tip.classList.remove('below', 'side-left', 'side-right');
         // Sidebars: open beside the panel (right of the left one, left of the
         // right one) instead of covering the neighbouring rows.
@@ -226,8 +229,8 @@ class UiTooltipManager {
             let st = r.top + r.height / 2 - th / 2;
             st = Math.max(8, Math.min(st, window.innerHeight - th - 8));
             tip.classList.add(leftBar ? 'side-right' : 'side-left');
-            tip.style.left = Math.round(toCss(Math.max(8, sl))) + 'px';
-            tip.style.top = Math.round(toCss(st)) + 'px';
+            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
+            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
             return;
         }
         let left = r.left + (r.width / 2) - (tw / 2);
@@ -239,8 +242,8 @@ class UiTooltipManager {
         left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
         // Never past the bottom edge either (below-placement near the foot).
         top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
-        tip.style.left = Math.round(toCss(left)) + 'px';
-        tip.style.top = Math.round(toCss(top)) + 'px';
+        tip.style.left = Math.round(toCss(left, 'x')) + 'px';
+        tip.style.top = Math.round(toCss(top, 'y')) + 'px';
     }
 
     hide() {

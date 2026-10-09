@@ -153,6 +153,7 @@ extendClass(LevelInfoManager, {
             levelData.obstacles = current.obstacles || levelData.obstacles;
             levelData.obstacleSpawnRate = current.obstacleSpawnRate || levelData.obstacleSpawnRate;
             levelData.stageLabel = current.stageLabel || '';
+            levelData.planetName = current.planetName || levelData.planetName || '';
             levelData.isBoss = !!current.isBoss;
             levelData.planetId = current.planetId || levelData.planetId;
             levelData.objective = current.objective || null;

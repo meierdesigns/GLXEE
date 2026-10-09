@@ -47,6 +47,10 @@ class UIManager {
             this.updatePlayerStatIcons();
         }
 
+        if (typeof bulletManager !== 'undefined' && bulletManager.updateWeaponHudState) {
+            bulletManager.updateWeaponHudState();
+        }
+
         this.updateEnemyHealthBars();
     }
 
@@ -54,7 +58,7 @@ class UIManager {
         const canvas = document.getElementById('playerShipIcon');
         if (!canvas || typeof playerManager === 'undefined') return;
         const model = playerManager.getCurrentShipModel ? playerManager.getCurrentShipModel() : null;
-        const key = model ? (model.id || model.type || model.name || 'player') : '';
+        const key = (model ? (model.id || model.type || model.name || 'player') : '') + '|48nn';
         if (key === this._playerShipIconKey) return;
         this._playerShipIconKey = key;
         this.renderHealthShipIcon(canvas, model);
@@ -62,14 +66,25 @@ class UIManager {
 
     updatePlayerStatIcons() {
         if (typeof iconRenderer === 'undefined') return;
-        const tint = (iconRenderer.getThemeTint && iconRenderer.getThemeTint()) || '#ffffff';
-        const key = String(tint);
+        const res = (id) => (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor)
+            ? economyConfig.getResourceColor(id)
+            : null;
+        const energyTint = res('voltex') || '#c86ef0';
+        const shieldTint = res('crystal') || '#6ec8e8';
+        const key = energyTint + '|' + shieldTint + '|16raw';
         if (key === this._playerStatIconKey) return;
         this._playerStatIconKey = key;
         const energy = document.getElementById('playerEnergyIcon');
         const shield = document.getElementById('playerShieldIcon');
-        if (energy) iconRenderer.drawToCanvas(energy, 'statEnergy', tint);
-        if (shield) iconRenderer.drawToCanvas(shield, 'statShield', tint);
+        // Native 16px sprite + CSS 3× pixelated — skip Scale2x/@4x (looks muddy).
+        const paint = (el, iconKey, tint) => {
+            if (!el) return;
+            if (el.width !== 16) el.width = 16;
+            if (el.height !== 16) el.height = 16;
+            iconRenderer.drawToCanvas(el, iconKey, tint, false, false, false);
+        };
+        paint(energy, 'statEnergy', energyTint);
+        paint(shield, 'statShield', shieldTint);
     }
 
     resolveEnemyFaction(type, factionId) {
@@ -92,11 +107,9 @@ class UIManager {
             const maxHp = enemyManager.getMaxHealth() || 1;
             const hp = enemyManager.getHealth();
             if (hp > 0) {
-                const type = enemyManager.currentShipType || 'enemyBasic';
-                const faction = this.resolveEnemyFaction(
-                    type,
-                    enemyManager.enemy.faction
-                );
+                const e = enemyManager.enemy;
+                const type = enemyManager.currentShipType || e.type || 'enemyBasic';
+                const faction = this.resolveEnemyFaction(type, e.faction);
                 list.push({
                     key: 'champion',
                     type: type,
@@ -107,7 +120,13 @@ class UIManager {
                     shieldMax: enemyManager.shieldMax || 0,
                     shieldRegen: enemyManager.shieldRegen || 0,
                     factionId: faction.id,
-                    factionLabel: faction.label
+                    factionLabel: faction.label,
+                    faction: e.faction || faction.id,
+                    enemyClass: e.enemyClass || null,
+                    tier: e.tier != null ? e.tier : e.level,
+                    width: e.width || 0,
+                    height: e.height || 0,
+                    level: e.level
                 });
             }
         }
@@ -128,7 +147,13 @@ class UIManager {
                 shieldMax: side.shieldMax || 0,
                 shieldRegen: side.shieldRegen || 0,
                 factionId: faction.id,
-                factionLabel: faction.label
+                factionLabel: faction.label,
+                faction: side.faction || faction.id,
+                enemyClass: side.enemyClass || null,
+                tier: side.tier != null ? side.tier : side.level,
+                width: side.width || 0,
+                height: side.height || 0,
+                level: side.level
             });
         }
         return list;
@@ -156,7 +181,11 @@ class UIManager {
         if (!container) return;
 
         const enemies = this.collectActiveEnemies();
-        const keys = enemies.map((e) => e.key + ':' + (e.factionId || '') + ':' + (e.shieldMax > 0 ? 's' : '')).join('|');
+        const keys = enemies.map((e) =>
+            e.key + ':' + (e.factionId || '') + ':' + (e.type || '') + ':' +
+            (e.enemyClass || '') + ':' + (e.tier != null ? e.tier : '') + ':' +
+            (e.width || '') + 'x' + (e.height || '') + ':' + (e.shieldMax > 0 ? 's' : '')
+        ).join('|');
         const layout = this.enemyHudLayout(Math.max(enemies.length, 1));
 
         container.style.setProperty('--enemy-bar-h', layout.barH + 'px');
@@ -235,7 +264,7 @@ class UIManager {
                 row.appendChild(main);
                 container.appendChild(row);
                 icon.setAttribute('data-ui-tip', String(tipName).replace(/_/g, ' ').toUpperCase());
-                this.renderHealthShipIcon(icon, model);
+                this.renderEnemyHealthIcon(icon, enemy);
             }
         }
 
@@ -269,29 +298,95 @@ class UIManager {
         }
     }
 
+    /** HUD portrait for a live enemy — same faction visual path as the playfield. */
+    renderEnemyHealthIcon(canvas, enemy) {
+        if (!canvas || !enemy) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = false;
+        if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+        if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+        if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const pad = 4;
+        const boxW = Math.max(8, canvas.width - pad * 2);
+        const boxH = Math.max(8, canvas.height - pad * 2);
+        // Keep the live footprint aspect so capitals don't look like scouts.
+        let ew = Number(enemy.width) || 0;
+        let eh = Number(enemy.height) || 0;
+        if (!(ew > 0 && eh > 0) && enemy.model) {
+            ew = enemy.model.width || 18;
+            eh = enemy.model.height || 14;
+        }
+        if (!(ew > 0 && eh > 0)) {
+            ew = 18;
+            eh = 14;
+        }
+        const fit = Math.min(boxW / ew, boxH / eh);
+        const dw = Math.max(8, Math.round(ew * fit));
+        const dh = Math.max(8, Math.round(eh * fit));
+        const dx = Math.floor((canvas.width - dw) / 2);
+        const dy = Math.floor((canvas.height - dh) / 2);
+
+        const ghost = {
+            x: dx,
+            y: dy,
+            width: dw,
+            height: dh,
+            type: enemy.type,
+            faction: enemy.faction || enemy.factionId,
+            enemyClass: enemy.enemyClass,
+            tier: enemy.tier,
+            level: enemy.level
+        };
+
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.renderEnemyShip) {
+            const prev = graphicsManager.currentEnemyModel;
+            if (enemy.model) graphicsManager.currentEnemyModel = enemy.model;
+            try {
+                graphicsManager.renderEnemyShip(ctx, ghost, 1);
+            } finally {
+                graphicsManager.currentEnemyModel = prev;
+            }
+            return;
+        }
+        this.renderHealthShipIcon(canvas, enemy.model);
+    }
+
     renderHealthShipIcon(canvas, shipModel) {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+        // Player HUD icon: 48×48 1:1. Enemy portraits keep their own backing size.
+        if (canvas.id === 'playerShipIcon') {
+            if (canvas.width !== 48) canvas.width = 48;
+            if (canvas.height !== 48) canvas.height = 48;
+        }
+        ctx.imageSmoothingEnabled = false;
+        if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+        if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+        if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
+        if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'low';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (!shipModel) return;
-
-        if (typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {
-            shipRenderer.renderShipPreview(canvas, shipModel, 1);
-            return;
-        }
 
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader)
             || (typeof shipAssetLoader !== 'undefined' ? shipAssetLoader : null);
         if (loader && loader.renderShip) {
             const shipW = shipModel.width || 16;
             const shipH = shipModel.height || 12;
-            const fit = Math.min(canvas.width / shipW, canvas.height / shipH);
+            const fit = Math.max(1, Math.floor(Math.min(canvas.width / shipW, canvas.height / shipH)));
             const rw = shipW * fit;
             const rh = shipH * fit;
-            const ox = (canvas.width - rw) / 2;
-            const oy = (canvas.height - rh) / 2;
+            const ox = Math.floor((canvas.width - rw) / 2);
+            const oy = Math.floor((canvas.height - rh) / 2);
             loader.renderShip(ctx, shipModel, ox, oy, fit, null, 0);
+            return;
+        }
+
+        if (typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {
+            shipRenderer.renderShipPreview(canvas, shipModel, 1);
         }
     }
 

@@ -44,6 +44,9 @@ class LevelInfoManager {
             return;
         }
         this.body = document.getElementById('giBody') || this.panel;
+        this.under = document.getElementById('giUnderStage');
+        this.loadoutSide = document.getElementById('giLoadoutSide');
+        this.missionSide = document.getElementById('giMissionSide');
         this.panel.style.display = 'flex';
         this.startUpdateLoop();
         this.updateLevelData(this.collectLevelData());
@@ -53,12 +56,30 @@ class LevelInfoManager {
         if (this.panel) {
             this.panel.style.display = 'flex';
         }
+        if (this.under) {
+            this.under.hidden = false;
+        }
+        if (this.loadoutSide) {
+            this.loadoutSide.hidden = false;
+        }
+        if (this.missionSide) {
+            this.missionSide.hidden = false;
+        }
     }
 
     hidePanel() {
         if (this.panel) {
             this.panel.style.display = 'none';
             this.stopUpdateLoop();
+        }
+        if (this.under) {
+            this.under.hidden = true;
+        }
+        if (this.loadoutSide) {
+            this.loadoutSide.hidden = true;
+        }
+        if (this.missionSide) {
+            this.missionSide.hidden = true;
         }
     }
 
@@ -77,22 +98,21 @@ class LevelInfoManager {
         this.updateDisplay();
     }
 
-    /** Loot chip: the resource's own icon with the collected count. */
+    /** Loot tile: same metric cell as SHIP stats (icon left, count right). */
     lootChipHtml(r) {
         const key = (typeof economyConfig !== 'undefined' && economyConfig.getResourceIconKey)
             ? economyConfig.getResourceIconKey(r.id)
             : 'hsCargo';
         const tip = `${String(r.name || r.id).toUpperCase()} ×${r.amount}`.replace(/"/g, '&quot;');
-        // Tinted in the resource's own colour (same as pickups / station).
         const tint = (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor)
             ? economyConfig.getResourceColor(r.id) : undefined;
         const icon = (typeof iconRenderer !== 'undefined' && iconRenderer && iconRenderer.imgHtml)
             ? iconRenderer.imgHtml(key || 'hsCargo', 32, 'gi-icon', tint, tip) : '';
-        const empty = !(Number(r.amount) > 0) ? ' gi-chip-empty' : '';
-        return `<span class="gi-chip gi-chip-loot${empty}" title="${tip}" style="--loot-color:${tint || 'currentColor'}">` +
-            icon +
-            `<span class="gi-chip-label gi-chip-count">${r.amount}</span>` +
-            `</span>`;
+        const empty = !(Number(r.amount) > 0) ? ' gi-loot-empty' : '';
+        return `<div class="gi-metric gi-loot${empty}" title="${tip}" style="--loot-color:${tint || 'currentColor'}">` +
+            `<span class="gi-metric-label gi-stat-icon">${icon}</span>` +
+            `<span class="gi-metric-value gi-loot-count">${r.amount}</span>` +
+            `</div>`;
     }
 
     iconHtml(key, size, tipLabel) {
@@ -103,6 +123,9 @@ class LevelInfoManager {
     }
 
     weaponIconKey(name) {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo) {
+            return iconRenderer.weaponIconInfo(name).key;
+        }
         const w = String(name || '').toLowerCase().replace(/[\s_-]+/g, '');
         const map = {
             laser: 'shotLaser',
@@ -122,11 +145,31 @@ class LevelInfoManager {
         return map[w] || 'statWeapon';
     }
 
+    /** Loadout weapon glyph: correct shot sprite + per-weapon tint (not faction theme). */
+    weaponIconHtml(weaponId, size, tipLabel) {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+            return iconRenderer.weaponImgHtml(weaponId, size || 24, 'gi-icon', tipLabel);
+        }
+        return this.iconHtml(this.weaponIconKey(weaponId), size, tipLabel);
+    }
+
     rowHtml(iconKey, label, valueHtml, valueId) {
         const idAttr = valueId ? ` id="${valueId}"` : '';
         const tip = String(valueHtml || '').replace(/"/g, '&quot;');
         return `<div class="gi-row">` +
             `<span class="gi-row-icon">${this.iconHtml(iconKey, 24, label)}</span>` +
+            `<span class="gi-row-text">` +
+            `<span class="gi-row-label">${label}</span>` +
+            `<span class="gi-row-value" title="${tip}"${idAttr}>${valueHtml}</span>` +
+            `</span></div>`;
+    }
+
+    /** Like rowHtml, but the icon is a tinted weapon shot sprite. */
+    weaponRowHtml(weaponId, label, valueHtml, valueId) {
+        const idAttr = valueId ? ` id="${valueId}"` : '';
+        const tip = String(valueHtml || '').replace(/"/g, '&quot;');
+        return `<div class="gi-row">` +
+            `<span class="gi-row-icon">${this.weaponIconHtml(weaponId, 24, label)}</span>` +
             `<span class="gi-row-text">` +
             `<span class="gi-row-label">${label}</span>` +
             `<span class="gi-row-value" title="${tip}"${idAttr}>${valueHtml}</span>` +
@@ -189,15 +232,19 @@ class LevelInfoManager {
         const d = fx ? Math.abs(fx.delta) : 0;
         const dTxt = fx ? `<span class="gi-stat-delta">${fx.dir === 'up' ? '▲' : '▼'}${st.key === 'dmg' ? d.toFixed(1) : (st.digits ? d.toFixed(st.digits) : Math.round(d))}</span>` : '';
         return `<div class="gi-metric gi-stat${cls}" data-stat="${st.key}">` +
-            `<span class="gi-metric-label gi-stat-icon">${this.iconHtml(STAT_ICON_KEYS[st.key], 24, st.label) || st.label}</span>` +
+            `<span class="gi-metric-label gi-stat-icon">${this.iconHtml(STAT_ICON_KEYS[st.key], 32, st.label) || st.label}</span>` +
             `<span class="gi-metric-value">${st.text}${dTxt}</span>` +
             `</div>`;
     }
 
-    metricHtml(label, valueHtml, valueId) {
+    metricHtml(label, valueHtml, valueId, iconKey) {
         const idAttr = valueId ? ` id="${valueId}"` : '';
+        const tip = String(label || '').toUpperCase();
+        const labelHtml = iconKey
+            ? `<span class="gi-metric-label gi-stat-icon">${this.iconHtml(iconKey, 24, tip) || tip}</span>`
+            : `<span class="gi-metric-label">${tip}</span>`;
         return `<div class="gi-metric">` +
-            `<span class="gi-metric-label">${label}</span>` +
+            labelHtml +
             `<span class="gi-metric-value"${idAttr}>${valueHtml}</span>` +
             `</div>`;
     }
@@ -216,40 +263,105 @@ class LevelInfoManager {
             `</span>`;
     }
 
-    /** Every slotted weapon as a chip; they breathe while a temporary boost is active. */
+    /**
+     * Extra weapon chips only when more than one gun is slotted (avoids
+     * duplicating the WEAPON row for a single loadout).
+     */
     weaponChipsHtml() {
         const weapons = this.collectEquippedWeapons ? this.collectEquippedWeapons() : [];
-        if (!weapons.length) return '';
+        if (weapons.length <= 1) return '';
         const boosted = typeof pickupManager !== 'undefined' && pickupManager.getPowerShot
             && !!pickupManager.getPowerShot();
-        const iconKey = (id) => (typeof bulletManager !== 'undefined' && bulletManager.getWeaponIconKey)
-            ? bulletManager.getWeaponIconKey(id)
-            : this.weaponIconKey(id);
         // The body re-renders every second: offset by wall-clock so the breath keeps its phase.
         const phase = boosted ? ` style="--gi-breath-delay:-${Date.now() % 1600}ms"` : '';
         const chips = weapons.map((w) => {
             const name = String(w.name || w.id).toUpperCase();
             const tip = (name + (w.count > 1 ? ` ×${w.count}` : '')).replace(/"/g, '&quot;');
             return `<span class="gi-chip gi-chip-weapon${boosted ? ' gi-chip-boosted' : ''}" title="${tip}"${phase}>` +
-                this.iconHtml(iconKey(w.id), 24, name) +
+                this.weaponIconHtml(w.id, 24, name) +
                 `<span class="gi-chip-label">${w.count > 1 ? '×' + w.count : name}</span>` +
                 `</span>`;
         }).join('');
         return `<div class="gi-weapon-chips">${chips}</div>`;
     }
 
+    /** Cluster header: icon when known, otherwise the text label. */
+    clusterTitleHtml(title) {
+        const tip = String(title || '').toUpperCase();
+        // SESSION: no header icon/label — metrics speak for themselves.
+        if (tip === 'SESSION') return '';
+        const key = ({
+            SHIP: 'hsShip',
+            FIELD: 'hsCargo'
+        })[tip];
+        if (key) {
+            return `<h4 class="gi-cluster-title gi-cluster-title-icon" title="${tip}">` +
+                `${this.iconHtml(key, 32, tip)}</h4>`;
+        }
+        return `<h4 class="gi-cluster-title">${tip}</h4>`;
+    }
+
     clusterHtml(title, rowsHtml, extraClass) {
-        const cls = extraClass ? ` gi-cluster ${extraClass}` : ' gi-cluster';
-        return `<section class="${cls.trim()}">` +
-            `<h4 class="gi-cluster-title">${title}</h4>` +
+        const tip = String(title || '').toUpperCase();
+        const hasIcon = !!({
+            SHIP: 1, FIELD: 1
+        })[tip];
+        const cls = ['gi-cluster', extraClass, hasIcon ? 'gi-cluster-iconed' : '']
+            .filter(Boolean).join(' ');
+        return `<section class="${cls}">` +
+            this.clusterTitleHtml(title) +
             `<div class="gi-cluster-body">${rowsHtml}</div>` +
             `</section>`;
+    }
+
+    /** Clear mission card: target icon + action/target lines + status. */
+    missionCardHtml(iconHtml, label, status, statusId) {
+        const raw = String(label || 'OBJECTIVE').replace(/:$/, '').trim();
+        const parts = raw.split(/\s+/);
+        const action = parts.length > 1 ? parts[0] : 'OBJECTIVE';
+        const target = parts.length > 1 ? parts.slice(1).join(' ') : raw;
+        const tip = String(status || '').replace(/"/g, '&quot;');
+        const idAttr = statusId ? ` id="${statusId}"` : '';
+        return `<div class="gi-mission-card" title="${raw.replace(/"/g, '&quot;')}">` +
+            `<span class="gi-mission-card-icon">${iconHtml}</span>` +
+            `<div class="gi-mission-card-copy">` +
+            `<span class="gi-mission-card-action">${action}</span>` +
+            `<span class="gi-mission-card-target">${target}</span>` +
+            `<span class="gi-mission-card-status" title="${tip}"${idAttr}>${status}</span>` +
+            `</div></div>`;
+    }
+
+    /** Planet title + stage line (avoid cramming "NAME — STAGE" into one wrapping h3). */
+    splitLevelTitle(d) {
+        const data = d || {};
+        let planet = String(data.planetName || '').trim();
+        let stage = String(data.stageLabel || '').trim();
+        const full = String(data.name || '').trim();
+        if ((!planet || !stage) && full) {
+            const parts = full.split(/\s*[—–-]\s*/);
+            if (parts.length >= 2) {
+                if (!planet) planet = parts[0].trim();
+                if (!stage) stage = parts.slice(1).join(' — ').trim();
+            } else if (!planet) {
+                planet = full;
+            }
+        }
+        return {
+            planet: (planet || 'UNKNOWN').toUpperCase(),
+            stage: stage ? stage.toUpperCase() : ''
+        };
     }
 
     updateDisplay() {
         if (!this.levelData || !this.panel) return;
 
-        this.updateElement('levelName', this.levelData.name || 'UNKNOWN');
+        const title = this.splitLevelTitle(this.levelData);
+        this.updateElement('levelName', title.planet);
+        const stageEl = document.getElementById('levelStage');
+        if (stageEl) {
+            stageEl.textContent = title.stage;
+            stageEl.hidden = !title.stage;
+        }
         this.updateElement('levelDifficulty', this.levelData.difficulty || 'NORMAL');
         this.updatePlanetIcon();
         this.renderBody();
@@ -353,37 +465,47 @@ class LevelInfoManager {
         const d = this.levelData;
         const obj = this.getObjectiveBits();
         const daily = this.getDailyBits();
-        const weaponName = d.currentWeapon || 'Laser';
-        const weaponKey = this.weaponIconKey(weaponName);
+        const weaponId = (typeof bulletManager !== 'undefined' && bulletManager.currentWeapon)
+            ? bulletManager.currentWeapon
+            : (d.currentWeapon || 'laser');
+        const weaponName = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
+            ? iconRenderer.weaponIconInfo(weaponId).name
+            : String(weaponId).toUpperCase();
 
         const session = this.clusterHtml('SESSION',
-            `<div class="gi-metrics">` +
-            this.metricHtml('SCORE', String(this.stats.score), 'currentScore') +
-            this.metricHtml('TIME', this._timeString, 'levelTime') +
-            this.metricHtml('KILLS', String(this.stats.enemiesKilled), 'enemiesKilled') +
+            `<div class="gi-metrics gi-metrics-session">` +
+            this.metricHtml('SCORE', String(this.stats.score), 'currentScore', 'navTrophy') +
+            this.metricHtml('TIME', this._timeString, 'levelTime', 'navClock') +
+            this.metricHtml('KILLS', String(this.stats.enemiesKilled), 'enemiesKilled', 'navSkull') +
             `</div>`,
             'gi-cluster-session'
         );
 
+        // Loadout lives in the right rail (top).
         const loadout = this.clusterHtml('LOADOUT',
             this.rowHtml('menuEnemies', 'ENEMY', String(d.enemyType || '—').toUpperCase(), 'enemyType') +
             this.rowHtml('hsShip', 'SHIP', String(d.playerShipType || '—'), 'playerShipType') +
-            this.rowHtml(weaponKey, 'WEAPON', String(weaponName), 'giCurrentWeapon') +
-            this.weaponChipsHtml()
+            this.weaponRowHtml(weaponId, 'WEAPON', weaponName, 'giCurrentWeapon'),
+            'gi-cluster-loadout'
         );
 
-        // Mission only shows at the start of a run. Goals with a count show
-        // just the icon of what to destroy plus the count.
+        // Mission: text title + one clear card (target icon, goal, status).
         const o = typeof objectiveManager !== 'undefined' ? objectiveManager.getObjective() : null;
-        const objRow = o && o.type === 'killCount'
-            ? this.countRowHtml(o.enemyType ? this.enemyIconHtml(o.enemyType, obj.label) : this.iconHtml('menuEnemies', 24, obj.label),
-                obj.label, String(obj.progress), 'objectiveHudValue')
-            : this.rowHtml('menuStart', obj.label.replace(/:$/, ''), String(obj.progress).toUpperCase(), 'objectiveHudValue');
+        const missionLabel = obj.label.replace(/:$/, '');
+        const missionProgress = String(obj.progress).toUpperCase();
+        const huntTarget = o && o.type === 'hunt' && o.targetEnemyId && objectiveManager.enemies
+            ? objectiveManager.enemies.find((e) => e && e.id === o.targetEnemyId)
+            : null;
+        const missionIcon = (o && o.type === 'killCount' && o.enemyType)
+            ? this.enemyIconHtml(o.enemyType, missionLabel)
+            : (huntTarget
+                ? this.enemyIconHtml(huntTarget.type, missionLabel)
+                : this.iconHtml('menuEnemies', 28, missionLabel));
+        const objCard = this.missionCardHtml(missionIcon, missionLabel, missionProgress, 'objectiveHudValue');
         const dailyRow = daily.active
             ? this.countRowHtml(this.enemyIconHtml(daily.enemyType, 'DAILY ' + daily.enemyType), 'DAILY', daily.progress, 'dailyHudValue')
             : '';
-        const showMission = !this.stats.startTime || (Date.now() - this.stats.startTime) < MISSION_HUD_SHOW_MS;
-        const mission = showMission ? this.clusterHtml('MISSION', objRow + dailyRow) : '';
+        const mission = this.clusterHtml('MISSION', objCard + dailyRow, 'gi-cluster-mission');
 
         // Player ship stats; anything an upgrade improves lights up.
         const stats = this.trackPlayerStats();
@@ -394,19 +516,27 @@ class LevelInfoManager {
             'gi-cluster-combat'
         );
 
-        // Only this run's real content: planet obstacles, equipped weapons.
+        // Field loot: same 1-row metric tiles as SHIP.
         const resources = d.resources || [];
-        const resourceChips = resources.map((r) => this.lootChipHtml(r)).join('');
-
-        const chipRow = (label, chips) => chips
-            ? `<div class="gi-chip-row"><span class="gi-chip-row-label">${label}</span>` +
-                `<div class="gi-chips">${chips}</div></div>`
-            : '';
         const field = this.clusterHtml('FIELD',
-            chipRow('LOOT', resourceChips),
+            `<div class="gi-metrics gi-metrics-2x2 gi-metrics-loot">` +
+            resources.map((r) => this.lootChipHtml(r)).join('') +
+            `</div>`,
             'gi-cluster-field'
         );
 
-        this.body.innerHTML = session + loadout + mission + combat + field;
+        this.body.innerHTML = session;
+        if (this.loadoutSide) {
+            this.loadoutSide.innerHTML = loadout;
+            this.loadoutSide.hidden = false;
+        }
+        if (this.under) {
+            this.under.innerHTML = combat + field;
+            this.under.hidden = false;
+        }
+        if (this.missionSide) {
+            this.missionSide.innerHTML = mission;
+            this.missionSide.hidden = false;
+        }
     }
 }

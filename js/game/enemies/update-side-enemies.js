@@ -55,7 +55,25 @@ extendClass(EnemyManager, {
             const pad = 4;
             const w = e.width || 8;
             const h = e.height || 8;
-            const clampX = (x) => Math.max(pad, Math.min(canvasWidth - w - pad, x));
+            // Corridor bounds from terrain walls (fallback: canvas edges).
+            let laneLeft = pad;
+            let laneRight = canvasWidth - pad;
+            if (!e.fleeing && typeof obstacleManager !== 'undefined'
+                && obstacleManager.terrainWallsOver) {
+                const walls = obstacleManager.terrainWallsOver(
+                    e.y - 8, e.y + h + 4, canvasWidth
+                );
+                if (walls) {
+                    laneLeft = walls.left + pad;
+                    laneRight = walls.right - pad;
+                    if (laneRight - laneLeft < w) {
+                        const mid = (walls.left + walls.right) * 0.5;
+                        laneLeft = mid - w * 0.5;
+                        laneRight = mid + w * 0.5;
+                    }
+                }
+            }
+            const clampX = (x) => Math.max(laneLeft, Math.min(laneRight - w, x));
             const clampY = (y) => Math.max(pad, Math.min(canvasHeight - h - pad, y));
             // Binary presence: inside = active, outside = fled / irrelevant.
             const fullyInside = e.x >= 0 && e.x + w <= canvasWidth
@@ -72,21 +90,28 @@ extendClass(EnemyManager, {
             }
 
             if (e.entering && !e.fleeing) {
-                // Spawn transit only — not combat-relevant until fully inside.
-                const ty = e.entryTargetY != null ? e.entryTargetY : 48;
-                e.y += Math.max(0.55, e.verticalSpeed || 0.9) * speedMul;
+                // Rim transit through an empty edge opening — not combat-ready yet.
+                const tx = e.entryTargetX != null ? e.entryTargetX : clampX(e.x);
+                const ty = e.entryTargetY != null ? e.entryTargetY : e.y;
                 if (e.isEscort && (teamWithMain || teamPending) && mainAlive) {
-                    const tx = clampX(this.enemy.x + this.enemy.width * 0.5
+                    e.entryTargetX = clampX(this.enemy.x + this.enemy.width * 0.5
                         + (e.formOffsetX || 0) - e.width * 0.5);
-                    e.x += (tx - e.x) * Math.min(1, 0.1 * speedMul);
                     e.entryTargetY = clampY(this.enemy.y + this.enemy.height * 0.5
                         + (e.formOffsetY || 0) - e.height * 0.5);
                 }
-                e.x = clampX(e.x);
-                if (e.y >= (e.entryTargetY != null ? e.entryTargetY : ty)) {
+                const dir = e.entryFromSide === 1 ? -1 : 1;
+                const spd = Math.max(0.75, Math.abs(e.speed) || 1);
+                e.x += dir * spd * speedMul;
+                // Nudge toward the gap row / formation Y while sliding in.
+                e.y += ((e.entryTargetY != null ? e.entryTargetY : ty) - e.y)
+                    * Math.min(1, 0.12 * speedMul);
+                const reachedX = e.entryFromSide === 1 ? e.x <= tx : e.x >= tx;
+                if (reachedX) {
+                    e.x = clampX(tx);
                     e.y = clampY(e.entryTargetY != null ? e.entryTargetY : ty);
                     e.entering = false;
                     e.arrived = true;
+                    e.entryFromSide = null;
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;
@@ -123,6 +148,7 @@ extendClass(EnemyManager, {
                 e.y += (ty - e.y) * follow;
                 e.x = clampX(e.x);
                 e.y = clampY(e.y);
+                if (this.avoidTerrainWalls) this.avoidTerrainWalls(canvasWidth, e);
                 e.speed = 0;
                 e.verticalSpeed = 0;
                 e.arrived = true;
@@ -149,14 +175,15 @@ extendClass(EnemyManager, {
                     e.y += push.y * 1.2 * speedMul;
                 }
                 if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
-                if (e.x > canvasWidth - 8 && e.speed > 0) e.speed = -Math.abs(e.speed);
-                if (e.x < 8 && e.speed < 0 && (e.lifetimeMs == null || e.lifetimeMs > 4000)) {
+                if (e.x + w > laneRight - 4 && e.speed > 0) e.speed = -Math.abs(e.speed);
+                if (e.x < laneLeft + 4 && e.speed < 0 && (e.lifetimeMs == null || e.lifetimeMs > 4000)) {
                     e.speed = Math.abs(e.speed) * 0.85;
                 }
                 if (e.lifetimeMs != null) e.lifetimeMs -= deltaTime;
-                // Active craft stay fully inside — never half-off the rim.
+                // Active craft stay in the corridor — never into the rock walls.
                 e.x = clampX(e.x);
                 e.y = clampY(e.y);
+                if (this.avoidTerrainWalls) this.avoidTerrainWalls(canvasWidth, e);
                 e.arrived = true;
             }
 

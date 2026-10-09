@@ -86,9 +86,14 @@ extendClass(EnemyEditorUI, {
         if (!this.previewSim) this.resetPreviewSim();
         this.updatePreviewSim(dt);
 
-        const w = canvas.width;
-        const h = canvas.height;
+        const w = this.previewBaseWidth || 360;
+        const h = this.previewBaseHeight || 300;
+        const backingScale = this.previewBackingScale || 1;
         const sim = this.previewSim;
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.save();
+        ctx.setTransform(backingScale, 0, 0, backingScale, 0, 0);
 
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, w, h);
@@ -169,6 +174,7 @@ extendClass(EnemyEditorUI, {
         ctx.fillText(`ARM ${this.draft.armor}  SHD ${this.draft.shieldMax || 0}  DMG ${this.draft.damage}`, w / 2, h - 20);
         const evadeTag = sim.isEvading ? ' EVADE' : '';
         ctx.fillText(`SHOT ${this.draft.shootInterval}ms  ${String(this.draft.defaultWeapon || '').toUpperCase()}${evadeTag}`, w / 2, h - 8);
+        ctx.restore();
     },
 
     drawPixelSprite(ctx, model, x, y, scale) {

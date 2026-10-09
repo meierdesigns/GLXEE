@@ -168,10 +168,13 @@ extendClass(EnemyManager, {
      * Scrolling stages: steer away from the canyon walls before touching
      * them (looking a bit ahead, since the walls scroll down), and never
      * overlap them — the enemy turns around like at the screen edge.
+     * @param {number} W canvas width
+     * @param {object} [entity] defaults to the main champion enemy
      */
-    avoidTerrainWalls(W) {
-        if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver || !this.enemy) return;
-        const e = this.enemy;
+    avoidTerrainWalls(W, entity) {
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver) return;
+        const e = entity || this.enemy;
+        if (!e) return;
         const walls = obstacleManager.terrainWallsOver(e.y - 12, e.y + e.height + 4, W);
         if (!walls) return;
         const margin = 4;

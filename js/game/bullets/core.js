@@ -53,6 +53,12 @@ class BulletManager {
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.resetWeaponCharge();
         }
+        // Restore unified card stats after CHARGE overlay text.
+        if (typeof this.weaponStatsHtml === 'function') {
+            const info = document.getElementById('weaponInfo');
+            const card = info && info.closest('.weapon-card');
+            if (info && card) info.innerHTML = this.weaponStatsHtml(card.dataset.weapon);
+        }
     }
 
     beginCharge() {
@@ -229,8 +235,26 @@ class BulletManager {
 
     setShipModel(shipModel) {
         this.currentShipModel = shipModel;
-        if (shipModel && shipModel.defaultWeapon) {
-            this.currentWeapon = shipModel.defaultWeapon;
+        if (shipModel) {
+            // Ensure every equipped weapon has a config entry (loadout can add
+            // guns that aren't on the stock hull's weaponConfig map).
+            shipModel.weaponConfig = shipModel.weaponConfig || {};
+            const ids = Array.isArray(shipModel.availableWeapons) && shipModel.availableWeapons.length
+                ? shipModel.availableWeapons
+                : ((shipModel.layout && shipModel.layout.loadout && shipModel.layout.loadout.weapons) || ['laser']);
+            shipModel.availableWeapons = ids.slice();
+            ids.forEach((id) => {
+                if (shipModel.weaponConfig[id]) return;
+                const fromReg = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip)
+                    ? weaponConfigManager.getDefaultsForShip(id) : null;
+                if (fromReg) shipModel.weaponConfig[id] = Object.assign({}, fromReg);
+            });
+            if (shipModel.defaultWeapon) {
+                this.currentWeapon = shipModel.defaultWeapon;
+            } else {
+                this.currentWeapon = ids[0] || 'laser';
+                shipModel.defaultWeapon = this.currentWeapon;
+            }
         }
         // Per-slot cooldowns (keyed by mount, not weapon id — two equipped
         // weapons of the same type still fire on independent clocks).

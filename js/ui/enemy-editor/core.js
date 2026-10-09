@@ -13,6 +13,9 @@ class EnemyEditorUI {
         this.previewCanvas = null;
         this.previewCtx = null;
         this.previewAnimId = null;
+        this.previewBaseWidth = 360;
+        this.previewBaseHeight = 300;
+        this.previewBackingScale = 1;
         this.previewZoom = 1;
         this.previewFullscreen = false;
         this.previewPanX = 0;
@@ -24,6 +27,27 @@ class EnemyEditorUI {
         this.previewLastTs = 0;
         this.draft = null;
         this.init();
+    }
+
+    previewPlayfieldSize() {
+        let w = 360;
+        let h = 300;
+        try {
+            const root = getComputedStyle(document.documentElement);
+            const cw = parseFloat(root.getPropertyValue('--map-w'));
+            const ch = parseFloat(root.getPropertyValue('--map-h'));
+            if (Number.isFinite(cw) && cw > 0) w = Math.round(cw);
+            if (Number.isFinite(ch) && ch > 0) h = Math.round(ch);
+        } catch (_) { /* keep defaults */ }
+        if (typeof game !== 'undefined' && game) {
+            const gw = game.internalWidth || game.baseWidth || game.width;
+            const gh = game.internalHeight || game.baseHeight || game.height;
+            if (Number.isFinite(gw) && gw > 0) w = Math.round(gw);
+            if (Number.isFinite(gh) && gh > 0) h = Math.round(gh);
+        }
+        this.previewBaseWidth = w;
+        this.previewBaseHeight = h;
+        return { w, h };
     }
 
     init() {
@@ -108,7 +132,7 @@ class EnemyEditorUI {
                             <button type="button" class="pe-btn pe-preview-btn" id="eePreviewFullscreen" title="Fullscreen">FULL</button>
                         </div>
                         <div class="pe-preview-viewport" id="eePreviewViewport">
-                            <canvas id="eePreview" width="200" height="300"></canvas>
+                            <canvas id="eePreview" width="360" height="300"></canvas>
                         </div>
                         <div class="pe-preview-label">LIVE PREVIEW</div>
                     </div>
@@ -196,8 +220,8 @@ class EnemyEditorUI {
             body,
             root: overlay,
             storageKey: 'eePanelWidths',
-            defaults: { left: 200, right: 280 },
-            mins: { left: 140, right: 180, center: 200 },
+            defaults: { left: 200, right: 360 },
+            mins: { left: 140, right: 220, center: 200 },
             onChange: () => {
                 if (this.visible) this.applyPreviewView();
             }
@@ -223,19 +247,30 @@ class EnemyEditorUI {
         if (label) label.textContent = `${Math.round(this.previewZoom * 100)}%`;
         if (fsBtn) fsBtn.textContent = this.previewFullscreen ? 'EXIT' : 'FULL';
         if (this.previewCanvas && viewport) {
+            this.previewPlayfieldSize();
             const pad = 8;
             const availW = Math.max(140, viewport.clientWidth - pad);
             const availH = Math.max(200, viewport.clientHeight - pad);
-            const aspect = this.previewCanvas.width / this.previewCanvas.height;
+            const aspect = this.previewBaseWidth / this.previewBaseHeight;
             let fitW = availW;
             let fitH = fitW / aspect;
             if (fitH > availH) {
                 fitH = availH;
                 fitW = fitH * aspect;
             }
-            this.previewCanvas.style.width = `${Math.round(fitW)}px`;
-            this.previewCanvas.style.height = `${Math.round(fitH)}px`;
-            this.previewCanvas.style.transform = `translate(${this.previewPanX}px, ${this.previewPanY}px) scale(${this.previewZoom})`;
+            const cssW = fitW * this.previewZoom;
+            const cssH = fitH * this.previewZoom;
+            const dpr = window.devicePixelRatio || 1;
+            this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
+            const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
+            if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {
+                this.previewCanvas.width = backingW;
+                this.previewCanvas.height = backingH;
+            }
+            this.previewCanvas.style.width = `${Math.round(cssW)}px`;
+            this.previewCanvas.style.height = `${Math.round(cssH)}px`;
+            this.previewCanvas.style.transform = `translate(${this.previewPanX}px, ${this.previewPanY}px)`;
         }
     }
 

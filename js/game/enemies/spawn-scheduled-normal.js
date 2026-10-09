@@ -2,6 +2,80 @@
 
 // EnemyManager methods, split from enemies.js.
 extendClass(EnemyManager, {
+    /**
+     * Empty rim openings where side craft may enter (wall cells ≤ 1 on that
+     * side across the ship height). No terrain → both rims are open.
+     */
+    findSideEntryGaps(canvasWidth, canvasHeight, shipH) {
+        const W = canvasWidth || 240;
+        const H = canvasHeight || 300;
+        const h = Math.max(8, shipH || 10);
+        const yMin = 18;
+        const yMax = Math.max(yMin + 8, Math.floor(H * 0.58));
+        const gaps = [];
+        if (typeof obstacleManager === 'undefined' || !obstacleManager.hasTerrain
+            || !obstacleManager.hasTerrain()) {
+            for (let n = 0; n < 6; n++) {
+                const y = yMin + Math.random() * (yMax - yMin);
+                gaps.push({ side: 0, y: y });
+                gaps.push({ side: 1, y: y });
+            }
+            return gaps;
+        }
+        const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 4;
+        const openEnough = (sideCells) => sideCells <= 1;
+        for (let y = yMin; y <= yMax; y += cell) {
+            let leftOpen = true;
+            let rightOpen = true;
+            for (let dy = 0; dy < h; dy += cell) {
+                const wr = obstacleManager.terrainRowAtY(y + dy);
+                const c = obstacleManager.terrainWallCells(wr, W);
+                if (!openEnough(c.left)) leftOpen = false;
+                if (!openEnough(c.right)) rightOpen = false;
+                if (!leftOpen && !rightOpen) break;
+            }
+            if (leftOpen) gaps.push({ side: 0, y: y });
+            if (rightOpen) gaps.push({ side: 1, y: y });
+        }
+        return gaps;
+    },
+
+    /** Pick a rim gap and place the side craft just off-screen outside it. */
+    placeSideEntryFromGap(side, canvasWidth, canvasHeight) {
+        const W = canvasWidth || 240;
+        const H = canvasHeight || 300;
+        const gaps = this.findSideEntryGaps(W, H, side.height || 10);
+        if (!gaps.length) return false;
+        const gap = gaps[Math.floor(Math.random() * gaps.length)];
+        const pad = 6;
+        let laneLeft = pad;
+        let laneRight = W - pad;
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.terrainWallsAtY) {
+            const walls = obstacleManager.terrainWallsAtY(gap.y + (side.height || 10) * 0.5, W);
+            if (walls) {
+                laneLeft = walls.left + pad;
+                laneRight = walls.right - pad;
+            }
+        }
+        const targetX = gap.side === 0
+            ? laneLeft + 4 + Math.random() * Math.max(8, (laneRight - laneLeft - side.width) * 0.35)
+            : laneRight - side.width - 4 - Math.random() * Math.max(8, (laneRight - laneLeft - side.width) * 0.35);
+        side.entryFromSide = gap.side;
+        side.entryTargetX = Math.max(laneLeft, Math.min(laneRight - side.width, targetX));
+        side.entryTargetY = Math.max(12, Math.min(H - side.height - 12, gap.y));
+        side.y = side.entryTargetY;
+        if (gap.side === 0) {
+            side.x = -side.width - 6 - Math.random() * 18;
+            side.speed = 0.85 + Math.random() * 0.45;
+        } else {
+            side.x = W + 6 + Math.random() * 18;
+            side.speed = -(0.85 + Math.random() * 0.45);
+        }
+        side.verticalSpeed = (Math.random() - 0.5) * 0.15;
+        side.entering = true;
+        return true;
+    },
+
     spawnScheduledNormal(entry, gameState) {
         if (!entry || !gameState) return null;
         if (this.sideEnemies.length >= this.sideEnemyCap) return null;
@@ -43,24 +117,24 @@ extendClass(EnemyManager, {
             ? flightProfiles.resolve(entry.faction || 'pirate', entry.enemyClass || 'assault')
             : null;
         const sideSpeedMul = sideFlightProfile ? sideFlightProfile.speedMul : 1;
-        // Enter from above the playfield, then settle into cruise / escort.
-        const entryTargetY = 36 + Math.random() * Math.max(36, canvasHeight * 0.42);
-        const entryX = 24 + Math.random() * Math.max(40, canvasWidth - 48);
+        // Enter from an empty rim opening, then settle into cruise / escort.
         const cruiseSpeed = isEscort
             ? 0
             : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul;
         const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul;
         const side = {
-            x: entryX,
-            y: -18,
+            x: 0,
+            y: 0,
             width: 12,
             height: 10,
             speed: 0,
-            verticalSpeed: (0.75 + Math.random() * 0.45) * sideSpeedMul,
+            verticalSpeed: 0,
             cruiseSpeed: cruiseSpeed,
             cruiseVerticalSpeed: cruiseVSpeed,
             entering: true,
-            entryTargetY: entryTargetY,
+            entryFromSide: null,
+            entryTargetX: null,
+            entryTargetY: null,
             flightProfile: sideFlightProfile,
             wobblePhase: Math.random() * Math.PI * 2,
             health: Math.round(baseHp * scale),
@@ -121,20 +195,19 @@ extendClass(EnemyManager, {
             type: side.type,
             drawScale: SIDE_DRAW_SCALE
         });
+        // Only enter through empty rim openings — never through solid rock.
+        if (!this.placeSideEntryFromGap(side, canvasWidth, canvasHeight)) {
+            return null; // no open edge this frame; try again later
+        }
         if (isEscort && this.enemy && form) {
-            // Dive in above the formation slot, then lock on once entered.
+            // After the rim entry, settle toward the formation slot.
             const slotX = this.enemy.x + this.enemy.width * 0.5 + form.x - side.width * 0.5;
             const slotY = Math.max(10, Math.min(canvasHeight - side.height - 10,
                 this.enemy.y + this.enemy.height * 0.5 + form.y - side.height * 0.5));
-            // Keep the dive column on-playfield even if formation offset is wide.
-            side.x = Math.max(4, Math.min(canvasWidth - side.width - 4, slotX));
-            side.y = -side.height - 10 - Math.random() * 24;
+            side.entryTargetX = Math.max(4, Math.min(canvasWidth - side.width - 4, slotX));
             side.entryTargetY = slotY;
-            side.verticalSpeed = 0.95 + Math.random() * 0.4;
-        } else if (!isEscort) {
-            side.x = Math.max(4, Math.min(canvasWidth - side.width - 4, entryX - side.width * 0.5));
-            side.y = -side.height - 10 - Math.random() * 28;
-            side.entryTargetY = Math.max(20, Math.min(canvasHeight - side.height - 20, entryTargetY));
+            side.formOffsetX = form.x;
+            side.formOffsetY = form.y;
         }
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);

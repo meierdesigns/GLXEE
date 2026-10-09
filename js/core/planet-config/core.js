@@ -63,7 +63,7 @@ class PlanetConfigManager {
         this.galaxyStorageKey = 'vf_galaxies_v1';
         this.defaultTileSize = 16;
         this.defaultCellSize = 4;
-        this.defaultLevelWidth = 240;
+        this.defaultLevelWidth = 405;
         this.defaultLevelHeight = 300;
         this.defaultViewZoom = 1;
         this.minLevelWidth = 160;

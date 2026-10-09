@@ -142,12 +142,12 @@ extendClass(BulletManager, {
         return map[weaponType] || 'shotLaser';
     },
 
-    renderWeaponIcon(weaponType) {
-        const canvas = document.getElementById('weaponIcon');
-        if (!canvas) return;
+    renderWeaponIcon(weaponType, canvas) {
+        const el = canvas || document.getElementById('weaponIcon');
+        if (!el) return;
         const key = this.getWeaponIconKey(weaponType);
         if (typeof iconRenderer !== 'undefined' && iconRenderer.drawWeaponToCanvas) {
-            iconRenderer.drawWeaponToCanvas(canvas, weaponType);
+            iconRenderer.drawWeaponToCanvas(el, weaponType);
             return;
         }
         if (typeof iconRenderer !== 'undefined') {
@@ -155,51 +155,220 @@ extendClass(BulletManager, {
             try {
                 tint = getComputedStyle(document.documentElement).getPropertyValue('--current-primary').trim() || null;
             } catch (e) { /* ignore */ }
-            iconRenderer.drawToCanvas(canvas, key, tint || '#00FFCC');
+            iconRenderer.drawToCanvas(el, key, tint || '#00FFCC');
             return;
         }
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const ctx = el.getContext('2d');
+        ctx.clearRect(0, 0, el.width, el.height);
         ctx.fillStyle = '#00FFCC';
         ctx.fillRect(6, 6, 4, 4);
     },
 
+    weaponConfigFor(weaponId) {
+        const id = weaponId || this.currentWeapon;
+        if (this.currentShipModel && this.currentShipModel.weaponConfig
+            && this.currentShipModel.weaponConfig[id]) {
+            return this.currentShipModel.weaponConfig[id];
+        }
+        if (typeof weaponConfigManager !== 'undefined') {
+            if (weaponConfigManager.getDefaultsForShip) {
+                const d = weaponConfigManager.getDefaultsForShip(id);
+                if (d) return d;
+            }
+            if (weaponConfigManager.getWeapon) {
+                const w = weaponConfigManager.getWeapon(id);
+                if (w) return w;
+            }
+        }
+        return null;
+    },
+
+    weaponStatsHtml(weaponId) {
+        const mode = this.getFireMode ? this.getFireMode() : 'auto';
+        const modeLabel = mode === 'charge' ? 'CHARGE' : 'AUTO';
+        const cfg = this.weaponConfigFor(weaponId);
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const ic = (key) => (ir && ir.imgHtml)
+            ? ir.imgHtml(key, 14, 'wi-icon', undefined, false)
+            : '';
+        if (!cfg) {
+            return `<span class="wi-part"><span class="wi-val">${modeLabel}</span></span>`;
+        }
+        const modeKey = mode === 'charge' ? 'statEnergy' : 'navCrosshair';
+        return `<span class="wi-part" title="DAMAGE">${ic('statDamage')}<span class="wi-val">${cfg.damage}</span></span>` +
+            `<span class="wi-sep" aria-hidden="true">·</span>` +
+            `<span class="wi-part" title="${modeLabel}">${ic(modeKey)}<span class="wi-val">${modeLabel}</span></span>` +
+            `<span class="wi-sep" aria-hidden="true">·</span>` +
+            `<span class="wi-part" title="COOLDOWN ${cfg.cooldown}ms">${ic('navClock')}<span class="wi-val">${cfg.cooldown}</span></span>`;
+    },
+
+    /** Effective cooldown ms for a weapon (same multipliers as shooting). */
+    effectiveCooldownMs(weaponId) {
+        const cfg = this.weaponConfigFor(weaponId);
+        if (!cfg) return 300;
+        const jammerMul = (typeof enemyManager !== 'undefined' && enemyManager.getJammerCooldownMul)
+            ? enemyManager.getJammerCooldownMul()
+            : 1;
+        const abilityRate = Number(this.currentShipModel && this.currentShipModel.abilityFireRateMul) || 1;
+        let cooldown = Number(cfg.cooldown) || 300;
+        cooldown = cooldown * jammerMul / Math.max(0.05, abilityRate);
+        if (typeof pickupManager !== 'undefined' && pickupManager.getFireRateMul) {
+            cooldown *= pickupManager.getFireRateMul();
+        }
+        return Math.max(1, cooldown);
+    },
+
+    /** Mount cooldown keys for a weapon id (mirrors getWeaponFirePositions keys). */
+    weaponMountKeys(weaponId) {
+        const id = String(weaponId || '');
+        if (!id) return [];
+        const model = this.currentShipModel;
+        const layout = model && model.layout;
+        const modules = layout && Array.isArray(layout.modules)
+            ? layout.modules.filter((m) => m && m.kind === 'weapon' && String(m.id) === id)
+            : [];
+        if (!modules.length) return [id];
+        return modules.map((m) => String(m.id || '') + '@' + String(m.face || 'up')
+            + (m.slotIndex != null ? '#' + m.slotIndex : '') + (m.side ? ':' + m.side : ''));
+    },
+
+    /**
+     * Ready fraction 0→1 (reload fill), energy cost, and flags for HUD dimming.
+     * Uses the slowest mount of that weapon type.
+     */
+    getWeaponHudState(weaponId, nowMs) {
+        const now = nowMs != null ? nowMs : Date.now();
+        const cd = this.effectiveCooldownMs(weaponId);
+        const keys = this.weaponMountKeys(weaponId);
+        const clocks = this.weaponCooldowns || {};
+        let ready = 1;
+        keys.forEach((key) => {
+            const last = clocks[key] || 0;
+            const elapsed = now - last;
+            const frac = last <= 0 ? 1 : Math.max(0, Math.min(1, elapsed / cd));
+            if (frac < ready) ready = frac;
+        });
+        const cfg = this.weaponConfigFor(weaponId);
+        let energyCost = cfg && cfg.energyCost != null ? Math.max(0, Number(cfg.energyCost) || 0) : 0;
+        if (!energyCost && typeof playerManager !== 'undefined' && playerManager.getShotEnergyCost) {
+            energyCost = playerManager.getShotEnergyCost();
+        }
+        let energy = Infinity;
+        if (typeof playerManager !== 'undefined') {
+            if (playerManager.isSystemsOnline && !playerManager.isSystemsOnline()) energy = 0;
+            else if (playerManager.getEnergy) energy = playerManager.getEnergy();
+        }
+        const noEnergy = energyCost > 0 && energy + 1e-6 < energyCost;
+        const reloading = ready < 0.999;
+        return { ready: ready, reloading: reloading, noEnergy: noEnergy, energyCost: energyCost };
+    },
+
+    /** Dim cards + drive reload fill (--reload-pct) without rebuilding the list. */
+    updateWeaponHudState() {
+        const list = document.getElementById('weaponList');
+        if (!list) return;
+        const now = Date.now();
+        list.querySelectorAll('.weapon-card').forEach((card) => {
+            const id = card.dataset.weapon;
+            if (!id) return;
+            const st = this.getWeaponHudState(id, now);
+            const dim = st.reloading || st.noEnergy;
+            card.classList.toggle('is-dim', dim);
+            card.classList.toggle('is-reloading', st.reloading);
+            card.classList.toggle('is-no-energy', st.noEnergy);
+            card.style.setProperty('--reload-pct', (st.ready * 100).toFixed(1) + '%');
+            card.title = st.noEnergy
+                ? 'NOT ENOUGH ENERGY'
+                : (st.reloading ? ('RELOAD ' + Math.round(st.ready * 100) + '%') : '');
+        });
+    },
+
+    /** Vertical list of equipped weapons as unified cards (icon + name + stats). */
+    renderWeaponList() {
+        const list = document.getElementById('weaponList');
+        if (!list) return;
+        let ids = [];
+        if (this.currentShipModel && Array.isArray(this.currentShipModel.availableWeapons)
+            && this.currentShipModel.availableWeapons.length) {
+            ids = this.currentShipModel.availableWeapons.slice();
+        } else if (typeof levelInfoManager !== 'undefined' && levelInfoManager.collectEquippedWeapons) {
+            ids = levelInfoManager.collectEquippedWeapons().map((w) => w.id);
+        }
+        if (!ids.length) {
+            ids = [this.currentWeapon || (this.shotTypes && this.shotTypes[this.shotType]) || 'laser'];
+        }
+        const seen = {};
+        ids = ids.filter((id) => id && !seen[id] && (seen[id] = true));
+        const active = String(this.currentWeapon || ids[0] || '').toLowerCase();
+        const mode = this.getFireMode ? this.getFireMode() : 'auto';
+        const idSig = ids.join('|') + '@' + mode;
+        if (idSig === this._weaponListIdSig && list.childElementCount === ids.length) {
+            list.querySelectorAll('.weapon-card').forEach((card) => {
+                const on = String(card.dataset.weapon || '').toLowerCase() === active;
+                card.classList.toggle('is-active', on);
+                const stats = card.querySelector('.weapon-card-stats');
+                if (stats) {
+                    if (on) stats.id = 'weaponInfo';
+                    else stats.removeAttribute('id');
+                    if (!this.isCharging) stats.innerHTML = this.weaponStatsHtml(card.dataset.weapon);
+                }
+            });
+            this.updateWeaponHudState();
+            return;
+        }
+        this._weaponListIdSig = idSig;
+        list.innerHTML = '';
+        ids.forEach((id) => {
+            const name = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
+                ? iconRenderer.weaponIconInfo(id).name
+                : String(id).toUpperCase();
+            const on = String(id).toLowerCase() === active;
+            const card = document.createElement('div');
+            card.className = 'weapon-card' + (on ? ' is-active' : '');
+            card.dataset.weapon = id;
+
+            const fill = document.createElement('div');
+            fill.className = 'weapon-card-reload';
+            fill.setAttribute('aria-hidden', 'true');
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            canvas.className = 'weapon-card-icon';
+            canvas.setAttribute('aria-hidden', 'true');
+
+            const body = document.createElement('div');
+            body.className = 'weapon-card-body';
+            const label = document.createElement('span');
+            label.className = 'weapon-card-name';
+            label.textContent = String(name).toUpperCase();
+            const stats = document.createElement('div');
+            stats.className = 'weapon-card-stats';
+            if (on) stats.id = 'weaponInfo';
+            stats.innerHTML = this.weaponStatsHtml(id);
+
+            body.appendChild(label);
+            body.appendChild(stats);
+            card.appendChild(fill);
+            card.appendChild(canvas);
+            card.appendChild(body);
+            list.appendChild(card);
+            this.renderWeaponIcon(id, canvas);
+        });
+        this.updateWeaponHudState();
+    },
+
     updateWeaponDisplay() {
         const weaponElement = document.getElementById('currentWeapon');
-        const infoElement = document.getElementById('weaponInfo');
-        const mode = this.getFireMode();
-        const modeLabel = mode === 'charge' ? 'CHARGE' : 'AUTO';
+        this.renderWeaponList();
 
-        if (weaponElement) {
-            if (this.currentShipModel && this.currentShipModel.availableWeapons) {
-                weaponElement.textContent = this.currentWeapon.toUpperCase();
-                this.renderWeaponIcon(this.currentWeapon);
-
-                // Update weapon info
-                if (infoElement) {
-                    const weaponConfig = this.currentShipModel.weaponConfig[this.currentWeapon];
-                    if (weaponConfig) {
-                        infoElement.innerHTML =
-                            `<span class="wi-part">DMG: ${weaponConfig.damage}</span>` +
-                            `<span class="wi-part">${modeLabel}</span>` +
-                            `<span class="wi-part">CD: ${weaponConfig.cooldown}ms</span>`;
-                    } else {
-                        infoElement.textContent = mode === 'charge'
-                            ? 'Hold SPACE to charge, release to fire'
-                            : 'Hold SPACE for autofire';
-                    }
-                }
-            } else {
-                // Legacy system
-                const currentShotType = this.shotTypes[this.shotType];
-                weaponElement.textContent = currentShotType.toUpperCase();
-                this.renderWeaponIcon(currentShotType);
-                if (infoElement) {
-                    infoElement.textContent = mode === 'charge'
-                        ? 'Hold SPACE to charge, release to fire'
-                        : 'Hold SPACE for autofire';
-                }
-            }
+        if (this.currentShipModel && this.currentShipModel.availableWeapons) {
+            if (weaponElement) weaponElement.textContent = this.currentWeapon.toUpperCase();
+            this.renderWeaponIcon(this.currentWeapon);
+        } else {
+            const currentShotType = this.shotTypes[this.shotType];
+            if (weaponElement) weaponElement.textContent = currentShotType.toUpperCase();
+            this.renderWeaponIcon(currentShotType);
         }
     },
 

@@ -9,13 +9,19 @@ extendClass(PlanetConfigManager, {
      */
     applyPlayfieldToRuntime(cfg) {
         const config = cfg || {};
-        const width = this.normalizeLevelWidth(config.levelWidth);
+        let width = this.normalizeLevelWidth(config.levelWidth);
         const height = this.normalizeLevelHeight(config.levelHeight);
+        // Keep the fight container wide enough to use the middle HUD column
+        // without stretching pixels (square voxels, more columns).
+        const minAspect = 1.35;
+        if (width / Math.max(1, height) < minAspect) {
+            width = this.normalizeLevelWidth(Math.round(height * minAspect));
+        }
         const zoom = this.normalizeViewZoom(config.viewZoom);
         const aspect = width / Math.max(1, height);
         // Fixed design reference — map size must not change UI/layout scale.
         const designW = 480;
-        const designH = 600;
+        const designH = Math.max(240, Math.round(designW / Math.max(0.45, aspect)));
 
         if (typeof game !== 'undefined' && game && game.gameState && game.gameState.setGameDimensions) {
             game.gameState.setGameDimensions(width, height);

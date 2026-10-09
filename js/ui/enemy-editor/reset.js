@@ -52,8 +52,9 @@ extendClass(EnemyEditorUI, {
     },
 
     resetPreviewSim() {
-        const w = 200;
-        const h = 300;
+        if (typeof this.previewPlayfieldSize === 'function') this.previewPlayfieldSize();
+        const w = this.previewBaseWidth || 360;
+        const h = this.previewBaseHeight || 300;
         const model = this.getPreviewModel();
         const shipW = Math.max(8, Math.round(model.width || 18));
         const shipH = Math.max(8, Math.round(model.height || 14));
@@ -93,6 +94,7 @@ extendClass(EnemyEditorUI, {
         const sim = this.previewSim;
         const d = this.draft;
         if (!sim || !d) return;
+        const w = this.previewBaseWidth || 360;
         const model = this.getPreviewModel();
         const shipW = Math.max(8, Math.round(model.width || 18));
         const shipH = Math.max(8, Math.round(model.height || 14));
@@ -110,7 +112,7 @@ extendClass(EnemyEditorUI, {
         e.minY = Number(d.minY);
         e.maxY = Number(d.maxY);
         e.y = Math.max(e.minY, Math.min(e.maxY, e.y));
-        e.x = Math.max(0, Math.min(200 - e.width, e.x));
+        e.x = Math.max(0, Math.min(w - e.width, e.x));
     },
 
     updatePreviewSim(dtMs) {
@@ -119,6 +121,8 @@ extendClass(EnemyEditorUI, {
         if (!sim || !d) return;
 
         this.syncPreviewEnemyFromDraft();
+        const w = this.previewBaseWidth || 360;
+        const h = this.previewBaseHeight || 300;
         const e = sim.enemy;
         const p = sim.player;
         const frameScale = dtMs / 16.67;
@@ -128,8 +132,8 @@ extendClass(EnemyEditorUI, {
         const track = (targetX - p.x) * 0.04 * frameScale;
         p.vx = p.vx * 0.85 + track + Math.sin(sim.starPhase * 0.7) * 0.15;
         p.x += p.vx;
-        p.x = Math.max(4, Math.min(200 - p.width - 4, p.x));
-        p.y = 300 - 36 + Math.sin(sim.starPhase * 1.2) * 2;
+        p.x = Math.max(4, Math.min(w - p.width - 4, p.x));
+        p.y = h - 36 + Math.sin(sim.starPhase * 1.2) * 2;
 
         // Player shoots at enemy
         sim.playerShootAcc += dtMs;
@@ -155,8 +159,8 @@ extendClass(EnemyEditorUI, {
             if (e.x <= 0) {
                 e.x = 0;
                 e.speed = Math.abs(e.speed);
-            } else if (e.x >= 200 - e.width) {
-                e.x = 200 - e.width;
+            } else if (e.x >= w - e.width) {
+                e.x = w - e.width;
                 e.speed = -Math.abs(e.speed);
             }
             if (e.y <= e.minY) {
@@ -212,7 +216,7 @@ extendClass(EnemyEditorUI, {
                 const strength = Math.max(0.6, 1.0 - closestDist / 100);
                 e.x += (edx / mag) * evasionSpeed * strength * frameScale;
                 e.y += (edy / mag) * evasionSpeed * strength * frameScale;
-                e.x = Math.max(0, Math.min(200 - e.width, e.x));
+                e.x = Math.max(0, Math.min(w - e.width, e.x));
                 e.y = Math.max(e.minY, Math.min(e.maxY, e.y));
             }
         }
@@ -230,7 +234,7 @@ extendClass(EnemyEditorUI, {
             const b = sim.playerBullets[i];
             b.x += (b.vx || 0) * frameScale;
             b.y -= b.speed * frameScale;
-            if (b.y + b.height < 0 || b.x < -20 || b.x > 220) {
+            if (b.y + b.height < 0 || b.x < -20 || b.x > w + 20) {
                 sim.playerBullets.splice(i, 1);
                 continue;
             }
@@ -249,7 +253,7 @@ extendClass(EnemyEditorUI, {
                 b.x += (b.vx || 0) * frameScale;
                 b.y += b.speed * frameScale;
             }
-            if (b.y > 310 || b.x < -30 || b.x > 230) {
+            if (b.y > h + 10 || b.x < -30 || b.x > w + 30) {
                 sim.enemyBullets.splice(i, 1);
                 continue;
             }

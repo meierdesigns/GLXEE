@@ -72,8 +72,8 @@ extendClass(WeaponConfigManager, {
     },
 
     getWeapon(id) {
-        const key = String(id || 'laser');
-        return this.configs[key] || this.configs.laser;
+        const key = String(id || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        return this.configs[key] || this.configs[key.replace(/_/g, '')] || this.configs.laser;
     },
 
     /**
@@ -118,6 +118,7 @@ extendClass(WeaponConfigManager, {
      * best with it (getFactionWeaponAffinity), distinct within the family.
      */
     getWeaponUiColor(weaponId) {
+        const id = String(weaponId || '').toLowerCase().replace(/[\s-]+/g, '_');
         return ({
             // Terran — blue
             laser: '#4da6ff',
@@ -138,7 +139,7 @@ extendClass(WeaponConfigManager, {
             // Machine — green
             missile: '#3dff9c',
             pierce: '#a8ffd8'
-        })[String(weaponId || '')] || null;
+        })[id] || null;
     },
 
     getDefaultsForShip(weaponId) {

@@ -421,7 +421,8 @@ extendClass(ObstacleManager, {
             // ~12-17 s per area at the base scroll speed: long, coherent stretches.
             zoneRows: Math.round(170 + r(1) * 70),
             // Thicker walls on later stages (narrower passage, still flyable).
-            width: (0.75 + this.terrainHash(pseed % 100003, 2) * 0.6) * (env.width || 1) * (1 + 0.18 * danger),
+            // Kept modest so the flyable corridor stays wide without stretching art.
+            width: (0.45 + this.terrainHash(pseed % 100003, 2) * 0.35) * (env.width || 1) * (1 + 0.12 * danger),
             freq: 0.6 + r(7) * 1.0,
             phase: r(8) * 100
         };
@@ -634,7 +635,7 @@ extendClass(ObstacleManager, {
             if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
             const t = (wr - slot * 70 - 10) / 44;
             if (t < 0 || t > 1) return 0;
-            const reach = 0.12 + this.terrainHash(slot, 29) * 0.16;
+            const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
             // Rounded bump with a flat-ish top.
             return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
         };
@@ -643,8 +644,8 @@ extendClass(ObstacleManager, {
             const f = prof.freq;
             const n = Math.sin(wr * 0.05 * f + s) * 0.5 + Math.sin(wr * 0.11 * f + s * 2) * 0.3
                 + Math.sin(wr * 0.23 * f + s * 3) * 0.2;
-            let d = (W * (0.05 + 0.045 * (n + 1) / 2) * prof.width * zone.mul
-                + W * (side ? zone.right : zone.left) + W * outcrop(side)) / cell
+            let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
                 + gate;
             // Per-material silhouette on top of the shared canyon curve.
             if (mat.id === 'metal') d = Math.round(d / 3) * 3 + 1;              // stepped blocks
@@ -660,18 +661,18 @@ extendClass(ObstacleManager, {
             if (t < 0 || t > 1) return 0;
             let v;
             switch (style) {
-                case 'tech': v = 0.07; break;
-                case 'organic': v = 0.09 * Math.sin(t * Math.PI); break;
-                case 'spike': v = 0.14 * (1 - Math.abs(t - 0.5) * 2); break;
-                case 'scrap': v = t < 0.25 || t > 0.75 ? 0.1 : 0.03; break;
-                default: v = 0.05 * Math.sin(t * Math.PI);
+                case 'tech': v = 0.045; break;
+                case 'organic': v = 0.055 * Math.sin(t * Math.PI); break;
+                case 'spike': v = 0.09 * (1 - Math.abs(t - 0.5) * 2); break;
+                case 'scrap': v = t < 0.25 || t > 0.75 ? 0.065 : 0.02; break;
+                default: v = 0.03 * Math.sin(t * Math.PI);
             }
             return Math.round((W * v) / cell);
         };
         const out = {};
-        // Always leave a flyable passage (~45% of the width) so the upper
+        // Always leave a flyable passage (~62% of the width) so the upper
         // enemy band stays usable even at zone seams.
-        const maxCells = Math.floor((W * 0.55) / cell);
+        const maxCells = Math.floor((W * 0.38) / cell);
         // Threshold sill marks the new area — skip when a gate is already
         // active so the two never stack into a sealed wall.
         const zi = this.terrainZoneIndex(wr, prof);

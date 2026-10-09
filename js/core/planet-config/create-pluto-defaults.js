@@ -125,7 +125,7 @@ extendClass(PlanetConfigManager, {
                 graphics: { enemyShip: 'battleship', obstacleStyle: 'mixed', iconStyle: 'pocked' },
                 starsEnabled: true,
                 starsOpacity: 0.5,
-                levelWidth: 360,
+                levelWidth: 540,
                 levelHeight: 450,
                 viewZoom: 1,
                 dailies: { enabled: true, enemyType: 'enemyBoss', killCountPerDay: 3, requiredDays: 5 },

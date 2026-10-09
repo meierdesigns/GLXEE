@@ -21,15 +21,33 @@ class ProfileSelectionManager {
         return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
     }
 
+    /** True when VOXEL / GUI-voxel wants hard blocks (no Scale2x slopes). */
+    wantsVoxelEmblems() {
+        try {
+            const root = document.documentElement;
+            if (root.getAttribute('data-vf-ship-render') === 'VOXEL') return true;
+            if (root.getAttribute('data-vf-gui-voxel') === 'on') return true;
+            if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell
+                && window.combatVoxels.cell()) return true;
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
     /** Faction emblem as a pixel icon, tinted in the faction accent. */
     getFactionEmblemHtml(id, size = 16, detail) {
         if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
         const base = factionShipStyles.emblemCamelKey ? factionShipStyles.emblemCamelKey(id) : null;
         if (!base) return '';
-        // Finer (Scale2x) art for large emblems, or when the caller says the
-        // emblem is magnified (`detail`, e.g. the galaxy map zoom).
-        const mag = Math.max(1, Number(detail) || 1) * size / 16;
-        const key = base + (mag >= 3 ? '@4x' : (mag >= 1.5 ? '@2x' : ''));
+        // VOXEL: nearest-neighbour upscale of the authored sprite (no Scale2x).
+        // FLAT: Scale2x/@Hi for large draws so diagonals look smoother.
+        let key = base;
+        if (!this.wantsVoxelEmblems()) {
+            const mag = Math.max(1, Number(detail) || 1) * size / 16;
+            if (mag >= 3) key = base + '@4x';
+            else if (mag >= 1.5) key = base + '@2x';
+        } else if (typeof iconRenderer.detailKey === 'function') {
+            key = iconRenderer.detailKey(base, size);
+        }
         const style = factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(id) : null;
         return iconRenderer.imgHtml(key, size, 'profile-faction-emblem-img', style && style.accent, this.getFactionLabel(id));
     }

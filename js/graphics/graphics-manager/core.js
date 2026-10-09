@@ -88,6 +88,10 @@ class GraphicsManager {
             // Replacing it here silently reset the in-game ship to the default hull.
             if (!this._playerModelExplicitlySelected) {
                 this.currentPlayerModel = this.shipAssetLoader.getShip('player');
+            } else {
+                // Mission may have started on the tiny hangar stub before PNGs /
+                // modular bases were ready — rebuild from the active ship id.
+                this.refreshPlayerShipFromAssets();
             }
             this.currentEnemyModel = this.shipAssetLoader.getShip('enemyBasic');
 
@@ -109,6 +113,16 @@ class GraphicsManager {
     renderPlayerShip(ctx, player, scale = 1) {
         if (!this.currentPlayerModel || !player) {
             return;
+        }
+
+        // Late asset arrival mid-fight: swap the stub for the real hull once.
+        if (!this._shipRefreshDone && this.shipAssetLoader && this.shipAssetLoader.isLoaded
+            && this.shipAssetLoader.isLoaded()) {
+            const m = this.currentPlayerModel;
+            if (!m.modular || !m.layout || !m.layout.segments || !m.layout.segments.length) {
+                this._shipRefreshDone = true;
+                this.refreshPlayerShipFromAssets();
+            }
         }
 
         const model = this.currentPlayerModel;
@@ -137,6 +151,7 @@ class GraphicsManager {
             const dw = Math.max(1, Math.ceil(mw * drawScale));
             const dh = Math.max(1, Math.ceil(mh * drawScale));
             const key = String(model.id || model.name || 'player')
+                + '|' + this.getShieldLayoutSignature(model)
                 + '|' + cell + '|' + dw + 'x' + dh
                 + '|' + String(colorOverlay || '') + '|' + String(overlayIntensity || 0);
             this._voxelShipBake = this._voxelShipBake || Object.create(null);
@@ -145,7 +160,7 @@ class GraphicsManager {
                 baked = document.createElement('canvas');
                 baked.width = dw;
                 baked.height = dh;
-                const bctx = baked.getContext('2d');
+                const bctx = baked.getContext('2d', { willReadFrequently: true });
                 if (bctx) {
                     bctx.imageSmoothingEnabled = false;
                     this.shipAssetLoader.renderShip(
@@ -153,10 +168,18 @@ class GraphicsManager {
                         { showThrusterGlow: false, allowColorMountSprites: true }
                     );
                 }
-                this._voxelShipBake[key] = baked;
-                const keys = Object.keys(this._voxelShipBake);
-                if (keys.length > 24) {
-                    delete this._voxelShipBake[keys[0]];
+                // Skip caching empty frames (assets/layout not ready yet).
+                let solid = 0;
+                try {
+                    const data = bctx.getImageData(0, 0, dw, dh).data;
+                    for (let i = 3; i < data.length; i += 16) solid += data[i] > 16 ? 1 : 0;
+                } catch (e) { solid = 1; }
+                if (solid > 2) {
+                    this._voxelShipBake[key] = baked;
+                    const keys = Object.keys(this._voxelShipBake);
+                    if (keys.length > 24) {
+                        delete this._voxelShipBake[keys[0]];
+                    }
                 }
             }
             ctx.imageSmoothingEnabled = false;
@@ -338,8 +361,10 @@ class GraphicsManager {
     // Set player ship model
     setPlayerShipModel(shipModel) {
         this._playerModelExplicitlySelected = true;
+        this._shipRefreshDone = false;
         this.currentPlayerModel = shipModel;
         this._shieldHullCache = Object.create(null);
+        this._voxelShipBake = Object.create(null);
 
         // Update player manager with ship model
         if (typeof playerManager !== 'undefined') {
@@ -350,6 +375,29 @@ class GraphicsManager {
         if (typeof bulletManager !== 'undefined') {
             bulletManager.setShipModel(shipModel);
         }
+    }
+
+    /**
+     * Rebuild the in-game player from shipConfig once asset bases are ready.
+     * Fixes missions that started while the hangar still used the stub hull.
+     */
+    refreshPlayerShipFromAssets() {
+        if (!this.shipAssetLoader || !this.shipAssetLoader.isLoaded()) return false;
+        const cur = this.currentPlayerModel;
+        const shipId = (cur && (cur.id || cur.type))
+            || (typeof profileManager !== 'undefined' && profileManager.getActiveShipId
+                ? profileManager.getActiveShipId() : null)
+            || 'player_scrap';
+        if (typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return false;
+        // Tiny non-modular stub from getHangarShipModel fallback, or missing layout.
+        const needsRebuild = !cur || !cur.modular || !cur.layout
+            || !Array.isArray(cur.layout.segments) || !cur.layout.segments.length
+            || (Number(cur.width) <= 8 && Number(cur.height) <= 8);
+        if (!needsRebuild) return false;
+        const fresh = shipConfigManager.getMergedModel(shipId);
+        if (!fresh || !fresh.layout) return false;
+        this.setPlayerShipModel(fresh);
+        return true;
     }
 
     /**

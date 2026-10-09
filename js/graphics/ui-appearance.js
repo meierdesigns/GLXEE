@@ -2,7 +2,7 @@
 
 /**
  * UI Appearance — border weight, typography, retro FX (independent of color themes).
- * Typography uses three types: H1, H2 Labels, Text.
+ * Typography uses three sizes: LG (titles), MD (values), SM (labels).
  */
 class UIAppearanceManager {
     constructor() {
@@ -121,11 +121,12 @@ class UIAppearanceManager {
         this.voxelSize = '1';
         this.uiScale = '75';
         this.font = 'COURIER';
+        // 3 sizes: lg (h1) / md (h2+text) / sm (small)
         this.fontSizes = {
-            h1: '28',
+            h1: '20',
             h2: '14',
-            text: '12',
-            small: '10',
+            text: '14',
+            small: '11',
             game: '100'
         };
         // Per-size family override ('GLOBAL' follows the main font).
@@ -609,6 +610,11 @@ class UIAppearanceManager {
         const val = String(size);
         if (!this.fontSizeOptions[type] || !this.fontSizeOptions[type].includes(val)) return;
         this.fontSizes[type] = val;
+        // md is shared: changing h2 or text keeps both in sync (3-size scale).
+        if (type === 'h2' || type === 'text') {
+            this.fontSizes.h2 = val;
+            this.fontSizes.text = val;
+        }
         this.persist();
         this.apply();
     }
@@ -821,24 +827,41 @@ class UIAppearanceManager {
         root.style.setProperty('--ui-indicator-width', stroke);
         root.style.setProperty('--ui-font-family', font);
         root.style.setProperty('--gui-zoom', String(Number(this.uiScale) / 100));
-        root.style.setProperty('--font-h1', `${this.fontSizes.h1}px`);
-        root.style.setProperty('--font-h2', `${this.fontSizes.h2}px`);
-        root.style.setProperty('--font-text', `${this.fontSizes.text}px`);
-        root.style.setProperty('--font-small', `${this.fontSizes.small}px`);
-        root.style.setProperty('--font-text-small', `${this.fontSizes.small}px`);
+        // 3-size scale: lg=h1, md=h2 (+ text alias), sm=small
+        this.fontSizes.text = this.fontSizes.h2;
+        const lgPx = Number(this.fontSizes.h1) || 20;
+        const mdPx = Number(this.fontSizes.h2) || 14;
+        const smPx = Number(this.fontSizes.small) || 11;
+        root.style.setProperty('--font-lg', lgPx + 'px');
+        root.style.setProperty('--font-md', mdPx + 'px');
+        root.style.setProperty('--font-sm', smPx + 'px');
+        root.style.setProperty('--font-h1', lgPx + 'px');
+        root.style.setProperty('--font-h2', mdPx + 'px');
+        root.style.setProperty('--font-text', mdPx + 'px');
+        root.style.setProperty('--font-small', smPx + 'px');
+        root.style.setProperty('--font-text-small', smPx + 'px');
         Object.keys(this.fontFamilies).forEach((k) => {
             const id = this.fontFamilies[k];
             root.style.setProperty('--ui-font-' + k, id === 'GLOBAL' ? font : (this.fonts[id] || font));
         });
-        root.style.setProperty('--font-base', `${this.fontSizes.text}px`);
-        // In-game HUD: own family + size scale (see .game-container in styles.css).
+        root.style.setProperty('--ui-font-lg', root.style.getPropertyValue('--ui-font-h1') || font);
+        root.style.setProperty('--ui-font-md', root.style.getPropertyValue('--ui-font-h2') || font);
+        root.style.setProperty('--ui-font-sm', root.style.getPropertyValue('--ui-font-small') || font);
+        root.style.setProperty('--font-base', mdPx + 'px');
+        // In-game HUD: menu sizes × IN-GAME % (see .game-container in styles.css).
         const gk = Number(this.fontSizes.game) / 100 || 1;
         const gfam = this.fontFamilies.game;
         root.style.setProperty('--game-font-family', gfam === 'GLOBAL' ? font : (this.fonts[gfam] || font));
-        root.style.setProperty('--game-font-h1', `${(this.fontSizes.h1 * gk).toFixed(1)}px`);
-        root.style.setProperty('--game-font-h2', `${(this.fontSizes.h2 * gk).toFixed(1)}px`);
-        root.style.setProperty('--game-font-text', `${(this.fontSizes.text * gk).toFixed(1)}px`);
-        root.style.setProperty('--game-font-small', `${(this.fontSizes.small * gk).toFixed(1)}px`);
+        const gLg = (lgPx * gk).toFixed(1) + 'px';
+        const gMd = (mdPx * gk).toFixed(1) + 'px';
+        const gSm = (smPx * gk).toFixed(1) + 'px';
+        root.style.setProperty('--game-font-lg', gLg);
+        root.style.setProperty('--game-font-md', gMd);
+        root.style.setProperty('--game-font-sm', gSm);
+        root.style.setProperty('--game-font-h1', gLg);
+        root.style.setProperty('--game-font-h2', gMd);
+        root.style.setProperty('--game-font-text', gMd);
+        root.style.setProperty('--game-font-small', gSm);
         root.setAttribute('data-game-font', gfam === 'GLOBAL' ? 'global' : 'custom');
         root.setAttribute('data-ui-controls', this.controlsHints === 'OFF' ? 'off' : 'on');
 
@@ -934,7 +957,9 @@ class UIAppearanceManager {
             const g = document.getElementById('vfBloomG' + c);
             if (g) g.setAttribute('slope', String(Math.round(3 * this.fxLevel('bloom') * 100) / 100));
         });
-        if (crtDisp) crtDisp.setAttribute('scale', isVoxel ? '0' : String(Math.round(crt * 7 * 10) / 10));
+        // No pixel warp: displacement made the whole screen ripple and
+        // smashed HUD / playfield text. CRT look stays via phosphor + contrast only.
+        if (crtDisp) crtDisp.setAttribute('scale', '0');
         if (r) { r.setAttribute('dx', String(shift)); r.setAttribute('dy', String(shift * 0.25)); }
         if (b) { b.setAttribute('dx', String(-shift)); b.setAttribute('dy', String(-shift * 0.25)); }
     }

@@ -246,10 +246,9 @@ extendClass(StartScreenManager, {
         const preview = document.createElement('div');
         preview.className = 'font-menu-preview';
         preview.innerHTML = `
-            <div class="type-h1">H1 TITLE</div>
-            <div class="type-h2">H2 LABELS</div>
-            <div class="type-text">Text sample body</div>
-            <div class="type-small">Small print, hints and captions</div>
+            <div class="type-lg">LG TITLE</div>
+            <div class="type-md">MD VALUES 100</div>
+            <div class="type-sm">SM LABELS</div>
         `;
 
         const menu = document.createElement('div');

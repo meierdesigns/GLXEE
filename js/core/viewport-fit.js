@@ -7,15 +7,16 @@
  */
 (function () {
     const ROOT = document.documentElement;
-    const DEFAULT_ASPECT = 0.8;
+    const DEFAULT_ASPECT = 1.42;
     const DEFAULT_DESIGN_W = 480;
-    const DEFAULT_DESIGN_H = 600;
+    const DEFAULT_DESIGN_H = 400;
     const SIZE_EPS = 2;
     const RO_SUPPRESS_MS = 80;
-    const SIDE_MIN = 140;
-    const SIDE_MAX = 280;
-    // Compact overlay chrome (title + ?) — not measured from DOM (would under-size fight)
-    const OVERLAY_CHROME = 8;
+    const SIDE_MIN = 180;
+    const SIDE_MAX = 260;
+    // Title + SHIP/FIELD strip under the fight (not measured from DOM)
+    const OVERLAY_CHROME = 108;
+    const FIGHT_INSET = 16;
 
     let lastApplied = { canvasW: 0, canvasH: 0, sidePanel: 0 };
     let suppressROUntil = 0;
@@ -32,12 +33,53 @@
     }
 
     function playfieldParams() {
-        const aspect = clamp(readCssNumber('--playfield-aspect', DEFAULT_ASPECT), 0.45, 1.4);
+        const aspect = clamp(readCssNumber('--playfield-aspect', DEFAULT_ASPECT), 0.45, 1.6);
         return {
             aspect: aspect,
             designW: DEFAULT_DESIGN_W,
             designH: Math.max(240, Math.round(DEFAULT_DESIGN_W / aspect))
         };
+    }
+
+    /** Widen logical map to match display aspect (square pixels, more columns). */
+    function syncMapToAspect(aspect) {
+        const mapH = Math.max(1, Math.round(readCssNumber('--map-h', 300)));
+        const mapW = Math.max(1, Math.round(mapH * aspect));
+        const prevW = readCssNumber('--map-w', 0);
+        ROOT.style.setProperty('--playfield-aspect', String(Number(aspect.toFixed(6))));
+        ROOT.style.setProperty('--map-w', String(mapW));
+        ROOT.style.setProperty('--map-h', String(mapH));
+        if (Math.abs(prevW - mapW) < 1) return mapW;
+        const canvas = document.getElementById('gameCanvas');
+        const k = (typeof window.renderManager !== 'undefined' && window.renderManager
+            && typeof window.renderManager.getRenderScale === 'function')
+            ? window.renderManager.getRenderScale()
+            : (Number(window.PLAYFIELD_RENDER_SCALE) || 1);
+        const scaleK = Number.isFinite(k) && k >= 1 ? Math.round(k) : 1;
+        if (canvas) {
+            const bw = mapW * scaleK;
+            const bh = mapH * scaleK;
+            if (canvas.width !== bw) canvas.width = bw;
+            if (canvas.height !== bh) canvas.height = bh;
+        }
+        if (typeof game !== 'undefined' && game) {
+            game.width = mapW;
+            game.height = mapH;
+            game.baseWidth = mapW;
+            game.baseHeight = mapH;
+            game.internalWidth = mapW;
+            game.internalHeight = mapH;
+            game.mapWidth = mapW;
+            game.mapHeight = mapH;
+        }
+        if (typeof gameStateManager !== 'undefined' && gameStateManager.setGameDimensions) {
+            gameStateManager.setGameDimensions(mapW, mapH);
+        }
+        if (typeof window.renderManager !== 'undefined' && window.renderManager
+            && typeof window.renderManager.setPlayfieldSize === 'function') {
+            window.renderManager.setPlayfieldSize(mapW, mapH);
+        }
+        return mapW;
     }
 
     const STAGE_ASPECT = 4 / 3;
@@ -569,12 +611,15 @@
         } else if (fxTab === 'text') {
             h += '<div class="vf-fx-title">MAIN FONT</div><div class="vf-fx-row"><span>FAMILY</span>' +
                 fxStepper(ui.getFontOptions().map(function (v) { return ['main:' + v, v]; }), 'main:' + ui.font, 'tx') + '</div>';
-            [['h1', 'H1'], ['h2', 'H2 LABELS'], ['text', 'TEXT'], ['small', 'SMALL'], ['game', 'IN-GAME (HUD) · SIZE %']].forEach(function (t) {
+            // 3 sizes: LG (titles) / MD (values) / SM (labels) + in-game scale %
+            [['h1', 'LG · TITLES'], ['h2', 'MD · VALUES'], ['small', 'SM · LABELS'], ['game', 'IN-GAME (HUD) · SIZE %']].forEach(function (t) {
+                const famKey = t[0] === 'h2' ? 'h2' : t[0];
                 h += '<div class="vf-fx-card"><div class="vf-fx-title">' + t[1] + '</div>' +
                     fxOptSlider('SIZE', 'fsize:' + t[0], ui.getFontSizeOptions(t[0]), ui.fontSizes[t[0]]) +
-                    '<div class="vf-fx-row"><span>FONT</span>' + fxStepper(ui.getFontFamilyOptions().map(function (v) { return ['fam:' + t[0] + ':' + v, v]; }), 'fam:' + t[0] + ':' + ui.fontFamilies[t[0]], 'tx') + '</div></div>';
+                    (t[0] === 'game' ? '' : '<div class="vf-fx-row"><span>FONT</span>' + fxStepper(ui.getFontFamilyOptions().map(function (v) { return ['fam:' + famKey + ':' + v, v]; }), 'fam:' + famKey + ':' + ui.fontFamilies[famKey], 'tx') + '</div>') +
+                    '</div>';
             });
-            h += '<div class="vf-fx-title">PREVIEW</div><div class="vf-fx-preview"><div class="type-h1">H1 TITLE</div><div class="type-h2">H2 LABELS</div><div class="type-text">Text sample body</div><div class="type-small">Small print and captions</div></div>';
+            h += '<div class="vf-fx-title">PREVIEW</div><div class="vf-fx-preview"><div class="type-lg">LG TITLE</div><div class="type-md">MD VALUES 100</div><div class="type-sm">SM LABELS</div></div>';
         } else if (fxTab === 'sizes') {
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
@@ -636,7 +681,10 @@
     window.addEventListener('resize', applyFxGeom);
     /** Re-run the station FLEET preview so colour edits show at once (for the faction being edited). */
     function refreshFleetPreviewLive(faction) {
-        if (typeof enemySizeOverlay !== 'undefined' && enemySizeOverlay.refreshFleetPreview) enemySizeOverlay.refreshFleetPreview(faction);
+        // enemySizeOverlay is no longer loaded (SIZES live in this panel), so restart the station preview directly.
+        if (typeof homeStationUI === 'undefined' || !homeStationUI || !homeStationUI.overlay || !homeStationUI.startFactionFleetPreview) return;
+        const cv = homeStationUI.overlay.querySelector('[data-fleet-preview]');
+        if (cv) homeStationUI.startFactionFleetPreview(faction || cv.getAttribute('data-faction'), cv.getAttribute('data-ship'));
     }
     function onFxClick(e) {
         const b = e.target.closest && e.target.closest('button');
@@ -753,7 +801,14 @@
             else if (id === 'gvcell') ui.setFx('gvCell', v);
             else if (id === 'framepx') ui.setFx('framePx', v);
             else if (id === 'framerad') ui.setFx('frameRound', v);
-            else if (id.indexOf('fsize:') === 0) ui.setFontSize(id.slice(6), v);
+            else if (id.indexOf('fsize:') === 0) {
+                ui.setFontSize(id.slice(6), v);
+                // Live HUD preview: keep the plate outputs in sync with 3-size scale.
+                if (id.slice(6) === 'h2' || id.slice(6) === 'text') {
+                    const mdOut = document.querySelectorAll('#vf-fx [data-ix="fsize:h2"] + output, #vf-fx [data-ix="fsize:text"] + output');
+                    mdOut.forEach(function (o) { o.textContent = v; });
+                }
+            }
             return;
         }
         if (!inp.dataset.sl) return;
@@ -765,7 +820,7 @@
         else if (parts[0] === 'sz') {
             ui.setSizePx(parts[1], parts[2], v);
             // Station FLEETS preview uses the same sizes: rebuild it live.
-            if (typeof enemySizeOverlay !== 'undefined' && enemySizeOverlay.refreshFleetPreview) enemySizeOverlay.refreshFleetPreview();
+            refreshFleetPreviewLive();
         }
         else if (parts[0] === 'fr') {
             const frame = document.getElementById('vf-bezel');
@@ -970,7 +1025,20 @@
     }
 
     // Cables running from the bezel out to the window edge (decor, window space only).
+    // Drawn on the same odd-pixel lattice as the bezel voxel / FRAME PX settings — no smooth curves.
     let lastCableArgs = null;
+    function cableCellPx() {
+        const cs = getComputedStyle(ROOT);
+        let cell = parseFloat(cs.getPropertyValue('--fr-px')) || 0;
+        if (!(cell > 0)) cell = parseFloat(cs.getPropertyValue('--ui-voxel')) || 0;
+        if (!(cell > 0) && typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGuiVoxelCell) {
+            cell = Number(uiAppearanceManager.getGuiVoxelCell()) || 0;
+        }
+        if (!(cell > 0)) cell = Number(ROOT.getAttribute('data-vf-voxel-size')) || 4;
+        // Window-space cables need chunky blocks (bezel voxels read large).
+        cell = Math.max(5, Math.round(cell));
+        return Math.floor(cell / 2) * 2 + 1; // odd, matches vfFramePx
+    }
     function drawCables(w, h, real) {
         lastCableArgs = [w, h, real];
         let svg = document.getElementById('vf-cables');
@@ -980,128 +1048,175 @@
             svg.setAttribute('aria-hidden', 'true');
             svg.setAttribute('shape-rendering', 'crispEdges');
             new MutationObserver(function () { if (lastCableArgs) drawCables.apply(null, lastCableArgs); })
-                .observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-faction'] });
+                .observe(document.documentElement, {
+                    attributes: true,
+                    attributeFilter: ['data-vf-faction', 'data-vf-frame-px', 'data-vf-gui-voxel', 'data-vf-voxel-size', 'style']
+                });
             document.documentElement.insertBefore(svg, document.body);
         }
         const k = real.scale;
+        const cell = cableCellPx();
+        const snap = function (v) { return Math.round(v / cell) * cell; };
+        const snapPt = function (p) { return [snap(p[0]), snap(p[1])]; };
         const sw = real.vw * k, sh = real.vh * k;
         const sx = (w - sw) / 2, sy = (h - sh) / 2;
         svg.setAttribute('width', w);
         svg.setAttribute('height', h);
         svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-        const MIN = 28;
+        const MIN = cell * 4;
         // Plugs sit over the bezel and reach into the screen opening.
         const bz = document.querySelector('.vf-bezel');
         const br = bz ? bz.getBoundingClientRect() : null;
         const u = br && br.width ? Math.min(br.width / 1640, br.height / 1110) : k * 0.6;
-        const reachH = 64 * u, reachTop = 86 * u, reachBot = 64 * u;
-        const t = Math.max(10, Math.round(16 * k));
+        const reachH = snap(64 * u);
+        const reachTop = snap(86 * u);
+        const reachBot = snap(64 * u);
         let out = '';
-        // Each faction runs its own kind of cable: steel conduit, spiked iron chain, glowing tendril,
-        // knotted rope, chamfered data line.
+        // Each faction runs its own kind of cable — all routes stay on the voxel lattice.
         const fac = (ROOT.getAttribute('data-vf-faction') || (bz && bz.getAttribute('data-faction')) || 'terran');
         const STY = {
-            terran:   { out: '#05060a', body: '#3a4150', hi: '#6a7488', route: 'ortho', led: 'var(--color-primary, #3dff6a)', plugFill: '#0c0e12', plugLine: '#2c313b', thick: 1 },
-            kronax:   { out: '#0a0403', body: '#4a2316', hi: '#d9611f', route: 'zig', led: '#ff7a2a', plugFill: '#1a0c08', plugLine: '#7a3a1c', thick: 1.25, hiDash: '4 6' },
-            voidborn: { out: '#07030f', body: '#2a1648', hi: '#b27cff', route: 'curve', led: '#c79bff', plugFill: '#120826', plugLine: '#5a2fa0', thick: 1, glow: '#7a3cff', round: true },
-            pirate:   { out: '#070604', body: '#4a3f2a', hi: '#cdc7a4', route: 'crook', led: '#e8d9a0', plugFill: '#1a160d', plugLine: '#6b5a3a', thick: 1.1, hiDash: '7 5', hiW: 0.45 },
-            machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 0.8, hiDash: '10 14', hiW: 0.3 }
+            terran:   { out: '#05060a', body: '#3a4150', hi: '#6a7488', route: 'ortho', led: 'var(--color-primary, #3dff6a)', plugFill: '#0c0e12', plugLine: '#2c313b', thick: 2 },
+            kronax:   { out: '#0a0403', body: '#4a2316', hi: '#d9611f', route: 'zig', led: '#ff7a2a', plugFill: '#1a0c08', plugLine: '#7a3a1c', thick: 3, hiDash: true },
+            voidborn: { out: '#07030f', body: '#2a1648', hi: '#b27cff', route: 'stair', led: '#c79bff', plugFill: '#120826', plugLine: '#5a2fa0', thick: 2, glow: '#7a3cff' },
+            pirate:   { out: '#070604', body: '#4a3f2a', hi: '#cdc7a4', route: 'crook', led: '#e8d9a0', plugFill: '#1a160d', plugLine: '#6b5a3a', thick: 2, hiDash: true, hiW: 1 },
+            machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 2, hiDash: true, hiW: 1 }
         };
         const S = STY[fac] || STY.terran;
-        const tt = Math.max(8, Math.round(t * S.thick));
+        const tt = Math.max(cell, S.thick * cell);
+        // Force axis-aligned polyline (H then V / V then H stairs).
+        const ortho = function (pts0) {
+            const r = [snapPt(pts0[0])];
+            for (let i = 1; i < pts0.length; i++) {
+                const a = r[r.length - 1];
+                const b = snapPt(pts0[i]);
+                if (a[0] === b[0] && a[1] === b[1]) continue;
+                if (a[0] !== b[0] && a[1] !== b[1]) {
+                    if (Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1])) r.push([b[0], a[1]]);
+                    else r.push([a[0], b[1]]);
+                }
+                r.push(b);
+            }
+            return r;
+        };
         const zig = function (pts) {
-            // Sawtooth teeth along every segment.
-            const step = Math.max(12, Math.round(18 * k)), amp = Math.max(4, Math.round(tt * 0.45));
-            const r = [pts[0]];
+            // Square sawtooth on the lattice (1-cell amplitude, 2-cell period).
+            const step = cell * 2, amp = cell;
+            const r = [snapPt(pts[0])];
             for (let i = 1; i < pts.length; i++) {
-                const a0 = pts[i - 1], b0 = pts[i];
+                const a0 = snapPt(pts[i - 1]), b0 = snapPt(pts[i]);
                 const dx = b0[0] - a0[0], dy = b0[1] - a0[1], len = Math.hypot(dx, dy);
                 if (!len) continue;
-                const n = Math.max(1, Math.floor(len / step)), nx = -dy / len, ny = dx / len;
+                const horiz = Math.abs(dx) >= Math.abs(dy);
+                const n = Math.max(1, Math.floor(len / step));
                 for (let j = 1; j <= n; j++) {
-                    const tm = (j - 0.5) / n, sg = j % 2 ? 1 : -1;
-                    r.push([a0[0] + dx * tm + nx * amp * sg, a0[1] + dy * tm + ny * amp * sg]);
+                    const tm = j / n;
+                    const sg = j % 2 ? 1 : -1;
+                    if (horiz) r.push([snap(a0[0] + dx * tm), snap(a0[1] + amp * sg)]);
+                    else r.push([snap(a0[0] + amp * sg), snap(a0[1] + dy * tm)]);
                 }
                 r.push(b0);
             }
-            return r;
+            return ortho(r);
         };
-        const chamfer = function (pts, c) {
-            const r = [pts[0]];
+        const chamfer = function (pts) {
+            const c = cell * 2;
+            const r = [snapPt(pts[0])];
             for (let i = 1; i < pts.length - 1; i++) {
-                const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
-                const l1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1, l2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) || 1;
-                const cc = Math.min(c, l1 / 2, l2 / 2);
-                r.push([p1[0] - (p1[0] - p0[0]) / l1 * cc, p1[1] - (p1[1] - p0[1]) / l1 * cc]);
-                r.push([p1[0] + (p2[0] - p1[0]) / l2 * cc, p1[1] + (p2[1] - p1[1]) / l2 * cc]);
+                const p0 = snapPt(pts[i - 1]), p1 = snapPt(pts[i]), p2 = snapPt(pts[i + 1]);
+                const l1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
+                const l2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) || 1;
+                const cc = Math.min(c, snap(l1 / 2), snap(l2 / 2));
+                r.push([snap(p1[0] - (p1[0] - p0[0]) / l1 * cc), snap(p1[1] - (p1[1] - p0[1]) / l1 * cc)]);
+                r.push([snap(p1[0] + (p2[0] - p1[0]) / l2 * cc), snap(p1[1] + (p2[1] - p1[1]) / l2 * cc)]);
             }
-            r.push(pts[pts.length - 1]);
-            return r;
+            r.push(snapPt(pts[pts.length - 1]));
+            return ortho(r);
         };
         const crook = function (pts) {
-            // Rope never runs dead straight: small fixed kinks mid-segment.
-            const r = [pts[0]];
+            const r = [snapPt(pts[0])];
             for (let i = 1; i < pts.length; i++) {
-                const a0 = pts[i - 1], b0 = pts[i];
+                const a0 = snapPt(pts[i - 1]), b0 = snapPt(pts[i]);
                 const dx = b0[0] - a0[0], dy = b0[1] - a0[1], len = Math.hypot(dx, dy);
-                if (len > 40) {
-                    const nx = -dy / len, ny = dx / len, o = (i % 2 ? 1 : -1) * Math.max(3, Math.round(tt * 0.35));
-                    r.push([a0[0] + dx * 0.33 + nx * o, a0[1] + dy * 0.33 + ny * o]);
-                    r.push([a0[0] + dx * 0.66 - nx * o, a0[1] + dy * 0.66 - ny * o]);
+                if (len > cell * 6) {
+                    const o = (i % 2 ? 1 : -1) * cell;
+                    const horiz = Math.abs(dx) >= Math.abs(dy);
+                    if (horiz) {
+                        r.push([snap(a0[0] + dx * 0.33), snap(a0[1] + o)]);
+                        r.push([snap(a0[0] + dx * 0.66), snap(a0[1] - o)]);
+                    } else {
+                        r.push([snap(a0[0] + o), snap(a0[1] + dy * 0.33)]);
+                        r.push([snap(a0[0] - o), snap(a0[1] + dy * 0.66)]);
+                    }
                 }
                 r.push(b0);
             }
+            return ortho(r);
+        };
+        // Voidborn "tendril": blocky stairs that alternate turn direction each corner.
+        const stair = function (pts) {
+            const r = [snapPt(pts[0])];
+            for (let i = 1; i < pts.length; i++) {
+                const a = r[r.length - 1];
+                const b = snapPt(pts[i]);
+                if (a[0] === b[0] || a[1] === b[1]) { r.push(b); continue; }
+                const flip = i % 2;
+                if (flip) { r.push([b[0], a[1]]); r.push(b); }
+                else { r.push([a[0], b[1]]); r.push(b); }
+            }
             return r;
         };
-        const curve = function (pts) {
-            // Smooth tendril: quadratic corners through segment midpoints.
-            let d = 'M' + Math.round(pts[0][0]) + ' ' + Math.round(pts[0][1]);
-            for (let i = 1; i < pts.length - 1; i++) {
-                const m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
-                const e = i === 1 ? [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2] : null;
-                if (e) d += 'L' + Math.round(e[0]) + ' ' + Math.round(e[1]);
-                d += 'Q' + Math.round(pts[i][0]) + ' ' + Math.round(pts[i][1]) + ' ' + Math.round(m[0]) + ' ' + Math.round(m[1]);
-            }
-            d += 'L' + Math.round(pts[pts.length - 1][0]) + ' ' + Math.round(pts[pts.length - 1][1]);
-            return d;
+        const pathD = function (pts) {
+            return 'M' + pts.map(function (q) { return q[0] + ' ' + q[1]; }).join('L');
         };
         const cable = function (pts0, key) {
-            let pts = pts0, d;
+            let pts;
             if (S.route === 'zig') pts = zig(pts0);
-            else if (S.route === 'chamfer') pts = chamfer(pts0, Math.max(8, Math.round(18 * k)));
+            else if (S.route === 'chamfer') pts = chamfer(pts0);
             else if (S.route === 'crook') pts = crook(pts0);
-            d = S.route === 'curve' ? curve(pts0) : 'M' + pts.map(function (q) { return Math.round(q[0]) + ' ' + Math.round(q[1]); }).join('L');
-            const join = S.round ? 'round' : 'miter';
-            const cap = S.round ? ' stroke-linecap="round"' : '';
-            const hiW = Math.max(2, Math.round(tt * (S.hiW || 0.25)));
-            const off = key === 'v' ? -Math.round(tt / 4) + ' 0' : '0 ' + -Math.round(tt / 4);
-            if (S.glow) out += '<path d="' + d + '" fill="none" stroke="' + S.glow + '" stroke-opacity="0.35" stroke-width="' + (tt + 12) + '" stroke-linejoin="round" stroke-linecap="round"/>';
-            out += '<path d="' + d + '" fill="none" stroke="' + S.out + '" stroke-width="' + (tt + 4) + '" stroke-linejoin="' + join + '"' + cap + '/>' +
-                '<path d="' + d + '" fill="none" stroke="' + S.body + '" stroke-width="' + tt + '" stroke-linejoin="' + join + '"' + cap + '/>' +
-                '<path d="' + d + '" fill="none" stroke="' + S.hi + '" stroke-width="' + hiW + '"' + (S.hiDash ? ' stroke-dasharray="' + S.hiDash + '"' : '') +
-                ' stroke-linejoin="' + join + '"' + cap + ' transform="translate(' + off + ')"/>';
+            else if (S.route === 'stair') pts = stair(pts0);
+            else pts = ortho(pts0);
+            const d = pathD(pts);
+            const hiW = Math.max(cell, (S.hiW || 1) * cell);
+            const offN = snap(tt / 2) || cell;
+            const off = key === 'v' ? (-offN) + ' 0' : '0 ' + (-offN);
+            const dash = S.hiDash ? ' stroke-dasharray="' + (cell * 2) + ' ' + (cell * 2) + '"' : '';
+            // Outer halo as a thicker lattice stroke (no soft blur / round caps).
+            if (S.glow) {
+                out += '<path d="' + d + '" fill="none" stroke="' + S.glow + '" stroke-opacity="0.4" stroke-width="' + (tt + cell * 2) + '" stroke-linejoin="miter" stroke-linecap="square"/>';
+            }
+            out += '<path d="' + d + '" fill="none" stroke="' + S.out + '" stroke-width="' + (tt + cell) + '" stroke-linejoin="miter" stroke-linecap="square"/>' +
+                '<path d="' + d + '" fill="none" stroke="' + S.body + '" stroke-width="' + tt + '" stroke-linejoin="miter" stroke-linecap="square"/>' +
+                '<path d="' + d + '" fill="none" stroke="' + S.hi + '" stroke-width="' + hiW + '"' + dash +
+                ' stroke-linejoin="miter" stroke-linecap="square" transform="translate(' + off + ')"/>';
         };
         const plug = function (x, y, horiz, dir) {
-            const L = Math.round(20 * k + 8), T = tt + 8;
-            const rx = horiz ? (dir < 0 ? x - L : x) : x - T / 2;
-            const ry = horiz ? y - T / 2 : (dir < 0 ? y - L : y);
-            const rw = horiz ? L : T, rh = horiz ? T : L;
-            out += '<rect x="' + Math.round(rx) + '" y="' + Math.round(ry) + '" width="' + Math.round(rw) + '" height="' + Math.round(rh) + '" fill="' + S.plugFill + '" stroke="' + S.plugLine + '" stroke-width="2"' + (S.round ? ' rx="6"' : '') + '/>' +
-                '<rect x="' + Math.round(horiz ? rx + (dir < 0 ? 2 : rw - 6) : rx + 2) + '" y="' + Math.round(horiz ? ry + 2 : ry + (dir < 0 ? 2 : rh - 6)) + '" width="' + (horiz ? 4 : Math.round(rw - 4)) + '" height="' + (horiz ? Math.round(rh - 4) : 4) + '" style="fill:' + S.led + '"/>';
+            const L = Math.max(cell * 3, snap(20 * k + 8));
+            const T = tt + cell;
+            const rx = snap(horiz ? (dir < 0 ? x - L : x) : x - T / 2);
+            const ry = snap(horiz ? y - T / 2 : (dir < 0 ? y - L : y));
+            const rw = snap(horiz ? L : T);
+            const rh = snap(horiz ? T : L);
+            const ledW = horiz ? cell : Math.max(cell, rw - cell);
+            const ledH = horiz ? Math.max(cell, rh - cell) : cell;
+            const ledX = snap(horiz ? rx + (dir < 0 ? cell / 2 : rw - cell - cell / 2) : rx + cell / 2);
+            const ledY = snap(horiz ? ry + cell / 2 : ry + (dir < 0 ? cell / 2 : rh - cell - cell / 2));
+            out += '<rect x="' + rx + '" y="' + ry + '" width="' + rw + '" height="' + rh + '" fill="' + S.plugFill + '" stroke="' + S.plugLine + '" stroke-width="' + cell + '"/>' +
+                '<rect x="' + ledX + '" y="' + ledY + '" width="' + ledW + '" height="' + ledH + '" style="fill:' + S.led + '"/>';
         };
         [[0.2, 0.55, 0.8], [0.3, 0.7]].forEach(function (fr, i) {
             // left (i=0) / right (i=1)
             const m = i === 0 ? sx : w - (sx + sw);
             if (m < MIN) return;
             fr.forEach(function (f, j) {
-                const y = sy + sh * f, dy = (j % 2 ? 1 : -1) * Math.min(40, m * 0.5);
+                const y = snap(sy + sh * f);
+                const dy = (j % 2 ? 1 : -1) * snap(Math.min(cell * 6, m * 0.5));
                 const x0 = i === 0 ? sx : sx + sw;
                 const dir = i === 0 ? -1 : 1;
                 const xe = i === 0 ? 0 : w;
-                const xm = x0 + dir * m * 0.45;
-                const xin = x0 - dir * reachH;
+                const xm = snap(x0 + dir * m * 0.45);
+                const xin = snap(x0 - dir * reachH);
                 plug(xin, y, true, dir);
-                const xp = xin + dir * (Math.round(20 * k + 8));
+                const xp = snap(xin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[xp, y], [xm, y], [xm, y + dy], [xe, y + dy]], 'h');
             });
         });
@@ -1109,14 +1224,15 @@
             const m = i === 0 ? sy : h - (sy + sh);
             if (m < MIN) return;
             fr.forEach(function (f, j) {
-                const x = sx + sw * f, dx = (j % 2 ? 1 : -1) * Math.min(40, m * 0.5);
+                const x = snap(sx + sw * f);
+                const dx = (j % 2 ? 1 : -1) * snap(Math.min(cell * 6, m * 0.5));
                 const y0 = i === 0 ? sy : sy + sh;
                 const dir = i === 0 ? -1 : 1;
                 const ye = i === 0 ? 0 : h;
-                const ym = y0 + dir * m * 0.45;
-                const yin = y0 - dir * (i === 0 ? reachTop : reachBot);
+                const ym = snap(y0 + dir * m * 0.45);
+                const yin = snap(y0 - dir * (i === 0 ? reachTop : reachBot));
                 plug(x, yin, false, dir);
-                const yp = yin + dir * (Math.round(20 * k + 8));
+                const yp = snap(yin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[x, yp], [x, ym], [x + dx, ym], [x + dx, ye]], 'v');
             });
         });
@@ -1187,7 +1303,10 @@
             frameEl.insertBefore(d, frameEl.firstChild);
         }
         const hud = pilotPlateHtml();
-        const sig = hud.plate + '|' + hud.res;
+        // Bust crest cache when VOXEL / GUI-voxel flips (emblem Scale2x vs NN).
+        const vx = (ROOT.getAttribute('data-vf-ship-render') || '') + '|'
+            + (ROOT.getAttribute('data-vf-gui-voxel') || '');
+        const sig = hud.plate + '|' + hud.res + '|' + vx;
         let plate = frame.querySelector('.vf-pilot-plate');
         let ress = frame.querySelector('.vf-pilot-ress');
         if (!plate) {
@@ -1249,67 +1368,90 @@
 
     /**
      * Playfield-first layout:
-     * 1) use nearly full viewport height for the fight
-     * 2) width follows aspect
-     * 3) leftover width split into side panels (clamped)
-     * 4) if sides would go below SIDE_MIN, shrink playfield to fit
+     * 1) compact sidebars at the shell edges
+     * 2) fight fills the middle slot exactly (aspect = slot; no stretch)
      */
-    function computeLayout(vw, vh, padX, padY, gap, aspect) {
+    function computeLayout(vw, vh, padX, padY, gap, aspect, fillSlot, slotMaxW, slotMaxH) {
         const shellW = Math.max(200, vw - padX * 2);
         const shellH = Math.max(180, vh - padY * 2);
-        const availH = Math.max(160, shellH - OVERLAY_CHROME);
+        const availH = Math.max(160, slotMaxH != null ? slotMaxH : (shellH - OVERLAY_CHROME));
 
-        // Ideal fight size: full height
-        let canvasH = availH;
-        let canvasW = canvasH * aspect;
+        const sidePanel = clamp(Math.round(shellW * 0.12), SIDE_MIN, SIDE_MAX);
+        const maxW = Math.max(120, slotMaxW != null ? slotMaxW : (shellW - sidePanel * 2 - gap * 2));
 
-        // Width left for both side panels + gaps between the three columns
-        let leftForSides = shellW - canvasW - gap * 2;
-        let sidePanel = leftForSides / 2;
+        // Match the middle column exactly so width AND height freiräume are used.
+        const slotAspect = maxW / Math.max(1, availH);
+        let useAspect = fillSlot ? clamp(slotAspect, 0.45, 1.6) : aspect;
 
-        if (sidePanel > SIDE_MAX) {
-            sidePanel = SIDE_MAX;
-            // Extra width goes to the fight (still height-capped)
-            const maxW = shellW - sidePanel * 2 - gap * 2;
-            canvasW = Math.min(maxW, availH * aspect);
-            canvasH = canvasW / aspect;
-        } else if (sidePanel < SIDE_MIN) {
-            sidePanel = SIDE_MIN;
-            const maxW = Math.max(120, shellW - sidePanel * 2 - gap * 2);
-            canvasW = Math.min(maxW, availH * aspect);
-            canvasH = canvasW / aspect;
+        let canvasW = maxW;
+        let canvasH = canvasW / useAspect;
+        if (canvasH > availH) {
+            canvasH = availH;
+            canvasW = canvasH * useAspect;
+        }
+        // Height-first nudge when floating-point left a vertical gap.
+        if (fillSlot && availH - canvasH > 1 && canvasW <= maxW + 0.5) {
+            canvasH = availH;
+            canvasW = Math.min(maxW, canvasH * useAspect);
+            useAspect = canvasW / Math.max(1, canvasH);
         }
 
         return {
             canvasW: canvasW,
             canvasH: canvasH,
             sidePanel: sidePanel,
-            availW: canvasW,
-            availH: availH
+            availW: maxW,
+            availH: availH,
+            aspect: useAspect
         };
     }
 
-    /** Largest integer-divisor CSS size that fits maxW×maxH. */
-    function snapVoxel(aspect, maxW, maxH) {
-        const k = Number(window.PLAYFIELD_RENDER_SCALE);
-        const scaleK = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
-        const mapW = readCssNumber('--map-w', 240);
-        const mapH = readCssNumber('--map-h', Math.round(mapW / aspect));
-        const backingW = Math.max(1, Math.round(mapW * scaleK));
-        const backingH = Math.max(1, Math.round(mapH * scaleK));
+    /** Measured fight middle slot (canvas column minus under-stage chrome). */
+    function measureFightSlot(gc) {
+        if (!gc) return null;
+        const mid = gc.querySelector('.game-canvas-container');
+        if (!mid || mid.clientWidth < 80 || mid.clientHeight < 80) return null;
+        const under = gc.querySelector('.gi-under-stage');
+        const underHidden = !under || under.hasAttribute('hidden')
+            || getComputedStyle(under).display === 'none';
+        const underH = underHidden ? 0 : (under.offsetHeight + 8);
+        const controls = mid.querySelector('.controls');
+        const controlsHidden = !controls || getComputedStyle(controls).display === 'none';
+        const controlsH = controlsHidden ? 0 : controls.offsetHeight;
+        return {
+            maxW: mid.clientWidth,
+            maxH: Math.max(120, mid.clientHeight - underH - controlsH)
+        };
+    }
 
-        let step = 1;
-        while (step < 128 && (backingW / step > maxW + 0.5 || backingH / step > maxH + 0.5)) {
-            step++;
+    /**
+     * VOXEL display size: fill maxW×maxH at map aspect (no stretch).
+     * Prefer an integer CSS scale of the logical map when it still uses
+     * most of the slot; otherwise keep the continuous fit so the middle
+     * column is not left empty (old backing/step snap halved the canvas).
+     */
+    function snapVoxel(aspect, maxW, maxH) {
+        const mapW = Math.max(1, readCssNumber('--map-w', 360));
+        const mapH = Math.max(1, readCssNumber('--map-h', Math.round(mapW / Math.max(0.45, aspect || 1.2))));
+        const a = mapW / mapH;
+        let fitW = maxW;
+        let fitH = fitW / a;
+        if (fitH > maxH) {
+            fitH = maxH;
+            fitW = fitH * a;
         }
-        let w = backingW / step;
-        let h = backingH / step;
-        if (w > maxW || h > maxH) {
-            const s = Math.min(maxW / backingW, maxH / backingH);
-            w = backingW * s;
-            h = backingH * s;
+        // Always fill the fitted slot (uniform scale, no stretch). Integer
+        // map multiples only when they already cover the freiräume.
+        const sInt = Math.max(1, Math.floor(Math.min(fitW / mapW, fitH / mapH)));
+        const intW = mapW * sInt;
+        const intH = mapH * sInt;
+        if (intW >= fitW * 0.98 && intH >= fitH * 0.98) {
+            return { canvasW: intW, canvasH: intH };
         }
-        return { canvasW: w, canvasH: h };
+        return {
+            canvasW: Math.max(1, Math.floor(fitW)),
+            canvasH: Math.max(1, Math.floor(fitH))
+        };
     }
 
     function update(force) {
@@ -1334,28 +1476,39 @@
         const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
         const zoom = guiZoom() * (inFight ? 0.85 : 1);
         ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
-        // The fight container starts at the screen opening of the bezel (44 units); content sits 8px inside it.
-        const insetX = inFight ? 44 * Math.min(real.vw / 1640, real.vh / 1110) / zoom : 0;
-        const vw = real.vw / zoom - 2 * insetX;
-        const vh = real.vh / zoom;
+        // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
+        // 16px fight inset so the playfield scales into the remaining glass.
+        const u = Math.min(real.vw / 1640, real.vh / 1110);
+        const openL = 44 * u;
+        const openR = 44 * u;
+        const openT = (44 + 22) * u;
+        const openB = 44 * u;
+        const inset = inFight ? FIGHT_INSET : 0;
+        const vw = (real.vw - openL - openR - 2 * inset) / zoom;
+        const vh = (real.vh - openT - openB - 2 * inset) / zoom;
 
-        const padX = inFight ? Math.round(8 / zoom) : clamp(Math.round(vw * 0.01), 4, 10);
-        const padY = clamp(Math.round(vh * 0.008), 2, 8);
-        const gap = clamp(Math.round(vw * 0.008), 4, 10);
+        const padX = inFight ? 0 : clamp(Math.round(vw * 0.01), 4, 10);
+        const padY = inFight ? 0 : clamp(Math.round(vh * 0.008), 2, 8);
+        const gap = inFight ? FIGHT_INSET : clamp(Math.round(vw * 0.008), 4, 10);
 
-        let layout = computeLayout(vw, vh, padX, padY, gap, aspect);
+        const measured = inFight ? measureFightSlot(gc) : null;
+        let layout = computeLayout(
+            vw, vh, padX, padY, gap, aspect, inFight,
+            measured && measured.maxW,
+            measured && measured.maxH
+        );
+        let useAspect = layout.aspect || aspect;
+        if (inFight && Math.abs(useAspect - aspect) > 0.001) {
+            syncMapToAspect(useAspect);
+        }
         let canvasW = layout.canvasW;
         let canvasH = layout.canvasH;
         let sidePanel = layout.sidePanel;
 
         if (ROOT.getAttribute('data-vf-ship-render') === 'VOXEL') {
-            const snapped = snapVoxel(aspect, canvasW, canvasH);
+            const snapped = snapVoxel(useAspect, canvasW, canvasH);
             canvasW = snapped.canvasW;
             canvasH = snapped.canvasH;
-            // Reclaim unused width into side panels after snap
-            const shellW = Math.max(200, vw - padX * 2);
-            const leftForSides = shellW - canvasW - gap * 2;
-            sidePanel = clamp(leftForSides / 2, SIDE_MIN, SIDE_MAX);
         }
 
         const fillH = Math.max(160, vh - padY * 2);
@@ -1378,20 +1531,27 @@
             !!force
         );
 
-        // Settle once after first paint (fonts / zoom)
+        // Settle once after first paint (fonts / zoom / measured middle)
         const token = ++secondPassToken;
         requestAnimationFrame(function () {
             if (token !== secondPassToken) return;
-            let layout2 = computeLayout(vw, vh, padX, padY, gap, aspect);
+            const measured2 = inFight ? measureFightSlot(gc) : null;
+            let layout2 = computeLayout(
+                vw, vh, padX, padY, gap, aspect, inFight,
+                measured2 && measured2.maxW,
+                measured2 && measured2.maxH
+            );
+            let a2 = layout2.aspect || aspect;
+            if (inFight && Math.abs(a2 - readCssNumber('--playfield-aspect', aspect)) > 0.001) {
+                syncMapToAspect(a2);
+            }
             let w2 = layout2.canvasW;
             let h2 = layout2.canvasH;
             let side2 = layout2.sidePanel;
             if (ROOT.getAttribute('data-vf-ship-render') === 'VOXEL') {
-                const snapped = snapVoxel(aspect, w2, h2);
+                const snapped = snapVoxel(a2, w2, h2);
                 w2 = snapped.canvasW;
                 h2 = snapped.canvasH;
-                const shellW = Math.max(200, vw - padX * 2);
-                side2 = clamp((shellW - w2 - gap * 2) / 2, SIDE_MIN, SIDE_MAX);
             }
             if (
                 sizesClose(w2, canvasW, SIZE_EPS) &&

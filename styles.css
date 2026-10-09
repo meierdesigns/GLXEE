@@ -245,13 +245,14 @@
     /* Viewport fit (set by viewport-fit.js; fallbacks for first paint) */
     --vw: 100vw;
     --vh: 100dvh;
-    --playfield-aspect: 0.8;
+    /* Slightly wider aspect → fight canvas a bit shorter; room for under-stage. */
+    --playfield-aspect: 1.42;
     --planet-view-zoom: 1;
     --design-canvas-w: 480;
-    --design-canvas-h: 600;
-    --canvas-w: min(480px, calc(50 * var(--sv-w)), calc((calc(100 * var(--sv-h)) - 240px) * 0.8));
-    --canvas-h: min(600px, calc(calc(100 * var(--sv-h)) - 240px), calc(calc(50 * var(--sv-w)) / 0.8));
-    --side-panel-w: clamp(172px, calc(14 * var(--sv-w)), 220px);
+    --design-canvas-h: 400;
+    --canvas-w: min(864px, calc(72 * var(--sv-w)), calc((calc(100 * var(--sv-h)) - 240px) * 1.2));
+    --canvas-h: min(600px, calc(calc(100 * var(--sv-h)) - 240px), calc(calc(72 * var(--sv-w)) / 1.2));
+    --side-panel-w: clamp(220px, calc(20 * var(--sv-w)), 300px);
     --ui-pad: clamp(6px, calc(1.2 * var(--sv-w)), 14px);
     --ui-gap: clamp(6px, calc(1 * var(--sv-w)), 14px);
     /* Normal GLXEE shell scale: equivalent to three browser zoom-out steps. */
@@ -259,10 +260,16 @@
     --app-scale: 1;
     --game-scale: 1;
     --fill-scale: 1;
-    --font-base: 12px;
-    --font-h1: 28px;
-    --font-h2: 14px;
-    --font-text: 12px;
+    /* Typography: 3 sizes only — lg / md / sm */
+    --font-lg: 20px;
+    --font-md: 14px;
+    --font-sm: 11px;
+    --font-base: var(--font-md);
+    --font-h1: var(--font-lg);
+    --font-h2: var(--font-md);
+    --font-text: var(--font-md);
+    --font-small: var(--font-sm);
+    --font-text-small: var(--font-sm);
 
     /* Global UI appearance (independent of color themes).
        Contour tokens stay equal within a weight; NORMAL default = 4px. */
@@ -321,6 +328,15 @@
     --status-warning: var(--status-warning);
     --status-error: var(--status-error);
     --status-info: var(--status-info);
+
+    /* Resource tints (synced from economyConfig); vitals map onto three of them */
+    --res-scrap: #b8b0a0;
+    --res-ore: #c49a4a;
+    --res-crystal: #6ec8e8;
+    --res-voltex: #c86ef0;
+    --vital-hull: var(--res-scrap);
+    --vital-energy: var(--res-voltex);
+    --vital-shield: var(--res-crystal);
 }
 
 * {
@@ -732,7 +748,8 @@ html[data-vf-bg-parallax="off"] .vf-bg-parallax-base {
     transform: none !important;
 }
 
-/* === Typography scale: H1 / H2 Labels / Text === */
+/* === Typography scale: LG (titles) / MD (values) / SM (labels) === */
+.type-lg,
 .type-h1,
 h1,
 .start-screen-title,
@@ -743,30 +760,16 @@ h1,
 .settings-overlay h2,
 .planet-editor-header h2,
 .theme-editor-title {
-    font-size: var(--font-h1);
+    font-size: var(--font-lg);
     font-family: var(--ui-font-h1, var(--ui-font-family));
     font-weight: bold;
 }
 
+.type-md,
 .type-h2,
+.type-text,
 h2,
 h3,
-label,
-.stat-label,
-.detail-label,
-.menu-cluster-title,
-.menu-item-label,
-.setting-item label,
-.volume-control label,
-.theme-editor-appearance-title,
-.theme-editor-swatch-group-title,
-.theme-editor-gfx-title {
-    font-size: var(--font-h2);
-    font-family: var(--ui-font-h2, var(--ui-font-family));
-    font-weight: bold;
-}
-
-.type-text,
 p,
 button,
 input,
@@ -777,16 +780,28 @@ textarea,
 .start-screen-profile,
 .start-screen-instructions,
 .font-menu-preview {
-    font-size: var(--font-text);
+    font-size: var(--font-md);
     font-family: var(--ui-font-text, var(--ui-font-family));
 }
 
+.type-sm,
 .type-small,
 small,
+label,
+.stat-label,
+.detail-label,
+.menu-cluster-title,
+.menu-item-label,
+.setting-item label,
+.volume-control label,
+.theme-editor-appearance-title,
+.theme-editor-swatch-group-title,
+.theme-editor-gfx-title,
 .ui-controls-hint,
 .profile-selection-instructions {
-    font-size: var(--font-small);
+    font-size: var(--font-sm);
     font-family: var(--ui-font-small, var(--ui-font-family));
+    font-weight: bold;
 }
 
 .font-menu-preview {
@@ -862,29 +877,18 @@ html[data-vf-scanlines="off"] .vf-fx-scanlines {
 }
 
 .vf-fx-crt {
-    /* Tube look instead of plain darkening: the picture behind gets more
-       contrast, saturation and bloom; an RGB phosphor mask and a faint
-       centre glow sit on top, the corners fall off only softly, and the
-       whole thing flickers slightly. */
-    -webkit-backdrop-filter: url(#vfCrtFx) contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0))) blur(calc(0.9px * var(--vf-crt, 0)));
-    backdrop-filter: url(#vfCrtFx) contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0))) blur(calc(0.9px * var(--vf-crt, 0)));
+    /* Tube look without warp/blur: horizontal shadow mask + vignette only.
+       The old 90deg RGB phosphor stripes read as weird semi-transparent
+       vertical lines across the fight screen. */
+    -webkit-backdrop-filter: contrast(calc(1 + 0.18 * var(--vf-crt, 0))) saturate(calc(1 + 0.28 * var(--vf-crt, 0))) brightness(calc(1 + 0.08 * var(--vf-crt, 0)));
+    backdrop-filter: contrast(calc(1 + 0.18 * var(--vf-crt, 0))) saturate(calc(1 + 0.28 * var(--vf-crt, 0))) brightness(calc(1 + 0.08 * var(--vf-crt, 0)));
     background:
-        /* coarse shadow mask: 3px RGB stripes, broken by dark gaps every 6px */
         repeating-linear-gradient(
             0deg,
-            rgba(0, 0, 0, calc(0.22 * var(--vf-crt, 0))) 0px,
-            rgba(0, 0, 0, calc(0.22 * var(--vf-crt, 0))) 1px,
+            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) 0px,
+            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) 1px,
             transparent 1px,
             transparent 6px
-        ),
-        repeating-linear-gradient(
-            90deg,
-            rgba(255, 0, 0, calc(0.16 * var(--vf-crt, 0))) 0px,
-            rgba(255, 0, 0, calc(0.16 * var(--vf-crt, 0))) 3px,
-            rgba(0, 255, 0, calc(0.16 * var(--vf-crt, 0))) 3px,
-            rgba(0, 255, 0, calc(0.16 * var(--vf-crt, 0))) 6px,
-            rgba(0, 0, 255, calc(0.16 * var(--vf-crt, 0))) 6px,
-            rgba(0, 0, 255, calc(0.16 * var(--vf-crt, 0))) 9px
         ),
         radial-gradient(
             ellipse 70% 65% at 50% 50%,
@@ -1055,7 +1059,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    justify-content: center;
+    justify-content: space-between;
     width: calc(var(--vw, calc(100 * var(--sv-w))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     min-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
@@ -1095,12 +1099,14 @@ html[data-vf-arcade="on"] .settings-row-value {
     height: 100%;
     max-height: 100%;
     align-self: stretch;
-    gap: clamp(4px, calc(0.7 * var(--sv-h)), 8px);
+    gap: clamp(3px, calc(0.5 * var(--sv-h)), 6px);
     z-index: 10;
 }
 
 /* Compact Game Info Panel */
 .game-info-panel {
+    position: relative;
+    isolation: isolate;
     width: 100%;
     flex: 1 1 auto;
     min-height: 0;
@@ -1114,23 +1120,26 @@ html[data-vf-arcade="on"] .settings-row-value {
             var(--color-background) 60%);
     border: var(--ui-border-width) solid var(--color-primary);
     border-radius: 0;
-    padding: clamp(4px, calc(0.55 * var(--sv-h)), 7px);
+    padding: clamp(4px, calc(0.5 * var(--sv-h)), 8px);
     color: var(--color-text);
     font-size: var(--font-text);
-    line-height: 1.1;
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 16%, transparent);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: none;
+    text-rendering: geometricPrecision;
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     visibility: visible;
     opacity: 1;
 }
 
 .gi-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
-    padding-bottom: 4px;
+    padding-bottom: 6px;
     border-bottom: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     flex-shrink: 0;
 }
@@ -1260,58 +1269,103 @@ html[data-vf-arcade="on"] .settings-row-value {
     background: color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
+/* Planet fills the info panel as atmosphere, not a corner icon. */
 .game-info-planet {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0;
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
-    aspect-ratio: 1;
+    opacity: 0.42;
 }
-
 .game-info-planet svg,
 .game-info-planet .game-info-planet-fallback {
-    width: 100%;
-    height: 100%;
+    width: 118%;
+    height: 118%;
+    max-width: none;
     display: block;
-    filter: contrast(1.15) brightness(1.1);
+    object-fit: cover;
+    filter: contrast(1.15) brightness(0.95) saturate(1.1);
 }
-
 .game-info-planet-fallback {
     border-radius: 50%;
     background: radial-gradient(circle at 30% 30%, var(--color-text-secondary), var(--color-primary) 70%, var(--color-border));
+}
+.game-info-panel > :not(.game-info-planet) {
+    position: relative;
+    z-index: 1;
 }
 
 .gi-head-text {
     min-width: 0;
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
 }
 
 .gi-head-text h3,
 .game-info-header h3 {
     margin: 0;
-    font-size: var(--font-h2);
-    color: var(--color-primary);
+    font-size: var(--font-lg);
+    color: #fff;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent);
-    overflow-wrap: anywhere;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 0 #050508, 0 0 4px #050508;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
     line-height: 1.15;
+}
+
+/* STAGE left of difficulty on one row */
+.gi-head-meta {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gi-head-text .gi-stage {
+    margin: 0;
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: color-mix(in srgb, #fff 88%, var(--faction-accent, var(--color-primary)));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.15;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.gi-head-text .gi-stage[hidden] {
+    display: none !important;
 }
 
 .game-info-panel .level-difficulty,
 .game-info-panel .gi-diff {
-    margin-top: 2px;
-    padding: 2px 6px;
-    background: color-mix(in srgb, var(--color-primary) 18%, transparent);
-    color: var(--color-primary);
+    margin-top: 0;
+    padding: 2px 7px;
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    color: #fff;
     border: var(--ui-border-width-thin) solid var(--color-primary);
     border-radius: 0;
-    font-size: 0.85em;
+    font-size: var(--font-sm);
     font-weight: bold;
-    letter-spacing: 1px;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
     display: inline-block;
     clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 0 100%, 0 4px, 2px 4px, 2px 2px, 4px 2px);
 }
@@ -1319,7 +1373,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .gi-body {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
     flex: 1 1 auto;
     min-height: 0;
@@ -1328,10 +1382,10 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .gi-cluster {
     min-width: 0;
-    padding: 3px 5px;
+    padding: 4px 6px;
     border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-    background: color-mix(in srgb, var(--color-background) 72%, transparent);
-    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 48%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 30%, transparent), inset 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 16%, transparent);
+    background: color-mix(in srgb, #05060a 88%, var(--color-background));
+    box-shadow: none;
     flex: 0 0 auto;
 }
 
@@ -1345,17 +1399,51 @@ html[data-vf-arcade="on"] .settings-row-value {
     margin: 0 0 2px;
     padding-bottom: 1px;
     border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-    font-size: 0.72em;
+    font-size: var(--font-sm);
     font-weight: bold;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-primary);
+    line-height: 1.15;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+}
+/* Icon as a left rail beside the body — no header bar / underline. */
+.gi-cluster-iconed {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.gi-cluster-iconed > .gi-cluster-title {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex: 0 0 auto;
+    align-self: center;
+}
+.gi-cluster-iconed > .gi-cluster-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.gi-cluster-title-icon {
+    letter-spacing: 0;
+    line-height: 0;
+    min-height: 24px;
+}
+.gi-cluster-title-icon :is(img, .gi-icon) {
+    width: 24px !important;
+    height: 24px !important;
+    display: block;
 }
 
 .gi-cluster-body {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0;
     min-width: 0;
 }
 
@@ -1381,32 +1469,32 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .gi-metric-label {
     color: var(--color-text-secondary);
-    font-size: 0.72em;
-    letter-spacing: 0.06em;
+    font-size: var(--font-sm);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: 0.85;
-    line-height: 1.1;
+    opacity: 1;
+    line-height: 1.2;
 }
 
 .gi-metric-value {
-    color: var(--color-text);
+    color: #fff;
     font-weight: bold;
     letter-spacing: 0;
     font-variant-numeric: tabular-nums;
     overflow: visible;
     text-overflow: clip;
     white-space: nowrap;
-    font-size: 0.9em;
-    line-height: 1.15;
+    font-size: var(--font-md);
+    line-height: 1.25;
 }
 
 .gi-row {
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr);
-    gap: 6px;
-    align-items: center;
+    gap: 2px 6px;
+    align-items: start;
     min-width: 0;
-    padding: 1px 0;
+    padding: 2px 0;
 }
 
 .gi-row-icon {
@@ -1428,32 +1516,36 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .gi-row-text {
     min-width: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 4px 8px;
-    align-items: baseline;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1px;
 }
 
 .gi-row-label {
-    color: var(--color-text-secondary);
-    font-size: 0.78em;
-    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--color-text, #fff) 72%, var(--faction-accent, var(--color-primary)));
+    font-size: var(--font-sm);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: 0.85;
+    opacity: 1;
     flex-shrink: 0;
+    line-height: 1.15;
 }
 
 .gi-row-value {
-    color: var(--color-text);
+    color: #fff;
     font-weight: bold;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    text-align: right;
+    text-align: left;
     min-width: 0;
     max-width: 100%;
+    font-size: var(--font-md);
+    line-height: 1.25;
 }
 
 .gi-chip-row {
@@ -1467,10 +1559,25 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .gi-chip-row-label {
     color: var(--color-text-secondary);
-    font-size: 0.72em;
+    font-size: var(--font-sm);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     opacity: 0.85;
+    text-align: left;
+    justify-self: start;
+}
+.gi-chip-row-label-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    line-height: 0;
+    letter-spacing: 0;
+    opacity: 1;
+}
+.gi-chip-row-label-icon :is(img, .gi-icon) {
+    width: 16px !important;
+    height: 16px !important;
+    display: block;
 }
 
 .gi-chips {
@@ -1485,19 +1592,21 @@ html[data-vf-arcade="on"] .settings-row-value {
     flex-direction: column;
     align-items: center;
     gap: 1px;
-    width: 42px;
+    width: min(100%, 72px);
+    min-width: 48px;
     max-width: 100%;
-    padding: 2px 1px;
+    padding: 3px 4px;
     border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+    box-sizing: border-box;
 }
 
 .gi-chip-label {
     display: block;
     width: 100%;
     text-align: center;
-    font-size: 0.62em;
+    font-size: var(--font-sm);
     letter-spacing: 0.02em;
     color: var(--color-text-secondary);
     overflow: hidden;
@@ -1508,7 +1617,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 .gi-chip-loot .gi-chip-count {
     color: var(--color-text-primary, var(--color-primary));
     font-weight: bold;
-    font-size: 0.72em;
+    font-size: var(--font-md);
 }
 
 /* Legacy hooks kept for any external selectors */
@@ -1734,7 +1843,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     padding: clamp(8px, calc(1.5 * var(--sv-h)), 16px) clamp(10px, calc(2 * var(--sv-w)), 24px);
     width: fit-content;
     max-width: min(calc(94 * var(--cw)), calc(820px * var(--zk)));
-    max-height: min(calc(94 * var(--sv-h)), var(--vh, calc(94 * var(--sv-h))));
+    max-height: min(calc(94 * var(--ch)), calc(94 * var(--sv-h)));
     overflow: hidden;
     box-sizing: border-box;
     display: flex;
@@ -1799,33 +1908,25 @@ html[data-vf-arcade="on"] .settings-row-value {
     margin: 5px 0;
 }
 
-/* Game Canvas Container — fight fills the column; chrome overlays the stage */
+/* Middle fight column: canvas grows, under-stage stays as a single foot bar */
 .game-canvas-container {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
     text-align: center;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
     height: 100%;
     max-height: 100%;
     overflow: hidden;
     position: relative;
+    gap: 0;
 }
 
 .game-header {
-    position: absolute;
-    top: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 6;
-    margin: 0;
-    flex-shrink: 0;
-    pointer-events: none;
-    width: max-content;
-    max-width: 100%;
+    display: none !important;
 }
 
 .game-header h1 {
@@ -1855,11 +1956,129 @@ html[data-vf-arcade="on"] .settings-row-value {
     flex-direction: row;
     align-items: stretch;
     justify-content: center;
-    width: var(--canvas-w);
+    width: 100%;
     max-width: 100%;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     min-height: 0;
     position: relative;
+    overflow: hidden;
+}
+html body .game-container .game-stage #gameCanvas {
+    margin: 0 auto;
+    max-width: 100%;
+    max-height: 100%;
+    width: var(--canvas-w);
+    height: var(--canvas-h);
+}
+
+/* SHIP + FIELD strip — one bar under the canvas, not nested framed boxes */
+.gi-under-stage {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 auto;
+    margin: 8px 0 0;
+    min-height: 0;
+    box-sizing: border-box;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, #05060a);
+    overflow: hidden;
+}
+.gi-under-stage[hidden] {
+    display: none !important;
+}
+.gi-under-stage > .gi-cluster {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.gi-under-stage > .gi-cluster + .gi-cluster {
+    border-left: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 45%, transparent) !important;
+}
+.gi-under-stage > .gi-cluster.gi-cluster-iconed {
+    flex-direction: row;
+    align-items: center;
+}
+.gi-under-stage .gi-cluster-title {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex: 0 0 auto;
+}
+.gi-under-stage .gi-cluster-title-icon {
+    min-height: 28px;
+}
+.gi-under-stage .gi-cluster-title-icon :is(img, .gi-icon, canvas) {
+    width: 28px !important;
+    height: 28px !important;
+}
+.gi-under-stage > .gi-cluster-combat {
+    flex: 1.65 1 0;
+}
+.gi-under-stage > .gi-cluster-field {
+    flex: 1 1 0;
+}
+.gi-under-stage .gi-cluster-body {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+}
+.gi-under-stage .gi-metrics-2x2 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 4px;
+}
+.gi-under-stage .gi-metrics-loot {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.gi-under-stage .gi-metric {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: left;
+    gap: 5px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 2px 4px;
+    min-height: 0;
+}
+.gi-under-stage .gi-metric-value {
+    font-size: var(--font-md);
+    line-height: 1;
+    color: #fff;
+}
+.gi-under-stage .gi-loot .gi-loot-count {
+    color: var(--loot-color, #fff);
+    font-weight: bold;
+}
+.gi-under-stage .gi-loot.gi-loot-empty {
+    opacity: 0.4;
+}
+.gi-under-stage .gi-stat-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    line-height: 0;
+}
+.gi-under-stage :is(img, .gi-icon, canvas) {
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+    -ms-interpolation-mode: nearest-neighbor;
+    flex-shrink: 0;
 }
 
 .mission-start-overlay {
@@ -1870,9 +2089,8 @@ html[data-vf-arcade="on"] .settings-row-value {
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    background:
-        linear-gradient(90deg, transparent 0 12%, color-mix(in srgb, var(--color-primary) 8%, transparent) 12.2%, transparent 12.4% 87.6%, color-mix(in srgb, var(--color-primary) 8%, transparent) 87.8%, transparent 88%),
-        rgba(0, 0, 0, 0.18);
+    /* Flat dim only — old 12%/88% primary hairlines looked like ghost frame contours. */
+    background: rgba(0, 0, 0, 0.18);
 }
 
 .mission-start-overlay.hidden {
@@ -1884,7 +2102,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     display: grid;
     place-items: center;
     font-family: var(--ui-font-family, monospace);
-    font-size: clamp(18px, calc(4.5 * var(--sv-w)), 28px);
+    font-size: var(--font-lg);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1894,11 +2112,9 @@ html[data-vf-arcade="on"] .settings-row-value {
     min-height: 64px;
     padding: 16px 22px;
     border: var(--ui-border-width, 2px) solid var(--color-primary, #b0b0b0);
-    background:
-        linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent),
-        color-mix(in srgb, var(--color-background) 88%, transparent);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 16%, transparent);
-    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 42%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 18%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 18%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 18%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 18%, transparent);
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent);
+    text-shadow: 0 1px 0 #050508, 0 0 6px #050508;
     -webkit-font-smoothing: none;
     -moz-osx-font-smoothing: unset;
 }
@@ -1914,7 +2130,7 @@ html[data-vf-arcade="on"] .settings-row-value {
     background:
         repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-primary) 6%, transparent) 3px 4px),
         color-mix(in srgb, var(--color-background) 92%, transparent);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-background) 80%, transparent), inset 0 0 0 var(--ui-border-width-thick) color-mix(in srgb, var(--color-primary) 30%, transparent), 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-background) 70%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
     text-shadow: none;
     image-rendering: pixelated;
 }
@@ -1960,7 +2176,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 
 .mission-start-text.mission-start-go {
     min-width: min(78%, 240px);
-    font-size: clamp(28px, calc(8 * var(--sv-w)), 48px);
+    font-size: var(--font-lg);
     color: var(--color-primary, #c8f0c8);
     border-color: var(--color-primary, #c8f0c8);
 }
@@ -1990,7 +2206,7 @@ html[data-vf-arcade="on"] .settings-row-value {
 }
 
 .player-vitals-side {
-    --vitals-h: clamp(120px, calc(22 * var(--sv-h)), 200px);
+    --vitals-h: clamp(96px, calc(16 * var(--sv-h)), 150px);
     display: flex;
     flex-direction: row;
     align-items: stretch;
@@ -2002,13 +2218,13 @@ html[data-vf-arcade="on"] .settings-row-value {
     min-height: var(--vitals-h);
     max-height: var(--vitals-h);
     box-sizing: border-box;
-    padding: 6px 5px;
+    padding: 5px 5px;
     border: var(--ui-border-width) solid var(--color-primary);
     background:
         linear-gradient(165deg,
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 16%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 .player-vitals-side .health-bar {
@@ -2026,17 +2242,28 @@ html[data-vf-arcade="on"] .settings-row-value {
 .player-vitals-side .health-stat-icon,
 .player-vitals-side .health-ship-icon {
     margin-right: 0;
-    margin-bottom: 0;
-    width: 32px;
-    height: 32px;
+    margin-bottom: 4px;
+    /* Native 16×16 canvas → 3× nearest-neighbor (no Scale2x mush). */
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+    -ms-interpolation-mode: nearest-neighbor;
+    filter: none !important;
+    opacity: 1 !important;
 }
 
 .player-vitals-side .health-fill {
     flex: 1 1 auto;
-    width: 20px;
+    width: 44px;
     height: auto;
     min-height: 0;
     align-self: center;
+    border-width: max(2px, var(--ui-border-width-thin, 2px));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vital-color, var(--color-border)) 35%, transparent);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }
 
 .player-vitals-side .health-fill::before {
@@ -2045,14 +2272,21 @@ html[data-vf-arcade="on"] .settings-row-value {
     left: 0;
     width: 100%;
     height: var(--health-width, 100%);
-    transition: height 0.3s ease;
+    transition: height 0.12s steps(8, end);
+    /* Hard 2px lattice bands — no soft blend */
+    background-image: repeating-linear-gradient(
+        to top,
+        transparent 0 2px,
+        rgba(0, 0, 0, 0.35) 2px 4px
+    );
+    background-blend-mode: normal;
 }
 
 #gameCanvas {
     border: var(--ui-border-width-thick) solid var(--ui-border);
     background: var(--color-background);
     display: block;
-    margin: 0;
+    margin: 0 auto;
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
@@ -2060,9 +2294,8 @@ html[data-vf-arcade="on"] .settings-row-value {
     width: var(--canvas-w);
     height: var(--canvas-h);
     max-width: 100%;
-    max-height: min(var(--canvas-h), 100%);
-    /* Size comes from --canvas-w/h (full map fit); do not force a second aspect box */
-    aspect-ratio: auto;
+    max-height: 100%;
+    /* Size from --canvas-w/h (aspect-correct); do not flex-stretch */
     flex: 0 0 auto;
     filter: contrast(var(--theme-contrast-filter, 1.15))
         saturate(var(--theme-saturation-filter, 1))
@@ -2076,16 +2309,13 @@ html[data-vf-ship-render="VOXEL"] #gameCanvas {
     image-rendering: -moz-crisp-edges !important;
     image-rendering: crisp-edges !important;
 }
-html[data-vf-ship-render="VOXEL"] .vf-fx-crt {
-    -webkit-backdrop-filter: contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0)));
-    backdrop-filter: contrast(calc(1 + 0.22 * var(--vf-crt, 0))) saturate(calc(1 + 0.35 * var(--vf-crt, 0))) brightness(calc(1 + 0.12 * var(--vf-crt, 0)));
-}
+/* VOXEL CRT inherits the shared no-warp CRT stack above. */
 html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     image-rendering: pixelated !important;
     image-rendering: crisp-edges !important;
 }
 
-/* Right HUD cluster: enemy health bars */
+/* Right HUD cluster: loadout top, enemy bars, mission bottom */
 .game-right-cluster {
     display: flex;
     flex-direction: column;
@@ -2100,6 +2330,169 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     z-index: 10;
 }
 
+.gi-loadout-side {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    order: -1;
+}
+.gi-loadout-side[hidden] {
+    display: none !important;
+}
+.gi-loadout-side > .gi-cluster {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+}
+.gi-loadout-side .gi-cluster-title {
+    margin: 0 0 6px;
+    padding-bottom: 4px;
+    letter-spacing: 0.12em;
+}
+.gi-loadout-side .gi-cluster-body {
+    gap: 0;
+}
+.gi-loadout-side .gi-row {
+    align-items: center;
+    padding: 6px 0;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 4px 8px;
+}
+.gi-loadout-side .gi-row-text {
+    flex-direction: column;
+    gap: 1px;
+}
+.gi-loadout-side .gi-row-value {
+    text-align: left;
+}
+.gi-loadout-side .gi-row-value,
+.gi-loadout-side .gi-metric-value {
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: #fff;
+}
+.gi-loadout-side .gi-cluster-body > .gi-row {
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.gi-loadout-side .gi-cluster-body > .gi-row:last-of-type {
+    border-bottom: 0;
+}
+.gi-loadout-side .gi-weapon-chips {
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.gi-loadout-side :is(.gi-row-icon, .gi-icon) {
+    width: 28px;
+    height: 28px;
+}
+.gi-loadout-side .gi-row-icon img {
+    width: 28px !important;
+    height: 28px !important;
+}
+
+.gi-mission-side {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    margin-top: auto;
+}
+.gi-mission-side[hidden] {
+    display: none !important;
+}
+.gi-mission-side > .gi-cluster {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+}
+.gi-mission-side .gi-cluster-title {
+    margin: 0 0 6px;
+    padding-bottom: 4px;
+    letter-spacing: 0.12em;
+}
+.gi-mission-side .gi-cluster-body {
+    gap: 8px;
+}
+.gi-mission-side .gi-row {
+    align-items: start;
+}
+.gi-mission-side .gi-row-text {
+    flex-direction: column;
+    gap: 1px;
+}
+.gi-mission-side .gi-row-value {
+    text-align: left;
+}
+.gi-mission-side .gi-row-value,
+.gi-mission-side .gi-metric-value {
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: #fff;
+}
+
+/* Mission card: icon | action → target → status (readable, not cramped) */
+.gi-mission-card {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: center;
+    min-height: 72px;
+    padding: 8px 6px;
+    box-sizing: border-box;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.gi-mission-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+.gi-mission-card-icon :is(img, .gi-icon, canvas) {
+    width: 32px !important;
+    height: 32px !important;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.gi-mission-card-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+.gi-mission-card-action {
+    font-size: var(--font-sm);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, #fff 70%, var(--faction-accent, var(--color-primary)));
+    line-height: 1.2;
+}
+.gi-mission-card-target {
+    font-size: var(--font-md);
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.gi-mission-card-status {
+    margin-top: 2px;
+    font-size: var(--font-sm);
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faction-accent, var(--color-primary));
+    line-height: 1.2;
+}
+
 .enemy-vitals-side {
     display: flex;
     flex-direction: column;
@@ -2109,7 +2502,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
-    height: 100%;
+    height: auto;
     box-sizing: border-box;
     padding: 6px 5px;
     overflow-x: hidden;
@@ -2119,7 +2512,9 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
         linear-gradient(165deg,
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 16%, transparent);
+    /* No outer ring glow — multi-spread box-shadows drew semi-transparent
+       vertical lines over the playfield beside the sidebar. */
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
     --enemy-bar-h: 14px;
     --enemy-icon-size: 20px;
 }
@@ -2213,48 +2608,112 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     align-items: stretch;
     justify-content: flex-start;
     margin: 0;
-    gap: 6px;
+    gap: 5px;
     width: 100%;
     box-sizing: border-box;
     overflow: hidden;
-    padding: clamp(8px, calc(1.4 * var(--sv-h)), 14px) 8px;
+    padding: 7px 8px;
     border: var(--ui-border-width) solid var(--color-primary);
     background:
         linear-gradient(165deg,
             color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
             var(--color-background) 60%);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 16%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
     font-family: var(--ui-font-family);
-    font-size: var(--font-text);
+    font-size: var(--font-md);
     color: var(--color-text);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    flex: 0 0 auto;
-    min-height: 64px;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    flex: 1 1 auto;
+    min-height: clamp(110px, calc(20 * var(--sv-h)), 200px);
+    max-height: 42%;
     -webkit-font-smoothing: none;
     -moz-osx-font-smoothing: unset;
 }
 
-.game-left-cluster .weapon-display {
-    font-weight: bold;
-    color: var(--color-primary);
-    text-shadow: 1px 0 0 color-mix(in srgb, var(--color-primary) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 2px 0 0 color-mix(in srgb, var(--color-primary) 42%, transparent), -2px 0 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 0 2px 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 0 -2px 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 2px 0 0 color-mix(in srgb, var(--color-primary) 18%, transparent), -2px 0 0 color-mix(in srgb, var(--color-primary) 18%, transparent), 0 2px 0 color-mix(in srgb, var(--color-primary) 18%, transparent), 0 -2px 0 color-mix(in srgb, var(--color-primary) 18%, transparent);
+.game-left-cluster .weapon-list {
     display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* One cohesive card per weapon: icon | name + stats + reload fill */
+.game-left-cluster .weapon-card {
+    --reload-pct: 100%;
+    position: relative;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
     align-items: center;
-    flex-wrap: wrap;
-    gap: 4px;
-    min-width: 0;
-    max-width: 100%;
-}
-
-.game-left-cluster .weapon-display #currentWeapon {
-    min-width: 0;
-    max-width: 100%;
+    gap: 8px;
+    padding: 6px 7px;
+    border: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 7%, #05060a);
+    box-sizing: border-box;
+    flex: 0 0 auto;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    transition: opacity 0.12s linear, filter 0.12s linear;
 }
 
+.game-left-cluster .weapon-card-reload {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--reload-pct);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent),
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent)
+    );
+    pointer-events: none;
+    z-index: 0;
+    transition: height 0.05s linear;
+}
+
+.game-left-cluster .weapon-card.is-reloading .weapon-card-reload {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--res-ore, #c49a4a) 10%, transparent),
+        color-mix(in srgb, var(--res-ore, #c49a4a) 34%, transparent)
+    );
+}
+
+.game-left-cluster .weapon-card.is-no-energy .weapon-card-reload {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--res-voltex, #c86ef0) 6%, transparent),
+        color-mix(in srgb, var(--res-voltex, #c86ef0) 18%, transparent)
+    );
+}
+
+.game-left-cluster .weapon-card > :not(.weapon-card-reload) {
+    position: relative;
+    z-index: 1;
+}
+
+.game-left-cluster .weapon-card.is-dim {
+    opacity: 0.42;
+    filter: saturate(0.55);
+}
+
+.game-left-cluster .weapon-card.is-dim.is-active {
+    opacity: 0.55;
+}
+
+.game-left-cluster .weapon-card.is-active {
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, #05060a);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+
+.game-left-cluster .weapon-card-icon,
 #weaponIcon {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
@@ -2264,29 +2723,72 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     border: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background: var(--ui-surface);
     flex-shrink: 0;
+    justify-self: center;
 }
 
-.game-left-cluster .weapon-info {
-    font-size: var(--font-text);
-    color: var(--color-text-secondary);
-    opacity: 0.8;
-    line-height: 1.25;
+.game-left-cluster .weapon-card.is-active .weapon-card-icon {
+    border-color: var(--faction-accent, var(--color-primary));
+}
+
+.game-left-cluster .weapon-card-body {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 0;
+    flex-direction: column;
+    gap: 3px;
     min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
 }
 
-.game-left-cluster .weapon-info .wi-part {
+.game-left-cluster .weapon-card-name {
+    font-weight: bold;
+    font-size: var(--font-md);
+    line-height: 1.1;
+    color: color-mix(in srgb, var(--color-text, #fff) 88%, var(--faction-accent, var(--color-primary)));
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.game-left-cluster .weapon-info .wi-part:not(:last-child)::after {
-    content: ' | ';
-    opacity: 0.55;
+.game-left-cluster .weapon-card.is-active .weapon-card-name {
+    color: #fff;
+}
+
+.game-left-cluster .weapon-card-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 5px;
+    font-size: var(--font-sm);
+    line-height: 1.15;
+    color: color-mix(in srgb, var(--color-text, #fff) 78%, var(--faction-accent, var(--color-primary)));
+    min-width: 0;
+}
+
+.game-left-cluster .weapon-card-stats .wi-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.game-left-cluster .weapon-card-stats .wi-sep {
+    opacity: 0.45;
+    user-select: none;
+}
+
+.game-left-cluster .weapon-card-stats .wi-icon,
+.game-left-cluster .weapon-card-stats .wi-part img.wi-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.game-left-cluster .weapon-card-stats .wi-val {
+    font-variant-numeric: tabular-nums;
+}
+
+.game-left-cluster .weapon-display {
+    display: none;
 }
 
 .health-bar {
@@ -2383,10 +2885,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     font-variant-ligatures: none;
 }
 
-.player-health .health-fill::before,
-.enemy-health .health-fill::before,
-.player-energy .health-fill::before,
-.player-shield .health-fill::before {
+.enemy-health .health-fill::before {
     background: var(--color-border);
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
@@ -2398,12 +2897,19 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     font-variant-ligatures: none;
 }
 
-.player-energy .health-fill::before {
-    opacity: 0.9;
+/* Player vitals: scrap / voltex / crystal — one colour per bar */
+.player-vitals-side .player-health { --vital-color: var(--vital-hull); }
+.player-vitals-side .player-energy { --vital-color: var(--vital-energy); }
+.player-vitals-side .player-shield { --vital-color: var(--vital-shield); }
+.player-vitals-side .health-fill {
+    border-color: color-mix(in srgb, var(--vital-color, var(--color-border)) 70%, transparent);
+    background: color-mix(in srgb, var(--vital-color, var(--color-border)) 12%, #05060a);
 }
-
-.player-shield .health-fill::before {
-    opacity: 0.65;
+.player-vitals-side .player-health .health-fill::before,
+.player-vitals-side .player-energy .health-fill::before,
+.player-vitals-side .player-shield .health-fill::before {
+    background-color: var(--vital-color);
+    opacity: 1;
 }
 
 .health-text {
@@ -2440,13 +2946,9 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     max-width: var(--canvas-w, 100%);
 }
 
-.game-canvas-container > .ui-controls-show-btn {
-    position: absolute;
-    left: 50%;
-    bottom: 6px;
-    transform: translateX(-50%);
-    margin: 0;
-    z-index: 6;
+.game-canvas-container > .ui-controls-show-btn,
+html[data-ui-controls="off"] .game-canvas-container > .ui-controls-show-btn {
+    display: none !important;
 }
 .game-canvas-container > .controls {
     position: absolute;
@@ -4511,7 +5013,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     text-align: center;
     width: fit-content;
     max-width: min(calc(860px * var(--zk)), calc(94 * var(--cw)));
-    max-height: min(calc(94 * var(--sv-h)), var(--vh, calc(94 * var(--sv-h))));
+    max-height: min(calc(94 * var(--ch)), calc(94 * var(--sv-h)));
     overflow: hidden;
     box-sizing: border-box;
     display: flex;
@@ -4836,31 +5338,52 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     line-height: 1.25;
 }
 
-/* Planet Editor — Game Boy / theme-matched */
+/* Planet / Enemy / Ship editors — fill the bezel glass (not the full stage).
+   CSS zoom + ÷zoom on geometry matches home-station / fight HUD. */
 .planet-editor-overlay {
-    position: fixed;
-    inset: 0;
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --sv-w: calc(var(--vw, 1000px) / var(--_z) / 100);
+    --sv-h: calc(var(--vh, 750px) / var(--_z) / 100);
+    position: fixed !important;
+    inset: auto !important;
+    left: calc(var(--fr-open-side) / var(--_z)) !important;
+    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--fr-open-w) / var(--_z)) !important;
+    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
     z-index: 3000;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: stretch;
+    zoom: var(--_z);
     background: rgba(0, 0, 0, 0.94);
     font-family: var(--ui-font-family);
     -webkit-font-smoothing: none;
     image-rendering: pixelated;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 0;
 }
 .planet-editor-overlay.hidden { display: none; }
 .planet-editor-panel {
-    width: min(calc(1600px * var(--zk)), calc(98 * var(--cw)));
-    height: min(calc(96 * var(--ch)), calc(1100px * var(--zk)));
-    max-height: calc(96 * var(--sv-h));
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     background: var(--color-background, #0a0a0a);
     border: var(--ui-border-width-thick) solid var(--color-primary, #c06020);
     color: var(--color-text, #e8e0d0);
-    padding: clamp(10px, calc(1.5 * var(--sv-h)), 16px) clamp(12px, calc(1.5 * var(--sv-w)), 18px) clamp(8px, calc(1.2 * var(--sv-h)), 12px);
+    padding: clamp(10px, calc(1.2 * var(--ch)), 16px) clamp(12px, calc(1.2 * var(--cw)), 18px) clamp(8px, calc(1 * var(--ch)), 12px);
     box-sizing: border-box;
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border, #3a2a18), 0 0 0 var(--ui-border-width) var(--ui-border, #3a2a18);
     border-radius: 0;
@@ -4923,7 +5446,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 .planet-editor-body {
     display: grid;
-    grid-template-columns: var(--pe-left-w, 200px) 8px minmax(0, 1fr) 8px var(--pe-right-w, 280px);
+    grid-template-columns: var(--pe-left-w, 200px) 8px minmax(0, 1fr) 8px var(--pe-right-w, 360px);
     gap: 4px;
     flex: 1;
     min-height: 0;
@@ -5280,9 +5803,11 @@ body.pe-resizing * {
     height: auto;
     max-width: 100%;
     max-height: 100%;
-    aspect-ratio: 0.8;
+    /* Match live playfield aspect (was hard-coded 0.8 → tiny stretched preview). */
+    aspect-ratio: var(--playfield-aspect, 1.35);
     object-fit: contain;
     image-rendering: pixelated;
+    image-rendering: crisp-edges;
     border: var(--ui-border-width-thick) solid var(--color-primary, #e07028);
     background: #000;
     box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border, #3a2a18);
@@ -5296,7 +5821,8 @@ body.pe-resizing * {
     color: var(--color-text-secondary, #b09070);
 }
 .planet-editor-preview-wrap.pe-preview-fs {
-    position: fixed;
+    /* Fill the editor glass (parent already applies gui-zoom). */
+    position: absolute;
     inset: 0;
     z-index: 10050;
     background: rgba(5, 4, 2, 0.96);
@@ -14548,7 +15074,8 @@ html[data-faction="machine"],
     inset: 0;
     pointer-events: none;
     background: var(--faction-surface);
-    opacity: var(--faction-surface-opacity);
+    /* Keep plating quiet so HUD labels stay readable. */
+    opacity: calc(var(--faction-surface-opacity, 0.16) * 0.35);
 }
 
 /* The HUD's own accents follow the faction, not just the theme primary. */
@@ -16203,16 +16730,19 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
 .player-vitals-side,
 .game-left-cluster .weapon-selection,
 .game-right-cluster .enemy-vitals-side {
-    background: color-mix(in srgb, var(--color-background, #050508) 55%, #000) !important;
-    color: color-mix(in srgb, var(--color-text, #fff) 88%, #fff);
+    background: color-mix(in srgb, #050508 82%, var(--color-background, #000)) !important;
+    color: #f2f4f8;
 }
-.game-info-panel :is(.gi-label, .info-label, .stat-label, small, .label),
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-label, .info-label, .stat-label, small, .label, .gi-row-label, .gi-metric-label, .gi-cluster-title, .gi-chip-row-label),
 .game-left-cluster .weapon-info {
-    color: color-mix(in srgb, var(--color-text, #fff) 70%, var(--faction-accent, var(--color-primary)));
+    color: color-mix(in srgb, #fff 72%, var(--faction-accent, var(--color-primary)));
     opacity: 1;
+    text-shadow: 0 1px 0 #050508, 0 0 4px #050508;
 }
-.game-info-panel :is(.gi-value, .info-value, .stat-value, strong) {
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-value, .info-value, .stat-value, strong, .gi-row-value, .gi-metric-value),
+.gi-head-text h3 {
     color: #fff;
+    text-shadow: 0 1px 0 #050508, 0 0 3px #050508;
 }
 
 /* Right sidebar: one row per enemy — framed portrait, faction + name, and
@@ -18875,37 +19405,49 @@ button.hs-faction-card.nav-focused {
     .hs-hangar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* --- Left HUD column: the info panel only takes the height its content
-   needs; the vitals panel (health / energy / shield) fills the rest, so
-   the bars are tall instead of leaving an empty info box. */
+/* --- Left HUD column: info packs to content; weapon + vitals take the rest. */
 .game-left-cluster > .game-info-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+}
+.game-left-cluster > .weapon-selection {
     flex: 1 1 auto;
+    min-height: clamp(110px, calc(20 * var(--sv-h)), 200px);
 }
 .game-left-cluster > .player-vitals-side {
-    --vitals-h: clamp(130px, calc(20 * var(--sv-h)), 240px);
-    flex: 0 0 auto;
-    height: var(--vitals-h);
-    max-height: var(--vitals-h);
+    --vitals-h: clamp(140px, calc(24 * var(--sv-h)), 280px);
+    flex: 1 1 auto;
+    height: auto;
     min-height: var(--vitals-h);
+    max-height: none;
 }
 
-/* Left HUD readability: larger labels/values, full-contrast labels. */
-.game-info-panel { font-size: calc(var(--font-text) + 2px); }
-.game-info-panel .gi-cluster-title { font-size: 0.9em; }
-.game-info-panel :is(.gi-metric-label, .gi-row-label, .gi-chip-row-label) {
-    font-size: 0.88em;
+/* HUD rails: 3 sizes — lg titles / md values / sm labels */
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) { font-size: var(--font-md); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-cluster-title { font-size: var(--font-sm); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-metric-label, .gi-row-label, .gi-chip-row-label) {
+    font-size: var(--font-sm);
     opacity: 1;
     color: color-mix(in srgb, var(--color-text, #fff) 80%, var(--faction-accent, var(--color-primary)));
 }
-.game-info-panel .gi-metric-value { font-size: 1.15em; color: #fff; }
-.game-info-panel .gi-row-value { font-size: 1.05em; color: #fff; }
-.game-info-panel .gi-chip-label { font-size: 0.8em; }
-.game-info-panel .gi-row { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
-.game-info-panel :is(.gi-row-icon, .gi-icon) { width: 28px; height: 28px; }
-.game-info-panel .gi-row-icon img { width: 28px !important; height: 28px !important; }
-.game-left-cluster .weapon-info { font-size: calc(var(--font-text) + 2px); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-metric-value { font-size: var(--font-md); color: #fff; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-value { font-size: var(--font-md); color: #fff; }
+:is(.game-info-panel, .gi-loadout-side) .gi-chip-label { font-size: var(--font-sm); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row { grid-template-columns: 24px minmax(0, 1fr); gap: 2px 6px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-row-icon, .gi-icon) { width: 24px; height: 24px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon { display: inline-flex; align-items: center; justify-content: center; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon .ui-weapon-tilt { width: 24px; height: 24px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon img { width: 24px !important; height: 24px !important; }
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon .ui-weapon-tilt {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.game-left-cluster .weapon-info { font-size: var(--font-sm); }
 .player-vitals-side .health-fill {
-    width: 26px;
+    width: 44px;
 }
 
 /* Ship tables (owned ships + blueprints): thumb left, name and stats right. */
@@ -22243,19 +22785,18 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
     font-size: var(--font-small);
 }
 .home-station-overlay .home-station-content {
-    /* Uniform GUI scale: zoom shrinks every element proportionally; the
-       frame geometry is divided by the zoom so it still fills the viewport. */
+    /* Uniform GUI scale; geometry matches the bezel screen opening exactly.
+       top/left ÷ zoom (CSS zoom quirk); size ÷ zoom so used layout = glass. */
     zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
     --hs-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    --hs-pad-y: clamp(8px, calc(1.6 * var(--sv-h)), 16px);
-    width: calc((var(--vw, calc(100 * var(--sv-w))) - 2 * (var(--hs-frame-gap) + var(--bezel))) / var(--hs-z)) !important;
+    --hs-pad-y: 0px;
+    width: calc(var(--fr-open-w) / var(--hs-z)) !important;
     max-width: none !important;
-    height: calc((var(--vh, calc(100 * var(--sv-h))) - 2 * (var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y))) / var(--hs-z)) !important;
+    height: calc(var(--fr-open-h) / var(--hs-z)) !important;
     max-height: none !important;
-    /* Pinned inside the frame with breathing room above and below. */
     position: fixed !important;
-    top: calc((var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y)) / var(--hs-z)) !important;
-    left: calc((var(--hs-frame-gap) + var(--bezel)) / var(--hs-z)) !important;
+    top: calc(var(--fr-open-top) / var(--hs-z)) !important;
+    left: calc(var(--fr-open-side) / var(--hs-z)) !important;
     right: auto !important;
     bottom: auto !important;
     margin: 0 !important;
@@ -23902,39 +24443,76 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .enemy-vitals-side .enemy-shield-fill.is-none { border-color: color-mix(in srgb, #4fd8ff 22%, transparent); }
 .enemy-vitals-side .enemy-shield-fill.is-none .enemy-shield-text { color: #6f8a96; }
 
-/* Left sidebar: spread the info clusters over the full height instead of
-   leaving an empty block at the bottom; rows get room to breathe. */
+/* Left sidebar: pack clusters tightly so vitals below get height. */
+.game-left-cluster > .game-info-panel {
+    padding: 5px 6px;
+    gap: 3px;
+}
+.game-left-cluster > .game-info-panel .gi-head {
+    padding-bottom: 5px;
+    gap: 0;
+    align-items: flex-start;
+}
 .game-left-cluster > .game-info-panel .gi-body {
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 2px;
 }
 .game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
 }
 .game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) .gi-cluster-body {
-    flex: 1 1 auto;
-    justify-content: space-evenly;
-    gap: 4px;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    gap: 0;
+}
+/* SESSION: no nested box / no header — sits flat in the panel. */
+.game-left-cluster > .game-info-panel .gi-cluster-session {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    gap: 0;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-session > .gi-cluster-title {
+    display: none;
 }
 .game-left-cluster > .game-info-panel .gi-metric {
-    padding: 4px 5px;
+    padding: 2px 4px;
+    gap: 0;
+}
+.game-left-cluster > .game-info-panel .gi-row { padding: 2px 0; }
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics {
+    flex: 0 0 auto;
+    grid-auto-rows: auto;
+    align-content: start;
     gap: 2px;
 }
-.game-left-cluster > .game-info-panel .gi-row { padding: 3px 0; }
-/* Fill the stretched clusters: metric tiles and rows grow into the free
-   height instead of floating in the middle of an empty box. */
-.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) .gi-cluster-body {
-    justify-content: stretch;
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session {
+    grid-template-columns: minmax(0, 1fr);
 }
-.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics {
-    flex: 1 1 auto;
-    grid-auto-rows: 1fr;
-    align-content: stretch;
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-metric {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    text-align: left;
+    padding: 2px 3px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-stat-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    line-height: 0;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-stat-icon :is(.gi-icon, img, canvas) {
+    width: 20px !important;
+    height: 20px !important;
+    image-rendering: pixelated;
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric {
-    justify-content: center;
-    gap: 4px;
+    justify-content: flex-start;
+    gap: 1px;
 }
 /* No outlines between the tiles: separated by the gap and a soft fill only
    (border stays transparent so the stat-change flash can still light it). */
@@ -23944,14 +24522,25 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     box-shadow: none;
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric-value {
-    font-size: 1.25em;
+    font-size: var(--font-md);
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-height: 0;
     border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row:last-child { border-bottom: 0; }
+.game-left-cluster > .game-info-panel .gi-cluster {
+    padding: 3px 4px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-title {
+    margin: 0;
+    padding-bottom: 0;
+}
+.game-left-cluster > .game-info-panel .gi-chips {
+    gap: 3px;
+    padding-top: 2px;
+}
 
 /* Victory / game-over menu: the selected button is a solid lit block
    (accent fill, dark text + icon, glow); the others stay quiet — a thin dim
@@ -23986,12 +24575,12 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
 }
 
 /* FIELD → LOOT: label above the chips; larger, resource-coloured icons. */
-.game-info-panel .gi-chip-row {
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
 }
-.game-info-panel .gi-chips { gap: 5px; }
-.game-info-panel .gi-chip.gi-chip-loot {
+:is(.game-info-panel, .gi-under-stage) .gi-chips { gap: 5px; }
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot {
     width: 48px;
     padding: 4px 2px 3px;
     border-color: color-mix(in srgb, var(--loot-color) 60%, transparent);
@@ -24001,14 +24590,18 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
     width: 32px !important;
     height: 32px !important;
 }
-.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
+.gi-under-stage .gi-stat-icon :is(.gi-icon, img, canvas) {
+    width: 32px !important;
+    height: 32px !important;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot .gi-chip-count {
     color: var(--loot-color);
     font-weight: bold;
     font-size: 0.85em;
 }
 
 /* FIELD → LOOT: bare icon + count below, no chip frame; empty resources dimmed. */
-.game-info-panel .gi-chip.gi-chip-loot {
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot {
     width: auto;
     min-width: 32px;
     padding: 0;
@@ -24016,20 +24609,22 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
     background: none;
     clip-path: none;
 }
-.game-info-panel .gi-chip.gi-chip-loot.gi-chip-empty { opacity: 0.35; }
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot.gi-chip-empty { opacity: 0.35; }
 
 /* LOOT: more headroom above the label; chips share the row evenly,
    icon and count centred in each column. */
-.game-info-panel .gi-cluster-field .gi-chip-row {
+:is(.game-info-panel, .gi-under-stage) .gi-cluster-field .gi-chip-row {
     padding-top: 8px;
 }
-.game-info-panel .gi-chip-row-label {
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row-label {
     margin-bottom: 2px;
+    text-align: left;
+    justify-self: start;
 }
-.game-info-panel .gi-chip-row .gi-chips {
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row .gi-chips {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    justify-items: center;
+    justify-items: start;
     width: 100%;
 }
 .game-info-panel .gi-chip.gi-chip-loot {
@@ -24046,50 +24641,54 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
 
 /* SHIP stats: improved values light up green with their delta, lowered
    ones dim red; the weapon box glows while shots are boosted. */
-.game-info-panel .gi-stat .gi-stat-delta {
+:is(.game-info-panel, .gi-under-stage) .gi-stat .gi-stat-delta {
     margin-left: 5px;
     font-size: 0.7em;
     vertical-align: middle;
 }
-.game-info-panel .gi-stat.gi-stat-up {
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-up {
     border-color: #5dff9a !important;
     background: color-mix(in srgb, #5dff9a 18%, #05060a) !important;
     box-shadow: 0 0 0 2px color-mix(in srgb, #5dff9a 35%, transparent), 0 0 12px color-mix(in srgb, #5dff9a 45%, transparent);
     animation: gi-stat-pulse 0.5s steps(2) 4;
 }
-.game-info-panel .gi-stat.gi-stat-up :is(.gi-metric-label, .gi-metric-value) { color: #5dff9a !important; }
-.game-info-panel .gi-stat.gi-stat-down {
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-up :is(.gi-metric-label, .gi-metric-value) { color: #5dff9a !important; }
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-down {
     border-color: color-mix(in srgb, #ff6a5d 60%, transparent) !important;
 }
-.game-info-panel .gi-stat.gi-stat-down .gi-metric-value { color: #ff8a80 !important; }
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-down .gi-metric-value { color: #ff8a80 !important; }
 @keyframes gi-stat-pulse { 50% { background: color-mix(in srgb, #5dff9a 40%, #05060a); } }
 
 .gi-weapon-boosted {
     border-color: #ffcf3a !important;
     box-shadow: 0 0 0 2px color-mix(in srgb, #ffcf3a 35%, transparent), 0 0 14px color-mix(in srgb, #ffcf3a 45%, transparent) !important;
 }
-.gi-weapon-boosted #weaponInfo::after {
-    content: '  ▲ BOOST';
+.gi-weapon-boosted .weapon-card.is-active {
+    border-color: #ffcf3a;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffcf3a 45%, transparent);
+}
+.gi-weapon-boosted .weapon-card.is-active .weapon-card-name::after {
+    content: ' ▲';
     color: #ffcf3a;
     font-weight: bold;
 }
 .gi-weapon-flash { animation: gi-stat-pulse 0.5s steps(2) 4; }
 
 /* LOADOUT → all slotted weapons; breathing glow during temporary boosts (power shot). */
-.game-info-panel .gi-weapon-chips {
+:is(.game-info-panel, .gi-loadout-side) .gi-weapon-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     padding-top: 4px;
 }
-.game-info-panel .gi-chip.gi-chip-weapon :is(.gi-icon, img) {
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon :is(.gi-icon, img) {
     filter: drop-shadow(0 0 1px #05060a);
 }
-.game-info-panel .gi-chip.gi-chip-weapon.gi-chip-boosted {
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon.gi-chip-boosted {
     border-color: #ffcf3a;
     animation: gi-weapon-breath 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
 }
-.game-info-panel .gi-chip.gi-chip-weapon.gi-chip-boosted :is(.gi-icon, img) {
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon.gi-chip-boosted :is(.gi-icon, img) {
     animation: gi-weapon-breath-icon 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
 }
 @keyframes gi-weapon-breath {
@@ -24102,7 +24701,7 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
 }
 
 /* SHIP stats: icon instead of the text label. */
-.game-info-panel .gi-stat .gi-stat-icon {
+:is(.game-info-panel, .gi-under-stage) .gi-stat .gi-stat-icon {
     display: flex;
     line-height: 0;
 }
@@ -24160,7 +24759,7 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-wal
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { margin: 8px 0 6px; }
 }
 
-/* SHIP stat tiles: icon/label and value centred horizontally. */
+/* SHIP stat tiles: icon + value (column in sidebar, row under stage). */
 .game-info-panel .gi-cluster-combat .gi-metric {
     align-items: center;
     justify-content: center;
@@ -24172,19 +24771,30 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-wal
     margin-left: auto;
     margin-right: auto;
 }
+.gi-under-stage :is(.gi-cluster-combat, .gi-cluster-field) .gi-metric {
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+}
+.gi-under-stage :is(.gi-cluster-combat, .gi-cluster-field) .gi-metric > * {
+    justify-content: flex-start;
+    text-align: left;
+    margin-left: 0;
+    margin-right: 0;
+}
 
 /* LOOT: icons always at full colour (also at 0); bigger counts. */
-.game-info-panel .gi-chip.gi-chip-loot,
-.game-info-panel .gi-chip.gi-chip-loot.gi-chip-empty {
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot,
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot.gi-chip-empty {
     opacity: 1 !important;
     filter: none !important;
 }
-.game-info-panel .gi-chip.gi-chip-loot :is(img, canvas) {
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot :is(img, canvas) {
     opacity: 1 !important;
     filter: none !important;
 }
-.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
-    font-size: var(--font-h2) !important;
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot .gi-chip-count {
+    font-size: var(--font-md) !important;
     line-height: 1.1;
     overflow: visible;
     text-overflow: clip;
@@ -25530,11 +26140,20 @@ select option:disabled { color: #6a7080; }
 }
 .galaxy-viewer-map { grid-area: map; min-width: 0; }
 .galaxy-viewer-map svg { width: 100%; height: auto; aspect-ratio: 560 / 220; display: block; border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
-.galaxy-viewer-info { grid-area: info; display: flex; flex-direction: column; gap: 8px; font-size: var(--font-h2); line-height: 16px; color: #d8dbe2; }
-.galaxy-viewer-info span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--font-h2); }
+.galaxy-viewer-info { grid-area: info; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; font-size: var(--font-h2); line-height: 16px; color: #d8dbe2; }
+.galaxy-viewer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-width: 0; }
+.galaxy-viewer-info span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; font-size: var(--font-h2); }
 .galaxy-viewer-name { font-size: 24px; line-height: 24px; color: #fff; }
 .galaxy-viewer-info .vs { color: color-mix(in srgb, var(--color-primary) 60%, #fff); }
 .galaxy-viewer-info .muted { opacity: 0.6; }
+.galaxy-viewer-pilots {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+    line-height: 1.4;
+}
 .galaxy-viewer-planets { grid-area: planets; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; }
 .galaxy-viewer-planets li { display: flex; align-items: center; gap: 8px; font-size: var(--font-h2); line-height: 16px; color: #d8dbe2; }
 .galaxy-viewer-planets .icon { display: inline-flex; width: 20px; height: 20px; }
@@ -25663,6 +26282,7 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
 .galaxy-viewer-info span { font-size: var(--font-small); line-height: 12px; letter-spacing: 2px; }
 .galaxy-viewer-name { font-size: var(--font-h2); line-height: 16px; }
 .galaxy-viewer-info .galaxy-viewer-btn { margin-top: 6px; }
+.galaxy-viewer-meta { gap: 4px 12px; }
 .galaxy-viewer-planets {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     grid-auto-rows: min-content;
@@ -25688,12 +26308,12 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
 @media (max-width: 1100px) {
     .galaxy-viewer-detail { grid-template-columns: 1fr; grid-template-areas: "map" "info" "planets"; }
 }
-/* Map full width, info as one row under it, then the planets. */
+/* Map full width, stacked info under it, then the planets. */
 .galaxy-viewer-detail,
 .galaxy-viewer-detail[class] { grid-template-columns: 1fr; grid-template-areas: "map" "info" "planets"; }
-.galaxy-viewer-info { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
-.galaxy-viewer-info .galaxy-viewer-btn { margin: 0 0 0 auto; }
-.galaxy-viewer-name { flex: 1 0 100%; }
+.galaxy-viewer-info { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; min-width: 0; }
+.galaxy-viewer-info .galaxy-viewer-btn { margin: 6px 0 0; align-self: flex-start; }
+.galaxy-viewer-name { flex: none; }
 /* Keep the galaxy page inside the terminal. The planet directory owns its
    scrollbar, so the map and galaxy details remain visible. */
 .start-screen-galaxies > .galaxy-viewer {
@@ -26025,14 +26645,25 @@ html .start-screen-menu-clustered .menu-item-icon .menu-pixel-icon { width: 48px
     pointer-events: auto;
 }
 
-/* Full-screen menu surfaces follow the same persistent scale as the game and station. */
+/* Full-screen menu surfaces: same GUI zoom, sized to the bezel screen opening.
+   top/left ÷ zoom (CSS zoom quirk); width/height ÷ zoom so used size = glass. */
 .start-screen,
 .start-screen-overlay,
 .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
 .player-selection-overlay {
-    zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    width: calc(var(--vw, calc(100 * var(--sv-w))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
-    height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    zoom: var(--_z);
+    position: fixed;
+    left: calc(var(--fr-open-side) / var(--_z));
+    top: calc(var(--fr-open-top) / var(--_z));
+    right: auto;
+    bottom: auto;
+    width: calc(var(--fr-open-w) / var(--_z));
+    height: calc(var(--fr-open-h) / var(--_z));
+    max-width: none;
+    max-height: none;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .enemy-size-row { grid-template-columns: 64px 1fr; grid-template-areas: "label label" "num range"; }
@@ -26392,7 +27023,8 @@ html body .profile-selection-overlay.is-inline .profile-selection-content { filt
 .pd-galaxy.is-station { box-shadow: inset 0 0 0 2px var(--faction-accent, var(--color-primary)); }
 
 /* UNIVERSE LOADER modal (galaxies page). */
-.galaxy-viewer-head-actions { display: flex; gap: 8px; align-items: center; }
+.galaxy-viewer-head { flex-wrap: wrap; min-width: 0; }
+.galaxy-viewer-head-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; min-width: 0; }
 .galaxy-viewer { position: relative; }
 .galaxy-viewer-modal-backdrop { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(2, 2, 3, 0.78); }
 .galaxy-viewer-modal { width: min(420px, 90%); box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 16px; background: #05060a; border: var(--ui-border-width, 2px) solid var(--color-primary); text-align: left; }
@@ -26588,11 +27220,12 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
 }
 
 /* Layout space under CSS zoom. Reference: 75% GUI scale.
-   --zk / --cw / --ch size elements in the zoomed layout coordinates. */
+   --zk / --cw / --ch size elements in the zoomed layout coordinates.
+   Use the bezel screen opening (not the full stage) so modals fit the glass. */
 :root {
     --zk: calc(0.75 / var(--gui-zoom, 0.75));
-    --cw: calc(var(--vw, calc(100 * var(--sv-w))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
-    --ch: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+    --cw: calc(var(--fr-open-w, var(--vw, 1280px)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+    --ch: calc(var(--fr-open-h, var(--vh, 960px)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
 }
 .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
     width: calc(420px * var(--zk)) !important;
@@ -26635,7 +27268,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
     overflow: hidden !important;
 }
 .home-station-overlay .home-station-content {
-    --hs-pad-y: calc(14 * var(--u));
+    --hs-pad-y: 0px;
 }
 .home-station-overlay::after,
 .vf-bezel::after {
@@ -27356,8 +27989,8 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     height: calc(var(--vh, calc(100 * var(--sv-h))) - 2 * var(--hs-frame-gap)) !important;
 }
 .home-station-overlay .home-station-content {
-    top: calc((var(--stage-y) + var(--hs-frame-gap) + var(--bezel) + var(--hs-pad-y)) / var(--hs-z)) !important;
-    left: calc((var(--stage-x) + var(--hs-frame-gap) + var(--bezel)) / var(--hs-z)) !important;
+    top: calc((var(--stage-y) + var(--fr-open-top)) / var(--hs-z)) !important;
+    left: calc((var(--stage-x) + var(--fr-open-side)) / var(--hs-z)) !important;
 }
 
 /* vw/vh replacements: 1% of the 4:3 stage. Not zoomed contexts: real stage px.
@@ -27378,6 +28011,13 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --stage-y: 0px;
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
+    /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before). */
+    --bz-extra: 22;
+    --fr-open-side: calc(44 * var(--bz-u));
+    --fr-open-bottom: calc(44 * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 22)) * var(--bz-u));
+    --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
+    --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
 }
 .vf-bezel {
     position: absolute;
@@ -27606,25 +28246,26 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-ma
         repeating-linear-gradient(0deg, #ffffff08 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(3 * var(--u))),
         var(--hull) !important;
 }
-/* Screen glass edge: inner shadow + soft glow line where the bezel meets the picture */
+/* Glass ::before retired — any paint here sat over the playfield as ghost
+   frame contours. Opening edge is hull plates only. */
 .vf-bezel::before {
-    content: '';
-    position: absolute;
-    inset: calc(44 * var(--u));
-    z-index: 2;
-    pointer-events: none;
-    box-shadow:
-        inset 0 0 0 calc(2 * var(--u)) color-mix(in srgb, var(--retro-ink) 45%, #000),
-        inset 0 0 calc(18 * var(--u)) calc(2 * var(--u)) #000a;
+    content: none !important;
+    display: none !important;
 }
 
-/* Cables from the bezel to the window edge (drawn by viewport-fit.js) */
+/* Cables from the bezel to the window edge (drawn by viewport-fit.js on the voxel lattice) */
 #vf-cables {
     position: fixed;
     left: 0;
     top: 0;
     z-index: 0;  /* behind the bezel; plugs still reach into the screen opening */
     pointer-events: none;
+    shape-rendering: crispEdges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+html[data-vf-frame-px="on"] #vf-cables {
+    filter: url(#vfFramePx);
 }
 
 /* Start screen: no inner housing; the content fills the (larger) screen bezel */
@@ -27737,18 +28378,59 @@ html body .profile-selection-name-mode.is-name-step .profile-selection-instructi
 /* Name step: compact cluster, so scale it up as a whole */
 html body .profile-selection-content.profile-selection-name-mode.is-name-step { zoom: 1.45; }
 
-/* Fight HUD: the left column shares the available height instead of overflowing */
+/* Fight HUD: info packs tight; weapon + vitals keep/fill remaining height */
 html body .game-container .game-left-cluster { overflow: hidden; }
-html body .game-container .game-left-cluster > #gameInfoPanel { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-html body .game-container .game-left-cluster > :not(#gameInfoPanel) { flex-shrink: 0; }
+html body .game-container .game-left-cluster > #gameInfoPanel {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 55%;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+html body .game-container .game-left-cluster > .weapon-selection { flex-shrink: 1; min-height: clamp(110px, calc(20 * var(--sv-h)), 200px); }
+html body .game-container .game-left-cluster > .player-vitals-side {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: clamp(160px, calc(28 * var(--sv-h)), 280px);
+    max-height: none;
+}
 
-/* Fight screen: sit inside the bezel (not under it) */
+/* Fight screen: glass opening + 16px inset. Zoom divides geometry (CSS zoom quirk). */
 html body .game-container {
-    --gc-inset: calc(52 * var(--bz-u));
-    width: calc((var(--vw, 1280px) - 2 * var(--gc-inset)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75))) !important;
-    height: calc((var(--vh, 960px) - 2 * var(--gc-inset)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75))) !important;
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --fight-inset: 16px;
+    position: fixed !important;
+    z-index: 9992 !important;
+    left: calc((var(--fr-open-side) + var(--fight-inset)) / var(--_z)) !important;
+    top: calc((var(--fr-open-top) + var(--fight-inset)) / var(--_z)) !important;
+    width: calc((var(--fr-open-w) - 2 * var(--fight-inset)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - 2 * var(--fight-inset)) / var(--_z)) !important;
     min-height: 0 !important;
     max-height: none !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    gap: var(--fight-inset) !important;
+    overflow: hidden !important;
+    background-color: #05060a !important;
+}
+/* Side / rail panels: single inset rim, no outer ring glow. */
+html body .game-container :is(.enemy-vitals-side, .player-vitals-side, .game-info-panel, .weapon-selection, .gi-loadout-side > .gi-cluster, .gi-mission-side > .gi-cluster) {
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
+}
+html body .game-container #gameCanvas,
+html body .game-container .game-stage,
+html body .game-container .game-canvas-container {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+html body .game-container :is(.game-left-cluster, .game-right-cluster) {
+    overflow: hidden;
+    gap: 8px;
+}
+html body .game-container .game-canvas-container > .controls,
+html body .game-container .game-canvas-container > .ui-controls-show-btn {
+    display: none !important;
 }
 html body .game-container #gameInfoPanel .gi-body { flex-shrink: 0; }
 html body .game-container #gameInfoPanel .gi-body > * { flex-shrink: 0; }
@@ -27804,11 +28486,9 @@ html body .profile-selection-content.profile-selection-floating:not(.profile-sel
     --bz-extra: 22;
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
-.vf-bezel::before { top: calc((44 + var(--bz-extra)) * var(--u)); }
+/* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */
 .vf-bezel-tools { top: calc(13 * var(--bz-u)); }
-html body .game-container { padding-top: calc(22 * var(--bz-u) / var(--gui-zoom-eff, var(--gui-zoom, 0.75))); box-sizing: border-box; }
-html body .home-station-overlay .home-station-content { margin-top: calc(22 * var(--bz-u)) !important; }
-html body .start-screen .start-screen-content.start-screen-retro { padding-top: calc(70 * var(--bz-u)) !important; }
+html body .start-screen .start-screen-content.start-screen-retro { padding-top: calc(24 * var(--bz-u)) !important; }
 .vf-bezel::after {
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
@@ -27888,17 +28568,85 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 @media (prefers-reduced-motion: reduce) { .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: none; } }
 .vf-bezel .vf-bezel-deco { z-index: 3; }
 
-/* Terran: classic heater shield with a flat top */
-.vf-pilot-crest[data-f="terran"] { --shape: polygon(0 0, 100% 0, 100% 55%, 82% 78%, 50% 100%, 18% 78%, 0 55%); }
-/* Kronax: heavy angular bastion, chevron-cut top */
-.vf-pilot-crest[data-f="kronax"] { --shape: polygon(0 12%, 50% 0, 100% 12%, 100% 62%, 74% 100%, 26% 100%, 0 62%); }
-/* Voidborn: smooth drop-shaped sigil */
-.vf-pilot-crest[data-f="voidborn"] { --shape: polygon(50% 0, 78% 10%, 96% 32%, 96% 58%, 80% 82%, 50% 100%, 20% 82%, 4% 58%, 4% 32%, 22% 10%); }
-.vf-pilot-crest[data-f="voidborn"] { filter: drop-shadow(0 0 calc(5 * var(--bz-u)) var(--retro-ink, var(--color-primary))); }
-/* Pirate: ragged pennant with torn top and notched tip */
-.vf-pilot-crest[data-f="pirate"] { --shape: polygon(0 6%, 16% 0, 30% 9%, 46% 0, 62% 10%, 80% 0, 100% 8%, 94% 44%, 100% 66%, 70% 76%, 50% 100%, 30% 76%, 0 66%, 6% 44%); }
-/* Machine: hexagonal plate */
-.vf-pilot-crest[data-f="machine"] { --shape: polygon(50% 0, 100% 18%, 100% 78%, 50% 100%, 0 78%, 0 18%); }
+/* Crest silhouettes: coarse 4·bz-u voxel stairs (beats bezel faction rules). */
+.vf-bezel .vf-pilot-crest[data-f="terran"] {
+    --shape: polygon(
+        0 0, 100% 0,
+        100% calc(28 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(28 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(28 * var(--bz-u)),
+        0 calc(28 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="kronax"] {
+    --shape: polygon(
+        0 calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
+        calc(50% - 4 * var(--bz-u)) 0, calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) 0,
+        calc(100% - 8 * var(--bz-u)) 0, calc(100% - 8 * var(--bz-u)) calc(8 * var(--bz-u)), 100% calc(8 * var(--bz-u)),
+        100% calc(36 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) 100%, calc(12 * var(--bz-u)) 100%,
+        calc(12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(4 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)), 0 calc(36 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="voidborn"] {
+    --shape: polygon(
+        calc(50% - 4 * var(--bz-u)) 0, calc(50% + 4 * var(--bz-u)) 0,
+        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(100% - 8 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(12 * var(--bz-u)), 100% calc(12 * var(--bz-u)),
+        100% calc(32 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(32 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(44 * var(--bz-u)), calc(50% + 8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(50% + 8 * var(--bz-u)) 100%, calc(50% - 8 * var(--bz-u)) 100%,
+        calc(50% - 8 * var(--bz-u)) calc(44 * var(--bz-u)), calc(4 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(32 * var(--bz-u)), 0 calc(32 * var(--bz-u)),
+        0 calc(12 * var(--bz-u)), calc(8 * var(--bz-u)) calc(12 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u))
+    );
+    filter: none;
+}
+.vf-bezel .vf-pilot-crest[data-f="pirate"] {
+    --shape: polygon(
+        0 calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
+        calc(16 * var(--bz-u)) 0, calc(16 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(24 * var(--bz-u)) calc(4 * var(--bz-u)), calc(24 * var(--bz-u)) 0,
+        calc(32 * var(--bz-u)) 0, calc(32 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(40 * var(--bz-u)) calc(4 * var(--bz-u)), calc(40 * var(--bz-u)) 0,
+        calc(48 * var(--bz-u)) 0, calc(48 * var(--bz-u)) calc(4 * var(--bz-u)), 100% calc(4 * var(--bz-u)),
+        100% calc(24 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(24 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) 100%, calc(50% - 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(12 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(36 * var(--bz-u)), calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(24 * var(--bz-u)), 0 calc(24 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="machine"] {
+    --shape: polygon(
+        calc(50% - 6 * var(--bz-u)) 0, calc(50% + 6 * var(--bz-u)) 0,
+        calc(50% + 6 * var(--bz-u)) calc(6 * var(--bz-u)), 100% calc(6 * var(--bz-u)),
+        100% calc(48 * var(--bz-u)), calc(50% + 6 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(50% + 6 * var(--bz-u)) 100%, calc(50% - 6 * var(--bz-u)) 100%,
+        calc(50% - 6 * var(--bz-u)) calc(48 * var(--bz-u)), 0 calc(48 * var(--bz-u)),
+        0 calc(6 * var(--bz-u)), calc(50% - 6 * var(--bz-u)) calc(6 * var(--bz-u))
+    );
+}
 
 /* ───── Darker, more distinct faction bezels ───── */
 .vf-bezel[data-faction="terran"]::after, .vf-bezel[data-faction="terran"] .vf-bezel-deco { }
@@ -27915,8 +28663,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
         /* seal at the crown */
         radial-gradient(circle, var(--gold) 0 calc(4 * var(--u)), var(--hull-dark) calc(4.5 * var(--u)) calc(8 * var(--u)), transparent calc(9 * var(--u))) 50% calc(24 * var(--u)) / calc(20 * var(--u)) calc(20 * var(--u)) no-repeat;
 }
-.vf-bezel[data-faction="terran"] .vf-pilot-crest { --shape: polygon(0 0, 100% 0, 100% 50%, 80% 80%, 50% 100%, 20% 80%, 0 50%); }
-
 .vf-bezel[data-faction="kronax"]::after, .vf-bezel[data-faction="kronax"] .vf-bezel-deco { }
 .vf-bezel[data-faction="kronax"] .vf-bezel-deco {
     background:
@@ -27932,8 +28678,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
         /* dried blood along the lower edge */
         linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 50%, transparent), transparent) 0 100% / 100% calc(18 * var(--u)) no-repeat;
 }
-.vf-bezel[data-faction="kronax"] .vf-pilot-crest { --shape: polygon(0 0, 22% 14%, 50% 0, 78% 14%, 100% 0, 92% 52%, 100% 74%, 62% 82%, 50% 100%, 38% 82%, 0 74%, 8% 52%); }
-
 .vf-bezel[data-faction="voidborn"]::after, .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { }
 .vf-bezel[data-faction="voidborn"]::before { border-radius: calc(70 * var(--u)) calc(20 * var(--u)) calc(54 * var(--u)) calc(38 * var(--u)) / calc(34 * var(--u)) calc(60 * var(--u)) calc(28 * var(--u)) calc(50 * var(--u)); }
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
@@ -27952,8 +28696,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
         radial-gradient(circle, var(--retro-ink) 0 calc(2.5 * var(--u)), transparent calc(3.5 * var(--u))) 12% calc(100% - calc(14 * var(--u))) / calc(14 * var(--u)) calc(14 * var(--u)) no-repeat;
     animation: vf-bz-pulse 2.6s ease-in-out infinite alternate;
 }
-.vf-bezel[data-faction="voidborn"] .vf-pilot-crest { --shape: polygon(50% 0, 70% 6%, 90% 24%, 100% 46%, 88% 70%, 70% 82%, 56% 100%, 44% 88%, 24% 82%, 8% 62%, 0 40%, 12% 20%, 30% 8%); }
-
 .vf-bezel[data-faction="pirate"]::after, .vf-bezel[data-faction="pirate"] .vf-bezel-deco { }
 .vf-bezel[data-faction="pirate"] .vf-bezel-deco {
     background:
@@ -27971,9 +28713,6 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
         radial-gradient(ellipse calc(70 * var(--u)) calc(18 * var(--u)) at 22% 100%, #3b5a2a66, transparent 70%),
         radial-gradient(ellipse calc(16 * var(--u)) calc(80 * var(--u)) at 100% 30%, #3b5a2a55, transparent 70%);
 }
-.vf-bezel[data-faction="pirate"] .vf-pilot-crest { --shape: polygon(18% 6%, 50% 0, 82% 6%, 100% 34%, 88% 58%, 78% 62%, 80% 82%, 62% 80%, 58% 100%, 50% 92%, 42% 100%, 38% 80%, 20% 82%, 22% 62%, 12% 58%, 0 34%); }
-
-
 /* ───── Faction-styled GUI: panels, tabs and buttons follow the pilot's faction ───── */
 html[data-vf-faction="terran"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
     clip-path: polygon(6px 0, calc(100% - 6px) 0, calc(100% - 6px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 6px), 0 calc(100% - 6px), 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px) !important;
@@ -28300,13 +29039,12 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
    would otherwise peek through at the rounded corners. */
 .vf-bezel { --glass-r: 0; }
 .vf-bezel[data-faction="voidborn"] { --glass-r: calc(24 * var(--u)) calc(16 * var(--u)) calc(22 * var(--u)) calc(18 * var(--u)); }
-.vf-bezel::before { border-radius: var(--glass-r); }
 .vf-bezel-back {
     position: absolute;
-    left: calc(44 * var(--u));
-    right: calc(44 * var(--u));
-    bottom: calc(44 * var(--u));
-    top: calc((44 + var(--bz-extra, 22)) * var(--u));
+    left: var(--fr-ol, var(--fr-open-side, calc(44 * var(--u))));
+    right: var(--fr-or, var(--fr-open-side, calc(44 * var(--u))));
+    bottom: var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u))));
+    top: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 22)) * var(--u))));
     z-index: 0;
     pointer-events: none;
     background: transparent;
@@ -29280,12 +30018,6 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { clip-path: none; }
 
 /* Pixel frame: sampling keeps a band only if it is at least one cell wide, so bevels and the
    glass edge are widened to one cell (otherwise they break up into scattered blocks). */
-html[data-vf-frame-px="on"] #vf-bezel::before {
-    box-shadow:
-        inset 0 0 0 var(--fr-bv, var(--fr-px, 5px)) color-mix(in srgb, var(--retro-ink) 45%, #000),
-        var(--fr-bv, var(--fr-px, 5px)) var(--fr-bv, var(--fr-px, 5px)) 0 0 color-mix(in srgb, var(--hull-lit) 70%, #fff),
-        calc(-1 * var(--fr-bv, var(--fr-px, 5px))) calc(-1 * var(--fr-bv, var(--fr-px, 5px))) 0 0 var(--hull-dark) !important;
-}
 
 /* Pixel frame keeps its roundings: the radius stays and the grid filter steps it into
    voxel stairs. (The generic "square corners" rule must not flatten the frame pieces.) */
@@ -29336,17 +30068,10 @@ html body .game-container .enemy-vitals-side :is(.enemy-faction, .enemy-name) { 
 html body .game-container .enemy-vitals-side :is(.enemy-hp-text, .enemy-shield-text) { font-family: var(--ui-font-small, var(--ui-font-family)); }
 html body .game-container #gameInfoPanel { font-family: var(--ui-font-text, var(--ui-font-family)); }
 
-/* Fight screen: container starts at the bezel's screen opening; content sits 8px inside (padding set by viewport-fit) */
-html body .game-container {
-    --gc-inset-x: calc(44 * var(--bz-u));
-    width: calc((var(--vw, 1280px) - 2 * var(--gc-inset-x)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75))) !important;
-}
-
-/* Station modal: starts at the bezel's screen opening, sections 8px from its left edge */
+/* Station: small inner pad inside the glass opening. */
 html body .home-station-overlay .home-station-content {
-    left: calc(44 * var(--bz-u) / var(--hs-z)) !important;
-    width: calc((var(--vw, calc(100 * var(--sv-w))) - 44 * var(--bz-u) - var(--hs-frame-gap) - var(--bezel)) / var(--hs-z)) !important;
-    padding-left: calc(13px / var(--hs-z)) !important;
+    padding: calc(10px / var(--hs-z)) calc(12px / var(--hs-z)) !important;
+    box-sizing: border-box !important;
 }
 
 /* Faction relation tabs: every card is the same size in every state and wears
@@ -29579,14 +30304,39 @@ html[data-vf-frame-px="on"] #vf-bezel { --fr-bv: max(var(--fr-px, 5px), var(--fr
     mask: var(--hole) exclude, linear-gradient(rgba(0, 0, 0, var(--fr-deco, 1)) 0 0);
 }
 
-/* In-game HUD fonts (VISUAL SETTINGS · TEXT · IN-GAME): own size scale and family. */
+/* In-game HUD fonts: Fernbedienung TEXT · LG/MD/SM × IN-GAME %. */
 .game-container {
-    --font-h1: var(--game-font-h1);
-    --font-h2: var(--game-font-h2);
-    --font-text: var(--game-font-text);
-    --font-small: var(--game-font-small);
-    --font-text-small: var(--game-font-small);
-    --font-base: var(--game-font-text);
+    --font-lg: var(--game-font-lg, var(--game-font-h1));
+    --font-md: var(--game-font-md, var(--game-font-h2));
+    --font-sm: var(--game-font-sm, var(--game-font-small));
+    --font-h1: var(--font-lg);
+    --font-h2: var(--font-md);
+    --font-text: var(--font-md);
+    --font-small: var(--font-sm);
+    --font-text-small: var(--font-sm);
+    --font-base: var(--font-md);
+    font-size: var(--font-md);
+}
+/* LG — titles */
+html body .game-container :is(.gi-head-text h3, .game-info-header h3, .mission-start-text:not(.mission-start-count)) {
+    font-size: var(--font-lg) !important;
+}
+/* MD — values & names */
+html body .game-container :is(
+    .gi-metric-value, .gi-row-value, .gi-loot-count, .gi-chip-count, .gi-stage,
+    #currentWeapon, .weapon-display, .weapon-display span, .weapon-selection,
+    .enemy-faction, .enemy-name, .enemy-hp-text, .enemy-shield-text,
+    .mission-start-text.mission-start-go
+) {
+    font-size: var(--font-md) !important;
+}
+/* SM — labels */
+html body .game-container :is(
+    .gi-cluster-title, .gi-metric-label, .gi-row-label, .gi-chip-row-label,
+    .gi-chip-label, .gi-diff, .level-difficulty, .weapon-info, #weaponInfo,
+    .weapon-info .wi-part, .gi-size-btn, .controls-info, .shot-type-display
+) {
+    font-size: var(--font-sm) !important;
 }
 html[data-game-font="custom"] .game-container,
 html[data-game-font="custom"] .game-container :is(div, span, p, h1, h2, h3, h4, button, label, strong, em, small, b, li) {
@@ -30016,3 +30766,165 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
 .gm-sector-planet-bg .gm-planet-icon,
 .outcome-planet-icon .gm-planet-icon,
 .gv-planet-bg .gm-planet-icon { filter: brightness(0.78) saturate(0.88) contrast(0.95); }
+
+/* The fight screen (.game-container, z 9992) must never hide the end-of-fight overlays. */
+html body .victory-screen,
+html body .game-over,
+html body .pause-overlay { z-index: 9993 !important; }
+html body .settings-overlay { z-index: 9994 !important; }
+
+/* Pause screen: larger title, wider menu, bigger buttons. */
+html body .pause-overlay h2 { font-size: calc(var(--font-h1) * 1.8); letter-spacing: 0.3em; margin-bottom: 28px; }
+html body .pause-overlay .pause-menu {
+    width: min(calc(92 * var(--cw)), calc(680px * var(--zk)));
+    gap: 24px;
+    padding: clamp(28px, calc(5 * var(--sv-h)), 56px) clamp(32px, calc(5 * var(--sv-w)), 64px);
+}
+html body .pause-overlay .pause-button {
+    font-size: calc(var(--font-h2) * 1.5);
+    padding: 22px 32px;
+    letter-spacing: 3px;
+}
+
+/* Pause screen only fills the glass opening of the bezel (same geometry as the fight screen). */
+html body .pause-overlay {
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    left: calc(var(--fr-open-side) / var(--_z)) !important;
+    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    width: calc(var(--fr-open-w) / var(--_z)) !important;
+    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Machine station tabs: frame and fill follow the hexagon, so the contour is not cut off by it. */
+html[data-vf-faction="machine"][data-vf-faction] body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::before {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
+}
+html[data-vf-faction="machine"][data-vf-faction] body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::after {
+    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%) !important;
+}
+
+/* Victory screen: only inside the bezel's screen opening (same geometry as the other menu surfaces). */
+html body .victory-screen {
+    --_z: 1;
+    zoom: var(--_z);
+    inset: auto !important;
+    left: calc(var(--fr-open-side) / var(--_z)) !important;
+    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--fr-open-w) / var(--_z)) !important;
+    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+html body .victory-screen .victory-content {
+    width: min(80%, 720px);
+    max-width: none;
+    zoom: 1;
+}
+
+/* Outcome planet: enlarged as a dimmed backdrop behind the header block (stays centred on the small icon's spot). */
+.outcome-planet { position: relative; justify-content: center; }
+.outcome-planet-icon { position: relative; z-index: 0; pointer-events: none; }
+.outcome-planet-icon > * { transform: scale(4.5); transform-origin: center; opacity: 0.45; image-rendering: pixelated; }
+.outcome-planet-text, .outcome-stepper, .outcome-status { position: relative; z-index: 1; }
+.outcome-planet-text {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    align-items: center; text-align: center; white-space: nowrap;
+    text-shadow: 0 0 4px #000, 0 0 8px #000;
+}
+.outcome-planet-text strong, .outcome-planet-text span { text-align: center; }
+.outcome-planet-text strong { font-size: calc(var(--font-h2) * 1.6); line-height: 1.3; }
+.outcome-planet-text span { font-size: calc(var(--font-small) * 1.6); line-height: 1.3; }
+
+/* Station upgrade page: legible chips + hint (the stacked glow made the values blurry). */
+html body .hs-upgrade-root .hs-upg-stats .hs-chip { padding: 8px 14px; gap: 10px; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip-label { font-size: var(--font-h2); letter-spacing: 2px; color: #fff; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip-value {
+    font-size: calc(var(--font-h2) * 1.3);
+    color: #fff;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 2px 0 #000;
+}
+html body .hs-upgrade-root .hs-hint { color: #fff; font-size: var(--font-h2); opacity: 1; margin-bottom: 8px; text-shadow: 0 2px 0 #000; }
+html body .hs-upgrade-root .hs-upg-stats { flex-wrap: nowrap; width: 100%; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip { flex: 1 1 0; min-width: 0; justify-content: center; }
+html body .hs-upgrade-root { padding-left: 0 !important; padding-right: 0 !important; }
+html body .hs-upgrade-root > * { margin-left: 0 !important; margin-right: 0 !important; padding-left: 24px !important; padding-right: 24px !important; box-sizing: border-box; }
+html body .hs-upgrade-root > .hs-shop-cats { background: transparent !important; background-image: none !important; box-shadow: none !important; }
+
+/* Upgrade-tree nodes: icon at a whole multiple of its 16px grid (48 = 3x), larger box, less muddy locked state. */
+html body .hs-upg-node .hs-upg-icon { width: 72px; height: 72px; margin-bottom: 10px; }
+html body .hs-upg-node .hs-upg-icon .hs-pixel { width: 64px !important; height: 64px !important; }
+html body .hs-upg-node.locked .hs-upg-face,
+html body .hs-upg-node.locked .hs-upg-icon,
+html body .hs-upg-node.locked .hs-upg-slots { opacity: 0.75; filter: grayscale(0.6); }
+/* Node icons: no second inner box (it doubled the frame and shrank the art); locked nodes keep their colour. */
+html body .hs-upg-node .hs-upg-icon { background: transparent; border: 0; width: 76px; height: 76px; margin-bottom: 8px; }
+html body .hs-upg-node .hs-upg-icon .hs-pixel { width: 64px !important; height: 64px !important; }
+html body .hs-upg-node.locked .hs-upg-face,
+html body .hs-upg-node.locked .hs-upg-icon,
+html body .hs-upg-node.locked .hs-upg-slots { opacity: 0.9; filter: grayscale(0.25) brightness(0.85); }
+
+/* Upgrade nodes: icon sits above a clearly visible level bar (one segment per build level). */
+html body .hs-upg-node { align-items: flex-start; padding-top: 6px; box-sizing: border-box; }
+html body .hs-upg-node .hs-upg-icon { width: 100%; height: 66px; margin-bottom: 0; }
+html body .hs-upg-node .hs-upg-slots { left: 5px; right: 5px; bottom: 5px; height: 14px; gap: 2px; padding: 2px; background: #050308; }
+html body .hs-upg-node .hs-upg-slot { border: 0 !important; background: #3a2a4a; }
+html body .hs-upg-node .hs-upg-slot.filled { background: color-mix(in srgb, var(--color-primary) 95%, #fff); }
+html body .hs-upg-node.maxed .hs-upg-slot.filled { background: #8e8; }
+html body .hs-upg-node.locked .hs-upg-slots { opacity: 1; filter: none; }
+/* PLAY button: darker icon so the label reads first. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover) :is(.hs-tab-icon, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) { filter: brightness(0.45) !important; }
+
+/* Empty station pages (craft …): centred card over the backdrop. */
+.hs-empty-state {
+    margin: auto;
+    width: min(520px, 90%);
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    background: color-mix(in srgb, #050308 82%, transparent);
+    border: var(--ui-border-width-thick, 3px) solid color-mix(in srgb, var(--color-primary) 70%, #fff);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #050308, 4px 4px 0 0 #000;
+}
+.hs-empty-icon { display: inline-flex; line-height: 0; opacity: 0.85; }
+.hs-empty-title { font-size: calc(var(--font-h2) * 1.3); letter-spacing: 0.16em; color: #fff; }
+.hs-empty-text { margin: 0; font-size: var(--font-h2); color: var(--color-text-secondary, #b8aec8); }
+.hs-empty-steps { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.hs-empty-steps li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-left: var(--ui-border-width-thick, 3px) solid var(--color-primary); font-size: var(--font-text); }
+.hs-empty-steps b { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; background: var(--color-primary); color: #050308; }
+/* Empty state fills the page: wide card, big icon/type, steps in a row. */
+.hs-tab-fill:has(> .hs-empty-state) { display: flex; min-height: 0; }
+.hs-empty-state { width: calc(100% - 48px); max-width: none; height: calc(100% - 32px); margin: 16px 24px; justify-content: center; gap: 18px; padding: 32px; box-sizing: border-box; }
+.hs-empty-state .hs-empty-icon .hs-pixel { width: 128px !important; height: 128px !important; }
+.hs-empty-state .hs-empty-title { font-size: calc(var(--font-h2) * 2); }
+.hs-empty-state .hs-empty-text { font-size: calc(var(--font-h2) * 1.3); }
+.hs-empty-state .hs-empty-steps { flex-direction: row; gap: 16px; width: 100%; max-width: 1100px; }
+.hs-empty-state .hs-empty-steps li { flex: 1 1 0; flex-direction: column; text-align: center; padding: 18px 14px; gap: 12px; font-size: var(--font-h2); border-left: 0; border-top: var(--ui-border-width-thick, 3px) solid var(--color-primary); }
+.hs-empty-state .hs-empty-steps b { width: 40px; height: 40px; font-size: var(--font-h2); }
+/* Explorations entries: the tooltip wrapper must fill the icon box, else the 100% img collapses to 0. */
+.hs-explore-item .hs-chip-icon > .ui-icon-tip { display: flex; width: 100%; height: 100%; line-height: 0; }
+.hs-explore-item .hs-chip-icon > .ui-icon-tip > img { width: 100% !important; height: 100% !important; object-fit: contain; }
+/* PLAY button, inactive: darker background. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover),
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover)::before {
+    background: color-mix(in srgb, var(--color-surface, #14101c) 45%, #000) !important;
+    background-image: none !important;
+}
+
+/* Galaxy map lanes: next jump from the ship = strong beam; other reachable lanes weaker but still bright. */
+.gm-edge.gm-pxline.lit { opacity: 0.62; }
+.gm-edge.gm-pxline.lit .gm-pxline-core { filter: brightness(1.15); }
+.gm-edge.gm-pxline.lit .gm-pxline-glow { opacity: 0.35; }
+.gm-edge.gm-pxline.lit .gm-pxline-halo { opacity: 0.12; }
+.gm-edge.gm-pxline.lit.next { opacity: 1; }
+.gm-edge.gm-pxline.lit.next .gm-pxline-core { filter: brightness(1.9) saturate(1.2); }
+.gm-edge.gm-pxline.lit.next .gm-pxline-glow { opacity: 0.85; }
+.gm-edge.gm-pxline.lit.next .gm-pxline-halo { opacity: 0.4; }

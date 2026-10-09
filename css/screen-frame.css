@@ -25,11 +25,12 @@
     --fr-bevel: calc(5 * var(--u));
     --fr-hole-r: 0;
     --fr-shape: none;
-    /* screen opening (glass edge): left/right/bottom 44u, top 44u + strip */
-    --fr-ol: calc(44 * var(--u));
-    --fr-or: calc(44 * var(--u));
-    --fr-ob: calc(44 * var(--u));
-    --fr-ot: calc((44 + var(--bz-extra, 22)) * var(--u));
+    /* screen opening (glass edge): left/right/bottom 44u, top 44u + strip.
+       Keep in sync with :root --fr-open-* (display content sizes to these). */
+    --fr-ol: var(--fr-open-side, calc(44 * var(--u)));
+    --fr-or: var(--fr-open-side, calc(44 * var(--u)));
+    --fr-ob: var(--fr-open-bottom, calc(44 * var(--u)));
+    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 22)) * var(--u)));
     --glass-r: var(--fr-hole-r);
 }
 
@@ -114,12 +115,8 @@
 .vf-bezel::before,
 .vf-bezel-back { border-radius: var(--fr-hole-r) !important; }
 .vf-bezel::before {
-    animation: none !important;
-    box-shadow:
-        inset 0 0 0 calc(2 * var(--u)) color-mix(in srgb, var(--retro-ink) 45%, #000),
-        inset 0 0 calc(18 * var(--u)) calc(2 * var(--u)) #000a,
-        calc(3 * var(--u)) calc(3 * var(--u)) 0 0 color-mix(in srgb, var(--hull-lit) 70%, #fff),
-        calc(-3 * var(--u)) calc(-3 * var(--u)) 0 0 var(--hull-dark);
+    content: none !important;
+    display: none !important;
 }
 
 /* ── Texture + decoration share the silhouette ────────────────────────── */

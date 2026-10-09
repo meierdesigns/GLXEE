@@ -203,6 +203,8 @@ extendClass(IconRenderer, {
     drawToCanvas(canvas, key, tint, contrast, brightness, saturation) {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'low';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const size = Math.min(canvas.width, canvas.height);
         this.drawKey(ctx, key, 0, 0, size, tint, contrast, brightness, saturation);
@@ -211,13 +213,18 @@ extendClass(IconRenderer, {
 
     /** Icon key + UI tint for a weapon id (weapons share shot sprites, the tint tells them apart). */
     weaponIconInfo(weaponId) {
-        const id = String(weaponId || 'laser');
+        let id = String(weaponId || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        // Display names like "LASER" / "Rapid Fire" → config ids.
+        if (id === 'normal') id = 'laser';
+        if (id === 'rapidfire' || id === 'rapid_fire') id = 'rapid';
+        if (id === 'spreadshot' || id === 'spread_shot') id = 'spread';
         const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
         const w = wcm && wcm.getWeapon ? wcm.getWeapon(id) : null;
-        const key = (w && w.iconKey) || ('shot' + id.charAt(0).toUpperCase() + id.slice(1));
-        const tint = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(id) : null;
-        const name = String((w && w.name) || id).toUpperCase();
-        return { key, tint, name };
+        const resolved = (w && w.id) || id;
+        const key = (w && w.iconKey) || ('shot' + resolved.charAt(0).toUpperCase() + resolved.slice(1).replace(/_([a-z])/g, (_, c) => c.toUpperCase()));
+        const tint = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(resolved) : null;
+        const name = String((w && w.name) || resolved).toUpperCase();
+        return { key, tint, name, id: resolved };
     },
 
     /** HTML weapon icon: tinted per weapon and tilted 45° (see .ui-weapon-tilt). */

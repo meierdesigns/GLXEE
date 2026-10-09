@@ -13,6 +13,8 @@ class IconRenderer {
         if (typeof IconSprites === 'undefined' || !IconSprites) return null;
         // "key@2x" / "key@4x": the sprite smoothed up with Scale2x (EPX),
         // for large or zoomed-in icons that should look finer, not blockier.
+        const dm = /^(.+)@d$/.exec(String(key || ''));
+        if (dm) return this.getDetailSprite(key, dm[1]);
         const m = /^(.+)@([24])x$/.exec(String(key || ''));
         if (!m) return IconSprites[key] || null;
         this._hiRes = this._hiRes || {};
@@ -27,12 +29,54 @@ class IconRenderer {
         return sprite;
     }
 
+    /**
+     * "key@d": 16px art smoothed 4x (Scale2x twice), then an edge-shading pass on the 64 grid:
+     * lit top/left rims, shaded bottom/right rims and a dark 1-cell outline. Adds visible detail
+     * to flat icons without redrawing them.
+     */
+    getDetailSprite(key, base) {
+        this._hiRes = this._hiRes || {};
+        if (this._hiRes[key]) return this._hiRes[key];
+        let sprite = IconSprites[base] || null;
+        if (!sprite) return null;
+        sprite = this.scale2x(this.scale2x(sprite));
+        const h = sprite.length, w = sprite[0].length;
+        const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : sprite[y][x];
+        const out = sprite.map((row) => row.slice());
+        const rim = 3;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const v = sprite[y][x];
+                if (!v) {
+                    let near = false;
+                    for (let d = 1; d <= 2 && !near; d++) near = at(x - d, y) || at(x + d, y) || at(x, y - d) || at(x, y + d);
+                    if (near) out[y][x] = 1;
+                    continue;
+                }
+                let lit = false, shade = false;
+                for (let d = 1; d <= rim; d++) {
+                    if (!at(x - d, y) || !at(x, y - d)) lit = true;
+                    if (!at(x + d, y) || !at(x, y + d)) shade = true;
+                }
+                if (lit && !shade) out[y][x] = Math.min(15, v + 4);
+                else if (shade && !lit) out[y][x] = Math.max(2, v - 5);
+            }
+        }
+        this._hiRes[key] = out;
+        return out;
+    }
+
     /** Large draws of sprites with hand-drawn 32x32 art get the @2x/@4x key. */
     detailKey(key, size) {
         const k = String(key || '');
-        // VOXEL combat: keep authored pixels as hard blocks — no Scale2x slopes.
-        const voxel = typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell
+        // VOXEL / GUI-voxel: keep authored pixels as hard blocks — no Scale2x slopes.
+        let voxel = typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell
             && window.combatVoxels.cell();
+        if (!voxel && typeof document !== 'undefined' && document.documentElement) {
+            const root = document.documentElement;
+            voxel = root.getAttribute('data-vf-ship-render') === 'VOXEL'
+                || root.getAttribute('data-vf-gui-voxel') === 'on';
+        }
         if (voxel) return k.replace(/@[24]x$/, '');
         if (/@[24]x$/.test(k) || typeof IconSprites === 'undefined' || !IconSprites[k + 'Hi']) return key;
         const s = Number(size) || 16;

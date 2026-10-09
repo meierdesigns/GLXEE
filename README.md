@@ -258,9 +258,16 @@ post keeps its builder's look after the anchor planet changes hands. Posts are
 placed with edge awareness so they sit on reachable lanes.
 
 Planet cards on the explore map show atmosphere haze from the live SVG palette.
-Map art is built from a shared **pixel unit** so zoom keeps edges crisp. Nebulae
-are sun-gated with free-floating vortices; fine patches snap to a tile grid so
-small pans reuse finished work. Border **checkpoints** use faction silhouette
+Map art is built from a shared **pixel unit**: planets, suns, and nebula cells
+use one pixel size per zoom step, and planet size classes add pixels instead of
+making pixels bigger. Suns carry a noise surface that gains octaves when you zoom.
+Nebulae are posterised into hard steps (no smooth gradients), mix coarse and fine
+grain, keep dark voids and translucent veils, and glow on their own in a few
+pockets; only some suns carry a nebula and its colour follows the sun while
+brightness falls with distance. Free-floating vortices are static. The coarse
+field is stored in the browser per galaxy and prepared at boot, so a reload
+shows it at once; fine patches snap to a tile grid so small pans reuse finished
+work. Stage counts under planets show on hover only. Border **checkpoints** use faction silhouette
 art. Route beams carry **bidirectional data-packet traffic**. A **ship locator**
 recenters the map. Explore budget sits in a progress chip; the **ruler bar**
 stacks planet / situation / action segments. Selecting a border, planet, or
@@ -477,7 +484,7 @@ Short index — details live in the sections above.
 - Five factions / galaxies with relations, contracts, trade, fleet preview, universe save.
 - Home Station loop: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
 - Modular loadouts, area pager, hangar bay zoom, VOXEL combat with field presence.
-- Galaxy explore: pixel-stable map, nebulae, checkpoints, traffic, ship locator.
+- Galaxy explore: one-pixel-size map, stored nebulae, checkpoints, traffic, ship locator.
 - 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
 
@@ -486,15 +493,18 @@ Short index — details live in the sections above.
 ```text
 LOOK    ── FX plate (bloom/HDR/vignette) ── pixel frame ── GUI voxel ── font scales
    │
-MAP     ── pixel units ── tiled nebula patches ── sun-gated swirls
+MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
    │
 FLEET   ── player ship in preview ── live colour overrides
    │
-MATCH   ── restore victory/game-over after refresh
+MATCH   ── restore victory/game-over after refresh ── map opens on the fought planet
+   │
+BOOT    ── fight screen hidden until shown ── nebula prepared during menu build
 ```
 
-Recent waves expand bezel FX and pixel-frame look, harden galaxy-map pixels,
-put the pilot into the faction fleet preview, and persist end screens on reload.
+Recent waves unify the map pixel size, store and thin out the nebula, speed up
+zoom, keep the fight screen from flashing on reload, fix overlays hidden behind
+the fight screen, sweep fast shots against targets, and rework HUD and bezel look.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -641,6 +651,13 @@ be reviewed or reverted independently.
 | 61E | End screen restore | Persist and restore victory/game-over across refresh |
 | 61F | Shot sweep and terrain | Bullet sweep hit tests; boss arenas keep scrolling terrain |
 | 61G | README look archive | Document pixel frame, FX, map, fleet preview; compress shell-zoom wave rows |
+| 62A | Stored nebula and map pixel | One map pixel unit, stored/prewarmed nebula, posterised steps, lighter zoom |
+| 62B | Boot and map return | Fight screen hidden until shown; map opens on the fought planet |
+| 62C | Combat sweep and spawns | Swept shot hits, scheduled spawns, editor shot preview, playfield defaults |
+| 62D | HUD rework | Level info HUD, tooltips, pilot HUD |
+| 62E | Bezel and look polish | Pause screen in the glass, victory/pause layering, icons, start-screen fonts |
+| 62F | Station and editors | Station tabs, editors, economy stats, ship asset sprites |
+| 62G | README map archive | Document nebula storage, map pixel unit, boot and map-return behaviour |
 
 The wave commit convention is:
 

@@ -357,6 +357,24 @@ stat tiles and per-galaxy progress cell bars; faction filters narrow the list.
 An unfinished New Pilot flow (faction / name step) restores after reload.
 Subtitle reads *…a MRDSN Production*.
 
+**New Pilot flow** runs faction → pilot → start setup. The pilot step shows the
+faction crest left of the name field and a generated 96×108 pixel portrait of a
+helmeted pilot (3/4 view, accent rim light) with sliders for skin, eyes, face,
+nose, mouth, brow, scar, and gear; RANDOMIZE re-rolls it. The start-setup step
+picks the start galaxy (generated galaxy icon) and starter kit. The chosen
+portrait is stored on the profile and shown in the profile list and faction
+hero cards. A procedural startup sound (Settings → Startup Sound) plays in the
+boot intro.
+
+### Galaxy map routes
+
+Planet-to-planet routes are one smooth arc that bows just far enough to clear
+obstacles (straight when the way is clear), start and end on the planet
+surface, and preview as slow marching dashes. Each galaxy remembers its camera
+and last selected planet or station. Stations orbit their planet and show only
+once that planet is unlocked. A locked planet's hint names what to clear first
+with a JUMP TO button.
+
 <div align="center">
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
@@ -658,6 +676,10 @@ be reviewed or reverted independently.
 | 62E | Bezel and look polish | Pause screen in the glass, victory/pause layering, icons, start-screen fonts |
 | 62F | Station and editors | Station tabs, editors, economy stats, ship asset sprites |
 | 62G | README map archive | Document nebula storage, map pixel unit, boot and map-return behaviour |
+| 63A | Map routes and stations | Detour arcs around obstacles, per-galaxy camera and selection, orbiting stations, JUMP TO unlock hint |
+| 63B | Pilot creator | Pilot step with generated helmet portrait and sliders, galaxy icon, startup sound, faction card layout |
+| 63C | Station and perf | Faction hero portraits, contract weapon rewards, PERF switches, calmer hangar parts, explosion loot timing |
+| 63D | README pilot archive | Document map routes, pilot creator and the 63A–63C changes |
 
 The wave commit convention is:
 

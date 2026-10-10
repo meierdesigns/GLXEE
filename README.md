@@ -596,7 +596,7 @@ be reviewed or reverted independently.
 | 47A | Pilot readouts | Profile scoring, ability stats, combat progression, and loadout feedback |
 | 47B | Planet theaters | Galaxy navigation, animated planet frames, and faction visual treatments |
 | 47C | Station presentation | Fleet previews, HD navigation icons, start intro, and hangar shell polish |
-| 48C–48K | Shell zoom era | 75% GUI baseline, browser zoom coexistence, Cursor viewport fit, `.vf-browser-shell` |
+| 48C–48K | Shell zoom era | 75% GUI baseline, browser zoom coexistence, responsive viewport fit, `.vf-browser-shell` |
 | 49A | README visual refresh | Live sprite strips for fleet, planets, and weapons plus updated terminal banner chrome |
 | 49B | Live README screenshots | Capture station, factions, galaxy travel, and Mars combat into the GitHub archive |
 | 50 | Live README strips | Replace old planet/weapon/ship gallery sprites with combat-renderer and SVG exports |

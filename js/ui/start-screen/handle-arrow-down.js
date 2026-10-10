@@ -216,6 +216,9 @@ extendClass(StartScreenManager, {
             }
         }
 
+        if (item.type === 'bgParallax' && typeof VFBgMouseParallax !== 'undefined') {
+            VFBgMouseParallax.setIntensity(item.value);
+        }
         if (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined') {
             uiAppearanceManager.setFx(item.fxKey, item.value);
         }
@@ -242,6 +245,10 @@ extendClass(StartScreenManager, {
             if (typeof difficultyEditorUI !== 'undefined' && difficultyEditorUI.show) {
                 difficultyEditorUI.show();
             }
+            return;
+        }
+        if (item.action === 'startupSound') {
+            if (typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
             return;
         }
         if (item.action === 'factionCommand') {

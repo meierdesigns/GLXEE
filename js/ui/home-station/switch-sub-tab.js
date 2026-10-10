@@ -130,7 +130,7 @@ extendClass(HomeStationUI, {
                 `</span>` +
                 `</span>`;
         });
-        return parts.join('') || '<span class="hs-muted hs-empty-slot">EMPTY</span>';
+        return parts.join('') || this.emptyHtml('hsShop', 'EMPTY');
     },
 
     formatUpgradeEffect(node, level) {

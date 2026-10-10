@@ -71,11 +71,45 @@ extendClass(HomeStationUI, {
             `${this.renderShopToolbar()}` +
             `<div class="hs-tab-fill hs-shop-list">` +
             `${head}` +
-            `${rows || '<p class="hs-muted hs-empty-slot">EMPTY</p>'}` +
+            `${rows || this.emptyHtml('hsShop', 'EMPTY')}` +
             `</div></div>`;
     },
 
+    /** Cropped, crisp thumbnail (data URL) of a ship, drawn with the hangar's own voxel renderer. */
+    shipThumbSrc(shipId, box) {
+        const cache = this._shipThumbCache || (this._shipThumbCache = {});
+        const key = shipId + '|' + box;
+        if (cache[key]) return cache[key];
+        try {
+            const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            if (!loader || !loader.renderShip || !this.getHangarShipModel) return '';
+            const model = this.getHangarShipModel(shipId);
+            if (!model) return '';
+            const mw = Math.max(8, model.width || 20), mh = Math.max(8, model.height || 16);
+            const scale = Math.max(1, Math.floor(box / Math.max(mw, mh)));
+            const pad = scale * 4;
+            const c = document.createElement('canvas');
+            c.width = Math.ceil(mw * scale) + pad * 2;
+            c.height = Math.ceil(mh * scale) + pad * 2;
+            const ctx = c.getContext('2d');
+            loader.renderShip(ctx, model, pad, pad, scale, null, 0, { allowColorMountSprites: true });
+            const d = ctx.getImageData(0, 0, c.width, c.height).data;
+            let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+            for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+                if (d[(y * c.width + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+            if (x1 < 0) return '';
+            const o = document.createElement('canvas');
+            o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+            o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+            return (cache[key] = o.toDataURL());
+        } catch (e) {
+            return '';
+        }
+    },
+
     renderCraftTab(profile) {
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
         if (!keys.length) {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT')}` +
@@ -101,13 +135,13 @@ extendClass(HomeStationUI, {
                 ? profileManager.getDiscountedCraftCost(cfg, profile)
                 : economyConfig.getCraftCost(cfg);
             const afford = this.canAffordCost(profile.resources, cost);
-            return `<div class="hs-line hs-shop-line">` +
-                `<span class="hs-line-name"><span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-                `<strong>${this.shipName(id)}</strong> ×${profile.blueprints[id]}</span>` +
+            const thumb = this.shipThumbSrc(id, 96);
+            return `<div class="hs-line hs-shop-line hs-craft-line">` +
+                `<span class="hs-line-name"><span class="hs-craft-ship">${thumb ? `<img src="${thumb}" alt="">` : this.iconHtml('hsBlueprint', 56, 'hs-pixel')}</span>` +
+                `<strong>${this.shipName(id)}</strong><em class="hs-craft-count">×${profile.blueprints[id]}</em></span>` +
                 `${this.renderCostGrid(cost, profile.resources)}` +
-                `<button class="action-button hs-line-action" data-craft="${id}" ${afford ? '' : 'disabled'}>` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span>` +
-                `<span>CRAFT</span></button></div>`;
+                `<button class="action-button hs-line-action hs-craft-go" data-craft="${id}" title="Craft ${esc(this.shipName(id))}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
+                `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
         });
         return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT FROM BLUEPRINT')}` +
             `<div class="hs-tab-fill">${rows.join('')}</div></div>`;

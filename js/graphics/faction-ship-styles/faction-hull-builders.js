@@ -37,10 +37,43 @@ extendClass(FactionShipStyles, {
             machine: 'buildMachineHull'
         };
         const engines = this[builders[f] || 'buildPirateHull'](d, size, seed);
-        this.outlineHull(g);
+        const S = this.spriteScale;
+        const hi = this.upscaleGrid(g);
+        this.outlineHull(hi);
         if (!this._hullEngines) this._hullEngines = Object.create(null);
-        this._hullEngines[f + '|' + cls] = (engines || []).map((e) => ({ x: cx + e.dx, y: e.y }));
-        return g;
+        // Engine cells live in the high-res grid: bottom-centre of the old cell.
+        this._hullEngines[f + '|' + cls] = (engines || []).map((e) => ({
+            x: (cx + e.dx) * S + (S >> 1),
+            y: e.y * S + S - 1
+        }));
+        return hi;
+    },
+
+    /**
+     * Doubles the build grid with Scale2x (EPX): diagonals become 1px steps
+     * instead of 2px blocks, so ships read at twice the resolution.
+     */
+    upscaleGrid(g) {
+        const H = g.length, W = g[0].length;
+        const at = (c, r) => (r < 0 || c < 0 || r >= H || c >= W) ? 0 : g[r][c];
+        const out = [];
+        for (let r = 0; r < H * 2; r++) out.push(new Array(W * 2).fill(0));
+        for (let r = 0; r < H; r++) {
+            for (let c = 0; c < W; c++) {
+                const P = g[r][c];
+                const A = at(c, r - 1), B = at(c + 1, r), C = at(c - 1, r), D = at(c, r + 1);
+                let p1 = P, p2 = P, p3 = P, p4 = P;
+                if (C === A && C !== D && A !== B) p1 = A;
+                if (A === B && A !== C && B !== D) p2 = B;
+                if (D === C && D !== B && C !== A) p3 = C;
+                if (B === D && B !== A && D !== C) p4 = D;
+                out[r * 2][c * 2] = p1;
+                out[r * 2][c * 2 + 1] = p2;
+                out[r * 2 + 1][c * 2] = p3;
+                out[r * 2 + 1][c * 2 + 1] = p4;
+            }
+        }
+        return out;
     },
 
     /** Drawing helpers on the grid: mirrored (m*) and single-sided (s*). */
@@ -72,7 +105,7 @@ extendClass(FactionShipStyles, {
      * struts keep their hull colour instead of turning into black lines.
      */
     outlineHull(g) {
-        const H = this.spriteH, W = this.spriteW;
+        const H = g.length, W = g[0].length;
         const at = (c, r) => (r < 0 || c < 0 || r >= H || c >= W) ? 0 : (g[r][c] || 0);
         const edge = [];
         for (let r = 0; r < H; r++) {
@@ -249,14 +282,14 @@ extendClass(FactionShipStyles, {
         const style = this.getFactionStyle(f);
         return {
             positions: list.map((p) => ({
-                x: Math.max(0, Math.min(this.spriteW - 1, p.x)),
-                y: Math.max(0, Math.min(this.spriteH - 1, p.y)),
+                x: Math.max(0, Math.min(this.spriteW * this.spriteScale - 1, p.x)),
+                y: Math.max(0, Math.min(this.spriteH * this.spriteScale - 1, p.y)),
                 intensity: 0.55 + t * 0.08
             })),
             // Thrusters burn in the faction accent.
             color: style.accent || this.sharedEngine,
-            width: this.spriteW,
-            height: this.spriteH
+            width: this.spriteW * this.spriteScale,
+            height: this.spriteH * this.spriteScale
         };
     }
 });

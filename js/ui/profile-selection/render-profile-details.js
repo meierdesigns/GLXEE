@@ -77,6 +77,7 @@ extendClass(ProfileSelectionManager, {
 
         return `
             <div class="pd-hero">
+                ${profile.portrait && typeof heroPortrait !== 'undefined' ? `<span class="pd-hero-portrait">${heroPortrait.html(profile.portrait, null)}</span>` : ''}
                 <span class="pd-hero-emblem">${this.getFactionEmblemHtml(profile.faction || 'pirate', 64)}</span>
                 <span class="pd-hero-text">
                     <b class="pd-hero-name">${profile.name}</b>
@@ -196,6 +197,7 @@ extendClass(ProfileSelectionManager, {
             this.mode = 'create';
             this.createStep = 'faction';
             this._heroDefaultName = '';
+            this._pilotName = '';
             this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
         });
@@ -339,13 +341,14 @@ extendClass(ProfileSelectionManager, {
             if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
             p.shipUpgrades[ship].weaponSlotsBought = (Number(p.shipUpgrades[ship].weaponSlotsBought) || 0) + 1;
         }
+        if (o.look) p.portrait = Object.assign({}, o.look);
         p.startKit = o.kit || 'balanced';
         profileManager.save();
     },
 
     saveName() {
         const input = this.overlay.querySelector('#profileNameInput');
-        const name = input ? input.value : '';
+        const name = input ? input.value : (this.mode === 'create' ? (this._pilotName || '') : '');
         if (typeof profileManager === 'undefined') return;
         if (this.mode === 'create') {
             const p = profileManager.create(name, this.pendingFaction);
@@ -379,6 +382,7 @@ extendClass(ProfileSelectionManager, {
             this.mode = 'create';
             this.createStep = 'faction';
             this._heroDefaultName = '';
+            this._pilotName = '';
             this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
             return;

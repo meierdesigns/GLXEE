@@ -92,9 +92,11 @@ extendClass(GalaxyMapManager, {
         this.selectedPostId = null;
         this.selectedBorder = null;
         this.selectedPlanetId = planetId;
+        this.saveGalaxySelection();
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
 
     /**
@@ -134,7 +136,63 @@ extendClass(GalaxyMapManager, {
     /** Standalone trading posts of this galaxy (own map nodes). */
     getTradingPosts() {
         if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
-        return profileManager.getTradingPosts(this.galaxyId);
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        // A station only shows once a planet it orbits has been unlocked.
+        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
+            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)))
+            .map((p) => this.orbitPost(p));
+    },
+
+    /** Stations circle their planet: the stored spot is the start, the angle advances with time (one lap ~150 s). */
+    orbitPost(p) {
+        const node = this.nodeById && this.nodeById[p.planetId];
+        if (!node || p.deepSpace) return p;
+        const SX = (GM_MAP_W - GM_MAP_PAD * 2) * 2.0, SY = (GM_MAP_H - GM_MAP_PAD * 2) * 2.0;
+        const ox = (p.x - node.x) * SX, oy = (p.y - node.y) * SY;
+        const R = Math.hypot(ox, oy);
+        if (R < 0.5) return p;
+        const dir = (String(p.id).length % 2) ? 1 : -1;
+        const a = Math.atan2(oy, ox) + dir * 2 * Math.PI * ((Date.now() % 150000) / 150000);
+        return Object.assign({}, p, { x: node.x + Math.cos(a) * R / SX, y: node.y + Math.sin(a) * R / SY, orbitA: a });
+    },
+
+    /** Moves the orbiting stations (and what hangs on them) in the live map without a re-render. */
+    tickOrbits() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg || !this.isVisible || this._flight) return;
+        const SX = GM_MAP_W - GM_MAP_PAD * 2, SY = GM_MAP_H - GM_MAP_PAD * 2;
+        const px = (p) => ({ x: GM_MAP_W / 2 + (p.x - 0.5) * SX * 2.0, y: GM_MAP_H / 2 + (p.y - 0.5) * SY * 2.0 });
+        const posts = this.getTradingPosts();
+        const byId = {};
+        posts.forEach((p) => {
+            byId[p.id] = p;
+            const node = svg.querySelector('.gm-post-node[data-post="' + p.id + '"]');
+            if (node) { const q = px(p); node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')'); }
+        });
+        svg.querySelectorAll('.gm-lane-rot').forEach((g) => {
+            const p = byId[g.getAttribute('data-post')];
+            if (!p || p.orbitA == null) return;
+            const deg = (p.orbitA - Number(g.getAttribute('data-a'))) * 180 / Math.PI;
+            g.setAttribute('transform', 'rotate(' + deg.toFixed(3) + ' ' + g.getAttribute('data-cx') + ' ' + g.getAttribute('data-cy') + ')');
+        });
+        const loc = typeof profileManager !== 'undefined' && profileManager.getShipLocation
+            ? profileManager.getShipLocation(this.galaxyId) : null;
+        const ship = svg.querySelector(':scope > .gm-ship-marker');
+        if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
+            const q = px(byId[loc.id]);
+            ship.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+        }
+        this._orbitTick = (this._orbitTick || 0) + 1;
+        const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
+        if (routeOnPost && this._orbitTick % 3 === 0 && this.syncRoutePreview) this.syncRoutePreview();
+    },
+
+    startOrbitLoop() {
+        if (this._orbitTimer) return;
+        this._orbitTimer = setInterval(() => {
+            if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
+            this.tickOrbits();
+        }, 66);
     },
 
     getSelectedPost() {
@@ -149,9 +207,11 @@ extendClass(GalaxyMapManager, {
         this.selectedBorder = null;
         this.selectedPostId = post.id;
         this.selectedPlanetId = post.planetId;
+        this.saveGalaxySelection();
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
 
     dockAt(postId) {
@@ -421,15 +481,7 @@ extendClass(GalaxyMapManager, {
         const stepper = this.overlay.querySelector('#gmStageStepper');
         if (stepper) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
         const unlockHint = this.overlay.querySelector('#gmUnlockHint');
-        if (unlockHint) {
-            const unlockFrom = !info.unlocked
-                ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
-                    .find((pid) => pid && this.isUnlocked(pid))
-                : null;
-            unlockHint.textContent = unlockFrom
-                ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
-                : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
-        }
+        if (unlockHint) unlockHint.innerHTML = this.unlockHintHtml(info);
         const progressBar = this.overlay.querySelector('.gm-explore-progress .gm-progress-text')
             || this.overlay.querySelector('.galaxy-map-progress-bar .gm-progress-text')
             || this.overlay.querySelector('.galaxy-map-progress-bar');

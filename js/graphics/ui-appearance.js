@@ -144,6 +144,7 @@ class UIAppearanceManager {
         this.bloomThreshold = 'OFF';
         this.hdr = 'OFF';
         this.arcade = 'OFF';
+        this.fxScale = 100;
         // Where the FX overlay shows: inside the screen, on the frame outside it, or both.
         this.fxArea = 'SCREEN';
         // Pixel-lattice GUI lines (independent of the ship render style).
@@ -337,6 +338,7 @@ class UIAppearanceManager {
 
     /** Whole percent 0–100 of a glow/scanlines/crt/chroma effect. */
     getFxPercent(fxKey) {
+        if (fxKey === 'fxScale') return this.fxScale;
         const m = /^(\d+)%$/.exec(String(this[fxKey] || ''));
         return m ? Math.max(0, Math.min(100, Number(m[1]))) : 0;
     }
@@ -436,6 +438,7 @@ class UIAppearanceManager {
                     this[key] = legacy[val] || 'OFF';
                 }
             });
+            if (Number.isFinite(Number(data.fxScale))) this.fxScale = Math.max(25, Math.min(400, Math.round(Number(data.fxScale))));
             if (data.arcade === 'ON' || data.arcade === 'OFF') {
                 this.arcade = data.arcade;
             }
@@ -491,6 +494,7 @@ class UIAppearanceManager {
                 bloomThreshold: this.bloomThreshold,
                 hdr: this.hdr,
                 arcade: this.arcade,
+                fxScale: this.fxScale,
                 fxArea: this.fxArea,
                 guiVoxel: this.guiVoxel,
                 guiVoxelCell: this.guiVoxelCell,
@@ -726,6 +730,14 @@ class UIAppearanceManager {
             this.apply();
             return;
         }
+        if (key === 'fxScale') {
+            const n = Number(String(val).replace('%', ''));
+            if (!Number.isFinite(n)) return;
+            this.fxScale = Math.max(25, Math.min(400, Math.round(n)));
+            this.persist();
+            this.apply();
+            return;
+        }
         if (key === 'fxArea') return this.setFxArea(val);
         if (key === 'arcade') {
             if (val !== 'ON' && val !== 'OFF') return;
@@ -882,6 +894,7 @@ class UIAppearanceManager {
         root.style.setProperty('--vf-bloom', String(this.fxLevel('bloom')));
         root.style.setProperty('--vf-bloom-spread', String(this.fxLevel('bloomSpread')));
         root.style.setProperty('--vf-bloom-thr', String(this.fxLevel('bloomThreshold')));
+        root.style.setProperty('--vf-fx-scale', String(this.fxScale / 100));
         root.style.setProperty('--vf-hdr', String(this.fxLevel('hdr')));
         root.setAttribute('data-vf-hdr', this.hdr === 'OFF' ? 'off' : 'on');
 

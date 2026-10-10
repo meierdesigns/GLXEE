@@ -83,7 +83,7 @@ extendClass(HomeStationUI, {
                     `</div>`;
             }).join('');
         });
-        return html || '<p class="hs-muted hs-empty-slot">NO STYLES</p>';
+        return html || this.emptyHtml('hsShop', 'NO STYLES');
     },
 
     bindShopStyleEvents() {

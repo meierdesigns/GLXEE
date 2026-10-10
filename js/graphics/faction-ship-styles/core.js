@@ -21,6 +21,7 @@ class FactionShipStyles {
         // for crisp sprites; on-screen display size is separate (see displaySizeForClass).
         this.spriteW = 18;
         this.spriteH = 14;
+        this.spriteScale = 2; // shipped sprites are the build grid ×2 (Scale2x)
         this.sharedHull = '#7a8490';
         this.sharedEdge = '#2a3038';
         this.sharedAccent = '#c8d0d8';

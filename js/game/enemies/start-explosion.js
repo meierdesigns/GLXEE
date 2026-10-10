@@ -19,6 +19,22 @@ extendClass(EnemyManager, {
             if (preset && preset.ringDurationMs) duration = preset.ringDurationMs;
         }
         this.explosionDuration = duration;
+        // Resources appear the moment the enemy dies, not after the explosion ends.
+        this.pickupsSpawnedAtDeath = false;
+        if (this.enemy && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {
+            const entry = this.pendingChampionEntry || {};
+            pickupManager.spawnFromKill({
+                type: entry.type || this.currentShipType,
+                entryId: entry.id || this.enemy.entryId,
+                faction: entry.faction || this.enemy.faction,
+                enemyClass: entry.enemyClass || this.enemy.enemyClass,
+                cluster: entry.cluster || this.enemy.cluster,
+                champion: true,
+                x: this.enemy.x + (this.enemy.width || 0) / 2,
+                y: this.enemy.y + (this.enemy.height || 0) / 2
+            });
+            this.pickupsSpawnedAtDeath = true;
+        }
         if (this.enemy && typeof explosionSystem !== 'undefined') {
             const ex = this.enemy.x + (this.enemy.width || 0) / 2;
             const ey = this.enemy.y + (this.enemy.height || 0) / 2;

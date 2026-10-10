@@ -71,7 +71,7 @@ class ColorPalette {
         if (typeof color === 'string' && color.indexOf('var(') === 0) {
             const match = color.match(/var\(\s*(--[^),\s]+)/);
             if (match) {
-                const value = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+                const value = vfCssVar(match[1]);
                 if (value) return value;
             }
             return '#999999';

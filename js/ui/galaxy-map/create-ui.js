@@ -337,9 +337,8 @@ extendClass(GalaxyMapManager, {
             ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
                 .find((pid) => pid && this.isUnlocked(pid))
             : null;
-        const unlockHint = unlockFrom
-            ? `CLEAR ${String(this.getPlanetInfo(unlockFrom).name).toUpperCase()} TO UNLOCK`
-            : (!info.unlocked ? 'CLEAR A CONNECTED PLANET TO UNLOCK' : '');
+        const unlockHint = this.unlockHintHtml(info);
+        if (this.bindUnlockJump) this.bindUnlockJump();
         const planetIcon = this.planetIconHtml(info.id, 260);
         const planetAtmo = this.planetAtmoColor(planetIcon);
         this._barAccent = null;

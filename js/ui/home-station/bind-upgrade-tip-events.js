@@ -248,7 +248,7 @@ extendClass(HomeStationUI, {
     renderShipFrameUpgrades(profile) {
         const owned = profile.ownedShipIds || [];
         if (!owned.length) {
-            return '<p class="hs-muted hs-empty-slot">NO SHIPS OWNED</p>';
+            return this.emptyHtml('hsShip', 'NO SHIPS OWNED');
         }
         const wallet = profile.resources || {};
         const max = (typeof economyConfig !== 'undefined') ? (economyConfig.maxShipFrameLevel || 9) : 9;

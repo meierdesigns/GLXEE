@@ -317,7 +317,7 @@ extendClass(EnemyManager, {
                 levelInfoManager.showLootNotice('BLUEPRINT: ' + name);
             }
         }
-        if (typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {
+        if (!(info && info.pickupsSpawned) && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {
             let x = info && info.x;
             let y = info && info.y;
             if ((x == null || y == null) && this.enemy) {

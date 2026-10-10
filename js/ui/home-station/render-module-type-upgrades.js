@@ -120,16 +120,28 @@ extendClass(HomeStationUI, {
             } else {
                 action = `<button class="action-button hs-line-action" data-travel="${gid}">TRAVEL HERE</button>`;
             }
-            return `<div class="hs-line hs-shop-line ${here ? 'hs-travel-here' : ''} ${!travel.ok ? 'locked' : ''}">` +
-                `<span class="hs-line-name">` +
-                `<span class="hs-chip-icon">${this.iconHtml('hsStation', 32, 'hs-pixel')}</span>` +
-                `<span class="hs-line-text">` +
-                `<strong>${(g && g.name) || gid.toUpperCase()}</strong>` +
-                `<span class="hs-line-meta">${planetCount} PLANETS · WARP REQ L${req}${factionLabel}` +
-                (here ? ' · HOME' : '') +
-                `</span>` +
+            const ctl = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl) ? planetConfigManager.getGalaxyControl(gid) : null;
+            const held = !ctl || ctl.control !== 'contested';
+            const chip = (fid) => `<span class="hs-travel-fac">${this.factionEmblemHtml({ faction: fid }, 24)}<b>${this.factionLabel(fid)}</b></span>`;
+            const facs = ctl ? [chip(ctl.main)].concat(ctl.rivals.length ? ['<i class="hs-travel-vs">VS</i>'].concat(ctl.rivals.map(chip)) : []).join('') : '';
+            const stat = (icon, val, tip, col) => {
+                const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+                const img = ir && ir.imgHtml ? ir.imgHtml(icon, 32, 'hs-pixel', col, false) : this.iconHtml(icon, 24, 'hs-pixel', false);
+                return `<span class="hs-mi-col" style="--stat:${col}" title="${tip}"><span class="hs-mi">${img}</span><span class="hs-mi-val">${val}</span></span>`;
+            };
+            const warpCol = ['#5cff7a', '#ffe14a', '#ff9a3c', '#ff4a3c'][Math.min(3, req)] || '#ff4a3c';
+            return `<div class="hs-line hs-travel-row ${here ? 'hs-travel-here' : ''} ${!travel.ok ? 'locked' : ''}">` +
+                `<span class="hs-chip-icon hs-galaxy-ico">${(typeof galaxyIcon !== 'undefined' && galaxyIcon.html(gid, 96)) || this.iconHtml('hsStation', 32, 'hs-pixel')}</span>` +
+                `<span class="hs-line-name"><span class="hs-line-text">` +
+                `<strong>${(g && g.name) || gid.toUpperCase()}${here ? ' <em class="hs-travel-tag">HOME</em>' : ''}</strong>` +
+                `<span class="hs-travel-facs">${facs}</span>` +
                 `</span></span>` +
-                action +
+                `<span class="hs-mission-info hs-mission-icons hs-travel-stats">` +
+                stat('navPlanet', planetCount, 'Planets in this galaxy', '#5ce1ff') +
+                stat('hsTeleport', 'L' + req, 'Warp drive level required', warpCol) +
+                stat(held ? 'navFlag' : 'navSword', held ? 'HELD' : 'CONTESTED', held ? 'One faction rules this galaxy' : 'Several factions fight over this galaxy', held ? '#5cff7a' : '#ff5a3c') +
+                `</span>` +
+                `<span class="hs-travel-action">${action}</span>` +
                 `</div>`;
         }).join('');
 
@@ -169,7 +181,7 @@ extendClass(HomeStationUI, {
                 const count = this.getExploreItemCount(entry.id);
                 const empty = !this.isExploreItemVisible(entry.id);
                 return `<button type="button" class="action-button hs-explore-item${empty ? ' is-empty' : ''}" data-explore="${entry.open}" data-nav-item${empty ? ' disabled' : ''}>` +
-                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon, 128, 'hs-pixel')}</span>` +
+                    `<span class="hs-chip-icon">${this.iconHtml(entry.icon + '@d', 128, 'hs-pixel')}</span>` +
                     `<span class="hs-explore-label">${entry.id}</span>` +
                     `<span class="hs-explore-count">${count == null ? '—' : count}</span>` +
                     `</button>`;
@@ -182,7 +194,6 @@ extendClass(HomeStationUI, {
 
         return `<div class="hs-section hs-panel hs-explore-root">` +
             `${this.panelTitle('hsExplore', 'EXPLORATIONS')}` +
-            `<p class="hs-muted hs-hint">Browse discovered ships, worlds, foes, peoples, events, equipment and components.</p>` +
             `<div class="hs-tab-fill hs-explore-grid">${groups}</div>` +
             `</div>`;
     },
@@ -363,7 +374,7 @@ extendClass(HomeStationUI, {
 
     renderBlueprintList(map) {
         const keys = Object.keys(map || {}).filter((k) => (map[k] || 0) > 0);
-        if (!keys.length) return '<span class="hs-muted hs-empty-slot">NONE</span>';
+        if (!keys.length) return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS YET');
         const rows = keys.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-bp', 'BLUEPRINT ×' + map[id])).join('');
         return this.shipTableHtml(rows);
     },
@@ -371,7 +382,6 @@ extendClass(HomeStationUI, {
     /** Header + body for a ship table (thumb, name/class, core stats). */
     shipTableHtml(rowsHtml, withAction) {
         return `<table class="hs-ship-table">` +
-            `<thead><tr><th></th><th>SHIP</th><th>TIER</th><th>HP</th><th>ARM</th><th>DMG</th><th>SPD</th>${withAction ? '<th></th>' : ''}</tr></thead>` +
             `<tbody>${rowsHtml}</tbody></table>`;
     },
 
@@ -410,6 +420,13 @@ extendClass(HomeStationUI, {
         const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
         const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
         const val = (v) => (v != null ? v : '—');
+        const stat = (icon, label, v, col) => {
+            const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+            const img = ir && ir.imgHtml ? ir.imgHtml(icon, 32, 'hs-pixel', col, false) : this.iconHtml(icon, 24, 'hs-pixel', false);
+            return `<span class="hs-ship-stat" style="--stat:${col}" title="${label}"><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
+        };
+        const tipText = [['TIER', cfg.tier], ['HP', cfg.maxHealth], ['ARMOR', cfg.armor], ['DAMAGE', cfg.damage], ['SPEED', cfg.speed]]
+            .map((x) => x[0] + ' ' + val(x[1])).join(' · ');
         return `<tr>` +
             `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
             (thumbClass === 'hs-ship-thumb-bp'
@@ -417,10 +434,12 @@ extendClass(HomeStationUI, {
                 : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
                   `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
             `</span></td>` +
-            `<td class="hs-ship-table-name"><strong>${this.shipName(id)}</strong>` +
+            `<td class="hs-ship-table-name" data-ui-tip="${tipText}"><strong>${this.shipName(id)}</strong>` +
             `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
-            `<td>${val(cfg.tier)}</td><td>${val(cfg.maxHealth)}</td><td>${val(cfg.armor)}</td>` +
-            `<td>${val(cfg.damage)}</td><td>${val(cfg.speed)}</td>` +
+            `<td><div class="hs-ship-stats">` +             stat('navStar', 'Tier', cfg.tier, '#ffe14a') + stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
+            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') + stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
+            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
+            `</div></td>` +
             (actionHtml != null
                 ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +

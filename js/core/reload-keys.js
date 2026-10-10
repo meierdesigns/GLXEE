@@ -18,14 +18,6 @@ window.addEventListener('keydown', (e) => {
             localStorage.removeItem('vf_start_menu_state_v1');
         } catch (err) { /* storage blocked */ }
     }
-    if (e.key !== 'F4' && e.code !== 'F4') { window.location.reload(); return; }
-    // Refresh the HTTP cache entries of every script/stylesheet first
-    // (cache: 'reload' bypasses and overwrites them), then reload.
-    const urls = Array.from(document.querySelectorAll('script[src], link[rel="stylesheet"]'))
-        .map((el) => el.src || el.href)
-        .filter((u) => u && u.startsWith(location.origin));
-    urls.push(location.href);
-    const refresh = Promise.all(urls.map((u) => fetch(u, { cache: 'reload' }).catch(() => {})));
-    const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
-    Promise.race([refresh, timeout]).then(() => window.location.reload());
+    // Reload at once: waiting lets the running game write its state back.
+    window.location.reload();
 }, true);

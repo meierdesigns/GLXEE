@@ -98,7 +98,7 @@ extendClass(HomeStationUI, {
             });
         }
         rows = rows.filter(Boolean);
-        return rows.length ? rows.join('') : '<p class="hs-muted hs-empty-slot">NOTHING TO SELL</p>';
+        return rows.length ? rows.join('') : this.emptyHtml('hsShop', 'NOTHING TO SELL');
     },
 
     renderShopSellHeader() {

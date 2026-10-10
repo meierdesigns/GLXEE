@@ -212,7 +212,7 @@ extendClass(HomeStationUI, {
                 this.hangarSectionSlotStripHtml(sec, sec.kind === 'weapon' && loadout && loadout.weaponSlots && loadout.weaponSlots.length
                     ? loadout.weaponSlots : equipped, caps) +
                 `<span class="hs-hangar-parts-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span></h4>` +
-                `<div class="hs-hangar-parts-grid">${cells || '<p class="hs-muted hs-empty-slot">NONE OWNED</p>'}</div>` +
+                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE OWNED')}</div>` +
                 `</section>`;
         }).join('') + `</div>`;
     },

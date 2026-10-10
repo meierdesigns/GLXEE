@@ -64,6 +64,8 @@ class ProfileSelectionManager {
         this.applyFactionVars(box, id);
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
         if (emblem) emblem.innerHTML = this.getFactionEmblemHtml(id, 48);
+        const nameCrest = this.overlay.querySelector('.profile-name-crest');
+        if (nameCrest) nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48);
         const name = this.overlay.querySelector('.profile-faction-preview-name');
         if (name) name.textContent = this.getFactionLabel(id);
         const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
@@ -217,13 +219,23 @@ class ProfileSelectionManager {
     }
 
     /** Default player hull drawn in the faction's silhouette and colours. */
-    renderFactionShipPreview(id) {
+    renderFactionShipPreview(id, attempt) {
+        const tries = attempt || 0;
+        clearTimeout(this._shipPreviewTimer);
+        // After a page refresh the ship assets / managers load asynchronously: retry until ready.
+        const retry = () => {
+            if (tries >= 60) return;
+            this._shipPreviewTimer = setTimeout(() => {
+                if (this.overlay && this.pendingFaction === id) this.renderFactionShipPreview(id, tries + 1);
+            }, 150);
+        };
         const canvas = this.overlay && this.overlay.querySelector('.profile-faction-ship');
         const ctx = canvas && canvas.getContext('2d');
         if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
-        if (!loader || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return;
+        if (!loader || (loader.isLoaded && !loader.isLoaded())
+            || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) { retry(); return; }
         try {
             const shipId = 'player_scrap';
             const model = Object.assign({}, shipConfigManager.getMergedModel(shipId), { id: shipId, faction: id, factionPreview: true });
@@ -238,7 +250,8 @@ class ProfileSelectionManager {
             loader.renderShip(ctx, model, Math.floor((canvas.width - mw * scale) / 2),
                 Math.floor((canvas.height - mh * scale) / 2), scale, null, 0, {});
         } catch (e) {
-            /* preview is cosmetic */
+            /* preview is cosmetic, but assets may still be arriving */
+            retry();
         }
     }
 
@@ -287,6 +300,7 @@ class ProfileSelectionManager {
             this.mode = 'create';
             this.createStep = 'faction';
             this._heroDefaultName = '';
+            this._pilotName = '';
             this.pendingFaction = this.getFactionIds()[0];
         }
         this.createUI();
@@ -412,7 +426,7 @@ class ProfileSelectionManager {
      * Start options for a new pilot: start galaxy (defaults to the faction's
      * home galaxy) and a starter kit. Difficulty is a global setting. Applied in saveName().
      */
-    renderStartOptionsHtml() {
+    renderStartOptionsHtml(pilotOnly) {
         const meta = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta)
             ? planetConfigManager.getFactionMeta(this.pendingFaction) : null;
         const home = (meta && meta.homeGalaxy) || 'milky_way';
@@ -422,7 +436,9 @@ class ProfileSelectionManager {
             this._startOpts = {
                 faction: this.pendingFaction,
                 galaxy: home,
-                kit: 'balanced'
+                kit: 'balanced',
+                look: (typeof heroPortrait !== 'undefined') ? heroPortrait.randomLook(this.pendingFaction) : null,
+                lookKey: 'skin'
             };
         }
         const o = this._startOpts;
@@ -443,6 +459,7 @@ class ProfileSelectionManager {
             const g = planetConfigManager.getGalaxy ? planetConfigManager.getGalaxy(gid) : null;
             return String((g && g.name) || gid).toUpperCase();
         };
+        if (pilotOnly) return `<div class="profile-start-options">${this.renderPilotRowHtml()}</div>`;
         return `
             <div class="profile-start-options">
                 <div class="profile-start-row" data-start-row="galaxy">
@@ -457,6 +474,72 @@ class ProfileSelectionManager {
                     </div>
                 </div>
             </div>`;
+    }
+
+    /** Accent colour of the pending faction (portrait glow). */
+    pilotAccent() {
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        return fss && fss.getFactionStyle ? (fss.getFactionStyle(this.pendingFaction) || {}).accent : null;
+    }
+
+    /** Which portrait features apply to the pending faction's species. */
+    pilotLookKeys() {
+        const f = this.pendingFaction;
+        const hairless = f === 'kronax' || f === 'voidborn' || f === 'machine';
+        return Object.keys(heroPortrait.OPTIONS).filter((k) => !(hairless && (k === 'hair' || k === 'hairCol' || k === 'beard')));
+    }
+
+    /** PILOT row of the create step: generated portrait plus feature pickers. */
+    renderPilotRowHtml() {
+        const o = this._startOpts;
+        if (typeof heroPortrait === 'undefined' || !o || !o.look) return '';
+        const keys = this.pilotLookKeys();
+        if (keys.indexOf(o.lookKey) < 0) o.lookKey = keys[0];
+        const ctl = (k) => `<div class="pp-ctl${k === o.lookKey ? ' active' : ''}" data-pp-key="${k}">` +
+            `<span class="pp-name">${heroPortrait.LABELS[k]}</span>` +
+            `<input type="range" class="pp-slider" data-pp-slider min="0" max="${heroPortrait.OPTIONS[k] - 1}" step="1" value="${o.look[k]}" tabindex="-1" aria-label="${heroPortrait.LABELS[k]}">` +
+            `<b class="pp-val">${heroPortrait.valueName(k, o.look[k])}</b></div>`;
+        return `<div class="profile-start-row" data-start-row="pilot">
+                    <span class="profile-start-label">PILOT</span>
+                    <div class="profile-pilot-card">
+                        <div class="profile-pilot-portrait" id="psPortrait">${heroPortrait.html(o.look, this.pilotAccent())}</div>
+                        <div class="profile-pilot-controls">
+                            <div class="pp-grid">${keys.map(ctl).join('')}</div>
+                            <button type="button" class="action-button secondary" id="psRandomPilot" tabindex="-1">RANDOMIZE</button>
+                        </div>
+                    </div>
+                </div>`;
+    }
+
+    /** Re-render the portrait and feature values after a change. */
+    refreshPilotRow() {
+        const o = this._startOpts;
+        const box = this.overlay && this.overlay.querySelector('#psPortrait');
+        if (!box || !o || !o.look) return;
+        box.innerHTML = heroPortrait.html(o.look, this.pilotAccent());
+        this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
+            const k = el.getAttribute('data-pp-key');
+            el.classList.toggle('active', k === o.lookKey);
+            const v = el.querySelector('.pp-val');
+            if (v) v.textContent = heroPortrait.valueName(k, o.look[k]);
+            const sl = el.querySelector('.pp-slider');
+            if (sl && Number(sl.value) !== o.look[k]) sl.value = o.look[k];
+        });
+    }
+
+    stepPilotLook(key, d) {
+        const o = this._startOpts;
+        if (!o || !o.look) return;
+        o.lookKey = key;
+        o.look = heroPortrait.cycle(o.look, key, d);
+        this.refreshPilotRow();
+    }
+
+    randomizePilotLook() {
+        const o = this._startOpts;
+        if (!o) return;
+        o.look = heroPortrait.randomLook(this.pendingFaction);
+        this.refreshPilotRow();
     }
 
     /**
@@ -876,7 +959,9 @@ class ProfileSelectionManager {
         const create = this.mode === 'create';
         const step = create ? (this.createStep || 'faction') : 'name';
         const pickFaction = create && step === 'faction';
-        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : 'NAME YOUR PILOT');
+        const pilotStep = create && step === 'pilot';
+        const startStep = create && !pickFaction && !pilotStep;
+        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : 'START SETUP'));
         const swatchesHtml = pickFaction ? `
             <div class="profile-faction-picker">
                 <div class="profile-faction-picker-label">← FACTION →</div>
@@ -898,66 +983,53 @@ class ProfileSelectionManager {
                 <div class="profile-faction-preview-text">
                     <span class="profile-faction-preview-emblem"></span>
                     <strong class="profile-faction-preview-name"></strong>
-                    <small class="profile-faction-preview-trait"></small>
-                    <small class="profile-faction-preview-hero"></small>
-                    ${create && !pickFaction ? this.renderPreferredWeaponHtml() : ''}
+                    ${pilotStep ? '' : '<small class="profile-faction-preview-trait"></small><small class="profile-faction-preview-hero"></small>'}
+                    ${create && !pickFaction && !pilotStep ? this.renderPreferredWeaponHtml() : ''}
                 </div>
             </div>
-            <div class="profile-faction-lore" role="note">
-                <div class="profile-faction-lore-label">ⓘ LORE</div>
-                <div class="profile-faction-lore-text"></div>
+            <div class="profile-faction-lore profile-faction-tabcard" role="note">
+                <div class="profile-faction-tabs" role="tablist">
+                    <button type="button" class="profile-faction-tab active" data-tab="lore" tabindex="-1">ⓘ LORE</button>
+                    <button type="button" class="profile-faction-tab" data-tab="home" tabindex="-1">GALAXY</button>
+                    <button type="button" class="profile-faction-tab" data-tab="style" tabindex="-1">PLAYSTYLE</button>
+                    <button type="button" class="profile-faction-tab" data-tab="weapon" tabindex="-1">WEAPON</button>
+                    <button type="button" class="profile-faction-tab" data-tab="allies" tabindex="-1">ALLIES</button>
+                </div>
+                <div class="profile-faction-tabpanel active" data-panel="lore">
+                    <div class="profile-faction-lore-text"></div>
+                </div>
+                ${[['home', 'HOME GALAXY', false], ['style', 'PLAYSTYLE', false], ['weapon', 'PREFERRED WEAPON', true], ['allies', 'ALLIES', true]].map(([k, label, note]) => `
+                <div class="profile-faction-tabpanel" data-panel="${k}">
+                    <div class="profile-faction-fact" data-fact="${k}">
+                        <span class="profile-faction-fact-icon"></span>
+                        <div class="profile-faction-fact-body">
+                            <div class="profile-faction-fact-label">${label}</div>
+                            <div class="profile-faction-fact-value"></div>
+                            ${note ? '<div class="profile-faction-fact-note"></div>' : ''}
+                        </div>
+                    </div>
+                </div>`).join('')}
             </div>
-            </div>
-            <div class="profile-faction-facts">
-                <div class="profile-faction-fact" data-fact="home">
-                    <span class="profile-faction-fact-icon"></span>
-                    <div class="profile-faction-fact-body">
-                        <div class="profile-faction-fact-label">HOME GALAXY</div>
-                        <div class="profile-faction-fact-value"></div>
-                    </div>
-                </div>
-                <div class="profile-faction-fact" data-fact="style">
-                    <span class="profile-faction-fact-icon"></span>
-                    <div class="profile-faction-fact-body">
-                        <div class="profile-faction-fact-label">PLAYSTYLE</div>
-                        <div class="profile-faction-fact-value"></div>
-                    </div>
-                </div>
-                <div class="profile-faction-fact" data-fact="weapon">
-                    <span class="profile-faction-fact-icon"></span>
-                    <div class="profile-faction-fact-body">
-                        <div class="profile-faction-fact-label">PREFERRED WEAPON</div>
-                        <div class="profile-faction-fact-value"></div>
-                        <div class="profile-faction-fact-note"></div>
-                    </div>
-                </div>
-                <div class="profile-faction-fact" data-fact="allies">
-                    <span class="profile-faction-fact-icon"></span>
-                    <div class="profile-faction-fact-body">
-                        <div class="profile-faction-fact-label">ALLIES</div>
-                        <div class="profile-faction-fact-value"></div>
-                        <div class="profile-faction-fact-note"></div>
-                    </div>
-                </div>
             </div>` : '';
-        const inputHtml = pickFaction ? ''
-            : '<div class="profile-name-row"><input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'
+        const inputHtml = (pickFaction || startStep) ? ''
+            : '<div class="profile-name-row">' + (pilotStep ? '<span class="profile-name-crest"></span>' : '') + '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'
                 + '<div class="profile-selection-actions profile-name-gen-wrap"><button type="button" class="action-button profile-name-gen" id="psGenName" title="Generate a name">GENERATE NAME</button></div></div>';
         const btnIcon = (kind) => ProfileSelectionManager.btnIconHtml(kind);
-        const primary = pickFaction ? 'NEXT' : 'SAVE';
+        const primary = (pickFaction || pilotStep) ? 'NEXT' : 'SAVE';
         const secondary = create && !pickFaction ? 'BACK' : 'CANCEL';
         const hint = pickFaction ? '← → Faction | ENTER Confirm | ESC Cancel'
+            : pilotStep ? '↑ ↓ Row | ← → Change | R Randomize | ENTER Next | ESC Back'
             : (create ? '↑ ↓ Row | ← → Change | ENTER Save | ESC Back' : 'ENTER Save | ESC Cancel');
         setHtml(`
-            <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}">
+            <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
                 <h2 class="profile-selection-title">${title}</h2>
                 ${pickFaction ? '' : inputHtml}
-                ${create && !pickFaction ? this.renderStartOptionsHtml() : ''}
+                ${create && !pickFaction ? this.renderStartOptionsHtml(pilotStep) : ''}
                 ${swatchesHtml}
                 ${previewHtml}
                 <div class="profile-selection-actions">
                     <button class="action-button secondary" id="psCancelMode">${btnIcon(secondary === 'BACK' ? 'back' : 'cancel')}${secondary}</button>
-                    <button class="action-button" id="psSave">${btnIcon(pickFaction ? 'next' : 'save')}${primary}</button>
+                    <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep) ? 'next' : 'save')}${primary}</button>
                 </div>
                 <div class="profile-selection-instructions"><p>${hint}</p></div>
             </div>
@@ -970,11 +1042,17 @@ class ProfileSelectionManager {
         if (input && this.mode === 'rename' && profiles[this.selectedIndex]) {
             input.value = profiles[this.selectedIndex].name;
         }
+        if (input && create && this._pilotName) input.value = this._pilotName;
         if (create) this.applyPendingFactionLook();
+        if (input && create) {
+            this._pilotName = input.value;
+            input.addEventListener('input', () => { this._pilotName = input.value; });
+        }
         const genBtn = this.overlay.querySelector('#psGenName');
         if (genBtn && input) {
             genBtn.addEventListener('click', () => {
                 input.value = this.generatePilotName(this.pendingFaction);
+                this._pilotName = input.value;
                 input.focus();
                 input.select();
             });
@@ -1008,6 +1086,28 @@ class ProfileSelectionManager {
                 galaxyBox.innerHTML = this.renderStartGalaxyCardHtml(this._startOpts.galaxy, (meta && meta.homeGalaxy) || 'milky_way');
             });
         }
+        // Pilot portrait pickers.
+        this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
+            const k = el.getAttribute('data-pp-key');
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('[data-pp-slider]')) return;
+                this._startOpts.lookKey = k; this.refreshPilotRow();
+            });
+            const sl = el.querySelector('.pp-slider');
+            if (sl) sl.addEventListener('change', () => { clearTimeout(this._ppTimer); this._ppTimer = 0; this.refreshPilotRow(); });
+            if (sl) sl.addEventListener('input', () => {
+                const o = this._startOpts;
+                o.lookKey = k;
+                o.look = Object.assign({}, o.look, { [k]: Number(sl.value) });
+                const val = el.querySelector('.pp-val');
+                if (val) val.textContent = heroPortrait.valueName(k, o.look[k]);
+                if (this._ppTimer) return;
+                // Portrait redraw is heavy: coalesce to ~10/s while dragging.
+                this._ppTimer = setTimeout(() => { this._ppTimer = 0; this.refreshPilotRow(); }, 90);
+            });
+        });
+        const randBtn = this.overlay.querySelector('#psRandomPilot');
+        if (randBtn) randBtn.addEventListener('click', () => this.randomizePilotLook());
         // Start options (galaxy / kit): toggle in place so the
         // typed name is kept.
         this.overlay.querySelectorAll('[data-start-opt]').forEach((btn) => {
@@ -1034,8 +1134,8 @@ class ProfileSelectionManager {
             this.applyPendingFactionLook();
         };
         const confirm = () => {
-            if (pickFaction) {
-                this.createStep = 'name';
+            if (pickFaction || pilotStep) {
+                this.createStep = pickFaction ? 'pilot' : 'name';
                 this.createUI();
             } else {
                 this.saveName();
@@ -1043,7 +1143,7 @@ class ProfileSelectionManager {
         };
         const cancel = () => {
             if (create && !pickFaction) {
-                this.createStep = 'faction';
+                this.createStep = pilotStep ? 'faction' : 'pilot';
             } else if (create && (this._createOnly || !this.getProfiles().length)) {
                 // Nothing to go back to: leave (back to the start menu).
                 this.close();
@@ -1053,6 +1153,13 @@ class ProfileSelectionManager {
             }
             this.createUI();
         };
+        this.overlay.querySelectorAll('.profile-faction-tab').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                this.overlay.querySelectorAll('.profile-faction-tab').forEach((t) => t.classList.toggle('active', t === tab));
+                this.overlay.querySelectorAll('.profile-faction-tabpanel').forEach((p) =>
+                    p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
+            });
+        });
         this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
             btn.addEventListener('click', () => pickIndex(this.getFactionIds().indexOf(btn.dataset.faction)));
             btn.addEventListener('dblclick', confirm);
@@ -1065,7 +1172,8 @@ class ProfileSelectionManager {
         // ←/→: swatches cycle factions, option rows change their value,
         // buttons move between buttons, the name input moves the caret.
         const rows = pickFaction ? ['faction', 'buttons']
-            : (create ? ['name', 'galaxy', 'kit', 'buttons'] : ['name', 'buttons']);
+            : (pilotStep ? ['name'].concat(this._startOpts && this._startOpts.look ? ['pilot'] : [], ['buttons'])
+                : (startStep ? ['galaxy', 'kit', 'buttons'] : ['name', 'buttons']));
         let row = 0;
         let btnIdx = 0;
         const buttons = [saveBtn, cancelBtn];
@@ -1112,7 +1220,15 @@ class ProfileSelectionManager {
                 } else if (id === 'galaxy' || id === 'kit') {
                     e.preventDefault();
                     stepOption(id, d);
+                } else if (id === 'pilot') {
+                    e.preventDefault();
+                    this.stepPilotLook(this._startOpts.lookKey, d);
                 }
+                return;
+            }
+            if ((key === 'n' || key === 'N' || key === 'r' || key === 'R') && id === 'pilot' && document.activeElement !== input) {
+                e.preventDefault();
+                this.randomizePilotLook();
                 return;
             }
             if ((key === 'n' || key === 'N') && rowId() === 'galaxy' && document.activeElement !== input) {

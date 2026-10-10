@@ -137,7 +137,11 @@
                         urgent = true;
                         break;
                     }
-                    if (m.type === 'attributes') relevant = true;
+                    if (m.type === 'attributes') {
+                        // Inline style churn (animations) is only relevant on a host itself.
+                        if (m.attributeName === 'style' && !(m.target.matches && m.target.matches(BG.HOST_SELECTOR))) continue;
+                        relevant = true;
+                    }
                 }
                 // New overlays / tab BGs: sync in the same turn (before paint) so ::before never flashes.
                 if (urgent) {
@@ -153,7 +157,7 @@
                 obsTimer = setTimeout(function () {
                     obsTimer = 0;
                     collectHosts();
-                }, 32);
+                }, 120);
             });
             parallax.observer.observe(document.body, {
                 childList: true,

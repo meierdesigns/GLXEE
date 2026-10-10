@@ -182,8 +182,10 @@
 .gm-edge.gm-pxline.lit .gm-pxline-core { filter: brightness(1.35); }
 .gm-edge.gm-pxline.dim { opacity: 0.4; }
 .gm-route.gm-pxline { color: var(--faction-accent, var(--color-primary)); opacity: 1; }
-.gm-route.gm-pxline .gm-pxline-core { filter: brightness(1.6); }
-.gm-route.gm-pxline .gm-pxline-glow { opacity: 0.35; }
+.gm-route.gm-pxline .gm-pxline-core { filter: brightness(2); }
+.gm-route.gm-pxline .gm-pxline-glow { opacity: 0.7; }
+.gm-route.gm-pxline .gm-pxline-halo { opacity: 0.5; }
+.gm-route.gm-pxline { filter: drop-shadow(0 0 4px var(--faction-accent, var(--color-primary))); }
 .gm-route.gm-pxline.risky { color: #ff5a3c; }
 .gm-space .gm-stars .gm-star-twinkle { animation: gm-star-twinkle 3.6s steps(6, end) infinite; }
 @keyframes gm-star-twinkle {
@@ -282,6 +284,7 @@
     /* Retro / arcade FX (driven by uiAppearanceManager) */
     --vf-glow: 0;
     --vf-scan: 0;
+    --vf-fx-scale: 1;
     --vf-crt: 0;
     --vf-chroma: 0;
     --vf-vignette: 0;
@@ -863,11 +866,15 @@ label,
     background: repeating-linear-gradient(
         to bottom,
         rgba(0, 0, 0, 0) 0px,
-        rgba(0, 0, 0, 0) 1px,
-        rgba(0, 0, 0, 0.92) 2px,
-        rgba(0, 0, 0, 0) 3px
+        rgba(0, 0, 0, 0) calc(1px * var(--vf-fx-scale, 1)),
+        rgba(0, 0, 0, 0.92) calc(2px * var(--vf-fx-scale, 1)),
+        rgba(0, 0, 0, 0) calc(3px * var(--vf-fx-scale, 1))
     );
     mix-blend-mode: multiply;
+    /* Drift via transform (compositor) instead of background-position (full repaint per frame):
+       the layer is 12px taller and slides by 12px = 4 gradient periods, so the loop is seamless. */
+    bottom: calc(-12px * var(--vf-fx-scale, 1));
+    will-change: transform;
     animation: vf-fx-scan-drift 6s linear infinite;
 }
 
@@ -886,9 +893,9 @@ html[data-vf-scanlines="off"] .vf-fx-scanlines {
         repeating-linear-gradient(
             0deg,
             rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) 0px,
-            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) 1px,
-            transparent 1px,
-            transparent 6px
+            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) calc(1px * var(--vf-fx-scale, 1)),
+            transparent calc(1px * var(--vf-fx-scale, 1)),
+            transparent calc(6px * var(--vf-fx-scale, 1))
         ),
         radial-gradient(
             ellipse 70% 65% at 50% 50%,
@@ -956,7 +963,7 @@ html[data-vf-vignette="off"] .vf-fx-vignette { display: none; }
 .vf-fx-noise {
     opacity: calc(0.5 * var(--vf-noise, 0));
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
-    background-size: 160px 160px;
+    background-size: calc(160px * var(--vf-fx-scale, 1)) calc(160px * var(--vf-fx-scale, 1));
     mix-blend-mode: overlay;
     animation: vf-fx-noise-shift 0.5s steps(5, end) infinite;
 }
@@ -985,8 +992,8 @@ html[data-vf-flicker="off"] .vf-fx-flicker { display: none; }
 }
 
 @keyframes vf-fx-scan-drift {
-    from { background-position: 0 0; }
-    to { background-position: 0 12px; }
+    from { transform: translateY(calc(-12px * var(--vf-fx-scale, 1))); }
+    to { transform: translateY(0); }
 }
 
 @keyframes vf-arcade-pulse {
@@ -15096,30 +15103,35 @@ html[data-faction="machine"],
    each faction reads at a glance. */
 html[data-faction="terran"],
 .hs-faction-card[data-faction="terran"],
+.hs-menu-profile-row[data-faction="terran"],
 .profile-selection-content[data-faction="terran"] {
     --faction-panel-clip: polygon(0px 16px, 0px 12px, 4px 12px, 4px 8px, 8px 8px, 8px 4px, 12px 4px, 12px 0px, 16px 0px, calc(100% - 16px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 4px, calc(100% - 8px) 4px, calc(100% - 8px) 8px, calc(100% - 4px) 8px, calc(100% - 4px) 12px, 100% 12px, 100% 16px, 100% calc(100% - 16px), 100% calc(100% - 12px), calc(100% - 4px) calc(100% - 12px), calc(100% - 4px) calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) calc(100% - 4px), calc(100% - 12px) calc(100% - 4px), calc(100% - 12px) 100%, calc(100% - 16px) 100%, 16px 100%, 12px 100%, 12px calc(100% - 4px), 8px calc(100% - 4px), 8px calc(100% - 8px), 4px calc(100% - 8px), 4px calc(100% - 12px), 0px calc(100% - 12px), 0px calc(100% - 16px));
     --faction-ctl-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
 }
 html[data-faction="kronax"],
 .hs-faction-card[data-faction="kronax"],
+.hs-menu-profile-row[data-faction="kronax"],
 .profile-selection-content[data-faction="kronax"] {
     --faction-panel-clip: polygon(0px 28px, 0px 21px, 7px 21px, 7px 14px, 14px 14px, 14px 7px, 21px 7px, 21px 0px, 28px 0px, calc(50% - 24px) 0px, calc(50% - 24px) 7px, 50% 8px, calc(50% + 24px) 7px, calc(50% + 24px) 0px, 100% 0, 100% calc(100% - 28px), 100% calc(100% - 21px), calc(100% - 7px) calc(100% - 21px), calc(100% - 7px) calc(100% - 14px), calc(100% - 14px) calc(100% - 14px), calc(100% - 14px) calc(100% - 7px), calc(100% - 21px) calc(100% - 7px), calc(100% - 21px) 100%, calc(100% - 28px) 100%, calc(50% + 24px) 100%, calc(50% + 24px) calc(100% - 7px), 50% calc(100% - 8px), calc(50% - 24px) calc(100% - 7px), calc(50% - 24px) 100%, 0 100%);
     --faction-ctl-clip: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
 }
 html[data-faction="voidborn"],
 .hs-faction-card[data-faction="voidborn"],
+.hs-menu-profile-row[data-faction="voidborn"],
 .profile-selection-content[data-faction="voidborn"] {
     --faction-panel-clip: polygon(0px 30px, 0px 25px, 1px 25px, 1px 20px, 3px 20px, 3px 15px, 6px 15px, 6px 10px, 10px 10px, 10px 5px, 18px 5px, 18px 0px, 30px 0px, calc(100% - 10px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 30px), 100% calc(100% - 25px), calc(100% - 1px) calc(100% - 25px), calc(100% - 1px) calc(100% - 20px), calc(100% - 3px) calc(100% - 20px), calc(100% - 3px) calc(100% - 15px), calc(100% - 6px) calc(100% - 15px), calc(100% - 6px) calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) calc(100% - 5px), calc(100% - 18px) calc(100% - 5px), calc(100% - 18px) 100%, calc(100% - 30px) 100%, 10px 100%, 3px 100%, 3px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
     --faction-ctl-clip: polygon(0px 12px, 0px 8px, 2px 8px, 2px 4px, 5px 4px, 5px 0px, 12px 0px, calc(100% - 12px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 8px, 100% 8px, 100% 12px, 100% calc(100% - 12px), 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 4px), calc(100% - 5px) calc(100% - 4px), calc(100% - 5px) 100%, calc(100% - 12px) 100%, 12px 100%, 5px 100%, 5px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 8px), 0px calc(100% - 8px), 0px calc(100% - 12px));
 }
 html[data-faction="pirate"],
 .hs-faction-card[data-faction="pirate"],
+.hs-menu-profile-row[data-faction="pirate"],
 .profile-selection-content[data-faction="pirate"] {
     --faction-panel-clip: polygon(0px 12px, 0px 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0px, 12px 0px, calc(100% - 24px) 0px, calc(100% - 20px) 0px, calc(100% - 20px) 4px, calc(100% - 16px) 4px, calc(100% - 16px) 8px, calc(100% - 12px) 8px, calc(100% - 12px) 12px, calc(100% - 8px) 12px, calc(100% - 8px) 16px, calc(100% - 4px) 16px, calc(100% - 4px) 20px, 100% 20px, 100% 24px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 20px 100%, 16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px), 12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px), 4px calc(100% - 12px), 4px calc(100% - 16px), 0px calc(100% - 16px), 0px calc(100% - 20px));
     --faction-ctl-clip: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
 }
 html[data-faction="machine"],
 .hs-faction-card[data-faction="machine"],
+.hs-menu-profile-row[data-faction="machine"],
 .profile-selection-content[data-faction="machine"] {
     --faction-panel-clip: polygon(0 12px, 12px 12px, 12px 0, calc(100% - 12px) 0, calc(100% - 12px) 12px, 100% 12px, 100% calc(50% - 10px), calc(100% - 6px) calc(50% - 10px), calc(100% - 6px) calc(50% + 10px), 100% calc(50% + 10px), 100% calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 12px calc(100% - 12px), 0 calc(100% - 12px), 0 calc(50% + 10px), 6px calc(50% + 10px), 6px calc(50% - 10px), 0 calc(50% - 10px));
     --faction-ctl-clip: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
@@ -15970,9 +15982,10 @@ html[data-faction] .enemy-vitals-side,
 }
 .hs-menu-profile-row {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    /* emblem | name | faction | active badge | actions */
+    grid-template-columns: 32px minmax(0, 1fr) auto auto auto;
     align-items: center;
-    gap: 10px;
+    column-gap: 16px;
     padding: 8px 12px;
     font: inherit;
     font-size: var(--font-text);
@@ -15991,11 +16004,22 @@ html[data-faction] .enemy-vitals-side,
     border-color: var(--row-accent, var(--color-primary));
     background: color-mix(in srgb, var(--row-accent, var(--color-primary)) 18%, transparent);
 }
+.hs-menu-profile-emblem,
+.hs-menu-profile-emblem .ui-icon-tip {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    line-height: 0;
+}
 .hs-menu-profile-emblem img {
     display: block;
     image-rendering: pixelated;
+    filter: none;
+    opacity: 1;
 }
 .hs-menu-profile-name {
+    font-size: var(--font-h2);
     font-weight: bold;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -21751,9 +21775,6 @@ html .home-station-overlay .home-station-content .hs-topbar.is-res-stacked {
 }
 
 /* Profile rows: emblem · name · faction · ACTIVE badge · actions — one line. */
-.hs-menu-profile-row {
-    grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
-}
 
 /* Profile overview: resource rows with their icon. */
 .profile-details-res-name {
@@ -23341,7 +23362,35 @@ html body .home-station-overlay .hs-faction-tabs .hs-faction-head { gap: 10px; }
     height: 96px;
     filter: contrast(1.35) brightness(1.2) saturate(1.2);
 }
-.hs-fd-hero-info { padding-right: 4px; }
+/* Right side of the faction header: three columns (identity + goal | playstyle | traits)
+   so the wide space is used instead of one tall stack. Own light box, not .hs-panel. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
+    align-items: stretch;
+    align-self: stretch;
+    gap: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, #05060a 55%, transparent);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-fd-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 18px; justify-content: center; }
+.hs-fd-col + .hs-fd-col { border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); }
+.hs-fd-col-style { flex-direction: row; align-items: center; gap: 12px; }
+.hs-fd-col-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-fd-col-ico { flex: 0 0 auto; display: grid; place-items: center; width: 44px; height: 44px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent); }
+.hs-fd-col-ico img { width: 28px; height: 28px; image-rendering: pixelated; }
+.hs-fd-col-label { font-size: var(--font-text); letter-spacing: 2px; color: var(--faction-accent, var(--color-primary)); }
+.hs-fd-traits { display: flex; flex-direction: column; gap: 8px; }
+.hs-fd-trait { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hs-fd-trait-ico { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent); }
+.hs-fd-trait-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-fd-trait-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hs-fd-trait-txt b { font-size: var(--font-text); letter-spacing: 1px; color: var(--color-text, #fff); }
+.hs-fd-trait-txt em { font-style: normal; font-size: var(--font-text); line-height: 1.35; color: color-mix(in srgb, var(--color-text, #fff) 65%, transparent); }
+.hs-fd-hero-info .hs-faction-head { flex-wrap: wrap; }
 .hs-fd-hero-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .hs-fd-hero-info .hs-faction-head { display: flex; align-items: center; gap: 12px; }
 .hs-fd-hero-info .hs-faction-name { flex: 0 1 auto; font-size: var(--font-h2); font-weight: bold; letter-spacing: 2px; }
@@ -30928,3 +30977,1209 @@ html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.a
 .gm-edge.gm-pxline.lit.next .gm-pxline-core { filter: brightness(1.9) saturate(1.2); }
 .gm-edge.gm-pxline.lit.next .gm-pxline-glow { opacity: 0.85; }
 .gm-edge.gm-pxline.lit.next .gm-pxline-halo { opacity: 0.4; }
+
+/* PERF switches from the remote's PERF tab */
+html[data-vf-perf-heavy="off"] .vf-fx-chroma,
+html[data-vf-perf-heavy="off"] .vf-fx-bloom,
+html[data-vf-perf-heavy="off"] .vf-fx-crt { display: none; }
+html[data-vf-perf-anim="off"] .vf-fx-scanlines,
+html[data-vf-perf-anim="off"] .vf-fx-crt,
+html[data-vf-perf-anim="off"] .vf-fx-noise,
+html[data-vf-perf-anim="off"] .vf-fx-flicker,
+html[data-vf-perf-anim="off"] .menu-item.selected,
+html[data-vf-perf-anim="off"] .settings-row.selected { animation: none !important; }
+.vf-bezel-fx .vf-fx-fps { font-variant-numeric: tabular-nums; }
+
+/* Faction trait hover modal: all traits stacked, icon container left, info right */
+.hs-trait-modal { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; pointer-events: none; background: rgba(2, 4, 8, 0.55); animation: hs-trait-fade 0.16s ease-out both; }
+.hs-trait-modal.is-out { animation: hs-trait-fade-out 0.16s ease-in both; }
+.hs-trait-modal-card { display: flex; flex-direction: column; gap: 12px; width: min(560px, 86vw); padding: 20px 24px; background: #05060a; border: 3px solid var(--trait-accent); box-shadow: 0 0 0 3px #05060a, 0 0 28px color-mix(in srgb, var(--trait-accent) 55%, transparent); animation: hs-trait-pop 0.32s cubic-bezier(.2, 1.4, .4, 1) both; }
+.hs-trait-modal-fac { font-size: var(--font-text); letter-spacing: 3px; color: var(--trait-accent); padding-bottom: 8px; border-bottom: 2px solid color-mix(in srgb, var(--trait-accent) 35%, transparent); }
+.hs-trait-modal-row { display: flex; align-items: center; gap: 18px; padding: 8px; border: 2px solid transparent; opacity: 0.55; animation: hs-trait-row 0.3s ease-out both; }
+.hs-trait-modal-row.is-hot { opacity: 1; border-color: color-mix(in srgb, var(--trait-accent) 60%, transparent); background: color-mix(in srgb, var(--trait-accent) 10%, transparent); }
+.hs-trait-modal-ico { flex: 0 0 auto; display: grid; place-items: center; width: 88px; height: 88px; background: #05060a; border: 3px solid var(--trait-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--trait-accent) 45%, transparent); }
+.hs-trait-modal-ico img { width: 64px !important; height: 64px !important; image-rendering: pixelated; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--trait-accent) 70%, transparent)); }
+.hs-trait-modal-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-trait-modal-txt b { font-size: var(--font-h2); letter-spacing: 2px; color: var(--color-text, #fff); }
+.hs-trait-modal-txt em { font-style: normal; font-size: var(--font-text); line-height: 1.4; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
+@keyframes hs-trait-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hs-trait-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hs-trait-pop { 0% { transform: scale(0.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes hs-trait-row { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); } }
+.hs-fd-trait[data-trait-key] { cursor: help; }
+
+/* The icons animate themselves, per trait, in stepped (pixel) motion. The hovered row runs faster. */
+.hs-trait-modal-ico img { animation-duration: 1.6s; animation-iteration-count: infinite; animation-timing-function: steps(8, end); transform-origin: 50% 50%; }
+.hs-trait-modal-row.is-hot .hs-trait-modal-ico img { animation-duration: 0.9s; }
+.hs-trait-modal-ico[data-ico="navCoin"] img { animation-name: hs-ti-spin; }
+.hs-trait-modal-ico[data-ico="navSkull"] img { animation-name: hs-ti-twitch; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navFlag"] img { animation-name: hs-ti-wave; transform-origin: 20% 50%; }
+.hs-trait-modal-ico[data-ico="navGear"] img { animation-name: hs-ti-rot; animation-timing-function: steps(8, end); }
+.hs-trait-modal-ico[data-ico="navAtom"] img { animation-name: hs-ti-rot; animation-timing-function: steps(12, end); animation-duration: 3.2s; }
+.hs-trait-modal-ico[data-ico="navPlanet"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico[data-ico="navFactory"] img { animation-name: hs-ti-pump; }
+.hs-trait-modal-ico[data-ico="navLock"] img { animation-name: hs-ti-shake; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navTrophy"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico[data-ico="navSword"] img { animation-name: hs-ti-swing; animation-timing-function: steps(6, end); }
+.hs-trait-modal-ico[data-ico="navCrosshair"] img { animation-name: hs-ti-lock; }
+.hs-trait-modal-ico[data-ico="navStar"] img { animation-name: hs-ti-twinkle; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navChart"] img { animation-name: hs-ti-grow; transform-origin: 50% 100%; }
+.hs-trait-modal-ico[data-ico="navScroll"] img { animation-name: hs-ti-wave; transform-origin: 50% 0%; }
+.hs-trait-modal-ico[data-ico="navQuestion"] img { animation-name: hs-ti-twitch; animation-timing-function: steps(1, end); }
+@keyframes hs-ti-spin { 0% { transform: scaleX(1); } 25% { transform: scaleX(0.5); } 50% { transform: scaleX(0.08); } 75% { transform: scaleX(0.5); } 100% { transform: scaleX(1); } }
+@keyframes hs-ti-twitch { 0%, 60%, 100% { transform: translate(0, 0); } 65% { transform: translate(-3px, 1px) rotate(-4deg); } 75% { transform: translate(3px, -1px) rotate(4deg); } 85% { transform: translate(-2px, 0); } }
+@keyframes hs-ti-wave { 0% { transform: skewY(0); } 25% { transform: skewY(-8deg); } 50% { transform: skewY(0); } 75% { transform: skewY(8deg); } 100% { transform: skewY(0); } }
+@keyframes hs-ti-rot { to { transform: rotate(360deg); } }
+@keyframes hs-ti-glow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.6) drop-shadow(0 0 6px var(--trait-accent)); } }
+@keyframes hs-ti-pump { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14, 0.9); } }
+@keyframes hs-ti-shake { 0%, 70%, 100% { transform: translateX(0); } 75% { transform: translateX(-3px); } 85% { transform: translateX(3px); } 95% { transform: translateX(-2px); } }
+@keyframes hs-ti-swing { 0%, 100% { transform: rotate(-18deg); } 50% { transform: rotate(18deg); } }
+@keyframes hs-ti-lock { 0% { transform: rotate(0) scale(1.15); } 50% { transform: rotate(45deg) scale(0.9); } 100% { transform: rotate(90deg) scale(1.15); } }
+@keyframes hs-ti-twinkle { 0%, 100% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.2); filter: brightness(1.7); } 55% { transform: scale(0.9); } }
+@keyframes hs-ti-grow { 0%, 100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.1); } }
+html[data-vf-perf-anim="off"] .hs-trait-modal-card, html[data-vf-perf-anim="off"] .hs-trait-modal-row, html[data-vf-perf-anim="off"] .hs-trait-modal-ico img { animation: none; }
+
+/* MISSION BOARD rows: four columns (name | difficulty + stage progress | bounty | actions) so the width is used
+   and the text is large enough to read. Scoped to the board, contracts reuse .hs-mission with their own layout. */
+html body .hs-missions-root .hs-mission {
+    grid-template-columns: minmax(180px, 1.1fr) minmax(150px, 0.9fr) auto auto;
+    gap: 20px;
+    padding: 12px 18px;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+html body .hs-missions-root .hs-mission .hs-mission-type { font-size: var(--font-text); }
+html body .hs-missions-root .hs-mission .hs-line-name strong { font-size: 24px; color: var(--color-text, #fff); }
+.hs-mission-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-left: 20px; border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); }
+html body .hs-missions-root .hs-mission-diff { font-size: var(--font-h2); letter-spacing: 2px; color: var(--color-text, #fff); }
+.hs-mission-stages { display: flex; align-items: center; gap: 10px; font-size: var(--font-h2); }
+.hs-mission-stages b { color: var(--color-text, #fff); }
+.hs-mission-stages small { font-size: var(--font-text); letter-spacing: 2px; color: color-mix(in srgb, var(--color-text, #fff) 70%, transparent); }
+.hs-mission-pips { display: inline-flex; gap: 4px; }
+.hs-mission-pips i { width: 18px; height: 10px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent); background: transparent; box-sizing: border-box; }
+.hs-mission-pips i.on { background: var(--faction-accent, var(--color-primary)); }
+html body .hs-missions-root .hs-mission .hs-line-action { min-width: 150px; }
+
+/* Mission board: faction lane (issuer > target) and action-style buttons */
+.hs-mission-lane { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.hs-mission-fac { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fac) 65%, transparent); background: color-mix(in srgb, var(--fac) 12%, #05060a); }
+.hs-mission-fac b { font-size: var(--font-text); letter-spacing: 1px; color: var(--fac); }
+.hs-mission-fac img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-mission-fac.is-target { background: color-mix(in srgb, var(--fac) 24%, #05060a); box-shadow: 0 0 10px color-mix(in srgb, var(--fac) 40%, transparent); }
+.hs-mission-arrow { font-size: var(--font-text); color: var(--color-text, #fff); opacity: 0.75; }
+html body .hs-missions-root .hs-mission .hs-mission-go,
+html body .hs-missions-root .hs-mission .hs-mission-abort { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: bold; letter-spacing: 2px; }
+html body .hs-missions-root .hs-mission .hs-mission-go {
+    min-width: 230px;
+    color: #05060a;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 100%, #fff 18%), var(--faction-accent, var(--color-primary)));
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 100%, #fff 30%);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent), inset 0 -4px 0 rgba(0, 0, 0, 0.28);
+    transition: transform 0.08s steps(2), filter 0.1s;
+}
+html body .hs-missions-root .hs-mission .hs-mission-go:hover:not(:disabled) { filter: brightness(1.18); transform: translateY(-2px); }
+html body .hs-missions-root .hs-mission .hs-mission-go:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3); }
+html body .hs-missions-root .hs-mission .hs-mission-go:disabled, html body .hs-missions-root .hs-mission .hs-mission-go.is-locked { color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); background: #0a0c10; box-shadow: none; border-color: color-mix(in srgb, var(--color-text, #fff) 25%, transparent); }
+.hs-go-ico { display: inline-grid; place-items: center; }
+.hs-go-ico img { width: 24px; height: 24px; image-rendering: pixelated; filter: brightness(0) drop-shadow(0 0 0 transparent); }
+.hs-mission-go:disabled .hs-go-ico img, .hs-mission-go.is-locked .hs-go-ico img { filter: brightness(0.8); }
+.hs-mission-abort .hs-go-ico img { filter: none; }
+html body .hs-missions-root .hs-mission { grid-template-columns: minmax(170px, 0.9fr) minmax(260px, 1.4fr) auto auto; }
+
+/* Mission board bounty: one row of chips, icon exactly as tall as the (larger) amount text. */
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward { justify-self: end; align-self: center; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-cell { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 0; width: auto; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward * { font-size: 24px !important; line-height: 24px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-icon { width: 24px; height: 24px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward img { width: 24px !important; height: 24px !important; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-amt { min-height: 0; min-width: 0; padding: 0; }
+
+/* Mission board buttons: text must read on the bright fill (the theme's thin, glowing, wide-spaced button text did not). */
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go span {
+    color: #02040a !important;
+    text-shadow: none !important;
+    font-size: var(--font-h2) !important;
+    font-weight: 900;
+    letter-spacing: 1px !important;
+    opacity: 1;
+}
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go:disabled,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go:disabled span,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go.is-locked span { color: color-mix(in srgb, #fff 70%, transparent) !important; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort span { font-size: var(--font-h2) !important; letter-spacing: 1px !important; font-weight: bold; }
+.hs-trait-modal-row { transition: opacity 0.12s, background-color 0.12s, border-color 0.12s; }
+.hs-fd-col[data-im-name] { cursor: help; }
+.hs-trait-modal-ico[data-ico="emblem"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico img { animation-name: hs-ti-glow; }
+
+/* FACTION OVERVIEW: two wide columns instead of four narrow ones, large type, an icon on every label. The blocks also
+   get extra left padding: the faction corner cut was clipping the first letters of titles and labels. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block { padding: 18px 24px 18px 30px !important; gap: 10px !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { display: flex; align-items: center; gap: 10px; font-size: 22px; letter-spacing: 3px; padding-bottom: 8px; margin-bottom: 4px; }
+.hs-fd-row-ico { flex: 0 0 auto; display: inline-grid; place-items: center; width: 26px; height: 26px; font-style: normal; }
+.hs-fd-row-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { align-items: center; gap: 14px !important; font-size: 21px; line-height: 1.3; padding: 6px 0; border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent); }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row:last-child { border-bottom: 0; }
+.hs-fd-row-label { display: inline-flex; align-items: center; gap: 10px; color: color-mix(in srgb, var(--color-text, #fff) 80%, transparent); letter-spacing: 1px; }
+.hs-fd-resval { display: inline-flex; align-items: center; gap: 8px; }
+.hs-fd-resval img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { font-size: 21px; display: inline-flex; align-items: center; gap: 8px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-chips { gap: 10px !important; padding-top: 4px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { font-size: 20px; padding: 6px 14px; gap: 8px; }
+.hs-fd-weapon img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-text { font-size: 20px; line-height: 1.5; color: color-mix(in srgb, var(--color-text, #fff) 88%, transparent); }
+
+/* More air between icon and label in the faction overview. */
+.hs-fd-row-ico { width: 34px; height: 34px; margin-right: 6px; }
+.hs-fd-row-label { gap: 18px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { gap: 18px; }
+.hs-fd-resval { gap: 14px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { gap: 14px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { gap: 14px; padding: 8px 18px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { padding: 10px 0; }
+
+/* Alignment: rows are a two-column grid (icon + label | value), icons sit in fixed boxes so every label starts at the
+   same x, and everything is centred on one line. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); align-items: center; column-gap: 20px !important; }
+.hs-fd-row-label { display: grid; grid-template-columns: 34px auto; align-items: center; column-gap: 16px; white-space: nowrap; line-height: 1; }
+.hs-fd-row-ico { margin: 0; width: 34px; height: 34px; line-height: 0; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { justify-self: end; justify-content: flex-end; text-align: right; line-height: 1.2; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { display: grid; grid-template-columns: 34px auto; align-items: center; column-gap: 16px; line-height: 1; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 .hs-fd-row-ico { margin: 0; }
+.hs-fd-resval { display: inline-flex; align-items: center; line-height: 1; }
+.hs-fd-resval img, .hs-fd-weapon img { flex: 0 0 auto; display: block; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { display: inline-flex; align-items: center; line-height: 1; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-cols { align-items: stretch; }
+.hs-trait-modal-card { max-height: 94vh; overflow: hidden; }
+
+/* The crest sits inside the info box, as its first cell; the hero panel just wraps that one box. */
+.home-station-overlay .hs-fd .hs-fd-hero { grid-template-columns: minmax(0, 1fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info { grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 1.2fr) minmax(0, 0.9fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { align-self: center; margin: 14px 22px; }
+.hs-fd-crest + .hs-fd-col { border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); }
+
+/* Crest: no frame, no divider next to it. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { border: 0; box-shadow: none; background: transparent; }
+.hs-fd-crest + .hs-fd-col { border-left: 0; }
+
+/* OVERVIEW tab: the identity / playstyle and the traits shown as the stacked big-icon rows (what the hover modals show). */
+.hs-fd-infos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+.hs-fd-infopanel { display: flex; flex-direction: column; gap: 12px; padding: 18px 24px 18px 30px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--trait-accent) 55%, transparent); min-width: 0; }
+.hs-fd-infopanel .hs-trait-modal-row { opacity: 1; animation: none; }
+
+/* Faction section tabs: icon + high-contrast label on a solid backing (readable over animated bg). */
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) { background: rgba(5, 6, 10, 0.88) !important; }
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) .hs-tab-label {
+    color: var(--color-text, #fff) !important;
+    text-shadow: 0 1px 0 #000, 0 0 3px #000;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) { opacity: 1 !important; }
+.hs-fd-tabs .hs-fd-tab-ico { display: inline-flex; position: static; width: 24px; height: 24px; flex: 0 0 24px; margin: 0; line-height: 0; }
+.hs-fd-tabs .hs-fd-tab-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+
+/* Highlight driven by hovering the header blocks; rows also light up under the pointer. */
+.hs-fd-infos.has-hot .hs-trait-modal-row:not(.is-hot) { opacity: 0.5; }
+.hs-fd-infopanel .hs-trait-modal-row:hover { opacity: 1; border-color: color-mix(in srgb, var(--trait-accent) 60%, transparent); background: color-mix(in srgb, var(--trait-accent) 10%, transparent); }
+
+/* Hover panel: replaces the tab content under the faction header while a header block is hovered. */
+.hs-fd-section { position: relative; }
+.hs-fd-hover { position: absolute; top: 0; left: 0; right: 0; min-height: 100%; z-index: 6; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 18px 28px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--trait-accent) 55%, transparent); pointer-events: none; animation: hs-trait-fade 0.14s ease-out both; }
+.hs-fd-hover.is-out { animation: hs-trait-fade-out 0.14s ease-in both; }
+html[data-vf-perf-anim="off"] .hs-fd-hover { animation: none; }
+
+/* Hover panel: the entries sit side by side (one column each), icon on top, text below. */
+.hs-fd-hover { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; align-content: start; }
+.hs-fd-hover .hs-trait-modal-fac { grid-column: 1 / -1; }
+.hs-fd-hover .hs-trait-modal-row { flex-direction: column; align-items: flex-start; gap: 14px; padding: 16px; }
+.hs-fd-hover .hs-trait-modal-txt { width: 100%; }
+
+/* Header bar: no explanation texts (goal, playstyle text, trait info); they show in the hover panel. */
+.hs-fd-hero-info .hs-fd-goal,
+.hs-fd-hero-info .hs-fd-col-style .hs-fd-text,
+.hs-fd-hero-info .hs-fd-trait-txt em { display: none; }
+.hs-fd-hero-info .hs-fd-col { justify-content: center; }
+
+/* Header bar, no divider lines, space used evenly: crest | identity | playstyle | traits in a row. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info {
+    grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.7fr);
+    column-gap: 28px;
+    border: 0;
+    background: transparent;
+    align-items: center;
+}
+.hs-fd-hero-info .hs-fd-col, .hs-fd-crest + .hs-fd-col, .hs-fd-col + .hs-fd-col { border: 0; padding: 10px 0; }
+.hs-fd-hero-info .hs-faction-head { border: 0; padding: 0; }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest, .home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest img { width: 112px; height: 112px; margin: 6px 0; }
+.hs-fd-hero-info .hs-faction-name { font-size: 34px; letter-spacing: 3px; }
+.hs-fd-hero-info .hs-faction-status { font-size: var(--font-h2); padding: 4px 12px; }
+.hs-fd-col-id { gap: 12px; }
+.hs-fd-hero-info .hs-fd-col-style { gap: 16px; }
+.hs-fd-hero-info .hs-fd-col-ico { width: 64px; height: 64px; }
+.hs-fd-hero-info .hs-fd-col-ico img { width: 40px; height: 40px; }
+.hs-fd-hero-info .hs-fd-col-label { font-size: var(--font-h2); letter-spacing: 3px; }
+.hs-fd-hero-info .hs-fd-col-traits { gap: 12px; }
+.hs-fd-hero-info .hs-fd-traits { flex-direction: row; flex-wrap: wrap; gap: 14px 22px; }
+.hs-fd-hero-info .hs-fd-trait { gap: 12px; }
+.hs-fd-hero-info .hs-fd-trait-ico { width: 52px; height: 52px; }
+.hs-fd-hero-info .hs-fd-trait-ico img { width: 32px; height: 32px; }
+.hs-fd-hero-info .hs-fd-trait-txt b { font-size: var(--font-h2); letter-spacing: 1px; }
+
+/* Header bar polish: every cell centred on one line, nothing cut at the left edge, no extra labels. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info { padding: 0 28px 0 24px; column-gap: 40px; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.8fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { margin: 8px 0; }
+.hs-fd-hero-info .hs-fd-col-traits > .hs-fd-col-label { display: none; }
+.hs-fd-hero-info .hs-fd-col { align-self: center; justify-content: center; }
+.hs-fd-hero-info .hs-fd-col-style .hs-fd-col-label { font-size: 24px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-fd-hero-info .hs-fd-traits { justify-content: flex-start; }
+
+/* Faction header traits: icon on top, title below. */
+.hs-fd-hero-info .hs-fd-trait { flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.hs-fd-hero-info .hs-fd-trait-txt { align-items: center; }
+
+/* Equal-width trait tiles with wider icon boxes. */
+.hs-fd-hero-info .hs-fd-traits { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 14px; }
+.hs-fd-hero-info .hs-fd-trait { flex: 1 1 0; width: 150px; min-width: 0; }
+.hs-fd-hero-info .hs-fd-trait-ico { width: 100%; height: 56px; }
+.hs-fd-hero-info .hs-fd-trait-ico img { width: 36px; height: 36px; }
+
+/* Hover glow on header traits + playstyle (dark outline first, then glow). */
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style) { transition: filter 0.15s; }
+.hs-fd-hero-info :is(.hs-fd-trait-ico, .hs-fd-col-ico) { transition: box-shadow 0.15s, border-color 0.15s; }
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style):hover :is(.hs-fd-trait-ico, .hs-fd-col-ico) {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 10px var(--faction-accent, var(--color-primary)), inset 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style):hover :is(.hs-fd-trait-ico, .hs-fd-col-ico) img {
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a) drop-shadow(0 0 6px var(--faction-accent, var(--color-primary)));
+}
+.hs-fd-hero-info .hs-fd-trait:hover .hs-fd-trait-txt b {
+    text-shadow: 0 0 8px var(--faction-accent, var(--color-primary));
+}
+
+/* Faction detail view follows the viewed faction's GUI shape, not the pilot's. */
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="terran"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(6px 0, calc(100% - 6px) 0, calc(100% - 6px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 6px), 0 calc(100% - 6px), 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #c9a24a 60%, transparent), inset 0 -2px 0 color-mix(in srgb, #c9a24a 35%, transparent) !important;
+}
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="kronax"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(0 0, calc(100% - 14px) 0, calc(100% - 14px) 2px, calc(100% - 12px) 2px, calc(100% - 12px) 4px, calc(100% - 10px) 4px, calc(100% - 10px) 6px, calc(100% - 8px) 6px, calc(100% - 8px) 8px, calc(100% - 6px) 8px, calc(100% - 6px) 10px, calc(100% - 4px) 10px, calc(100% - 4px) 12px, calc(100% - 2px) 12px, calc(100% - 2px) 14px, 100% 14px, 100% 100%, 14px 100%, 14px calc(100% - 2px), 12px calc(100% - 2px), 12px calc(100% - 4px), 10px calc(100% - 4px), 10px calc(100% - 6px), 8px calc(100% - 6px), 8px calc(100% - 8px), 6px calc(100% - 8px), 6px calc(100% - 10px), 4px calc(100% - 10px), 4px calc(100% - 12px), 2px calc(100% - 12px), 2px calc(100% - 14px), 0 calc(100% - 14px)) !important;
+    border-width: 3px !important;
+    letter-spacing: 0.14em !important;
+    box-shadow: inset 0 -4px 0 color-mix(in srgb, #8a1c10 70%, transparent), inset 3px 0 0 #000 !important;
+    text-shadow: 1px 1px 0 #000 !important;
+}
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="voidborn"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: inset(0 round 18px 6px 18px 6px) !important;
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--color-primary) 45%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="pirate"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(0 3px, 7px 0, 22% 2px, 41% 0, 63% 3px, 82% 0, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, calc(100% - 3px) 55%, 100% calc(100% - 7px), calc(100% - 9px) 100%, 70% calc(100% - 3px), 45% 100%, 20% calc(100% - 2px), 5px 100%, 0 calc(100% - 8px), 3px 45%) !important;
+    border-style: dashed !important;
+    box-shadow: inset 0 0 0 1px #cdc7a455, inset 0 -3px 0 #3b5a2a99 !important;
+}
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="machine"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 60%, transparent), inset 0 2px 0 color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+}
+
+/* Faction section tabs: label as tall as the icon, wider buttons, real gap between icon and label. */
+html body .home-station-overlay .home-station-content .hs-fd-tabs { gap: 12px; }
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    min-width: 230px;
+    padding: 0 30px !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab .hs-tab-label { font-size: 24px !important; line-height: 24px; letter-spacing: 2px; }
+.hs-fd-tabs .hs-fd-tab-ico { width: 24px; height: 24px; flex: 0 0 24px; }
+
+/* Faction hero: crest + name stacked in one vertical box on the left, style and traits to the right */
+.hs-fd-idbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; padding: 10px 24px 10px 8px; margin-right: 8px; border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); text-align: center; }
+.hs-fd-idbox .hs-fd-col-id { align-items: center; padding: 0; }
+.hs-fd-idbox .hs-faction-head { flex-direction: column; align-items: center; gap: 6px; }
+
+/* Faction contracts: same four-column layout as the mission board, readable sizes. */
+html body .hs-faction-contracts .hs-mission .hs-mission-goal { display: block; font-size: var(--font-h2); line-height: 1.35; letter-spacing: 0.03em; color: var(--color-text, #fff); }
+html body .hs-faction-contracts .hs-mission .hs-mission-where { font-size: var(--font-text); letter-spacing: 1px; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
+html body .hs-faction-contracts .hs-mission.is-remote .hs-mission-where { color: var(--color-primary); }
+html body .hs-faction-contracts .hs-mission .hs-mission-rep { font-size: var(--font-text); letter-spacing: 1px; color: #ffcf3a; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: minmax(260px, 1.6fr) minmax(150px, 0.8fr) auto auto; }
+html body .hs-faction-contracts .hs-mission .hs-mission-go { min-width: 260px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-type { font-size: var(--font-h2); }
+
+/* Faction detail: crest + name as a vertical sidebar on the left, hero details and everything below on the right. */
+.home-station-overlay .hs-fd[data-faction] { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.home-station-overlay .hs-fd[data-faction] > .hs-fd-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.home-station-overlay .hs-fd[data-faction] > .hs-fd-idbox { margin: 0; padding: 24px 16px; border-right: 0; justify-content: flex-start; gap: 16px; }
+.home-station-overlay .hs-fd-idbox .hs-fd-crest, .home-station-overlay .hs-fd-idbox .hs-fd-crest img { width: 128px; height: 128px; margin: 0; border: 0; box-shadow: none; background: transparent; }
+.home-station-overlay .hs-fd-idbox .hs-faction-name { font-size: 30px; }
+.home-station-overlay .hs-fd .hs-fd-main > .hs-fd-hero .hs-fd-hero-info { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); padding: 0 24px; }
+.hs-fd-idbox .hs-fd-goal, .hs-fd-idbox .hs-fd-col-style .hs-fd-text { display: none; }
+.hs-fd-idbox .hs-fd-col-style { flex-direction: column; align-items: center; gap: 10px; padding: 14px 0 0; border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); width: 100%; }
+.hs-fd-idbox .hs-fd-col-label { font-size: 22px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-fd-idbox .hs-fd-col-ico { width: 64px; height: 64px; }
+.hs-fd-idbox .hs-fd-col-ico img { width: 40px; height: 40px; }
+.home-station-overlay .hs-fd .hs-fd-main > .hs-fd-hero .hs-fd-hero-info { grid-template-columns: minmax(0, 1fr); }
+
+/* Hovered / pinned header item: fully filled tile, the others dimmed. */
+.hs-fd-hover .hs-trait-modal-row.is-hot { background: color-mix(in srgb, var(--trait-accent) 28%, #05060a); border-color: var(--trait-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--trait-accent) 40%, transparent), inset 0 0 18px color-mix(in srgb, var(--trait-accent) 25%, transparent); }
+.hs-fd-hover.is-pinned { border-color: var(--trait-accent); }
+
+/* Hover panel shows only the hovered entry: big icon left, text right. */
+.hs-fd-hover { display: flex; flex-direction: column; align-content: normal; }
+.hs-fd-hover .hs-trait-modal-row { flex-direction: row; align-items: center; gap: 28px; padding: 24px; opacity: 1; animation: none; }
+.hs-fd-hover .hs-trait-modal-ico { width: 160px; height: 160px; }
+.hs-fd-hover .hs-trait-modal-ico img { width: 112px !important; height: 112px !important; }
+.hs-fd-hover .hs-trait-modal-txt { width: auto; flex: 1 1 auto; gap: 12px; }
+.hs-fd-hover .hs-trait-modal-txt b { font-size: 28px; }
+.hs-fd-hover .hs-trait-modal-txt em { font-size: var(--font-h2); }
+
+/* Explanation text in the hover panel / modal: larger and easier to read. */
+.hs-trait-modal-txt em { font-size: 24px; line-height: 1.4; color: color-mix(in srgb, var(--color-text, #fff) 90%, transparent); }
+.hs-trait-modal-txt b { font-size: 28px; }
+
+/* Traits live in the left sidebar, stacked: icon box + name per row. */
+.hs-fd-idbox .hs-fd-col-traits { width: 100%; align-items: stretch; gap: 12px; padding: 14px 0 0; border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); text-align: left; }
+.hs-fd-idbox .hs-fd-traits { flex-direction: column; flex-wrap: nowrap; gap: 12px; align-items: stretch; }
+.hs-fd-idbox .hs-fd-trait { gap: 14px; }
+.hs-fd-idbox .hs-fd-trait-ico { width: 52px; height: 52px; }
+.hs-fd-idbox .hs-fd-trait-ico img { width: 32px; height: 32px; }
+.hs-fd-idbox .hs-fd-trait-txt b { font-size: var(--font-h2); letter-spacing: 1px; }
+.hs-fd-idbox .hs-fd-trait-txt em { display: none; }
+.hs-fd-idbox .hs-fd-col-traits > .hs-fd-col-label { display: none; }
+
+/* Faction views: less empty space between the station nav and the first row. */
+html body .home-station-overlay .home-station-content .hs-factions { padding-top: 4px !important; }
+
+/* Contract filter bar: bigger buttons spread across the full width. */
+html body .home-station-overlay .hs-fcontract-filters { display: flex; flex-wrap: nowrap; gap: 12px; width: 100%; }
+html body .home-station-overlay .hs-fcontract-filters .hs-shop-cat {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 56px;
+    padding: 0 12px;
+    font-size: 22px;
+    letter-spacing: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+/* Contracts hint: never shifted or clipped at the left edge. */
+html body .hs-faction-contracts > .hs-hint { display: block; box-sizing: border-box; width: 100%; margin: 0 !important; padding: 4px 16px !important; text-indent: 0 !important; transform: none !important; overflow: visible; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+
+/* Mission / contract launch buttons: outlined instead of filled. */
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked),
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) span {
+    color: var(--faction-accent, var(--color-primary)) !important;
+}
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) {
+    background: transparent;
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+}
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent);
+    filter: none;
+}
+.hs-mission-go:not(:disabled):not(.is-locked) .hs-go-ico img { filter: none; }
+
+/* Launch buttons v2: dark body, bright accent frame + text (beats the filled gradient and the inherited ::after fill). */
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) {
+    --frame-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked):hover {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 24%, #05060a) !important;
+}
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) span {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #fff) !important;
+    opacity: 1 !important;
+}
+
+/* Contracts rows: inner padding + full border so the left edge is not clipped; fixed columns keep rows aligned. */
+html body .hs-faction-contracts .hs-mission {
+    box-sizing: border-box;
+    gap: 20px;
+    padding: 12px 18px 12px 22px;
+    margin-inline: 0;
+    overflow: visible;
+    grid-template-columns: minmax(260px, 1.6fr) 220px 250px 260px;
+}
+html body .hs-faction-contracts .hs-mission .hs-mission-info { padding-left: 16px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-reward { justify-self: end; }
+
+/* Faction hero block: one-line heading (label + name), readable rank line, calm lore text. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; white-space: normal; }
+.hs-fd-herobox h4 span { font-size: var(--font-text); letter-spacing: 3px; color: color-mix(in srgb, var(--color-text, #fff) 60%, transparent); }
+.hs-fd-herobox h4 b { font-size: 26px; letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox .hs-fd-goal { display: block; font-size: var(--font-h2); letter-spacing: 1px; line-height: 1.4; color: var(--faction-accent, var(--color-primary)); margin: 0; padding: 0 0 6px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox .hs-fd-text { margin: 0; padding: 0; text-indent: 0; letter-spacing: 0.5px; }
+
+/* Faction detail fills the available height: sidebar stretches, the section panel takes the free space, actions stay at the bottom. */
+html body .home-station-overlay .home-station-content .hs-factions > .hs-faction-tabpanel { flex: 1 1 auto; min-height: 0; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabpanel > .hs-fd[data-faction] { flex: 1 1 auto; min-height: 100%; grid-template-rows: minmax(0, 1fr); }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-fd-section { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-fd-section > .hs-fd-block { flex: 1 1 auto; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block > .hs-fd-text { margin: 0; text-indent: 0; letter-spacing: 0.5px; }
+
+/* Faction cards: larger names, relation shown as an icon. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-name { font-size: var(--font-h2); letter-spacing: 2px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-score { font-size: var(--font-h2); }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-status-ico { display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent; }
+.hs-faction-status-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+
+/* Faction cards v2: bigger names, stronger faction identity (accent tint, frame, name glow, accent meter edge). */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card .hs-faction-name {
+    font-size: 26px !important;
+    line-height: 32px;
+    letter-spacing: 2px;
+    color: var(--faction-accent) !important;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--faction-accent) 60%, transparent);
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card .hs-faction-score { font-size: 22px !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card {
+    --frame-color: color-mix(in srgb, var(--faction-accent) 75%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--faction-accent) 26%, #05060a), color-mix(in srgb, var(--faction-accent) 8%, #05060a) 70%) !important;
+    box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--faction-accent) 70%, transparent), 0 0 12px color-mix(in srgb, var(--faction-accent) 25%, transparent);
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card:not(.active) { opacity: 0.92; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card.active {
+    --frame-color: var(--faction-accent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--faction-accent) 42%, #05060a), color-mix(in srgb, var(--faction-accent) 16%, #05060a) 70%) !important;
+    box-shadow: inset 0 -4px 0 var(--faction-accent), 0 0 18px color-mix(in srgb, var(--faction-accent) 50%, transparent);
+}
+
+/* Faction cards: each faction's own (larger) panel silhouette, clipped on the card itself so the gradient follows the shape. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card {
+    --faction-ctl-clip: var(--faction-panel-clip);
+    clip-path: var(--faction-panel-clip);
+    box-shadow: none;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card.active { box-shadow: none; }
+
+/* Faction card v3: slightly smaller names, relation as plus / minus icon. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card .hs-faction-name { font-size: 22px !important; line-height: 28px; }
+.hs-faction-score { display: inline-flex; align-items: center; line-height: 0; }
+.hs-faction-score.is-pos { color: #3dff9a; }
+.hs-faction-score.is-neg { color: #ff5a5a; }
+.hs-faction-score.is-zero { color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); }
+
+/* Voxel bezel perf: the #vfFramePx filter (tile + dilate + 4 offsets) is expensive on full-screen layers.
+   Keep each filtered layer on its own compositor layer so the result is cached instead of re-run every frame,
+   and drop the looping deco animations while the pixel frame is on (they invalidate the filtered layer). */
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr,
+html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco,
+html[data-vf-frame-px="on"] #vf-bezel::before,
+html[data-vf-frame-px="on"] #vf-bezel::after,
+html[data-vf-frame-px="on"] #vf-cables {
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+html[data-vf-frame-px="on"] #vf-bezel,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction] .vf-bezel-deco,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction]::before,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction]::after { animation: none !important; }
+html[data-vf-frame-px="on"] #vf-bezel { contain: layout style; }
+
+/* Faction detail uses the full height: chain of flex children down to the cards, rows spread evenly inside them. */
+html body .home-station-overlay .home-station-content .hs-factions.hs-faction-detail { height: 100%; min-height: 0; box-sizing: border-box; }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main { min-height: 0; height: 100%; }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-fd-section > .hs-fd-cols { flex: 1 1 auto; min-height: 0; }
+html body .home-station-overlay .hs-fd-section > .hs-fd-cols > .hs-fd-block { display: flex; flex-direction: column; justify-content: space-between; }
+html body .home-station-overlay .hs-fd-section > .hs-fd-cols > .hs-fd-block .hs-fd-row { flex: 1 1 0; min-height: 56px; }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-faction-actions { margin-top: auto !important; }
+
+/* Faction section tabs: always one row, sharing the width equally. */
+html body .home-station-overlay .home-station-content .hs-fd-tabs { flex-wrap: nowrap; gap: 8px; }
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab { flex: 1 1 0; min-width: 0; padding: 0 12px !important; gap: 10px; }
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab .hs-tab-label { font-size: 20px !important; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+/* Sidebar traits: inset from the frame edge, icons not touching the border. */
+html body .home-station-overlay .hs-fd-idbox .hs-fd-col-traits { box-sizing: border-box; padding: 16px 10px 4px; }
+html body .home-station-overlay .hs-fd-idbox .hs-fd-trait { padding: 0 4px; }
+
+/* Sidebar header: crest, name and relation label sit tight together; label as large as the behaviour label. */
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-idbox { gap: 6px; }
+html body .home-station-overlay .hs-fd-idbox .hs-fd-crest { margin-bottom: -4px; }
+html body .home-station-overlay .hs-fd-idbox .hs-fd-col-id { gap: 4px; padding: 0; }
+html body .home-station-overlay .hs-fd-idbox .hs-fd-col-id .hs-faction-head { gap: 6px; row-gap: 4px; margin: 0; }
+html body .home-station-overlay .hs-fd-idbox .hs-faction-status { font-size: 22px !important; letter-spacing: 3px; padding: 4px 12px; line-height: 1.1; }
+
+/* Faction cards: content centred vertically (the stats row is gone). */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card { display: flex !important; flex-direction: column; justify-content: center; align-items: stretch; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card .hs-faction-top { align-items: center; margin: 0; flex: 0 0 auto; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-card .hs-faction-main { justify-content: center; }
+
+/* Contract rows: type line small on top, the task large, meta as icon chips (details on hover). */
+html body .hs-faction-contracts .hs-mission .hs-mission-type { font-size: var(--font-text); letter-spacing: 2px; }
+html body .hs-faction-contracts .hs-mission .hs-line-name .hs-mission-goal { font-size: 26px; line-height: 1.2; letter-spacing: 1px; color: var(--color-text, #fff); font-weight: bold; white-space: normal; }
+html body .hs-faction-contracts .hs-mission .hs-mission-icons { flex-direction: row; align-items: center; justify-content: center; gap: 12px; padding-left: 0; border-left: 0; }
+.hs-mi { display: inline-grid; place-items: center; width: 40px; height: 40px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent); background: rgba(5, 6, 10, 0.7); cursor: help; }
+.hs-mi.is-on { border-color: var(--faction-accent, var(--color-primary)); }
+.hs-mi img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: minmax(280px, 1fr) auto auto 240px; }
+
+/* Contract rows: faction + planet icons on the left. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: auto minmax(280px, 1fr) auto auto 240px; }
+.hs-mission-icons-l { display: flex; align-items: center; gap: 10px; }
+.hs-mi.hs-mi-lg { width: 56px; height: 56px; cursor: help; }
+.hs-mi.hs-mi-lg img, .hs-mi.hs-mi-lg canvas, .hs-mi.hs-mi-lg svg { width: 40px; height: 40px; image-rendering: pixelated; }
+
+/* Contract rows: planet icon with the faction crest at its bottom-right, no frames. */
+.hs-mission-icons-l { position: relative; display: block; width: 72px; height: 64px; }
+.hs-mission-icons-l .hs-mi-planet { position: absolute; left: 0; top: 4px; width: 56px; height: 56px; display: grid; place-items: center; }
+.hs-mission-icons-l .hs-mi-planet .gm-planet-img { image-rendering: pixelated; }
+.hs-mission-icons-l .hs-mi-crest { position: absolute; right: 0; bottom: 0; width: 32px; height: 32px; display: grid; place-items: center; filter: drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a) drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a); }
+.hs-mission-icons-l .hs-mi-crest * { max-width: 32px; max-height: 32px; image-rendering: pixelated; }
+
+/* Contract rows: more breathing room above and below the content. */
+html body .hs-faction-contracts .hs-mission { padding-block: 20px !important; }
+html body .hs-faction-contracts .hs-mission-list { gap: 12px; }
+html body .hs-faction-contracts .hs-mission .hs-line-name { gap: 6px; }
+
+/* Contract rows: enemy shown as an icon between the task text and the info tiles. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: auto minmax(280px, 1fr) 48px auto auto 240px; }
+.hs-mission-foe { display: grid; place-items: center; width: 48px; height: 48px; cursor: help; }
+.hs-mission-foe img, .hs-mission-foe canvas, .hs-mission-foe svg { max-width: 40px; max-height: 40px; image-rendering: pixelated; }
+
+/* Contract rows v3: bigger planet, small crest overlapping its edge; enemy shown as a ship. */
+.hs-mission-icons-l { width: 96px; height: 88px; }
+.hs-mission-icons-l .hs-mi-planet { left: 0; top: 0; width: 88px; height: 88px; }
+.hs-mission-icons-l .hs-mi-planet .gm-planet-icon { position: relative; display: block; width: 100%; height: 100%; }
+.hs-mission-icons-l .hs-mi-planet .gm-planet-img { position: absolute; max-width: none; }
+.hs-mission-icons-l .hs-mi-crest { right: -4px; bottom: -2px; width: 24px; height: 24px; }
+.hs-mission-icons-l .hs-mi-crest * { max-width: 24px; max-height: 24px; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 96px minmax(280px, 1fr) 64px auto auto 240px; }
+.hs-mission-foe { width: 64px; height: 64px; }
+.hs-mission-foe img { max-width: 56px; max-height: 56px; }
+
+/* Contract rows v4: planet large and bleeding out past the left edge; enemy ship scaled up. */
+html body .hs-faction-contracts .hs-mission { overflow: visible; }
+html body .hs-faction-contracts .hs-mission-icons-l { width: 96px; height: 96px; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-planet { left: -34px; top: -12px; width: 120px; height: 120px; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-crest { right: -6px; bottom: -4px; }
+html body .hs-faction-contracts .hs-mission-foe { width: 72px; height: 72px; }
+html body .hs-faction-contracts .hs-mission-foe :is(img, canvas) { width: 88px !important; height: 88px !important; max-width: none !important; max-height: none !important; object-fit: contain; image-rendering: pixelated; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 96px minmax(280px, 1fr) 96px auto auto 240px; }
+
+/* Contract rows v5: nothing sticks out to the left; planet fully inside, crest on its lower right. */
+html body .hs-faction-contracts .hs-mission-icons-l { width: 120px; height: 96px; margin-left: 6px; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-planet { left: 0; top: -12px; width: 120px; height: 120px; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-crest { right: 6px; bottom: -6px; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 126px minmax(280px, 1fr) 96px auto auto 240px; }
+
+/* Contract rows v6: readable task text on at most two lines; narrower side columns give it the room. */
+html body .hs-faction-contracts .hs-mission { gap: 14px; grid-template-columns: 110px minmax(340px, 1fr) 72px auto auto 190px; padding-inline: 12px !important; }
+html body .hs-faction-contracts .hs-mission .hs-line-name .hs-mission-goal { font-size: 21px; line-height: 1.25; letter-spacing: 0.5px; }
+html body .hs-faction-contracts .hs-mission-icons-l { width: 104px; margin-left: 0; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-planet { width: 104px; height: 104px; }
+html body .hs-faction-contracts .hs-mission-foe { width: 72px; height: 72px; }
+html body .hs-faction-contracts .hs-mission-foe :is(img, canvas) { width: 64px !important; height: 64px !important; }
+html body .hs-faction-contracts .hs-mission .hs-mission-go { min-width: 0; width: 100%; }
+html body .hs-faction-contracts .hs-mission .hs-mi { width: 36px; height: 36px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-icons { gap: 8px; }
+
+/* Contract rows: icon-only launch / abandon buttons. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(340px, 1fr) 72px auto auto auto; }
+html body .hs-faction-contracts .hs-mission .hs-mission-actions { display: flex; gap: 10px; justify-content: flex-end; }
+html body .hs-faction-contracts .hs-mission :is(.hs-mission-go, .hs-mission-abort) { width: 80px !important; min-width: 80px !important; height: 56px; padding: 0 !important; gap: 0; }
+
+/* Contracts: the faction crest on the planet, about twice as large. */
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-crest { width: 48px; height: 48px; right: -10px; bottom: -8px; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-crest * { width: 48px !important; height: 48px !important; max-width: 48px !important; max-height: 48px !important; }
+
+/* Contract rows: no frames around the info icons, bigger enemy ship. */
+html body .hs-faction-contracts .hs-mission .hs-mi { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+html body .hs-faction-contracts .hs-mission .hs-mi.is-on img { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 6px var(--faction-accent, var(--color-primary))); }
+html body .hs-faction-contracts .hs-mission .hs-mission-foe { width: 120px; height: 120px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-foe :is(img, canvas) { width: 112px !important; height: 112px !important; }
+
+/* Contract rows: fixed columns so ship, icons, rewards and buttons line up across all rows. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(240px, 1fr) 120px 172px 250px 200px; align-items: center; }
+html body .hs-faction-contracts .hs-mission > * { align-self: center; }
+html body .hs-faction-contracts .hs-mission .hs-mission-foe { justify-self: center; }
+html body .hs-faction-contracts .hs-mission .hs-mission-icons { width: 172px; justify-content: flex-start; flex-wrap: nowrap; gap: 8px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-reward { justify-self: end; width: 250px; display: flex; justify-content: flex-end; }
+html body .hs-faction-contracts .hs-mission .hs-mission-actions { justify-self: end; width: 200px; display: flex; justify-content: flex-end; }
+
+/* Contract info: icon on top, its value underneath; difficulty as a 5-step rank. */
+html body .hs-faction-contracts .hs-mission .hs-mission-icons { width: 300px; align-items: flex-start; gap: 14px; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(240px, 1fr) 120px 300px 250px 200px; }
+.hs-mi-col { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; min-width: 0; cursor: help; }
+.hs-mi-val { font-size: var(--font-text); letter-spacing: 1px; color: var(--color-text, #fff); text-align: center; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 14px; }
+.hs-mi-rank { display: inline-flex; align-items: flex-end; justify-content: center; gap: 3px; height: 14px; }
+.hs-mi-rank i { width: 8px; height: 6px; background: color-mix(in srgb, var(--color-text, #fff) 22%, transparent); }
+.hs-mi-rank i:nth-child(2) { height: 8px; } .hs-mi-rank i:nth-child(3) { height: 10px; } .hs-mi-rank i:nth-child(4) { height: 12px; } .hs-mi-rank i:nth-child(5) { height: 14px; }
+.hs-mi-rank i.on { background: var(--faction-accent, var(--color-primary)); box-shadow: 0 0 4px var(--faction-accent, var(--color-primary)); }
+
+/* Profile list: separated entries instead of a stacked block. */
+html body .profile-selection-overlay .profile-list, html body .profile-selection-floating .profile-list { display: flex; flex-direction: column; gap: 10px; padding: 10px; box-sizing: border-box; }
+html body .profile-selection-overlay .profile-list-item, html body .profile-selection-floating .profile-list-item {
+    padding: 18px 18px !important;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    gap: 14px;
+}
+
+/* Contract rows: fixed action column, Launch always in the same spot (Abandon sits to its right). */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(340px, 1fr) 72px auto auto 170px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-actions { justify-content: flex-start; }
+
+html body .hs-faction-contracts .hs-mission-foe { display: flex; align-items: center; justify-content: center; align-self: center; }
+html body .hs-faction-contracts .hs-mission-foe :is(img, canvas) { width: auto !important; height: auto !important; max-width: 64px !important; max-height: 64px !important; }
+
+/* Contract rewards: icon only, size encodes amount / strength; more air between reward and the buttons. */
+.hs-contract-rewards { display: inline-flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.hs-cr { display: inline-grid; place-items: center; cursor: help; }
+.hs-cr img { image-rendering: pixelated; }
+.hs-cr-part img { width: 48px; height: 48px; }
+html body .hs-faction-contracts .hs-mission { gap: 22px; grid-template-columns: 110px minmax(340px, 1fr) 72px auto auto 190px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-reward { margin-right: 14px; }
+
+/* Planet icon is built at a cheap detail level (72px) and scaled up, a 120px build triggers the fine spin model per row. */
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-planet { overflow: visible; }
+html body .hs-faction-contracts .hs-mission-icons-l .hs-mi-planet > .gm-planet-icon { width: 72px; height: 72px; transform: scale(1.6667); transform-origin: 0 0; flex: none; }
+
+/* Mission board uses the contract row layout; enemies wrapper, stage pips as compact info. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(240px, 1fr) auto auto auto 190px; }
+html body .hs-faction-contracts .hs-mission-foe-wrap { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-stages { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-text); }
+html body .hs-faction-contracts .hs-mission .hs-mission-stages small { display: none; }
+html body .hs-faction-contracts .hs-mission.is-locked { opacity: 0.55; }
+
+/* Contract rewards: bigger resource icons. */
+html body .hs-body .hs-panel.hs-faction-contracts .hs-mission-bounty .hs-cost-icon { width: 36px; height: 36px; }
+html body .hs-body .hs-panel.hs-faction-contracts .hs-mission-reward img { width: 36px !important; height: 36px !important; }
+html body .hs-body .hs-panel.hs-faction-contracts .hs-mission-reward * { font-size: 28px !important; line-height: 36px; }
+html body .hs-faction-contracts .hs-mission .hs-mission-reward { width: 300px; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(240px, 1fr) 120px 300px 300px 200px; }
+
+/* Planet + crest block sits a little higher in the mission rows. */
+html body .hs-missions-root .hs-mission .hs-mission-icons-l { transform: translateY(-8px); }
+
+/* Galaxy travel list: generated galaxy icons. */
+.hs-galaxy-ico { flex: 0 0 auto; width: 72px; height: 72px; display: grid; place-items: center; }
+.hs-galaxy-ico img { width: 72px; height: 72px; image-rendering: pixelated; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent)); }
+.hs-travel-here .hs-galaxy-ico img { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 10px var(--faction-accent, var(--color-primary))); }
+
+/* Galaxy travel rows: icon | name + factions | stat icons with values | action. */
+.hs-travel-row { display: grid !important; grid-template-columns: 112px minmax(260px, 1fr) 260px 230px; align-items: center; gap: 18px; padding: 12px 18px !important; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); }
+.hs-travel-row.locked { opacity: 0.8; }
+.hs-travel-row.hs-travel-here { border-color: var(--faction-accent, var(--color-primary)); }
+.hs-travel-row .hs-galaxy-ico { width: 96px; height: 96px; justify-self: center; }
+.hs-travel-row .hs-galaxy-ico img { width: 96px; height: 96px; }
+.hs-travel-row .hs-line-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hs-travel-row .hs-line-text strong { font-size: 28px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-travel-tag { font-style: normal; font-size: var(--font-text); letter-spacing: 2px; margin-left: 12px; padding: 2px 8px; color: #05060a; background: var(--faction-accent, var(--color-primary)); vertical-align: middle; }
+.hs-travel-facs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.hs-travel-fac { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 4px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); background: rgba(5, 6, 10, 0.7); }
+.hs-travel-fac b { font-size: var(--font-text); letter-spacing: 1px; color: var(--color-text, #fff); }
+.hs-travel-fac img { width: 24px; height: 24px; }
+.hs-travel-vs { font-style: normal; font-size: var(--font-text); letter-spacing: 2px; opacity: 0.7; }
+.hs-travel-stats { display: flex; justify-content: flex-start; gap: 14px; width: auto; }
+.hs-travel-stats .hs-mi-col { width: 80px; }
+.hs-travel-stats .hs-mi { border: 0; background: transparent; width: 40px; height: 40px; }
+.hs-travel-stats .hs-mi img { width: 32px; height: 32px; }
+.hs-travel-stats .hs-mi-val { font-size: var(--font-h2); }
+.hs-travel-action { display: flex; justify-content: flex-end; text-align: center; }
+.hs-travel-action .hs-line-action { font-size: var(--font-h2); min-width: 210px; padding: 12px 18px; text-align: center; }
+
+/* Galaxy travel stats: three icon+value blocks side by side, filling the column. */
+.hs-travel-row .hs-travel-stats { display: grid !important; grid-template-columns: repeat(3, 1fr); flex-direction: row; gap: 10px; width: 100%; align-items: start; padding: 0 0 0 18px; }
+.hs-travel-row .hs-travel-stats .hs-mi-col { width: auto; }
+.hs-travel-row { grid-template-columns: 112px minmax(260px, 1fr) minmax(300px, 380px) 230px; }
+.hs-travel-stats .hs-mi-val { color: var(--stat, var(--color-text, #fff)); text-shadow: 0 0 6px color-mix(in srgb, var(--stat, #fff) 50%, transparent); }
+
+/* Ship tables: coarser, taller rows with larger text, thumbs and buttons. */
+html body .hs-ship-table { font-size: var(--font-h2); }
+html body .hs-ship-table th { font-size: var(--font-text); opacity: 0.8; padding: 6px 12px 10px; }
+html body .hs-ship-table td { padding: 16px 12px; height: 96px; }
+html body .hs-ship-table .hs-ship-table-name strong { font-size: 24px; letter-spacing: 0.1em; color: var(--color-text, #fff); }
+html body .hs-ship-table .hs-ship-table-name span { font-size: var(--font-text); opacity: 0.75; }
+html body .hs-ship-table .hs-ship-table-thumb { width: 104px; }
+html body .hs-ship-table .hs-ship-thumb { width: 96px; height: 76px; }
+html body .hs-ship-table .hs-ship-icon-btn { width: 56px; height: 56px; margin-left: 10px; }
+html body .hs-ship-table .hs-ship-icon-btn .hs-pixel { width: 32px; height: 32px; }
+html body .hs-ship-table .hs-weapon-icon { width: 40px; height: 40px; }
+
+/* Empty states: big dimmed pixel icon above the message. */
+.hs-empty-slot.hs-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 180px; padding: 28px 16px; width: 100%; box-sizing: border-box; text-align: center; }
+.hs-empty-state .hs-empty-ico { display: grid; place-items: center; width: 96px; height: 96px; border: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent); background: rgba(5, 6, 10, 0.55); }
+.hs-empty-state .hs-empty-ico img { width: 64px; height: 64px; image-rendering: pixelated; opacity: 0.55; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent)); }
+.hs-empty-state .hs-empty-txt { font-size: var(--font-h2); letter-spacing: 3px; max-width: 36ch; line-height: 1.4; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
+
+/* Blueprint unlock rows: taller, bolder. */
+html body .hs-actions-col > .action-button[data-unlock] { min-height: 72px; font-size: var(--font-h2); letter-spacing: 2px; gap: 14px; }
+html body .hs-actions-col > .action-button[data-unlock] .hs-btn-icon img { width: 48px; height: 48px; }
+
+/* Ship table: stat icons live in each row (icon above value) instead of a header row. */
+html body .hs-ship-table .hs-ship-stat { text-align: center; width: 84px; }
+html body .hs-ship-table .hs-ship-stat-ico { display: grid; place-items: center; height: 32px; }
+html body .hs-ship-table .hs-ship-stat-ico img { width: 28px; height: 28px; image-rendering: pixelated; }
+html body .hs-ship-table .hs-ship-stat b { display: block; margin-top: 6px; font-size: var(--font-h2); color: var(--stat, var(--color-text, #fff)); text-shadow: 0 0 6px color-mix(in srgb, var(--stat, #fff) 45%, transparent); }
+
+/* Craft tab: roomy rows that use the width; big name, large cost tiles, icon-only craft button. */
+html body .hs-craft-line { display: grid; grid-template-columns: minmax(240px, 1fr) auto 120px; align-items: center; gap: 28px; padding: 22px 26px !important; min-height: 110px; box-sizing: border-box; }
+html body .hs-craft-line .hs-line-name { display: flex; flex-direction: row; align-items: center; gap: 18px; }
+html body .hs-craft-line .hs-line-name strong { font-size: 30px; letter-spacing: 2px; }
+html body .hs-craft-line .hs-craft-count { font-style: normal; font-size: var(--font-h2); color: color-mix(in srgb, var(--color-text, #fff) 70%, transparent); }
+html body .hs-craft-line .hs-cost-grid { grid-template-columns: repeat(4, minmax(84px, 1fr)); gap: 12px; justify-content: end; }
+html body .hs-craft-line .hs-cost-cell { padding: 10px 12px; font-size: var(--font-h2); }
+html body .hs-craft-line .hs-cost-cell img { width: 28px; height: 28px; }
+html body .hs-craft-line .hs-craft-go { width: 120px !important; min-width: 120px !important; height: 64px; padding: 0 !important; justify-self: end; }
+
+/* Craft tab: ship thumbnail instead of a generic blueprint icon. */
+.hs-craft-ship { display: grid; place-items: center; width: 96px; height: 96px; flex: 0 0 96px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, #05060a), #05060a 75%); }
+.hs-craft-ship img { max-width: 84px; max-height: 84px; image-rendering: pixelated; }
+
+/* Ship table stats: larger values, smaller icons. */
+html body .hs-ship-table .hs-ship-stat-ico { height: 22px; }
+html body .hs-ship-table .hs-ship-stat-ico img { width: 20px !important; height: 20px !important; }
+html body .hs-ship-table .hs-ship-stat b { font-size: 24px !important; margin-top: 4px; line-height: 1.1; }
+
+/* Ship table stats: icon left of a small value, two rows (3 + 2). */
+html body .hs-ship-table .hs-ship-stats { display: grid; grid-template-columns: repeat(3, auto); gap: 10px 22px; justify-content: start; align-items: center; width: auto; text-align: left; }
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat { display: inline-flex; align-items: center; gap: 8px; width: auto; text-align: left; }
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico { height: auto; }
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico img { width: 24px; height: 24px; }
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat b { display: inline; margin: 0; font-size: var(--font-text); }
+
+/* Responsive ship tables: the stat grid narrows, then hides (values stay in the row tooltip). */
+*:has(> .hs-ship-table) { container-type: inline-size; container-name: shiptbl; }
+@container shiptbl (max-width: 640px) {
+    .hs-ship-table .hs-ship-stats { grid-template-columns: repeat(2, auto) !important; gap: 8px 16px !important; }
+    .hs-ship-table .hs-ship-table-name strong { font-size: 20px !important; }
+}
+@container shiptbl (max-width: 460px) {
+    .hs-ship-table .hs-ship-stats { display: none !important; }
+    .hs-ship-table .hs-ship-table-thumb { width: 72px !important; }
+    .hs-ship-table .hs-ship-thumb { width: 64px !important; height: 52px !important; }
+}
+
+/* Launch / abandon buttons: larger hit area and icon. */
+html body .hs-faction-contracts .hs-mission { grid-template-columns: 110px minmax(240px, 1fr) auto auto auto 270px; }
+html body .hs-faction-contracts .hs-mission :is(.hs-mission-go, .hs-mission-abort) { width: 128px !important; min-width: 128px !important; height: 76px; }
+html body .hs-faction-contracts .hs-mission :is(.hs-mission-go, .hs-mission-abort) .hs-go-ico img { width: 44px; height: 44px; }
+
+/* Scoreboard: emblem column as wide as the emblem, with room before the name. */
+.start-screen-retro .start-scoreboard-head,
+.start-screen-retro .start-scoreboard-row {
+    grid-template-columns: 22px clamp(22px, calc(2.4 * var(--sv-w)), 32px) minmax(0, 1fr) max-content;
+    column-gap: clamp(10px, calc(1.6 * var(--sv-w)), 18px);
+}
+
+/* Profile list: bigger names, more room between crest and name. */
+html body .profile-list-item .profile-list-emblem { margin-right: 40px !important; }
+html body .profile-list-item .profile-list-name { font-size: 24px !important; letter-spacing: 2px; padding-left: 0; }
+
+/* Profile list v2: stronger horizontal gap between crest and name, and inner side padding. */
+html body .profile-selection-overlay .profile-list-item, html body .profile-selection-floating .profile-list-item { justify-content: flex-start; gap: 36px !important; padding-inline: 24px !important; }
+html body .profile-list-item .profile-list-emblem { margin-right: 0 !important; flex: 0 0 auto; }
+html body .profile-list-item .profile-list-name { padding-left: 16px !important; }
+
+.hs-menu-panel-section .hs-menu-profile-row .hs-menu-profile-name { font-size: var(--font-h2); }
+
+/* Profile rows: faction background like the faction cards (accent gradient, accent underline). */
+html body .hs-menu-profile-row {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--row-accent, var(--color-primary)) 26%, #05060a), color-mix(in srgb, var(--row-accent, var(--color-primary)) 8%, #05060a) 70%);
+    box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--row-accent, var(--color-primary)) 70%, transparent);
+}
+html body .hs-menu-profile-row:hover,
+html body .hs-menu-profile-row.is-active {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--row-accent, var(--color-primary)) 42%, #05060a), color-mix(in srgb, var(--row-accent, var(--color-primary)) 16%, #05060a) 70%);
+    box-shadow: inset 0 -4px 0 var(--row-accent, var(--color-primary)), 0 0 14px color-mix(in srgb, var(--row-accent, var(--color-primary)) 40%, transparent);
+}
+
+/* GLOW slider (--vf-glow, 0..2.2) also drives the home-station UI, which had no glow rules of its own.
+   :where() keeps these weak, so deliberate per-element glows elsewhere still win. */
+:where(html[data-vf-glow]:not([data-vf-glow="off"])) .home-station-overlay :where(.hs-tab, .hs-area-btn, .action-button, .hs-shop-cat, h4, strong, .hs-panel-label, .hs-mi-val, .hs-cost-amt, .hs-line-meta) {
+    text-shadow: 0 0 calc(var(--vf-glow, 0) * 5px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent), 0 0 calc(var(--vf-glow, 0) * 12px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+:where(html[data-vf-glow]:not([data-vf-glow="off"])) .home-station-overlay :where(.hs-tab.active, .hs-area-btn.active, .action-button, .hs-panel, .hs-mi, .hs-line, .hs-cost-cell) {
+    box-shadow: 0 0 calc(var(--vf-glow, 0) * 8px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+:where(html[data-vf-glow]:not([data-vf-glow="off"])) .home-station-overlay :where(img.hs-pixel, .hs-galaxy-ico img, .hs-faction-crest img) {
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 calc(var(--vf-glow, 0) * 5px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent));
+}
+
+/* Explorations cluster labels (ARCHIVE / ARSENAL): larger. */
+html body .hs-explore-cluster-title { font-size: var(--font-h2); letter-spacing: 4px; padding-bottom: 8px; }
+html body .hs-explore-cluster-title { font-size: 28px !important; letter-spacing: 5px; padding-left: 24px !important; padding-bottom: 10px; }
+
+/* Ship table rows flow instead of switching layouts: thumb | name | stats | buttons wrap one after another as the panel narrows. */
+.hs-ship-table, .hs-ship-table tbody { display: block; width: 100%; }
+.hs-ship-table thead { display: none; }
+.hs-ship-table tr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 8px; border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent); }
+.hs-ship-table td { display: block; padding: 0 !important; height: auto !important; border: 0 !important; min-width: 0; }
+.hs-ship-table td.hs-ship-table-thumb { flex: 0 0 auto; width: auto !important; }
+.hs-ship-table td.hs-ship-table-name { flex: 1 1 150px; }
+.hs-ship-table td:has(.hs-ship-stats) { flex: 0 1 auto; }
+.hs-ship-table td.hs-ship-table-action { flex: 0 0 auto; margin-left: auto; display: flex; gap: 8px; }
+.hs-ship-table .hs-ship-icon-btn { width: 48px !important; height: 48px !important; margin-left: 0 !important; }
+
+/* Locked planet hint: boxed, larger, with a JUMP TO button. */
+html body .galaxy-map-panel-select .gm-detail .gm-unlock-hint:not(:empty) { display: flex; flex-direction: column; gap: 12px; align-items: stretch; margin-top: 10px; padding: 14px 16px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, #ff9b54 55%, transparent); background: rgba(255, 155, 84, 0.08); font: bold var(--font-h2, 16px) var(--ui-font-family, monospace); letter-spacing: 2px; }
+.gm-unlock-hint .gm-unlock-text { color: #ffb070; line-height: 1.4; }
+.gm-unlock-hint .gm-unlock-text b { color: #fff; }
+.gm-unlock-hint .gm-unlock-jump { width: 100%; min-height: 44px; font-size: var(--font-text, 14px); letter-spacing: 2px; }
+
+/* JUMP TO button icon: a rocket that pulses forward in hard steps. */
+.gm-unlock-jump { display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
+.gm-unlock-jump .gm-jump-ico { display: inline-grid; place-items: center; width: 32px; height: 32px; }
+.gm-unlock-jump .gm-jump-ico img { width: 32px; height: 32px; image-rendering: pixelated; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 5px #ff9b54); animation: gm-jump-go 1s steps(2, end) infinite; }
+@keyframes gm-jump-go { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+html[data-vf-perf-anim="off"] .gm-unlock-jump .gm-jump-ico img { animation: none; }
+
+/* Planet info cells: icon left of the value; label only on hover. */
+html body .galaxy-map-panel-select .gm-detail .stat-row {
+    position: relative;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px;
+}
+.galaxy-map-panel-select .gm-detail .stat-row::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    background: var(--color-primary);
+    -webkit-mask: var(--gm-ico) center / contain no-repeat;
+    mask: var(--gm-ico) center / contain no-repeat;
+    filter: drop-shadow(0 0 0 #05060a);
+}
+.galaxy-map-panel-select .gm-detail .stat-row .stat-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a1017;
+    opacity: 0 !important;
+    pointer-events: none;
+    transition: opacity 0.12s;
+}
+.galaxy-map-panel-select .gm-detail .stat-row:hover .stat-label { opacity: 1 !important; }
+.galaxy-map-panel-select .gm-detail .stat-row:nth-child(1) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 1h12v8l-6 6-6-6z'/%3E%3C/svg%3E"); }
+.galaxy-map-panel-select .gm-detail .stat-row:nth-child(2) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l2 5 5 .5-4 3.5 1.5 5L8 12.200 3.500 15 5 10 1 6.500 6 6z'/%3E%3C/svg%3E"); }
+.galaxy-map-panel-select .gm-detail .stat-row:nth-child(3) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 11h14v3H1zM3 6h10v3H3zM5 1h6v3H5z'/%3E%3C/svg%3E"); }
+.galaxy-map-panel-select .gm-detail .stat-row:nth-child(4) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l7 14H1z'/%3E%3C/svg%3E"); }
+.galaxy-map-panel-select .gm-detail .stat-row:nth-child(5) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3C/svg%3E"); }
+
+/* Route preview: dashes run from the ship towards the target. */
+.gm-pxline-run .gm-run-core { stroke: color-mix(in srgb, currentColor 30%, #fff); stroke-linecap: butt; animation: gm-run-march 1.2s linear infinite; }
+.gm-pxline-run .gm-run-glow { stroke: currentColor; opacity: 0.45; stroke-linecap: butt; animation: gm-run-march 1.2s linear infinite; }
+@keyframes gm-run-march { to { stroke-dashoffset: calc(var(--flow-len) * -1); } }
+@media (prefers-reduced-motion: reduce) { .gm-pxline-run path { animation: none; } }
+.gm-edge.on-route { display: none; }
+
+/* --- Faction picker: lore + facts as one tabbed card. */
+.profile-faction-tabcard { display: flex; flex-direction: column; padding: 0 !important; }
+.profile-faction-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0; border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.profile-faction-tab {
+    font: inherit; font-size: var(--font-small); font-weight: bold; letter-spacing: 1px;
+    padding: 6px 10px; cursor: pointer; color: var(--color-text-secondary);
+    background: transparent; border: var(--ui-border-width, 2px) solid transparent; border-bottom: 0;
+}
+.profile-faction-tab:hover { color: var(--color-primary); }
+.profile-faction-tab.active { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, #050508); border-color: var(--color-primary); }
+.profile-faction-tabpanel { display: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 18px; }
+.profile-faction-tabpanel.active { display: block; }
+.profile-selection-name-mode .profile-faction-tabcard .profile-faction-fact { height: auto; border: 0; background: none; padding: 0; clip-path: none; }
+
+/* --- Profiles: smaller type, solid backing behind every pilot row. */
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item {
+    background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
+    gap: 16px !important;
+    padding: 10px 14px !important;
+}
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item.selected {
+    background: color-mix(in srgb, var(--color-primary) 20%, #05060a);
+}
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item .profile-list-emblem { margin-right: 0 !important; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item .profile-list-name { font-size: 15px !important; letter-spacing: 1px; padding-left: 0 !important; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-badge { font-size: var(--font-small); }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-hero-name { font-size: 18px; letter-spacing: 2px; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-hero-faction,
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-block-title,
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-res-value,
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-ship { font-size: var(--font-text); }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-tile-value { font-size: 15px; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-tile-cap { font-size: var(--font-small); }
+
+/* Name step: input text large enough to read. */
+html body .profile-selection-name-mode .profile-name-input,
+html body .profile-selection-name-mode.is-name-step .profile-name-input {
+    font-size: 28px !important;
+    letter-spacing: 3px;
+    padding: 14px 20px;
+}
+html body .profile-selection-name-mode .profile-name-gen { font-size: var(--font-h2) !important; }
+
+/* Name step buttons (Generate / Cancel / Back / Save): readable size. */
+html body .profile-selection-name-mode .profile-selection-actions .action-button,
+html body .profile-selection-name-mode.is-name-step .profile-selection-actions .action-button,
+html body .profile-selection-name-mode .profile-name-gen {
+    font-size: 20px !important;
+    letter-spacing: 2px;
+    padding: 12px 28px !important;
+}
+
+/* Pirate ambush: bigger card with event art; EVADE left / FIGHT right, same size. */
+.gm-ambush-card { width: min(560px, 92%); max-width: none; padding: 22px 28px; }
+.gm-ambush-art { display: flex; justify-content: center; margin-bottom: 10px; filter: drop-shadow(0 0 12px rgba(255, 90, 60, 0.7)); }
+.gm-ambush-art img { width: 112px !important; height: 112px !important; image-rendering: pixelated; }
+.gm-ambush-title { font-size: 22px; margin-bottom: 10px; }
+.gm-ambush-card p { font-size: 16px; line-height: 1.5; margin-bottom: 18px; }
+.gm-ambush-actions { flex-wrap: nowrap; }
+.gm-ambush-btn {
+    flex: 1 1 0; min-width: 0; height: 52px; font-size: 18px !important;
+    display: inline-flex; align-items: center; justify-content: center; position: relative;
+}
+.gm-ambush-info { display: none; font-size: 13px; letter-spacing: 1px; }
+.gm-ambush-btn:hover .gm-ambush-lbl, .gm-ambush-btn:focus-visible .gm-ambush-lbl { display: none; }
+.gm-ambush-btn:hover .gm-ambush-info, .gm-ambush-btn:focus-visible .gm-ambush-info { display: inline; }
+
+/* Victory / defeat header: one font size for every line under the title, tighter stacking. */
+html body .victory-screen :is(.victory-subtitle, .victory-stage, .outcome-planet-text strong, .outcome-planet-text span, .outcome-status) {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: var(--font-h2);
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1.3;
+    letter-spacing: 2px;
+}
+html body .victory-screen .victory-header { margin-bottom: 0; }
+html body .victory-screen .victory-title { margin-bottom: 4px; }
+html body .victory-screen .victory-stage { margin-top: 4px; }
+html body .victory-screen .outcome-progress { margin: 0 auto; gap: 8px; width: 100%; }
+html body .victory-screen .outcome-planet { width: 100%; height: 96px; }
+html body .victory-screen .outcome-planet-icon { position: absolute; inset: 0; width: 100%; height: 100%; align-items: center; justify-content: center; }
+html body .victory-screen .outcome-planet-icon > * { transform: scale(3.6); }
+html body .victory-screen .outcome-planet-text { gap: 4px; }
+html body .victory-screen .outcome-step { width: 64px; }
+
+/* Faction archive: illustration plate + lore + customs. */
+.hs-arc { overflow: hidden; min-height: 0; }
+.hs-arc-scroll { display: flex; flex-direction: column; gap: 22px; flex: 1 1 auto; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 6px; }
+.hs-arc-top { display: grid; grid-template-columns: minmax(220px, 42%) 1fr; gap: 16px; align-items: start; }
+.hs-arc-plate {
+    margin: 0; position: relative; display: flex; flex-direction: column; gap: 8px; padding: 12px;
+    background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, #05060a), #05060a 75%);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+}
+.hs-arc-emblem { display: flex; justify-content: center; opacity: 0.9; }
+.hs-arc-fleet { display: flex; align-items: flex-end; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.hs-arc-ship { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hs-arc-ship img { max-width: 64px; max-height: 64px; image-rendering: pixelated; }
+.hs-arc-ship figcaption { font-size: var(--font-small); letter-spacing: 1px; color: color-mix(in srgb, var(--color-text, #fff) 65%, transparent); }
+.hs-arc-plate > figcaption { font-size: var(--font-small); letter-spacing: 2px; text-align: center; color: var(--faction-accent, var(--color-primary)); }
+.hs-arc-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hs-arc-note { margin: 0; font-size: var(--font-text); color: var(--color-text, #fff); }
+.hs-arc-note b, .hs-arc-sub { color: var(--faction-accent, var(--color-primary)); letter-spacing: 2px; }
+.hs-arc-sub { margin: 6px 0 14px; font-size: var(--font-text); white-space: nowrap; border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent); padding-bottom: 4px; }
+.hs-arc-grid > div, .hs-arc-entry > div { min-width: 0; }
+.hs-arc-text, .hs-arc-top, .hs-arc-grid { max-width: 100%; }
+.hs-arc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 18px 20px; }
+.hs-arc-entry { display: flex; gap: 10px; align-items: flex-start; }
+.hs-arc-entry b { font-size: var(--font-text); letter-spacing: 1px; }
+.hs-arc-ico { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent); }
+@media (max-width: 900px) { .hs-arc-top { grid-template-columns: 1fr; } }
+
+.hs-arc .hs-fd-text { line-height: 1.7; }
+.hs-arc-text { gap: 16px; }
+.hs-arc-entry { gap: 14px; }
+.hs-arc-entry b { display: block; margin-bottom: 6px; }
+.hs-arc-top { gap: 24px; }
+.hs-arc-plate { gap: 14px; padding: 16px; }
+
+/* Trait detail: fills the panel, larger text, extra sections. */
+.hs-fd-hover .hs-trait-modal-row.is-hot { flex: 1 1 auto; align-items: flex-start; }
+.hs-fd-hover .hs-trait-modal-txt b { font-size: calc(var(--font-h2) * 1.5); }
+.hs-fd-hover .hs-trait-modal-txt em { font-size: calc(var(--font-h2) * 1.2); line-height: 1.5; color: var(--color-text, #fff); }
+.hs-trait-modal-sec { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; margin-top: 4px; border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--trait-accent) 35%, transparent); }
+.hs-trait-modal-sec span { font-size: var(--font-text); letter-spacing: 3px; color: var(--trait-accent); }
+.hs-trait-modal-sec p { margin: 0; font-size: var(--font-h2); line-height: 1.55; color: color-mix(in srgb, var(--color-text, #fff) 85%, transparent); }
+
+/* Hero tab: pixel portrait left, text right. */
+.hs-fd-herobox { display: flex; align-items: flex-start; gap: 24px; }
+.hs-fd-heroportrait { flex: 0 0 auto; width: 224px; border: 2px solid var(--faction-accent, var(--color-primary)); background: #0a0c12; box-shadow: 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent); }
+.hs-fd-heroportrait .hero-portrait { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.hs-fd-herotext { flex: 1 1 auto; min-width: 0; }
+
+/* Preview header: emblem hugs the faction name. */
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-emblem {
+    width: auto !important;
+    height: auto !important;
+    display: inline-flex;
+}
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-text { column-gap: 8px; }
+
+/* Pilot creator: generated portrait + feature pickers (solid dark panel so it reads over the busy background). */
+html body .profile-pilot-card { display: flex; gap: 20px; align-items: flex-start; padding: 14px; box-sizing: border-box; width: 100%; background: rgba(5, 6, 10, 0.92); border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, #000); }
+html body .profile-pilot-portrait { flex: 0 0 auto; width: 200px; border: 2px solid var(--faction-accent, var(--color-primary)); background: #05060a; }
+.profile-pilot-portrait .hero-portrait { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+html body .profile-pilot-controls { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+html body .pp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+html body .pp-ctl { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; gap: 2px 8px; padding: 4px 6px; border: 1px solid transparent; background: rgba(255, 255, 255, 0.05); }
+html body .pp-ctl .pp-name { grid-column: 1 / -1; grid-row: 1; font-size: var(--font-small, 12px) !important; letter-spacing: 2px; color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff); opacity: 1; text-align: center; }
+html body .pp-ctl .pp-val { grid-column: 2; grid-row: 2; text-align: center; font-size: var(--font-text) !important; letter-spacing: 1px; color: #fff; }
+html body .pp-ctl .pp-step:first-of-type { grid-column: 1; grid-row: 2; }
+html body .pp-ctl .pp-step:last-of-type { grid-column: 3; grid-row: 2; }
+html body .pp-ctl.active { border-color: var(--faction-accent, var(--color-primary)); background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent); }
+html body .pp-step { background: rgba(0, 0, 0, 0.6); border: 1px solid var(--faction-accent, var(--color-primary)); color: #fff; cursor: pointer; padding: 2px 0; font-size: var(--font-text) !important; line-height: 1; }
+html body .profile-pilot-controls #psRandomPilot { align-self: stretch; }
+@media (max-width: 760px) { html body .profile-pilot-card { flex-direction: column; } html body .pp-grid { grid-template-columns: 1fr; } }
+.pd-hero-portrait { display: inline-block; width: 56px; margin-right: 10px; border: 1px solid var(--color-border, #444); }
+.pd-hero-portrait .hero-portrait { display: block; width: 100%; height: auto; }
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-emblem img { width: 48px; height: 48px; display: block; }
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-text { column-gap: 0; }
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-emblem { margin-right: -4px !important; }
+
+/* Faction picker tabcard: larger, higher-contrast text and always-backed tab buttons. */
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel {
+    font-size: calc(var(--font-h2) * 1.25); line-height: 1.5; padding: 18px 24px; color: #f2f6f8;
+    text-shadow: 0 0 3px #030809, 0 1px 0 #030809;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel * { font-size: inherit !important; line-height: inherit !important; }
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel p { margin: 0 0 14px; }
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel .profile-faction-fact-label { opacity: 0.85; }
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabs { gap: 6px; padding: 10px 12px 0; }
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tab {
+    font-size: var(--font-text) !important; padding: 9px 16px;
+    color: var(--color-text-primary, #e8eef0);
+    background: color-mix(in srgb, var(--color-primary) 10%, #05060a);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    border-bottom: 0;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tab:hover { background: color-mix(in srgb, var(--color-primary) 20%, #05060a); color: var(--color-primary); }
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tab.active {
+    background: color-mix(in srgb, var(--color-primary) 28%, #05060a); color: var(--color-primary); border-color: var(--color-primary);
+}
+
+/* Create step layout: pilot card and galaxy card use the full row, map is never cropped. */
+html body .profile-selection-name-mode.is-name-step .profile-pilot-card {
+    display: grid; grid-template-columns: clamp(110px, calc(14 * var(--sv-h)), 170px) minmax(0, 1fr); gap: 16px; align-items: start; width: 100%;
+}
+html body .profile-selection-name-mode.is-name-step .profile-pilot-portrait { width: 100%; }
+html body .profile-selection-name-mode.is-name-step .profile-pilot-controls { flex-direction: row; align-items: flex-start; gap: 16px; }
+html body .profile-selection-name-mode.is-name-step .pp-grid { flex: 1 1 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; }
+html body .profile-selection-name-mode.is-name-step .pp-ctl { padding: 3px 6px; }
+html body .profile-selection-name-mode.is-name-step :is(.pp-name, .pp-val) { font-size: var(--font-text) !important; opacity: 1; }
+html body .profile-selection-name-mode.is-name-step .pp-name { text-align: left; }
+html body .profile-selection-name-mode.is-name-step .pp-val { min-width: 70px; }
+html body .profile-selection-name-mode.is-name-step #psRandomPilot { flex: 0 0 auto; align-self: flex-end; white-space: nowrap; }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy {
+    grid-template-columns: auto minmax(0, 1.4fr) minmax(220px, 1fr) auto; align-items: center;
+}
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-map {
+    width: 100% !important; height: auto !important; aspect-ratio: 560 / 220; max-height: clamp(110px, calc(20 * var(--sv-h)), 240px);
+}
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-nav { height: 100% !important; min-height: 60px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-info { align-items: flex-start; text-align: left; gap: 6px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-kit-card .profile-start-chip { min-height: 64px; }
+
+/* Pilot step: portrait + name get the whole screen. */
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-card { grid-template-columns: clamp(180px, calc(30 * var(--sv-h)), 320px) minmax(0, 1fr); }
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls { flex-direction: column; }
+html body .profile-selection-name-mode.is-pilot-step .pp-grid { grid-template-columns: minmax(0, 1fr); width: 100%; }
+html body .profile-selection-name-mode.is-pilot-step #psRandomPilot { align-self: stretch; }
+
+/* Pilot step: faction crest left of the name field. */
+.profile-name-row .profile-name-crest { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: calc(56 * var(--bz-u)); }
+.profile-name-row .profile-name-crest > * { width: 100%; height: 100%; }
+.profile-name-row .profile-name-crest img, .profile-name-row .profile-name-crest svg { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Pilot look pickers are sliders: name | slider | value. */
+html body .pp-ctl { grid-template-columns: minmax(60px, 90px) 1fr 36px; }
+html body .pp-ctl .pp-name { grid-column: 1; grid-row: 1; text-align: left; }
+html body .pp-ctl .pp-slider { grid-column: 2; grid-row: 1; width: 100%; margin: 0; accent-color: var(--faction-accent, var(--color-primary)); cursor: pointer; }
+html body .pp-ctl .pp-val { grid-column: 3; grid-row: 1; }
+
+/* Pilot step: no faction card; taller slider rows. */
+html body .profile-selection-name-mode.is-pilot-step .profile-faction-info-row { display: none !important; }
+html body .profile-selection-name-mode.is-pilot-step .pp-ctl { padding: clamp(8px, calc(1.4 * var(--sv-h)), 16px) 10px; }
+html body .profile-selection-name-mode.is-pilot-step .pp-grid { gap: clamp(8px, calc(1.4 * var(--sv-h)), 16px) 18px; }
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-card { align-items: stretch; }
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls { flex: 1 1 auto; justify-content: space-between; }
+
+/* Pilot sliders: big hit area, chunky track and thumb. */
+html body .pp-ctl .pp-slider { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; touch-action: none; }
+html body .pp-ctl .pp-slider::-webkit-slider-runnable-track { height: 8px; background: rgba(255, 255, 255, 0.18); border: 1px solid var(--faction-accent, var(--color-primary)); }
+html body .pp-ctl .pp-slider::-moz-range-track { height: 8px; background: rgba(255, 255, 255, 0.18); border: 1px solid var(--faction-accent, var(--color-primary)); }
+html body .pp-ctl .pp-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 26px; margin-top: -10px; background: var(--faction-accent, var(--color-primary)); border: 2px solid #05060a; border-radius: 0; }
+html body .pp-ctl .pp-slider::-moz-range-thumb { width: 14px; height: 22px; background: var(--faction-accent, var(--color-primary)); border: 2px solid #05060a; border-radius: 0; }
+
+/* Pilot step: square portrait, vertically centred beside the sliders. */
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-card { align-items: center; }
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-portrait { align-self: center; box-sizing: border-box; width: 100%; aspect-ratio: 1 / 1; height: auto; overflow: hidden; }
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-portrait .hero-portrait { width: 100%; height: 100%; }
+
+/* Readability: selected start chips keep a dark face, accent frame and white label. */
+html body .profile-start-chip.selected,
+html body .profile-selection-name-mode .profile-start-chip.selected {
+    color: #fff !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #05060a) !important;
+    border-color: var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: inset 0 -4px 0 var(--faction-accent, var(--color-primary));
+    text-shadow: 1px 0 0 #05060a, -1px 0 0 #05060a, 0 1px 0 #05060a, 0 -1px 0 #05060a !important;
+}
+html body .profile-start-chip.selected :is(.profile-kit-icon, img) { filter: drop-shadow(0 0 3px var(--faction-accent, var(--color-primary))); }
+
+/* Faction picker card: ship left, text right, filling the card width. */
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview {
+    flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center;
+    gap: clamp(12px, calc(2 * var(--sv-w)), 28px); width: 100%; box-sizing: border-box; padding: 12px 20px;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-ship {
+    flex: 0 0 40%; width: 40% !important; max-width: 40%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-preview-text {
+    flex: 1 1 0; width: auto; min-width: 0; justify-items: start; text-align: left; justify-content: start; grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* Same horizontal card on the start-setup step. */
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview {
+    flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center;
+    gap: clamp(16px, calc(3 * var(--sv-w)), 40px); width: 100%; max-width: none; box-sizing: border-box; padding: 14px 28px;
+}
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview .profile-faction-ship {
+    flex: 0 0 34%; width: 34% !important; max-width: 34%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
+}
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview .profile-faction-preview-text {
+    flex: 1 1 0; width: auto; min-width: 0; justify-items: start; text-align: left; justify-content: start; grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* Crest and faction name: breathing room. */
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-text { column-gap: 16px; }
+html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-emblem { margin-right: 0 !important; }
+
+/* Hangar parts: smaller icons, subtle glow (dark outline first, then a faint 1px rim). */
+html body .hs-hangar-part .hs-hangar-part-icon { width: 24px; height: 24px; }
+html body .hs-hangar-part .hs-hangar-part-icon :is(img, canvas, svg) { width: 24px; height: 24px; }
+html body .hs-hangar-part.is-equipped .hs-hangar-part-icon {
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a) drop-shadow(0 0 2px color-mix(in srgb, var(--color-primary) 40%, transparent));
+}
+html body .hs-hangar-parts-icon, html body .hs-hangar-parts-icon img { width: 24px; height: 24px; }
+html body .hs-hangar-parts-section .hs-hangar-parts-title { min-height: 30px; }
+
+/* Hangar parts: keep rows and section headers off the left edge. */
+html body .hs-hangar-part { padding: 6px 10px 6px 14px; gap: 12px; }
+html body .hs-hangar-parts-section .hs-hangar-parts-title { padding-left: 12px; padding-right: 8px; gap: 10px; }

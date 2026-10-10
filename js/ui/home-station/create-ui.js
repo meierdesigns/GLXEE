@@ -3,11 +3,7 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
-        // Galaxy travel is a modal over the planet map, not its own page.
-        if (this.tab === 'travel') {
-            this.tab = 'play';
-            this._travelModal = true;
-        }
+        // The TRAVEL tab is a page listing the galaxies; the planet map still opens its own travel modal.
         if (this._travelKey) {
             document.removeEventListener('keydown', this._travelKey, true);
             this._travelKey = null;
@@ -81,7 +77,7 @@ extendClass(HomeStationUI, {
                 `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
                 `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
             )).join(''), true)
-            : '<span class="hs-muted hs-empty-slot">NONE</span>';
+            : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
         const slotsLabel = `${owned.length}/${stats.shipSlots}`;
 
         let body = '';

@@ -292,6 +292,7 @@
     };
 
     // Inline cursors set from JS (el.style.cursor = 'grab', setProperty).
+    let inlineHooked = false;
     const hookInline = () => {
         const proto = CSSStyleDeclaration.prototype;
         // Newer engines keep property accessors on a sub-prototype
@@ -306,6 +307,7 @@
                 get() { return desc.get.call(this); },
                 set(v) { desc.set.call(this, themed(v)); }
             });
+            inlineHooked = true;
         }
         const setProp = proto.setProperty;
         proto.setProperty = function (name, value, prio) {
@@ -343,7 +345,9 @@
         }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-faction', 'data-theme', 'style', 'class'] });
         // Fallback for engines where `el.style.cursor = …` cannot be hooked:
         // swap a plain keyword in any changed inline style for its sprite.
-        new MutationObserver((records) => {
+        // Only needed when the setter hook failed: a document-wide style observer fires on
+        // every animated inline style and is a major cost.
+        if (!inlineHooked) new MutationObserver((records) => {
             records.forEach((rec) => {
                 const st = rec.target && rec.target.style;
                 if (!st) return;

@@ -49,9 +49,11 @@ extendClass(EnemyManager, {
                     enemyClass: (entry && entry.enemyClass) || (this.enemy && this.enemy.enemyClass),
                     cluster: (entry && entry.cluster) || (this.enemy && this.enemy.cluster),
                     champion: true,
+                    pickupsSpawned: !!this.pickupsSpawnedAtDeath,
                     x: this.enemy ? this.enemy.x + this.enemy.width / 2 : undefined,
                     y: this.enemy ? this.enemy.y + this.enemy.height / 2 : undefined
                 });
+                this.pickupsSpawnedAtDeath = false;
                 this.enemy = null;
                 this.pendingChampionEntry = null;
                 this.activeCombatEvents = [];

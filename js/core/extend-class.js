@@ -15,3 +15,20 @@ function extendClass(Cls, members) {
 }
 
 window.extendClass = extendClass;
+
+// Root CSS custom property, read once per frame: getComputedStyle in render paths forces style recalc on every call.
+const vfCssVar = (() => {
+    const cache = new Map();
+    let clearing = false;
+    return (name) => {
+        let v = cache.get(name);
+        if (v !== undefined) return v;
+        v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        cache.set(name, v);
+        if (!clearing) {
+            clearing = true;
+            requestAnimationFrame(() => { cache.clear(); clearing = false; });
+        }
+        return v;
+    };
+})();

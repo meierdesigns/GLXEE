@@ -78,8 +78,8 @@ extendClass(HomeStationUI, {
             // Last used sub-tab of the area — except PLAY (the map is never
             // entered just by switching areas) — else the area's default.
             const last = this._areaLastTab[area.id];
-            // TRAVEL is only a modal over the map: never the landing tab.
-            const modal = (id) => id === 'play' || id === 'travel';
+            // PLAY is the map, never an area's landing tab.
+            const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
             const fallback = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
             const target = tabs.indexOf(last) !== -1 && !modal(last) ? last : fallback;
@@ -288,12 +288,13 @@ extendClass(HomeStationUI, {
         const savedTab = opts.tab || (typeof menuStateManager !== 'undefined' && menuStateManager.get().tab);
         const savedState = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : {};
         const savedShopCat = opts.shopCategory || savedState.shopCategory;
-        // TRAVEL is a modal over PLAY: a reload never reopens it.
-        const restored = savedTab === 'travel' ? 'play' : savedTab;
+        const restored = savedTab;
         // PLAY sits in the main menu, not in an area's tab row.
         this.tab = (restored === 'play' || this._tabs.includes(restored)) ? restored : 'station';
         this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'resources';
         this.ensureShopCategory();
+        if (savedState.factionDetail) this._factionDetail = savedState.factionDetail;
+        if (savedState.factionSection) this._factionSection = savedState.factionSection;
         const savedUpgradeSub = opts.upgradeSubTab || savedState.upgradeSubTab;
         this.upgradeSubTab = this._upgradeSubTabs.includes(savedUpgradeSub) ? savedUpgradeSub : 'station';
         this.applyShopPrefsForCategory(this.shopCategory, {
@@ -327,7 +328,7 @@ extendClass(HomeStationUI, {
         if (typeof menuStateManager === 'undefined') return;
         const tab = this.tab === 'menu'
             ? ((this._prevTab && this._prevTab !== 'menu') ? this._prevTab : 'station')
-            : (this.tab === 'travel' ? 'play' : this.tab);
+            : this.tab;
         this.captureShopPrefs();
         const extra = {
             tab: tab,
@@ -336,6 +337,8 @@ extendClass(HomeStationUI, {
                 ? startScreenManager.embeddedMenuTab : null,
             shopCategory: this.shopCategory,
             upgradeSubTab: this.upgradeSubTab,
+            factionDetail: this._factionDetail || null,
+            factionSection: this._factionSection || null,
             shopFilter: this.shopFilter,
             shopSort: this.shopSort,
             shopResourceQty: this.shopResourceQty

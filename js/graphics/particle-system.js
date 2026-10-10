@@ -55,10 +55,9 @@ class ParticleSystem {
             return color;
         }
         try {
-            const root = getComputedStyle(document.documentElement);
             const match = String(color).match(/var\(\s*(--[^)\s]+)/);
             if (match) {
-                const value = root.getPropertyValue(match[1]).trim();
+                const value = vfCssVar(match[1]);
                 if (value) return value;
             }
         } catch (e) { /* ignore */ }
@@ -67,14 +66,13 @@ class ParticleSystem {
 
     getRandomHitColor() {
         try {
-            const root = getComputedStyle(document.documentElement);
             const fromTheme = [
-                root.getPropertyValue('--color-highlight').trim(),
-                root.getPropertyValue('--color-text').trim(),
-                root.getPropertyValue('--color-particle').trim(),
-                root.getPropertyValue('--color-explosion').trim(),
-                root.getPropertyValue('--color-secondary').trim(),
-                root.getPropertyValue('--current-text').trim()
+                vfCssVar('--color-highlight'),
+                vfCssVar('--color-text'),
+                vfCssVar('--color-particle'),
+                vfCssVar('--color-explosion'),
+                vfCssVar('--color-secondary'),
+                vfCssVar('--current-text')
             ].filter(c => c && c.indexOf('var(') === -1);
             if (fromTheme.length) {
                 return fromTheme[Math.floor(Math.random() * fromTheme.length)];

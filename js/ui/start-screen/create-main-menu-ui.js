@@ -373,7 +373,7 @@ extendClass(StartScreenManager, {
                     if (st && st.accent) row.style.setProperty('--row-accent', st.accent);
                 }
                 const emblem = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
-                    ? profileSelectionManager.getFactionEmblemHtml(faction, 32) : '';
+                    ? profileSelectionManager.getFactionEmblemHtml(faction, 32, 4) : '';
                 const icoSwitch = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5h10M9 2l3 3-3 3M14 11H4M7 8l-3 3 3 3"/></svg>';
                 const icoDelete = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 7v4M9 7v4"/></svg>';
                 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -280,8 +280,8 @@ class ExplosionSystem {
             p.vy += (p.g || 0) * f;
             p.x += p.vx * f;
             p.y += p.vy * f;
-            p.vx *= Math.pow(0.965, f);
-            p.vy *= Math.pow(0.965, f);
+            p.vx *= Math.pow(0.95, f);
+            p.vy *= Math.pow(0.95, f);
             p.rot += (p.spin || 0) * f;
             p.spin *= Math.pow(0.98, f);
         }
@@ -298,7 +298,7 @@ class ExplosionSystem {
                 const p = this.voxels[i];
                 if (p.life < (p.delay || 0)) continue;
                 const t = p.life / Math.max(1, p.ttl);
-                const alpha = t < 0.55 ? 1 : Math.max(0, 1 - (t - 0.55) / 0.45);
+                const alpha = Math.pow(Math.max(0, 1 - t), 1.4);
                 const s = cell
                     ? Math.max(cell, Math.round(Math.max(1, p.s) / cell) * cell)
                     : Math.max(1, Math.round(p.s));
@@ -331,9 +331,8 @@ class ExplosionSystem {
 
     themeColor(vars, fallback) {
         try {
-            const root = getComputedStyle(document.documentElement);
             for (let i = 0; i < vars.length; i++) {
-                const v = root.getPropertyValue(vars[i]).trim();
+                const v = vfCssVar(vars[i]);
                 if (v) return v;
             }
         } catch (e) { /* ignore */ }
@@ -346,7 +345,7 @@ class ExplosionSystem {
         try {
             const match = String(color).match(/var\(\s*(--[^)\s]+)/);
             if (match) {
-                const value = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+                const value = vfCssVar(match[1]);
                 if (value) return value;
             }
         } catch (e) { /* ignore */ }
@@ -359,7 +358,9 @@ class ExplosionSystem {
         // to ~1.5× its base instead of 2.5×.
         const baseSize = Math.max(8, Math.min(EXPLOSION_MAX_BASE,
             (burst.width + burst.height) * 0.5 * burst.ringScale));
-        const explosionSize = baseSize * (0.5 + progress);
+        const ease = 1 - Math.pow(1 - progress, 2.2);
+        const fade = Math.pow(1 - progress, 1.6);
+        const explosionSize = baseSize * (0.5 + ease);
         const centerX = burst.x;
         const centerY = burst.y;
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
@@ -385,9 +386,9 @@ class ExplosionSystem {
         const ringCount = Math.max(1, burst.rings || 1);
         for (let ring = 0; ring < ringCount; ring++) {
             const ringRadius = Math.floor(explosionRadius * (0.3 + ring * 0.3));
-            const alpha = 1 - progress - (ring * 0.2);
-            if (alpha <= 0) continue;
-            ctx.globalAlpha = Math.max(0.35, Math.min(1, alpha));
+            const alpha = fade * (1 - ring * 0.25);
+            if (alpha <= 0.02) continue;
+            ctx.globalAlpha = Math.min(1, alpha);
             ctx.fillStyle = colors[ring % colors.length];
             for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
                 let pixelX = centerX + Math.cos(angle) * ringRadius * pixelSize;
@@ -399,13 +400,13 @@ class ExplosionSystem {
                     pixelX = Math.floor(pixelX);
                     pixelY = Math.floor(pixelY);
                 }
-                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, colors[ring % colors.length], null);
+                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, colors[ring % colors.length], Math.min(1, alpha));
                 else ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
             }
         }
 
         ctx.globalAlpha = 1;
-        const sparkleCount = burst.sparkles || 0;
+        const sparkleCount = Math.round((burst.sparkles || 0) * fade);
         for (let i = 0; i < sparkleCount; i++) {
             let sparkleX = centerX + (Math.random() - 0.5) * explosionSize;
             let sparkleY = centerY + (Math.random() - 0.5) * explosionSize;
@@ -417,7 +418,7 @@ class ExplosionSystem {
                 sparkleY = Math.floor(sparkleY);
             }
             const sc = i % 2 ? colors[0] : colors[1];
-            if (cv && cv.fill) cv.fill(ctx, sparkleX, sparkleY, pixelSize, pixelSize, sc, 1);
+            if (cv && cv.fill) cv.fill(ctx, sparkleX, sparkleY, pixelSize, pixelSize, sc, Math.max(0.1, fade));
             else {
                 ctx.fillStyle = sc;
                 ctx.fillRect(sparkleX, sparkleY, pixelSize, pixelSize);

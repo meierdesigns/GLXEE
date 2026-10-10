@@ -204,6 +204,13 @@ extendClass(ProfileManager, {
                 Object.keys(rw.reward).forEach((k) => {
                     reward[k] = k === 'credits' ? Math.round(rw.reward[k] * mult / 5) * 5 : Math.round(rw.reward[k] * mult);
                 });
+                // Some contracts also pay a weapon part from the issuer's affinity list.
+                const affinity = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponAffinity)
+                    ? weaponConfigManager.getFactionWeaponAffinity(entry.factionId) || [] : [];
+                const partKey = entry.kind + gid + entry.factionId;
+                if (affinity.length && this.missionHash(seedBase + '|part|' + partKey) % 3 === 0) {
+                    reward['part:weapon:' + affinity[this.missionHash(seedBase + '|partid|' + partKey) % affinity.length]] = 1;
+                }
                 out.push(Object.assign(entry, {
                     id: entry.kind + ':' + gid + ':' + entry.factionId,
                     galaxyId: gid,

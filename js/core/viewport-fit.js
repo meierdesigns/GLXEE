@@ -426,14 +426,42 @@
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
     // tabs FX / VOXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT']];
+    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['perf', 'PERF']];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
         frame: svg16('<rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/>'),
         sizes: svg16('<path d="M2 14V9M2 14h5M14 2v5M14 2H9M3 13l10-10"/>'),
-        text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>')
+        text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>'),
+        perf: svg16('<path d="M2 12a6 6 0 0112 0M8 12l3-5"/>')
     };
+    // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
+    //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
+    //   heavy ON/OFF = the backdrop-filter layers (chroma / bloom / CRT)
+    //   anim  ON/OFF = looping animations of the screen-effect layers and selection pulse
+    const PERF_KEY = 'vf-perf';
+    const perf = { sway: 'AUTO', heavy: 'ON', anim: 'ON' };
+    try {
+        const sp = JSON.parse(localStorage.getItem(PERF_KEY) || 'null');
+        if (sp) {
+            if (/^(AUTO|ON|OFF)$/.test(sp.sway)) perf.sway = sp.sway;
+            if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
+            if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
+        }
+    } catch (e) { /* defaults */ }
+    function applyPerf() {
+        const root = document.documentElement;
+        root.setAttribute('data-vf-perf-heavy', perf.heavy === 'OFF' ? 'off' : 'on');
+        root.setAttribute('data-vf-perf-anim', perf.anim === 'OFF' ? 'off' : 'on');
+        try { localStorage.setItem(PERF_KEY, JSON.stringify(perf)); } catch (e) { /* ignore */ }
+    }
+    function setPerf(key, val) {
+        if (!(key in perf)) return;
+        perf[key] = val;
+        applyPerf();
+    }
+    applyPerf();
+    window.vfPerf = perf;
     // Selected section of the remote control survives a refresh.
     const FXTAB_KEY = 'vf-fx-tab';
     let fxTab = 'fx';
@@ -555,6 +583,7 @@
             [['glow', 'GLOW'], ['scanlines', 'SCANLINES'], ['crt', 'CRT'], ['chroma', 'CHROMA'], ['vignette', 'VIGNETTE'], ['noise', 'NOISE'], ['flicker', 'FLICKER'], ['bloom', 'BLOOM'], ['bloomSpread', 'B. SPREAD'], ['bloomThreshold', 'B. CUTOFF'], ['hdr', 'HDR']].forEach(function (r) {
                 h += fxSlider(r[1], 'fx:' + r[0], 0, 100, r[0] === 'flicker' ? 1 : 5, ui.getFxPercent(r[0]), '%');
             });
+            h += fxSlider('FX SCALE', 'fx:fxScale', 25, 400, 5, ui.getFxPercent('fxScale'), '%');
             h += '<div class="vf-fx-row"><span>SEL. PULSE</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.arcade, 'fx-arcade') + '</div>';
             (function () {
                 const frame = document.getElementById('vf-bezel');
@@ -580,6 +609,21 @@
                 h += '<button type="button" class="vf-fx-key' + (on ? ' on' : '') + '" data-vx-gv="' + p[0] + ':' + (on ? 'OFF' : 'ON') + '">' + p[1] + '</button>';
             });
             h += '</div>';
+        } else if (fxTab === 'perf') {
+            const mq = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
+            const backdropOk = !!(window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px)'));
+            h += '<div class="vf-fx-title">PRESET</div><div class="vf-fx-row">' +
+                fxSeg([['LOW', 'LOW'], ['BALANCED', 'BALANCED'], ['HIGH', 'HIGH']], '', 'pf-preset') + '</div>' +
+                '<div class="vf-fx-title">LIVE</div><div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-pf-fps>--</output></div>' +
+                '<div class="vf-fx-title">EFFECTS</div>' +
+                '<div class="vf-fx-row"><span>SWAY</span>' + fxSeg([['AUTO', 'AUTO'], ['ON', 'ON'], ['OFF', 'OFF']], perf.sway, 'pf-sway') + '</div>' +
+                '<div class="vf-fx-row"><span>CHROMA/BLOOM/CRT</span>' + fxSeg([['ON', 'ON'], ['OFF', 'OFF']], perf.heavy, 'pf-heavy') + '</div>' +
+                '<div class="vf-fx-row"><span>FX ANIMATION</span>' + fxSeg([['ON', 'ON'], ['OFF', 'OFF']], perf.anim, 'pf-anim') + '</div>' +
+                '<div class="vf-fx-row"><span>FRAME PIXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.framePx === 'OFF' ? 'OFF' : 'ON', 'pf-framepx') + '</div>' +
+                '<div class="vf-fx-title">SYSTEM</div>' +
+                '<div class="vf-fx-row"><span>OS REDUCE MOTION</span><output>' + (mq('(prefers-reduced-motion: reduce)') ? 'YES (AUTO = no sway)' : 'NO') + '</output></div>' +
+                '<div class="vf-fx-row"><span>BACKDROP FILTER</span><output>' + (backdropOk ? 'SUPPORTED' : 'MISSING') + '</output></div>';
+            startPerfFps();
         } else if (fxTab === 'frame') {
             const frame = document.getElementById('vf-bezel');
             const cur = editFaction || (frame && frame.getAttribute('data-faction')) || 'terran';
@@ -686,6 +730,23 @@
         const cv = homeStationUI.overlay.querySelector('[data-fleet-preview]');
         if (cv) homeStationUI.startFactionFleetPreview(faction || cv.getAttribute('data-faction'), cv.getAttribute('data-ship'));
     }
+    // FPS readout: only counts while the PERF tab is on screen.
+    let pfFpsRaf = 0;
+    function startPerfFps() {
+        if (pfFpsRaf) return;
+        let n = 0, t0 = performance.now();
+        const tick = function (now) {
+            const out = document.querySelector('#vf-fx [data-pf-fps]');
+            if (!out || !fxOpen || fxTab !== 'perf') { pfFpsRaf = 0; return; }
+            n++;
+            if (now - t0 >= 500) {
+                out.textContent = Math.round(n * 1000 / (now - t0)) + '';
+                n = 0; t0 = now;
+            }
+            pfFpsRaf = requestAnimationFrame(tick);
+        };
+        pfFpsRaf = requestAnimationFrame(tick);
+    }
     function onFxClick(e) {
         const b = e.target.closest && e.target.closest('button');
         const ui = getUi();
@@ -710,6 +771,17 @@
         else if (d.vxSize) ui.setVoxelSize(d.vxSize);
         else if (d.vxGui) ui.setGuiVoxel(d.vxGui);
         else if (d.vxGv) { const kv = d.vxGv.split(':'); ui.setFx(kv[0], kv[1]); }
+        else if (d.pfSway) setPerf('sway', d.pfSway);
+        else if (d.pfHeavy) setPerf('heavy', d.pfHeavy);
+        else if (d.pfAnim) setPerf('anim', d.pfAnim);
+        else if (d.pfFramepx) ui.setFx('framePx', d.pfFramepx === 'ON' ? '5' : 'OFF');
+        else if (d.pfPreset) {
+            const lo = d.pfPreset === 'LOW', hi = d.pfPreset === 'HIGH';
+            setPerf('sway', lo ? 'OFF' : 'AUTO');
+            setPerf('heavy', hi ? 'ON' : 'OFF');
+            setPerf('anim', lo ? 'OFF' : 'ON');
+            if (lo) ui.setFx('framePx', 'OFF');
+        }
         else if (d.fxFac) { fxFacPrev = editFaction || (document.getElementById('vf-bezel') || document.body).getAttribute('data-faction'); editFaction = d.fxFac; setPreviewFaction(editFaction); }
         else if (d.frReset) {
             delete frameStyles[d.frReset]; saveFrameStyles(); applyFrameStyle();
@@ -884,7 +956,7 @@
         const dt = Math.min(0.1, (now - swayLast) / 1000 || 0.016);
         swayLast = now;
         swayT += dt;
-        const target = (swayHover || reduceMotion || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
+        const target = (swayHover || perf.sway === 'OFF' || (perf.sway === 'AUTO' && reduceMotion) || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
         swayAmp += (target - swayAmp) * Math.min(1, dt * 5); // ease toward held / swaying
         const t = swayT;
         const x = (Math.sin(t * 0.9) * 1.2 + Math.sin(t * 1.7 + 1) * 0.6) * swayAmp;

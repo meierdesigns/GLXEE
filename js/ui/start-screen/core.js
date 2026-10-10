@@ -505,6 +505,14 @@ class StartScreenManager {
                 type: 'youtubeUrl'
             },
             {
+                name: 'BG Mouse Follow',
+                type: 'bgParallax',
+                value: (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.getIntensity)
+                    ? String(VFBgMouseParallax.getIntensity()).toUpperCase() : 'NORMAL',
+                options: (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.getIntensityOptions)
+                    ? VFBgMouseParallax.getIntensityOptions() : ['OFF', 'LOW', 'NORMAL', 'HIGH']
+            },
+            {
                 name: 'Difficulty',
                 value: (typeof difficultyConfigManager !== 'undefined')
                     ? String(difficultyConfigManager.current || 'normal').toUpperCase()
@@ -516,6 +524,12 @@ class StartScreenManager {
                 value: 'OPEN ›',
                 type: 'action',
                 action: 'difficultyEditor'
+            },
+            {
+                name: 'Startup Sound',
+                value: 'EDIT ›',
+                type: 'action',
+                action: 'startupSound'
             },
             {
                 name: 'Faction Command',

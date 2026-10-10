@@ -27,7 +27,7 @@ class RenderManager {
             }
             const match = color.match(/var\(\s*(--[^),\s]+)/);
             if (match) {
-                const value = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+                const value = vfCssVar(match[1]);
                 if (value) return value;
             }
         } catch (e) { /* ignore */ }
@@ -37,9 +37,8 @@ class RenderManager {
     themeColor(names, fallback) {
         const list = Array.isArray(names) ? names : [names];
         try {
-            const root = getComputedStyle(document.documentElement);
             for (let i = 0; i < list.length; i++) {
-                const v = root.getPropertyValue(list[i]).trim();
+                const v = vfCssVar(list[i]);
                 if (v && v.indexOf('var(') === -1) return v;
             }
         } catch (e) { /* ignore */ }
@@ -367,8 +366,8 @@ class RenderManager {
                 if (side.repairBeamActive && enemyManager.getEnemy && enemyManager.getEnemy()) {
                     const champ = enemyManager.getEnemy();
                     const beamColor = side.role === 'shieldBattery'
-                        ? (getComputedStyle(document.documentElement).getPropertyValue('--current-secondary').trim() || '#6af')
-                        : (getComputedStyle(document.documentElement).getPropertyValue('--current-accent').trim() || '#8f8');
+                        ? (vfCssVar('--current-secondary') || '#6af')
+                        : (vfCssVar('--current-accent') || '#8f8');
                     const x0 = side.x + side.width / 2;
                     const y0 = side.y + side.height / 2;
                     const x1 = champ.x + champ.width / 2;

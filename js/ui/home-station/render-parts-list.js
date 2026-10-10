@@ -2,6 +2,12 @@
 
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
+    /** Empty list placeholder: big pixel icon over a short message. */
+    emptyHtml(iconKey, text) {
+        return `<div class="hs-empty-slot hs-empty-state"><span class="hs-empty-ico">${this.iconHtml(iconKey, 64, 'hs-pixel', false)}</span>` +
+            `<span class="hs-empty-txt">${text}</span></div>`;
+    },
+
     renderPartsList(profile) {
         const weapons = Object.keys((profile.parts && profile.parts.weapons) || {})
             .filter((id) => (profile.parts.weapons[id] || 0) > 0);
@@ -10,7 +16,7 @@ extendClass(HomeStationUI, {
         const abilities = Object.keys((profile.parts && profile.parts.abilities) || {})
             .filter((id) => (profile.parts.abilities[id] || 0) > 0);
         if (!weapons.length && !defenses.length && !abilities.length) {
-            return '<span class="hs-muted hs-empty-slot">NONE</span>';
+            return this.emptyHtml('statAbilities', 'NO PARTS YET');
         }
         const chips = [];
         weapons.forEach((id) => {
@@ -208,7 +214,7 @@ extendClass(HomeStationUI, {
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
-            return '<p class="hs-muted hs-empty-slot">NO SHIPS MATCH FILTER</p>';
+            return this.emptyHtml('hsShip', 'NO SHIPS MATCH FILTER');
         }
         return entries.map((e) => {
             const afford = this.canAffordCost(wallet, e.cost, profile);
@@ -252,7 +258,7 @@ extendClass(HomeStationUI, {
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
-            return '<p class="hs-muted hs-empty-slot">NO BLUEPRINTS MATCH FILTER</p>';
+            return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS MATCH FILTER');
         }
         return entries.map((e) => {
             const stock = e.count > 0 ? ` ×${e.count}` : '';

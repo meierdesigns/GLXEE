@@ -207,6 +207,7 @@ class MissionStartManager {
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
         this.phase = 'countdown';
+        this._lastTick = 0;
         this.countdownValue = 3;
         this.countdownTimer = 0;
         this.setText('3', false);
@@ -219,8 +220,13 @@ class MissionStartManager {
     update(deltaTime) {
         if (!this.active) return;
 
+        // Countdown / GO run on wall-clock time: the loop caps deltaTime per frame, so a slow frame rate would stretch them.
+        const now = performance.now();
+        const real = this._lastTick ? Math.min(1000, now - this._lastTick) : deltaTime;
+        this._lastTick = now;
+
         if (this.phase === 'countdown') {
-            this.countdownTimer += deltaTime;
+            this.countdownTimer += Math.max(deltaTime, real);
             if (this.countdownTimer >= 900) {
                 this.countdownTimer = 0;
                 this.countdownValue -= 1;
@@ -242,7 +248,7 @@ class MissionStartManager {
         }
 
         if (this.phase === 'go') {
-            this.goTimer += deltaTime;
+            this.goTimer += Math.max(deltaTime, real);
             if (this.goTimer >= 450) {
                 this.startFlyIn();
             }

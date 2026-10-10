@@ -30,7 +30,7 @@ extendClass(HomeStationUI, {
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
-            return '<p class="hs-muted hs-empty-slot">NO PARTS MATCH FILTER</p>';
+            return this.emptyHtml('hsShop', 'NO PARTS MATCH FILTER');
         }
         return entries.map((e) => {
             const stock = e.count > 0 ? ` ×${e.count}` : '';
@@ -107,7 +107,7 @@ extendClass(HomeStationUI, {
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
-            return '<p class="hs-muted hs-empty-slot">NO PORTALS — MEET NEW FACTIONS IN COMBAT TO UNLOCK</p>';
+            return this.emptyHtml('hsTeleport', 'NO PORTALS — MEET NEW FACTIONS IN COMBAT TO UNLOCK');
         }
         return entries.map((e) => {
             const afford = this.canAffordCost(wallet, e.cost, profile);

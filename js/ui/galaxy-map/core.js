@@ -39,15 +39,68 @@ class GalaxyMapManager {
                 clearTimeout(this._zoomSaveTimer);
                 this._zoomSaveTimer = setTimeout(() => {
                     try { localStorage.setItem(zoomStorageKey, String(zoom)); } catch (e) {}
+                    this.saveGalaxyView();
                 }, 300);
             }
         });
         this.mapPan = null;
     }
 
+    /** Per-galaxy camera (zoom + pan) kept in localStorage so every galaxy reopens as it was left. */
+    saveGalaxyView() {
+        if (!this.galaxyId) return;
+        try {
+            const all = JSON.parse(localStorage.getItem('vf.galaxyMapViewV1') || '{}') || {};
+            all[this.galaxyId] = {
+                z: this.mapZoom,
+                a: this._panAnchor ? { x: this._panAnchor.x, y: this._panAnchor.y } : null,
+                p: this.mapPan ? { x: this.mapPan.x, y: this.mapPan.y } : null
+            };
+            localStorage.setItem('vf.galaxyMapViewV1', JSON.stringify(all));
+        } catch (e) {}
+    }
+
+    /** Last selected planet / station per galaxy, so a refresh or a return from a mission reopens on it. */
+    saveGalaxySelection() {
+        if (!this.galaxyId || !this.selectedPlanetId) return;
+        try {
+            const all = JSON.parse(localStorage.getItem('vf.galaxySelV1') || '{}') || {};
+            all[this.galaxyId] = { p: this.selectedPlanetId, s: this.selectedPostId || null };
+            localStorage.setItem('vf.galaxySelV1', JSON.stringify(all));
+        } catch (e) {}
+    }
+
+    restoreGalaxySelection() {
+        try {
+            const all = JSON.parse(localStorage.getItem('vf.galaxySelV1') || '{}') || {};
+            const v = all[this.galaxyId];
+            if (!v || !this.nodeById[v.p] || !this.isUnlocked(v.p)) return;
+            this.selectedPlanetId = v.p;
+            this._picked = true;
+            if (v.s) {
+                const post = (this.getTradingPosts() || []).find((q) => q.id === v.s);
+                if (post && post.planetId === v.p) this.selectedPostId = post.id;
+            }
+        } catch (e) {}
+    }
+
+    restoreGalaxyView() {
+        this._panAnchor = null;
+        this.mapPan = null;
+        try {
+            const all = JSON.parse(localStorage.getItem('vf.galaxyMapViewV1') || '{}') || {};
+            const v = all[this.galaxyId];
+            if (!v || !Number.isFinite(v.z)) return;
+            this.mapZoom = v.z;
+            if (v.a && Number.isFinite(v.a.x) && Number.isFinite(v.a.y)) this._panAnchor = { x: v.a.x, y: v.a.y };
+            if (v.p && Number.isFinite(v.p.x) && Number.isFinite(v.p.y)) this.mapPan = { x: v.p.x, y: v.p.y };
+        } catch (e) {}
+    }
+
     show(options) {
         this.isVisible = true;
         this.galaxyId = options && options.galaxyId;
+        this.restoreGalaxyView();
         this.onConfirm = options && options.onConfirm;
         this.onBack = options && options.onBack;
         this.onExplored = options && options.onExplored;
@@ -85,12 +138,16 @@ class GalaxyMapManager {
         }
         this.loadMap();
         this.createUI();
+        if (this.startOrbitLoop) this.startOrbitLoop();
+        // Open with the route to the selected planet centred (animated).
+        requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');
         }
     }
 
     hide() {
+        if (this.isVisible) this.saveGalaxyView();
         this.isVisible = false;
         this._mountEl = null;
         this._inputActive = false;
@@ -217,6 +274,7 @@ class GalaxyMapManager {
                 this.selectedPostId = post.id;
             }
         }
+        this.restoreGalaxySelection();
     }
 
     isUnlocked(planetId) {
@@ -309,6 +367,33 @@ class GalaxyMapManager {
         const pick = this.isDevMode() ? this.getDevStagePick(pid) : null;
         if (!pick) return null;
         return pick > this.getStagesPerPlanet(pid) ? `${pid}-boss` : `${pid}-${pick}`;
+    }
+
+    /** Locked-planet hint: what to clear first, with a JUMP TO button that selects that planet. */
+    unlockHintHtml(info) {
+        if (!info || info.unlocked) return '';
+        const from = (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
+            .find((pid) => pid && this.isUnlocked(pid));
+        if (!from) return `<span class="gm-unlock-text">CLEAR A CONNECTED PLANET TO UNLOCK</span>`;
+        const name = String(this.getPlanetInfo(from).name).toUpperCase();
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const ico = ir && ir.imgHtml ? `<span class="gm-jump-ico">${ir.imgHtml('navRocket', 32, 'hs-pixel', null, false)}</span>` : '';
+        return `<span class="gm-unlock-text">CLEAR <b>${name}</b> TO UNLOCK</span>` +
+            `<button type="button" class="action-button gm-unlock-jump" data-gm-jump="${from}" data-nav-item>${ico}<span>JUMP TO ${name}</span></button>`;
+    }
+
+    /** JUMP TO buttons in the unlock hint (delegated, bound once). */
+    bindUnlockJump() {
+        if (this._unlockJumpBound) return;
+        this._unlockJumpBound = true;
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.closest && e.target.closest('[data-gm-jump]');
+            if (!el || !this.overlay || !this.overlay.contains(el)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.selectPlanet(el.getAttribute('data-gm-jump'));
+            if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        }, true);
     }
 
     /** Stepper clicks in dev mode (delegated, bound once). */

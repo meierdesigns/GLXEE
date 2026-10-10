@@ -14,7 +14,7 @@ const VFStartIntro = {
         const style = document.createElement('style');
         style.id = 'vf-start-intro-style';
         style.textContent = `
-.vf-start-intro { position: fixed; inset: 0; z-index: 100000; background: #05060a; cursor: pointer;
+.vf-start-intro { position: fixed; overflow: hidden; left: var(--fr-open-side); right: var(--fr-open-side); top: var(--fr-open-top); bottom: var(--fr-open-bottom); z-index: 100000; background: #05060a; cursor: pointer;
     display: flex; align-items: center; justify-content: center; transition: opacity 600ms ease-out; }
 .vf-start-intro.is-leaving { opacity: 0; pointer-events: none; }
 .vf-start-intro canvas { width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
@@ -50,44 +50,7 @@ const VFStartIntro = {
     },
 
     chime() {
-        try {
-            // Creating AudioContext before any user gesture logs a console
-            // warning and stays suspended — skip until the page is unlocked.
-            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
-            if (typeof soundManager !== 'undefined' && soundManager.ensureContext) {
-                const ctx = soundManager.ensureContext();
-                if (!ctx) return;
-                [[1046.5, 0, 0.09], [2093, 0.09, 0.5]].forEach(([f, at, len]) => {
-                    const o = ctx.createOscillator();
-                    const g = ctx.createGain();
-                    o.type = 'square';
-                    o.frequency.value = f;
-                    g.gain.setValueAtTime(0.06, ctx.currentTime + at);
-                    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + len);
-                    o.connect(g).connect(ctx.destination);
-                    o.start(ctx.currentTime + at);
-                    o.stop(ctx.currentTime + at + len + 0.05);
-                });
-                return;
-            }
-            const AC = window.AudioContext || window.webkitAudioContext;
-            if (!AC) return;
-            const ac = new AC();
-            if (ac.state === 'suspended') ac.resume();
-            // Classic two-note square "ding-DING"
-            [[1046.5, 0, 0.09], [2093, 0.09, 0.5]].forEach(([f, at, len]) => {
-                const o = ac.createOscillator();
-                const g = ac.createGain();
-                o.type = 'square';
-                o.frequency.value = f;
-                g.gain.setValueAtTime(0.06, ac.currentTime + at);
-                g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + at + len);
-                o.connect(g).connect(ac.destination);
-                o.start(ac.currentTime + at);
-                o.stop(ac.currentTime + at + len + 0.05);
-            });
-            setTimeout(() => ac.close(), 1200);
-        } catch (e) { /* audio blocked before user gesture — fine */ }
+        if (typeof startupSound !== 'undefined') startupSound.play();
     },
 
     play(options) {
@@ -107,7 +70,9 @@ const VFStartIntro = {
         const H = 144;
         let W = 160;
         const resize = () => {
-            W = Math.max(160, Math.round(H * window.innerWidth / Math.max(1, window.innerHeight)));
+            // Stay inside the screen opening (not over the bezel).
+            const box = root.getBoundingClientRect();
+            W = Math.max(160, Math.round(H * box.width / Math.max(1, box.height)));
             canvas.width = W;
             canvas.height = H;
             ctx.imageSmoothingEnabled = false;

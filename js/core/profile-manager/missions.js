@@ -101,7 +101,12 @@ extendClass(ProfileManager, {
         // the station stores.
         Object.keys(m.reward || {}).forEach((id) => {
             const n = Number(m.reward[id]) || 0;
-            if (id === 'credits') p.credits = Math.max(0, Math.round(Number(p.credits) || 0) + n);
+            if (id.indexOf('part:weapon:') === 0) {
+                const wid = id.slice(12);
+                if (!p.parts || typeof p.parts !== 'object') p.parts = {};
+                if (!p.parts.weapons || typeof p.parts.weapons !== 'object') p.parts.weapons = {};
+                p.parts.weapons[wid] = (Number(p.parts.weapons[wid]) || 0) + Math.max(1, n);
+            } else if (id === 'credits') p.credits = Math.max(0, Math.round(Number(p.credits) || 0) + n);
             else p.resources[id] = (Number(p.resources[id]) || 0) + n;
         });
         p.activeMission = null;

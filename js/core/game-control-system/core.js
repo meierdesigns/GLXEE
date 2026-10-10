@@ -216,9 +216,8 @@ class GameControlSystem {
             this.hideVictoryOverlay();
             galaxyMapManager._postAmbushFlight = null;
             this.showLevelSelection();
-            if (interrupted && galaxyMapManager.flyTo) {
-                galaxyMapManager._skipAmbushOnce = true;
-                galaxyMapManager.flyTo(interrupted.kind, interrupted.id);
+            if (interrupted && galaxyMapManager.resumeAfterAmbush) {
+                galaxyMapManager.resumeAfterAmbush(interrupted);
             }
             return true;
         }

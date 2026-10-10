@@ -8,10 +8,14 @@ const GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-const NEB_VERSION = 14;
+const NEB_VERSION = 17;
 const NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
-const NEB_PIXEL_BUDGET = 450000;
+const NEB_PIXEL_BUDGET = 160000;
+// Time per compute slice: the fine patch (rebuilt while zooming / panning) takes small bites so frames keep running;
+// the coarse field is built once and may take bigger ones.
+const NEB_SLICE_FINE_MS = 5;
+const NEB_SLICE_COARSE_MS = 12;
 // How steeply nebula density drops with distance from the suns (higher = faster).
 const NEB_SUN_FALLOFF = 1.8;
 // Free-floating static vortices in the nebula: one candidate per cell of this size.
@@ -87,7 +91,8 @@ extendClass(GalaxyMapManager, {
         const mapSpread = 2.0;
         // Lines aim at the centre and stop on the drawn surface.
         const objScale = this.nodeObjScale();
-        const planetRadius = (planetId) => this.planetSurfaceRadius(planetId) * objScale;
+        // Lines are drawn under the planets and run slightly into the disc, so the planet's own silhouette cuts them: they meet the surface exactly.
+        const planetRadius = (planetId) => this.planetSurfaceRadius(planetId) * objScale * 0.88;
         let edgesHtml = '';
         // Lanes leaving the ship's current spot (planet, or the anchor planets of a post) are the
         // next jump: they get the strong beam, the other reachable lanes a weaker one.
@@ -99,6 +104,7 @@ extendClass(GalaxyMapManager, {
             const hp = profileManager.getTradingPost(shipLoc.id);
             if (hp) (hp.anchors || [hp.planetId]).forEach((id) => hereIds.push(id));
         }
+        const routeIds = this.routeEdgeIds ? this.routeEdgeIds() : null;
         edges.forEach(edge => {
             const a = this.nodeById[edge[0]];
             const b = this.nodeById[edge[1]];
@@ -128,7 +134,8 @@ extendClass(GalaxyMapManager, {
             // reachable). A lane to a still-locked planet stays dim: no gate on it.
             edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB
                 ? (hereIds.indexOf(edge[0]) !== -1 || hereIds.indexOf(edge[1]) !== -1 ? 'lit next' : 'lit')
-                : 'dim'));
+                : 'dim') + ' gm-e-' + edge[0] + ' gm-e-' + edge[1]
+                + (routeIds && routeIds.indexOf(edge[0]) !== -1 && routeIds.indexOf(edge[1]) !== -1 ? ' on-route' : ''));
         });
         // Border stations always sit on top of the beams (a beam never runs across one).
         return edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + backBlocks + frontBlocks;
@@ -420,7 +427,7 @@ extendClass(GalaxyMapManager, {
             // Base cell = one planet pixel at zoom detail 1; the station's own
             // sub-pixel detail then follows the zoom like the planets do.
             const pp = this.planetPixelSize(post.planetId) * this.getMapObjectScale();
-            const half = 4.4 * pp;
+            const half = 2.6 * pp;
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
                 <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
@@ -428,7 +435,7 @@ extendClass(GalaxyMapManager, {
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
                     ${post.faction ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${(pp * 0.7).toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
+                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
                 </g>
             `;
         });
@@ -450,12 +457,10 @@ extendClass(GalaxyMapManager, {
             const icon = this.getShipIconUrl(this.getMapDetail());
             // Sized to the ring: ~39×51 on a planet, ~26×34 on a trading post.
             // Whole-pixel magnification of the 13×17 icon, so every pixel is the same size.
-            const px = Math.max(2, Math.round(r * 1.2 / 13));
-            const sw = 13 * px;
-            const sh = 17 * px;
-            const k = sw / 11;
+            const box = this.shipIconBox();
+            const k = box.w / 11;
             const shipSvg = icon
-                ? `<image href="${icon}" x="${-Math.round(sw / 2)}" y="${-Math.round(sh / 2)}" width="${sw}" height="${sh}" class="gm-ship-marker-img" transform="rotate(180)"/>`
+                ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
                 : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
             const view = this.getMapViewBox(W, H, pad);
             const centered = Math.hypot(
@@ -468,7 +473,7 @@ extendClass(GalaxyMapManager, {
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${x},${y})">
                     <title>YOUR SHIP</title>
-                    <g class="gm-ship-scale" transform="scale(${(1 / Math.sqrt(Math.max(1, this.mapZoom || 1))).toFixed(4)})">
+                    <g class="gm-ship-scale" transform="scale(1)">
                     ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
                     <g>
                         <animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>
@@ -483,9 +488,9 @@ extendClass(GalaxyMapManager, {
             <svg class="galaxy-map-svg${(this.mapZoom || 1) >= 2.5 ? ' gm-close-view' : ''}" style="--gm-px:${1 / this.getMapDetail()}" viewBox="${this.getMapViewBox(W, H, pad).join(' ')}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
                 ${this.galaxyStarsSvg ? this.galaxyStarsSvg(W, H) : ''}
                 <g class="gm-suns">${this.galaxySunsSvg ? this.galaxySunsSvg(W, H, pad) : ''}</g>
+                <g class="gm-lines">${edgesHtml}</g>
                 ${nodesHtml}
                 ${postsHtml}
-                <g class="gm-lines">${edgesHtml}</g>
                 <g class="gm-route-layer">${this.routePreviewSvg ? this.routePreviewSvg() : ''}</g>
                 ${shipHtml}
             </svg>
@@ -703,17 +708,26 @@ extendClass(GalaxyMapManager, {
             const ctx = cv.getContext('2d');
             const img = ctx.createImageData(cols, rows);
             const px = img.data;
+            const lerpTone = (arr, f) => { const x = f * (arr.length - 1), i = Math.min(arr.length - 2, Math.floor(x)); return arr[i] + (arr[i + 1] - arr[i]) * (x - i); };
             const toneAlpha = [0.05, 0.08, 0.12, 0.16];
             const job = { opaque: !!opaque, cancel: false };
             this._nebJobs[jobKey] = job;
             let r = 0;
             const slice = () => {
                 if (job.cancel) { delete this._nebJobs[jobKey]; return; }
-                const until = performance.now() + 14;
+                const until = performance.now() + (opaque ? NEB_SLICE_FINE_MS : NEB_SLICE_COARSE_MS);
                 for (; r < rows && performance.now() < until; r++) paintRow(r);
                 if (r < rows) { setTimeout(slice, 0); return; }
                 ctx.putImageData(img, 0, 0);
-                const url = cv.toDataURL();
+                // Stored (coarse) copies need a data URL; fine patches use an async blob URL instead of a
+                // synchronous PNG encode + base64 string, which stalled a frame.
+                if (storeKey || !cv.toBlob || typeof URL === 'undefined' || !URL.createObjectURL) { finish(cv.toDataURL()); return; }
+                cv.toBlob((blob) => {
+                    if (!blob) { finish(cv.toDataURL()); return; }
+                    finish(URL.createObjectURL(blob));
+                });
+            };
+            const finish = (url) => {
                 this._nebUrls[jobKey] = url;
                 if (storeKey) {
                     try {
@@ -725,7 +739,11 @@ extendClass(GalaxyMapManager, {
                     } catch (e) { /* quota / storage unavailable */ }
                 }
                 const fines = Object.keys(this._nebUrls).filter((k) => k.indexOf('|f') !== -1);
-                if (fines.length > 4) fines.slice(0, fines.length - 4).forEach((k) => { if (k !== jobKey) delete this._nebUrls[k]; });
+                if (fines.length > 4) fines.slice(0, fines.length - 4).forEach((k) => {
+                    if (k === jobKey) return;
+                    if (String(this._nebUrls[k]).indexOf('blob:') === 0) { try { URL.revokeObjectURL(this._nebUrls[k]); } catch (e) { /* ignore */ } }
+                    delete this._nebUrls[k];
+                });
                 delete this._nebJobs[jobKey];
                 if (opaque) this._nebLastFine = { key: jobKey, tag: tag(url) };
                 document.querySelectorAll(`image[data-neb-key="${jobKey}"]`).forEach((el) => el.setAttribute('href', url));
@@ -746,7 +764,7 @@ extendClass(GalaxyMapManager, {
             }
             // Slow fields (wisps, banks, veils …) vary over hundreds of map units: sampled on a lattice
             // every BLK cells and interpolated per pixel (no blocks), then cut into hard steps.
-            const BLK = 4;
+            const BLK = 8;
             const lat = new Map();
             const latAt = (bi, bj) => {
                 const key = bi * 100003 + bj;
@@ -759,7 +777,7 @@ extendClass(GalaxyMapManager, {
                     wisp: sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
                     free: sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
-                    bank: sstep(0.32, 0.58, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    bank: sstep(0.4, 0.62, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
                     gm: sstep(0.6, 0.74, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
                     veil: layers.map((_, li) => sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
@@ -776,18 +794,18 @@ extendClass(GalaxyMapManager, {
                 const slRaw = suns.length ? sunLight(x, y) : { k: 0, rgb: null };
                 // Hard steps only (pixel art): sun light comes in 5 levels, never as a smooth gradient.
                 const sl = lw.sl && lw.sl.rgb === slRaw.rgb ? lw.sl : (lw.sl = { k: 0, rgb: slRaw.rgb });
-                sl.k = Math.round(slRaw.k * 5) / 5; sl.rgb = slRaw.rgb;
-                lw.wisp = Math.round(mix('wisp') * 4) / 4 * 0.5;
+                sl.k = Math.round(slRaw.k * 14) / 14; sl.rgb = slRaw.rgb;
+                lw.wisp = mix('wisp') * 0.5;
                 lw.wispK = lw.wisp / 0.5;
                 const freeCloud = Math.max(mix('free') * 0.35, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 lw.envNear = mix('envBase') * sunFade;
                 lw.grain = mix('grain');
-                lw.bank = 0.1 + 0.6 * mix('bank');
-                lw.gm = Math.round(mix('gm') * 3) / 3;
+                lw.bank = 0.02 + 0.98 * mix('bank');
+                lw.gm = Math.round(mix('gm') * 8) / 8;
                 for (let li = 0; li < layers.length; li++) {
                     const v = (A.veil[li] * (1 - fx) + B.veil[li] * fx) * (1 - fy) + (C.veil[li] * (1 - fx) + D.veil[li] * fx) * fy;
-                    lw.veil[li] = 0.18 + 0.82 * Math.round(v * 3) / 3;
+                    lw.veil[li] = 0.08 + 0.92 * Math.round(v * 10) / 10;
                 }
                 lw.ang = Math.atan2((y - cym) / H, (x - cxm) / W);
                 return lw;
@@ -799,7 +817,7 @@ extendClass(GalaxyMapManager, {
                     const lw = lowAt(r, c, x, y);
                     const sl = lw.sl, wisp = lw.wisp, wispK = lw.wispK, envNear = lw.envNear;
                     if (envNear < 0.02 && sl.k < 0.05 && wisp < 0.02) continue;
-                    const th = (bayer[(r % 4) * 4 + (c % 4)] / 16 - 0.5) * 0.035;
+                    const th = (bayer[(r % 4) * 4 + (c % 4)] / 16 - 0.5) * 0.04;
                     // Static vortices: coordinates twist around scattered centres, so clouds curl into swirls.
                     let wx = x, wy = y;
                     for (let si = 0; si < swirls.length; si++) {
@@ -830,29 +848,31 @@ extendClass(GalaxyMapManager, {
                         };
                         let cv = grain < 0.02 ? cloudV(0.45) : grain > 0.98 ? cloudV(1.5) : cloudV(0.45) * (1 - grain) + cloudV(1.5) * grain;
                         // Big dark voids and bright banks: contrast + a very low-frequency density mask.
-                        cv = 0.5 + (cv - 0.5) * 1.25;
+                        cv = 0.5 + (cv - 0.5) * 1.5;
                         const bank = lw.bank;
                         const v = (cv - (1 - L.cover) * 1.05 * (1 - wispK * 0.7)) * env * bank + sl.k * 0.12;
-                        let l = v > 0.34 + th ? 3 : v > 0.25 + th ? 2 : v > 0.15 + th ? 1 : v > 0.07 + th ? 0 : -1;
-                        if (l < 0) continue;
-                        if (L.dust && l > 1) l = 1;
+                        // Many soft tone steps (dithered at the edges) instead of four flat plateaus with hard contours.
+                        const tt = (v + th - 0.17) / 0.3;
+                        if (tt <= 0) continue;
+                        let f = Math.min(1, Math.round(tt * 12) / 12);
+                        if (L.dust && f > 1 / 3) f = 1 / 3;
                         // Tone colour; near a sun lifted a level and tinted by it.
                         // Self-luminous pockets: a few scattered clouds glow on their own, not tied to a sun.
                         const gm = lw.gm;
                         const lit = Math.max(sl.k, gm * 0.55);
-                        const lift = [0, 6, 14, 22][l] + lit * 14 + gm * [4, 10, 16, 20][l];
-                        const mulc = [1, 1.1, 1.15, 1.1][l];
+                        const lift = lerpTone([0, 6, 14, 22], f) + lit * 14 + gm * lerpTone([4, 10, 16, 20], f);
+                        const mulc = lerpTone([1, 1.1, 1.15, 1.1], f);
                         let cr = L.rgb[0] * mulc + lift, cg = L.rgb[1] * mulc + lift, cb = L.rgb[2] * mulc + lift;
                         if (sl.rgb && lit > 0.02) {
                             const t = Math.min(0.9, sl.k * 1.6);
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
                         // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.35 + 0.65 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 3) / 3;
+                        const shine = 0.35 + 0.65 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.8 * veil * Math.min(0.6, (L.dust ? [0.11, 0.16][Math.min(1, l)] : toneAlpha[l]) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.34 * veil * Math.min(0.6, (L.dust ? lerpTone([0.11, 0.16], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
@@ -1137,6 +1157,14 @@ extendClass(GalaxyMapManager, {
         const hotRad = Math.max(0.5, rad * 0.4);
         const glowRad = rad + 1.6;
         const haloRad = rad + 3.6;
+        // Route preview: thin dashes with wide gaps, marching towards the target.
+        if (o.run) {
+            const dash = width * 5, gap = width * 4.4, period = dash + gap;
+            const d = 'M' + points.map((q) => q.x.toFixed(2) + ' ' + q.y.toFixed(2)).join('L');
+            return `<g class="${cls} gm-pxline gm-pxline-run">` +
+                `<path class="gm-run-glow" fill="none" d="${d}" style="stroke-width:${(width * 2.4).toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/>` +
+                `<path class="gm-run-core" fill="none" d="${d}" style="stroke-width:${width.toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/></g>`;
+        }
         const hotCells = new Map();
         const coreCells = new Map();
         const glowCells = new Map();
@@ -1271,16 +1299,13 @@ extendClass(GalaxyMapManager, {
                 if (!this.nodeById || !this.nodeById[pid]) return;
                 const pts = this.routePath({ kind: 'post', id: post.id }, { kind: 'planet', id: pid });
                 if (!pts || pts.length < 2) return;
-                // Start / end outside the station icon and the planet disc.
-                const trim = (a, b, by) => {
-                    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-                    return { x: a.x + (b.x - a.x) / l * by, y: a.y + (b.y - a.y) / l * by };
-                };
-                const p = pts.slice();
-                p[0] = trim(p[0], p[1], 16);
-                const planetInset = this.planetSurfaceRadius(pid) * this.nodeObjScale();
-                p[p.length - 1] = trim(p[p.length - 1], p[p.length - 2], planetInset);
-                out += this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1], traffic: true });
+                // Start outside the station icon, end on the planet disc (measured along the curve).
+                const p = this.trimPolyline(pts, 6, this.planetSurfaceRadius(pid) * this.nodeObjScale() * 0.88);
+                const pn = this.nodeById[pid];
+                const cx = (640 / 2 + (pn.x - 0.5) * (640 - 96) * 2.0).toFixed(2);
+                const cy = (320 / 2 + (pn.y - 0.5) * (320 - 96) * 2.0).toFixed(2);
+                out += `<g class="gm-lane-rot" data-post="${post.id}" data-a="${post.orbitA == null ? 0 : post.orbitA}" data-cx="${cx}" data-cy="${cy}">`
+                    + this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1], traffic: true }) + '</g>';
             });
         });
         return out;
@@ -1403,6 +1428,18 @@ extendClass(GalaxyMapManager, {
         // come out smaller after a reload at high zoom than the same zoom reached
         // by scrolling.
         return 1;
+    },
+
+    /**
+     * Position + size of the ship icon in map units. The icon is 13*dk x 17*dk texels, and one texel is
+     * exactly the map's one pixel (mapPixelUnitGlobal), the same pixel the planets, sun and nebula use,
+     * so ship and planet pixels always match at every zoom.
+     */
+    shipIconBox() {
+        const dk = Math.max(1, Math.round(this.getMapDetail()));
+        const u = this.mapPixelUnitGlobal();
+        const w = 13 * dk * u, h = 17 * dk * u;
+        return { x: -w / 2, y: -h / 2, w: w, h: h, attrs: `x="${(-w / 2).toFixed(3)}" y="${(-h / 2).toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}"` };
     },
 
     /**
@@ -1764,6 +1801,8 @@ extendClass(GalaxyMapManager, {
             if (x1 - x0 > w) w = x1 - x0;
             if ((y1 - y0) * aspect > w) w = (y1 - y0) * aspect;
         }
+        // Dead band: tiny zoom corrections just look like jitter — keep the current zoom.
+        if (Math.abs(Math.log(w / cur.width)) < 0.15) w = cur.width;
         const h = w / aspect;
         const cx = (x0 + x1) / 2;
         const cy = (y0 + y1) / 2;
@@ -1772,17 +1811,22 @@ extendClass(GalaxyMapManager, {
         this.mapZoom = (this.mapZoom || 1) * (cur.width / w);
         this._panAnchor = { x: cx, y: cy };
         this.mapPan = { x: 0, y: 0 };
-        // Animate the viewBox.
+        // Animate the viewBox: centre moves linearly, zoom in log space, so pan and zoom stay in sync.
         const start = performance.now();
-        const dur = 450;
-        const ease = (t) => 1 - Math.pow(1 - t, 3);
+        const fcx = from[0] + from[2] / 2, fcy = from[1] + from[3] / 2;
+        const travel = Math.hypot(cx - fcx, cy - fcy) / Math.max(1, cur.width);
+        const dur = Math.round(Math.max(380, Math.min(900, 380 + travel * 700 + Math.abs(Math.log(w / cur.width)) * 300)));
+        const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+        const lw0 = Math.log(from[2]), lw1 = Math.log(w);
         const token = (this._camAnim = {});
         const step = (now) => {
             if (this._camAnim !== token || !svg.isConnected || this._flight) return;
             const t = Math.min(1, (now - start) / dur);
             const k = ease(t);
-            const vb = from.map((v, i) => v + (to[i] - v) * k);
-            svg.setAttribute('viewBox', vb.map((v) => v.toFixed(2)).join(' '));
+            const vw = Math.exp(lw0 + (lw1 - lw0) * k);
+            const vh = vw / aspect;
+            const vcx = fcx + (cx - fcx) * k, vcy = fcy + (cy - fcy) * k;
+            svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
             this.updateSelectionFrames();
             if (t < 1) requestAnimationFrame(step);
         };
@@ -1915,7 +1959,7 @@ extendClass(GalaxyMapManager, {
             this.updateSelectionFrames();
             // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
             const shipScale = cur.querySelector('.gm-ship-scale');
-            if (shipScale) shipScale.setAttribute('transform', `scale(${(1 / Math.sqrt(Math.max(1, this.mapZoom || 1))).toFixed(4)})`);
+            if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
             if (this._mapArtDetail === this.getMapDetail()) {
@@ -1941,6 +1985,10 @@ extendClass(GalaxyMapManager, {
             const shipImg = cur && cur.querySelector('.gm-ship-marker-img');
             const url = shipImg && this.getShipIconUrl(this.getMapDetail());
             if (url && shipImg.getAttribute('href') !== url) shipImg.setAttribute('href', url);
+            if (url) {
+                const b = this.shipIconBox();
+                ['x', 'y', 'width', 'height'].forEach((a, i) => shipImg.setAttribute(a, [b.x, b.y, b.w, b.h][i].toFixed(3)));
+            }
         };
         // Any manual camera input stops a running glide, which would
         // otherwise keep writing its own viewBox and snap the zoom back.

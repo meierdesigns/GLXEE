@@ -101,6 +101,7 @@ extendClass(GameControlSystem, {
                 const selectFought = () => {
                     if (galaxyMapManager.nodeById && galaxyMapManager.nodeById[foughtPlanet] && galaxyMapManager.selectPlanet) {
                         galaxyMapManager.selectPlanet(foughtPlanet);
+                        if (galaxyMapManager.markUserPicked) galaxyMapManager.markUserPicked();
                         if (galaxyMapManager.frameSelectionCamera) galaxyMapManager.frameSelectionCamera('follow');
                         return true;
                     }
@@ -115,6 +116,13 @@ extendClass(GameControlSystem, {
                 galaxyMapManager._postAmbushFlight = null;
                 galaxyMapManager._ambushLost = false;
                 galaxyMapManager.retreatAfterAmbush(f);
+            }
+            // Ambush won: carry on from the fight spot along the route.
+            else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._postAmbushFlight
+                && galaxyMapManager.resumeAfterAmbush) {
+                const f = galaxyMapManager._postAmbushFlight;
+                galaxyMapManager._postAmbushFlight = null;
+                galaxyMapManager.resumeAfterAmbush(f);
             }
         } else if (typeof combinedSelectionManager !== 'undefined') {
             combinedSelectionManager.show();

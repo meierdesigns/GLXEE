@@ -79,13 +79,45 @@ extendClass(GalaxyMapManager, {
         (this.nodes || Object.values(this.nodeById || {})).forEach((n) => {
             if (skip('planet', n.planetId)) return;
             const p = this.locationPoint({ kind: 'planet', id: n.planetId });
-            if (p) obstacles.push({ x: p.x, y: p.y, r: 34 });
+            if (p) obstacles.push({ x: p.x, y: p.y, r: 30 });
         });
         (this.getTradingPosts() || []).forEach((post) => {
             if (skip('post', post.id)) return;
             const p = this.locationPoint({ kind: 'post', id: post.id });
-            if (p) obstacles.push({ x: p.x, y: p.y, r: 22 });
+            if (p) obstacles.push({ x: p.x, y: p.y, r: 20 });
         });
+        // Elegant detour: one symmetric quadratic arc, bowed just far enough to clear every obstacle.
+        const clear = (path, pad) => obstacles.every((o) => path.every((q) => Math.hypot(q.x - o.x, q.y - o.y) >= o.r + pad));
+        const straight = [from, to];
+        const sample = (h, side) => {
+            const dx = to.x - from.x, dy = to.y - from.y;
+            const L = Math.hypot(dx, dy) || 1;
+            const nx = -dy / L * side, ny = dx / L * side;
+            const cx = (from.x + to.x) / 2 + nx * 2 * h, cy = (from.y + to.y) / 2 + ny * 2 * h;
+            const path = [];
+            const n = Math.max(8, Math.ceil(L / 8));
+            for (let k = 0; k <= n; k++) {
+                const t = k / n, u = 1 - t;
+                path.push({ x: u * u * from.x + 2 * u * t * cx + t * t * to.x, y: u * u * from.y + 2 * u * t * cy + t * t * to.y });
+            }
+            return path;
+        };
+        if (!clear([from, to].concat((() => { const m = []; for (let k = 1; k < 40; k++) m.push({ x: from.x + (to.x - from.x) * k / 40, y: from.y + (to.y - from.y) * k / 40 }); return m; })()), 4)) {
+            const L = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+            let best = null;
+            for (const side of [1, -1]) {
+                for (let h = 8; h <= L * 0.45; h += 4) {
+                    const path = sample(h, side);
+                    if (clear(path, 10)) {
+                        if (!best || h < best.h) best = { h, path };
+                        break;
+                    }
+                }
+            }
+            if (best) return best.path;
+        } else {
+            return straight;
+        }
         const pts = [from, to];
         for (let iter = 0; iter < 12; iter++) {
             let hit = null;
@@ -120,9 +152,43 @@ extendClass(GalaxyMapManager, {
                 nx /= d;
                 ny /= d;
             }
-            pts.splice(hit.i + 1, 0, { x: o.x + nx * (o.r + 8), y: o.y + ny * (o.r + 8) });
+            pts.splice(hit.i + 1, 0, { x: o.x + nx * (o.r + 16), y: o.y + ny * (o.r + 16) });
         }
-        return pts;
+        // A direct route stays a straight line; only detours around obstacles get rounded corners.
+        if (pts.length === 2) return pts;
+        // Catmull-Rom spline through the waypoints: one smooth arc around each obstacle.
+        const out = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+            const n = Math.max(6, Math.ceil(Math.hypot(p2.x - p1.x, p2.y - p1.y) / 10));
+            for (let k = 1; k <= n; k++) {
+                const t = k / n, t2 = t * t, t3 = t2 * t;
+                const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+                out.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) });
+            }
+        }
+        return out;
+    },
+
+    /** Cuts `head` map units off the start and `tail` off the end of a polyline (by arc length). */
+    trimPolyline(pts, head, tail) {
+        let out = pts.slice();
+        const cut = (list, d) => {
+            let rest = d;
+            while (list.length > 2) {
+                const l = Math.hypot(list[1].x - list[0].x, list[1].y - list[0].y);
+                if (l > rest) break;
+                rest -= l;
+                list.shift();
+            }
+            const l = Math.hypot(list[1].x - list[0].x, list[1].y - list[0].y) || 1;
+            const k = Math.min(0.9, rest / l);
+            list[0] = { x: list[0].x + (list[1].x - list[0].x) * k, y: list[0].y + (list[1].y - list[0].y) * k };
+            return list;
+        };
+        if (head > 0) out = cut(out, head);
+        if (tail > 0) out = cut(out.reverse(), tail).reverse();
+        return out;
     },
 
     /** Point + heading at progress e (0..1) along a polyline, by arc length. */
@@ -174,27 +240,32 @@ extendClass(GalaxyMapManager, {
         const mid = this.pointOnPath(pts, 0.5);
         const mx = mid.x;
         const my = mid.y;
-        // Start / end on the planet surface, not at its centre.
-        const trimEnd = (list, loc) => {
-            if (!loc || loc.kind !== 'planet' || list.length < 2 || !this.planetSurfaceRadius) return;
-            const a = list[list.length - 1], b = list[list.length - 2];
-            const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-            const by = Math.min(l * 0.9, this.planetSurfaceRadius(loc.id) * (this.nodeObjScale ? this.nodeObjScale() : 1));
-            list[list.length - 1] = { x: a.x + (b.x - a.x) / l * by, y: a.y + (b.y - a.y) / l * by };
-        };
-        const line = pts.slice();
-        trimEnd(line, target);
-        line.reverse();
-        trimEnd(line, current);
-        line.reverse();
-        return this.pixelLineSvg(line, 'gm-route' + (risky ? ' risky' : ''), { dash: [1, 2] }) +
+        // Start / end on the planet surface, not at its centre (measured along the curve).
+        const surf = (loc) => (loc && loc.kind === 'planet' && this.planetSurfaceRadius)
+            ? this.planetSurfaceRadius(loc.id) * (this.nodeObjScale ? this.nodeObjScale() : 1) * 0.88 : 0;
+        const line = this.trimPolyline(pts, surf(current), surf(target));
+        return this.pixelLineSvg(line, 'gm-route' + (risky ? ' risky' : ''), { run: true, width: 2.2 }) +
             (risky ? `<g class="gm-route-warn" transform="translate(${mx},${my})">` +
                 `<title>PIRATE ROUTE · AMBUSH POSSIBLE</title>` +
                 `<path d="M0 -9 L9 7 L-9 7 Z"/><text x="0" y="5">!</text></g>` : '');
     },
 
+    /** [shipPlanetId, selectedPlanetId] while a planet-to-planet route preview is shown, else null. */
+    routeEdgeIds() {
+        if (this._flight || typeof profileManager === 'undefined' || !profileManager.getShipLocation) return null;
+        const cur = profileManager.getShipLocation(this.galaxyId);
+        if (!cur || cur.kind !== 'planet' || this.selectedPostId || !this.selectedPlanetId
+            || cur.id === this.selectedPlanetId || !this.isUnlocked(this.selectedPlanetId)) return null;
+        return [cur.id, this.selectedPlanetId];
+    },
+
     syncRoutePreview() {
         const layer = this.overlay && this.overlay.querySelector('.gm-route-layer');
+        if (this.overlay) {
+            const ids = this.routeEdgeIds();
+            this.overlay.querySelectorAll('.gm-edge.on-route').forEach((el) => el.classList.remove('on-route'));
+            if (ids) this.overlay.querySelectorAll('.gm-edge.gm-e-' + ids[0] + '.gm-e-' + ids[1]).forEach((el) => el.classList.add('on-route'));
+        }
         if (layer) layer.innerHTML = this._flight ? '' : this.routePreviewSvg();
     },
 
@@ -219,13 +290,13 @@ extendClass(GalaxyMapManager, {
         const angle = this.pointOnPath(path, 0).angle; // ship art points up
         const icon = this.getShipIconUrl && this.getShipIconUrl();
         const shipSvg = icon
-            ? `<image href="${icon}" x="-5.5" y="-7.5" width="11" height="15" class="gm-ship-marker-img"/>`
+            ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
             : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
         const ns = 'http://www.w3.org/2000/svg';
         const g = document.createElementNS(ns, 'g');
         g.setAttribute('class', 'gm-ship-travel');
         g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${from.x},${from.y}"/>` +
-            `<g class="gm-travel-ship" transform="scale(1.8)"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
+            `<g class="gm-travel-ship"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
         svg.appendChild(g);
         const layer = svg.querySelector('.gm-route-layer');
         if (layer) layer.innerHTML = '';
@@ -310,12 +381,16 @@ extendClass(GalaxyMapManager, {
         if (!area) { this.resolveAmbush('evade'); return; }
         const box = document.createElement('div');
         box.className = 'gm-ambush';
+        const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
+        const art = psm && psm.getFactionEmblemHtml ? psm.getFactionEmblemHtml('pirate', 112, 4) : '';
         box.innerHTML = `<div class="gm-ambush-card">` +
+            `<div class="gm-ambush-art" aria-hidden="true">${art}</div>` +
             `<div class="gm-ambush-title">PIRATE AMBUSH</div>` +
             `<p>Raiders intercept your flight. Fight them off — or dump part of your stores and slip away.</p>` +
             `<div class="gm-ambush-actions">` +
-            `<button type="button" class="action-button" data-ambush="fight" data-nav-item>FIGHT</button>` +
-            `<button type="button" class="action-button secondary" data-ambush="evade" data-nav-item>EVADE · LOSE ~15% MATERIALS</button>` +
+            `<button type="button" class="action-button secondary gm-ambush-btn" data-ambush="evade" data-nav-item>` +
+            `<span class="gm-ambush-lbl">EVADE</span><span class="gm-ambush-info">LOSE ~15% MATERIALS</span></button>` +
+            `<button type="button" class="action-button gm-ambush-btn" data-ambush="fight" data-nav-item>FIGHT</button>` +
             `</div></div>`;
         area.appendChild(box);
         box.querySelectorAll('[data-ambush]').forEach((btn) => {
@@ -398,7 +473,7 @@ extendClass(GalaxyMapManager, {
             if (path.length < 2 || reduced) { this.commitFlight(origin.kind, origin.id); return; }
             const icon = this.getShipIconUrl && this.getShipIconUrl();
             const shipSvg = icon
-                ? `<image href="${icon}" x="-5.5" y="-7.5" width="11" height="15" class="gm-ship-marker-img"/>`
+                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
                 : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
             // Easing is symmetric, so 1 - t on the reversed path is the ambush point.
             const t0 = Math.max(0, Math.min(1, 1 - (Number(f.t) || 0.5)));
@@ -406,7 +481,7 @@ extendClass(GalaxyMapManager, {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('class', 'gm-ship-travel gm-ship-retreat');
             g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${at.x},${at.y}"/>` +
-                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}<rect class="gm-travel-thrust" x="-1.5" y="7" width="3" height="3"/></g></g>`;
+                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
             svg.appendChild(g);
             const layer = svg.querySelector('.gm-route-layer');
             if (layer) layer.innerHTML = '';
@@ -426,6 +501,53 @@ extendClass(GalaxyMapManager, {
                 const m = this.overlay && this.overlay.querySelector('.gm-status-msg');
                 if (m) m.textContent = 'AMBUSH LOST · BACK AT LAST STATION';
             });
+        };
+        requestAnimationFrame(start);
+        return true;
+    },
+
+    /**
+     * Ambush won: the ship continues from the spot where it was intercepted
+     * along the same route to the original destination (waits for the map SVG).
+     */
+    resumeAfterAmbush(f) {
+        if (!f || !f.path || typeof profileManager === 'undefined') return false;
+        const dest = { kind: f.kind, id: f.id };
+        let tries = 0;
+        const start = () => {
+            const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!svg || this._flight || this._ambush) {
+                if (++tries < 120) { requestAnimationFrame(start); return; }
+                if (!this._flight) this.commitFlight(dest.kind, dest.id);
+                return;
+            }
+            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduced) { this.commitFlight(dest.kind, dest.id); return; }
+            const icon = this.getShipIconUrl && this.getShipIconUrl();
+            const shipSvg = icon
+                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
+                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
+            const t0 = Math.max(0, Math.min(1, Number(f.t) || 0));
+            const e0 = t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2;
+            const at = this.pointOnPath(f.path, e0);
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('class', 'gm-ship-travel');
+            const done = f.path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
+            done.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));
+            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${done.join(' ')}"/>` +
+                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
+            svg.appendChild(g);
+            const layer = svg.querySelector('.gm-route-layer');
+            if (layer) layer.innerHTML = '';
+            const marker = svg.querySelector('.gm-ship-marker');
+            if (marker) marker.style.display = 'none';
+            this._flight = {
+                kind: dest.kind, id: dest.id, origin: f.origin, from: f.from, to: f.to, path: f.path,
+                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
+                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                svg: svg, originalViewBox: svg.getAttribute('viewBox')
+            };
+            this.runFlight(t0, 1, () => this.finishFlight());
         };
         requestAnimationFrame(start);
         return true;
@@ -455,4 +577,10 @@ extendClass(GalaxyMapManager, {
         if (parts.length) profileManager.save();
         return parts.join(', ');
     },
+
+    /** Engine flame block at the ship's tail, built from the same map pixel as the hull. */
+    shipThrustRect() {
+        const b = this.shipIconBox(), u = this.mapPixelUnitGlobal();
+        return `<rect class="gm-travel-thrust" x="${(-1.5 * u).toFixed(3)}" y="${(b.h / 2 - u).toFixed(3)}" width="${(3 * u).toFixed(3)}" height="${(3 * u).toFixed(3)}"/>`;
+    }
 });

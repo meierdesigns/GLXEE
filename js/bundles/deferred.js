@@ -28756,7 +28756,7 @@ extendClass(EnemyManager, {
     // Get enemy ship model for weapon configuration
     async getEnemyShipModel(type) {
         try {
-            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import('../graphics/ship-assets/ship-asset-loader.js');
             if (shipAssetLoader && shipAssetLoader.isLoaded()) {
                 const hullId = (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getHullId)
                     ? enemyConfigManager.getHullId(type)
@@ -42673,7 +42673,7 @@ class GraphicsManager {
     async initializeShipAssets() {
         try {
             // Import ship asset loader
-            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import('../graphics/ship-assets/ship-asset-loader.js');
             this.shipAssetLoader = shipAssetLoader;
 
             // Load all ship assets
@@ -70349,7 +70349,7 @@ class CombinedSelectionManager {
 
         // Try to load from asset loader if available
         try {
-            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import('../graphics/ship-assets/ship-asset-loader.js');
             if (shipAssetLoader && shipAssetLoader.isLoaded()) {
                 const assetShips = shipAssetLoader.getPlayerShipModels();
                 if (assetShips && assetShips.length > 0) {
@@ -101268,7 +101268,7 @@ class PlayerSelectionManager {
 
         // Try to load from asset loader if available
         try {
-            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import('../graphics/ship-assets/ship-asset-loader.js');
             if (shipAssetLoader && shipAssetLoader.isLoaded()) {
                 const assetShips = shipAssetLoader.getPlayerShipModels();
                 if (assetShips && assetShips.length > 0) {

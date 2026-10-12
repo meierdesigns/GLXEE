@@ -78,7 +78,7 @@ class GraphicsManager {
     async initializeShipAssets() {
         try {
             // Import ship asset loader
-            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import('../ship-assets/ship-asset-loader.js');
             this.shipAssetLoader = shipAssetLoader;
 
             // Load all ship assets

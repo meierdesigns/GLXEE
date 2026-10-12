@@ -1,0 +1,15 @@
+
+# Local tooling and editor state
+.cursed/
+.cursor/
+.vscode/
+node_modules/
+tmp/
+tools/__pycache__/
+tools/asset-gen/__pycache__/
+tools/asset-gen/bridge.out
+tools/asset-gen/bridge.pid
+tools/comfyui/comfyui-start.out
+tools/comfyui/comfyui.log
+tools/comfyui/local.env
+tools/debug/

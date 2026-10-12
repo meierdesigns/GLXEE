@@ -1,0 +1,220 @@
+/* ========================================
+   VF Game - Optimized Color Theme System
+   ======================================== */
+
+:root {
+  /* ========================================
+     Theme Color Definitions
+     ======================================== */
+  
+  /* TEAL Theme (Default) */
+  --theme-teal-primary: #0FA2BC;
+  --theme-teal-secondary: #0A8A9F;
+  --theme-teal-accent: #0FA2BC;
+  --theme-teal-background: #001a1f;
+  --theme-teal-background-light: #002a3f;
+  --theme-teal-surface: #003a4f;
+  --theme-teal-border: #0FA2BC;
+  --theme-teal-text: #E0F0F0;
+  --theme-teal-text-secondary: #A0C0C0;
+  
+  /* GREEN Theme */
+  --theme-green-primary: #00FF00;
+  --theme-green-secondary: #00CC00;
+  --theme-green-accent: #00FF00;
+  --theme-green-background: #001a00;
+  --theme-green-background-light: #002a00;
+  --theme-green-surface: #003a00;
+  --theme-green-border: #00FF00;
+  --theme-green-text: #E0FFE0;
+  --theme-green-text-secondary: #A0FFA0;
+  
+  /* BLUE Theme */
+  --theme-blue-primary: #0080FF;
+  --theme-blue-secondary: #0066CC;
+  --theme-blue-accent: #0080FF;
+  --theme-blue-background: #001a35;
+  --theme-blue-background-light: #002a50;
+  --theme-blue-surface: #003a65;
+  --theme-blue-border: #0080FF;
+  --theme-blue-text: #E0F0FF;
+  --theme-blue-text-secondary: #A0C0FF;
+  
+  /* RED Theme */
+  --theme-red-primary: #FF4040;
+  --theme-red-secondary: #CC3333;
+  --theme-red-accent: #FF4040;
+  --theme-red-background: #1a0000;
+  --theme-red-background-light: #2a0000;
+  --theme-red-surface: #3a0000;
+  --theme-red-border: #FF4040;
+  --theme-red-text: #FFE0E0;
+  --theme-red-text-secondary: #FFA0A0;
+  
+  /* PURPLE Theme */
+  --theme-purple-primary: #8000FF;
+  --theme-purple-secondary: #6633CC;
+  --theme-purple-accent: #8000FF;
+  --theme-purple-background: #1a0035;
+  --theme-purple-background-light: #2a0050;
+  --theme-purple-surface: #3a0065;
+  --theme-purple-border: #8000FF;
+  --theme-purple-text: #F0E0FF;
+  --theme-purple-text-secondary: #C0A0FF;
+  
+  /* ORANGE Theme */
+  --theme-orange-primary: #FF8000;
+  --theme-orange-secondary: #CC6633;
+  --theme-orange-accent: #FF8000;
+  --theme-orange-background: #1a0f00;
+  --theme-orange-background-light: #2a1f00;
+  --theme-orange-surface: #3a2f00;
+  --theme-orange-border: #FF8000;
+  --theme-orange-text: #FFF0E0;
+  --theme-orange-text-secondary: #FFC0A0;
+  
+  /* PINK Theme */
+  --theme-pink-primary: #FF69B4;
+  --theme-pink-secondary: #CC5599;
+  --theme-pink-accent: #FF69B4;
+  --theme-pink-background: #1a001a;
+  --theme-pink-background-light: #2a002a;
+  --theme-pink-surface: #3a003a;
+  --theme-pink-border: #FF69B4;
+  --theme-pink-text: #FFE0F0;
+  --theme-pink-text-secondary: #FFA0C0;
+  
+  /* YELLOW Theme */
+  --theme-yellow-primary: #FFD700;
+  --theme-yellow-secondary: #CCAA00;
+  --theme-yellow-accent: #FFD700;
+  --theme-yellow-background: #1a1a00;
+  --theme-yellow-background-light: #2a2a00;
+  --theme-yellow-surface: #3a3a00;
+  --theme-yellow-border: #FFD700;
+  --theme-yellow-text: #FFFFE0;
+  --theme-yellow-text-secondary: #FFFFA0;
+  
+  /* ========================================
+     Current Theme Variables (Dynamic - Set by ColorManager)
+     ======================================== */
+  
+  --current-primary: #808080;        /* Default grayscale */
+  --current-secondary: #606060;      /* Default grayscale */
+  --current-accent: #808080;         /* Default grayscale */
+  --current-background: #0a0a0a;     /* Default grayscale */
+  --current-background-light: #1a1a1a; /* Default grayscale */
+  --current-surface: #2a2a2a;        /* Default grayscale */
+  --current-border: #404040;         /* Default grayscale */
+  --current-text: #e0e0e0;           /* Default grayscale */
+  --current-text-secondary: #a0a0a0; /* Default grayscale */
+  
+  /* ========================================
+     UI System Colors (Grayscale Base)
+     ======================================== */
+  
+  --ui-background: #2a2a2a;          /* Grayscale */
+  --ui-surface: #1a1a1a;             /* Grayscale */
+  --ui-border: #404040;              /* Grayscale */
+  --ui-text-primary: #e0e0e0;        /* Grayscale */
+  --ui-text-secondary: #a0a0a0;      /* Grayscale */
+  --ui-text-muted: #666666;          /* Grayscale */
+  --ui-highlight: #808080;           /* Grayscale */
+  --ui-accent: #808080;              /* Grayscale */
+  --ui-active: #606060;              /* Grayscale */
+  --ui-hover: #404040;               /* Grayscale */
+  
+  /* ========================================
+     Game Element Colors (Grayscale Base)
+     ======================================== */
+  
+  --player-color: #808080;           /* Grayscale */
+  --player-health: #808080;          /* Grayscale */
+  --enemy-color: #606060;            /* Grayscale */
+  --enemy-health: #606060;           /* Grayscale */
+  --bullet-color: #a0a0a0;           /* Grayscale */
+  --obstacle-color: #404040;         /* Grayscale */
+  --particle-color: #808080;         /* Grayscale */
+  
+  /* ========================================
+     Status Colors (Grayscale Base)
+     ======================================== */
+  
+  --status-success: #a0a0a0;         /* Grayscale */
+  --status-warning: #808080;         /* Grayscale */
+  --status-error: #606060;           /* Grayscale */
+  --status-info: #a0a0a0;            /* Grayscale */
+  
+  /* ========================================
+     Special Effects (Grayscale Base)
+     ======================================== */
+  
+  --explosion-color: #808080;        /* Grayscale */
+  --powerup-color: #a0a0a0;          /* Grayscale */
+  --cheat-color: #606060;            /* Grayscale */
+  
+  /* ========================================
+     Shadows and Effects
+     ======================================== */
+  
+  --shadow-light: rgba(0, 0, 0, 0.1);
+  --shadow-medium: rgba(0, 0, 0, 0.3);
+  --shadow-dark: rgba(0, 0, 0, 0.5);
+  --glow-primary: var(--current-primary);
+  --glow-intensity: 0.3;
+}
+
+/* ========================================
+   Legacy Theme Classes (Deprecated - Use HSL System)
+   ======================================== */
+
+/* ========================================
+   Global Theme Transitions
+   ======================================== */
+
+* {
+  transition: 
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* ========================================
+   Theme-specific Effects
+   ======================================== */
+
+.theme-glow {
+  box-shadow: 0 0 10px var(--glow-primary);
+}
+
+.theme-glow-strong {
+  box-shadow: 0 0 20px var(--glow-primary);
+}
+
+.theme-border-glow {
+  border: 2px solid var(--current-border);
+  box-shadow: 0 0 10px var(--current-border);
+}
+
+/* ========================================
+   Color Overlay System (Optional)
+   ======================================== */
+
+.color-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  background: var(--current-primary);
+  opacity: var(--glow-intensity);
+  mix-blend-mode: screen;
+  display: none;
+}
+
+body.color-overlay-active {
+  filter: hue-rotate(var(--hue-rotation, 0deg)) saturate(var(--saturation, 1.2));
+}

@@ -1,0 +1,80 @@
+/* ========================================
+   VF Game - HSL Color System
+   ======================================== */
+
+:root {
+  /* ========================================
+     Current Theme Variables (Dynamic - Set by ColorManager)
+     ======================================== */
+  
+  --current-primary: #808080;        /* Default grayscale */
+  --current-secondary: #606060;      /* Default grayscale */
+  --current-accent: #808080;         /* Default grayscale */
+  --current-background: #0a0a0a;     /* Default grayscale */
+  --current-background-light: #1a1a1a; /* Default grayscale */
+  --current-surface: #2a2a2a;        /* Default grayscale */
+  --current-border: #404040;         /* Default grayscale */
+  --current-text: #e0e0e0;           /* Default grayscale */
+  --current-text-secondary: #a0a0a0; /* Default grayscale */
+  --current-text-dim: #808080;       /* Default grayscale */
+  --current-active: #606060;         /* Default grayscale */
+  --current-hover: #404040;          /* Default grayscale */
+  
+  /* ========================================
+     UI System Colors (Grayscale Base)
+     ======================================== */
+  
+  --ui-background: #2a2a2a;          /* Grayscale */
+  --ui-surface: #1a1a1a;             /* Grayscale */
+  --ui-border: #404040;              /* Grayscale */
+  --ui-text-primary: #e0e0e0;        /* Grayscale */
+  --ui-text-secondary: #a0a0a0;      /* Grayscale */
+  --ui-text-muted: #666666;          /* Grayscale */
+  --ui-highlight: #808080;           /* Grayscale */
+  --ui-accent: #808080;              /* Grayscale */
+  --ui-active: #606060;              /* Grayscale */
+  --ui-hover: #404040;               /* Grayscale */
+  
+  /* ========================================
+     Game Element Colors (Grayscale Base)
+     ======================================== */
+  
+  --player-color: #e0e0e0;           /* Grayscale */
+  --enemy-color: #a0a0a0;            /* Grayscale */
+  --bullet-color: #808080;           /* Grayscale */
+  --explosion-color: #606060;        /* Grayscale */
+  --powerup-color: #808080;          /* Grayscale */
+  --obstacle-color: #404040;         /* Grayscale */
+  
+  /* ========================================
+     Status Colors (Grayscale Base)
+     ======================================== */
+  
+  --status-success: #808080;         /* Grayscale */
+  --status-warning: #606060;         /* Grayscale */
+  --status-error: #404040;           /* Grayscale */
+  --status-info: #a0a0a0;            /* Grayscale */
+  
+  /* ========================================
+     Special Effects (Grayscale Base)
+     ======================================== */
+  
+  --explosion-color: #808080;        /* Grayscale */
+  --particle-color: #606060;         /* Grayscale */
+  --glow-color: #404040;             /* Grayscale */
+  --shadow-color: #202020;           /* Grayscale */
+  
+  /* ========================================
+     Overlay System
+     ======================================== */
+  
+  --overlay-color: #808080;          /* Default grayscale */
+  --overlay-intensity: 0.3;          /* Default intensity */
+}
+
+/* ========================================
+   Legacy Theme Classes (Deprecated)
+   ======================================== */
+
+/* These classes are no longer used - colors are now managed by HSL system */
+/* .theme-teal, .theme-green, .theme-blue, etc. are deprecated */

@@ -1,0 +1,28 @@
+---
+description: Keep README updates in the GLXEE visual language and canonical structure
+globs: README.md
+alwaysApply: false
+---
+
+# GLXEE README Style
+
+Treat `README.md` as an in-universe GLXEE transmission, not a generic project
+README.
+
+- Keep the visual language: pixel-art assets, VOLTEX / UGDF terminology,
+  compact status panels, monospace HUD blocks, restrained badges, and dark
+  Game Boy–shell presentation.
+- Use the canonical order: identity and visual hook, boot, controls, game loop,
+  factions / galaxies, Home Station / hangar, combat, feature summary,
+  architecture, development waves, documentation, lore, credits.
+- Describe each system once in its owning section. Use the Features section
+  only as a short index; do not duplicate full explanations there.
+- Prefer existing assets from `assets/ui/readme-*.svg` and game sprites over
+  invented decorative graphics. Keep image alt text descriptive.
+- Document new work in the Development Waves table with a feature ID, concise
+  scope, and matching `feat:` / `docs:` commit convention.
+- Preserve GitHub readability: short paragraphs, clear headings, small tables,
+  fenced monospace panels, valid relative links, and no decorative block wider
+  than the normal README content.
+- Before finishing a README change, check links, headings, image paths, and
+  redundant sections. Keep the README factual and aligned with the codebase.

@@ -1,0 +1,16 @@
+<body style="background:#000;color:#f88;font:12px monospace;margin:0"><pre id=err></pre><div id=g style="display:flex;flex-wrap:wrap;gap:4px"></div>
+<script>window.onerror=(m,u,l)=>{document.getElementById('err').textContent+=m+' @'+l+'\n'};console.warn=(...a)=>{document.getElementById('err').textContent+=a.join(' ')+'\n'};</script>
+<script src="../../js/graphics/hero-portrait.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/glsl-lib.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/glsl-scene.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/glsl-shade.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/glsl-post.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/glsl-mesh.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/mesh-assets.js"></script>
+<script src="../../js/graphics/hero-portrait-gl/renderer.js"></script>
+<script>
+const b={faction:'terran',gender:0,skin:1,hair:1,hairCol:0,hairc:1,eye:0,face:4,nose:0,mouth:0,brow:1,scar:0,beard:0,gear:0};
+const V=[{},{gender:6,hair:8},{hair:2,faction:'voidborn'},{face:2},{face:2,gender:6,hair:5},{faction:'machine'}];
+const L=V.map(v=>Object.assign({},b,v));
+document.getElementById('g').innerHTML=L.map((l,i)=>'<div style="width:400px">'+heroPortrait.html(l,'#4090d0')+'</div>').join('');
+</script></body>

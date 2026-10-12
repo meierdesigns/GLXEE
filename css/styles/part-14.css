@@ -1,0 +1,1501 @@
+.galaxy-map-ruler-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+.galaxy-map-ruler-label {
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    opacity: 0.7;
+}
+.galaxy-map-ruler-name {
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: var(--ruler-accent);
+}
+
+.galaxy-map-ruler-galaxy {
+    font-size: var(--font-h2);
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+/* Factions present on each planet (galaxy map) */
+.gm-node-factions {
+    display: flex;
+    pointer-events: none;
+}
+.gm-node-faction {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.75);
+    border: var(--ui-border-width, 2px) solid var(--fac);
+}
+.gm-node-faction > * {
+    width: 12px;
+    height: 12px;
+}
+
+/* Galaxy map: start / continue buttons inside the planet card, at the bottom
+   of its stats column. */
+.galaxy-map-panel-select .gm-detail {
+    flex-direction: column;
+    min-width: 0;
+}
+.galaxy-map-panel-select .gm-card-actions {
+    padding-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+    position: relative;
+    z-index: 1;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button {
+    margin: 0;
+    font-size: var(--font-text);
+}
+
+/* Planet card: just the planet name, larger. */
+.gm-sector-heading #gmSectorName {
+    display: block;
+    font-size: 22px;
+    line-height: 1.1;
+    letter-spacing: 2px;
+}
+
+/* Galaxy map top-right stack: ruler card + mission / conflict card.
+   Solid backgrounds so both read over the busy map. */
+.galaxy-map-ruler {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    min-width: 0;
+    width: auto;
+    background: none;
+    border: none;
+}
+.galaxy-map-ruler-card,
+.galaxy-map-situation {
+    color: #fff;
+}
+/* Standalone cards (non-bar contexts) keep their own frame. */
+.galaxy-map-ruler:not(.is-bar) .galaxy-map-ruler-card,
+.galaxy-map-ruler:not(.is-bar) .galaxy-map-situation {
+    background: color-mix(in srgb, var(--color-background, #000) 94%, #000);
+    border: var(--ui-border-width, 2px) solid var(--ruler-accent, var(--color-primary));
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 30%, transparent) 16%, transparent);
+}
+.galaxy-map-ruler-card {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 14px;
+}
+.galaxy-map-ruler-card .galaxy-map-ruler-galaxy {
+    font-size: var(--font-h2);
+    color: #fff;
+}
+.galaxy-map-ruler-card .galaxy-map-ruler-label {
+    font-size: var(--font-text);
+    opacity: 1;
+    color: var(--ruler-accent, var(--color-primary));
+    letter-spacing: 2px;
+}
+.galaxy-map-situation {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+}
+.galaxy-map-situation-kind {
+    font-size: var(--font-small);
+    letter-spacing: 2px;
+    color: var(--ruler-accent, var(--color-primary));
+}
+.galaxy-map-situation-title {
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #fff;
+}
+.galaxy-map-situation-sub {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    color: color-mix(in srgb, #fff 75%, var(--ruler-accent, var(--color-primary)));
+}
+.galaxy-map-situation-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.galaxy-map-situation-emblem {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+}
+.galaxy-map-situation-emblem > * {
+    width: 100%;
+    height: 100%;
+}
+.galaxy-map-situation.is-calm {
+    --ruler-accent: color-mix(in srgb, var(--color-text, #fff) 40%, transparent);
+}
+
+/* Faction holdings on the galaxy map: base planet + faction stations. */
+/* Base fortress (baseFortressSvg): outline + five depths of the faction
+   colour, lit windows, glowing gate, blinking mast lamps. */
+.gm-base-marker .gm-base-graphic rect { stroke: none; }
+.gm-base-marker .gm-base-o { fill: #07080c; }
+.gm-base-marker .gm-base-k { fill: color-mix(in srgb, var(--fac) 15%, #0a0a0e); }
+.gm-base-marker .gm-base-d { fill: color-mix(in srgb, var(--fac) 35%, #1a1a22); }
+.gm-base-marker .gm-base-m { fill: color-mix(in srgb, var(--fac) 55%, #454552); }
+.gm-base-marker .gm-base-l { fill: color-mix(in srgb, var(--fac) 70%, #d8d9e2); }
+.gm-base-marker .gm-base-w { fill: color-mix(in srgb, var(--fac) 55%, #fff); }
+.gm-base-marker .gm-base-c { fill: color-mix(in srgb, var(--fac) 80%, #fff); animation: gm-base-core 2.4s steps(4, end) infinite; }
+.gm-base-marker .gm-base-a { fill: #ffb43b; animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
+@keyframes gm-base-core { 50% { fill: var(--fac); } }
+.gm-base-marker .gm-base-label {
+    fill: var(--fac);
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-anchor: middle;
+}
+.gm-post-node.is-built .gm-faction-station-ring {
+    display: none;
+}
+.galaxy-map-ruler-holdings {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    color: #fff;
+    opacity: 0.85;
+}
+
+/* Galaxy map without focus: no planet / post selection frame — only the
+   player ship marker shows where you are. */
+.galaxy-map-embedded:not(.is-input-active):not(.is-picked) .gm-selection-frame {
+    display: none;
+}
+
+/* Selection frame: snaps onto the picked planet / post, then breathes. */
+.gm-node.selected .gm-selection-frame,
+.gm-post-node.selected .gm-selection-frame,
+.gm-border-station.selected .gm-selection-frame {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation:
+        gm-frame-snap 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both,
+        gm-frame-breathe 1.8s ease-in-out 0.28s infinite;
+}
+@keyframes gm-frame-snap {
+    from { transform: scale(1.45); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+}
+@keyframes gm-frame-breathe {
+    0%, 100% { transform: scale(1);    opacity: 1; }
+    50%      { transform: scale(1.06); opacity: 0.75; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-node.selected .gm-selection-frame,
+    .gm-post-node.selected .gm-selection-frame { animation: none; }
+}
+
+/* Locked planet / station in the map card: padlock over the graphic. */
+.gm-sector-planet-bg .gm-lock-badge {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    padding: 8px;
+    background: color-mix(in srgb, #000 70%, transparent);
+    border: var(--ui-border-width) solid var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 16%, transparent);
+    z-index: 2;
+    pointer-events: none;
+}
+.gm-lock-badge .gm-lock-shackle,
+.gm-lock-badge .gm-lock-body { fill: var(--faction-accent, var(--color-primary)); }
+.gm-lock-badge .gm-lock-hole { fill: #000; }
+
+/* ===== Area tree: calmer containers ======================================
+   Nested boxes each drew a full bright outline. Now: soft tinted panels,
+   a faint divider under each heading and an accent bar on open sections. */
+.hs-tree-root,
+.hs-tree-root > summary {
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
+    box-shadow: none !important;
+}
+.hs-tree-branch,
+.hs-tree-item {
+    border: none !important;
+    box-shadow: none !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 5%, transparent);
+    margin: 0 0 4px;
+}
+.hs-tree-branch > summary,
+.hs-tree-item > summary {
+    border: none !important;
+    box-shadow: none !important;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) !important;
+}
+.hs-tree-branch[open],
+.hs-tree-item[open] {
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 7%, transparent);
+}
+.hs-tree-branch > summary:hover,
+.hs-tree-item > summary:hover,
+.hs-tree-branch.is-focused > .hs-tree-branch-label {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, transparent);
+    box-shadow: inset 2px 0 0 var(--faction-accent, var(--color-primary)) !important;
+}
+.hs-tree-items {
+    border: none !important;
+    box-shadow: none !important;
+}
+/* Style pickers / thumbnails inside the tree: thin muted outline. */
+.hs-tree-branch .hs-style-dropdown,
+.hs-tree-item .hs-style-dropdown,
+.hs-tree-branch .hs-style-dropdown-current,
+.hs-tree-item .hs-style-dropdown-current,
+.hs-tree-branch .hs-style-dropdown-thumb,
+.hs-tree-item .hs-style-dropdown-thumb {
+    border-width: var(--ui-border-width, 2px) !important;
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) !important;
+    box-shadow: none !important;
+}
+.hs-tree-branch .hs-style-dropdown-current:hover,
+.hs-tree-item .hs-style-dropdown-current:hover {
+    border-color: var(--faction-accent, var(--color-primary)) !important;
+}
+.hs-tree-empty {
+    border: none !important;
+    opacity: 0.6;
+}
+
+/* --- Faction picker, large: fill the screen, bigger type and icons. */
+.profile-selection-content.profile-selection-floating.profile-selection-name-mode:has(.profile-faction-info-row) {
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    max-height: calc(96 * var(--sv-h));
+    overflow-y: auto;
+    padding: 28px 32px;
+}
+.profile-selection-name-mode:has(.profile-faction-info-row) h2 { font-size: 34px; }
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatches { gap: 12px; }
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatch { padding: 18px 6px 14px; }
+
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatch-label { font-size: var(--font-h2); letter-spacing: 1px; }
+.profile-selection-name-mode .profile-faction-info-row { gap: 16px; margin: 16px 0; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview { padding: 16px 20px; gap: 24px; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-ship { width: 260px; height: 182px; }
+.profile-selection-name-mode .profile-faction-preview-emblem { width: 48px; height: 48px; }
+.profile-selection-name-mode .profile-faction-preview-name { font-size: 22px; }
+.profile-selection-name-mode .profile-faction-preview-trait,
+.profile-selection-name-mode .profile-faction-preview-hero { font-size: var(--font-h2); line-height: 1.5; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-lore { padding: 16px 20px; }
+.profile-selection-name-mode .profile-faction-lore-label { font-size: var(--font-text); margin-bottom: 8px; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-lore-text {
+    font-size: var(--font-h2);
+    line-height: 1.6;
+    max-height: none;
+}
+.profile-selection-name-mode .profile-faction-facts { gap: 16px; margin-bottom: 20px; }
+.profile-selection-name-mode .profile-faction-fact {
+    text-align: left;
+}
+
+.profile-selection-name-mode .profile-faction-fact-label { font-size: var(--font-text); margin-bottom: 6px; }
+.profile-selection-name-mode .profile-faction-fact-value { font-size: var(--font-h2);}
+.profile-selection-name-mode .profile-faction-fact-note { font-size: var(--font-text); margin-top: 4px;}
+.profile-selection-name-mode:has(.profile-faction-info-row) .profile-selection-actions button {
+    font-size: var(--font-h2);
+    padding: 10px 28px;
+}
+
+/* --- Profiles overlay, large: same footprint as the station's big panels. */
+.profile-selection-content.profile-selection-floating:not(.profile-selection-name-mode) {
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    max-height: calc(94 * var(--sv-h));
+    padding: 28px 32px;
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-title { font-size: 34px; margin-bottom: 20px; }
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+    gap: 18px;
+    height: min(calc(70 * var(--ch)), calc(820px * var(--zk)));
+    max-height: none;
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item {
+    padding: 14px 16px;
+    font-size: var(--font-h2);
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-list-emblem { width: 28px; height: 28px; }
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-list-emblem img { width: 28px !important; height: 28px !important; }
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-list-empty,
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-details-empty { font-size: var(--font-h2); }
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-details {
+    padding: 20px 24px;
+    font-size: var(--font-h2);
+    gap: 14px;
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-actions button {
+    font-size: var(--font-h2);
+    padding: 10px 28px;
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-instructions { font-size: var(--font-text); }
+@media (max-width: 560px) {
+    .profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
+        grid-template-columns: 1fr;
+        height: min(calc(72 * var(--ch)), calc(640px * var(--zk)));
+    }
+}
+
+/* --- Start menu, wide: pilot card + a one-line hint under each entry. */
+.start-screen-content:has(> .start-screen-menu-clustered) {
+    width: min(calc(560px * var(--zk)), calc(94 * var(--cw)));
+    padding: 28px 36px 18px;
+    gap: 10px;
+}
+.start-screen-content:has(> .start-screen-menu-clustered) .start-screen-title {
+    font-size: 48px;
+    letter-spacing: 0.18em;
+    margin: 0;
+}
+.start-screen-content:has(> .start-screen-menu-clustered) .start-screen-subtitle {
+    font-size: var(--font-h2);
+    letter-spacing: 0.3em;
+    margin: 0 0 6px;
+}
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered {
+    width: 100%;
+    max-width: none;
+}
+.start-screen-content > .start-screen-profile {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0 6px;
+    padding: 12px 16px;
+    text-align: left;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.start-screen-content > .start-screen-profile.no-profile {
+    justify-content: center;
+    font-size: var(--font-text);
+    letter-spacing: 0.12em;
+    opacity: 0.75;
+    border-style: dashed;
+}
+.start-profile-emblem { display: inline-flex; width: 40px; height: 40px; flex: 0 0 auto; }
+.start-profile-emblem .menu-pixel-icon { width: 40px; height: 40px; }
+.start-profile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.start-profile-label { font-size: var(--font-text); letter-spacing: 0.2em; color: var(--color-primary); }
+.start-profile-name { font-size: 20px; letter-spacing: 0.08em; color: var(--color-text); }
+.start-profile-meta { font-size: var(--font-text); letter-spacing: 0.1em; color: var(--color-text-secondary); }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item {
+    gap: 14px;
+    padding: 8px 12px;
+}
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item.menu-item-primary { padding: 14px 18px; }
+.menu-item-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item-label { font-size: var(--font-h2); letter-spacing: 0.08em; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item-primary .menu-item-label { font-size: 22px; }
+.menu-item-desc {
+    font-size: var(--font-text);
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.menu-item.selected .menu-item-desc { opacity: 1; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-cluster-title { font-size: var(--font-text); }
+
+/* --- Faction picker: same box heights for every faction; lore in blocks. */
+.profile-selection-name-mode .profile-faction-info-row { height: 300px; }
+.profile-selection-name-mode .profile-faction-info-row > * { min-height: 0; overflow: hidden; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-lore-text {
+    overflow-y: auto;
+    padding-right: 6px;
+}
+.profile-faction-lore-text p { margin: 0 0 10px; }
+.profile-faction-lore-text p:last-child { margin-bottom: 0; }
+.profile-faction-lore-lead {
+    color: var(--color-primary);
+    font-weight: bold;
+    padding-bottom: 8px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.profile-faction-lore-hero {
+    font-size: 0.85em;
+    letter-spacing: 1px;
+    color: var(--color-primary);
+    opacity: 0.8;
+    text-transform: uppercase;
+}
+
+.profile-selection-name-mode .profile-faction-fact { box-sizing: border-box;}
+@media (max-width: 640px) {
+    .profile-selection-name-mode .profile-faction-info-row { height: auto; }
+    .profile-selection-name-mode .profile-faction-facts { grid-auto-rows: auto; }
+}
+
+/* --- Faction picker: fourth card (allies). */
+.profile-selection-name-mode .profile-faction-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.profile-faction-ally {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.profile-faction-ally img { width: 24px !important; height: 24px !important; }
+@media (max-width: 1000px) {
+    .profile-selection-name-mode .profile-faction-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .profile-selection-name-mode .profile-faction-facts { grid-template-columns: 1fr; }
+}
+
+/* Faction fact cards: grow with their text instead of clipping it. */
+/* Fixed row height so switching factions doesn't resize the modal;
+   long texts are clamped instead of clipped mid-line. */
+.profile-selection-name-mode .profile-faction-facts { align-items: stretch;}
+.profile-selection-name-mode .profile-faction-fact {
+    height: 100%;
+    overflow: hidden;
+    gap: 14px;
+}
+.profile-selection-name-mode .profile-faction-fact-icon { width: 48px; height: 48px; }
+.profile-selection-name-mode .profile-faction-fact-value { font-size: var(--font-h2); overflow-wrap: anywhere;}
+.profile-selection-name-mode .profile-faction-fact-note { font-size: var(--font-text);}
+.profile-selection-name-mode .profile-faction-fact-value,
+.profile-selection-name-mode .profile-faction-fact-note {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Settings modal: wide, three columns, collapsible sections. */
+.start-screen-content:has(> .settings-panel-3col) {
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+}
+.settings-panel-clustered.settings-panel-3col {
+    /* Sections stacked, each the full modal width. */
+    grid-template-columns: 1fr;
+    gap: clamp(8px, calc(1.2 * var(--sv-h)), 14px);
+}
+.settings-panel-3col .settings-cluster {
+    width: 100%;
+}
+details.settings-section > summary.settings-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+details.settings-section > summary.settings-section-title::-webkit-details-marker { display: none; }
+details.settings-section > summary.settings-section-title::after {
+    content: "▾";
+    font-size: 1.1em;
+    transition: transform 0.12s;
+}
+details.settings-section:not([open]) > summary.settings-section-title {
+    margin-bottom: 0;
+    border-bottom-color: transparent;
+}
+details.settings-section:not([open]) > summary.settings-section-title::after {
+    transform: rotate(-90deg);
+}
+details.settings-section > summary.settings-section-title:hover {
+    opacity: 1;
+    text-shadow: 1px 0 0 color-mix(in srgb, var(--color-primary) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--color-primary) 78%, transparent), 2px 0 0 color-mix(in srgb, var(--color-primary) 42%, transparent), -2px 0 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 0 2px 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 0 -2px 0 color-mix(in srgb, var(--color-primary) 42%, transparent), 4px 0 0 color-mix(in srgb, var(--color-primary) 18%, transparent), -4px 0 0 color-mix(in srgb, var(--color-primary) 18%, transparent), 0 4px 0 color-mix(in srgb, var(--color-primary) 18%, transparent), 0 -4px 0 color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+details.settings-section > summary.settings-section-title .settings-section-name {
+    flex: 1 1 auto;
+    text-align: left;
+}
+.settings-section-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    margin-right: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+/* Settings modal: only the modal is outlined, sections are borderless. */
+.settings-panel-clustered details.settings-section,
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-panel-clustered details.settings-section {
+    border: none !important;
+    outline: none;
+    box-shadow: none !important;
+    background: transparent !important;
+    clip-path: none;
+    padding-left: 0;
+    padding-right: 0;
+}
+.settings-panel-clustered details.settings-section:not([open]) > summary.settings-section-title {
+    border-bottom-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+/* Fixed modal height, whichever section is open; the panel scrolls inside. */
+.start-screen-content:has(> .settings-panel-3col) {
+    height: min(calc(86 * var(--ch)), calc(860px * var(--zk)));
+}
+.start-screen-content > .settings-panel-3col {
+    overflow-y: auto;
+    align-content: start;
+}
+
+/* Credits: plain upward roll, large and flat (the 3D fly-in read oddly and
+   spent most of its time tiny in the distance). */
+.hs-credits-crawl-stage { perspective: none; }
+.hs-credits-crawl-stage-fullscreen {
+    width: min(calc(900px * var(--zk)), calc(92 * var(--cw)));
+    height: min(calc(64 * var(--ch)), calc(560px * var(--zk)));
+}
+.hs-credits-crawl { transform: none; }
+.hs-credits-crawl-text {
+    position: absolute;
+    top: 0;
+    width: min(760px, 92%);
+    animation: hs-credits-roll 14s linear infinite;
+}
+.hs-credits-crawl-line {
+    font-size: clamp(1.4rem, calc(3.6 * var(--sv-h)), 2.2rem);
+    margin: 0.7em 0;
+}
+.hs-credits-crawl-role {
+    font-size: clamp(1rem, calc(2.4 * var(--sv-h)), 1.4rem);
+    color: var(--color-primary);
+}
+@keyframes hs-credits-roll {
+    from { transform: translateY(var(--credits-roll-from, 480px)); }
+    to { transform: translateY(-100%); }
+}
+.hs-credits-crawl-stage-fullscreen .hs-credits-crawl-text { --credits-roll-from: min(calc(64 * var(--sv-h)), 560px); }
+.start-screen-content:has(> .hs-credits-crawl-stage-fullscreen) {
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    height: min(calc(88 * var(--ch)), calc(820px * var(--zk)));
+}
+.start-screen-content > .hs-credits-crawl-stage-fullscreen {
+    width: 100%;
+    height: auto;
+    flex: 1 1 auto;
+}
+.hs-credits-crawl-stage-fullscreen .hs-credits-crawl-text { --credits-roll-from: min(calc(70 * var(--sv-h)), 660px); }
+.hs-credits-crawl-line.hs-credits-crawl-title {
+    font-size: clamp(2.6rem, calc(7 * var(--sv-h)), 4.4rem);
+    font-weight: bold;
+    color: var(--color-primary);
+    letter-spacing: 0.2em;
+    margin: 0.5em 0 0.2em;
+}
+
+/* Modal switch (menu ↔ settings ↔ credits …): short pop-in of the new panel. */
+.start-screen-content:not(.start-screen-content-embedded) {
+    animation: vf-modal-in 180ms steps(6, end) both;
+}
+@keyframes vf-modal-in {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .start-screen-content:not(.start-screen-content-embedded) { animation: none; }
+}
+
+/* Settings accordion: the opened section's rows slide in. */
+details.settings-section[open] > .settings-section-list,
+details.settings-section[open] > .settings-style-body {
+    animation: vf-section-in 200ms steps(5, end) both;
+    transform-origin: top center;
+}
+@keyframes vf-section-in {
+    from { opacity: 0; transform: translateY(-8px) scaleY(0.92); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    details.settings-section[open] > .settings-section-list,
+    details.settings-section[open] > .settings-style-body { animation: none; }
+}
+
+/* Pilot creation: start options (galaxy / difficulty / starter kit). */
+.profile-start-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px auto 4px;
+    max-width: 960px;
+    width: 100%;
+}
+.profile-start-row {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+.profile-start-label {
+    font-size: var(--font-text);
+    letter-spacing: 2px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.profile-start-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.profile-start-chip {
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, #000);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    cursor: pointer;
+}
+.profile-start-chip:hover {
+    border-color: var(--faction-accent, var(--color-primary));
+    color: #fff;
+}
+.profile-start-chip.selected {
+    color: #000;
+    background: var(--faction-accent, var(--color-primary));
+    border-color: var(--faction-accent, var(--color-primary));
+}
+
+/* Pilot creation: start galaxy card (‹ mini map · info ›). */
+.profile-start-galaxy {
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, #000);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.profile-start-galaxy-nav {
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+    width: 28px;
+    height: 84px;
+    color: var(--faction-accent, var(--color-primary));
+    background: transparent;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    cursor: pointer;
+}
+.profile-start-galaxy-nav:hover {
+    color: #000;
+    background: var(--faction-accent, var(--color-primary));
+}
+.profile-start-galaxy-map {
+    flex: 0 0 auto;
+    background: #000;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--galaxy-color) 45%, transparent);
+}
+.profile-start-galaxy-map .edges line {
+    stroke: color-mix(in srgb, var(--galaxy-color) 55%, transparent);
+    stroke-width: 1;
+}
+.profile-start-galaxy-map .dots rect { fill: var(--galaxy-color); }
+.profile-start-galaxy-map .dots rect.is-start { fill: #fff; }
+.profile-start-galaxy-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.profile-start-galaxy-name {
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    color: #fff;
+}
+.profile-start-galaxy-home {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    color: var(--faction-accent, var(--color-primary));
+    margin-left: 6px;
+}
+.profile-start-galaxy-ruler {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+}
+.profile-start-galaxy-ruler > span:first-child,
+.profile-start-galaxy-ruler > svg,
+.profile-start-galaxy-ruler > img {
+    width: 20px;
+    height: 20px;
+}
+.profile-start-galaxy-meta {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+}
+
+/* Pilot name step: only ship + start galaxy, both larger. */
+.profile-selection-name-mode.is-name-step .profile-faction-lore,
+.profile-selection-name-mode.is-name-step .profile-faction-facts {
+    display: none;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-info-row {
+    display: flex;
+    justify-content: center;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    flex: 1 1 auto;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-ship {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-nav {
+    width: 34px;
+    font-size: 24px;
+}
+
+/* Keyboard row highlight in the start options. */
+.profile-start-row.nav-row-active .profile-start-label {
+    color: #fff;
+    text-shadow: 1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), -2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 -2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 6px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), -6px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 6px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 -6px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);
+}
+.profile-start-row.nav-row-active .profile-start-label::before {
+    content: "▶ ";
+}
+.profile-start-row.nav-row-active .profile-start-galaxy,
+.profile-start-row.nav-row-active .profile-start-chip.selected {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 72%, transparent), 0 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 48%, transparent), 0 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent), 0 0 0 16px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent);
+}
+
+/* Pilot creation: faction crest top-left of the modal (like the station). */
+.profile-selection-name-mode { position: relative; }
+.profile-selection-name-mode .profile-modal-crest {
+    position: absolute;
+    top: 18px;
+    left: 22px;
+    width: 56px;
+    height: 56px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--faction-color, var(--color-primary)) 10%, #000);
+    border: var(--ui-border-width) solid var(--faction-color, var(--color-primary));
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent) 16%, transparent);
+    z-index: 2;
+}
+.profile-selection-name-mode .profile-modal-crest > * { width: 100%; height: 100%; }
+
+/* Name step: bigger galaxy card, compact ship box with the weapon icon. */
+.profile-selection-name-mode.is-name-step .profile-faction-preview-emblem { display: none; }
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    min-height: 0;
+    max-width: 640px;
+    padding: 10px 20px;
+    gap: 24px;
+}
+/* Start setup: keep the ship, bonuses and editor in a clear two-column
+   composition instead of letting the editor collapse into a loose bottom row. */
+.profile-selection-name-mode.is-name-step .profile-faction-info-row {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.82fr) minmax(360px, 1.4fr);
+    align-items: stretch;
+    gap: 14px;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    display: grid;
+    grid-template-rows: minmax(110px, 1fr) auto;
+    align-content: stretch;
+}
+.profile-selection-name-mode.is-name-step .profile-loadout {
+    margin-top: 0;
+    width: 100%;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-ship {
+    height: 154px !important;
+}
+.profile-faction-preview-weapon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.profile-faction-preview-weapon-icon {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+}
+.profile-selection-name-mode.is-name-step .profile-start-options { max-width: 1040px; }
+.profile-selection-name-mode.is-name-step .profile-start-row[data-start-row="galaxy"] {
+    grid-template-columns: 130px minmax(0, 1fr);
+}
+.profile-selection-name-mode.is-name-step .profile-start-galaxy { padding: 10px 12px; }
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-map {
+    max-width: 100%;
+    height: auto;
+}
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-nav { height: 220px; }
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-name { font-size: 22px; }
+
+/* Keyboard focus on a disabled content button (e.g. unaffordable BUY):
+   still reachable with the arrows, so it needs a visible marker. */
+.home-station-content .hs-body button[disabled].nav-focused {
+    outline: var(--ui-border-width) solid var(--faction-accent, var(--color-primary));
+    outline-offset: 2px;
+    opacity: 1;
+}
+
+/* Deny feedback on an unusable focused control (bind-controls-toggle.js). */
+.hs-deny {
+    animation: hs-deny-shake 0.4s steps(6, end);
+    outline: var(--ui-border-width) solid var(--status-error, #ff4a3a) !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--status-error, #ff4a3a) 60%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--status-error, #ff4a3a) 60%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--status-error, #ff4a3a) 60%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--status-error, #ff4a3a) 60%, transparent) 16%, transparent) !important;
+}
+@keyframes hs-deny-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hs-deny { animation: none; }
+}
+
+/* Station ↔ anchor planet lanes (postLanesSvg): thinner, dotted. */
+.gm-edge.gm-post-lane {
+    stroke-width: calc(1.5px * var(--gm-px, 1));
+    stroke-dasharray: calc(3px * var(--gm-px, 1)) calc(3px * var(--gm-px, 1));
+}
+
+/* Planet faction emblems: small + faded until the planet is hovered or
+   selected, then full size. */
+.gm-node .gm-node-factions {
+    transform: scale(0.55);
+    transform-origin: 50% 100%;
+    opacity: 0.55;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.gm-node.hovered .gm-node-factions,
+.gm-node.selected .gm-node-factions,
+.gm-node:hover .gm-node-factions {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Planet factions as plain coloured names (no crests / boxes). */
+.gm-node-factions {
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px;
+    width: 100%;
+    height: 100%;
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 1px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.gm-node-faction-name {
+    color: var(--fac);
+    text-shadow: 0 0 3px #000, 0 0 2px #000;
+}
+.gm-node-faction-sep { color: rgba(255, 255, 255, 0.5); }
+
+/* Planet factions as bare icons (no box). */
+.gm-node-faction-icon {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+}
+.gm-node-faction-icon > * { width: 100%; height: 100%; }
+
+/* Faction relations: the cards stretch across the full width (auto-fit
+   collapses empty tracks instead of leaving a gap on the right). */
+.hs-faction-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.hs-faction-grid .hs-faction-card { height: 100%; }
+
+/* Faction cards: more height and readable text. */
+.hs-faction-grid { gap: 14px; }
+.hs-faction-grid .hs-faction-card {
+    padding: 16px 18px;
+}
+.hs-faction-grid .hs-faction-crest,
+.hs-faction-grid .hs-faction-crest img {
+    width: 56px;
+    height: 56px;
+}
+.hs-faction-grid .hs-faction-head { gap: 10px; }
+.hs-faction-grid .hs-faction-name {
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+}
+.hs-faction-grid .hs-faction-status {
+    font-size: var(--font-text);
+}
+.hs-faction-grid .hs-faction-stats {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: var(--font-text);
+}
+.hs-faction-grid .hs-faction-goal {
+    font-size: var(--font-text);
+    line-height: 1.55;
+    margin: 0;
+    color: color-mix(in srgb, var(--color-text, #fff) 88%, transparent);
+}
+
+/* Faction relation bar: taller, centre (neutral) mark, value on the bar. */
+.hs-faction-meter {
+    position: relative;
+    height: 18px;
+    background: #0a0a0e;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-text, #fff) 35%, transparent);
+}
+.hs-faction-meter .hs-faction-meter-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    display: block;
+    height: auto;
+    background: #e0a030;
+}
+.hs-faction-card.is-ally .hs-faction-meter .hs-faction-meter-fill,
+.hs-faction-card.is-friend .hs-faction-meter .hs-faction-meter-fill { background: #40d890; }
+.hs-faction-card.is-hostile .hs-faction-meter .hs-faction-meter-fill { background: #e04848; }
+.hs-faction-meter .hs-faction-meter-mid {
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    background: #fff;
+    opacity: 0.8;
+}
+.hs-faction-meter .hs-faction-meter-val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #fff;
+    text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+
+/* ===== Nav rows: selected / focused buttons glow in the accent colour
+   (dark body, coloured text + icon) instead of a bright fill with black
+   text; the row that holds keyboard focus is framed. */
+.home-station-content .hs-tab.active,
+.home-station-content .hs-shop-cat.active,
+.home-station-content .hs-tab.nav-focused,
+.home-station-content .hs-shop-cat.nav-focused {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, #05060a) !important;
+    color: var(--faction-accent, var(--color-primary)) !important;
+    border-color: var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 72%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 48%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 30%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 16%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 72%, transparent), inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 48%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 30%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 16%, transparent) !important;
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent);
+}
+.home-station-content .hs-tab.active *,
+.home-station-content .hs-shop-cat.active *,
+.home-station-content .hs-tab.nav-focused *,
+.home-station-content .hs-shop-cat.nav-focused * {
+    color: inherit !important;
+}
+/* Icons keep their colour (no black / inverted icon on selection). */
+.home-station-content .hs-tab.active img,
+.home-station-content .hs-shop-cat.active img,
+.home-station-content .hs-tab.nav-focused img,
+.home-station-content .hs-shop-cat.nav-focused img {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent)) !important;
+}
+/* Keyboard focus on top of that: a solid outline + stronger glow. */
+.home-station-content button.hs-tab.nav-focused,
+.home-station-content button.hs-shop-cat.nav-focused {
+    outline: var(--ui-border-width) solid var(--faction-accent, var(--color-primary)) !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 16%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 16%, transparent) !important;
+}
+
+/* The nav row that currently holds keyboard focus. */
+.home-station-content .hs-tabs:has(.nav-focused),
+.home-station-content .hs-subnav:has(.nav-focused),
+.home-station-content .hs-shop-cats:has(.nav-focused) {
+    outline-offset: 3px;
+}
+/* Undo the black active icon (filter: brightness(0)) — glow instead. */
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :is(.hs-menu-tab-icon, .hs-tab-icon, .hs-home-icon),
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).nav-focused :is(.hs-menu-tab-icon, .hs-tab-icon, .hs-home-icon) {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 75%, transparent)) !important;
+    opacity: 1;
+}
+html .home-station-overlay :is(.hs-menu-tab-btn, .hs-home-btn).active {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, #05060a) !important;
+    color: var(--faction-accent, var(--color-primary)) !important;
+}
+
+/* ===== One active nav row (JS: .is-nav-row-active in refreshFocus) =====
+   The old rule framed the whole top bar in "tabs" mode even while the
+   focus sat in the sub-nav row; now only the focused row is framed. */
+.home-station-content.hs-nav-tabs .hs-topbar:not(.is-nav-row-active) {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.home-station-content .hs-tabs:has(.nav-focused),
+.home-station-content .hs-subnav:has(.nav-focused),
+.home-station-content .hs-shop-cats:has(.nav-focused) {
+    outline: none;
+    box-shadow: none;
+    background-color: transparent;
+}
+.home-station-content .is-nav-row-active {
+    position: relative;
+    outline: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
+    outline-offset: 2px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, transparent) !important;
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 72%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 30%, transparent), 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 16%, transparent) !important;
+}
+/* Rows without focus step back a little so the active one stands out. */
+.home-station-content:has(.is-nav-row-active) :is(.hs-topbar, .hs-subnav, .hs-shop-cats):not(.is-nav-row-active) {
+    opacity: 0.7;
+}
+
+/* Menu tab row (PROFILES / SETTINGS / COMPONENTS / CREDITS): same accent
+   glow as the station tabs — coloured text + icon, no black label. */
+html .home-station-overlay .hs-menu-tab-btn.active,
+html .home-station-overlay .hs-menu-tab-btn.nav-focused {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, #05060a) !important;
+    color: var(--faction-accent, var(--color-primary)) !important;
+    border-color: var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 72%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 48%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 30%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 16%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 72%, transparent), inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 48%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 30%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent) 16%, transparent) !important;
+}
+html .home-station-overlay .hs-menu-tab-btn.active .hs-menu-tab-label,
+html .home-station-overlay .hs-menu-tab-btn.nav-focused .hs-menu-tab-label,
+html .home-station-overlay .hs-menu-tab-btn.active *,
+html .home-station-overlay .hs-menu-tab-btn.nav-focused * {
+    color: var(--faction-accent, var(--color-primary)) !important;
+    -webkit-text-fill-color: currentColor !important;
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 42%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) 18%, transparent) !important;
+}
+html .home-station-overlay .hs-menu-tab-btn.nav-focused {
+    outline: var(--ui-border-width) solid var(--faction-accent, var(--color-primary)) !important;
+    outline-offset: 2px;
+}
+
+/* Tab rows keep a fixed height: the active tab's larger title font no
+   longer makes the row (and everything below it) jump. */
+html .home-station-overlay .hs-area-btn {
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    box-sizing: border-box;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    display: inline-flex;
+    align-items: center;
+}
+html .home-station-overlay :is(.hs-subnav-tab, .hs-menu-tab-btn) {
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    box-sizing: border-box;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    display: inline-flex;
+    align-items: center;
+}
+html .home-station-overlay :is(.hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label) {
+    line-height: 1 !important;
+}
+html .home-station-overlay :is(.hs-subnav, .hs-subnav-menu) {
+    align-items: center;
+}
+
+/* COMPONENTS (menu tab) uses the same frame as PROFILES / SETTINGS /
+   CREDITS: no extra body padding, embedded-menu box, fixed full height
+   so the late-mounted editor can't make the page jump. */
+.home-station-content .hs-body.hs-body-components {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.home-station-content .hs-body-components > .hs-components-root {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0 !important;
+    box-sizing: border-box;
+    background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    padding: clamp(8px, calc(1.2 * var(--sv-h)), 12px) !important;
+    box-shadow: none;
+    overflow: hidden;
+}
+.home-station-content .hs-body-components .hs-components-host {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Pilot card: a bit wider, bigger resource icons and numbers. */
+.hs-pilot-card {
+    padding: 8px 16px 8px 10px;
+    gap: 14px;
+}
+
+.hs-pilot-card .hs-pilot-res .hs-credit-amount {
+    font-size: var(--font-h2);
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* Pilot card v2: wider, name + resource row centred next to the crest,
+   resource row sized to match. */
+.hs-pilot-card {
+    align-items: center;
+}
+.hs-pilot-card .hs-pilot-info {
+    flex: 1 1 auto;
+    align-self: stretch;
+    justify-content: center;
+}
+.hs-pilot-card .hs-pilot-res {
+    align-items: center;
+    gap: 6px 16px;
+    line-height: 1;
+}
+.hs-pilot-card .hs-pilot-res .hs-credit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+}
+.hs-pilot-card .hs-pilot-res .hs-credit-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-pilot-card .hs-pilot-res .hs-credit-icon,
+.hs-pilot-card .hs-pilot-res .hs-credit-icon img,
+.hs-pilot-card .hs-pilot-res .hs-credit-icon canvas {
+    width: 24px !important;
+    height: 24px !important;
+}
+.hs-pilot-card .hs-pilot-res .hs-credit-amount {
+    font-size: var(--font-h2);
+    line-height: 24px;
+}
+/* Pilot card: resource row a little lower (more space under the name). */
+.hs-pilot-card .hs-pilot-info { gap: 14px; }
+.hs-pilot-card .hs-pilot-res { margin-top: 2px; }
+
+/* Resources in the top bar, right of the MENU tab. */
+.hs-topbar .hs-topbar-res {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    margin: 0 12px 0 18px;
+    align-self: center;
+    line-height: 1;
+}
+.hs-topbar .hs-topbar-res .hs-credit {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+.hs-topbar .hs-topbar-res .hs-credit-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hs-topbar .hs-topbar-res .hs-credit-amount {
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+/* Pilot card now only crest + name. */
+
+/* Top-bar resources: a bit larger. */
+.hs-topbar .hs-topbar-res { gap: 20px; }
+.hs-topbar .hs-topbar-res .hs-credit { gap: 8px; }
+.hs-topbar .hs-topbar-res .hs-credit-icon,
+.hs-topbar .hs-topbar-res .hs-credit-icon img,
+.hs-topbar .hs-topbar-res .hs-credit-icon canvas {
+    width: 30px !important;
+    height: 30px !important;
+}
+.hs-topbar .hs-topbar-res .hs-credit-amount {
+    font-size: 21px;
+    line-height: 30px;
+}
+/* Pilot card (crest + name): a bit wider. */
+.hs-pilot-card { min-width: 280px; padding-right: 24px; }
+
+/* ===== Stable layout across every area, tab and nav level ===============
+   Top bar, sub-nav row and content body keep the same box in all modes
+   (tabs / section / content / menu), so switching never shifts anything. */
+html .home-station-overlay .home-station-content .hs-topbar {
+    position: relative;
+    padding: 6px 6px 4px !important;
+    margin: 2px -2px 8px !important;
+    min-height: 56px;
+    box-sizing: border-box;
+}
+
+/* Keep the session action in the resource strip instead of centering it
+   against the taller two-row navigation area. */
+html .home-station-overlay .home-station-content .hs-topbar-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    margin-left: 0;
+    z-index: 2;
+}
+
+html .home-station-overlay .home-station-content .hs-topbar-res {
+    margin-right: 48px;
+}
+html .home-station-overlay .home-station-content .hs-subnav {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    padding: 4px 6px !important;
+    margin: 0 0 6px !important;
+    box-sizing: border-box;
+    overflow-y: hidden;
+}
+html .home-station-overlay .home-station-content .hs-body,
+html .home-station-overlay .home-station-content .hs-body.hs-body-menu,
+html .home-station-overlay .home-station-content .hs-body.hs-body-components {
+    padding: 18px 4px 6px 2px !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+}
+
+/* Menu → LAYOUT editor (fill-embedded-layout.js). */
+.hs-layout-editor .hs-layout-areas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px;
+    margin: 10px 0 14px;
+}
+.hs-layout-area {
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, #05060a);
+}
+
+.hs-layout-area-name {
+    flex: 1 1 auto;
+    font-weight: bold;
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-layout-tabs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+.hs-layout-tab {
+    background: rgba(0, 0, 0, 0.35);
+}
+.hs-layout-name {
+    flex: 1 1 auto;
+    font-size: var(--font-text);
+    min-width: 0;
+}
+.hs-layout-btn {
+    font: inherit;
+    font-size: var(--font-text);
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    color: var(--faction-accent, var(--color-primary));
+    background: transparent;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    cursor: pointer;
+}
+.hs-layout-btn:hover:not([disabled]),
+.hs-layout-btn.nav-focused {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
+    border-color: var(--faction-accent, var(--color-primary));
+}
+.hs-layout-btn[disabled] { opacity: 0.3; cursor: default; }
+.hs-layout-star { color: color-mix(in srgb, #fff 35%, transparent); }
+.hs-layout-star.is-on {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), -2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 -2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), -4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 -4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);
+}
+.hs-layout-move {
+    font: inherit;
+    font-size: var(--font-small);
+    max-width: 96px;
+    height: 22px;
+    color: var(--color-text);
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+
+/* LAYOUT editor drag & drop. */
+.hs-layout-grip {
+    cursor: grab;
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent);
+    font-size: var(--font-text);
+    user-select: none;
+}
+
+.hs-layout-editor .is-dragging { opacity: 0.4; }
+.hs-layout-tab { position: relative; }
+.hs-layout-tab.is-drop-before { box-shadow: inset 0 3px 0 var(--faction-accent, var(--color-primary)); }
+.hs-layout-tab.is-drop-after { box-shadow: inset 0 -3px 0 var(--faction-accent, var(--color-primary)); }
+.hs-layout-area.is-drop-into {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 16%, transparent);
+}
+.hs-layout-area.is-drop-before { box-shadow: -4px 0 0 var(--faction-accent, var(--color-primary)); }
+.hs-layout-area.is-drop-after { box-shadow: 4px 0 0 var(--faction-accent, var(--color-primary)); }
+/* LAYOUT editor: the labels are the drag handles. */
+.hs-layout-name[draggable="true"],
+.hs-layout-area-name[draggable="true"] {
+    cursor: grab;
+    user-select: none;
+}
+.hs-layout-name[draggable="true"]:hover,
+.hs-layout-area-name[draggable="true"]:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+.hs-layout-name[draggable="true"]:active,
+.hs-layout-area-name[draggable="true"]:active { cursor: grabbing; }
+.hs-layout-tab[draggable="true"],
+.hs-layout-area-head[draggable="true"] { cursor: default; }
+/* LAYOUT editor: drag-only, larger text. */
+.hs-layout-area { padding: 12px 14px; }
+.hs-layout-area-head { margin-bottom: 10px; }
+.hs-layout-area-name { font-size: var(--font-h2); letter-spacing: 3px; }
+.hs-layout-tabs { gap: 6px; }
+.hs-layout-tab { padding: 8px 10px; min-height: 38px;}
+.hs-layout-name { font-size: var(--font-h2); letter-spacing: 2px; }
+.hs-layout-star { width: 28px; height: 28px; font-size: var(--font-h2); }
+
+/* LAYOUT editor: MENU card. */
+.hs-layout-area.hs-layout-area-menu {
+    border-style: dashed;
+}
+.hs-layout-lock {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    padding: 2px 5px;
+    color: color-mix(in srgb, #fff 55%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, #fff 25%, transparent);
+}
+
+/* LAYOUT editor: icon buttons + icon picker modal */
+/* Icons stay at exactly 2× (16 → 32px) on whole-pixel offsets: no squashed pixels. */
+.hs-layout-icon { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; flex: 0 0 40px; box-sizing: border-box; }
+.hs-layout-icon img, .hs-layout-icon canvas { image-rendering: pixelated; display: block; }
+.hs-layout-icon .ui-icon-tip { display: block; line-height: 0; }
+.hs-layout-area-head { display: flex; align-items: center; gap: 8px; }
+.hs-layout-tab { display: flex; align-items: center; gap: 8px; }
+.hs-layout-icon-modal-back {
+    position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+.hs-layout-icon-modal {
+    width: min(640px, calc(calc(100 * var(--sv-w)) - 32px)); max-height: calc(80 * var(--sv-h)); display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; background: var(--color-bg, #10151c);
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent) 16%, transparent);
+}
+.hs-layout-icon-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, 48px); justify-content: center; gap: 6px; overflow-y: auto; padding: 2px;
+}
+.hs-layout-icon-pick {
+    width: 48px; height: 48px; padding: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: rgba(255, 255, 255, 0.04); border: var(--ui-border-width, 2px) solid rgba(255, 255, 255, 0.12);
+}
+.hs-layout-icon-pick img, .hs-layout-icon-pick canvas { image-rendering: pixelated; display: block; }
+.hs-layout-icon-pick .ui-icon-tip { display: block; line-height: 0; }
+/* 2px border when selected: keep the icon on the same pixel grid. */
+.hs-layout-icon-pick { border-width: var(--ui-border-width, 2px) !important; }
+.hs-layout-icon-pick:not(.is-on):not(:hover):not(:focus) { border-color: rgba(255, 255, 255, 0.12); }
+.hs-layout-icon-pick:hover, .hs-layout-icon-pick:focus { border-color: var(--faction-accent, var(--color-primary)); outline: none; }
+.hs-layout-icon-pick.is-default { border-style: dashed; }
+.hs-layout-icon-pick.is-on {
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
+}
+
+/* LAYOUT editor: inline rename (pencil appears on hover) */
+.hs-layout-rename {
+    flex: 0 0 auto; margin-left: 2px; background: none; border: 0; cursor: pointer;
+    color: var(--faction-accent, var(--color-primary)); line-height: 1;
+    opacity: 0; visibility: hidden; transition: opacity 0.12s;
+}
+.hs-layout-tab:hover .hs-layout-rename,
+.hs-layout-area-head:hover .hs-layout-rename,
+.hs-layout-rename:focus { opacity: 1; visibility: visible; }
+.hs-layout-rename:hover { color: #fff; }
+.hs-layout-rename-input {
+    flex: 1 1 auto; min-width: 0; font: inherit; letter-spacing: inherit; text-transform: uppercase;
+    color: #fff; background: rgba(0, 0, 0, 0.35); padding: 2px 6px;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)); outline: none;
+}
+.hs-layout-icon-modal .hs-menu-panel-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.hs-layout-modal-btn {
+    font: inherit; font-size: var(--font-text); letter-spacing: 0.15em; padding: 8px 16px; cursor: pointer;
+    color: var(--faction-accent, var(--color-primary)); background: rgba(255, 255, 255, 0.04);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+}
+.hs-layout-modal-btn:hover, .hs-layout-modal-btn:focus { color: #fff; border-color: var(--faction-accent, var(--color-primary)); outline: none; }
+
+/* Pixel icons only at whole multiples of their 16px grid (2× = 32px):
+   the sub-nav and the MENU row drew them at 24px (1.5×), which tears pixels. */
+/* The img carries its own device-pixel-snapped size (iconRenderer.devicePixelSnap). */
+.home-station-overlay .hs-subnav .hs-tab-icon,
+.home-station-overlay .hs-menu-tab-icon {
+    width: 32px !important;
+    height: 32px !important;
+    flex: 0 0 32px;
+}

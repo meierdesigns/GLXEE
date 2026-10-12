@@ -1,0 +1,1504 @@
+.galaxy-map-embedded > .galaxy-map-area,
+.galaxy-map-embedded > .galaxy-map-panels,
+.galaxy-map-embedded > .galaxy-map-explore,
+.galaxy-map-embedded > .galaxy-map-instructions {
+    position: relative;
+    width: 100%;
+    grid-column: auto;
+    grid-row: auto;
+}
+/* One full-width bar: large planet | stacked galaxy/situation | big start. */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar {
+    position: static;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: stretch;
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    gap: 0;
+    pointer-events: auto;
+    padding: 0;
+    /* Fixed height: the bar never resizes with the selection */
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
+    background: color-mix(in srgb, #05060a 90%, #000);
+    border: var(--ui-border-width, 2px) solid var(--ruler-accent, var(--color-primary));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 28%, transparent),
+        4px 4px 0 0 #000;
+    overflow: hidden;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg {
+    min-width: 0;
+    flex: 1 1 0;
+    width: auto;
+    height: auto;
+    align-self: stretch;
+    pointer-events: auto;
+    padding: 10px 16px;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet {
+    flex: 3 1 0;
+    min-width: 380px;
+    padding: 10px 14px;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex: 2 1 0;
+    min-width: 260px;
+    max-width: none;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg {
+    flex: 1 1 0;
+    max-width: none;
+    border-left: 0;
+    padding: 8px 14px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg + .galaxy-map-ruler-seg {
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+    border-left: 0;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card .galaxy-map-ruler-text {
+    align-items: flex-start;
+    text-align: left;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation {
+    justify-content: center;
+    align-items: stretch;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation-row {
+    justify-content: flex-start;
+    width: 100%;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation-kind {
+    width: 100%;
+    text-align: left;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
+    flex: 0 0 auto;
+    min-width: 240px;
+    max-width: 340px;
+    width: min(calc(34 * var(--sv-w)), 340px);
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 10px 14px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 8px;
+    min-height: 0;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 64px;
+    margin: 0;
+    padding: 14px 18px;
+    font-size: var(--font-h2);
+    letter-spacing: 0.12em;
+    white-space: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button img,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button .menu-pixel-icon,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button .gm-mission-icon {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 auto;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.disabled,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button:disabled {
+    opacity: 0.38;
+    filter: grayscale(1);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.galaxy-map-embedded.is-input-active {
+    opacity: 1;
+}
+.galaxy-map-embedded .galaxy-map-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    margin-left: 0 !important;
+    min-width: 0;
+    width: 100%;
+    padding-right: 0;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    justify-content: stretch;
+    gap: 8px 16px;
+}
+.galaxy-map-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
+    align-items: start;
+}
+.galaxy-map-embedded > .galaxy-map-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+.galaxy-map-header .galaxy-map-toolbar {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+}
+.galaxy-map-header > .galaxy-map-title {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    white-space: nowrap;
+    text-align: left;
+    justify-self: start;
+}
+.galaxy-map-header > .galaxy-map-progress-bar {
+    grid-column: 2 !important;
+    grid-row: 1;
+    align-self: end;
+    justify-self: end;
+    margin: 0;
+}
+.galaxy-map-content .galaxy-map-header {
+    margin-bottom: 8px;
+}
+.galaxy-map-embedded .galaxy-map-title {
+    margin: 0;
+    text-align: left;
+    justify-self: start;
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    grid-column: 1 / -1;
+    white-space: nowrap;
+    font-size: clamp(13px, calc(1.45 * var(--sv-w)), 22px);
+    font-size: calc(var(--font-h1, 2rem) * 0.7);
+    letter-spacing: 3px;
+}
+.galaxy-map-embedded .galaxy-map-progress-bar {
+    margin: 0;
+    grid-column: 1;
+}
+.galaxy-map-embedded .galaxy-map-area {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    flex: 0 1 auto;
+    min-height: 160px;
+    height: min(calc(34 * var(--ch)), calc(280px * var(--zk)));
+    margin-bottom: 0;
+}
+@media (max-width: 720px) {
+    .galaxy-map-embedded {
+        grid-template-columns: 1fr;
+    }
+    .galaxy-map-embedded .galaxy-map-toolbar {
+        grid-column: 1;
+    }
+    .galaxy-map-embedded .galaxy-map-area {
+        grid-row: 3;
+    }
+}
+.galaxy-map-embedded .galaxy-map-panels {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    flex: 0 0 auto;
+    margin: 0;
+}
+.galaxy-map-embedded .galaxy-map-actions {
+    grid-column: 1 / -1;
+    flex: 0 0 auto;
+    margin-top: 4px;
+    min-height: 0;
+    gap: 8px;
+}
+.galaxy-map-embedded .galaxy-map-actions .action-button {
+    padding: 10px 26px;
+    font-size: calc(var(--font-h2) * 1.15);
+}
+.gm-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: relative;
+    min-height: 56px;
+}
+.gm-actions-row .action-button.secondary {
+    opacity: 0.9;
+}
+.galaxy-map-panel-ship .gm-ship-mini-canvas {
+    width: 84px;
+    flex: 0 0 auto;
+    align-self: center;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    box-sizing: border-box;
+}
+.galaxy-map-embedded .galaxy-map-instructions {
+    flex: 0 0 auto;
+    margin-top: 4px;
+}
+.galaxy-map-embedded .galaxy-map-explore {
+    flex: 0 0 auto;
+}
+.hs-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px 4px 6px 2px;
+    display: flex;
+    flex-direction: column;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) var(--color-background);
+    box-sizing: border-box;
+    border: var(--ui-border-width) solid transparent;
+    border-radius: 0;
+    transition:
+        opacity 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease,
+        filter 0.18s ease;
+}
+
+/* Active navigation zone: tabs vs content */
+.home-station-content.hs-nav-tabs .hs-topbar {
+    position: relative;
+    padding: 6px 6px 4px;
+    margin: 2px -2px 8px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 75%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 35%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent), 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 72%, transparent), 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 48%, transparent), 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 30%, transparent), 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 16%, transparent);
+}
+.home-station-content.hs-nav-tabs .hs-topbar::after {
+    content: "TABS";
+    position: absolute;
+    top: 2px;
+    right: 8px;
+    padding: 1px 6px;
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 2px;
+    line-height: 1.2;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    pointer-events: none;
+    z-index: 2;
+}
+.home-station-content.hs-nav-tabs .hs-body {
+    opacity: 0.38;
+    filter: saturate(0.45) brightness(0.85);
+    border-color: color-mix(in srgb, var(--color-border) 35%, transparent);
+}
+.home-station-content.hs-mode-station.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-hangar.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-shop.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-upgrade.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-craft.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-travel.hs-nav-tabs .hs-body,
+.home-station-content.hs-mode-explorations.hs-nav-tabs .hs-body {
+    opacity: 1;
+    filter: none;
+    border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.home-station-content.hs-nav-sub .hs-topbar {
+    opacity: 0.38;
+    filter: saturate(0.45) brightness(0.85);
+}
+.home-station-content.hs-nav-sub .hs-body {
+    position: relative;
+    opacity: 1;
+    filter: none;
+    padding-top: 18px;
+    border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 30%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 16%, transparent);
+}
+.home-station-content.hs-nav-sub .hs-body::before {
+    content: "SECTION";
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    z-index: 4;
+    padding: 1px 6px;
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 2px;
+    line-height: 1.2;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    pointer-events: none;
+}
+.home-station-content.hs-nav-sub .hs-shop-cats {
+    position: relative;
+    z-index: 2;
+    padding: 8px 8px 6px;
+    margin: 4px 0 12px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 80%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 40%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+.home-station-content.hs-nav-sub .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-nav-sub .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 0.4;
+    filter: saturate(0.5) brightness(0.88);
+    transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.home-station-content.hs-nav-content .hs-topbar {
+    opacity: 0.38;
+    filter: saturate(0.45) brightness(0.85);
+    transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.home-station-content.hs-nav-content .hs-shop-cats {
+    opacity: 0.4;
+    filter: saturate(0.5) brightness(0.88);
+}
+
+.home-station-content.hs-nav-content .hs-body {
+    position: relative;
+    opacity: 1;
+    filter: none;
+    padding-top: 18px;
+    border-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 45%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 32%, transparent) 72%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 32%, transparent) 48%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 32%, transparent) 30%, transparent), 0 0 0 32px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 32%, transparent) 16%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 72%, transparent), inset 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 48%, transparent), inset 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 30%, transparent), inset 0 0 0 44px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 16%, transparent);
+}
+.home-station-content.hs-nav-content .hs-body::before {
+    content: "CONTENT";
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    z-index: 4;
+    padding: 1px 6px;
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 2px;
+    line-height: 1.2;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    pointer-events: none;
+}
+.home-station-content.hs-nav-content.hs-mode-play .hs-body::before {
+    content: none;
+}
+.home-station-content.hs-mode-menu .hs-topbar,
+.home-station-content.hs-mode-menu .hs-body {
+    opacity: 1;
+    filter: none;
+    border-color: transparent;
+    box-shadow: none;
+    background: transparent;
+    padding-top: 6px;
+}
+.home-station-content.hs-mode-menu .hs-topbar::after,
+.home-station-content.hs-mode-menu .hs-body::before {
+    content: none;
+}
+
+.home-station-content.hs-pointer-mode .hs-topbar,
+.home-station-content.hs-pointer-mode .hs-body,
+.home-station-content.hs-pointer-mode .hs-shop-cats,
+.home-station-content.hs-pointer-mode .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-pointer-mode .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 1;
+    filter: none;
+    pointer-events: auto;
+}
+.home-station-content.hs-pointer-mode .hs-body {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    padding-top: 6px;
+}
+.home-station-content.hs-pointer-mode .hs-body::before,
+.home-station-content.hs-pointer-mode .hs-topbar::after {
+    content: none;
+}
+
+/* Keep navigation and content at full brightness; only disabled controls dim. */
+.home-station-content.hs-nav-tabs .hs-topbar,
+.home-station-content.hs-nav-tabs .hs-body,
+.home-station-content.hs-nav-sub .hs-topbar,
+.home-station-content.hs-nav-sub .hs-body,
+.home-station-content.hs-nav-content .hs-topbar,
+.home-station-content.hs-nav-content .hs-body,
+.home-station-content.hs-nav-content .hs-shop-cats,
+.home-station-content.hs-nav-sub .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-nav-sub .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 1;
+    filter: none;
+}
+
+.home-station-content.hs-nav-content .hs-shop-root > :not(.hs-shop-cats),
+.home-station-content.hs-nav-content .hs-upgrade-root > :not(.hs-shop-cats) {
+    opacity: 1;
+    filter: none;
+}
+
+.hs-body::-webkit-scrollbar {
+    width: 8px;
+}
+.hs-body::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-body > .hs-station-grid,
+.hs-body > .hs-section,
+.hs-body > .hs-panel,
+.hs-body > .hs-play-shell {
+    /* Hug the map content instead of stretching to the full body height. */
+    flex: 0 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+.hs-body > .hs-section,
+.hs-body > .hs-panel {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+.hs-station-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-content: stretch;
+    grid-template-rows: minmax(110px, 0.8fr) auto auto minmax(0, 1fr);
+}
+.hs-station-cover {
+    position: relative;
+    grid-area: cover;
+    min-height: 110px;
+    overflow: hidden;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, var(--color-border));
+    background: #020306;
+    box-shadow: inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent) 72%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent) 48%, transparent), inset 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent) 30%, transparent), inset 0 0 0 32px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent) 16%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 15%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 15%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 15%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 15%, transparent) 16%, transparent);
+}
+.hs-station-cover-image {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.04) 55%, rgba(0, 0, 0, 0.36)),
+        linear-gradient(0deg, rgba(0, 0, 0, 0.32), transparent 55%),
+        url('../../assets/ui/hs-bg-station.png') center 48% / cover no-repeat;
+    image-rendering: pixelated;
+    filter: brightness(1.65) saturate(1.25) contrast(1.12);
+    transform: scale(1.02);
+}
+/* Faction identity layer — recolors the station photo toward the player's
+   faction hull tone and lays a faction-shaped structural pattern over it,
+   so the station itself reads Terran / Kronax / Voidborn / Pirate / Machine
+   instead of one neutral backdrop for every faction. */
+.hs-station-cover-faction {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-color: color-mix(in srgb, var(--faction-hull, transparent) 48%, transparent);
+    mix-blend-mode: color;
+    opacity: 0.9;
+}
+.hs-station-cover-faction::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 1;
+    mix-blend-mode: screen;
+}
+/* Faction silhouette frame — the cover's own outline bends hard per faction
+   so the station reads as a different structure at a glance, not the same
+   rectangle with another tint. */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover {
+    /* Straight top edge — no notches cut into the station banner. */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% calc(100% - 34px), calc(100% - 46px) 100%,
+        46px 100%, 0 calc(100% - 34px)
+    );
+}
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover {
+    /* Straight top edge — the blade cuts live on the lower flanks only. */
+    clip-path: polygon(
+        0 0, 100% 0, 100% 62%,
+        calc(100% - 120px) 100%,
+        62% 100%, 54% calc(100% - 26px), 46% 100%,
+        0 100%
+    );
+}
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover {
+    /* Same stepped pod cut as every other Voidborn panel. */
+    border-radius: 0;
+    clip-path: var(--faction-panel-clip, none);
+}
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover {
+    /* Straight top edge — the welded jag lives on the lower flanks only. */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% calc(100% - 46px),
+        calc(100% - 88px) 100%, 34% 100%, 30% calc(100% - 22px),
+        96px calc(100% - 14px), 0 calc(100% - 52px)
+    );
+}
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover {
+    /* Straight top edge — machined teeth live on the lower edge only. */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% 100%, 86% 100%, 86% calc(100% - 18px), 80% calc(100% - 18px), 80% 100%,
+        52% 100%, 52% calc(100% - 18px), 46% calc(100% - 18px), 46% 100%,
+        20% 100%, 20% calc(100% - 18px), 14% calc(100% - 18px), 14% 100%, 0 100%
+    );
+}
+/* Terran — disciplined orthogonal service grid */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(0deg, transparent 0 14px, color-mix(in srgb, var(--faction-accent) 36%, transparent) 14px 15px),
+        repeating-linear-gradient(90deg, transparent 0 22px, color-mix(in srgb, var(--faction-accent) 28%, transparent) 22px 23px);
+}
+/* Kronax — aggressive diagonal chevron blades */
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover-faction::after {
+    background: repeating-linear-gradient(
+        58deg,
+        transparent 0 18px,
+        color-mix(in srgb, var(--faction-accent) 46%, transparent) 18px 22px,
+        transparent 22px 40px
+    );
+}
+/* Voidborn — hollow concentric ring arcs */
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover-faction::after {
+    background:
+        radial-gradient(circle at 16% 45%, transparent 0 22px, color-mix(in srgb, var(--faction-accent) 42%, transparent) 23px 27px, transparent 29px),
+        radial-gradient(circle at 42% 30%, transparent 0 34px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 35px 39px, transparent 42px),
+        radial-gradient(circle at 82% 60%, transparent 0 44px, color-mix(in srgb, var(--faction-accent) 34%, transparent) 45px 49px, transparent 52px);
+}
+/* Pirate — uneven welded scrap patchwork */
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(12deg, transparent 0 26px, color-mix(in srgb, var(--faction-accent) 38%, transparent) 26px 29px, transparent 29px 52px),
+        repeating-linear-gradient(-31deg, transparent 0 34px, color-mix(in srgb, var(--faction-accent) 30%, transparent) 34px 37px, transparent 37px 64px);
+}
+/* Machine — precise circuit trace grid */
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover-faction::after {
+    background:
+        repeating-linear-gradient(0deg, transparent 0 9px, color-mix(in srgb, var(--faction-accent) 40%, transparent) 9px 10px, transparent 10px 20px),
+        repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in srgb, var(--faction-accent) 40%, transparent) 9px 10px, transparent 10px 20px);
+}
+.hs-station-cover-scanline {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 3px,
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent) 4px
+    );
+    opacity: 0.7;
+}
+.hs-station-cover-caption {
+    position: absolute;
+    inset: auto 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--color-text);
+    text-shadow: 0 0 8px #000, 1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), -4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 -4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 8px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), -8px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 -8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);
+    letter-spacing: 2px;
+}
+/* Keep the caption clear of the lower-left silhouette cuts. */
+.home-station-overlay[data-hs-faction="terran"] .hs-station-cover-caption {
+    bottom: 38px;
+}
+.home-station-overlay[data-hs-faction="pirate"] .hs-station-cover-caption {
+    bottom: 56px;
+}
+.hs-station-cover-kicker {
+    color: var(--faction-accent, var(--color-primary));
+    font-size: var(--font-text);
+}
+.hs-station-cover-caption strong {
+    font-size: clamp(1rem, calc(2.2 * var(--sv-w)), 1.5rem);
+    letter-spacing: 4px;
+}
+.hs-panel-stores {
+    grid-area: stores;
+}
+.hs-panel-cargo {
+    grid-area: cargo;
+}
+.hs-panel-bp {
+    grid-area: blueprints;
+}
+.hs-panel-stack {
+    grid-area: ships;
+}
+.hs-panel-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+
+.hs-row.hs-res-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.hs-panel-stores .hs-chip-value {
+    font-size: calc(var(--font-h2) * 2.4);
+    text-shadow:
+        1px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        -1px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        0 1px 0 color-mix(in srgb, var(--color-primary) 30%, transparent),
+        0 -1px 0 color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.hs-panel-stores .hs-chip-cap {
+    font-size: calc(var(--font-text) * 1.8);
+}
+.hs-explore-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 20px;
+    align-content: start;
+}
+.hs-explore-cluster-title {
+    font-size: var(--font-text);
+    letter-spacing: 0.16em;
+    color: var(--color-primary, var(--color-text-secondary));
+    opacity: 0.9;
+    padding: 2px 4px 6px;
+    border-bottom: var(--ui-border-width-thin, 2px) solid var(--ui-border, var(--color-primary));
+    margin-bottom: 8px;
+    font-family: var(--ui-font-family);
+    font-weight: bold;
+}
+.hs-explore-cluster-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hs-explore-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+    text-align: left;
+    width: 100%;
+    padding: 8px 12px;
+}
+.hs-explore-label {
+    flex: 1;
+    min-width: 0;
+    letter-spacing: 0.06em;
+}
+@media (max-width: 640px) {
+    .hs-explore-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.hs-panel,
+.hs-section {
+    margin: 0;
+    padding: 8px 10px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-surface) 70%, transparent) 0%,
+            color-mix(in srgb, var(--color-background) 75%, transparent) 100%);
+    box-sizing: border-box;
+    position: relative;
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, calc(100% - 10px) 2px, calc(100% - 8px) 2px, calc(100% - 8px) 4px, calc(100% - 6px) 4px, calc(100% - 6px) 6px, calc(100% - 4px) 6px, calc(100% - 4px) 8px, calc(100% - 2px) 8px, calc(100% - 2px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 2px) calc(100% - 10px), calc(100% - 2px) calc(100% - 8px), calc(100% - 4px) calc(100% - 8px), calc(100% - 4px) calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px), calc(100% - 8px) calc(100% - 2px), calc(100% - 10px) calc(100% - 2px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 2px), 8px calc(100% - 2px), 8px calc(100% - 4px), 6px calc(100% - 4px), 6px calc(100% - 6px), 4px calc(100% - 6px), 4px calc(100% - 8px), 2px calc(100% - 8px), 2px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 2px 10px, 2px 8px, 4px 8px, 4px 6px, 6px 6px, 6px 4px, 8px 4px, 8px 2px, 10px 2px);
+    box-shadow: inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 72%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 48%, transparent), inset 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 30%, transparent), inset 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 16%, transparent);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.hs-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 10px;
+    right: 10px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+    opacity: 0.55;
+}
+.hs-section {
+    margin-bottom: 10px;
+}
+.hs-panel h3,
+.hs-section h3 {
+    margin: 0 0 8px;
+    font-size: var(--font-text);
+    letter-spacing: 2px;
+    color: var(--color-text);
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    padding-bottom: 6px;
+}
+.hs-panel-action {
+    margin-top: 8px;
+    width: 100%;
+}
+.hs-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.hs-muted {
+    color: var(--color-text-secondary);
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+}
+.hs-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    font-size: var(--font-h2);
+    letter-spacing: 1px;
+    padding: 6px 8px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-border) 65%, transparent);
+    background: color-mix(in srgb, var(--color-background) 45%, transparent);
+}
+.hs-line-name {
+    flex: 1 1 140px;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.hs-line-price {
+    color: var(--color-primary);
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+.hs-credits-bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 6px 10px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--color-background) 50%, transparent);
+    max-width: none;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    box-sizing: border-box;
+}
+.hs-shop-wallet {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 42%, transparent);
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--color-primary) 12%, rgba(0, 0, 0, 0.55)) 0%,
+            rgba(0, 0, 0, 0.42) 100%);
+    box-sizing: border-box;
+}
+.hs-shop-wallet-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 108px;
+    padding: 8px 10px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    background: color-mix(in srgb, var(--color-background) 55%, transparent);
+}
+.hs-shop-wallet-item.hs-res-empty {
+    opacity: 0.45;
+}
+.hs-shop-wallet-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-shop-wallet-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.hs-shop-wallet-label {
+    font-size: var(--font-small);
+    letter-spacing: 0.14em;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+    line-height: 1;
+}
+.hs-shop-wallet-amount {
+    font-size: clamp(16px, calc(2.2 * var(--sv-h)), 22px);
+    font-weight: bold;
+    color: var(--color-primary);
+    letter-spacing: 1px;
+    line-height: 1;
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), -8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), 0 8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), 0 -8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent);
+}
+.hs-play {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 72px;
+    height: 36px;
+    padding: 0 14px;
+    background: color-mix(in srgb, var(--color-primary) 28%, var(--color-surface));
+    border: var(--ui-border-width-thick, 3px) solid var(--color-primary);
+    color: var(--color-text);
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1;
+    cursor: pointer;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 0 100%, 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px);
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.hs-play-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-play:hover {
+    background: color-mix(in srgb, var(--color-primary) 42%, var(--color-surface));
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 16%, transparent);
+}
+button.hs-play.nav-focused {
+    outline: var(--ui-border-width) dashed var(--color-primary);
+    outline-offset: 3px;
+}
+.hs-credit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.hs-credit-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-pixel-24 {
+    width: 24px !important;
+    height: 24px !important;
+}
+.hs-pixel-32 {
+    width: 32px !important;
+    height: 32px !important;
+}
+.hs-pixel-40 {
+    width: 40px !important;
+    height: 40px !important;
+}
+.hs-credit-amount {
+    font-size: var(--font-h2);
+    font-weight: bold;
+    color: var(--color-primary);
+    letter-spacing: 1px;
+    line-height: 1;
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 42%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 18%, transparent);
+}
+.hs-shop-cats {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.hs-shop-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--color-background);
+    border: var(--ui-border-width, 2px) solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    letter-spacing: 1px;
+    font-size: var(--font-text);
+    font-weight: bold;
+    text-transform: uppercase;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 0 100%, 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px);
+}
+.hs-shop-cat:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+}
+.hs-shop-cat.active {
+    color: #fff;
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 48%, var(--color-surface, #1a1a1a));
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 42%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 18%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 18%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 18%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 18%, transparent);
+}
+button.hs-shop-cat.nav-focused {
+    outline: var(--ui-border-width) dashed var(--color-primary);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+button.hs-shop-cat.active.nav-focused {
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 72%, transparent), inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 48%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 30%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 16%, transparent);
+}
+.hs-actions-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.hs-hangar-root {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 6px;
+    overflow: hidden;
+    clip-path: none;
+}
+.hs-hangar-root > .hs-panel-title {
+    margin-bottom: 0;
+    padding-bottom: 4px;
+    flex: 0 0 auto;
+}
+.hs-hangar-bay.hs-panel {
+    overflow: visible;
+    clip-path: none;
+}
+.hs-hangar-split {
+    display: grid;
+    grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+    gap: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    margin-top: 0;
+}
+.hs-hangar-split > .pe-resize-handle {
+    width: 8px;
+    margin: 0;
+}
+.hs-hangar-split > .hs-hangar-list {
+    grid-column: 1;
+}
+.hs-hangar-split > .pe-resize-handle[data-resize="left"] {
+    grid-column: 2;
+}
+.hs-hangar-split > .hs-hangar-detail {
+    grid-column: 3;
+}
+.hs-hangar-split > .pe-resize-handle[data-resize="right"] {
+    grid-column: 4;
+}
+.hs-hangar-split > .hs-hangar-preview {
+    grid-column: 5;
+}
+.hs-hangar-split.hs-hangar-left-collapsed {
+    grid-template-columns: 0 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+}
+.hs-hangar-split.hs-hangar-right-collapsed {
+    grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 0 0;
+}
+.hs-hangar-split.hs-hangar-left-collapsed.hs-hangar-right-collapsed {
+    grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+}
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list,
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview {
+    display: none;
+}
+.hs-hangar-split.hs-hangar-left-collapsed > .pe-resize-handle[data-resize="left"],
+.hs-hangar-split.hs-hangar-right-collapsed > .pe-resize-handle[data-resize="right"] {
+    display: none;
+}
+.hs-hangar-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+    padding: 8px;
+    gap: 6px;
+}
+.hs-hangar-list > .hs-panel-title,
+.hs-hangar-preview > .hs-panel-title {
+    margin-bottom: 0;
+    padding-bottom: 4px;
+}
+.hs-hangar-list .hs-hangar-ships {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    gap: 6px;
+    display: flex;
+    flex-direction: column;
+}
+.hs-hangar-ship-tree {
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+}
+.hs-hangar-ship-tree > summary {
+    list-style: none;
+}
+.hs-hangar-ship-tree > summary::-webkit-details-marker {
+    display: none;
+}
+.hs-hangar-ship-tree > summary::before {
+    content: '▶';
+    display: inline-block;
+    width: 14px;
+    color: var(--color-primary);
+    font-size: 0.7em;
+}
+.hs-hangar-ship-tree[open] > summary::before {
+    transform: rotate(90deg);
+}
+.hs-hangar-ship-tree > .hs-component-tree-container {
+    flex: 0 1 auto;
+    min-height: 0;
+    min-width: 0;
+    max-height: 420px;
+    padding: 6px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-hangar-ship-tree .hs-component-tree-header {
+    display: none;
+}
+.hs-hangar-ship-tree .hs-component-tree {
+    gap: 4px;
+}
+.hs-hangar-list.hs-component-selected .hs-hangar-ships {
+    display: none;
+}
+.hs-component-details {
+    display: none;
+    flex-direction: column;
+    flex: 1 1 auto;
+    padding: 16px;
+    gap: 12px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    min-height: 250px;
+    max-height: none;
+    overflow-y: auto;
+}
+.hs-hangar-list.hs-component-selected .hs-component-details {
+    display: flex;
+}
+.hs-component-details .hs-component-close {
+    align-self: flex-end;
+    padding: 4px 8px;
+    font-size: 1.2em;
+    background: transparent;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+}
+.hs-component-details .hs-component-close:hover {
+    color: var(--color-accent);
+}
+.hs-component-details .hs-component-title {
+    margin: 0;
+    padding: 0;
+    font-size: 1.3em;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    color: var(--color-primary);
+    text-transform: uppercase;
+}
+.hs-component-details .hs-component-info {
+    font-size: 0.85em;
+    line-height: 1.6;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    flex: 1;
+}
+.hs-component-settings {
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+    padding-top: 12px;
+    margin-top: 12px;
+}
+.hs-component-skins {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.hs-component-skins-label {
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--color-primary);
+    opacity: 0.9;
+}
+.hs-component-skins-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.hs-component-skin-btn {
+    padding: 10px 12px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.15s ease-out;
+    text-align: center;
+}
+.hs-component-skin-btn:hover {
+    background: color-mix(in srgb, var(--color-primary) 15%, var(--color-surface));
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+.hs-component-skin-btn.is-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-surface);
+    box-shadow: 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 48%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 30%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 16%, transparent);
+}
+/* Expand sidebar when component is selected */
+.hs-hangar-split.hs-component-selected {
+    --hs-hangar-left-w: 300px;
+}
+.hs-component-details[style*="display: block"] {
+    animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
+}
+.hs-hangar-detail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    gap: 8px;
+    overflow: visible;
+}
+.hs-hangar-detail::-webkit-scrollbar {
+    width: 8px;
+}
+.hs-hangar-detail::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-hangar-bay {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    overflow: visible;
+    clip-path: none;
+}
+.hs-hangar-bay-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: visible;
+    background:
+        radial-gradient(ellipse at center,
+            color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
+            transparent 62%),
+        #050508;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+}
+
+.hs-floating-area-style {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 35;
+    width: min(230px, calc(100% - 20px));
+    padding: 10px;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 94%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+
+/* Editing a left-hand part: keep the panel off the thing being edited. */
+.hs-floating-area-style.is-right {
+    left: auto;
+    right: 10px;
+}
+
+.hs-floating-area-style strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--color-primary);
+    letter-spacing: 1px;
+}
+
+.hs-floating-wing-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 1;
+    margin: 0 0 3px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: #09090d;
+    image-rendering: pixelated;
+}
+
+.hs-wing-style-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin: 6px 0 8px;
+}
+.hs-wing-style-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 3px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: #09090d;
+    color: var(--color-text-dim, var(--color-text));
+    font: inherit;
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+.hs-wing-style-tile canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    image-rendering: pixelated;
+}
+.hs-wing-style-tile:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.hs-wing-style-tile.is-active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+.hs-wing-style-tile:focus-visible {
+    outline: var(--ui-border-width) solid var(--color-primary);
+    outline-offset: 1px;
+}
+.hs-floating-preview-caption {
+    display: block;
+    margin-bottom: 8px;
+    color: #00e6c3;
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+}
+
+.hs-floating-style-select-label {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 6px;
+    color: var(--color-primary);
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+}
+
+.hs-floating-style-select {
+    width: 100%;
+    min-width: 0;
+    padding: 3px 5px;
+    border: var(--ui-border-width) solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-small);
+}
+
+.hs-floating-style-select-label input[type="range"] {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--color-primary);
+}
+
+.hs-floating-area-crop {
+    display: grid;
+    gap: 4px;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    color: var(--color-primary);
+}
+
+.hs-floating-area-crop label {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    align-items: center;
+    gap: 6px;
+    /* The global `label` rule sets --font-h2, which beats the inherited
+       panel size and made these labels overflow their column. */
+    font-size: var(--font-small);
+}
+
+.hs-floating-area-crop label span,
+.hs-floating-style-select-label span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.hs-floating-area-crop input {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--color-primary);
+}
+
+.hs-floating-panel-link {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 4px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: transparent;
+    color: var(--color-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+}
+
+.hs-floating-panel-link:hover {
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.hs-hangar-bay-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    image-rendering: -moz-crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+}
+.hs-hangar-preview-canvas,
+.hs-comp-list-thumb canvas,
+.hs-comp-canvas-wrap canvas,
+.hs-comp-thumb canvas,
+.ship-belt-canvas,
+.level-belt-canvas,
+.level-large-canvas,
+.ship-large-canvas {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+}
+.hs-hangar-bay-canvas {
+    pointer-events: auto;
+    cursor: grab;
+}
+.hs-hangar-bay-canvas.is-wing-dragging {
+    cursor: grabbing;
+}
+.hs-hangar-bay-canvas.is-wing-scaling {
+    cursor: ew-resize;
+}
+
+.hs-hangar-bay-canvas.is-module-dragging {
+    cursor: move;
+}
+.hs-hangar-slot-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    --bay-ship-left: 20%;
+    --bay-ship-top: 18%;
+    --bay-ship-w: 60%;
+    --bay-ship-h: 64%;
+}

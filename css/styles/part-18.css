@@ -1,0 +1,1501 @@
+.galaxy-viewer-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.galaxy-viewer-rows li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 6px;
+    font-size: var(--font-h2);
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: #d8dbe2;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+    cursor: pointer;
+}
+.galaxy-viewer-rows li:hover { background: color-mix(in srgb, var(--color-primary) 12%, #05060a); color: #fff; }
+.galaxy-viewer-rows li.selected { background: color-mix(in srgb, var(--color-primary) 26%, #05060a); color: #fff; }
+.galaxy-viewer-rows .icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; }
+.galaxy-viewer-rows .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.galaxy-viewer-rows .diff { opacity: 0.65; white-space: nowrap; }
+.gv-station-icon {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: #9fb3c8;
+    box-shadow: inset 0 0 0 3px #3a4a5c;
+    flex: none;
+}
+.gv-station-icon.is-faction { background: #ff7a6a; box-shadow: inset 0 0 0 3px #6a2a24; }
+.galaxy-viewer-map .gv-station rect { fill: #3a4a5c; stroke: #9fb3c8; stroke-width: 1; }
+.galaxy-viewer-map .gv-station rect.core { fill: #9fb3c8; stroke: none; }
+.galaxy-viewer-map .gv-station.is-faction rect { fill: #6a2a24; stroke: #ff7a6a; }
+.galaxy-viewer-map .gv-station.is-faction rect.core { fill: #ff7a6a; }
+
+/* Let faction ornamentation frame the content instead of competing with it. */
+.profile-selection-content[data-faction] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    background-color: #030809 !important;
+    --fp-surface-opacity: 0.04;
+}
+/* Readable text on the textured faction cards: bright body text with a dark halo, calm texture behind. */
+.profile-selection-content[data-faction] :is(.profile-faction-fact, .profile-faction-lore) :is(.profile-faction-fact-value, .profile-faction-fact-note, .profile-faction-lore-text) {
+    position: relative;
+    z-index: 3;
+    color: #f2f6f8;
+    text-shadow: 0 0 3px #030809, 0 1px 0 #030809, 0 0 8px #030809;
+}
+.profile-selection-content[data-faction] .profile-faction-fact-label {
+    position: relative;
+    z-index: 3;
+    text-shadow: 0 0 3px #030809, 0 1px 0 #030809;
+}
+.profile-selection-name-mode:not(.is-name-step) :is(.profile-faction-preview, .profile-faction-lore) {
+    padding: clamp(18px, calc(2 * var(--sv-w)), 26px);
+}
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-fact {
+    padding: 16px 20px;
+}
+.galaxy-viewer-map .gv-station.is-selected rect:not(.hit) { stroke: #fff; stroke-width: 2; }
+.galaxy-viewer-map rect.hit, .galaxy-viewer-map rect.gv-hit { fill: transparent; stroke: none; cursor: pointer; }
+.galaxy-viewer-map rect.gv-hit.is-selected { stroke: #fff; stroke-width: 2; stroke-dasharray: 4 3; }
+.galaxy-viewer-map .gv-station { cursor: pointer; }
+.galaxy-viewer-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 4%, #05060a);
+    min-width: 0;
+}
+.galaxy-viewer-stats :is(h3, span, p, div) {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    text-shadow: none;
+    -webkit-font-smoothing: none;
+}
+.gv-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 700;
+    font-size: var(--font-h2);
+    line-height: 20px;
+    letter-spacing: 1px;
+    color: #fff;
+}
+.galaxy-viewer-stats { position: relative; overflow: hidden; }
+.galaxy-viewer-stats > * { position: relative; z-index: 1; }
+.galaxy-viewer-stats > .gv-planet-bg {
+    position: absolute; z-index: 0; pointer-events: none;
+    width: 360px; height: 360px; right: -140px; bottom: -60px;
+    opacity: 0.55; image-rendering: pixelated;
+}
+.galaxy-viewer-stats > .gv-space-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.gv-planet-bg.has-atmo::before {
+    content: ''; position: absolute; inset: -12%; pointer-events: none;
+    background: radial-gradient(circle closest-side, transparent calc(62% * var(--dk, 1)),
+        color-mix(in srgb, var(--atmo) 45%, transparent) calc(62% * var(--dk, 1)), color-mix(in srgb, var(--atmo) 45%, transparent) calc(67% * var(--dk, 1)),
+        color-mix(in srgb, var(--atmo) 25%, transparent) calc(67% * var(--dk, 1)), color-mix(in srgb, var(--atmo) 25%, transparent) calc(74% * var(--dk, 1)),
+        color-mix(in srgb, var(--atmo) 10%, transparent) calc(74% * var(--dk, 1)), color-mix(in srgb, var(--atmo) 10%, transparent) calc(84% * var(--dk, 1)), transparent calc(84% * var(--dk, 1)));
+}
+.gv-planet-bg .gm-planet-icon, .gv-planet-bg .gm-planet-icon-img { position: relative; display: block; width: 360px; height: 360px; }
+.gv-planet-head { display: flex; align-items: center; gap: 10px; }
+.gv-planet-icon { display: inline-flex; width: 48px; height: 48px; flex: none; }
+.gv-stat { display: flex; flex-direction: column; gap: 3px; }
+.gv-stat .k { font-size: var(--font-small); line-height: 8px; letter-spacing: 2px; color: color-mix(in srgb, var(--color-primary) 70%, #fff); }
+.gv-stat .v { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--font-h2); line-height: 20px; color: #d8dbe2; }
+.gv-empty { margin: 0; font-size: var(--font-h2); line-height: 20px; color: #8a90a0; }
+@media (max-width: 1200px) {
+    .galaxy-viewer-body { grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); }
+    .galaxy-viewer-stats { grid-column: 2; }
+}
+.galaxy-viewer-rows .diff { display: inline-flex; align-items: center; gap: 6px; }
+.gv-owner { display: inline-flex; width: 16px; height: 16px; }
+
+/* Victory / defeat: planet + stage stepper (stage-stepper.js). */
+.outcome-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 12px auto 4px;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    text-shadow: none;
+    --outcome-accent: var(--faction-accent, var(--color-primary));
+}
+.outcome-progress[hidden] { display: none; }
+.outcome-planet { display: flex; align-items: center;}
+.outcome-planet-icon { display: inline-flex; flex: none;}
+.outcome-planet-text { display: flex; flex-direction: column;}
+.outcome-planet-text strong { font-size: var(--font-h2); letter-spacing: 2px; color: #fff;}
+.outcome-planet-text span { font-size: var(--font-small); color: #a8adb8;}
+.outcome-stepper {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.outcome-step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+/* Connector to the previous step. */
+.outcome-step + .outcome-step::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    right: 50%;
+    width: calc(100% - 28px);
+    margin-right: 14px;
+    height: 2px;
+    background: #3a3f4a;
+}
+.outcome-step.is-done::before, .outcome-step.is-won::before { background: var(--outcome-accent); }
+.outcome-step-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    box-sizing: border-box;
+    font-size: var(--font-h2);
+    line-height: 16px;
+    color: #6a7080;
+    background: #0a0c12;
+    border: var(--ui-border-width, 2px) solid #3a3f4a;
+}
+.outcome-step-label { font-size: var(--font-small); line-height: 8px; letter-spacing: 1px; color: #6a7080; white-space: nowrap; }
+.outcome-step.is-done .outcome-step-dot { color: #000; background: color-mix(in srgb, var(--outcome-accent) 70%, #000); border-color: var(--outcome-accent); }
+.outcome-step.is-done .outcome-step-label { color: #c8ccd6; }
+.outcome-step.is-won .outcome-step-dot { color: #000; background: var(--outcome-accent); border-color: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--outcome-accent) 40%, transparent); }
+.outcome-step.is-won .outcome-step-label { color: #fff; }
+.outcome-step.is-lost .outcome-step-dot { color: #fff; background: #8a1f1f; border-color: #ff6a6a; box-shadow: 0 0 0 3px rgba(255, 90, 90, 0.35); }
+.outcome-step.is-lost .outcome-step-label { color: #ff8a8a; }
+.outcome-step.is-boss .outcome-step-dot { width: 32px; height: 32px; margin-top: -2px; }
+
+/* Planet card buttons side by side (FROM START left, mission right). */
+.galaxy-map-panel-select .gm-card-actions {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    white-space: nowrap;
+}
+.outcome-step { width: 56px; }
+.outcome-status {
+    margin: 0;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: var(--font-h2);
+    line-height: 16px;
+    letter-spacing: 2px;
+    color: var(--outcome-accent);
+}
+.outcome-progress[data-result="lost"] .outcome-status { color: #ff8a8a; }
+.outcome-planet-text span { font-size: var(--font-h2); letter-spacing: 1px;}
+
+/* Planet segment inside the shared bottom bar. */
+.galaxy-map-panel-select {
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+.galaxy-map-panel-select .gm-sector-planet-col {
+    width: 28%;
+    min-width: 140px;
+    max-width: 220px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-col {
+    width: 32%;
+    min-width: 160px;
+    max-width: 240px;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg {
+    left: -16px;
+    bottom: -48px;
+    width: 260px;
+    height: 260px;
+    max-width: none;
+    transform: none;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg .gm-planet-icon,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg svg {
+    width: 100%;
+    height: 100%;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-heading #gmSectorName {
+    font-size: 26px;
+}
+.galaxy-map-panel-select .gm-detail {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px 8px;
+    align-content: start;
+    flex: 1 1 0;
+}
+.galaxy-map-panel-select .gm-detail .stat-row {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 4px 8px;
+    background: color-mix(in srgb, #05060a 60%, transparent) !important;
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+    min-width: 0;
+}
+.galaxy-map-panel-select .gm-detail .stat-row .stat-label {
+    font-size: var(--font-small);
+    letter-spacing: 0.1em;
+}
+.galaxy-map-panel-select .gm-detail .stat-row .stat-value {
+    text-align: left;
+    justify-content: flex-start;
+    overflow-wrap: anywhere;
+}
+/* Faction spans full width; stepper + hint too. */
+.galaxy-map-panel-select .gm-detail .stat-row:first-child,
+.galaxy-map-panel-select .gm-detail .gm-stage-stepper,
+.galaxy-map-panel-select .gm-detail .gm-unlock-hint {
+    grid-column: 1 / -1;
+}
+.galaxy-map-panel-select .gm-detail .gm-unlock-hint:empty { display: none; }
+.galaxy-map-panel-select > .gm-card-actions {
+    flex: 1 0 100%;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/* Bottom bar is below the map — full hit targets on its controls. */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-panel-select,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-panel-select *,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions,
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions * {
+    pointer-events: auto !important;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-situation {
+    pointer-events: auto;
+}
+
+/* Full-screen menu surfaces: same GUI zoom, sized to the bezel screen opening.
+   top/left ÷ zoom (CSS zoom quirk); width/height ÷ zoom so used size = glass. */
+.start-screen,
+.start-screen-overlay,
+.profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
+.player-selection-overlay {
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    zoom: 1;
+    transform: scale(var(--_z));            /* scale, not CSS zoom: DevTools and getBoundingClientRect then agree with what is drawn */
+    transform-origin: 0 0;
+    position: fixed;
+    left: var(--fr-open-side);
+    top: var(--fr-open-top);
+    right: auto;
+    bottom: auto;
+    width: calc(var(--fr-open-w) / var(--_z));
+    height: calc(var(--fr-open-h) / var(--_z));
+    max-width: none;
+    max-height: none;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.enemy-size-row { grid-template-columns: 64px 1fr; grid-template-areas: "label label" "num range"; }
+.enemy-size-input {
+    grid-area: num;
+    width: 100%;
+    box-sizing: border-box;
+    height: 24px;
+    padding: 0 4px;
+    background: #05060a;
+    color: var(--color-primary);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    font: 700 12px var(--ui-font-family);
+    text-align: right;
+}
+.enemy-size-slider { grid-area: range; width: 100%; accent-color: var(--color-primary); margin: 0; }
+.enemy-size-unit { display: none; }
+
+/* Station header: stay on one row at every GUI / window scale. Children shrink
+   instead of wrapping (progress + wallet used to drop onto a second line). */
+html body .home-station-overlay .home-station-content .hs-header-split {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
+    margin-left: auto;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-progress-card {
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-wallet-res {
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+
+/* The tab hover rule resets `top: auto` on every descendant, which collapsed the
+   absolutely positioned relation-meter parts (fill, centre mark, value) to
+   nothing — the bar looked empty / 0 while hovering. Keep their offsets. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-faction-card:is(:hover, :focus, :focus-visible, :active, .nav-focused) :is(.hs-faction-meter-fill, .hs-faction-meter-val) { top: 0; }
+html body .home-station-overlay .home-station-content .hs-tab.hs-faction-card:is(:hover, :focus, :focus-visible, :active, .nav-focused) .hs-faction-meter-mid { top: -3px; }
+
+/* FACTIONS area: padding and margin 16px, gaps 8px (4px between chips / rows). */
+html body .home-station-overlay .home-station-content .hs-factions {
+    --fac-space: 16px;
+    --fac-gap: 8px;
+    --fac-gap-s: 4px;
+    gap: var(--fac-gap) !important;
+    padding: var(--fac-space) !important;
+    margin: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-hint, .hs-faction-tabpanel, .hs-fd, .hs-fd-hero, .hs-fd-block, .hs-fd-cols, .hs-fd-row, .hs-fd-chips, .hs-fd-tabs, .hs-faction-actions, .hs-faction-grid, .hs-fd-fleet, .hs-fd-fleet-list, .hs-fd-fleet-toolbar) {
+    gap: var(--fac-gap) !important;
+    margin: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-fd-chips, .hs-fd-row, .hs-fd-tabs, .hs-fd-fleet-toolbar) {
+    gap: var(--fac-gap-s) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions :is(.hs-faction-tabpanel, .hs-fd-hero, .hs-fd-block, .hs-faction-actions) {
+    padding: var(--fac-space) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card,
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    padding: var(--fac-space) !important;
+    margin: 0 !important;
+}
+
+/* Relation value in the faction colour of its standing, right next to the name. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-name { flex: 0 1 auto; }
+
+.hs-faction-score {
+    flex: none;
+    font-size: var(--font-h2);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    color: #e0a030;
+    text-shadow: 1px 0 0 #05060a, -1px 0 0 #05060a, 0 1px 0 #05060a, 0 -1px 0 #05060a;
+}
+.hs-faction-card.is-ally .hs-faction-score,
+.hs-faction-card.is-friend .hs-faction-score { color: #40d890; }
+.hs-faction-card.is-hostile .hs-faction-score { color: #e04848; }
+
+.hs-faction-planets { display: inline-flex; align-items: center; gap: 4px; }
+
+.hs-faction-trade-ico { display: inline-flex; align-items: center; }
+.hs-faction-trade-ico.is-open { color: #40d890; filter: drop-shadow(1px 1px 0 #05060a); }
+.hs-faction-trade-ico.is-closed { color: color-mix(in srgb, var(--color-text, #fff) 45%, transparent); }
+
+/* Wallet buttons (fullscreen / logout): symmetric padding so the glyph sits in the middle. */
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn {
+    align-items: center;
+    justify-content: center;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn {
+    box-sizing: border-box;
+}
+
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn :is(.vf-fs-icon, .hs-logout-icon, .hs-tab-pixel) { flex: none;}
+
+/* Main nav (PLAY + area cards): split vertically in thirds — icon in the upper
+   two thirds, label on a dark strip in the lower third. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn {
+    display: grid !important;
+    grid-template-rows: 2fr 1fr;
+    grid-template-columns: 100%;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active { overflow: visible !important; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-icon {
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    justify-self: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn :is(.hs-tab-icon .ui-icon-tip, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) {
+    width: 64px !important;
+    height: 64px !important;
+    image-rendering: pixelated;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label {
+    grid-row: 2;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    background: rgba(2, 2, 3, 0.88);
+    text-align: center;
+    white-space: nowrap;
+}
+/* PLAY: disc + triangle centre on the upper two thirds, label strip below. */
+html body .home-station-overlay .home-station-content .hs-play-launch::before,
+html body .home-station-overlay .home-station-content .hs-play-launch::after,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon { top: 33.333%; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    height: 33.333%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 2, 3, 0.88);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn > .hs-tab-icon {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0;
+}
+/* Make the lower third read as exactly one third: opaque dark strip with a
+   frame-coloured line on its upper edge. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    box-sizing: border-box;
+    background: #020203;
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+/* Labels sit INSIDE the outline (the frame stays visible around the strip),
+   and the nav buttons get more height. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn { min-height: 120px !important; }
+html body .home-station-overlay .home-station-content .hs-play-launch { min-height: 120px; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label { margin: 0 5px 5px; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label { margin: 0 2px; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    height: calc(33.333% - 3px);
+}
+
+/* Nav icons: 2px dark outline (#05060a), same as the other glowing icons.
+   Put on the wrapper — the img itself already carries the tint filter. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-icon > .ui-icon-tip {
+    filter:
+        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
+        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+}
+
+/* Active PLAY joins the content below exactly like an active area tab:
+   open at the bottom (top + side lines only), panel-coloured, reaching 3px
+   down over the body's top line. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch.active {
+    z-index: 3;
+    margin-bottom: -24px;
+    border-bottom-width: 0;
+    clip-path: none;
+    background: var(--hs-tabpanel, #05060a);
+    box-shadow:
+        inset 0 2px 0 var(--color-primary),
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary);
+}
+/* The button reaches 30px lower than its siblings: keep icon + label where theirs are. */
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    left: 2px;
+    right: 2px;
+    bottom: 35px;
+    height: calc((100% - 30px) / 3 - 5px);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active::before,
+html body .home-station-overlay .home-station-content .hs-play-launch.active::after,
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-icon { top: calc((100% - 30px) / 3); }
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 35px;
+    background: #020203;
+}
+
+/* PLAY icon: same coarse 16×16 pixel art as the nav icons (octagon ring +
+   triangle), 64px = 4px per cell, coloured through a mask so hover / active
+   tinting keeps working. */
+html body .home-station-overlay .home-station-content .hs-play-launch::before,
+html body .home-station-overlay .home-station-content .hs-play-launch::after { display: none; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    width: 64px;
+    height: 64px;
+    border: 0;
+    left: 50%;
+    top: 33.333%;
+    transform: translate(-50%, -50%);
+    clip-path: none;
+    background: var(--color-primary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2016%2016%27%20shape-rendering=%27crispEdges%27%3E%3Crect%20x=%274%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2016%2016%27%20shape-rendering=%27crispEdges%27%3E%3Crect%20x=%274%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%270%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%271%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%272%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%274%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%275%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%276%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%277%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%278%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%279%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2710%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%270%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2715%27%20y=%2711%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%271%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2714%27%20y=%2712%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%272%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2713%27%20y=%2713%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2712%27%20y=%2714%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%274%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%275%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%276%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%277%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%278%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%279%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2710%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3Crect%20x=%2711%27%20y=%2715%27%20width=%271%27%20height=%271%27/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    image-rendering: pixelated;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon::before { content: none; }
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    filter:
+        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
+        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+}
+
+/* Background deco icons only on PLAY (its planets); area cards stay clean. */
+.hs-area-btn .hs-area-deco { display: none !important; }
+
+/* PLAY a bit wider than the area cards. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+    flex: 0 0 230px;
+    width: 230px;
+    min-width: 230px;
+}
+@media (min-width: 1101px) and (max-width: 1650px) {
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+        flex: 0 1 clamp(112px, calc(10.5 * var(--sv-w)), 172px) !important;
+        width: clamp(112px, calc(10.5 * var(--sv-w)), 172px) !important;
+        min-width: 0;
+    }
+}
+
+/* Nav labels a size up. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    font-size: var(--font-h2) !important;
+    letter-spacing: 0.06em;
+}
+@media (min-width: 1101px) and (max-width: 1650px) {
+    html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
+    html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+        font-size: clamp(13px, calc(1.25 * var(--sv-w)), 17px) !important;
+    }
+}
+
+/* Profile list: no separators between pilots, no doubled side lines — the
+   selected pilot is marked by a tinted row instead of left/right borders. */
+html body .profile-list .profile-list-item,
+html body .profile-list .profile-list-item.selected {
+    border: 0;
+}
+html body .profile-list .profile-list-item.selected {
+    background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+/* The inline profile dialog carried a faction drop-shadow filter on the whole
+   box, which put a halo (and a ghost second line) around every text, emblem
+   and border. Off; the list keeps one crisp frame. */
+html body .profile-selection-overlay.is-inline .profile-selection-content { filter: none !important; }
+
+/* ==== Profile details: coarse tile layout, big type, icons ==== */
+.profile-details { padding: 16px !important; gap: 16px; text-align: left; }
+.pd-hero { display: flex; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: var(--ui-border-width, 2px) solid var(--color-border); }
+.pd-hero-emblem, .pd-hero-emblem img { width: 64px; height: 64px; flex: none; }
+.pd-hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pd-hero-name { font-size: 26px; letter-spacing: 3px; color: var(--color-text); overflow-wrap: anywhere; }
+.pd-hero-faction { font-style: normal; font-size: var(--font-h2); letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
+.pd-tiles { display: flex; flex-wrap: nowrap; align-items: center; gap: 0; background: color-mix(in srgb, var(--color-primary) 10%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.pd-tile { display: flex; align-items: center; gap: 12px; padding: 12px; min-width: 0; }
+.pd-tile.is-wide { flex: 1 1 auto; }
+.pd-tile:not(.is-wide) { flex: 0 0 auto; }
+.pd-tile-icon, .pd-tile-icon img { width: 32px; height: 32px; flex: none; }
+.pd-tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pd-tile-value { font-size: 20px; letter-spacing: 1px; color: var(--color-text); overflow-wrap: anywhere; }
+.pd-tile-cap { font-style: normal; font-size: var(--font-text); letter-spacing: 2px; color: var(--color-text-secondary); }
+.pd-block-title { font-size: var(--font-h2); letter-spacing: 3px; color: var(--faction-accent, var(--color-primary));}
+.pd-block-title img { width: 20px; height: 20px; }
+.pd-galaxies { flex-direction: column;}
+.pd-galaxy { display: grid; grid-template-columns: minmax(0, 1fr) auto 56px; align-items: center; gap: 12px; padding: 8px 12px; background: color-mix(in srgb, var(--color-primary) 6%, #05060a); font-size: var(--font-h2); letter-spacing: 1px; color: var(--color-text-secondary); }
+.pd-galaxy.is-station { color: var(--faction-accent, var(--color-primary)); background: color-mix(in srgb, var(--color-primary) 16%, #05060a); }
+.pd-galaxy-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-galaxy-count { text-align: right; color: var(--color-text); }
+.pd-bar { display: inline-flex; gap: 2px; }
+.pd-bar i { width: 8px; height: 12px; background: color-mix(in srgb, var(--color-text) 18%, transparent); }
+.pd-bar i.on { background: var(--faction-accent, var(--color-primary)); }
+.pd-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pd-res-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--color-primary) 8%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.pd-res-icon, .pd-res-icon img { width: 28px; height: 28px; flex: none; }
+.pd-res-value { font-size: var(--font-h2); letter-spacing: 1px; color: var(--color-text); }
+.pd-ships { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-ship { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: var(--font-h2); letter-spacing: 1px; background: color-mix(in srgb, var(--color-primary) 8%, #05060a); border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent); color: var(--color-text); }
+.pd-ship.is-active { border-color: var(--faction-accent, var(--color-primary)); color: var(--faction-accent, var(--color-primary)); }
+.pd-ship img { width: 20px; height: 20px; }
+/* Galaxies: two columns of chunky tiles (name + count on top, cell bar below). */
+.pd-galaxies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pd-galaxy { grid-template-columns: minmax(0, 1fr) auto;}
+.pd-galaxy-name { grid-area: name; }
+.pd-galaxy-count { grid-area: count; }
+.pd-bar { grid-area: bar; }
+.pd-bar i { flex: 1 1 0; max-width: 14px; }
+
+/* Galaxy tile: current planet as the galaxy's icon on the left. */
+.pd-galaxy { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "planet name count" "planet bar bar"; column-gap: 12px; row-gap: 8px; }
+.pd-galaxy-planet { grid-area: planet; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; align-self: center; }
+.pd-galaxy-planet > *, .pd-galaxy-planet img { width: 40px; height: 40px; }
+.pd-galaxy-count { display: inline-flex; align-items: center; gap: 4px; }
+.pd-galaxy-count img { width: 20px; height: 20px; }
+.pd-galaxy.is-station { box-shadow: inset 0 0 0 2px var(--faction-accent, var(--color-primary)); }
+
+/* UNIVERSE LOADER modal (galaxies page). */
+.galaxy-viewer-head { flex-wrap: wrap; min-width: 0; }
+.galaxy-viewer-head-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; min-width: 0; }
+.galaxy-viewer { position: relative; }
+.galaxy-viewer-modal-backdrop { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(2, 2, 3, 0.78); }
+.galaxy-viewer-modal { width: min(420px, 90%); box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 16px; background: #05060a; border: var(--ui-border-width, 2px) solid var(--color-primary); text-align: left; }
+.galaxy-viewer-modal h3 { margin: 0; font-size: var(--font-h2); letter-spacing: 3px; color: var(--color-primary); }
+.galaxy-viewer-modal p { margin: 0; font-size: var(--font-text); line-height: 1.5; letter-spacing: 1px; color: var(--color-text-secondary); }
+.galaxy-viewer-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.galaxy-viewer-modal-actions .galaxy-viewer-btn:first-child { margin-right: auto; }
+.galaxy-viewer-modal-actions .is-primary { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* Galaxy list runs down to the bottom of its column. */
+.galaxy-viewer-side { height: 100%; }
+.galaxy-viewer-list { flex: 1 1 0; min-height: 0; max-height: none; }
+
+.galaxy-viewer-btn { display: inline-flex; align-items: center; gap: 8px; }
+.galaxy-viewer-btn .ps-btn-icon, .galaxy-viewer-btn .gv-btn-ico, .galaxy-viewer-btn .gv-btn-ico img { width: 16px; height: 16px; flex: none; }
+
+/* UNIVERSE LOADER: drop area + app-style action buttons. */
+.galaxy-viewer-modal-actions .action-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.gv-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 16px; text-align: center; cursor: pointer; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-primary) 6%, #05060a); border: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.gv-drop:hover, .gv-drop:focus-visible, .gv-drop.is-over { color: var(--color-primary); border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 16%, #05060a); outline: none; }
+.gv-drop-icon { display: inline-flex; filter: drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a) drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a); }
+.gv-drop-title { font-size: var(--font-h2); letter-spacing: 3px; color: var(--color-text); }
+.gv-drop-sub { font-size: var(--font-text); letter-spacing: 1px; }
+.galaxy-viewer-modal .action-button {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    font-size: var(--font-h2);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    color: var(--color-text);
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow: none;
+}
+.galaxy-viewer-modal .action-button:not(.secondary) {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
+}
+.galaxy-viewer-modal .action-button:hover,
+.galaxy-viewer-modal .action-button:focus-visible {
+    color: #05060a;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    outline: none;
+}
+.galaxy-viewer-modal .action-button .ps-btn-icon { width: 20px; height: 20px; }
+.galaxy-viewer-modal-actions .action-button:first-child { margin-right: auto; }
+
+/* DELETE GALAXY modal: target galaxy list. */
+.gv-target-list { max-height: 200px; }
+.gv-target-list li { cursor: pointer; }
+.galaxy-viewer-modal .gv-target-list { flex: none; height: auto; min-height: 0; max-height: 200px; overflow-y: auto; }
+
+/* Main nav icons: dim when idle, holographic flicker when selected. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active) .hs-tab-icon {
+    filter: brightness(0.28) saturate(0.5) !important;
+    transition: filter 0.2s ease;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active):is(:hover, :focus-visible, .nav-focused) .hs-tab-icon {
+    filter: brightness(0.85) saturate(0.9) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon {
+    position: relative;
+    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 0%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, transparent) 40%, transparent 65%) !important;
+    box-shadow: 0 0 8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent),
+        inset 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
+    background-size: 100% 100% !important;
+    animation: none;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px);
+    animation: hs-holo-scan 3.5s linear infinite;
+}
+@keyframes hs-holo-on {
+    /* Only a slight dimming, no blackout. */
+    0%   { opacity: 0.82; }
+    35%  { opacity: 1; }
+    55%  { opacity: 0.9; }
+    100% { opacity: 1; }
+}
+@keyframes hs-holo-flicker {
+    0%, 100% { opacity: 1; }
+    6% { opacity: 0.8; }
+    8% { opacity: 1; }
+    41% { opacity: 0.9; }
+    43% { opacity: 1; }
+    72% { opacity: 0.7; transform: translateX(1px); }
+    74% { opacity: 1; transform: none; }
+    90% { opacity: 0.92; }
+}
+@keyframes hs-holo-scan {
+    from { background-position: 0 0; }
+    to { background-position: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon::after { animation: none; }
+}
+
+/* MENU: calmer flicker (its wide bar icon made the full flicker too harsh). */
+@keyframes hs-holo-flicker-soft {
+    0%, 100% { opacity: 1; }
+    41% { opacity: 0.94; }
+    43% { opacity: 1; }
+    72% { opacity: 0.88; }
+    74% { opacity: 1; }
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn[data-open-menu].active .hs-tab-icon {
+    animation: none;
+}
+
+/* PLAY: dark when idle, powers on like the nav icons when active. */
+html body .home-station-overlay .home-station-content .hs-play-launch:not(.active) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    filter: brightness(0.3) saturate(0.5);
+    transition: filter 0.2s ease;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:not(.active):is(:hover, .nav-focused) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    filter: brightness(0.85) saturate(0.9);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn[data-open-menu].active .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-play-launch.active :is(.hs-play-launch-planets, .hs-play-launch-icon) { animation: none; }
+}
+
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active.holo-on .hs-tab-icon,
+html body .home-station-overlay .home-station-content .hs-play-launch.active.holo-on :is(.hs-play-launch-planets, .hs-play-launch-icon) {
+    animation: hs-holo-on 0.3s steps(1, end) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active.holo-on .hs-tab-icon,
+    html body .home-station-overlay .home-station-content .hs-play-launch.active.holo-on :is(.hs-play-launch-planets, .hs-play-launch-icon) { animation: none; }
+}
+
+/* Settings: text and controls scale with the panel's own width (container
+   queries), so the page fills whatever box it sits in. */
+.settings-panel {
+    container: sp / inline-size;
+    --sp-font: clamp(14px, 1.7cqw, 20px);
+}
+.settings-panel :is(.settings-row-label, .settings-row-value, .settings-hint, .settings-section-name, .volume-control label, .theme-dropdown-toggle) {
+    font-size: var(--sp-font);
+}
+.settings-panel .settings-section-title {
+    font-size: calc(var(--sp-font) * 1.1);
+}
+.settings-panel .settings-section-icon {
+    width: calc(var(--sp-font) * 1.4);
+    height: calc(var(--sp-font) * 1.4);
+}
+.settings-panel .settings-row {
+    padding-block: calc(var(--sp-font) * 0.4) !important;
+}
+.settings-panel .settings-cycle-btn {
+    width: calc(var(--sp-font) * 2);
+    height: calc(var(--sp-font) * 2);
+    font-size: var(--sp-font);
+}
+.settings-panel .settings-row-value {
+    min-width: calc(var(--sp-font) * 5);
+}
+@container sp (max-width: 640px) {
+    .settings-panel-clustered:not(.settings-panel-3col) {
+        grid-template-columns: 1fr;
+    }
+    .settings-panel .settings-row:not(.settings-row-theme):not(.settings-row-volume):not(.settings-row-youtube):not(.settings-row-sound-code) {
+        flex-wrap: wrap;
+    }
+}
+
+/* Bottom bar under the map: planet segment keeps a readable min width. */
+.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels {
+    justify-content: flex-start;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    width: max(calc(20 * var(--sv-w)), 380px) !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-width: calc(50 * var(--sv-w));
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    overflow: hidden;
+}
+
+/* Layout space under CSS zoom. Reference: 75% GUI scale.
+   --zk / --cw / --ch size elements in the zoomed layout coordinates.
+   Use the bezel screen opening (not the full stage) so modals fit the glass. */
+:root {
+    --zk: calc(0.75 / var(--gui-zoom, 0.75));
+    --cw: calc(var(--fr-open-w, var(--vw, 1280px)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+    --ch: calc(var(--fr-open-h, var(--vh, 960px)) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    width: calc(420px * var(--zk)) !important;
+    max-width: calc(50 * var(--cw));
+}
+.start-screen-content {
+    max-width: min(calc(94 * var(--cw)), calc(860px * var(--zk)));
+    max-height: calc(94 * var(--ch));
+}
+.start-screen-content:has(> .settings-panel) {
+    width: min(calc(94 * var(--cw)), calc(860px * var(--zk)));
+}
+.start-screen-content:has(> .settings-panel-3col) {
+    width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    max-width: min(calc(96 * var(--cw)), calc(1100px * var(--zk)));
+    height: min(calc(86 * var(--ch)), calc(860px * var(--zk)));
+}
+
+/* Planet map container: fills the space under the header (the whole station
+   is one fixed-proportion stage, so that share is the same at every size). */
+.home-station-content .hs-body-play .galaxy-map-embedded .gm-map-stage {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+
+/* Station bezel: proportional to the real viewport (not a separate stage).
+   GUI scale stays on .home-station-content via zoom: var(--gui-zoom). */
+.home-station-overlay {
+    --u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
+    --bezel: calc(38 * var(--u));
+    --hs-frame-gap: calc(6 * var(--u));
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    box-shadow: none;
+    overflow: hidden !important;
+}
+.home-station-overlay .home-station-content {
+    --hs-pad-y: 0px;
+}
+.home-station-overlay::after,
+.vf-bezel::after {
+    position: fixed !important;
+    inset: var(--hs-frame-gap) !important;
+    font-size: calc(11 * var(--u));
+    letter-spacing: 0.3em;
+    clip-path: polygon(
+        calc(16 * var(--u)) 0, calc(100% - 16 * var(--u)) 0, calc(100% - 16 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(16 * var(--u)), 100% calc(16 * var(--u)),
+        100% calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) 100%,
+        calc(16 * var(--u)) 100%, calc(16 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 16 * var(--u)), 0 calc(100% - 16 * var(--u)),
+        0 calc(16 * var(--u)), calc(8 * var(--u)) calc(16 * var(--u)), calc(8 * var(--u)) calc(8 * var(--u)), calc(16 * var(--u)) calc(8 * var(--u)));
+    background:
+        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#3dff6a 0 0) calc(100% - 62 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--hull-dark) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(8 * var(--u))) calc(40 * var(--u)) calc(12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(100% - 40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / calc(4 * var(--u)) 100% no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 0 100% / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 100% 0 / calc(4 * var(--u)) 100% no-repeat,
+        var(--hull);
+}
+.hs-frame-ui-scale {
+    position: fixed !important;
+    right: calc(var(--bezel) + 224 * var(--u));
+    bottom: calc(var(--hs-frame-gap) + 6 * var(--u));
+    font-size: calc(12 * var(--u));
+}
+.hs-frame-ui-scale input {
+    width: calc(180 * var(--u));
+}
+
+/* Settings sliders: much wider, they take most of the row. */
+
+.settings-panel .settings-look-slider {
+    min-width: 160px;
+    height: calc(var(--sp-font, 14px) * 1);
+}
+
+/* All settings sliders share one width (set by the longest label's row). */
+.settings-panel .settings-look-controls {
+    flex: 0 0 auto;
+    width: 52%;
+    max-width: none;
+}
+
+/* Dev mode, top bar: handle to add a divider. */
+.hs-tabs.hs-tabs-editing .hs-tab-divider-handle {
+    align-self: center;
+    margin-left: 12px;
+    padding: 6px 10px;
+    border: var(--ui-border-width, 2px) dashed var(--color-primary);
+    color: var(--color-primary);
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    cursor: grab;
+    user-select: none;
+}
+
+/* Planet-view header (situation / ship / progress): readable type, and the
+   16x16 icons shown at exactly 2x (32 px). Teleport button and crests keep
+   their own sizes. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-title { font-size: 20px; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-panel-value { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-status { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-class { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dt { font-size: var(--font-text); letter-spacing: 0.08em; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd * { font-size: inherit; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-progress-text { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-galaxy { font-size: 20px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-label { font-size: var(--font-h2); }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-holdings { font-size: var(--font-text); }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-kind { font-size: var(--font-text); }
+
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-sub { font-size: var(--font-text); }
+html body .galaxy-map-embedded .galaxy-map-header :is(.gm-stat-icon, .gm-progress-icon),
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation img.profile-faction-emblem-img,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler-emblem img.profile-faction-emblem-img {
+    width: 32px !important;
+    height: 32px !important;
+    image-rendering: pixelated;
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img,
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.hs-pixel,
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats img.gm-stat-icon,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats img.hs-pixel {
+    width: 40px !important;
+    height: 40px !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats .gm-stat-chip,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-card-stats dd { align-items: center; }
+/* Invasion / conflict icon: its own slot instead of overlapping the text. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-emblem { flex: 0 0 auto;}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-row { align-items: center;}
+
+/* Start galaxy picker: the ruler's crest, large, in front of the galaxy name. */
+.profile-start-galaxy-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+.profile-start-galaxy-crest,
+.profile-start-galaxy-crest > *,
+.profile-start-galaxy-crest img,
+.profile-start-galaxy-crest svg {
+    width: 48px;
+    height: 48px;
+    flex: none;
+}
+.profile-start-galaxy-crest img { image-rendering: pixelated; }
+.profile-start-galaxy-ruler > span:first-child { width: auto; height: auto; }
+
+/* Ship bar: stacked name/class/status on the left, Weapons · Modules to the right. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-ship-bar {
+    flex: 1 1 auto;
+    gap: 18px;
+    padding: 6px 20px;
+    align-items: center;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-art { width: 80px; height: 100px; display: flex; align-items: center; justify-content: center; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+    min-width: 0;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 5px;
+    padding-right: 20px;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info .gm-panel-value {
+    font-size: var(--font-h2);
+    line-height: 1.1;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-class {
+    font-size: var(--font-h2);
+    letter-spacing: 0.1em;
+    opacity: 0.8;
+    line-height: 1.1;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-status {
+    padding: 2px 8px;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats {
+    flex: 1 1 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding-top: 0;
+    border-top: 0;
+    align-self: stretch;
+    align-content: center;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 20px;
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    min-width: 0;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div:first-child { border-left: 0; padding-left: 0; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats dd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 32px;
+    margin: 0;
+    white-space: nowrap;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats dd .gm-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-bar-cta {
+    flex: 0 0 auto;
+    margin-left: 4px;
+}
+
+/* Planet-view header: dark panel behind title, cards, ship bar and progress. */
+html body .galaxy-map-embedded .galaxy-map-header {
+    background: color-mix(in srgb, #05060a 88%, transparent);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    padding: 8px 12px;
+    box-sizing: border-box;
+}
+
+/* Active nav button: bold label. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-tab.active .hs-tab-label,
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    font-weight: 800 !important;
+    letter-spacing: 0.06em;
+}
+
+/* Ship bar opens the hangar. */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar { cursor: pointer; transition: background 0.15s ease; }
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    outline: none;
+}
+
+/* Ship bar = button: framed, lifts on hover, with the animated repair icon. */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link {
+    position: relative;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a;
+    padding-right: 80px;
+    transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship {
+    margin-right: 4px;
+    order: 3;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:is(:hover, :focus-visible) {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 20%, #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 14px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:active {
+    background: color-mix(in srgb, var(--color-primary) 30%, #05060a);
+    transform: translateY(1px);
+}
+.gm-ship-bar-cta {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 22%, #05060a), #05060a);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 2px 0 #000;
+    pointer-events: none;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+.gm-ship-bar-cta svg { display: block; overflow: visible; image-rendering: pixelated; }
+/* Gear: still at rest; while hovered it ticks between two positions. */
+.gm-cta-wrench {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+}
+.is-hangar-link:is(:hover, :focus-visible):not(:has(.gm-locate-ship:is(:hover, :focus-visible))) .gm-ship-bar-cta {
+    border-color: var(--color-primary);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 40%, #05060a), color-mix(in srgb, var(--color-primary) 12%, #05060a));
+}
+/* Gear ticks only when the hangar bar itself is hovered — not when FIND SHIP is. */
+.is-hangar-link:is(:hover, :focus-visible):not(:has(.gm-locate-ship:is(:hover, :focus-visible))) .gm-cta-wrench {
+    animation: gm-cta-gear 0.9s steps(1, end) infinite;
+}
+/* Two states only: the gear ticks between two positions (half a tooth apart). */
+@keyframes gm-cta-gear {
+    0%   { transform: rotate(0deg); }
+    50%  { transform: rotate(22.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .is-hangar-link:hover .gm-cta-wrench { animation: none; }
+}
+
+/* Planet-map progress ("1/5 CLEARED"): own card in the top bar, left of the wallet. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-progress-card {
+    flex: 0 0 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    margin: 8px 8px 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    background: color-mix(in srgb, var(--color-background, #050508) 80%, transparent);
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-progress-card[hidden] { display: none !important; }
+.hs-progress-card .gm-progress-text {
+    font-size: var(--font-h2);
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+.hs-progress-card .gm-progress-icon { width: 32px !important; height: 32px !important; flex: none; }
+
+/* Situation card: clickable, opens the mission modal. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation { cursor: pointer; transition: filter 0.12s ease; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) { filter: brightness(1.25); outline: none; }
+
+.gm-mission-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.62);
+}
+.gm-mm-dialog {
+    width: min(560px, 80%);
+    box-sizing: border-box;
+    padding: 22px 26px;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    box-shadow: inset 0 0 0 2px #05060a, 0 0 0 2px #000, 0 0 28px color-mix(in srgb, var(--color-primary) 40%, transparent);
+    color: var(--color-text);
+}
+.gm-mm-title { margin: 0 0 14px; letter-spacing: 0.14em; color: var(--color-primary);}
+.gm-mm-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.gm-mm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    font-size: var(--font-h2);
+    letter-spacing: 0.06em;
+}
+.gm-mm-row span { color: var(--color-text-secondary); font-size: var(--font-text); align-self: center; }
+.gm-mm-goal { margin: 0 0 18px; font-size: var(--font-h2); line-height: 1.5; opacity: 0.9; }
+.gm-mm-actions { display: flex; justify-content: space-between; gap: 12px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation { pointer-events: auto; }
+
+/* Teleport: a large tile as tall as the header row, big wormhole icon (4x the 16 px art) and a label. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    align-self: stretch;
+    width: 132px;
+    min-width: 132px;
+    height: auto;
+    min-height: 110px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn .gm-teleport-icon {
+    width: 64px !important;
+    height: 64px !important;
+    image-rendering: pixelated;
+    transform-origin: 50% 50%;
+}
+/* Same stepped tick as the hangar gear CTA. */
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn:is(:hover, :focus-visible) .gm-teleport-icon {
+    animation: gm-cta-gear 0.9s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn:is(:hover, :focus-visible) .gm-teleport-icon {
+        animation: none;
+    }
+}
+html body .galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar .gm-teleport-btn .gm-teleport-label {
+    position: static;
+    font-size: var(--font-h2);
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    color: var(--color-text);
+}
+
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler { gap: 10px; }
+.hs-menu-panel-brand:empty { display: none; }
+
+/* Profiles page inside the station menu: use the full height of the panel. */
+.hs-menu-panel-section .hs-menu-profile-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
+}
+.hs-menu-panel-section .hs-menu-profile-col {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.hs-menu-panel-section .hs-menu-profile-stats {
+    max-height: none;
+    height: auto;
+    align-self: stretch;
+    box-sizing: border-box;
+    overflow-y: auto;
+    zoom: 1.2;
+}
+.hs-menu-panel-section .hs-menu-profile-row {
+    padding: 14px 16px;
+    font-size: var(--font-h2);
+}
+.hs-menu-panel-section .hs-menu-profile-row .hs-menu-profile-act { padding: 6px 14px; font-size: var(--font-text); }
+
+/* Profile details: the hero (crest + name) stays pinned at the top; only what is below scrolls. */
+.profile-details > .pd-hero,
+.hs-menu-profile-stats > .pd-hero {
+    top: 0;
+    z-index: 5;
+    padding: 12px 14px 14px;
+    background: color-mix(in srgb, var(--color-background, #05060a) 96%, #000);
+}
+
+.profile-details:has(> .pd-hero) { padding-top: 0; }
+.profile-details.hs-menu-profile-stats:has(> .pd-hero),
+.hs-menu-panel-section .profile-details:has(> .pd-hero) { padding-top: 0 !important; }
+
+/* Profiles page: only the area below the faction filters scrolls (the page itself does not). */
+.hs-menu-panel-body:has(.hs-menu-profile-split) { overflow: hidden; }
+.hs-menu-panel-body .hs-menu-panel-section:has(.hs-menu-profile-split) { overflow: hidden; }
+
+/* Profile details: hero fixed on top, the scrollbar belongs to the part below it. */
+.profile-details:has(> .pd-scroll),
+.hs-menu-profile-stats:has(> .pd-scroll) {
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+.profile-details > .pd-hero,
+.hs-menu-profile-stats > .pd-hero {
+    position: static;
+    margin: 0 -14px;
+    flex: 0 0 auto;
+}
+.pd-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+}
+
+/* Profile galaxy rows: planet slots in the ruling faction's colour; unvisited galaxies stay neutral. */
+.pd-galaxy .pd-bar i.on { background: var(--gx, var(--faction-accent, var(--color-primary))); }
+.pd-galaxy .pd-bar i.open {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--gx, var(--faction-accent, var(--color-primary)));
+}
+.pd-galaxy.is-unvisited .pd-galaxy-planet { opacity: 0.55; filter: grayscale(0.6); }
+.pd-galaxy .pd-bar i.locked {
+    background: color-mix(in srgb, var(--gx, var(--color-text)) 38%, transparent);
+}
+.pd-galaxy .pd-bar i.on, .pd-galaxy .pd-bar i.open, .pd-galaxy .pd-bar i.locked { width: 10px; height: 14px; }
+
+/* Faction contracts: readable type and larger reward / action elements. */
+html body .hs-faction-contracts .hs-mission-type { font-size: var(--font-h2); letter-spacing: 0.12em; }
+html body .hs-faction-contracts .hs-line-name strong { font-size: 21px; letter-spacing: 0.04em; }
+html body .hs-faction-contracts .hs-mission-meta { font-size: var(--font-h2); line-height: 1.35; letter-spacing: 0.04em; }
+html body .hs-faction-contracts .hs-hint { font-size: var(--font-h2); line-height: 1.45; }
+html body .hs-faction-contracts .hs-fcontract-filters .hs-chip,
+html body .hs-faction-contracts .hs-fcontract-filters button { font-size: var(--font-h2); padding: 7px 14px; }
+html body .hs-faction-contracts .hs-mission-reward { font-size: var(--font-h2); gap: 10px; }
+html body .hs-faction-contracts .hs-mission-reward img { width: 32px !important; height: 32px !important; }
+html body .hs-faction-contracts .hs-line-action { font-size: var(--font-h2); padding: 10px 18px; min-width: 220px; }
+html body .hs-faction-contracts .hs-contract-emblem,
+html body .hs-faction-contracts .hs-contract-emblem img { width: 24px !important; height: 24px !important; }
+
+html body .hs-faction-contracts .hs-panel-label { font-size: 20px; letter-spacing: 0.12em; }
+html body .hs-faction-contracts .hs-mission-reward * { font-size: var(--font-h2) !important; }
+html body .hs-faction-contracts .hs-mission-reward > * { padding: 4px 10px; gap: 8px; align-items: center; }
+
+/* Station pages (storage, mission board, explorations, contracts …): readable type. */
+html body .hs-body .hs-panel .hs-panel-label { font-size: 20px; letter-spacing: 0.12em; }
+html body .hs-body .hs-panel :is(.hs-hint, .hs-muted, .hs-empty-slot) { font-size: var(--font-h2); line-height: 1.45; }
+html body .hs-body .hs-panel .hs-chip-label { font-size: var(--font-h2); }
+html body .hs-body .hs-panel :is(th, td) { font-size: var(--font-h2); }
+html body .hs-body .hs-panel td small, html body .hs-body .hs-panel td span { font-size: inherit; }
+html body .hs-body .hs-panel .hs-mission-type { font-size: var(--font-h2); letter-spacing: 0.12em; }
+html body .hs-body .hs-panel .hs-line-name strong { font-size: 21px; letter-spacing: 0.04em; }
+html body .hs-body .hs-panel .hs-mission-meta { font-size: var(--font-h2); line-height: 1.35; }
+html body .hs-body .hs-panel .hs-mission-reward * { font-size: var(--font-h2) !important; }
+html body .hs-body .hs-panel .hs-mission-reward img { width: 32px !important; height: 32px !important; }
+html body .hs-body .hs-panel .hs-line-action { font-size: var(--font-h2); padding: 10px 18px; min-width: 200px; }
+html body .hs-body .hs-panel .hs-explore-cluster-title { font-size: var(--font-h2); letter-spacing: 0.14em; }
+html body .hs-body .hs-station-cover-kicker { font-size: var(--font-h2); }
+html body .hs-body .hs-mission { padding-block: 10px; }
+
+/* Mission modal: larger type and buttons. */
+.gm-mm-title { font-size: 26px; }
+.gm-mm-row { font-size: var(--font-h2); }
+.gm-mm-row span { font-size: var(--font-h2); }
+.gm-mm-goal { font-size: var(--font-h2); }
+.gm-mm-actions .action-button { font-size: var(--font-h2); padding: 10px 22px; min-width: 150px; }
+
+/* Station storage: three full-height columns — owned ships | blueprints | parts. */
+.hs-station-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+        "cover cover cover"
+        "stores stores stores"
+        "ships blueprints parts";
+    grid-template-rows: minmax(110px, auto) auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+.hs-body > .hs-station-grid,
+.hs-body > .hs-section .hs-station-grid { flex: 1 1 auto; }
+.hs-station-grid > .hs-panel-stack { display: contents; }
+.hs-station-grid .hs-panel-ships { grid-area: ships; }
+.hs-station-grid .hs-panel-bp { grid-area: blueprints; }
+.hs-station-grid .hs-panel-parts { grid-area: parts; }
+.hs-station-grid :is(.hs-panel-ships, .hs-panel-bp, .hs-panel-parts) {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* Station storage: draggable column borders. */
+.hs-col-resize {
+    position: absolute;
+    width: 12px;
+    cursor: col-resize;
+    z-index: 5;
+    touch-action: none;
+}
+.hs-col-resize::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--faction-accent, var(--color-primary, #3ddc97));
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.hs-col-resize:hover::after,
+.hs-col-resize.is-dragging::after { opacity: 0.7; }
+
+/* Hangar anatomy buttons: stats row, side by side and compact. */
+.hs-hangar-bay-tools.is-topbar {
+    flex: 0 0 auto;
+    align-self: center;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+.hs-hangar-bay-tools.is-topbar > .action-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 0;
+    padding: 10px 18px;
+    font-size: var(--font-h2);
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Hangar area tiles: fill the frame's height, crisp pixel icons + switches. */
+.hs-hangar-stats.is-row .hs-hangar-areas {
+    align-self: stretch;
+    padding: 0 14px;
+    image-rendering: pixelated;
+}
+.hs-hangar-stats.is-row .hs-area-tile { padding: 0; }
+.hs-hangar-stats.is-row .hs-area-icon svg {
+    width: 55px;
+    height: 55px;
+    image-rendering: pixelated;
+    shape-rendering: crispEdges;
+}
+.hs-hangar-stats.is-row .hs-area-icon .is-lit { filter: drop-shadow(0 0 0 transparent) drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a); }
+.hs-hangar-stats.is-row .hs-area-switch .hs-area-switch-track {
+    width: 56px;
+    min-width: 56px;
+    height: 28px;
+    padding: 0 24px 0 6px;
+    font-family: var(--font-pixel, 'Silkscreen', monospace);
+    font-size: var(--font-small);
+    border-radius: 0;
+    clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.hs-hangar-stats.is-row .hs-area-switch .hs-area-switch-track::before {
+    top: 4px;
+    width: 16px;
+    height: 16px;
+    left: calc(100% - 22px);
+}

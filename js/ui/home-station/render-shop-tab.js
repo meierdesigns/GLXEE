@@ -1,0 +1,331 @@
+"use strict";
+
+// HomeStationUI methods, split from home-station.js.
+extendClass(HomeStationUI, {
+    renderShopTab(profile) {
+        const post = this.getVisitedTradingPost();
+        this.ensureShopCategory();
+        let rows = '';
+        let title = 'SHIP SHOP';
+        let titleIcon = 'hsShop';
+        if (this.shopCategory === 'blueprints') {
+            title = 'BLUEPRINT SHOP';
+            titleIcon = 'hsBlueprint';
+            rows = this.renderShopBlueprintRows(profile);
+        } else if (this.shopCategory === 'parts') {
+            title = 'PARTS SHOP';
+            titleIcon = 'hsCraft';
+            rows = this.renderShopPartRows(profile);
+        } else if (this.shopCategory === 'portals') {
+            title = 'PORTALS SHOP';
+            titleIcon = 'galaxyMilkyWay';
+            rows = this.renderShopPortalRows(profile);
+        } else if (this.shopCategory === 'resources') {
+            title = 'RESOURCE MARKET';
+            titleIcon = 'hsStores';
+            rows = this.renderShopResourceRows(profile);
+        } else if (this.shopCategory === 'styles') {
+            title = 'STYLE SHOP';
+            titleIcon = 'hsShip';
+            rows = this.renderShopStyleRows(profile);
+        } else {
+            rows = this.renderShopShipRows(profile);
+        }
+        const shopFaction = this.getShopFaction(profile).toUpperCase();
+        const galaxyId = (typeof profileManager !== 'undefined')
+            ? profileManager.getCurrentGalaxyId(profile)
+            : 'milky_way';
+        const galaxyName = String(galaxyId).replace(/_/g, ' ').toUpperCase();
+        let stockHint = '';
+        if (this.shopCategory === 'portals') {
+            stockHint = `<p class="hs-muted hs-hint">Buy portals only for factions you have already met in combat. Filter by discovered faction.</p>`;
+        } else if (this.shopCategory === 'resources') {
+            stockHint = `<p class="hs-muted hs-hint">CREDITS = money (uncapped). SCRAP / ORE / CRYSTAL / VOLTEX = materials. Buy &amp; sell materials for credits from STATION or CARGO.</p>`;
+        } else if (this.shopCategory === 'styles') {
+            stockHint = `<p class="hs-muted hs-hint">The first 3 styles of every part and component are free. Unlock more looks here, then pick them in the HANGAR.</p>`;
+        } else {
+            stockHint = `<p class="hs-muted hs-hint">Station stock for ${galaxyName} · FACTION ${shopFaction}. Travel to change available ships and parts.</p>`;
+        }
+        if (post) {
+            title = post.name + ' · ' + title;
+            if (this.shopCategory === 'parts') stockHint = this.renderTradingPostHint(post);
+        }
+        let head = this.shopCategory === 'resources'
+            ? this.renderShopResourceHeader()
+            : this.renderShopCostHeader();
+        if (this.isShopSellMode()) {
+            title += ' · SELL';
+            rows = this.renderShopSellRows(profile);
+            head = this.renderShopSellHeader();
+            stockHint = `<p class="hs-muted hs-hint">Sell back for 50% of the price in credits. Your starter and active ship cannot be sold; only uncrafted blueprints are listed.</p>`;
+        }
+        const undock = post
+            ? `<button type="button" class="hs-shop-cat" id="hsUndock" data-nav-item>` +
+                `<span class="hs-chip-icon">${this.iconHtml('hsStation', 32, 'hs-pixel')}</span><span>← UNDOCK</span></button>`
+            : '';
+        return `<div class="hs-section hs-panel hs-shop-root${post ? ' hs-trading-post' : ''}">` +
+            `${this.renderShopWalletBar(profile)}` +
+            `<div class="hs-shop-cats">${undock}${this.renderShopCategoryTabs()}</div>` +
+            `${this.panelTitle(titleIcon, title)}` +
+            `${stockHint}` +
+            `${this.renderShopToolbar()}` +
+            `<div class="hs-tab-fill hs-shop-list">` +
+            `${head}` +
+            `${rows || this.emptyHtml('hsShop', 'EMPTY')}` +
+            `</div></div>`;
+    },
+
+    /** Cropped, crisp thumbnail (data URL) of a ship, drawn with the hangar's own voxel renderer. */
+    shipThumbSrc(shipId, box) {
+        const cache = this._shipThumbCache || (this._shipThumbCache = {});
+        const key = shipId + '|' + box;
+        if (cache[key]) return cache[key];
+        try {
+            const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            if (!loader || !loader.renderShip || !this.getHangarShipModel) return '';
+            const model = this.getHangarShipModel(shipId);
+            if (!model) return '';
+            const mw = Math.max(8, model.width || 20), mh = Math.max(8, model.height || 16);
+            const scale = Math.max(1, Math.floor(box / Math.max(mw, mh)));
+            const pad = scale * 4;
+            const c = document.createElement('canvas');
+            c.width = Math.ceil(mw * scale) + pad * 2;
+            c.height = Math.ceil(mh * scale) + pad * 2;
+            const ctx = c.getContext('2d');
+            loader.renderShip(ctx, model, pad, pad, scale, null, 0, { allowColorMountSprites: true });
+            const d = ctx.getImageData(0, 0, c.width, c.height).data;
+            let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+            for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+                if (d[(y * c.width + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+            if (x1 < 0) return '';
+            const o = document.createElement('canvas');
+            o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+            o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+            return (cache[key] = o.toDataURL());
+        } catch (e) {
+            return '';
+        }
+    },
+
+    renderCraftTab(profile) {
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
+        if (!keys.length) {
+            return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT')}` +
+                `<div class="hs-tab-fill"><div class="hs-empty-state">` +
+                `<span class="hs-empty-icon">${this.iconHtml('hsBlueprint@d', 64, 'hs-pixel')}</span>` +
+                `<strong class="hs-empty-title">NO BLUEPRINTS YET</strong>` +
+                `<p class="hs-empty-text">Blueprints unlock new ships for the forge.</p>` +
+                `<ul class="hs-empty-steps">` +
+                `<li><b>1</b><span>Fly missions and defeat bosses - they drop blueprints.</span></li>` +
+                `<li><b>2</b><span>Teleport cargo to the station to keep them.</span></li>` +
+                `<li><b>3</b><span>Come back here and craft the ship.</span></li>` +
+                `</ul></div></div></div>`;
+        }
+        const rows = keys.map((id) => {
+            if (profile.ownedShipIds.indexOf(id) !== -1) {
+                return `<div class="hs-line hs-shop-line">` +
+                    `<span class="hs-line-name"><span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
+                    `<strong>${this.shipName(id)}</strong></span>` +
+                    `<span class="hs-muted">OWNED</span></div>`;
+            }
+            const cfg = shipConfigManager.getConfig(id);
+            const cost = (typeof profileManager !== 'undefined' && profileManager.getDiscountedCraftCost)
+                ? profileManager.getDiscountedCraftCost(cfg, profile)
+                : economyConfig.getCraftCost(cfg);
+            const afford = this.canAffordCost(profile.resources, cost);
+            const thumb = this.shipThumbSrc(id, 96);
+            return `<div class="hs-line hs-shop-line hs-craft-line">` +
+                `<span class="hs-line-name"><span class="hs-craft-ship">${thumb ? `<img src="${thumb}" alt="">` : this.iconHtml('hsBlueprint', 56, 'hs-pixel')}</span>` +
+                `<strong>${this.shipName(id)}</strong><em class="hs-craft-count">×${profile.blueprints[id]}</em></span>` +
+                `${this.renderCostGrid(cost, profile.resources)}` +
+                `<button class="action-button hs-line-action hs-craft-go" data-craft="${id}" title="Craft ${esc(this.shipName(id))}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
+                `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
+        });
+        return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT FROM BLUEPRINT')}` +
+            `<div class="hs-tab-fill">${rows.join('')}</div></div>`;
+    },
+
+    /** Module icon HTML; weapons use the shared tilted, per-weapon tinted look. */
+    moduleIconHtml(kind, id, size, className, tipLabel, tint) {
+        // Default tooltip: name plus what the part does.
+        if (tipLabel === undefined && id) tipLabel = this.hangarModuleTip(kind, id);
+        if (kind === 'weapon' && id && typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+            return iconRenderer.weaponImgHtml(id, size, className, tipLabel === false ? false : tipLabel);
+        }
+        return this.iconHtml(this.hangarModuleIconKey(kind, id), size, className, tipLabel, tint);
+    },
+
+    hangarModuleIconKey(kind, id) {
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
+            const key = shipLoadoutManager.resolveModuleIcon({ kind: kind, id: id });
+            if (key) return key;
+        }
+        if (kind === 'weapon') {
+            const wid = String(id || 'laser');
+            return 'shot' + wid.charAt(0).toUpperCase() + wid.slice(1);
+        }
+        if (kind === 'energy') return 'statEnergy';
+        return 'ability_' + String(id || '');
+    },
+
+    /**
+     * Tooltip text for a module: NAME, then what it does (config description
+     * + effect line), for weapons their DMG / SPD / rate. One item per line.
+     */
+    hangarModuleTip(kind, id) {
+        const key = String(id || '');
+        const lines = [this.hangarModuleLabel(key)];
+        if (kind === 'weapon') {
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon
+                ? weaponConfigManager.getWeapon(key) : null;
+            if (w) {
+                if (w.description) lines.push(String(w.description));
+                const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) + '/S' : null;
+                lines.push(['DMG ' + w.damage, 'SPD ' + w.speed, rate].filter(Boolean).join(' · '));
+            }
+        } else {
+            const cfg = typeof abilityConfigManager !== 'undefined' && abilityConfigManager.configs
+                ? abilityConfigManager.configs[key] : null;
+            if (cfg) {
+                if (cfg.description) lines.push(String(cfg.description));
+                if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
+                const type = cfg.type ? String(cfg.type).toUpperCase() : '';
+                if (type) lines.push(type + (cfg.tier ? ' · TIER ' + cfg.tier : ''));
+            }
+        }
+        return lines.join('\n');
+    },
+
+    hangarModuleLabel(id) {
+        const key = String(id || '');
+        // Configured display name (read without creating entries), else the id.
+        const cfg = (typeof abilityConfigManager !== 'undefined' && abilityConfigManager.configs
+                && abilityConfigManager.configs[key])
+            || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.configs
+                && weaponConfigManager.configs[key]);
+        if (cfg && cfg.name && String(cfg.name).toUpperCase() !== key.toUpperCase()) {
+            return String(cfg.name).toUpperCase();
+        }
+        return String(key || 'EMPTY').replace(/_/g, ' ').toUpperCase();
+    },
+
+    /**
+     * A second, independent dropdown per slot for choosing the module's
+     * visual skin — deliberately separate from the weapon/module select
+     * above, so re-skinning a component never changes its stats.
+     */
+    renderHangarSlotSkinDropdown(slot, kind, current) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getAvailableSkins) return '';
+        const skins = shipLoadoutManager.getAvailableSkins(kind);
+        if (!skins || skins.length <= 1) return '';
+        const activeSkin = current && shipLoadoutManager.getModuleSkin
+            ? shipLoadoutManager.getModuleSkin(this.hangarShipId, kind, current, slot.face)
+            : (shipLoadoutManager.getSlotSkin
+                ? shipLoadoutManager.getSlotSkin(this.hangarShipId, kind, slot.index)
+                : 'default');
+        return `<div class="hs-hangar-slot-skin-wrap">` +
+            `<span class="hs-hangar-slot-skin-label">SKIN</span>` +
+            `<div class="hs-hangar-slot-skin-options">` +
+            skins.map((s) => `<button type="button" class="hs-hangar-slot-skin-option${s.id === activeSkin ? ' is-active' : ''}" data-hangar-slot-skin-set="${kind}" data-slot-index="${slot.index}" data-mod-face="${slot.face || ''}" data-skin-id="${s.id}">${s.label}</button>`).join('') +
+            `</div>` +
+            `</div>`;
+    },
+
+    renderHangarSlotDropdown(slot, inventory, equippedByKind) {
+        const kind = slot.kind;
+        const poolKey = kind === 'weapon' ? 'weapons'
+            : (kind === 'defense' ? 'defenses'
+                : (kind === 'energy' ? 'energy' : 'abilities'));
+        const pool = (inventory && inventory[poolKey]) ? inventory[poolKey].slice() : [];
+        const equipped = equippedByKind[kind] || {};
+        const current = slot.id || '';
+        const installBlocked = (id) => {
+            if (!id || id === current) return null;
+            if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.canInstallModule) return null;
+            const fit = shipLoadoutManager.partFitsSlot
+                ? shipLoadoutManager.partFitsSlot(this.hangarShipId, kind, id, slot.index) : { ok: true };
+            if (!fit.ok) return 'TOO_BIG';
+            const check = shipLoadoutManager.canInstallModule(this.hangarShipId, kind, id);
+            if (check.ok || check.removing || check.reason === 'FULL'
+                || check.reason === 'TOO_BIG') return null;
+            return check.reason || 'BLOCKED';
+        };
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const partSize = (id) => (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S');
+        const slotSize = slm && slm.getSlotSizeLevel
+            ? slm.slotSizeLabel(slm.getSlotSizeLevel(this.hangarShipId, kind, slot.index)) : 'S';
+        const options = [`<option value="">EMPTY</option>`].concat(pool.map((id) => {
+            const usedElsewhere = !!(equipped[id] && id !== current);
+            const blocked = installBlocked(id);
+            const label = `[${partSize(id)}] ` + this.hangarModuleLabel(id)
+                + (blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CHARGE SHOT'
+                    : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CHARGE DRIVE'
+                        : (blocked === 'TOO_BIG' ? ' · NEEDS ' + partSize(id) + ' SLOT'
+                            : (usedElsewhere ? ' · EQUIPPED' : ''))));
+            return `<option value="${id}" ${id === current ? 'selected' : ''}${blocked ? ' disabled' : ''}>${label}</option>`;
+        }));
+        const iconKey = current
+            ? this.hangarModuleIconKey(kind, current)
+            : (kind === 'weapon' ? 'statWeapon'
+                : (kind === 'defense' ? 'statArmor'
+                    : (kind === 'energy' ? 'statEnergy' : 'statAbilities')));
+        const mark = current ? '●' : '+';
+        const name = current ? this.hangarModuleLabel(current) : 'EMPTY';
+        const open = (this._hangarOpenSlot
+            && this._hangarOpenSlot.kind === kind
+            && Number(this._hangarOpenSlot.index) === Number(slot.index)) ? ' is-open' : '';
+        const pinX = Math.round((slot.nx != null ? slot.nx : 0.5) * 1000) / 1000;
+        const pinY = Math.round((slot.ny != null ? slot.ny : 0.5) * 1000) / 1000;
+        const railI = slot.railIndex != null ? slot.railIndex : 0;
+        const railN = Math.max(1, slot.railCount != null ? slot.railCount : 1);
+        const side = slot.side === 'left' ? 'left' : 'right';
+        const factionAccent = this.hangarFactionAccent();
+        // Wing weapon slots are a mirrored pair: a second, display-only marker
+        // sits on the right wing (same slot, same weapon).
+        const mirror = slot.mirrorNx != null;
+        const mirrorVars = mirror ? `--pin-mx:${Math.round(slot.mirrorNx * 1000) / 1000};--pin-my:${Math.round(slot.mirrorNy * 1000) / 1000};` : '';
+        return `<div class="hs-hangar-slot${slot.empty ? ' is-empty' : ''}${open}${mirror ? ' is-wing-pair' : ''}" data-slot-kind="${kind}" data-slot-size="${slotSize}" data-slot-index="${slot.index}" data-slot-side="${side}" data-slot-mount="${slot.mount || ''}" style="--pin-x:${pinX};--pin-y:${pinY};${mirrorVars}--rail-i:${railI};--rail-n:${railN};">` +
+            `<button type="button" class="hs-hangar-slot-pin" data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}" data-mod-id="${current}" data-mod-face="${slot.face || ''}" title="${slot.label} · SLOT SIZE ${slotSize}">` +
+            `<span class="hs-hangar-slot-dot"></span>` +
+            `</button>` +
+            (mirror ? `<span class="hs-hangar-slot-pin is-mirror" aria-hidden="true"><span class="hs-hangar-slot-dot"></span></span>` : '') +
+            `<div class="hs-hangar-slot-card">` +
+            `<button type="button" class="hs-hangar-slot-btn" data-nav-item data-hangar-slot-toggle="${kind}" data-slot-index="${slot.index}">` +
+            `<span class="hs-btn-icon">${current && kind === 'weapon'
+                ? this.moduleIconHtml(kind, current, 20, 'hs-pixel hs-pixel-20')
+                : this.iconHtml(iconKey, 20, 'hs-pixel hs-pixel-20', null, factionAccent)}</span>` +
+            `<span class="hs-hangar-slot-meta">` +
+            `<span class="hs-hangar-slot-kind">${this.slotGlyphHtml(kind)}${slot.label} <span class="hs-slot-size" title="Slot size">${slotSize}</span></span>` +
+            `<span class="hs-hangar-slot-name" title="${name}"><span class="hs-hangar-slot-mark">${mark}</span> ${name}</span>` +
+            `</span>` +
+            `<span class="hs-hangar-slot-caret">▾</span>` +
+            `</button>` +
+            `<div class="hs-hangar-slot-menu" role="listbox">` +
+            (this.renderSlotUpgradeRow ? this.renderSlotUpgradeRow(kind, slot.index) : '') +
+            `<label class="hs-hangar-slot-select-wrap">` +
+            `<select class="hs-hangar-slot-select" data-hangar-slot-select="${kind}" data-slot-index="${slot.index}" aria-label="${slot.label}">` +
+            options.join('') +
+            `</select>` +
+            `</label>` +
+            this.renderHangarSlotSkinDropdown(slot, kind, current) +
+            `<div class="hs-hangar-slot-options">` +
+            `<button type="button" class="hs-hangar-slot-option${current ? '' : ' is-active'}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="">` +
+            `<span class="hs-hangar-slot-mark">○</span><span>EMPTY</span></button>` +
+            pool.map((id) => {
+                const on = id === current;
+                const usedElsewhere = !!(equipped[id] && !on);
+                const blocked = installBlocked(id);
+                const disabled = blocked ? ' disabled' : '';
+                const blockedCls = blocked ? ' is-blocked' : '';
+                return `<button type="button" class="hs-hangar-slot-option${on ? ' is-active' : ''}${usedElsewhere ? ' is-used' : ''}${blockedCls}" data-hangar-slot-set="${kind}" data-slot-index="${slot.index}" data-mod-id="${id}"${disabled}>` +
+                    `<span class="hs-btn-icon">${this.moduleIconHtml(kind, id, 18, 'hs-pixel hs-pixel-18', null, factionAccent)}</span>` +
+                    `<span class="hs-slot-size" title="Part size">${partSize(id)}</span>` +
+                    `<span>${this.hangarModuleLabel(id)}${blocked === 'NEED_CHARGE_SHOT' ? ' · NEED CS' : (blocked === 'NEED_CHARGE_DRIVE' ? ' · NEED CD' : (blocked === 'TOO_BIG' ? ' · NEEDS ' + partSize(id) : ''))}</span>` +
+                    `<span class="hs-hangar-slot-mark">${on ? '●' : (blocked ? '✕' : (usedElsewhere ? '◇' : '○'))}</span>` +
+                    `</button>`;
+            }).join('') +
+            `</div></div></div></div>`;
+    },
+});

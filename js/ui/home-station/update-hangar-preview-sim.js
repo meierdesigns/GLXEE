@@ -1,0 +1,437 @@
+"use strict";
+
+// HomeStationUI methods, split from home-station.js.
+extendClass(HomeStationUI, {
+    updateHangarPreviewSim(dtMs) {
+        const sim = this._hangarPreviewSim;
+        const canvas = this._hangarPreviewCanvas;
+        if (!sim || !canvas) return;
+        if (this._hangarPreviewShipId !== this.hangarShipId) {
+            this.resetHangarPreviewSim();
+            return;
+        }
+
+        const frameScale = dtMs / 16.67;
+        const shipId = this.hangarShipId || 'player_scrap';
+        const model = this.getHangarShipModel(shipId);
+        const cfg = (typeof shipConfigManager !== 'undefined')
+            ? shipConfigManager.getConfig(shipId)
+            : null;
+        // Box the ship with the layout-applied model's proportions: the ship
+        // is drawn with a uniform fit, but shots map mounts with separate
+        // X/Y scales, so a box of another aspect put shots off their slots.
+        const size = this.hangarCloseupSize(this.getHangarPreviewModel(shipId), canvas.width, canvas.height);
+        const p = sim.player;
+        p.width = size.width;
+        p.height = size.height;
+
+        sim.phase += dtMs * 0.0035;
+        sim.modeTimer -= dtMs;
+        if (sim.modeTimer <= 0) {
+            sim.mode = sim.mode === 'fly' ? 'shoot' : 'fly';
+            sim.modeTimer = sim.mode === 'shoot' ? 1600 + Math.random() * 900 : 2200 + Math.random() * 1400;
+            if (sim.mode === 'shoot') {
+                sim.burstLeft = 3 + Math.floor(Math.random() * 3);
+                sim.burstGap = 0;
+            }
+        }
+
+        const speed = Math.max(0.4, Number((cfg && cfg.speed) || model.speed || 4) * 0.22);
+        const margin = Math.max(12, (canvas.width - size.width) * 0.18);
+        const baseX = (canvas.width - size.width) / 2;
+        const sway = Math.sin(sim.phase) * Math.min(28, canvas.width * 0.08);
+        if (sim.mode === 'fly') {
+            // Ease towards the sway path: coming out of 'shoot' the ship is
+            // off the path, and snapping onto it made the ship jump.
+            const target = baseX + sway + Math.sin(sim.phase * 0.55) * 10;
+            p.x += (target - p.x) * Math.min(1, 0.06 * frameScale);
+            p.dir = Math.cos(sim.phase) >= 0 ? 1 : -1;
+        } else {
+            p.x += p.dir * speed * 0.35 * frameScale;
+            if (p.x <= margin || p.x + p.width >= canvas.width - margin) {
+                p.dir *= -1;
+                p.x = Math.max(margin, Math.min(canvas.width - margin - p.width, p.x));
+            }
+        }
+        p.x = Math.max(8, Math.min(canvas.width - p.width - 8, p.x));
+        p.y = canvas.height * 0.68 + Math.sin(sim.phase * 1.35) * 10;
+
+        // Engine thrust particles (flying feel)
+        if (Math.random() < 0.55) {
+            sim.thrust.push({
+                x: p.x + p.width * (0.35 + Math.random() * 0.3),
+                y: p.y + p.height - 2,
+                vy: 1.2 + Math.random() * 1.6,
+                life: 280 + Math.random() * 220,
+                w: 2 + Math.floor(Math.random() * 2)
+            });
+        }
+        sim.thrust = sim.thrust.filter((t) => {
+            t.y += t.vy * frameScale;
+            t.life -= dtMs;
+            return t.life > 0 && t.y < canvas.height + 8;
+        });
+
+        // Shooting — the game's own per-mount weapon logic (cooldowns,
+        // mount positions, bullet shapes), scaled up to the close-up size.
+        const fireModel = this.getHangarPreviewModel(shipId);
+        const energy = this.syncHangarPreviewEnergy(sim, fireModel, shipId);
+        const dt = dtMs / 1000;
+        if (energy.max > 0) {
+            let net = energy.regen;
+            if (sim.energy > 0) net -= energy.idleDraw;
+            sim.energy = Math.max(0, Math.min(energy.max, sim.energy + net * dt));
+        }
+        sim.energyGhost = Math.max(sim.energy, (sim.energyGhost || 0) - energy.max * 0.35 * dt);
+
+        if (sim.mode !== 'shoot') {
+            sim.shootAcc += dtMs;
+            if (sim.shootAcc >= sim.nextBurst) {
+                sim.shootAcc = 0;
+                sim.nextBurst = 1400 + Math.random() * 1600;
+                sim.mode = 'shoot';
+                sim.modeTimer = 1200 + Math.random() * 900;
+            }
+        }
+        // Shots keep their in-game size relative to the ship: preview px per
+        // layout unit ÷ in-game px per layout unit.
+        const unitScale = typeof PLAYER_UNIT_SCALE !== 'undefined' ? PLAYER_UNIT_SCALE : 0.78;
+        const k = (p.width / Math.max(1, fireModel.width || 36)) / unitScale;
+        const bm = this.getHangarPreviewBulletManager(sim, fireModel);
+        const canFire = energy.max <= 0 || sim.energy >= energy.shotCost;
+        const demoKey = this.stepHangarPreviewDemoKey(sim, dtMs);
+        // No weapon slotted → nothing to fire (no default-laser fallback).
+        if (demoKey && canFire && this.hangarPreviewHasWeapons(shipId)) {
+            let fired = false;
+            if (bm && fireModel.weaponConfig) {
+                // Same routing as in game: the ALL key fires every slot.
+                const allKey = this.hangarPreviewAllKey(shipId);
+                // shotScale sizes shots to the close-up before they are
+                // fitted to the (already close-up sized) gun barrels.
+                fired = bm.shootWithShipWeapon(p, Date.now(), {
+                    fireKey: demoKey === allKey ? 'all' : demoKey,
+                    shotScale: k
+                });
+            } else {
+                sim.burstGap -= dtMs;
+                if (sim.burstGap <= 0) {
+                    sim.burstGap = Math.max(70, Number((cfg && cfg.weaponCooldown) || model.weaponCooldown || 300));
+                    bm.bullets.push({
+                        x: p.x + p.width / 2 - 1.5, y: p.y - 4,
+                        width: 3 * k, height: 12 * k, speed: 6 * k,
+                        type: (cfg && cfg.defaultWeapon) || model.defaultWeapon || 'laser', isPlayer: true
+                    });
+                    fired = true;
+                }
+            }
+            if (fired && energy.max > 0) sim.energy = Math.max(0, sim.energy - energy.shotCost);
+        }
+
+        // Target enemy at the top: drifts side to side, flashes when hit.
+        const en = sim.enemy;
+        if (en) {
+            // Box with the real model's aspect so the uniform fit fills it.
+            if (!en.aspect) {
+                const vis = typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual
+                    ? factionShipStyles.resolveFactionShipVisual({ faction: en.faction, enemyClass: en.enemyClass,
+                        tier: en.tier, level: en.level, typeId: en.type }) : null;
+                const m = vis && vis.model;
+                en.aspect = m && m.width && m.height ? m.width / m.height : 1;
+            }
+            en.width = Math.round(p.width * 0.75);
+            en.height = Math.round(en.width / en.aspect);
+            en.x = (canvas.width - en.width) / 2 + Math.sin(sim.phase * 0.4) * Math.min(60, canvas.width * 0.2);
+            en.y = canvas.height * 0.12 + Math.sin(sim.phase * 0.9) * 6;
+            en.hitFlash = Math.max(0, (en.hitFlash || 0) - dtMs);
+            en.sinceHit += dtMs;
+            if (en.respawn > 0) {
+                en.respawn -= dtMs;
+                if (en.respawn <= 0) { en.health = en.maxHealth; en.shield = en.shieldMax; }
+            } else if (en.sinceHit > 2000) {
+                // Shield recharges after 2 s without a hit.
+                en.shield = Math.min(en.shieldMax, en.shield + en.shieldMax * 0.5 * dt);
+            }
+        }
+        const texts = sim.damageTexts || (sim.damageTexts = []);
+        sim.damageTexts = texts.filter((t) => {
+            t.y -= 0.6 * frameScale;
+            t.life -= dtMs;
+            return t.life > 0;
+        });
+        bm.bullets = bm.bullets.filter((b) => {
+            if (en && en.respawn <= 0 && b.x + b.width > en.x && b.x < en.x + en.width
+                && b.y < en.y + en.height && b.y + b.height > en.y) {
+                const dmg = Math.max(1, Math.round(Number(b.damage) || 10));
+                const absorbed = Math.min(en.shield, dmg);
+                en.shield -= absorbed;
+                en.health = Math.max(0, en.health - (dmg - absorbed));
+                en.hitFlash = 120;
+                en.sinceHit = 0;
+                sim.damageTexts.push({
+                    x: b.x + b.width / 2 + (Math.random() - 0.5) * 10, y: en.y + en.height * 0.4,
+                    text: String(dmg), shield: absorbed >= dmg, life: 700
+                });
+                if (en.health <= 0) en.respawn = 900;
+                return false;
+            }
+            if (b.type === 'wave_beam' && b.waveAmp) {
+                b.wavePhase = (b.wavePhase || 0) + 0.25 * frameScale;
+                b.x += Math.sin(b.wavePhase) * b.waveAmp * k * 0.5 * frameScale;
+                b.y -= b.speed * frameScale;
+            } else if (b.angle !== undefined) {
+                b.x += Math.sin(b.angle) * b.speed * frameScale;
+                b.y -= Math.cos(b.angle) * b.speed * frameScale;
+            } else {
+                b.y -= b.speed * frameScale;
+            }
+            return b.y + b.height > 0 && b.x > -20 && b.x < canvas.width + 20;
+        });
+    },
+    /**
+     * Recharge on the weapon art after each shot: the weapon drops dark and
+     * refills with its colour from the base up to the muzzle in pixel steps
+     * (pulsing, edge flashes per step); a white blink when ready. Drawn 'source-atop' on the
+     * ship-only buffer, so only the weapon's own pixels change.
+     */
+    drawHangarPreviewRecharge(bctx, player, bm) {
+        const shots = bm && bm.lastShots;
+        const model = bm && bm.currentShipModel;
+        const layout = model && model.layout;
+        if (!shots || !layout || !player) return;
+        const now = performance.now();
+        // Same uniform fit + centring as drawMuzzleFlashes / renderPlayerShip.
+        const lw = Math.max(1, layout.width || player.width);
+        const lh = Math.max(1, layout.height || player.height);
+        const mw = Math.max(1, model.width || lw);
+        const mh = Math.max(1, model.height || lh);
+        const fit = Math.max(0.25, Math.min(player.width / mw, player.height / mh));
+        const sx = fit * (mw / lw);
+        const sy = fit * (mh / lh);
+        const px0 = player.x - (mw * fit - player.width) / 2;
+        const py0 = player.y - (mh * fit - player.height) / 2;
+        bctx.save();
+        bctx.globalCompositeOperation = 'source-atop';
+        Object.keys(shots).forEach((key) => {
+            const s = shots[key];
+            const m = s.muzzle;
+            if (!m) return;
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon
+                ? weaponConfigManager.getWeapon(s.id) : null;
+            // Real cooldown, but never shorter than readable.
+            const dur = Math.max(450, Number(w && w.cooldown) || 300);
+            const age = now - s.t;
+            if (age > dur + 160) { delete shots[key]; return; }
+            const color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
+                && weaponConfigManager.getWeaponUiColor(s.id)) || '#ffffff';
+            const x = Math.round(px0 + (m.lx - m.lw / 2) * sx) - 2;
+            const top = Math.round(py0 + m.ly * sy) - 2;
+            const bot = Math.round(py0 + (m.by != null ? m.by : m.ly + m.lh * 2.4) * sy) + 2;
+            const bw = Math.round(m.lw * sx) + 4;
+            const bh = Math.max(2, bot - top);
+            if (age > dur) {
+                // Ready: white blink that shrinks from the muzzle end down.
+                const k = (age - dur) / 160;
+                bctx.globalAlpha = 0.85 * (1 - k);
+                bctx.fillStyle = '#ffffff';
+                bctx.fillRect(x, top, bw, Math.max(2, Math.round(bh * (1 - k))));
+                return;
+            }
+            const r = age / dur;
+            // Refill in 6 visible pixel steps (base → muzzle), not a smooth slide.
+            const STEPS = 6;
+            const step = Math.min(STEPS, Math.floor(r * STEPS) + 1);
+            const filled = Math.round(bh * step / STEPS);
+            // Empty part: dark, fading out as the charge rises.
+            bctx.globalAlpha = 0.75 - 0.35 * r;
+            bctx.fillStyle = '#05060a';
+            bctx.fillRect(x, top, bw, bh - filled);
+            // Charged part: weapon colour, pulsing faster as it fills.
+            const pulse = 0.5 + 0.5 * Math.sin(now / (120 - 70 * r));
+            bctx.globalAlpha = 0.3 + 0.25 * r + 0.15 * pulse;
+            bctx.fillStyle = color;
+            bctx.fillRect(x, bot - filled, bw, filled);
+            // Step edge: bright line, flashes on each new step.
+            const stepAge = (r * STEPS) % 1;
+            bctx.globalAlpha = stepAge < 0.25 ? 1 : 0.7;
+            bctx.fillStyle = stepAge < 0.25 ? '#ffffff' : color;
+            bctx.fillRect(x, bot - filled, bw, Math.max(2, Math.round(bh / 12)));
+        });
+        bctx.restore();
+    },
+    /** Ship model with the current hangar layout applied (what the game flies). */
+    getHangarPreviewModel(shipId) {
+        let model = this.getHangarShipModel(shipId);
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+            model = Object.assign({}, model);
+            shipLoadoutManager.applyLayoutToModel(model, shipId);
+        }
+        return model;
+    },
+    /** Detached BulletManager so the preview never touches the live game's bullets. */
+    getHangarPreviewBulletManager(sim, model) {
+        if (!sim.bm) {
+            const bm = (typeof BulletManager !== 'undefined')
+                ? Object.create(BulletManager.prototype)
+                : {};
+            bm.bullets = [];
+            bm.enemyBullets = [];
+            bm.weaponCooldowns = {};
+            bm.muzzleFlashes = {};
+            bm.lastShotTime = 0;
+            bm.currentWeapon = model.defaultWeapon || 'laser';
+            sim.bm = bm;
+        }
+        sim.bm.currentShipModel = model;
+        return sim.bm;
+    },
+    /** Same energy stats the player gets in-game (see PlayerManager.setShipModel). */
+    syncHangarPreviewEnergy(sim, model, shipId) {
+        let e = { max: 0, regen: 0, idleDraw: 0, shotCost: 0 };
+        if (model.energyStats || model.hasEnergyCore != null) {
+            e = {
+                max: Math.max(0, Math.round(Number(model.maxEnergy) || 0)),
+                regen: Math.max(0, Number(model.energyRegen) || 0),
+                idleDraw: Math.max(0, Number(model.energyIdleDraw) || 0),
+                shotCost: Math.max(0, Number(model.shotEnergyCost) || 0)
+            };
+        } else if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeEnergyStats) {
+            const loadout = model.loadout || (shipLoadoutManager.getLoadout ? shipLoadoutManager.getLoadout(shipId) : null) || {
+                weapons: model.availableWeapons || [], defenses: [], abilities: model.abilities || [], energy: model.energy || []
+            };
+            const es = shipLoadoutManager.computeEnergyStats(loadout) || {};
+            e = {
+                max: Math.max(0, Number(es.maxEnergy) || 0),
+                regen: Math.max(0, Number(es.regen) || 0),
+                idleDraw: Math.max(0, Number(es.idleDraw) || 0),
+                shotCost: Math.max(0, Number(es.shotCost) || 0)
+            };
+        }
+        if (sim.energyMax !== e.max) {
+            sim.energyMax = e.max;
+            sim.energy = e.max;
+            sim.energyGhost = e.max;
+        }
+        sim.energyStats = e;
+        return e;
+    },
+    /**
+     * Demo trigger for the preview: holds A, S, D, then SPACE in turn so you
+     * can see which shots each key fires. Returns the held key or null.
+     */
+    stepHangarPreviewDemoKey(sim, dtMs) {
+        const KEYS = ['a', 's', 'd', 'space'];
+        const HOLD = 1100;
+        const GAP = 350;
+        if (sim.demoIdx == null) { sim.demoIdx = 0; sim.demoT = 0; }
+        sim.demoT += dtMs;
+        if (sim.demoT >= HOLD + GAP) {
+            sim.demoT = 0;
+            sim.demoIdx = (sim.demoIdx + 1) % KEYS.length;
+        }
+        sim.demoKey = sim.demoT < HOLD ? KEYS[sim.demoIdx] : null;
+        return sim.demoKey;
+    },
+    hangarPreviewHasWeapons(shipId) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getLoadout) return true;
+        const L = shipLoadoutManager.getLoadout(shipId) || {};
+        return (L.weaponSlots || L.weapons || []).some(Boolean);
+    },
+    hangarPreviewAllKey(shipId) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getAllFireKey) return 'space';
+        return shipLoadoutManager.getAllFireKey(shipLoadoutManager.getLoadout(shipId));
+    },
+    /**
+     * Keys that fire something: the ALL key, plus each key with at least one
+     * filled weapon slot on it (unassigned slots fire on SPACE).
+     */
+    hangarPreviewUsedKeys(shipId) {
+        const used = {};
+        if (!this.hangarPreviewHasWeapons(shipId)) return used;
+        used[this.hangarPreviewAllKey(shipId)] = true;
+        if (typeof shipLoadoutManager === 'undefined') return used;
+        const L = shipLoadoutManager.getLoadout(shipId);
+        const slots = (L.weaponSlots || L.weapons || []);
+        slots.forEach((id, idx) => {
+            if (!id) return;
+            used[shipLoadoutManager.getWeaponFireKey(L, idx)] = true;
+        });
+        return used;
+    },
+    /** Key caps under the energy bar; the demo's held key lights up. */
+    drawHangarPreviewKeys(ctx, w, top, sim, accent, shipId) {
+        const used = this.hangarPreviewUsedKeys(shipId);
+        const keys = [['a', 'A'], ['s', 'S'], ['d', 'D'], ['space', 'SPACE']];
+        const pad = 10;
+        const gap = 6;
+        const capH = 22;
+        // Row 1: A S D side by side; row 2: SPACE across the full width.
+        const unit = (w - pad * 2 - gap * 2) / 3;
+        ctx.save();
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        keys.forEach(([id, label], i) => {
+            const isSpace = id === 'space';
+            const cw = Math.round(isSpace ? w - pad * 2 : unit);
+            const x = isSpace ? pad : Math.round(pad + i * (unit + gap));
+            const y = isSpace ? top + capH + gap : top;
+            const on = sim.demoKey === id;
+            const live = !!used[id];
+            ctx.globalAlpha = live ? 1 : 0.3;
+            if (on) {
+                ctx.fillStyle = accent;
+                ctx.fillRect(x, y + 2, cw, capH);
+                ctx.fillStyle = '#050508';
+            } else {
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 1, y + 1, cw - 2, capH - 2);
+                // Key "depth": thicker bottom edge unless pressed.
+                ctx.fillStyle = accent;
+                ctx.fillRect(x, y + capH - 2, cw, 3);
+            }
+            ctx.fillText(label, x + cw / 2, y + capH / 2 + (on ? 2 : 0));
+        });
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 1;
+        ctx.restore();
+    },
+    drawHangarPreviewEnergyBar(ctx, w, h, sim, accent) {
+        const e = sim.energyStats;
+        if (!e) return;
+        const pad = 10;
+        const barH = 10;
+        const keysH = 60; // two rows of key caps
+        const y = h - pad - keysH - barH;
+        this.drawHangarPreviewKeys(ctx, w, h - pad - 54, sim, accent, this.hangarShipId || 'player_scrap');
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.9;
+        if (e.max <= 0) {
+            ctx.fillText('ENERGY  NO CORE', pad, y - 6);
+            ctx.globalAlpha = 1;
+            return;
+        }
+        const r = Math.max(0, Math.min(1, sim.energy / e.max));
+        const g = Math.max(0, Math.min(1, (sim.energyGhost || 0) / e.max));
+        ctx.fillText('ENERGY ' + Math.round(sim.energy) + '/' + Math.round(e.max), pad, y - 24);
+        ctx.globalAlpha = 0.6;
+        ctx.font = '13px monospace';
+        const net = e.regen - e.idleDraw;
+        ctx.fillText('-' + (+e.shotCost.toFixed(1)) + '/SHOT  ' + (net >= 0 ? '+' : '') + (+net.toFixed(1)) + '/S', pad, y - 6);
+        const bw = w - pad * 2;
+        ctx.globalAlpha = 0.25;
+        ctx.fillRect(pad, y, bw, barH);
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ff4040';
+        ctx.fillRect(pad, y, Math.round(bw * g), barH);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = r < 0.2 ? '#ff4040' : accent;
+        ctx.fillRect(pad, y, Math.round(bw * r), barH);
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.8;
+        ctx.strokeRect(pad + 0.5, y + 0.5, bw - 1, barH - 1);
+        ctx.globalAlpha = 1;
+    },
+});

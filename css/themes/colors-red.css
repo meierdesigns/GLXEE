@@ -1,0 +1,89 @@
+/* RED Color Theme - Clean and Simple */
+:root {
+    /* Primary Colors */
+    --primary-color: #FF4040;
+    --secondary-color: #CC3333;
+    --accent-color: #FF4040;
+    
+    /* Background Colors */
+    --background-color: #1a0000;
+    --ui-background: #2C2C2C;
+    --ui-surface: #f8f8f8;
+    
+    /* Text Colors */
+    --text-color: #ffffff;
+    --ui-text-primary: #E0E0E0;
+    --ui-text-secondary: #A0A0A0;
+    
+    /* Border and Effects */
+    --border-color: #FF4040;
+    --ui-border: #404040;
+    --shadow-color: rgba(255, 64, 64, 0.3);
+    --glow-color: #FF4040;
+    
+    /* Game Element Colors */
+    --player-color: #FF4040;
+    --enemy-color: #FF6B6B;
+    --bullet-color: #FF4040;
+    --obstacle-color: #8B4513;
+    --particle-color: #FF4040;
+    
+    /* Status Colors */
+    --status-success: #00ff00;
+    --status-warning: #ffff00;
+    --status-error: #ff0000;
+    --status-info: #FF4040;
+    
+    /* Special Effects */
+    --explosion-color: #FFD700;
+    --powerup-color: #FF4040;
+    --cheat-color: #FF00FF;
+    
+    /* Current Theme Variables */
+    --current-theme-primary: #FF4040;
+    --current-theme-secondary: #CC3333;
+    --current-theme-accent: #FF4040;
+}
+
+/* Game Background */
+.game-background {
+    background: linear-gradient(135deg, #1a0000 0%, #2a0000 100%);
+}
+
+/* UI Elements */
+.level-info-panel {
+    background: var(--ui-background);
+    border-color: var(--primary-color);
+    color: var(--ui-text-primary);
+}
+
+.level-info-header h3 {
+    color: var(--primary-color);
+}
+
+.level-difficulty {
+    background: var(--secondary-color);
+    color: var(--ui-background);
+}
+
+/* Interactive Elements */
+.menu-item:hover {
+    color: var(--primary-color);
+    text-shadow: 0 0 10px var(--glow-color);
+}
+
+.selected-item {
+    color: var(--primary-color);
+    text-shadow: 0 0 15px var(--glow-color);
+}
+
+.button-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 20px var(--shadow-color);
+}
+
+.button-primary:hover {
+    background-color: var(--secondary-color);
+    box-shadow: 0 0 25px var(--shadow-color);
+}

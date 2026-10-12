@@ -1,0 +1,219 @@
+/* GUI styles for pirate: every rule is scoped with html[data-faction="pirate"] / html[data-pf="pirate"] / html[data-vf-faction="pirate"].
+   Split out of styles.css; loaded after it (index.html). */
+html[data-faction="pirate"],
+.profile-selection-content[data-faction="pirate"] {
+    --faction-clip: polygon(0px 15px, 0px 12px, 3px 12px, 3px 9px, 6px 9px, 6px 6px, 9px 6px, 9px 3px, 12px 3px, 12px 0px, 15px 0px, calc(100% - 21px) 0px, calc(100% - 18px) 0px, calc(100% - 18px) 3px, calc(100% - 15px) 3px, calc(100% - 15px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 9px, calc(100% - 9px) 9px, calc(100% - 9px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 15px, calc(100% - 3px) 15px, calc(100% - 3px) 18px, 100% 18px, 100% 21px, 100% calc(100% - 9px), 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, calc(100% - 9px) 100%, 24px 100%, 21px 100%, 21px calc(100% - 3px), 18px calc(100% - 3px), 18px calc(100% - 6px), 15px calc(100% - 6px), 15px calc(100% - 9px), 12px calc(100% - 9px), 12px calc(100% - 12px), 9px calc(100% - 12px), 9px calc(100% - 15px), 6px calc(100% - 15px), 6px calc(100% - 18px), 3px calc(100% - 18px), 3px calc(100% - 21px), 0px calc(100% - 21px), 0px calc(100% - 24px));
+    --faction-surface:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 50%, transparent) 0) 0px 0px / 20px 20px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 50%, transparent) 0) 8px 4px / 20px 20px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 38%, transparent) 0) 14px 12px / 28px 28px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 38%, transparent) 0) 2px 18px / 28px 28px;
+    --faction-surface-opacity: 0.22;
+}
+
+html[data-faction="pirate"],
+.hs-faction-card[data-faction="pirate"],
+.hs-menu-profile-row[data-faction="pirate"],
+.profile-selection-content[data-faction="pirate"] {
+    --faction-panel-clip: polygon(0px 12px, 0px 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0px, 12px 0px, calc(100% - 24px) 0px, calc(100% - 20px) 0px, calc(100% - 20px) 4px, calc(100% - 16px) 4px, calc(100% - 16px) 8px, calc(100% - 12px) 8px, calc(100% - 12px) 12px, calc(100% - 8px) 12px, calc(100% - 8px) 16px, calc(100% - 4px) 16px, calc(100% - 4px) 20px, 100% 20px, 100% 24px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 20px 100%, 16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px), 12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px), 4px calc(100% - 12px), 4px calc(100% - 16px), 0px calc(100% - 16px), 0px calc(100% - 20px));
+    --faction-ctl-clip: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
+}
+
+html[data-faction="pirate"] .home-station-overlay .hs-panel-title {
+    background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 0 8px, transparent 8px 16px) 0 100% / 100% 4px no-repeat;
+    border-bottom-style: dashed;
+}
+
+.profile-selection-content[data-faction="pirate"] {
+    --pf-shape: polygon(0px 12px, 0px 9px, 3px 9px, 3px 6px, 6px 6px, 6px 3px, 9px 3px, 9px 0px, 12px 0px, calc(100% - 18px) 0px, calc(100% - 15px) 0px, calc(100% - 15px) 3px, calc(100% - 12px) 3px, calc(100% - 12px) 6px, calc(100% - 9px) 6px, calc(100% - 9px) 9px, calc(100% - 6px) 9px, calc(100% - 6px) 12px, calc(100% - 3px) 12px, calc(100% - 3px) 15px, 100% 15px, 100% 18px, 100% calc(100% - 10px), 100% calc(100% - 7px), calc(100% - 3px) calc(100% - 7px), calc(100% - 3px) calc(100% - 3px), calc(100% - 7px) calc(100% - 3px), calc(100% - 7px) 100%, calc(100% - 10px) 100%, 21px 100%, 18px 100%, 18px calc(100% - 3px), 15px calc(100% - 3px), 15px calc(100% - 6px), 12px calc(100% - 6px), 12px calc(100% - 9px), 9px calc(100% - 9px), 9px calc(100% - 12px), 6px calc(100% - 12px), 6px calc(100% - 15px), 3px calc(100% - 15px), 3px calc(100% - 18px), 0px calc(100% - 18px), 0px calc(100% - 21px));
+    --pf-shape-in: polygon(0px 9px, 0px 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0px, 9px 0px, calc(100% - 15px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 3px, calc(100% - 9px) 3px, calc(100% - 9px) 6px, calc(100% - 6px) 6px, calc(100% - 6px) 9px, calc(100% - 3px) 9px, calc(100% - 3px) 12px, 100% 12px, 100% 15px, 100% calc(100% - 9px), 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, calc(100% - 9px) 100%, 18px 100%, 15px 100%, 15px calc(100% - 3px), 12px calc(100% - 3px), 12px calc(100% - 6px), 9px calc(100% - 6px), 9px calc(100% - 9px), 6px calc(100% - 9px), 6px calc(100% - 12px), 3px calc(100% - 12px), 3px calc(100% - 15px), 0px calc(100% - 15px), 0px calc(100% - 18px));
+    --pf-ctl: polygon(0px 3px, 0px 0px, 3px 0px, calc(100% - 4px) 0px, 100% 0px, 100% 4px, 100% calc(100% - 2px), 100% 100%, calc(100% - 2px) 100%, 3px 100%, 0px 100%, 0px calc(100% - 3px));
+}
+
+html[data-faction="pirate"] .victory-title {
+    transform: rotate(-2deg);
+    letter-spacing: 0.12em;
+}
+
+html[data-faction="pirate"] :is(.victory-stats, .victory-loot, .victory-instructions) {
+    border-style: dashed;
+}
+
+html[data-faction="pirate"] .game-over-content h2 { transform: rotate(-2deg); }
+
+html[data-faction="pirate"] .game-over-loss { border-style: dashed; }
+
+html[data-faction="pirate"] .pause-overlay h2 { transform: rotate(-2deg); }
+
+html[data-faction="pirate"] .pause-button { border-style: dashed; }
+
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"] {
+    --pf-ctl: polygon(0px 3px, 0px 0px, 3px 0px, calc(100% - 4px) 0px, 100% 0px, 100% 4px, 100% calc(100% - 2px), 100% 100%, calc(100% - 2px) 100%, 3px 100%, 0px 100%, 0px calc(100% - 3px));
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"] {
+    --pf-ctl: polygon(0px 4px, 0px 2px, 2px 2px, 2px 0px, 4px 0px, calc(100% - 10px) 0px, calc(100% - 8px) 0px, calc(100% - 8px) 2px, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, 100% 10px, 100% calc(100% - 6px), 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, calc(100% - 6px) 100%, 2px 100%, 0px 100%, 0px calc(100% - 2px));
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="pirate"]::before {
+    /* welded plates with rivets */
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--faction-color) 60%, transparent) 1px, transparent 1.5px) 0 0 / 8px 8px,
+        linear-gradient(90deg, transparent 49%, color-mix(in srgb, var(--faction-color) 25%, transparent) 49% 51%, transparent 51%);
+}
+
+.profile-selection-content[data-faction="pirate"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: solid;
+    border-width: 3px 7px 5px 3px;
+    --fp-surface-opacity: 0.4;
+    --fp-ornament:
+        radial-gradient(circle, var(--fp-accent) 0 2.5px, #05060a 3px 4px, transparent 4.5px) 6px 6px / 18px 12px repeat-x,
+        radial-gradient(circle, var(--fp-accent) 0 2.5px, #05060a 3px 4px, transparent 4.5px) 6px calc(100% - 6px) / 18px 12px repeat-x;
+}
+
+.profile-selection-content[data-faction="pirate"] .profile-faction-preview { transform: rotate(-0.6deg); }
+
+.profile-selection-content[data-faction="pirate"] .profile-faction-lore { transform: rotate(0.5deg); }
+
+.profile-selection-content[data-faction="pirate"] .profile-faction-fact:nth-child(odd) { transform: rotate(-0.8deg); }
+
+.profile-selection-content[data-faction="pirate"] .profile-faction-fact:nth-child(even) { transform: rotate(0.7deg) translateY(3px); }
+
+.profile-selection-content[data-faction="pirate"] .action-button { transform: rotate(-1deg); }
+
+.vf-bezel[data-faction="pirate"]::after,
+.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
+}
+
+.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
+    background:
+        linear-gradient(#7a5a2b 0 0) 12% calc(6 * var(--u)) / calc(90 * var(--u)) calc(30 * var(--u)) no-repeat,
+        linear-gradient(#4a3418 0 0) 68% calc(100% - 36 * var(--u)) / calc(120 * var(--u)) calc(28 * var(--u)) no-repeat,
+        linear-gradient(#6b3a1c 0 0) calc(100% - 30 * var(--u)) 20% / calc(24 * var(--u)) calc(110 * var(--u)) no-repeat,
+        radial-gradient(circle, #d9b36a 0 calc(2 * var(--u)), transparent calc(2.5 * var(--u))) 0 0 / calc(34 * var(--u)) calc(34 * var(--u)) round no-repeat;
+}
+
+.vf-bezel[data-faction="pirate"]::after, .vf-bezel[data-faction="pirate"] .vf-bezel-deco { }
+
+.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
+    background:
+        /* row of teeth along the bottom */
+        repeating-linear-gradient(90deg, var(--bone) 0 calc(9 * var(--u)), var(--hull-dark) calc(9 * var(--u)) calc(11 * var(--u))) 50% calc(100% - calc(6 * var(--u))) / 56% calc(10 * var(--u)) no-repeat,
+        /* ribs on the sides */
+        repeating-linear-gradient(0deg, var(--bone) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(11 * var(--u))) calc(10 * var(--u)) 26% / calc(22 * var(--u)) 48% no-repeat,
+        repeating-linear-gradient(0deg, var(--bone) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(11 * var(--u))) calc(100% - calc(10 * var(--u))) 26% / calc(22 * var(--u)) 48% no-repeat,
+        linear-gradient(var(--bone) 0 0) calc(19 * var(--u)) 22% / calc(4 * var(--u)) 56% no-repeat,
+        linear-gradient(var(--bone) 0 0) calc(100% - calc(19 * var(--u))) 22% / calc(4 * var(--u)) 56% no-repeat,
+        /* two ghost-lit eye sockets, top centre */
+        radial-gradient(circle, var(--retro-ink) 0 calc(3 * var(--u)), color-mix(in srgb, var(--retro-ink) 40%, transparent) calc(5 * var(--u)), transparent calc(9 * var(--u))) 43% calc(8 * var(--u)) / calc(24 * var(--u)) calc(24 * var(--u)) no-repeat,
+        radial-gradient(circle, var(--retro-ink) 0 calc(3 * var(--u)), color-mix(in srgb, var(--retro-ink) 40%, transparent) calc(5 * var(--u)), transparent calc(9 * var(--u))) 57% calc(8 * var(--u)) / calc(24 * var(--u)) calc(24 * var(--u)) no-repeat,
+        /* rotted green stains */
+        radial-gradient(ellipse calc(70 * var(--u)) calc(18 * var(--u)) at 22% 100%, #3b5a2a66, transparent 70%),
+        radial-gradient(ellipse calc(16 * var(--u)) calc(80 * var(--u)) at 100% 30%, #3b5a2a55, transparent 70%);
+}
+
+html[data-vf-faction="pirate"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
+    clip-path: polygon(0 3px, 7px 0, 22% 2px, 41% 0, 63% 3px, 82% 0, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, calc(100% - 3px) 55%, 100% calc(100% - 7px), calc(100% - 9px) 100%, 70% calc(100% - 3px), 45% 100%, 20% calc(100% - 2px), 5px 100%, 0 calc(100% - 8px), 3px 45%) !important;
+    border-style: dashed !important;
+    box-shadow: inset 0 0 0 1px #cdc7a455, inset 0 -3px 0 #3b5a2a99 !important;
+}
+
+html[data-vf-faction="pirate"] {
+    background-color: #1f1405;
+    background-image:
+        radial-gradient(circle at -4% 50%, #ffe08a 0 22%, #b8862a 23% 36%, color-mix(in srgb, #b8862a 55%, #1f1405) 37% 48%, transparent 49%),
+        radial-gradient(circle at -4% 50%, color-mix(in srgb, #ffe08a 50%, transparent) 0 56%, transparent 70%),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #b8862a 70%, transparent) 0 16%, color-mix(in srgb, #b8862a 28%, transparent) 17% 34%, transparent 46%),
+        linear-gradient(color-mix(in srgb, #1f1405 28%, transparent), color-mix(in srgb, #1f1405 28%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-repeat: no-repeat;
+}
+
+.vf-bezel-fx .vf-fx-fac[data-faction="pirate"] { clip-path: polygon(0px 3px, 0px 0px, 3px 0px, calc(100% - 4px) 0px, 100% 0px, 100% 4px, 100% calc(100% - 2px), 100% 100%, calc(100% - 2px) 100%, 3px 100%, 0px 100%, 0px calc(100% - 3px)); }
+
+.vf-bezel-fx .vf-fx-fac[data-faction="pirate"]::before { background: radial-gradient(circle, color-mix(in srgb, var(--faction-color) 60%, transparent) 1px, transparent 1.5px) 0 0 / 8px 8px; }
+
+html[data-vf-faction="pirate"] {
+    background-image:
+        repeating-linear-gradient(33deg, transparent 0 74px, color-mix(in srgb, #b8862a 30%, transparent) 74px 92px, transparent 92px 100px, color-mix(in srgb, #4a3f2a 55%, transparent) 100px 112px, transparent 112px 190px),
+        repeating-linear-gradient(-58deg, transparent 0 120px, color-mix(in srgb, #1f1405 70%, transparent) 120px 134px, transparent 134px 260px),
+        radial-gradient(circle at -4% 62%, color-mix(in srgb, #ffe08a 55%, transparent) 0 7%, color-mix(in srgb, #b8862a 38%, transparent) 8% 24%, transparent 40%),
+        radial-gradient(circle at 103% 30%, color-mix(in srgb, #ffe08a 36%, transparent) 0 3%, color-mix(in srgb, #b8862a 26%, transparent) 4% 14%, transparent 30%),
+        linear-gradient(color-mix(in srgb, #1f1405 56%, transparent), color-mix(in srgb, #1f1405 56%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-size: auto, auto, auto, auto, auto, cover;
+    background-position: 0 0, 0 0, center, center, center, center center;
+}
+
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="pirate"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(0 3px, 7px 0, 22% 2px, 41% 0, 63% 3px, 82% 0, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, calc(100% - 3px) 55%, 100% calc(100% - 7px), calc(100% - 9px) 100%, 70% calc(100% - 3px), 45% 100%, 20% calc(100% - 2px), 5px 100%, 0 calc(100% - 8px), 3px 45%) !important;
+    border-style: dashed !important;
+    box-shadow: inset 0 0 0 1px #cdc7a455, inset 0 -3px 0 #3b5a2a99 !important;
+}
+
+.profile-selection-content[data-faction="pirate"] .pp-pick, .profile-selection-content[data-faction="pirate"] .profile-pilot-portrait { --pk-shape: polygon(0 var(--pk), var(--pk) var(--pk), var(--pk) 0, calc(100% - var(--pk) * 3) 0, calc(100% - var(--pk) * 3) var(--pk), calc(100% - var(--pk) * 2) var(--pk), calc(100% - var(--pk) * 2) calc(var(--pk) * 2), 100% calc(var(--pk) * 2), 100% calc(100% - var(--pk)), calc(100% - var(--pk)) calc(100% - var(--pk)), calc(100% - var(--pk)) 100%, calc(var(--pk) * 2) 100%, calc(var(--pk) * 2) calc(100% - var(--pk) * 2), 0 calc(100% - var(--pk) * 2)); }
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="station"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="station"],
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="menu"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="menu"],
+html[data-faction="pirate"] .home-station-overlay:not([data-hs-tab]),
+html[data-faction="pirate"] .vf-boot-veil-hs:not([data-hs-tab]) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/pirate/ui/bg-station.png'), url('../../../assets/ui/hs-bg-station.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="upgrade"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="upgrade"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/pirate/ui/bg-upgrade.png'), url('../../../assets/ui/hs-bg-upgrade.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="hangar"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="hangar"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/pirate/ui/bg-hangar.png'), url('../../../assets/ui/hs-bg-hangar.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="shop"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="shop"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/pirate/ui/bg-shop.png'), url('../../../assets/ui/hs-bg-shop.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="craft"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="craft"],
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="components"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="components"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/pirate/ui/bg-craft.png'), url('../../../assets/ui/hs-bg-craft.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="travel"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="travel"],
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="play"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="play"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.56) 100%), url('../../../assets/factions/pirate/ui/bg-travel.png'), url('../../../assets/ui/hs-bg-travel.png');
+}
+
+html[data-faction="pirate"] .home-station-overlay[data-hs-tab="explorations"],
+html[data-faction="pirate"] .vf-boot-veil-hs[data-hs-tab="explorations"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/pirate/ui/bg-explorations.png'), url('../../../assets/ui/hs-bg-explorations.png');
+}
+
+html[data-faction="pirate"] .start-screen,
+html[data-faction="pirate"] .start-screen-overlay,
+html[data-faction="pirate"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/pirate/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-faction="pirate"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/pirate/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html[data-pf="pirate"] .start-screen,
+html[data-pf="pirate"] .start-screen-overlay,
+html[data-pf="pirate"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/pirate/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-pf="pirate"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/pirate/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="pirate"]:not(.selected) { border-style: solid; border-width: 3px 7px 5px 3px; transform: rotate(-1deg); }

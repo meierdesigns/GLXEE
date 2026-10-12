@@ -1,0 +1,1503 @@
+.hs-hangar-stats.is-row .hs-area-switch input:not(:checked) + .hs-area-switch-track { padding: 0 5px 0 24px; }
+.hs-hangar-stats.is-row .hs-area-switch input:not(:checked) + .hs-area-switch-track::before { left: 3px; }
+
+/* Hangar stat icons (slots, size, areas, speed, energy): larger, crisp. */
+.hs-hangar-stats.is-row .hs-stat-icon { width: 32px; height: 32px; }
+.hs-hangar-stats.is-row .hs-stat-icon img { width: 32px; height: 32px; image-rendering: pixelated; }
+
+/* --------------------------------------------------------------------------
+   Contour consistency (home station + galaxy map): every chrome stroke uses
+   --ui-border-width (2px grid). No stray 1px / 3px outlines.
+   -------------------------------------------------------------------------- */
+html body .home-station-overlay,
+html body .galaxy-map-embedded {
+    --gm-stroke: var(--ui-border-width, 2px);
+    --gm-stroke-gap: var(--ui-border-width, 2px);
+    --gm-stroke-inner: calc(var(--ui-border-width, 2px) * 2);
+}
+
+/* Panels / cards / header chrome */
+html body .galaxy-map-embedded .galaxy-map-header,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar,
+html body .home-station-overlay .hs-play-shell,
+html body .home-station-overlay .hs-wallet-card,
+html body .home-station-overlay .hs-progress-card,
+html body .home-station-overlay .hs-tab {
+    border-width: var(--gm-stroke) !important;
+}
+
+/* Ship bar + locate / hangar CTA: single 2px stroke, matching inset gap */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link {
+    border: var(--gm-stroke) solid color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar.is-hangar-link:is(:hover, :focus-visible) {
+    border-color: var(--color-primary) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a, 0 0 14px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-locate-ship,
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-bar-cta {
+    border-width: var(--gm-stroke) !important;
+    box-shadow: inset 0 0 0 var(--gm-stroke-gap) #05060a, 0 2px 0 #000 !important;
+}
+
+/* Bottom-bar internal dividers */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+    border-right-width: var(--gm-stroke) !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .galaxy-map-ruler-seg + .galaxy-map-ruler-seg {
+    border-top-width: var(--gm-stroke) !important;
+}
+
+/* Stat cells inside the planet segment */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select .gm-detail .stat-row {
+    box-shadow: inset 0 0 0 var(--gm-stroke) color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+}
+
+/* Stage stepper tiles */
+html body .galaxy-map-embedded .gm-stage-stepper .gm-sector-stage {
+    border-width: var(--gm-stroke) !important;
+    box-shadow: 0 0 0 var(--gm-stroke) #05060a !important;
+}
+
+/* Mission / teleport / FROM START: same double outline recipe (outer + gap + inner) */
+html body .galaxy-map-embedded .gm-card-actions .action-button,
+html body .galaxy-map-embedded .action-button#gmConfirmStart,
+html body .galaxy-map-embedded .action-button.gm-mission-btn,
+html body .galaxy-map-embedded .gm-teleport-btn.action-button,
+html body .home-station-overlay .gm-card-actions .action-button,
+html body .home-station-overlay .action-button#gmConfirmStart,
+html body .home-station-overlay .action-button.gm-mission-btn {
+    border: var(--gm-stroke) solid var(--gm-btn-line, var(--color-primary)) !important;
+    box-shadow:
+        inset 0 0 0 var(--gm-stroke-gap) #05060a,
+        inset 0 0 0 var(--gm-stroke-inner) var(--gm-btn-line, var(--color-primary)),
+        2px 2px 0 0 #000 !important;
+}
+html body .galaxy-map-embedded .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused),
+html body .galaxy-map-embedded .action-button#gmConfirmStart:is(:hover, :focus-visible, .nav-focused),
+html body .galaxy-map-embedded .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .action-button#gmConfirmStart:is(:hover, :focus-visible, .nav-focused),
+html body .home-station-overlay .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused) {
+    box-shadow:
+        inset 0 0 0 var(--gm-stroke-gap) #05060a,
+        inset 0 0 0 var(--gm-stroke-inner) var(--gm-btn-line, var(--color-primary)),
+        3px 3px 0 0 #000 !important;
+}
+
+/* Ship-bar info / stats hairlines */
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-info {
+    border-right-width: var(--gm-stroke) !important;
+}
+html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-stats > div {
+    border-left-width: var(--gm-stroke) !important;
+}
+
+/* Station bezel + content: keep the 4:3 stage (--vw/--vh) centered in the window */
+.home-station-overlay {
+    --stage-x: 0px;
+    --stage-y: 0px;
+}
+.home-station-overlay::after {
+    inset: auto !important;
+    left: calc(var(--stage-x) + var(--hs-frame-gap)) !important;
+    top: calc(var(--stage-y) + var(--hs-frame-gap)) !important;
+    width: calc(var(--vw, calc(100 * var(--sv-w))) - 2 * var(--hs-frame-gap)) !important;
+    height: calc(var(--vh, calc(100 * var(--sv-h))) - 2 * var(--hs-frame-gap)) !important;
+}
+.home-station-overlay .home-station-content {
+    top: calc((var(--stage-y) + var(--fr-open-top)) / var(--hs-z)) !important;
+    left: calc((var(--stage-x) + var(--fr-open-side)) / var(--hs-z)) !important;
+}
+
+/* vw/vh replacements: 1% of the 4:3 stage. Not zoomed contexts: real stage px.
+   Zoomed contexts (below) use layout px so sizes keep their proportions. */
+:root {
+    --sv-w: calc(var(--vw, 1000px) / 100);
+    --sv-h: calc(var(--vh, 750px) / 100);
+}
+.game-container,
+.home-station-overlay .home-station-content {
+    --sv-w: calc(var(--vw, 1000px) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+    --sv-h: calc(var(--vh, 750px) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)) / 100);
+}
+
+/* Global bezel around the 4:3 stage (all screens) + resolution slider */
+:root {
+    --stage-x: 0px;
+    --stage-y: 0px;
+    --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
+    --bz: max(34px, calc(44 * var(--bz-u)));
+    /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before). */
+    --bz-extra: 22;
+    --fr-open-side: calc(44 * var(--bz-u));
+    --fr-open-bottom: calc(44 * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 22)) * var(--bz-u));
+    --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
+    --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
+}
+.vf-bezel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9990;
+    pointer-events: none;
+    --u: var(--bz-u);
+    --bezel: calc(38 * var(--u));
+    --hs-frame-gap: calc(6 * var(--u));
+    --retro-ink: var(--color-primary, #3dff6a);
+    --hull: #1c1f26;
+    --hull-lit: #2c313b;
+    --hull-dark: #0c0e12;
+}
+.vf-bezel::after {
+    content: '' !important; /* the slider takes the label's place */
+    position: absolute !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    z-index: 1;
+    display: flex !important;
+}
+.vf-bezel-res {
+    /* Child of <html> (outside the scaled stage): fixed pixel size, positioned by viewport-fit.js.
+       Styled like the in-game sliders on a hull plate. */
+    position: fixed;
+    z-index: 9995;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 22px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    background: #0c0e12;
+    box-shadow: inset 0 0 0 2px #2c313b;
+    pointer-events: auto;
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+    font-weight: 700;
+    color: var(--color-primary, #3dff6a);
+    letter-spacing: 0.12em;
+    line-height: 1;
+    image-rendering: pixelated;
+}
+:is(.vf-bezel-res, .vf-bezel-fx) input {
+    width: 140px;
+    height: 10px;
+    margin: 0;
+    border: 2px solid var(--color-primary, #3dff6a);
+    border-radius: 0;
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right,
+        var(--color-primary, #3dff6a) 0%,
+        var(--color-primary, #3dff6a) var(--look-fill, 0%),
+        color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #05060a) var(--look-fill, 0%),
+        color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #05060a) 100%);
+}
+:is(.vf-bezel-res, .vf-bezel-fx) input::-webkit-slider-runnable-track { height: 6px; background: transparent; border: 0; }
+:is(.vf-bezel-res, .vf-bezel-fx) input::-moz-range-track { height: 6px; background: transparent; border: 0; }
+:is(.vf-bezel-res, .vf-bezel-fx) input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 14px;
+    margin-top: -4px;
+    background: #fff;
+    border: 2px solid var(--color-primary, #3dff6a);
+    border-radius: 0;
+    box-shadow: none;
+}
+:is(.vf-bezel-res, .vf-bezel-fx) input::-moz-range-thumb {
+    width: 4px;
+    height: 10px;
+    background: #fff;
+    border: 2px solid var(--color-primary, #3dff6a);
+    border-radius: 0;
+}
+.vf-bezel-res output { min-width: 8.5em; color: var(--color-text, #fff); text-align: right; }
+/* The station used to draw its own bezel + GUI slider */
+.home-station-overlay::after,
+.hs-frame-ui-scale { display: none !important; }
+
+/* Wallet buttons (fullscreen / logout): square, centered, flat pixel style */
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn {
+    align-self: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    aspect-ratio: 1 / 1;
+    margin: 0 0 0 6px;
+    padding: 0 !important;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #000);
+    border-left-width: var(--ui-border-width, 2px);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a);
+    box-shadow: inset 0 0 0 2px #05060a, 2px 2px 0 0 #000;
+    color: var(--faction-accent, var(--color-primary));
+    clip-path: none;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn:is(:hover, :focus-visible, .nav-focused) {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 24%, #05060a);
+    border-color: var(--faction-accent, var(--color-primary));
+    color: #fff;
+}
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn :is(.vf-fs-icon, .hs-logout-icon, .hs-tab-pixel) {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+/* Fullscreen + logout live in the top bezel strip (proxy buttons made by viewport-fit.js) */
+html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout-btn { display: none !important; }
+.vf-bezel-tools {
+    position: absolute;
+    top: calc(2 * var(--bz-u));
+    right: calc(100 * var(--bz-u));
+    z-index: 9995;
+    display: flex;
+    gap: calc(8 * var(--bz-u));
+}
+.vf-bezel-tools button {
+    width: calc(40 * var(--bz-u));
+    height: calc(40 * var(--bz-u));
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0c0e12;
+    border: calc(2 * var(--bz-u)) solid #2c313b;
+    border-radius: 0;
+    color: var(--color-primary, #3dff6a);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.vf-bezel-tools button:hover,
+.vf-bezel-tools button:focus-visible {
+    border-color: var(--color-primary, #3dff6a);
+    color: #fff;
+    outline: none;
+}
+.vf-bezel-tools button > * {
+    /* every icon: the same 16x16 grid cell */
+    display: block;
+    flex: none;
+    width: calc(32 * var(--bz-u)) !important;
+    height: calc(32 * var(--bz-u)) !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    pointer-events: none;
+}
+.vf-bezel-tools button svg { fill: none; stroke: currentColor; stroke-width: 2; }
+.vf-bezel-tools button > span :is(img, svg) {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    image-rendering: pixelated;
+}
+
+/* Corner fullscreen button: replaced by the bezel tools on every screen */
+.vf-fullscreen-btn { display: none !important; }
+.vf-bezel-tools button.is-open { border-color: var(--color-primary, #3dff6a); background: color-mix(in srgb, var(--color-primary, #3dff6a) 18%, #0c0e12); }
+
+/* Situation card (conflict / invasion / mission): use the whole segment */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation {
+    justify-content: center;
+    gap: 6px;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-emblem {
+    width: 32px;
+    height: 32px;
+    margin-right: 0;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-row { gap: 10px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-kind { font-size: var(--font-h2); letter-spacing: 3px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-title { font-size: 20px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-sub { font-size: var(--font-text);}
+/* Ruler card (galaxy name + state): larger text and crest */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card .galaxy-map-ruler-galaxy { font-size: 22px; letter-spacing: 3px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card .galaxy-map-ruler-label { font-size: var(--font-h2); letter-spacing: 3px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-emblem { width: 56px; height: 56px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-emblem img.profile-faction-emblem-img { width: 56px !important; height: 56px !important; }
+
+/* Bezel styling: layered hull plate — brushed panels, bevels, bolts, vents, lamps, hazard strips */
+.vf-bezel::after {
+    background:
+        /* bolts: dark socket + lit head, four corners */
+        linear-gradient(#fff3 0 0) calc(21 * var(--u)) calc(21 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(19 * var(--u)) calc(19 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(100% - 27 * var(--u)) calc(21 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 27 * var(--u)) calc(19 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(21 * var(--u)) calc(100% - 27 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(19 * var(--u)) calc(100% - 27 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#fff3 0 0) calc(100% - 27 * var(--u)) calc(100% - 27 * var(--u)) / calc(2 * var(--u)) calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 27 * var(--u)) calc(100% - 27 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* status lamps, top right */
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#3dff6a 0 0) calc(100% - 62 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* vent slots, top left */
+        repeating-linear-gradient(90deg, var(--hull-dark) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(8 * var(--u))) calc(40 * var(--u)) calc(12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* hazard strips, bottom corners */
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(100% - 40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
+        /* seams: panel joints every ~1/4 along the top and bottom */
+        repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), #0006 calc(25% - 1px) 25%) 0 calc(6 * var(--u)) / 100% calc(6 * var(--u)) no-repeat,
+        /* inner lip: thin dim trim line right at the screen opening */
+        linear-gradient(color-mix(in srgb, var(--retro-ink) 55%, #000) 0 0) 0 calc(100% - 2 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
+        /* hard bevel: lit top/left, dark bottom/right */
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / calc(4 * var(--u)) 100% no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 0 100% / 100% calc(4 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 100% 0 / calc(4 * var(--u)) 100% no-repeat,
+        /* brushed metal: fine horizontal grain over a vertical gradient */
+        repeating-linear-gradient(0deg, #ffffff08 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(3 * var(--u))),
+        var(--hull) !important;
+}
+/* Glass ::before retired — any paint here sat over the playfield as ghost
+   frame contours. Opening edge is hull plates only. */
+.vf-bezel::before {
+    content: none !important;
+    display: none !important;
+}
+
+/* Cables from the bezel to the window edge (drawn by viewport-fit.js on the voxel lattice) */
+#vf-cables {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 0;  /* behind the bezel; plugs still reach into the screen opening */
+    pointer-events: none;
+    shape-rendering: crispEdges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+html[data-vf-frame-px="on"] #vf-cables {
+    filter: url(#vfFramePx);
+}
+
+/* Start screen: no inner housing; the content fills the (larger) screen bezel */
+html body .start-screen .start-screen-content.start-screen-retro {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: calc(48 * var(--bz-u)) calc(64 * var(--bz-u)) calc(40 * var(--bz-u)) !important;
+    box-sizing: border-box;
+    background: transparent !important;
+    box-shadow: none !important;
+    justify-content: center;
+}
+html body .start-screen .start-screen-content.start-screen-retro::before { display: none !important; }
+
+/* Faction picker / name step: use the whole screen with readable type */
+html body .profile-selection-content.profile-selection-name-mode:not(.is-name-step) {
+    width: calc(100% - 140 * var(--bz-u)) !important;
+    max-width: none !important;
+    height: calc(100% - 100 * var(--bz-u)) !important;
+    max-height: none !important;
+    justify-content: space-between;
+    gap: calc(14 * var(--bz-u));
+}
+html body .profile-selection-name-mode .profile-selection-title { letter-spacing: 6px;}
+html body .profile-selection-name-mode .profile-faction-picker-label { font-size: 22px !important; letter-spacing: 3px; }
+html body .profile-selection-name-mode .profile-faction-swatches { gap: 12px; }
+html body .profile-selection-name-mode .profile-faction-swatch { padding: 14px 6px 12px; }
+
+html body .profile-selection-name-mode .profile-faction-swatch-emblem > * { width: 100% !important; height: 100% !important; }
+html body .profile-selection-name-mode .profile-faction-swatch-label { letter-spacing: 2px;}
+html body .profile-selection-name-mode .profile-faction-info-row { gap: 16px; margin: 0;}
+html body .profile-selection-name-mode .profile-faction-preview { padding: 16px 20px; gap: 24px; }
+
+html body .profile-selection-name-mode .profile-faction-preview-trait,
+html body .profile-selection-name-mode .profile-faction-preview-hero { line-height: 1.4;}
+
+html body .profile-selection-name-mode .profile-faction-lore-label { letter-spacing: 3px; margin-bottom: 8px;}
+html body .profile-selection-name-mode .profile-faction-lore-text { max-height: none;}
+html body .profile-selection-name-mode .profile-faction-facts { gap: 16px; margin: 0; }
+html body .profile-selection-name-mode .profile-faction-fact { gap: 16px;}
+
+html body .profile-selection-name-mode .profile-faction-fact-icon > * { width: 100%; height: 100%; }
+html body .profile-selection-name-mode .profile-faction-fact-label { letter-spacing: 3px; margin-bottom: 6px;}
+html body .profile-selection-name-mode .profile-faction-fact-value { line-height: 1.4;}
+html body .profile-selection-name-mode .profile-faction-fact-note { line-height: 1.4;}
+html body .profile-selection-name-mode .profile-selection-actions .action-button { font-size: 31px !important;}
+html body .profile-selection-name-mode .profile-selection-instructions p { font-size: 22px !important; }
+html body .profile-selection-name-mode .profile-faction-info-row { height: auto !important;}
+
+html body .profile-selection-name-mode .profile-faction-lore-text * { font-size: inherit; }
+html body .profile-selection-name-mode .profile-faction-swatches { margin-bottom: 0; }
+html body .profile-selection-name-mode .profile-faction-ship { height: auto !important;}
+
+html body .profile-selection-name-mode .profile-faction-fact { height: auto !important; }
+html body .profile-selection-name-mode .profile-faction-info-row { max-height: none !important;}
+
+html body .profile-selection-name-mode .profile-faction-facts { grid-auto-rows: auto !important;}
+html body .profile-selection-name-mode .profile-faction-info-row { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) !important; }
+
+html body .profile-selection-name-mode .profile-faction-lore { padding: 12px 18px; }
+
+html body .profile-selection-name-mode .profile-faction-info-row { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) !important; }
+
+html body .profile-selection-name-mode .profile-faction-lore-label { font-size: 20px !important; }
+
+html body .profile-selection-name-mode .profile-faction-fact-label { font-size: 20px !important; }
+
+html body .profile-selection-name-mode .profile-faction-preview-trait,
+html body .profile-selection-name-mode .profile-faction-preview-hero { font-size: 22px !important; }
+
+html body .profile-selection-name-mode .profile-selection-content, html body .profile-selection-content.profile-selection-name-mode:not(.is-name-step) { gap: calc(10 * var(--bz-u)); }
+html body .profile-selection-name-mode .profile-faction-lore-text { font-size: 23px !important;}
+
+html body .profile-selection-name-mode .profile-faction-fact-note { font-size: 21px !important; }
+html body .profile-selection-name-mode .profile-selection-actions { margin-top: 0; }
+
+/* Layout is 1280x960 now: faction picker sizes scaled back so everything fits */
+html body .profile-selection-name-mode .profile-selection-title { font-size: 38px !important; }
+html body .profile-selection-name-mode .profile-faction-swatch-label { font-size: 20px !important; }
+html body .profile-selection-name-mode .profile-faction-swatch-emblem { width: 56px; height: 56px; }
+html body .profile-selection-name-mode .profile-faction-picker-label { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode .profile-faction-lore-text { font-size: var(--font-h2) !important; line-height: 1.3 !important; }
+html body .profile-selection-name-mode .profile-faction-lore-label { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode .profile-faction-fact-value { font-size: 20px !important; }
+html body .profile-selection-name-mode .profile-faction-fact-note { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode .profile-faction-fact-label { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode .profile-faction-fact-icon { width: 44px; height: 44px; }
+html body .profile-selection-name-mode .profile-faction-preview-name { font-size: 32px !important; }
+html body .profile-selection-name-mode .profile-faction-preview-trait,
+html body .profile-selection-name-mode .profile-faction-preview-hero { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode .profile-faction-ship { width: 240px !important; }
+html body .profile-selection-name-mode .profile-faction-preview-emblem { width: 56px; height: 56px; }
+html body .profile-selection-name-mode .profile-faction-fact { padding: 8px 14px; }
+html body .profile-selection-name-mode .profile-selection-actions .action-button { font-size: var(--font-h2) !important; padding: 10px 26px !important; }
+
+/* Name step: readable minimum sizes */
+html body .profile-selection-name-mode.is-name-step :is(.profile-start-label, .profile-start-galaxy-home, .profile-start-galaxy-meta, .profile-start-galaxy-new, .profile-start-galaxy-caret, .profile-start-chip, .profile-start-kit-effect, .profile-faction-preview-weapon) { font-size: var(--font-text) !important; }
+html body .profile-selection-name-mode.is-name-step .profile-selection-instructions p { font-size: var(--font-h2) !important; }
+/* Name step: compact cluster, so scale it up as a whole */
+
+/* Fight HUD: info packs tight; weapon + vitals keep/fill remaining height */
+html body .game-container .game-left-cluster { overflow: hidden; }
+html body .game-container .game-left-cluster > #gameInfoPanel {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 55%;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+html body .game-container .game-left-cluster > .weapon-selection { flex-shrink: 1; min-height: clamp(110px, calc(20 * var(--sv-h)), 200px); }
+html body .game-container .game-left-cluster > .player-vitals-side {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: clamp(160px, calc(28 * var(--sv-h)), 280px);
+    max-height: none;
+}
+
+/* Fight screen: glass opening + 16px inset. Zoom divides geometry (CSS zoom quirk). */
+html body .game-container {
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --fight-inset: 16px;
+    position: fixed !important;
+    z-index: 9992 !important;
+    left: calc((var(--fr-open-side) + var(--fight-inset)) / var(--_z)) !important;
+    top: calc((var(--fr-open-top) + var(--fight-inset)) / var(--_z)) !important;
+    width: calc((var(--fr-open-w) - 2 * var(--fight-inset)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - 2 * var(--fight-inset)) / var(--_z)) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    gap: var(--fight-inset) !important;
+    overflow: hidden !important;
+    background-color: #05060a !important;
+}
+/* Side / rail panels: single inset rim, no outer ring glow. */
+html body .game-container :is(.enemy-vitals-side, .player-vitals-side, .game-info-panel, .weapon-selection, .gi-loadout-side > .gi-cluster, .gi-mission-side > .gi-cluster) {
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
+}
+html body .game-container #gameCanvas,
+html body .game-container .game-stage,
+html body .game-container .game-canvas-container {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+html body .game-container :is(.game-left-cluster, .game-right-cluster) {
+    overflow: hidden;
+    gap: 8px;
+}
+html body .game-container .game-canvas-container > .controls,
+html body .game-container .game-canvas-container > .ui-controls-show-btn {
+    display: none !important;
+}
+html body .game-container #gameInfoPanel .gi-body { flex-shrink: 0; }
+html body .game-container #gameInfoPanel .gi-body > * { flex-shrink: 0; }
+html body .game-container #gameInfoPanel .gi-cluster { flex-shrink: 0; min-height: min-content; }
+
+/* Faction picker: the panel never scrolls; the containers inside scroll when needed */
+html body .profile-selection-content.profile-selection-name-mode:not(.is-name-step) { overflow: hidden !important; }
+html body .profile-selection-name-mode .profile-faction-info-row { flex: 1 1 0 !important; min-height: 0 !important; }
+html body .profile-selection-name-mode .profile-faction-info-row > * { min-height: 0; overflow: hidden; }
+html body .profile-selection-name-mode .profile-faction-preview { overflow-y: auto; }
+html body .profile-selection-name-mode .profile-faction-lore { min-height: 0; }
+html body .profile-selection-name-mode .profile-faction-lore-text { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; scrollbar-width: thin; }
+html body .profile-selection-name-mode .profile-faction-facts { flex: 0 1 auto !important; min-height: 0 !important; grid-auto-rows: minmax(0, auto) !important; }
+html body .profile-selection-name-mode .profile-faction-fact { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+
+/* Profiles screen (list mode): scale the whole modal up so the small type is readable */
+html body .profile-selection-content.profile-selection-floating:not(.profile-selection-name-mode) { zoom: 1.3; }
+
+/* Known-galaxies toggle (icon switch) */
+.pd-block-title { display: flex; align-items: center; gap: 6px; }
+.pd-known-toggle {
+    margin-left: auto;
+    width: 28px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.pd-known-toggle.is-on { color: var(--color-primary); border-color: var(--color-primary); }
+.pd-known-toggle:hover, .pd-known-toggle:focus-visible { color: #fff; outline: none; }
+
+/* empty screen: static noise + label */
+.vf-pilot-empty { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); letter-spacing: 0.3em; }
+.vf-pilot-empty i {
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(90deg, #ffffff10 0 calc(3 * var(--bz-u)), transparent calc(3 * var(--bz-u)) calc(7 * var(--bz-u))),
+        repeating-linear-gradient(0deg, #ffffff0c 0 calc(2 * var(--bz-u)), transparent calc(2 * var(--bz-u)) calc(5 * var(--bz-u)));
+    animation: vf-pilot-noise 0.4s steps(3) infinite;
+}
+.vf-pilot-empty b { position: relative; font-weight: normal; }
+@keyframes vf-pilot-noise { 0% { background-position: 0 0, 0 0; } 33% { background-position: 5px 3px, -3px 2px; } 66% { background-position: -4px 6px, 2px -4px; } }
+@media (prefers-reduced-motion: reduce) { .vf-pilot-empty i { animation: none; } }
+
+/* Taller top strip only (bezel ~44 layout px; top = 44 + extra) */
+.vf-bezel {
+    --bz-extra: 22;
+    --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
+}
+/* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */
+.vf-bezel-tools { top: calc(13 * var(--bz-u)); }
+html body .start-screen .start-screen-content.start-screen-retro { padding-top: calc(24 * var(--bz-u)) !important; }
+.vf-bezel::after {
+    --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
+}
+
+/* Pilot card + wallet now live in the bezel's top strip */
+html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-pilot-card, .hs-wallet-card) { display: none !important; }
+
+/* ── Sci-fi bezel, styled per faction (data-faction on #vf-bezel, from the active pilot) ── */
+.vf-bezel-deco {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    -webkit-mask: var(--hole), linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--hole) exclude, linear-gradient(#000 0 0);
+    background:
+        /* light strips along the outer edge (top / bottom) */
+        linear-gradient(90deg, transparent, var(--retro-ink) 20%, var(--retro-ink) 80%, transparent) 50% calc(5 * var(--u)) / 60% calc(2 * var(--u)) no-repeat,
+        linear-gradient(90deg, transparent, var(--retro-ink) 20%, var(--retro-ink) 80%, transparent) 50% calc(100% - 5 * var(--u)) / 60% calc(2 * var(--u)) no-repeat,
+        /* side service panels with slots */
+        repeating-linear-gradient(0deg, var(--hull-dark) 0 calc(3 * var(--u)), transparent calc(3 * var(--u)) calc(10 * var(--u))) calc(14 * var(--u)) 30% / calc(8 * var(--u)) 40% no-repeat,
+        repeating-linear-gradient(0deg, var(--hull-dark) 0 calc(3 * var(--u)), transparent calc(3 * var(--u)) calc(10 * var(--u))) calc(100% - 22 * var(--u)) 30% / calc(8 * var(--u)) 40% no-repeat;
+}
+@keyframes vf-bz-pulse { from { opacity: 0.45; } to { opacity: 1; } }
+.vf-bezel .vf-bezel-deco { z-index: 3; }
+
+/* Crest silhouettes: coarse 4·bz-u voxel stairs (beats bezel faction rules). */
+.vf-bezel .vf-pilot-crest[data-f="terran"] {
+    --shape: polygon(
+        0 0, 100% 0,
+        100% calc(28 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(28 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(52 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(28 * var(--bz-u)),
+        0 calc(28 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="kronax"] {
+    --shape: polygon(
+        0 calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
+        calc(50% - 4 * var(--bz-u)) 0, calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) 0,
+        calc(100% - 8 * var(--bz-u)) 0, calc(100% - 8 * var(--bz-u)) calc(8 * var(--bz-u)), 100% calc(8 * var(--bz-u)),
+        100% calc(36 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) 100%, calc(12 * var(--bz-u)) 100%,
+        calc(12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(4 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)), 0 calc(36 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="voidborn"] {
+    --shape: polygon(
+        calc(50% - 4 * var(--bz-u)) 0, calc(50% + 4 * var(--bz-u)) 0,
+        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(100% - 8 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(100% - 8 * var(--bz-u)) calc(12 * var(--bz-u)), 100% calc(12 * var(--bz-u)),
+        100% calc(32 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(32 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(44 * var(--bz-u)), calc(50% + 8 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(50% + 8 * var(--bz-u)) 100%, calc(50% - 8 * var(--bz-u)) 100%,
+        calc(50% - 8 * var(--bz-u)) calc(44 * var(--bz-u)), calc(4 * var(--bz-u)) calc(44 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(32 * var(--bz-u)), 0 calc(32 * var(--bz-u)),
+        0 calc(12 * var(--bz-u)), calc(8 * var(--bz-u)) calc(12 * var(--bz-u)),
+        calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u))
+    );
+    filter: none;
+}
+.vf-bezel .vf-pilot-crest[data-f="pirate"] {
+    --shape: polygon(
+        0 calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
+        calc(16 * var(--bz-u)) 0, calc(16 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(24 * var(--bz-u)) calc(4 * var(--bz-u)), calc(24 * var(--bz-u)) 0,
+        calc(32 * var(--bz-u)) 0, calc(32 * var(--bz-u)) calc(4 * var(--bz-u)),
+        calc(40 * var(--bz-u)) calc(4 * var(--bz-u)), calc(40 * var(--bz-u)) 0,
+        calc(48 * var(--bz-u)) 0, calc(48 * var(--bz-u)) calc(4 * var(--bz-u)), 100% calc(4 * var(--bz-u)),
+        100% calc(24 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(24 * var(--bz-u)),
+        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(50% + 4 * var(--bz-u)) 100%, calc(50% - 4 * var(--bz-u)) 100%,
+        calc(50% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(12 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(12 * var(--bz-u)) calc(36 * var(--bz-u)), calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
+        calc(4 * var(--bz-u)) calc(24 * var(--bz-u)), 0 calc(24 * var(--bz-u))
+    );
+}
+.vf-bezel .vf-pilot-crest[data-f="machine"] {
+    --shape: polygon(
+        calc(50% - 6 * var(--bz-u)) 0, calc(50% + 6 * var(--bz-u)) 0,
+        calc(50% + 6 * var(--bz-u)) calc(6 * var(--bz-u)), 100% calc(6 * var(--bz-u)),
+        100% calc(48 * var(--bz-u)), calc(50% + 6 * var(--bz-u)) calc(48 * var(--bz-u)),
+        calc(50% + 6 * var(--bz-u)) 100%, calc(50% - 6 * var(--bz-u)) 100%,
+        calc(50% - 6 * var(--bz-u)) calc(48 * var(--bz-u)), 0 calc(48 * var(--bz-u)),
+        0 calc(6 * var(--bz-u)), calc(50% - 6 * var(--bz-u)) calc(6 * var(--bz-u))
+    );
+}
+
+/* Voidborn: the frame and the GUI breathe and wobble like living tissue */
+@keyframes vf-void-wobble {
+    0%   { clip-path: inset(0 round calc(120 * var(--u)) calc(34 * var(--u)) calc(96 * var(--u)) calc(64 * var(--u)) / calc(60 * var(--u)) calc(110 * var(--u)) calc(46 * var(--u)) calc(90 * var(--u))); }
+    25%  { clip-path: inset(calc(3 * var(--u)) round calc(70 * var(--u)) calc(100 * var(--u)) calc(50 * var(--u)) calc(120 * var(--u)) / calc(100 * var(--u)) calc(50 * var(--u)) calc(110 * var(--u)) calc(40 * var(--u))); }
+    50%  { clip-path: inset(0 calc(4 * var(--u)) round calc(40 * var(--u)) calc(120 * var(--u)) calc(110 * var(--u)) calc(60 * var(--u)) / calc(110 * var(--u)) calc(70 * var(--u)) calc(40 * var(--u)) calc(100 * var(--u))); }
+    75%  { clip-path: inset(calc(2 * var(--u)) 0 calc(3 * var(--u)) round calc(100 * var(--u)) calc(60 * var(--u)) calc(40 * var(--u)) calc(110 * var(--u)) / calc(50 * var(--u)) calc(100 * var(--u)) calc(100 * var(--u)) calc(60 * var(--u))); }
+    100% { clip-path: inset(0 round calc(120 * var(--u)) calc(34 * var(--u)) calc(96 * var(--u)) calc(64 * var(--u)) / calc(60 * var(--u)) calc(110 * var(--u)) calc(46 * var(--u)) calc(90 * var(--u))); }
+}
+@keyframes vf-void-wobble-in {
+    0%, 100% { border-radius: calc(70 * var(--u)) calc(20 * var(--u)) calc(54 * var(--u)) calc(38 * var(--u)) / calc(34 * var(--u)) calc(60 * var(--u)) calc(28 * var(--u)) calc(50 * var(--u)); }
+    33%      { border-radius: calc(30 * var(--u)) calc(64 * var(--u)) calc(24 * var(--u)) calc(66 * var(--u)) / calc(58 * var(--u)) calc(24 * var(--u)) calc(60 * var(--u)) calc(26 * var(--u)); }
+    66%      { border-radius: calc(54 * var(--u)) calc(30 * var(--u)) calc(70 * var(--u)) calc(18 * var(--u)) / calc(26 * var(--u)) calc(56 * var(--u)) calc(32 * var(--u)) calc(60 * var(--u)); }
+}
+@keyframes vf-void-gui {
+    0%, 100% { clip-path: inset(0 round 18px 6px 18px 6px); }
+    25%      { clip-path: inset(1px round 8px 20px 6px 22px / 20px 8px 22px 6px); }
+    50%      { clip-path: inset(0 1px round 22px 8px 20px 8px / 8px 22px 6px 20px); }
+    75%      { clip-path: inset(1px 0 round 6px 22px 10px 18px / 22px 6px 20px 10px); }
+}
+
+@keyframes vf-void-crest { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, 0.95) rotate(2deg); } }
+
+/* Voidborn GUI: living flesh — blobby lumps, wet highlights, veins, slow breathing (colour stays purple) */
+@keyframes vf-flesh-breathe {
+    0%, 100% { border-radius: 14px 26px 18px 30px / 24px 14px 28px 16px; transform: scale(1); }
+    25%      { border-radius: 28px 14px 30px 16px / 14px 26px 16px 28px; transform: scale(1.006, 0.996); }
+    50%      { border-radius: 18px 30px 14px 26px / 28px 16px 26px 14px; transform: scale(0.996, 1.006); }
+    75%      { border-radius: 30px 16px 26px 14px / 16px 28px 14px 26px; transform: scale(1.004, 0.998); }
+}
+@keyframes vf-flesh-veins { 0%, 100% { background-position: 0 0, 100% 0, 0 100%, 50% 50%; } 50% { background-position: 8px 4px, calc(100% - 6px) 3px, 5px calc(100% - 4px), 50% 50%; } }
+@keyframes vf-flesh-throb { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18) saturate(1.15); } }
+
+/* Voidborn bezel: lumpy flesh outline that slowly shifts between two shapes */
+@keyframes vf-void-flesh { 0%, 100% { clip-path: polygon(calc(0.0% + 0.0 * var(--u)) calc(0.0% + 35.4 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(0.0% + 17.1 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(0.0% + 9.9 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(0.0% + 19.7 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(0.0% + 20.7 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(0.0% + 0.9 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(0.0% + 0.1 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(0.0% + 31.2 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(0.0% + 6.0 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(0.0% + 5.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(0.0% + 39.8 * var(--u)), calc(100.0% + -43.9 * var(--u)) calc(0.0% + 0.0 * var(--u)), calc(100.0% + -31.2 * var(--u)) calc(9.1% + 0.0 * var(--u)), calc(100.0% + -14.2 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(100.0% + -21.4 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(100.0% + -2.8 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(100.0% + -21.2 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(100.0% + -32.8 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(100.0% + -16.2 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(100.0% + -26.3 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(100.0% + -22.9 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(100.0% + -0.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(100.0% + 0.0 * var(--u)) calc(100.0% + -57.2 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(100.0% + -19.2 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(100.0% + -7.5 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(100.0% + -0.3 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(100.0% + -32.7 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(100.0% + -14.0 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(100.0% + -25.2 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(100.0% + -33.4 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(100.0% + -25.0 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(100.0% + -35.7 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(100.0% + -10.9 * var(--u)), calc(0.0% + 59.3 * var(--u)) calc(100.0% + 0.0 * var(--u)), calc(0.0% + 12.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(0.0% + 36.4 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(0.0% + 33.4 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(0.0% + 1.5 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(0.0% + 2.4 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(0.0% + 4.7 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(0.0% + 38.1 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(0.0% + 12.5 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(0.0% + 20.8 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(0.0% + 7.4 * var(--u)) calc(9.1% + 0.0 * var(--u))); } 50% { clip-path: polygon(calc(0.0% + 0.0 * var(--u)) calc(0.0% + 35.0 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(0.0% + 37.9 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(0.0% + 2.2 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(0.0% + 24.5 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(0.0% + 1.3 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(0.0% + 5.7 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(0.0% + 40.0 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(0.0% + 4.5 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(0.0% + 21.5 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(0.0% + 13.5 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(0.0% + 13.2 * var(--u)), calc(100.0% + -44.9 * var(--u)) calc(0.0% + 0.0 * var(--u)), calc(100.0% + -4.0 * var(--u)) calc(9.1% + 0.0 * var(--u)), calc(100.0% + -30.8 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(100.0% + -1.4 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(100.0% + -5.2 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(100.0% + -0.2 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(100.0% + -6.3 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(100.0% + -11.4 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(100.0% + -34.6 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(100.0% + -10.3 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(100.0% + -1.9 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(100.0% + 0.0 * var(--u)) calc(100.0% + -36.0 * var(--u)), calc(90.9% + 0.0 * var(--u)) calc(100.0% + -39.5 * var(--u)), calc(81.8% + 0.0 * var(--u)) calc(100.0% + -0.8 * var(--u)), calc(72.7% + 0.0 * var(--u)) calc(100.0% + -20.5 * var(--u)), calc(63.6% + 0.0 * var(--u)) calc(100.0% + -10.2 * var(--u)), calc(54.5% + 0.0 * var(--u)) calc(100.0% + -22.4 * var(--u)), calc(45.5% + 0.0 * var(--u)) calc(100.0% + -8.8 * var(--u)), calc(36.4% + 0.0 * var(--u)) calc(100.0% + -23.9 * var(--u)), calc(27.3% + 0.0 * var(--u)) calc(100.0% + -15.1 * var(--u)), calc(18.2% + 0.0 * var(--u)) calc(100.0% + -21.9 * var(--u)), calc(9.1% + 0.0 * var(--u)) calc(100.0% + -34.6 * var(--u)), calc(0.0% + 48.7 * var(--u)) calc(100.0% + 0.0 * var(--u)), calc(0.0% + 2.6 * var(--u)) calc(90.9% + 0.0 * var(--u)), calc(0.0% + 0.9 * var(--u)) calc(81.8% + 0.0 * var(--u)), calc(0.0% + 37.0 * var(--u)) calc(72.7% + 0.0 * var(--u)), calc(0.0% + 14.7 * var(--u)) calc(63.6% + 0.0 * var(--u)), calc(0.0% + 4.0 * var(--u)) calc(54.5% + 0.0 * var(--u)), calc(0.0% + 37.0 * var(--u)) calc(45.5% + 0.0 * var(--u)), calc(0.0% + 18.6 * var(--u)) calc(36.4% + 0.0 * var(--u)), calc(0.0% + 25.7 * var(--u)) calc(27.3% + 0.0 * var(--u)), calc(0.0% + 33.5 * var(--u)) calc(18.2% + 0.0 * var(--u)), calc(0.0% + 6.9 * var(--u)) calc(9.1% + 0.0 * var(--u))); } }
+
+/* GUI: only the edges move, gently */
+@keyframes vf-flesh-breathe {
+    0%, 100% { border-radius: 14px 22px 16px 24px / 20px 14px 22px 16px; }
+    50%      { border-radius: 22px 14px 24px 16px / 14px 20px 16px 22px; }
+}
+
+/* Voidborn GUI v3: darker, readable flesh; each piece a different lump; calm on load */
+html.vf-loading *, html.vf-loading *::before, html.vf-loading *::after { animation: none !important; transition: none !important; }
+@keyframes vf-flesh-breathe {
+    0%, 100% { border-top-left-radius: 34px 16px; border-bottom-right-radius: 26px 22px; }
+    50%      { border-top-left-radius: 22px 26px; border-bottom-right-radius: 36px 14px; }
+}
+
+/* ── Smoothness: no per-frame shape animation on big surfaces ── */
+.vf-bezel { transition: opacity 0.14s ease; }
+.vf-bezel.is-switching { opacity: 0; }
+@keyframes vf-heartbeat { 0%, 100% { opacity: 0.55; } 12% { opacity: 1; } 22% { opacity: 0.6; } 34% { opacity: 0.95; } 50% { opacity: 0.55; } }
+@keyframes vf-void-crest { 0%, 50%, 100% { transform: scale(1); } 12% { transform: scale(1.1); } 34% { transform: scale(1.06); } }
+
+/* Name step: icons on kit chips + use the whole screen */
+.profile-start-chips .profile-start-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
+.profile-kit-icon { display: inline-flex; width: 28px; height: 28px; }
+.profile-kit-icon img { width: 100% !important; height: 100% !important; image-rendering: pixelated; }
+html body .profile-selection-content.profile-selection-name-mode.is-name-step {
+    zoom: 1;
+    width: calc(100% - 140 * var(--bz-u)) !important;
+    max-width: none !important;
+    height: calc(100% - 100 * var(--bz-u)) !important;
+    max-height: none !important;
+    justify-content: space-between;
+    gap: 14px;
+    overflow: hidden !important;
+}
+html body .profile-selection-name-mode.is-name-step .profile-selection-title { font-size: 40px !important; }
+html body .profile-selection-name-mode.is-name-step .profile-name-input { font-size: 30px; padding: 14px 20px; width: 100%; box-sizing: border-box; }
+html body .profile-selection-name-mode.is-name-step .profile-start-options { display: flex; flex-direction: column; gap: 14px; min-height: 0;}
+html body .profile-selection-name-mode.is-name-step .profile-start-row { display: flex; flex-direction: column; gap: 8px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-label { font-size: var(--font-h2) !important; letter-spacing: 3px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-chip { font-size: var(--font-h2) !important; padding: 14px 8px; }
+html body .profile-selection-name-mode.is-name-step .profile-kit-icon { width: 40px; height: 40px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-kit-effect { font-size: var(--font-h2) !important; margin-top: 8px; }
+html body .profile-selection-name-mode.is-name-step :is(.profile-start-galaxy-home, .profile-start-galaxy-meta, .profile-start-galaxy-new, .profile-start-galaxy-caret) { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy { font-size: 20px; }
+
+html body .profile-selection-name-mode.is-name-step .profile-selection-actions .action-button { font-size: var(--font-h2) !important; padding: 12px 30px !important; }
+html body .profile-selection-name-mode.is-name-step :is(.profile-start-options, .profile-start-row, .profile-start-galaxy, .profile-start-kit-card) { width: 100% !important; max-width: none !important; box-sizing: border-box; }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy { min-height: 150px; }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy [class*="profile-start-galaxy-name"], html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-info b { white-space: nowrap; word-break: normal; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview { flex: 0 0 auto; overflow: visible;}
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview-text { overflow: visible; }
+
+html body .profile-selection-name-mode.is-name-step .profile-start-options { flex: 0 0 auto; justify-content: flex-start; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-info-row { display: block; flex: 1 1 0; min-height: 0; width: 100%; margin: 0; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview { width: 100% !important; height: 100%; min-height: 0; gap: 36px;}
+html body .profile-selection-name-mode.is-name-step .profile-faction-ship { width: 220px !important; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview-name { font-size: 34px !important; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview-trait, html body .profile-selection-name-mode.is-name-step .profile-faction-preview-hero { font-size: var(--font-h2) !important; }
+html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html body .profile-selection-name-mode.is-name-step .profile-faction-facts { display: none; }
+
+/* Hangar head: title row carries the anatomy tools on the right; the stats
+   row (slots · areas · stats) never overlaps and wraps when it must. */
+.hs-hangar-head-title .hs-hangar-bay-tools.is-topbar {
+    position: static;
+    display: flex;
+    gap: 8px;
+    margin: 0 0 0 auto;
+    flex: 0 0 auto;
+}
+.hs-hangar-head-title .hs-hangar-bay-tools.is-topbar > .action-button { min-height: 0; padding: 6px 14px; font-size: var(--font-text); white-space: nowrap; }
+.hs-hangar-stats.is-row { flex-wrap: wrap; overflow: visible; row-gap: 8px; }
+.hs-hangar-stats.is-row .hs-hangar-areas { flex: 1 1 auto; min-width: max-content; justify-content: center; margin: 0; }
+
+/* Slot bar: key label sits to the left of its socket. */
+.hs-slot-tile { flex-direction: row; align-items: center; gap: 6px; padding: 3px 6px; }
+.hs-slot-tile .hs-slot-tile-key { order: -1; flex: 0 0 auto; }
+.hs-slot-tile .hs-slot-tile-socket { order: 1; }
+.hs-slot-bar { align-items: center; gap: 10px; }
+
+/* Component tree: the expand toggle is a boxed chevron, clearly a control;
+   the area icon next to it is a framed hull pictogram. */
+.home-station-overlay .hs-tree-branch > summary .hs-tree-toggle,
+.home-station-overlay .hs-tree-item > summary .hs-tree-toggle,
+.hs-tree-branch > summary .hs-tree-toggle,
+.hs-tree-item > summary .hs-tree-toggle {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    font-size: 0;
+    line-height: 0;
+    box-sizing: border-box;
+    transition: none;
+    transform: none;
+}
+.hs-tree-branch > summary .hs-tree-toggle::before,
+.hs-tree-item > summary .hs-tree-toggle::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: translate(-65%, -50%) rotate(-45deg);
+}
+.hs-tree-branch[open] > summary .hs-tree-toggle,
+.hs-tree-item[open] > summary .hs-tree-toggle { transform: none;}
+.hs-tree-branch[open] > summary .hs-tree-toggle::before,
+.hs-tree-item[open] > summary .hs-tree-toggle::before { border-color: #05060a; transform: translate(-50%, -75%) rotate(45deg); }
+.hs-tree-branch > summary .hs-tree-icon,
+.hs-tree-item > summary .hs-tree-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding: 0;
+    line-height: 0;
+    box-sizing: border-box;
+    color: var(--faction-accent, var(--color-primary, #00ffcc));
+}
+.hs-tree-icon .hs-area-glyph { display: block; margin: 0;}
+
+/* Component tree, calmer: no frames around toggle / icon, nested branches
+   drop their own outline and keep just a thin accent rule on the left. */
+.home-station-overlay .hs-tree-branch > summary .hs-tree-toggle,
+.home-station-overlay .hs-tree-item > summary .hs-tree-toggle,
+.hs-tree-branch > summary .hs-tree-toggle,
+.hs-tree-item > summary .hs-tree-toggle {
+    border: 0;
+    background: transparent;
+    width: 14px;
+    height: 14px;
+}
+.hs-tree-branch > summary .hs-tree-toggle::before,
+.hs-tree-item > summary .hs-tree-toggle::before { border-color: var(--faction-accent, var(--color-primary, #00ffcc)); }
+.hs-tree-branch[open] > summary .hs-tree-toggle,
+.hs-tree-item[open] > summary .hs-tree-toggle { background: transparent; }
+.hs-tree-branch[open] > summary .hs-tree-toggle::before,
+.hs-tree-item[open] > summary .hs-tree-toggle::before { border-color: var(--faction-accent, var(--color-primary, #00ffcc)); }
+.hs-tree-branch > summary .hs-tree-icon,
+.hs-tree-item > summary .hs-tree-icon {
+    border: 0;
+    background: transparent;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+}
+.hs-tree-icon .hs-area-glyph { width: 20px; height: 20px; }
+.hs-tree-branch .hs-tree-branch,
+.hs-tree-branch .hs-tree-item {
+    border: 0;
+    border-left: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: transparent;
+}
+.hs-tree-branch .hs-tree-items { border-top: 0; }
+
+/* Backing under the whole bezel: a box exactly as big as the screen glass
+   (same corner radius), whose huge shadow fills everything around it. Under
+   the hull it is invisible; it only blocks the page / screen background that
+   would otherwise peek through at the rounded corners. */
+.vf-bezel { --glass-r: 0; }
+.vf-bezel-back {
+    position: absolute;
+    left: var(--fr-ol, var(--fr-open-side, calc(44 * var(--u))));
+    right: var(--fr-or, var(--fr-open-side, calc(44 * var(--u))));
+    bottom: var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u))));
+    top: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 22)) * var(--u))));
+    z-index: 0;
+    pointer-events: none;
+    background: transparent;
+    border-radius: var(--glass-r);
+    box-shadow: 0 0 0 calc(60 * var(--u)) #030307;
+    clip-path: inset(calc(-60 * var(--u)));
+}
+
+/* Hangar bay zoom buttons, top right of the stage. */
+.hs-bay-zoom {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 7;
+    display: flex;
+    gap: 4px;
+    pointer-events: auto;
+}
+.hs-bay-zoom-btn {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    font: inherit;
+    font-size: var(--font-h2);
+    font-weight: bold;
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-background) 80%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    cursor: pointer;
+}
+.hs-bay-zoom-btn.is-fit { font-size: var(--font-text); letter-spacing: 1px; }
+.hs-bay-zoom-btn:hover { background: var(--faction-accent, var(--color-primary)); color: #05060a; }
+
+/* Hangar ships sidebar: one type scale, one icon size, fewer lines */
+html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) {
+    --sb-fs: 13px; --sb-icon: 20px;
+    font-size: var(--sb-fs);
+}
+html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) :is(summary, span, div, p, b, i, small, label, button) {
+    font-size: var(--sb-fs) !important;
+    letter-spacing: 0.04em;
+    line-height: 1.25;
+}
+html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) :is(img, svg, canvas, .hs-btn-icon, .hs-pixel) {
+    width: var(--sb-icon) !important;
+    height: var(--sb-icon) !important;
+    min-width: var(--sb-icon);
+    flex: none;
+    image-rendering: pixelated;
+}
+html body .home-station-overlay .hs-component-tree-header { font-size: var(--font-text) !important;}
+html body .home-station-overlay :is(.hs-tree-branch-label, .hs-hangar-ship) { padding: 6px 8px; gap: 8px; min-height: 0; }
+
+/* one outline per row; no nested boxes or shadows */
+html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) * { box-shadow: none !important; outline: 0 !important; }
+html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) :is(.hs-tree-items, .hs-tree-root, .hs-component-tree) { border: 0 !important; background: none !important; }
+html body .home-station-overlay .hs-tree-branch { border: 0 !important; border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent) !important; }
+html body .home-station-overlay .hs-tree-branch > summary { border: 0 !important; background: color-mix(in srgb, var(--color-primary) 8%, #05060a) !important; }
+
+.hs-bay-zoom { align-items: center; padding: 4px 8px; background: color-mix(in srgb, var(--color-background) 80%, transparent); border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent); }
+
+.hs-bay-zoom-out { min-width: 40px; text-align: right; font-size: var(--font-text); color: var(--color-text-secondary); }
+.hs-bay-zoom-btn.is-fit { height: 24px; min-width: 0; }
+
+/* Hangar sidebar area pager */
+.hs-tree-branch.is-paged-out { display: none !important; }
+.hs-tree-branch.is-paged-in > summary.hs-tree-branch-label { pointer-events: none; cursor: default; }
+.hs-tree-branch.is-paged-in > summary .hs-tree-caret, .hs-tree-branch.is-paged-in > summary::before, .hs-tree-branch.is-paged-in > summary::marker { display: none; content: ''; }
+html body .home-station-overlay .hs-component-tree-header { display: flex; align-items: center; justify-content: space-between; opacity: 1; letter-spacing: 0.06em;}
+.hs-area-nav-label { flex: 1; text-align: center; font-size: var(--font-text) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-area-nav { flex: none; padding: 5px 8px; font: inherit; font-size: var(--font-text) !important; background: color-mix(in srgb, var(--color-primary) 14%, #05060a); border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent); color: var(--color-text, #fff); cursor: pointer; }
+.hs-area-nav:hover, .hs-area-nav:focus-visible { background: color-mix(in srgb, var(--color-primary) 34%, #05060a); outline: none; }
+
+/* Bay zoom slider: chunky pixel track and square thumb in the faction colour. */
+.hs-bay-zoom-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 150px;
+    height: 14px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+.hs-bay-zoom-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+    box-sizing: content-box;
+}
+.hs-bay-zoom-slider::-moz-range-track {
+    height: 6px;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+.hs-bay-zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 16px;
+    margin-top: -7px;
+    background: var(--faction-accent, var(--color-primary));
+    border: 2px solid #05060a;
+    border-radius: 0;
+    box-shadow: 0 0 0 2px var(--faction-accent, var(--color-primary));
+}
+.hs-bay-zoom-slider::-moz-range-thumb {
+    width: 8px;
+    height: 12px;
+    background: var(--faction-accent, var(--color-primary));
+    border: 2px solid #05060a;
+    border-radius: 0;
+    box-shadow: 0 0 0 2px var(--faction-accent, var(--color-primary));
+}
+.hs-bay-zoom-slider:hover::-webkit-slider-thumb { background: #fff; }
+.hs-bay-zoom-slider:focus-visible { outline: 2px solid var(--faction-accent, var(--color-primary)); outline-offset: 3px; }
+
+/* Slot bar sits at the left of the bay instead of centred. */
+.hs-slot-bar {
+    left: 10px;
+    transform: none;
+    max-width: calc(100% - 220px);
+}
+/* Areas / Parts switch: both fit the narrow sidebar */
+html body .home-station-overlay [data-hangar-left-view] { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: var(--font-text) !important; gap: 4px; justify-content: center; }
+html body .home-station-overlay [data-hangar-left-view] :is(img, svg) { width: 18px !important; height: 18px !important; }
+html body .home-station-overlay :has(> [data-hangar-left-view]) { display: flex; gap: 4px; width: 100%; }
+html body .hs-area-icon svg { width: 48px !important; height: 48px !important; }
+html body .hs-area-icon .is-dim { fill: color-mix(in srgb, var(--color-text-secondary) 38%, #05060a); }
+.hs-area-icons { flex: 1; display: flex; justify-content: center;}
+.hs-area-nav.is-icon { padding: 2px; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--color-primary) 6%, #05060a); border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);}
+
+.hs-area-nav.is-icon.is-current { background: color-mix(in srgb, var(--color-primary) 26%, #05060a); border-color: var(--color-primary); }
+.hs-area-nav.is-step { padding: 0; font-size: 20px !important; line-height: 1;}
+html body .home-station-overlay .hs-component-tree-header { gap: 2px; padding: 4px 2px; }
+.hs-area-icons { gap: 2px; min-width: 0; }
+.hs-area-nav.is-icon { flex: none;}
+
+.hs-area-nav.is-step { width: 18px; height: 32px; font-size: var(--font-h2) !important; }
+
+/* Live preview: collapsed sidebar strip with a vertical label (default) */
+.hs-hangar-split.hs-hangar-right-collapsed { grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 0 44px; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > :not(h3) { display: none !important; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > h3 > :not(.hs-sidebar-toggle) { display: none; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > h3 { flex: 1; padding: 0; margin: 0; display: flex; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-sidebar-toggle { flex: 1; width: 100%; height: 100%; writing-mode: vertical-rl; text-orientation: mixed; display: flex; align-items: center; justify-content: center;}
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-collapsed-label { font-size: var(--font-h2); white-space: nowrap;}
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-collapsed-label { font-size: var(--font-text); letter-spacing: 0.08em; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-sidebar-toggle { padding: 6px 0; overflow: hidden; }
+.hs-area-nav.is-icon svg .ai-hull { fill: color-mix(in srgb, var(--color-text, #fff) 85%, var(--color-primary)); }
+.hs-area-nav.is-icon svg .ai-acc { fill: var(--faction-accent, var(--color-primary)); }
+.hs-area-nav.is-icon:not(.is-current) svg { opacity: 0.7; }
+.hs-area-nav.is-icon.is-current svg { opacity: 1; }
+.hs-area-nav.is-icon { width: 34px; height: 34px; }
+.hs-area-nav.is-icon svg { width: 28px !important; height: 28px !important; }
+/* Sidebar: always expanded, no collapse affordances, no "SHIPS" label */
+.hs-hangar-list > h3.hs-panel-title > :is(.hs-panel-icon, .hs-panel-label, .hs-panel-scan) { display: none; }
+.hs-hangar-list > h3.hs-panel-title { padding: 4px; }
+.hs-component-tree-container details > summary { cursor: default; list-style: none; }
+.hs-component-tree-container details > summary::-webkit-details-marker { display: none; }
+.hs-component-tree-container details > summary :is(.hs-tree-caret, .hs-tree-arrow, [class*="caret"], [class*="chevron"]) { display: none !important; }
+.hs-hangar-ship-tree > summary.hs-hangar-ship { pointer-events: none; }
+
+/* Ships / parts sidebar: collapsed strip with a vertical label, like the live preview. */
+.hs-hangar-list .hs-sidebar-strip { display: none; }
+.hs-hangar-split.hs-hangar-left-collapsed { grid-template-columns: 44px 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px); }
+.hs-hangar-split.hs-hangar-left-collapsed.hs-hangar-right-collapsed { grid-template-columns: 44px 0 minmax(0, 1fr) 0 44px; }
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list > :not(h3) { display: none !important; }
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list > h3 { flex: 1; padding: 0; margin: 0; display: flex; }
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list > h3 > :not(.hs-sidebar-strip) { display: none; }
+.hs-hangar-split.hs-hangar-left-collapsed .hs-hangar-list .hs-sidebar-strip { flex: 1; width: 100%; height: 100%; writing-mode: vertical-rl; text-orientation: mixed; padding: 10px 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.hs-hangar-split.hs-hangar-left-collapsed .hs-hangar-list .hs-collapsed-label { font-size: var(--font-text); letter-spacing: 0.08em; white-space: nowrap; }
+
+/* Hangar sidebar: roomier, clearly separated clusters */
+html body .home-station-overlay .hs-tree-items { padding: 6px 4px 10px 4px; gap: 14px; display: flex; flex-direction: column; }
+html body .home-station-overlay .hs-tree-items > * {
+    padding: 10px 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent) !important;
+    background: color-mix(in srgb, var(--color-primary) 5%, #05060a) !important;
+    border-radius: 0;
+}
+html body .home-station-overlay .hs-tree-items > * > :is(.hs-tree-skin-label, .hs-tree-style-label, [class*="-label"]:first-child) {
+    display: block; margin-bottom: 8px; padding-bottom: 6px; letter-spacing: 0.12em; font-size: var(--font-text) !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+html body .home-station-overlay .hs-tree-items :is(.hs-style-carousel, .hs-style-list, [class*="style-opt"], [class*="style-row"]) { gap: 8px; }
+html body .home-station-overlay .hs-tree-items :is(button, [role="option"], [class*="style-item"], [class*="style-card"]) { margin-bottom: 6px; padding: 8px 10px; min-height: 40px; }
+html body .home-station-overlay .hs-tree-branch > summary { margin-bottom: 8px; padding: 10px; }
+/* hide the single-ship title row inside the areas view; the ship picker lives in its own tab */
+.hs-hangar-ships:not(.is-picker) .hs-hangar-ship-tree > summary.hs-hangar-ship { display: none; }
+.hs-hangar-ships.is-picker { display: flex; flex-direction: column; gap: 8px; padding: 8px 4px; }
+.hs-hangar-ship-pick { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px; text-align: left; cursor: pointer; font: inherit; color: var(--color-text); background: color-mix(in srgb, var(--color-primary) 7%, #05060a); border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent); }
+.hs-hangar-ship-pick.active { background: color-mix(in srgb, var(--color-primary) 26%, #05060a); border-color: var(--color-primary); }
+html body .home-station-overlay [data-hangar-left-view] { font-size: var(--font-text) !important; }
+
+/* Collapsed sidebar strips: the label must always read — light text on a dark strip. */
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-sidebar-toggle,
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list .hs-sidebar-strip {
+    background: #05060a;
+    color: var(--color-text, #fff);
+    border: 0;
+    font-size: var(--font-text);
+    line-height: 1.2;
+    text-indent: 0;
+}
+.hs-collapsed-label {
+    display: inline-block;
+    color: var(--faction-accent, var(--color-text, #fff));
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+}
+/* Label drawn by the strip itself, so it never depends on inner markup. */
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview::before,
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list::before { display: none; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview,
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list { position: relative; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview::after,
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list::after {
+    content: 'LIVE PREVIEW  ‹';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 0.16em;
+    white-space: nowrap;
+    color: #fff;
+    background: none;
+    border: 0;
+    pointer-events: none;
+    opacity: 1;
+    text-shadow: 0 0 6px var(--faction-accent, var(--color-primary));
+}
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list::after { content: '› SHIPS · PARTS'; }
+.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview .hs-collapsed-label,
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list .hs-collapsed-label { visibility: hidden; }
+
+/* Connection controls: stacked, roomy, nothing overlapping */
+html body .home-station-overlay .hs-tree-connection-body { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px 12px; }
+html body .home-station-overlay .hs-tree-connection-body > * { padding: 0 !important; border: 0 !important; background: none !important; border-radius: 0; }
+html body .home-station-overlay .hs-tree-connection-body > .hs-tree-area-style { padding: 10px !important; border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent) !important; background: color-mix(in srgb, var(--color-primary) 5%, #05060a) !important; }
+html body .home-station-overlay .hs-connection-strength {
+    display: grid;
+    row-gap: 6px; column-gap: 8px; align-items: center;
+}
+html body .home-station-overlay .hs-connection-strength > span { grid-area: label; font-size: var(--font-text) !important; letter-spacing: 0.1em; }
+html body .home-station-overlay .hs-connection-strength > output { grid-area: out; font-size: var(--font-text) !important; }
+html body .home-station-overlay .hs-connection-strength > :is(button, input) { grid-area: ctrl; }
+html body .home-station-overlay .hs-connection-strength { grid-template-columns: 28px 1fr 28px auto; grid-template-areas: "label label label out" "minus slider plus plus"; }
+html body .home-station-overlay .hs-connection-strength > button[data-step="-1"] { grid-area: minus; }
+html body .home-station-overlay .hs-connection-strength > input[type="range"] { grid-area: slider; width: 100%; min-width: 0; margin: 0; }
+html body .home-station-overlay .hs-connection-strength > button[data-step="1"] { grid-area: plus; justify-self: start; }
+html body .home-station-overlay .hs-connection-step { width: 28px !important; height: 28px !important; min-width: 0; padding: 0 !important; font-size: var(--font-h2) !important; line-height: 1; border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent) !important; background: color-mix(in srgb, var(--color-primary) 10%, #05060a) !important; }
+html body .home-station-overlay .hs-connection-link-ends { display: flex; align-items: center; gap: 10px; font-size: var(--font-text) !important; }
+html body .home-station-overlay .hs-connection-link-ends input { width: 16px; height: 16px; flex: none; margin: 0; }
+html body .home-station-overlay .hs-tree-joint-range { display: grid; align-items: center; font-size: var(--font-text) !important;}
+html body .home-station-overlay .hs-tree-joint-range input { width: 100%; min-width: 0; margin: 0; }
+html body .home-station-overlay .hs-tree-joint-range { grid-template-columns: 1fr; gap: 6px; }
+html body .home-station-overlay .hs-tree-connection-body :is(.hs-tree-style-list, .hs-style-list, [class*="style-options"], [class*="style-dropdown"]) { display: flex; flex-direction: column; gap: 8px; }
+html body .home-station-overlay .hs-tree-connection-body :is([class*="style"] button, [class*="style"] [role="option"]) { border-width: 1px !important; outline: 0 !important; }
+html body .home-station-overlay .hs-tree-connection-body .hs-connection-link-ends span { white-space: normal; }
+
+/* Area bar pinned above the scrolling ship list. */
+.hs-hangar-list > .hs-component-tree-header.is-pinned {
+    flex: 0 0 auto;
+    margin: 0 0 4px;
+    position: relative;
+    z-index: 2;
+}
+
+/* Area icons in the ON/OFF row use the same art and colours as the area bar. */
+.hs-area-icon svg .ai-hull { fill: color-mix(in srgb, var(--color-text, #fff) 85%, var(--color-primary)); }
+.hs-area-icon svg .ai-acc { fill: var(--faction-accent, var(--color-primary)); }
+.hs-area-tile.is-off .hs-area-icon svg { opacity: 0.4; }
+
+/* Area bar: the four area buttons share the whole width. */
+.hs-component-tree-header.is-pinned { display: flex; align-items: stretch; gap: 4px; }
+.hs-component-tree-header .hs-area-icons { flex: 1 1 auto; display: flex; gap: 4px; min-width: 0; }
+.hs-component-tree-header .hs-area-nav.is-icon { flex: 1 1 0; width: auto; min-width: 0; height: 40px; }
+.hs-component-tree-header .hs-area-nav.is-icon svg { width: 28px !important; height: 28px !important; }
+.hs-component-tree-header .hs-area-nav.is-step { height: 40px; }
+
+/* Faction crest: the emblem always fits inside its frame. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 112px;
+    height: 112px;
+    padding: 12px;
+    overflow: hidden;
+}
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg img,
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg .ui-icon-tip {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+/* Nav bar: nudged right so its first tab lines up with the panel frame below. */
+
+/* PLAY section, calmer and aligned: one frame per container, every surface
+   opaque (nothing shows through), all containers on the same left edge. */
+html .home-station-overlay .hs-play-shell {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-embedded { padding: 0 !important; margin: 0 !important; }
+html .home-station-overlay .hs-play-shell .galaxy-map-header {
+    padding: 16px 8px 8px !important;
+    box-sizing: border-box !important;
+    margin: 0 0 6px !important;
+    background: #05080c !important;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: none !important;
+}
+html .home-station-overlay .hs-play-shell .gm-ship-card {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #0a1017 !important;
+    margin: 0 !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-header :is(.gm-locate-ship, .gm-ship-bar-cta) {
+    box-shadow: none !important;
+    background: #0a1017 !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-area {
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: none !important;
+    background: #000 !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-ruler.is-bar {
+    box-shadow: none !important;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
+    background: #05080c !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-ruler .stat-row {
+    background: #0a1017 !important;
+    box-shadow: none !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-header :is(.gm-ship-bar, .gm-ship-card) {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    background: #0a1017 !important;
+}
+html .home-station-overlay .hs-play-shell .galaxy-map-header :is(.gm-ship-bar, .gm-ship-card)::before,
+html .home-station-overlay .hs-play-shell .galaxy-map-header :is(.gm-ship-bar, .gm-ship-card)::after { display: none !important; }
+html body .home-station-overlay .home-station-content .hs-play-shell .galaxy-map-header .gm-ship-card.gm-ship-bar {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+    background-image: none !important;
+}
+
+/* PLAY frames: no translucent outer contour (glow rings / outlines) anywhere. */
+html body .home-station-overlay .hs-body-play :is(.hs-play-shell, .hs-play-shell.is-map-active, .galaxy-map-embedded, .galaxy-map-header, .galaxy-map-area, .gm-map-stage, .galaxy-map-panels, .galaxy-map-ruler.is-bar, .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar) {
+    box-shadow: none !important;
+    outline: 0 !important;
+    filter: none !important;
+}
+html body .home-station-overlay .hs-body-play :is(.galaxy-map-area, .galaxy-map-ruler.is-bar, .galaxy-map-header)::before,
+html body .home-station-overlay .hs-body-play :is(.galaxy-map-area, .galaxy-map-ruler.is-bar, .galaxy-map-header)::after {
+    box-shadow: none !important;
+    outline: 0 !important;
+    border-color: transparent !important;
+}
+
+/* PLAY: the outer .hs-body box (translucent border, tint, glow rings) goes away. */
+html body .home-station-overlay .home-station-content.hs-mode-play .hs-body,
+html body .home-station-overlay .home-station-content .hs-body.hs-body-play {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+}
+
+/* Nav cards: faction shape stays. The frame was an inset box-shadow, which the
+   clip-path sliced off at the notches; it is now drawn by ::before (accent slab)
+   and ::after (fill + inner glow), both cut to the same faction shape. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active) {
+    box-shadow: none !important;
+    isolation: isolate;
+    --nav-frame: var(--color-primary);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active):is(:hover, :focus-visible, .nav-focused) {
+    --nav-frame: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::before,
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+    clip-path: var(--faction-ctl-clip, none) !important;
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::before {
+    inset: 0;
+    background: var(--nav-frame);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::after {
+    inset: 3px;
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 18%, #05060a) 0%, #020203 80%);
+    box-shadow: inset 0 0 22px color-mix(in srgb, var(--nav-frame) 80%, transparent);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active) {
+    clip-path: var(--faction-ctl-clip, none);
+}
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active) :is(.hs-tab-icon, .hs-tab-label) {
+    position: relative;
+    z-index: 1;
+}
+
+/* Active nav card is open at the bottom into the sub-nav: the faction clip-path
+   cut its side lines off at the lower corners (slanted stubs). No clip here. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    clip-path: none !important;
+}
+
+/* Nav bar must not change height when the active card changes: inactive cards
+   reserve the same bottom margin the active card uses, so nothing below jumps. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn,
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active {
+    margin-bottom: -3px !important;
+}
+
+/* VOXEL GUI: each part is switched separately (data-vf-gv-*). Line widths snap to
+   the GUI cell in JS (--ui-border-width). */
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"] *,
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"] *::before,
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"] *::after,
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"] .vf-fr-hole {
+    border-radius: 0 !important;
+}
+html[data-vf-gui-voxel="on"][data-vf-gv-text="on"] * {
+    -webkit-font-smoothing: none;
+}
+html[data-vf-gui-voxel="on"][data-vf-gv-svg="on"] svg,
+html[data-vf-gui-voxel="on"][data-vf-gv-svg="on"] svg * {
+    shape-rendering: crispEdges;
+}
+html[data-vf-gui-voxel="on"][data-vf-gv-images="on"] :where(button, input, select, textarea, canvas, img) {
+    image-rendering: pixelated;
+    outline-offset: 0;
+}
+
+/* Screen-effects dropdown (opened from the bezel tools; child of <html>, fixed pixel size). */
+.vf-bezel-fx {
+    position: fixed;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: #0c0e12;
+    pointer-events: auto;
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--color-primary, #3dff6a);
+    image-rendering: pixelated;
+}
+.vf-bezel-fx .vf-fx-row { display: flex; align-items: center; gap: 8px; }
+
+.vf-bezel-fx input[type="range"] { flex: 1;}
+.vf-bezel-fx output { min-width: 3.5em; text-align: right; color: var(--color-text, #fff); }
+.vf-bezel-fx .vf-fx-seg { display: flex; flex: 1; gap: 4px; }
+.vf-bezel-fx .vf-fx-seg button {
+    flex: 1;
+    padding: 4px 6px;
+    background: #0c0e12;
+    border: 2px solid #2c313b;
+    border-radius: 0;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+}
+.vf-bezel-fx .vf-fx-seg button.on { border-color: var(--color-primary, #3dff6a); background: color-mix(in srgb, var(--color-primary, #3dff6a) 18%, #0c0e12); color: #fff; }
+
+.vf-bezel-fx { overflow-y: auto;}
+.vf-bezel-fx .vf-fx-title { margin-top: 4px; padding-top: 6px; border-top: 2px solid #2c313b; color: var(--color-text, #fff); }
+.vf-bezel-fx .vf-fx-wrap { flex-wrap: wrap; }
+.vf-bezel-fx .vf-fx-wrap button { flex: 0 0 auto; min-width: 2.2em; }
+.vf-bezel-fx .vf-fx-colors { display: flex; gap: 10px; flex: 1; }
+.vf-bezel-fx .vf-fx-colors label { display: flex; align-items: center; gap: 4px; }
+.vf-bezel-fx input[type="color"] { padding: 0; background: none; border-radius: 0; cursor: pointer;}
+.vf-bezel-fx .vf-fx-reset { flex: 1; padding: 4px 6px; background: #0c0e12; border: 2px solid #2c313b; border-radius: 0; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.vf-bezel-fx .vf-fx-reset:hover { border-color: var(--color-primary, #3dff6a); }
+.vf-bezel .vf-bezel-deco { opacity: var(--fr-deco, 1); }
+
+/* Visual-settings sidebar: docked to the right window edge, scrolls inside. */
+.vf-bezel-fx { left: auto; min-width: 0; max-height: none; max-width: 100vw;
+    z-index: 10001;
+    box-shadow: inset 0 0 0 2px #2c313b, -6px 0 0 rgba(0, 0, 0, 0.45);
+}
+.vf-bezel-fx .vf-fx-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #2c313b; color: var(--color-text, #fff);}
+.vf-bezel-fx .vf-fx-head button { background: #0c0e12; border-radius: 0; font: inherit; padding: 2px 8px; cursor: pointer;}
+.vf-bezel-fx .vf-fx-tabs { display: flex; border-bottom: 2px solid #2c313b; }
+.vf-bezel-fx .vf-fx-tabs button { background: #0c0e12; border-right: 2px solid #2c313b; border-radius: 0; color: inherit; font: inherit; cursor: pointer;}
+.vf-bezel-fx .vf-fx-tabs button.on { opacity: 1; background: color-mix(in srgb, var(--color-primary, #3dff6a) 18%, #0c0e12); box-shadow: inset 0 -2px 0 var(--color-primary, #3dff6a);}
+.vf-bezel-fx .vf-fx-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;}
+.vf-bezel-fx .vf-fx-body .vf-fx-title { border-top: 0; margin-top: 4px; padding-top: 0; }
+
+/* FRAME PIXEL: the bezel plates are re-sampled on a coarse grid (SVG filter #vfFramePx),
+   so bevels and diagonal silhouettes step like pixels. */
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr {
+    clip-path: none;
+    filter: url(#vfFramePx);
+}
+html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelated; }
+
+/* ── Visual settings sidebar styled as a REMOTE CONTROL ───────────────────
+   Chamfered hull body, IR window on top, LCD readout, chunky keys with LEDs,
+   recessed fader slots and a speaker grill at the bottom. */
+.vf-bezel-fx {
+    --rc-hull: #1a1d26;
+    --rc-lit: #3a4152;
+    --rc-dark: #07080c;
+    --rc-acc: var(--color-primary, #3dff6a);
+    top: 12px; right: 12px; bottom: 12px;
+    width: 304px;
+    padding: 18px 12px 10px;
+    gap: 10px;
+    background: linear-gradient(90deg, var(--rc-hull), color-mix(in srgb, var(--rc-hull) 80%, #000));
+    box-shadow:
+        inset 4px 4px 0 var(--rc-lit),
+        inset -4px -4px 0 var(--rc-dark),
+        inset 0 0 0 8px var(--rc-hull),
+        -8px 8px 0 rgba(0, 0, 0, 0.5);
+    clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
+    overflow: hidden;
+}
+/* IR window */
+.vf-bezel-fx::before {
+    content: "";
+    position: absolute;
+    top: 6px; left: 50%;
+    width: 64px; height: 6px;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, #ff2a2a 40%, #200);
+    box-shadow: inset 0 0 0 2px #000, 0 0 0 2px var(--rc-dark);
+}
+/* speaker grill */
+.vf-bezel-fx::after {
+    content: "";
+    flex: 0 0 14px;
+    background: repeating-linear-gradient(90deg, var(--rc-dark) 0 4px, transparent 4px 8px);
+    box-shadow: inset 0 0 0 2px var(--rc-dark);
+    opacity: 0.8;
+}
+/* LCD readout */
+.vf-bezel-fx .vf-fx-head {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    border: 0;
+    background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px),
+        color-mix(in srgb, var(--rc-acc) 12%, #02070a);
+    box-shadow: inset 3px 3px 0 #000, inset -3px -3px 0 color-mix(in srgb, var(--rc-acc) 25%, #000);
+    color: var(--rc-acc);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--rc-acc) 70%, transparent);
+}
+.vf-bezel-fx .vf-fx-head button { background: var(--rc-hull); box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark); border: 0; color: #fff; text-shadow: none; }
+.vf-bezel-fx .vf-fx-head button:active { box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit); }
+/* tab keys */
+.vf-bezel-fx .vf-fx-tabs { flex: 0 0 auto; border: 0;}
+.vf-bezel-fx .vf-fx-tabs button {
+    border: 0; opacity: 1;
+    background: var(--rc-hull);
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), 0 3px 0 var(--rc-dark);
+    position: relative;
+}
+.vf-bezel-fx .vf-fx-tabs button::before { content: ""; position: absolute; top: 3px; left: 50%; width: 6px; height: 2px; transform: translateX(-50%); background: #000; }
+.vf-bezel-fx .vf-fx-tabs button.on {
+    background: color-mix(in srgb, var(--rc-acc) 14%, var(--rc-hull));
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit), 0 1px 0 var(--rc-dark);
+    color: #fff;
+}

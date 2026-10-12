@@ -1,0 +1,1507 @@
+.hs-hangar-slot {
+    --pin-x: 0.5;
+    --pin-y: 0.5;
+    --rail-i: 0;
+    --rail-n: 1;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    width: auto;
+    height: auto;
+    transform: none;
+}
+.hs-hangar-slot-pin {
+    position: absolute;
+    left: calc(var(--bay-ship-left) + (var(--bay-ship-w) * var(--pin-x)));
+    top: calc(var(--bay-ship-top) + (var(--bay-ship-h) * var(--pin-y)));
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    padding: 0;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-background) 72%, transparent);
+    cursor: pointer;
+    clip-path: none;
+    border-radius: 0;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 72%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 48%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 30%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 16%, transparent);
+    pointer-events: auto;
+    opacity: 0.5;
+    z-index: 4;
+}
+.hs-hangar-slot.is-open .hs-hangar-slot-pin {
+    opacity: 1;
+    pointer-events: auto;
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 72%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 30%, transparent), 0 0 0 28px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 16%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 72%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 48%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 30%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 16%, transparent), inset 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 72%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 48%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 30%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 16%, transparent) !important;
+}
+.hs-hangar-slot-dot {
+    display: block;
+    width: 5px;
+    height: 5px;
+    margin: 2.5px auto 0;
+    background: var(--color-primary);
+    pointer-events: none;
+}
+.hs-hangar-slot.is-empty .hs-hangar-slot-pin {
+    border-style: dashed;
+}
+.hs-hangar-slot-card {
+    position: absolute;
+    width: min(168px, calc(34% - 8px));
+    max-width: calc(100% - 16px);
+    box-sizing: border-box;
+    transform: translate(var(--card-drag-x, 0px), var(--card-drag-y, 0px));
+    cursor: grab;
+    z-index: -1;
+    pointer-events: none !important;
+    top: calc(8px + (((100% - 24px) / max(var(--rail-n), 1)) * var(--rail-i)));
+    display: none !important;
+    opacity: 0 !important;
+}
+.hs-hangar-slot-card.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
+.hs-hangar-slot.is-open .hs-hangar-slot-card {
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 20 !important;
+}
+/* The open left sidebar is the settings surface; avoid a duplicate floating card. */
+.hs-hangar-split:not(.hs-hangar-left-collapsed) .hs-hangar-slot-card {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+.hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card {
+    left: 8px;
+    right: auto;
+}
+.hs-hangar-slot[data-slot-side="right"] .hs-hangar-slot-card {
+    right: 8px;
+    left: auto;
+}
+/* With the ship-list sidebar closed, keep the floating menu inside the bay. */
+.hs-hangar-split.hs-hangar-left-collapsed .hs-hangar-slot-card {
+    top: 8px;
+    width: min(240px, calc(50% - 12px));
+    max-height: none;
+    overflow: visible;
+}
+.hs-hangar-split.hs-hangar-left-collapsed
+.hs-hangar-slot[data-slot-side="left"] .hs-hangar-slot-card {
+    left: auto;
+    right: 8px;
+}
+.hs-hangar-split.hs-hangar-left-collapsed
+.hs-hangar-slot[data-slot-side="right"] .hs-hangar-slot-card {
+    left: 8px;
+    right: auto;
+}
+/*
+ * The connector between a dropdown card and its on-ship mount is a real SVG
+ * path (see hs-hangar-link-svg below) rather than a CSS-only stub, because
+ * the card's anchor point and the pin's mount point rarely sit on the same
+ * row — a single horizontal segment (the original approach) stopped short of
+ * the mount and never actually looked like it connected to it. It's drawn as
+ * a straight diagonal from the card edge to the pin's exact center (the
+ * component's own center), so it always points precisely at the part it
+ * controls instead of just its column/row. JS (updateHangarSlotLinks) reads
+ * both elements' live rects and rebuilds the <path> whenever geometry or
+ * hover state changes, so the route stays exact regardless of zoom or panel
+ * size.
+ */
+.hs-hangar-link-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+    display: none !important;
+}
+.hs-hangar-slot.is-open .hs-hangar-link-svg {
+    display: block !important;
+}
+.hs-hangar-link {
+    fill: none;
+    stroke: color-mix(in srgb, var(--color-primary) 45%, transparent);
+    stroke-width: 1.5;
+    transition: stroke 0.12s ease, stroke-width 0.12s ease, filter 0.12s ease;
+}
+.hs-hangar-link.is-active {
+    stroke: var(--faction-accent, var(--color-primary));
+    stroke-width: 2.5;
+    filter:
+        drop-shadow(2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent))
+        drop-shadow(0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent));
+}
+.hs-hangar-slot:hover .hs-hangar-slot-btn,
+.hs-hangar-slot.is-hover-linked .hs-hangar-slot-btn {
+    border-color: var(--faction-accent, var(--color-primary));
+    border-width: var(--ui-border-width);
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent) 16%, transparent);
+}
+.hs-hangar-slot:hover .hs-hangar-slot-pin,
+.hs-hangar-slot.is-hover-linked .hs-hangar-slot-pin {
+    opacity: 1;
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, var(--color-background));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 72%, transparent), 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 48%, transparent), 0 0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent), 0 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent) 16%, transparent);
+}
+.hs-hangar-slot-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    text-align: left;
+    background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    color: var(--color-text);
+    cursor: pointer;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 0 100%, 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px);
+}
+.hs-hangar-slot-btn:hover,
+.hs-hangar-slot.is-open .hs-hangar-slot-btn,
+.hs-hangar-slot.is-open .hs-hangar-slot-pin {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 16%, transparent);
+}
+.hs-hangar-slot-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.hs-hangar-slot-kind {
+    font-size: var(--font-small);
+    letter-spacing: 1.5px;
+    color: var(--color-text-secondary);
+}
+.hs-hangar-slot-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: bold;
+}
+.hs-hangar-slot-mark {
+    opacity: 0.85;
+}
+.hs-hangar-slot-caret {
+    flex: 0 0 auto;
+    opacity: 0.7;
+}
+.hs-hangar-slot-menu {
+    display: none;
+    margin-top: 4px;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: visible;
+    overscroll-behavior: contain;
+    background: color-mix(in srgb, var(--color-background) 96%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) var(--color-background);
+}
+.hs-hangar-slot.is-open .hs-hangar-slot-menu {
+    display: block;
+}
+.hs-hangar-slot.is-open {
+    z-index: 12;
+}
+.hs-hangar-slot-menu::-webkit-scrollbar {
+    width: 6px;
+}
+.hs-hangar-slot-menu::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-hangar-slot-select-wrap {
+    display: block;
+    padding: 4px;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.hs-hangar-slot-select {
+    width: 100%;
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+    color: var(--color-text);
+    border: var(--ui-border-width) solid var(--color-border);
+    padding: 4px 6px;
+    font: inherit;
+    letter-spacing: 1px;
+}
+.hs-hangar-slot-options {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+}
+.hs-hangar-slot.is-open .hs-hangar-slot-options {
+    display: flex;
+}
+.hs-hangar-slot-skin-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 4px 8px;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.hs-hangar-slot-skin-label {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    opacity: 0.65;
+}
+.hs-hangar-slot-skin-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.hs-hangar-slot-skin-option {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+    border: var(--ui-border-width) solid var(--color-border);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    text-align: center;
+    cursor: pointer;
+}
+.hs-hangar-slot-skin-option:hover {
+    border-color: var(--color-primary);
+}
+.hs-hangar-slot-skin-option:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.hs-hangar-slot-skin-option.is-active {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 30%, var(--color-surface));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    font-weight: bold;
+}
+.hs-hangar-slot-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 5px 6px;
+    background: transparent;
+    border: var(--ui-border-width) solid transparent;
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    letter-spacing: 1px;
+}
+.hs-hangar-slot-option:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.hs-hangar-slot-option.is-active {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+.hs-hangar-slot-option.is-used {
+    opacity: 0.55;
+}
+.hs-hangar-slot-option.is-blocked,
+.hs-hangar-slot-option:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.hs-hangar-slot-option .hs-btn-icon {
+    flex: 0 0 auto;
+}
+.hs-hangar-slot-option > span:nth-child(2) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-hangar-bay-hint {
+    margin: 0;
+    text-align: center;
+    letter-spacing: 1px;
+    flex: 0 0 auto;
+}
+.hs-hangar-module-scale {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    padding: 0 8px;
+    flex: 0 0 auto;
+}
+.hs-hangar-module-scale[hidden] {
+    display: none !important;
+}
+.hs-hangar-fire-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+.hs-hangar-fire-inline .hs-mod {
+    width: auto;
+    min-width: 0;
+    padding: 6px 10px;
+}
+.hs-hangar-preview {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 8px;
+    gap: 6px;
+}
+.hs-hangar-preview-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex: 0 0 auto;
+}
+.hs-hangar-zoom-label {
+    flex: 0 0 auto;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--color-primary, #e07028);
+}
+.hs-hangar-zoom-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: color-mix(in srgb, var(--color-primary) 35%, var(--color-background));
+    border-radius: 0;
+    outline: none;
+    cursor: pointer;
+}
+.hs-hangar-zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+    cursor: pointer;
+}
+.hs-hangar-zoom-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+    border-radius: 0;
+    cursor: pointer;
+}
+.hs-hangar-preview-hit {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: inherit;
+}
+.hs-hangar-preview-hit:hover .hs-hangar-preview-viewport,
+.hs-hangar-preview-hit:focus-visible .hs-hangar-preview-viewport {
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 72%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 48%, transparent), inset 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 30%, transparent), inset 0 0 0 32px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 16%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 16%, transparent);
+}
+.hs-hangar-preview-hit:hover .hs-hangar-preview-caption,
+.hs-hangar-preview-hit:focus-visible .hs-hangar-preview-caption {
+    color: var(--color-primary);
+}
+.hs-hangar-preview-viewport {
+    flex: 1 1 auto;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    background:
+        radial-gradient(ellipse at 50% 42%,
+            color-mix(in srgb, var(--color-primary) 12%, transparent) 0%,
+            transparent 55%),
+        #050508;
+    box-shadow: inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 72%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 48%, transparent), inset 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 30%, transparent), inset 0 0 0 32px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 16%, transparent);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.hs-hangar-preview-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+}
+.hs-hangar-preview-caption {
+    margin: 0;
+    text-align: center;
+    letter-spacing: 2px;
+    font-size: var(--font-text);
+    transition: color 0.15s ease;
+}
+
+/* Hangar Test Arena */
+.hta-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: color-mix(in srgb, var(--color-background) 72%, transparent);
+    backdrop-filter: blur(2px);
+}
+.hta-overlay.hta-fullscreen {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+    background: var(--color-background);
+    backdrop-filter: none;
+}
+.hta-panel {
+    width: min(960px, 100%);
+    max-height: min(calc(92 * var(--ch)), calc(720px * var(--zk)));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)) 0%,
+            var(--color-background) 55%);
+    box-shadow: 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 44px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+.hta-overlay.hta-fullscreen .hta-panel {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border-width: 0;
+    border-bottom: var(--ui-border-width, 2px) solid var(--color-primary);
+    box-shadow: none;
+    padding: 10px 14px 14px;
+}
+.hta-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 16px;
+}
+.hta-title {
+    margin: 0;
+    letter-spacing: 3px;
+    font-size: var(--font-title, 1.25rem);
+    color: var(--color-primary);
+}
+.hta-sub {
+    margin: 0;
+    flex: 1 1 auto;
+    letter-spacing: 2px;
+    font-size: var(--font-text);
+    opacity: 0.7;
+}
+.hta-close {
+    margin-left: 0;
+}
+.hta-head .action-button:last-of-type {
+    margin-left: auto;
+}
+.hta-head #htaToggleLayout {
+    margin-left: auto;
+}
+.hta-head #htaClose {
+    margin-left: 0;
+}
+.hta-body {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+.hta-overlay.hta-fullscreen .hta-body {
+    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+}
+.hta-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)) 0%,
+            color-mix(in srgb, var(--color-background) 92%, transparent) 100%);
+    box-shadow: inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 72%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 48%, transparent), inset 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 30%, transparent), inset 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 10%, transparent) 16%, transparent);
+}
+.hta-side-title {
+    margin: 0;
+    letter-spacing: 2px;
+    font-size: var(--font-text);
+    color: var(--color-primary);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent);
+}
+.hta-enemy-list {
+    flex: 0 1 auto;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    max-height: 220px;
+}
+.hta-overlay.hta-fullscreen .hta-enemy-list {
+    flex: 1 1 auto;
+    max-height: none;
+}
+.hta-enemy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    background: color-mix(in srgb, var(--color-background) 55%, transparent);
+    cursor: pointer;
+    font-size: var(--font-text);
+    color: var(--color-text);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 2px) calc(100% - 5px), calc(100% - 2px) calc(100% - 3px), calc(100% - 4px) calc(100% - 3px), calc(100% - 5px) 100%, 0 100%, 0 5px, 2px 5px, 2px 3px, 4px 3px);
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.hta-enemy:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.hta-enemy input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    grid-row: 1 / span 2;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    background: var(--color-background);
+    border-radius: 0;
+    cursor: pointer;
+    position: relative;
+    accent-color: var(--color-primary);
+    flex-shrink: 0;
+}
+.hta-enemy input[type="checkbox"]:checked {
+    background: var(--color-primary);
+}
+.hta-enemy input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0;
+    width: 4px;
+    height: 8px;
+    border: solid var(--color-background);
+    border-width: 0 var(--ui-border-width) var(--ui-border-width) 0;
+    transform: rotate(45deg);
+}
+.hta-enemy.on {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 72%, transparent), inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 48%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 30%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 18%, transparent) 16%, transparent);
+}
+.hta-enemy-name {
+    letter-spacing: 1px;
+    color: var(--color-text);
+    font-weight: bold;
+}
+.hta-enemy-meta {
+    grid-column: 2;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
+    font-size: 0.85em;
+}
+.hta-side-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+.hta-overlay .action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 8px 14px;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)) 0%,
+            color-mix(in srgb, var(--color-background) 80%, transparent) 100%);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 70%, var(--color-border));
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 6px), calc(100% - 4px) calc(100% - 6px), calc(100% - 4px) calc(100% - 4px), calc(100% - 6px) calc(100% - 4px), calc(100% - 6px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 0 100%, 0 8px, 2px 8px, 2px 6px, 4px 6px, 4px 4px, 6px 4px, 6px 2px, 8px 2px);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 16%, transparent);
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.hta-overlay .action-button:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 50%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+.hta-overlay .action-button:not(.secondary) {
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-primary) 55%, #fff) 0%,
+            var(--color-primary) 55%,
+            color-mix(in srgb, var(--color-primary) 70%, #000) 100%);
+    border-color: var(--color-primary);
+    color: var(--color-background);
+    text-shadow: none;
+}
+.hta-overlay .action-button:not(.secondary):hover:not(:disabled) {
+    color: var(--color-background);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, #fff 25%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 48%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 30%, transparent), 0 0 0 22px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 16%, transparent);
+}
+.hta-overlay .action-button.secondary {
+    color: var(--color-text-secondary);
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-surface) 75%, transparent) 0%,
+            color-mix(in srgb, var(--color-background) 85%, transparent) 100%);
+    border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    opacity: 1;
+}
+.hta-overlay .action-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.hta-side-actions .action-button {
+    width: 100%;
+}
+.hta-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    font-size: var(--font-text);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
+}
+.hta-stat-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--color-text-secondary);
+}
+.hta-stat-row strong {
+    color: var(--color-text);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+.hta-hint,
+.hta-muted {
+    margin: 0;
+    opacity: 0.55;
+    letter-spacing: 1px;
+    font-size: 0.85em;
+}
+.hta-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    min-width: 0;
+    padding: 8px;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    background: #050508;
+    box-shadow: inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 72%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 48%, transparent), inset 0 0 0 26px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 30%, transparent), inset 0 0 0 38px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 12%, transparent) 16%, transparent);
+}
+.hta-overlay.hta-fullscreen .hta-stage {
+    height: 100%;
+    overflow: hidden;
+}
+.hta-canvas {
+    display: block;
+    /* Same display scale as #gameCanvas (internal 240×300 → --canvas-w/h) */
+    width: var(--canvas-w);
+    height: var(--canvas-h);
+    max-width: 100%;
+    max-height: min(calc(68 * var(--sv-h)), var(--canvas-h));
+    aspect-ratio: 0.8;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+.hta-overlay.hta-fullscreen .hta-canvas {
+    width: min(var(--canvas-w), 100%);
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 0.8;
+}
+@media (max-width: 720px) {
+    .hta-body {
+        grid-template-columns: 1fr;
+    }
+    .hta-enemy-list {
+        max-height: 120px;
+    }
+    .hta-overlay.hta-fullscreen .hta-canvas {
+        max-height: min(calc(52 * var(--sv-h)), var(--canvas-h));
+        width: min(var(--canvas-w), 100%);
+        height: auto;
+    }
+}
+.hs-hangar-detail-head {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 8px 10px;
+}
+.hs-hangar-selected {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: var(--font-h2);
+    letter-spacing: 1px;
+    line-height: 1.2;
+}
+.hs-hangar-meta {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    line-height: 1.35;
+    color: var(--color-text);
+}
+.hs-hangar-meta.hs-muted {
+    color: var(--color-text-secondary);
+}
+.hs-hangar-active-tag {
+    color: var(--color-primary);
+    letter-spacing: 1px;
+    font-size: var(--font-text);
+}
+
+.hs-hangar-ship,
+.hs-mod {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+    min-height: 32px;
+    padding: 6px 10px;
+}
+.hs-mod .hs-btn-icon,
+.hs-hangar-ship .hs-btn-icon {
+    width: 24px;
+    height: 24px;
+}
+.hs-mod-mark {
+    flex-shrink: 0;
+    width: 1em;
+    opacity: 0.85;
+}
+.hs-mod-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.hs-hangar-ship.active,
+.hs-mod.equipped {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--color-primary) 18%, var(--color-surface)) 0%,
+            color-mix(in srgb, var(--color-background) 80%, transparent) 100%);
+    box-shadow: inset 0 0 0 var(--ui-border-width) var(--color-primary), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 30%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 30%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 30%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 30%, transparent) 16%, transparent);
+}
+.hs-hangar-frame-up {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.hs-hangar-frame-up .hs-cost-grid {
+    flex: 0 1 auto;
+    min-width: 0;
+    grid-template-columns: repeat(4, minmax(48px, 60px));
+    gap: 4px;
+}
+.hs-hangar-frame-up .hs-line-action {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    letter-spacing: 1px;
+    padding: 6px 10px;
+}
+.hs-activate-ship {
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 28%, transparent) 16%, transparent);
+}
+.hs-activate-ship:hover {
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 72%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 30%, transparent), 0 0 0 28px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 16%, transparent);
+}
+.hs-hangar-grid {
+    margin-top: 0;
+    flex: 1 1 auto;
+    align-content: start;
+    align-items: start;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
+}
+.hs-hangar-grid > .hs-panel {
+    min-height: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow: hidden;
+}
+.hs-hangar-grid > .hs-panel > .hs-panel-title {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+}
+.hs-hangar-grid > .hs-panel > .hs-hint {
+    margin: 0;
+    line-height: 1.25;
+    flex: 0 0 auto;
+}
+.hs-hangar-grid .hs-actions-col {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 6px;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) var(--color-background);
+}
+.hs-hangar-grid .hs-actions-col::-webkit-scrollbar {
+    width: 6px;
+}
+.hs-hangar-grid .hs-actions-col::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-hangar-grid .hs-fire-mode {
+    gap: 6px;
+}
+.hs-body > .hs-section .hs-station-grid,
+.hs-body > .hs-section > .hs-actions-col {
+    flex: 1 1 auto;
+}
+.hs-body > .hs-section .hs-shop-cats {
+    flex: 0 0 auto;
+}
+.hs-body > .hs-section .hs-panel-title {
+    flex: 0 0 auto;
+}
+.hs-tab-fill {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.hs-actions-col .hs-empty-slot {
+    margin: 0;
+}
+.hs-status {
+    text-align: center;
+    color: var(--color-primary);
+    letter-spacing: 2px;
+    font-size: var(--font-text);
+    min-height: 1.2em;
+    margin: 0 0 2px;
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), -8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), 0 8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), 0 -8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent);
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+.hs-status.is-empty {
+    display: none;
+}
+.hs-status.hs-status-ok {
+    color: var(--status-success);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 78%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 42%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 42%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 42%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 42%, transparent), 10px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 18%, transparent), -10px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 18%, transparent), 0 10px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 18%, transparent), 0 -10px 0 color-mix(in srgb, color-mix(in srgb, var(--status-success) 65%, transparent) 18%, transparent);
+    animation: hs-status-flash-ok 0.45s ease-out;
+}
+.hs-status.hs-status-fail {
+    color: var(--status-error);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 78%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 42%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 42%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 42%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 42%, transparent), 10px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 18%, transparent), -10px 0 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 18%, transparent), 0 10px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 18%, transparent), 0 -10px 0 color-mix(in srgb, color-mix(in srgb, var(--status-error) 65%, transparent) 18%, transparent);
+    animation: hs-status-flash-fail 0.45s ease-out;
+}
+.hs-shop-root {
+    overflow: visible;
+    clip-path: none;
+}
+.hs-upgrade-root {
+    overflow: hidden;
+    min-height: 0;
+}
+/* Trading post: fixed frame, only the stock list scrolls. */
+.hs-body:has(> .hs-trading-post) {
+    overflow: hidden;
+}
+.hs-body > .hs-section.hs-trading-post {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+.hs-trading-post > * {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.hs-body > .hs-section.hs-trading-post > .hs-shop-cats {
+    position: static;
+    padding-top: 4px;
+}
+.hs-trading-post > .hs-tab-fill {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.hs-upgrade-root .hs-hint {
+    flex: 0 0 auto;
+}
+.hs-upgrade-root .hs-tab-fill {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.hs-upgrade-root .hs-upg-stats {
+    flex: 0 0 auto;
+}
+.hs-upgrade-root .hs-upg-tree-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
+.hs-upgrade-root .hs-upg-dock {
+    flex: 0 0 auto;
+    margin-top: 8px;
+}
+.hs-body:has(> .hs-upgrade-root) {
+    overflow: hidden;
+}
+.hs-body > .hs-section > .hs-shop-cats {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    padding: 0 0 10px;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--color-surface) 92%, var(--color-background)) 0%,
+            color-mix(in srgb, var(--color-surface) 88%, var(--color-background)) 70%,
+            color-mix(in srgb, var(--color-surface) 88%, transparent) 100%);
+}
+.hs-upg-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+.hs-upg-stats .hs-chip {
+    min-width: 72px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+}
+.hs-upg-tree-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-width: 100%;
+    padding: 16px 8px 20px;
+    min-height: 120px;
+    cursor: grab;
+    user-select: none;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) var(--color-background);
+}
+.hs-upg-tree-scroll.is-panning {
+    cursor: grabbing;
+}
+.hs-upg-tree-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.hs-upg-tree-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-upg-tree {
+    position: relative;
+    margin: 0 auto;
+    min-width: 0;
+}
+.hs-upg-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+    shape-rendering: crispEdges;
+}
+.hs-upg-link {
+    stroke: color-mix(in srgb, var(--color-primary) 55%, #889);
+    stroke-width: 4;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    vector-effect: non-scaling-stroke;
+}
+.hs-upg-link.lit {
+    stroke: color-mix(in srgb, var(--color-primary) 90%, #fff);
+    stroke-width: 4;
+}
+.hs-upg-joint {
+    fill: color-mix(in srgb, var(--color-primary) 55%, #889);
+    stroke: none;
+}
+.hs-upg-joint.lit {
+    fill: color-mix(in srgb, var(--color-primary) 90%, #fff);
+}
+.hs-upg-node {
+    position: absolute;
+    z-index: 1;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    overflow: visible;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.hs-upg-face {
+    position: absolute;
+    inset: 0;
+    border: var(--ui-border-width-thick) solid color-mix(in srgb, var(--color-primary) 72%, #ccc);
+    border-radius: 0;
+    background: #141018;
+    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 45%, #fff), inset -2px -2px 0 0 #050308, 2px 0 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), -2px 0 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), 0 2px 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), 0 -2px 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent);
+    pointer-events: none;
+}
+.hs-upg-node.available .hs-upg-face {
+    border-color: color-mix(in srgb, var(--color-primary) 95%, #fff);
+    background: #1c1424;
+    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 70%, #fff), inset -2px -2px 0 0 #050308, 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 0 var(--ui-border-width-thick) color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.hs-upg-node.available .hs-upg-icon .hs-pixel {
+    animation: hs-upg-afford-icon 1.2s steps(2, end) infinite;
+}
+.hs-upg-node.maxed .hs-upg-face {
+    border-color: color-mix(in srgb, #7d7 70%, var(--color-primary));
+    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, #9f9 55%, #fff), inset -2px -2px 0 0 #050308, 0 0 0 var(--ui-border-width) color-mix(in srgb, #7d7 40%, transparent);
+}
+.hs-upg-node.locked .hs-upg-face,
+.hs-upg-node.locked .hs-upg-icon,
+.hs-upg-node.locked .hs-upg-slots {
+    opacity: 0.5;
+    filter: grayscale(1) contrast(0.9);
+}
+.hs-upg-node.blocked .hs-upg-face,
+.hs-upg-node.blocked .hs-upg-icon,
+.hs-upg-node.blocked .hs-upg-slots {
+    opacity: 0.85;
+}
+.hs-upg-node.selected .hs-upg-face,
+button.hs-upg-node.nav-focused .hs-upg-face {
+    border-color: #fff;
+    box-shadow: inset 2px 2px 0 0 #fff, inset -2px -2px 0 0 #050308, 0 0 0 var(--ui-border-width) #fff, 0 0 0 var(--ui-border-width-thick) color-mix(in srgb, var(--color-primary) 80%, transparent), 0 0 0 6px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.hs-upg-node.selected,
+button.hs-upg-node.nav-focused {
+    z-index: 3;
+}
+.hs-upg-node:hover {
+    z-index: 30;
+}
+.hs-upg-node.hs-fx-ok .hs-upg-icon .hs-pixel,
+.hs-upg-node.available.hs-fx-ok .hs-upg-icon .hs-pixel {
+    animation: hs-fx-ok-icon 0.48s steps(3, end);
+}
+.hs-upg-node.hs-fx-fail .hs-upg-icon .hs-pixel,
+.hs-upg-node.available.hs-fx-fail .hs-upg-icon .hs-pixel {
+    animation: hs-fx-fail-icon 0.48s steps(3, end);
+}
+.hs-upg-icon {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    border-radius: 0;
+    background: #050308;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 55%, #222);
+    box-shadow: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.hs-upg-icon .hs-pixel {
+    width: 40px;
+    height: 40px;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+    filter: none;
+}
+.hs-upg-slots {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    z-index: 2;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
+    height: 10px;
+    padding: 0;
+    background: #050308;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 80%, #fff);
+    border-radius: 0;
+    box-sizing: border-box;
+    pointer-events: none;
+    overflow: hidden;
+}
+.hs-upg-slot {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    box-sizing: border-box;
+    background: #1a1020;
+    border: none;
+    border-right: var(--ui-border-width) solid #050308;
+}
+.hs-upg-slot:last-child {
+    border-right: none;
+}
+.hs-upg-slot.filled {
+    background: color-mix(in srgb, var(--color-primary) 95%, #fff);
+    border-right-color: #050308;
+}
+.hs-upg-node.maxed .hs-upg-slot.filled {
+    background: #8e8;
+    border-right-color: #050308;
+}
+.hs-upg-tip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 18px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 260px;
+    padding: 8px 10px;
+    background: #050308;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 85%, #fff);
+    border-radius: 0;
+    box-shadow: 4px 4px 0 0 #000, inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 35%, transparent);
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 40;
+}
+/* Floated to body so tree-scroll overflow + stats chips cannot clip it */
+.hs-upg-tip-float {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: auto;
+    transform: none;
+    z-index: 100080;
+    opacity: 0;
+    visibility: hidden;
+}
+.hs-upg-tip-float.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Global icon / control tooltips (floating, matches upgrade tip chrome) */
+.ui-icon-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    vertical-align: middle;
+    cursor: help;
+}
+.ui-icon-tip img {
+    display: block;
+}
+.ui-tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 100060;
+    width: max-content;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--color-background, #05060a) 92%, #000);
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width-thin, 2px) #05060a,
+        0 0 0 var(--ui-border-width-thin, 2px) #000,
+        0 10px 28px rgba(0, 0, 0, 0.85);
+    color: var(--color-text, #fff);
+    font-family: var(--ui-font-family, inherit);
+    font-size: var(--font-text);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.3;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.22s ease, visibility 0s linear 0.22s;
+}
+.ui-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.22s ease, visibility 0s;
+}
+.hs-upg-tip.below,
+.hs-upg-tip-float.below {
+    bottom: auto;
+    top: auto;
+}
+.hs-upg-dock {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 70%, #fff);
+    border-radius: 0;
+    background: #050308;
+    box-shadow: 4px 4px 0 0 #000, inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent);
+    max-height: min(160px, 28%);
+    overflow: auto;
+}
+.hs-upg-dock-body {
+    max-width: none;
+}
+.hs-upg-tip-title,
+.hs-upg-dock-body .hs-upg-tip-title {
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: calc(var(--font-text) + 1px);
+    margin-bottom: 5px;
+    color: #fff;
+}
+.hs-upg-tip-desc,
+.hs-upg-tip-row,
+.hs-upg-dock-body .hs-upg-tip-desc,
+.hs-upg-dock-body .hs-upg-tip-row {
+    margin: 0 0 4px;
+    font-size: var(--font-text);
+    letter-spacing: 0.4px;
+    color: color-mix(in srgb, var(--color-primary) 55%, #fff);
+    line-height: 1.4;
+}
+.hs-upg-tip-row:last-child {
+    margin-bottom: 0;
+}
+.hs-upg-tip-ok {
+    color: #fff;
+}
+.hs-empty {
+    text-align: center;
+    color: var(--color-text-secondary);
+}
+#hsTeleport:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    animation: none;
+}
+.home-station-content .action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 8px 14px;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-surface) 75%, transparent) 0%,
+            color-mix(in srgb, var(--color-background) 85%, transparent) 100%);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--font-text);
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 6px), calc(100% - 4px) calc(100% - 6px), calc(100% - 4px) calc(100% - 4px), calc(100% - 6px) calc(100% - 4px), calc(100% - 6px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 0 100%, 0 8px, 2px 8px, 2px 6px, 4px 6px, 4px 4px, 6px 4px, 6px 2px, 8px 2px);
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 16%, transparent);
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.home-station-content .action-button:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 50%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+}
+.home-station-content .action-button.secondary {
+    color: var(--color-text-secondary);
+    opacity: 1;
+    background: color-mix(in srgb, var(--color-background) 70%, transparent);
+}
+.home-station-content .action-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.home-station-content .action-button.hs-fx-ok {
+    animation: hs-fx-ok-btn 0.48s ease-out;
+}
+.home-station-content .action-button.hs-fx-fail {
+    animation: hs-fx-fail-btn 0.48s ease-out;
+}
+.home-station-content .profile-selection-actions .action-button {
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--color-surface) 75%, transparent) 0%,
+            color-mix(in srgb, var(--color-background) 85%, transparent) 100%);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    color: var(--color-text-secondary);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 6px), calc(100% - 4px) calc(100% - 6px), calc(100% - 4px) calc(100% - 4px), calc(100% - 6px) calc(100% - 4px), calc(100% - 6px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 0 100%, 0 8px, 2px 8px, 2px 6px, 4px 6px, 4px 4px, 6px 4px, 6px 2px, 8px 2px);
+}
+
+@keyframes hs-scanlines {
+    from { background-position: 0 0; }
+    to { background-position: 0 48px; }
+}
+@keyframes hs-pulse-bar {
+    0%, 100% { opacity: 0.35; transform: scaleX(0.7); }
+    50% { opacity: 1; transform: scaleX(1); }
+}
+@keyframes hs-teleport-glow {
+    0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 72%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 48%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 30%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 16%, transparent); }
+    50% { box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 72%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 30%, transparent), 0 0 0 28px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 16%, transparent); }
+}
+@keyframes hs-upg-afford-icon {
+    0%, 100% { filter: brightness(1.15) contrast(1.2); opacity: 1; }
+    50% { filter: brightness(1.85) contrast(1.35); opacity: 1; }
+}
+@keyframes hs-fx-ok-icon {
+    0% { filter: brightness(1.2); opacity: 1; }
+    35% { filter: brightness(2) contrast(1.2); opacity: 1; }
+    100% { filter: brightness(1.3) contrast(1.1); opacity: 1; }
+}
+@keyframes hs-fx-fail-icon {
+    0%, 100% { filter: none; opacity: 1; transform: translateX(0); }
+    25%, 75% { filter: brightness(0.7) contrast(1.3); opacity: 0.85; transform: translateX(-2px); }
+    50% { filter: brightness(0.55); opacity: 0.7; transform: translateX(2px); }
+}
+@keyframes hs-fx-ok-btn {
+    0% {
+        border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+        color: var(--color-text);
+        box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 8%, transparent) 16%, transparent);
+    }
+    40% {
+        border-color: var(--status-success);
+        color: var(--status-success);
+        box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--status-success) 50%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--status-success) 55%, transparent) 72%, transparent), 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--status-success) 55%, transparent) 48%, transparent), 0 0 0 20px color-mix(in srgb, color-mix(in srgb, var(--status-success) 55%, transparent) 30%, transparent), 0 0 0 30px color-mix(in srgb, color-mix(in srgb, var(--status-success) 55%, transparent) 16%, transparent);
+    }
+    100% {
+        border-color: color-mix(in srgb, var(--status-success) 60%, var(--color-primary));
+        color: var(--color-text);
+        box-shadow: 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--status-success) 30%, transparent) 72%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--status-success) 30%, transparent) 48%, transparent), 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--status-success) 30%, transparent) 30%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--status-success) 30%, transparent) 16%, transparent);
+    }
+}
+@keyframes hs-fx-fail-btn {
+    0%, 100% {
+        transform: translateX(0);
+        border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+        color: var(--color-text);
+    }
+    15% {
+        transform: translateX(-4px);
+        border-color: var(--status-error);
+        color: var(--status-error);
+        box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--status-error) 55%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--status-error) 55%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--status-error) 55%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--status-error) 55%, transparent) 16%, transparent);
+    }
+    30% { transform: translateX(4px); }
+    45% {
+        transform: translateX(-3px);
+        border-color: var(--status-error);
+        color: var(--status-error);
+    }
+    60% { transform: translateX(3px); }
+}

@@ -1,0 +1,347 @@
+"use strict";
+
+// HomeStationUI methods, split from home-station.js.
+extendClass(HomeStationUI, {
+    mountPlayTab() {
+        const mount = this.overlay && this.overlay.querySelector('#hsPlayMount');
+        if (!mount || typeof galaxyMapManager === 'undefined') return;
+        const profile = this.getProfile();
+        const galaxyId = (typeof profileManager !== 'undefined')
+            ? profileManager.getCurrentGalaxyId(profile)
+            : 'milky_way';
+        galaxyMapManager.show({
+            galaxyId: galaxyId,
+            mount: mount,
+            onConfirm: (planet) => this.startMission(planet),
+            onBack: () => {
+                this.exitPlayMap();
+                this.tab = 'station';
+                this.statusMsg = '';
+                this.persistTab();
+                this.createUI();
+            },
+            onEscape: () => {
+                this.exitPlayMap();
+            },
+            onExplored: () => {},
+            onDock: (post) => this.openTradingPost(post)
+        });
+        this.mountTravelControls(mount);
+        this.syncPlayHint();
+    },
+
+    /** Galaxy travel modal over the planet map. */
+    mountTravelControls(mount) {
+        if (!mount) return;
+        // Opened from the map's TELEPORT button or the Travel tab.
+        mount.querySelectorAll(':scope > .hs-travel-modal').forEach((el) => el.remove());
+        if (!this._travelModal) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'hs-travel-modal';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.setAttribute('aria-label', 'Galaxy travel');
+        wrap.innerHTML = `<div class="hs-travel-dialog">` +
+            `<button type="button" class="action-button hs-travel-close" data-travel-close aria-label="Close">✕</button>` +
+            this.renderTravelTab(this.getProfile()) +
+            `</div>`;
+        // Click on the dimmed backdrop closes it too.
+        wrap.addEventListener('click', (e) => { if (e.target === wrap) this.closeTravelModal(); });
+        wrap.querySelector('[data-travel-close]').addEventListener('click', () => this.closeTravelModal());
+        wrap.querySelectorAll('[data-travel]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-travel');
+                const res = profileManager.travelToGalaxy(gid);
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this._travelModal = false;
+                    this.statusMsg = 'TRAVELLED TO ' + name + (res.faction ? ' · ' + String(res.faction).toUpperCase() : '');
+                    this.createUI();
+                } else {
+                    this.playButtonResult(btn, false, res.reason === 'DRIVE'
+                        ? 'NEED WARP L' + (res.requireWarp || 1) + ' OR BUY PORTAL'
+                        : (res.reason || 'FAILED'));
+                }
+            });
+        });
+        this._travelKey = (e) => {
+            if (e.key === 'Escape' && this._travelModal) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                this.closeTravelModal();
+            }
+        };
+        document.addEventListener('keydown', this._travelKey, true);
+        mount.appendChild(wrap);
+    },
+
+    openTravelModal() {
+        this._travelModal = true;
+        const mount = this.overlay && this.overlay.querySelector('#hsPlayMount');
+        if (mount) this.mountTravelControls(mount);
+    },
+
+    closeTravelModal() {
+        this._travelModal = false;
+        if (this._travelKey) document.removeEventListener('keydown', this._travelKey, true);
+        this._travelKey = null;
+        const el = this.overlay && this.overlay.querySelector('.hs-travel-modal');
+        if (el) el.remove();
+    },
+
+    getActivePlayShipId() {
+        if (typeof profileManager !== 'undefined' && profileManager.getActiveShipId) {
+            const id = profileManager.getActiveShipId();
+            if (id) return id;
+        }
+        return this.hangarShipId || 'player_scrap';
+    },
+
+    startMission(planet) {
+        if (!planet) return;
+        const shipId = this.getActivePlayShipId();
+        let ship = this.getHangarShipModel(shipId);
+        if (ship && !ship.id) ship.id = shipId;
+        if (ship && !ship.type) ship.type = shipId;
+        // Ensure modular layout + weapons before combat (assets may have just loaded).
+        if (ship && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel
+            && (!ship.modular || !ship.layout || !ship.layout.segments)) {
+            shipLoadoutManager.applyLayoutToModel(ship, shipId);
+        }
+
+        const planetId = String(planet.planetId || planet.id || '').toLowerCase();
+        let levelId = String(planet.levelId || '').toLowerCase();
+        if (!levelId && planetId) {
+            if (planet.startMode === 'start') {
+                levelId = `${planetId}-1`;
+            } else if (typeof profileManager !== 'undefined' && profileManager.getResumeLevelId) {
+                levelId = profileManager.getResumeLevelId(planetId) || `${planetId}-1`;
+            } else {
+                levelId = planetId;
+            }
+        }
+        const level = {
+            id: levelId,
+            name: planet.name || String(planet.planetId || planet.id || '').toUpperCase(),
+            difficulty: planet.difficulty || '',
+            unlocked: planet.unlocked !== false,
+            description: planet.description || '',
+            enemyCount: planet.enemyCount || 0,
+            obstacleCount: planet.obstacleCount || 0,
+            reward: planet.reward || 'XP',
+            galaxyId: planet.galaxyId || null
+        };
+        if (!planetId) {
+            this.setStatus('NO PLANET SELECTED');
+            return;
+        }
+        if (level.unlocked === false) {
+            this.setStatus('PLANET LOCKED');
+            return;
+        }
+
+        if (typeof profileManager !== 'undefined' && profileManager.setActiveShip) {
+            profileManager.setActiveShip(shipId);
+        }
+        if (typeof graphicsManager !== 'undefined') {
+            graphicsManager.setPlayerShipModel(ship);
+        }
+
+        this.hide();
+
+        if (typeof startScreenManager !== 'undefined') {
+            startScreenManager.startGameWithLevelAndShip(level, ship);
+        }
+    },
+
+    isPlayMapActive() {
+        return !!(typeof galaxyMapManager !== 'undefined' &&
+            galaxyMapManager.isVisible &&
+            galaxyMapManager._mountEl &&
+            galaxyMapManager.isInputActive());
+    },
+
+    enterPlayMap() {
+        if (typeof galaxyMapManager === 'undefined' || !galaxyMapManager.isVisible) return false;
+        this._navLevel = 'content';
+        galaxyMapManager.armInput();
+        this.syncNavHint();
+        return true;
+    },
+
+    exitPlayMap() {
+        if (typeof galaxyMapManager === 'undefined') return false;
+        if (!galaxyMapManager.isVisible || !galaxyMapManager._mountEl) return false;
+        const wasActive = galaxyMapManager.isInputActive();
+        galaxyMapManager.disarmInput();
+        this._navLevel = 'tabs';
+        this.focusActiveTab();
+        // One level up = the area's sub-nav row (PLAY / HANGAR / …), not the area row.
+        if (this.overlay && this.overlay.querySelector('.hs-subnav-tab') && this.focusNavRow) {
+            this.focusNavRow('subnav');
+        }
+        this.syncNavHint();
+        return wasActive || true;
+    },
+
+    isMenuChrome(el) {
+        return !!(el && (el.id === 'hsMenu' || el.id === 'hsLogout' ||
+            (el.classList && (el.classList.contains('hs-menu-btn') ||
+                el.classList.contains('hs-menu-tab-btn')))));
+    },
+
+    isTabChromeFocused() {
+        const list = this.getFocusables();
+        const el = list[this.focusIndex];
+        if (!el) return false;
+        if (this.isMainTabChrome(el)) return true;
+        if (this.isMenuChrome(el)) return true;
+        return false;
+    },
+
+    hasSubTabs() {
+        return this.tab === 'shop' || this.tab === 'upgrade';
+    },
+
+    isSubTabEl(el) {
+        if (!el || !el.hasAttribute) return false;
+        return el.hasAttribute('data-shop-cat') || el.hasAttribute('data-upgrade-sub');
+    },
+
+    isContentFocusable(el) {
+        if (!el) return false;
+        if (this.isMainTabChrome(el) || this.isMenuChrome(el) || this.isSubTabEl(el)) return false;
+        // Footer controls toggles are chrome, not tab content.
+        if (el.id === 'hsHideControls' || el.id === 'hsShowControls') return false;
+        return true;
+    },
+
+    getNavLevel() {
+        if (this.tab === 'play' && this.isPlayMapActive()) return 'content';
+        return this._navLevel || 'tabs';
+    },
+
+    isContentNavActive() {
+        return this.getNavLevel() !== 'tabs';
+    },
+
+    getZoneFocusables() {
+        const all = this.getFocusables();
+        const level = this.getNavLevel();
+        if (level === 'tabs') {
+            return all.filter((el) => this.isMainTabChrome(el) || this.isMenuChrome(el));
+        }
+        if (level === 'sub') {
+            return all.filter((el) => this.isSubTabEl(el));
+        }
+        return all.filter((el) => this.isContentFocusable(el));
+    },
+
+    setFocusEl(el) {
+        const list = this.getFocusables();
+        const idx = el ? list.indexOf(el) : -1;
+        if (idx < 0) return false;
+        this.focusIndex = (typeof menuNavHelper !== 'undefined')
+            ? menuNavHelper.applyFocus(list, idx)
+            : idx;
+        this.refreshFocus();
+        this.scrollFocusedIntoView();
+        return true;
+    },
+
+    focusActiveSubTab() {
+        if (!this.overlay || !this.hasSubTabs()) return false;
+        const active = this.overlay.querySelector('.hs-shop-cats .hs-shop-cat.active') ||
+            this.overlay.querySelector('[data-shop-cat].active, [data-upgrade-sub].active');
+        if (!this.setFocusEl(active)) {
+            const first = this.overlay.querySelector('.hs-shop-cats [data-nav-item]');
+            return this.setFocusEl(first);
+        }
+        return true;
+    },
+
+    findFirstContentFocusable(list) {
+        if (!list || !list.length) return -1;
+        for (let i = 0; i < list.length; i++) {
+            if (this.isContentFocusable(list[i])) return i;
+        }
+        return -1;
+    },
+
+    restoreNavFocus() {
+        const level = this._navLevel || 'tabs';
+        if (level === 'sub' && this.hasSubTabs()) {
+            this._navLevel = 'sub';
+            this.focusActiveSubTab();
+            return;
+        }
+        if (level === 'content' && this.tab !== 'menu') {
+            this._navLevel = 'content';
+            const list = this.getFocusables();
+            const idx = this.findFirstContentFocusable(list);
+            if (idx >= 0) {
+                this.focusIndex = (typeof menuNavHelper !== 'undefined')
+                    ? menuNavHelper.applyFocus(list, idx)
+                    : idx;
+                this.refreshFocus();
+                return;
+            }
+        }
+        this._navLevel = 'tabs';
+        this.focusActiveTab();
+    },
+
+    enterSubTabs() {
+        if (!this.hasSubTabs()) return false;
+        this._navLevel = 'sub';
+        this.focusActiveSubTab();
+        this.syncNavHint();
+        return true;
+    },
+
+    enterTabContent() {
+        if (this.tab === 'play') return this.enterPlayMap();
+        if (this.tab === 'menu') return false;
+        if (this.getNavLevel() === 'tabs' && this.hasSubTabs()) {
+            return this.enterSubTabs();
+        }
+        const list = this.getFocusables();
+        const bodyIdx = this.findFirstContentFocusable(list);
+        this._navLevel = 'content';
+        if (bodyIdx >= 0) {
+            this.focusIndex = (typeof menuNavHelper !== 'undefined')
+                ? menuNavHelper.applyFocus(list, bodyIdx)
+                : bodyIdx;
+            this.refreshFocus();
+            this.scrollFocusedIntoView();
+        } else {
+            this.refreshFocus();
+        }
+        this.syncNavHint();
+        return true;
+    },
+
+    exitTabContent() {
+        if (this.tab === 'play' && this.isPlayMapActive()) {
+            return this.exitPlayMap();
+        }
+        const level = this.getNavLevel();
+        if (level === 'content' && this.hasSubTabs()) {
+            this._navLevel = 'sub';
+            this.focusActiveSubTab();
+            this.syncNavHint();
+            return true;
+        }
+        if (level === 'content' || level === 'sub') {
+            this._navLevel = 'tabs';
+            this.focusActiveTab();
+            // Content → the area's sub-nav row (one level up), not the area row.
+            if (this.overlay && this.overlay.querySelector('.hs-subnav-tab') && this.focusNavRow) {
+                this.focusNavRow('subnav');
+            }
+            this.syncNavHint();
+            return true;
+        }
+        return false;
+    },
+});

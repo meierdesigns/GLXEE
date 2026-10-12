@@ -1,0 +1,326 @@
+"use strict";
+
+/**
+ * Economy constants: resources, shop/craft costs, blueprint drop chances.
+ */
+class EconomyConfig {
+    constructor() {
+        this.resourceIds = ['scrap', 'ore', 'crystal', 'voltex'];
+        this.resourceLabels = {
+            scrap: 'SCRAP',
+            ore: 'ORE',
+            crystal: 'CRYSTAL',
+            voltex: 'VOLTEX'
+        };
+        /** Distinct tint per resource (icons / pickups / HUD). */
+        this.resourceColors = {
+            scrap: '#b8b0a0',
+            ore: '#c49a4a',
+            crystal: '#6ec8e8',
+            voltex: '#c86ef0'
+        };
+        this.resourceIconKeys = {
+            scrap: 'resScrap',
+            ore: 'resOre',
+            crystal: 'resCrystal',
+            voltex: 'resVoltex'
+        };
+        /** Extra seconds after objective clear for the player to scoop pickups. */
+        // Release the combat area quickly after the last enemy falls while
+        // still leaving a short window to collect nearby drops.
+        this.victoryLootGraceMs = 12000;
+        /** Credits-equivalent unit value for the resource market. Credits are uncapped currency. */
+        this.resourceTradeValue = {
+            scrap: 1,
+            ore: 2,
+            crystal: 5,
+            voltex: 12
+        };
+        this.resourceBuyMult = 1.5;
+        this.resourceSellMult = 0.6;
+        this.starterCredits = 250;
+        this.starterShipId = 'player_scrap';
+        this.blueprintDropChance = {
+            scout: 0.02,
+            assault: 0.04,
+            heavy: 0.06,
+            elite: 0.10,
+            capital: 0.15,
+            champion: 0.15,
+            default: 0.03
+        };
+        this.defaultPlanetResources = {
+            mars: [
+                { id: 'scrap', weight: 4, min: 12, max: 28 },
+                { id: 'ore', weight: 2, min: 6, max: 16 }
+            ],
+            jupiter: [
+                { id: 'ore', weight: 3, min: 10, max: 22 },
+                { id: 'crystal', weight: 2, min: 6, max: 16 }
+            ],
+            saturn: [
+                { id: 'crystal', weight: 4, min: 12, max: 28 },
+                { id: 'ore', weight: 1, min: 6, max: 12 }
+            ],
+            neptune: [
+                { id: 'crystal', weight: 3, min: 10, max: 22 },
+                { id: 'voltex', weight: 2, min: 5, max: 12 }
+            ],
+            pluto: [
+                { id: 'voltex', weight: 4, min: 10, max: 22 },
+                { id: 'crystal', weight: 1, min: 5, max: 12 }
+            ]
+        };
+        /**
+         * Home Station upgrade tree.
+         * Levels start at 0. Costs are for purchasing the next level.
+         */
+        this.stationBaseStats = {
+            resourceCap: 80,
+            cargoCap: 40,
+            shipSlots: 2,
+            craftDiscount: 0,
+            dropBonus: 0
+        };
+        this.stationUpgradeNodes = {
+            ...createBaseStationUpgradeNodes(),
+            ...createAdvancedStationUpgradeNodes()
+        };
+        this.stationUpgradeOrder = [
+            'core', 'storage', 'hangar', 'cargo', 'impulse_drive', 'reactor',
+            'compactor', 'docking_ring', 'fabricator', 'warp_drive', 'cooling',
+            'refinery', 'drone_bay', 'sensors', 'nav_computer', 'foundry',
+            'vault_omega', 'fleet_yard', 'quantum_array', 'stargate'
+        ];
+        /** Warp level required to travel to each galaxy (milky_way always free). */
+        this.galaxyWarpRequirement = {
+            milky_way: 0,
+            andromeda: 1,
+            void_reach: 2,
+            scrap_belt: 3,
+            synth_grid: 4
+        };
+        /** Shop portal unlock costs (home galaxy not sold). */
+        this.galaxyPortalCost = {
+            andromeda: { scrap: 220, ore: 90, crystal: 110, voltex: 65 },
+            void_reach: { scrap: 320, ore: 130, crystal: 160, voltex: 100 },
+            scrap_belt: { scrap: 420, ore: 170, crystal: 200, voltex: 140 },
+            synth_grid: { scrap: 540, ore: 220, crystal: 260, voltex: 190 }
+        };
+        // Frame level = sum of the 4 hull area levels (each 0..2, S/M/L).
+        this.maxShipFrameLevel = 8;
+        this.moduleUpgradeDefs = {
+            weapons: {
+                power: { label: 'POWER', desc: '+Damage (scales hard at high L)', maxLevel: 5, costMul: 1.2 },
+                cyclic: { label: 'CYCLIC', desc: '−Cooldown', maxLevel: 5, costMul: 1.0 },
+                barrel: { label: 'BARREL', desc: '+Projectiles / spread', maxLevel: 5, costMul: 1.4 }
+            },
+            defenses: {
+                capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.15 },
+                harden: { label: 'HARDEN', desc: 'Damage reduction', maxLevel: 5, costMul: 1.35 },
+                recover: { label: 'RECOVER', desc: '+Regen', maxLevel: 5, costMul: 0.95 }
+            },
+            abilities: {
+                efficiency: { label: 'EFFICIENCY', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.3 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
+            },
+            charge: {
+                focus: { label: 'FOCUS', desc: '−Charge time (shot & drive)', maxLevel: 5, costMul: 1.15 },
+                output: { label: 'OUTPUT', desc: '+Charge power / shield fill / burst', maxLevel: 5, costMul: 1.4 },
+                ballast: { label: 'BALLAST', desc: '−Slowdown while drive-charging', maxLevel: 5, costMul: 0.9 }
+            },
+            energy: {
+                capacity: { label: 'CAPACITY', desc: '+Energy pool', maxLevel: 5, costMul: 1.2 },
+                regen: { label: 'REGEN', desc: '+Energy recharge', maxLevel: 5, costMul: 1.1 },
+                efficiency: { label: 'EFFICIENCY', desc: '−Power drain', maxLevel: 5, costMul: 1.25 }
+            },
+            collector: {
+                radius: { label: 'RADIUS', desc: '+Pickup collect radius', maxLevel: 6, costMul: 0.85 },
+                yield: { label: 'YIELD', desc: '+Resources per kill drop', maxLevel: 6, costMul: 1.25 },
+                magnet: { label: 'MAGNET', desc: '+Pull strength toward ship', maxLevel: 6, costMul: 1.0 }
+            }
+        };
+        /** Category base materials for module-type upgrades (scaled by level + track). */
+        this.moduleUpgradeCatBase = {
+            weapons: { scrap: 48, ore: 14 },
+            defenses: { scrap: 42, ore: 22 },
+            abilities: { scrap: 55, ore: 12 },
+            charge: { scrap: 60, ore: 16 },
+            energy: { scrap: 50, ore: 18 },
+            collector: { scrap: 36, ore: 14 }
+        };
+        /** Base pixel radius for collecting mission resource pickups. */
+        this.collectBaseRadius = 32;
+        /** Relative kill-drop scale by enemy class / champion. */
+        this.enemyDropScale = {
+            scout: 0.55,
+            assault: 0.85,
+            heavy: 1.15,
+            elite: 1.45,
+            capital: 1.9,
+            champion: 2.4,
+            default: 0.75
+        };
+    }
+
+    /**
+     * Warp tier of a galaxy (its distance from the Milky Way). Generated
+     * galaxies take their difficulty tier (EASY counts as 1).
+     */
+    getGalaxyWarpTier(galaxyId) {
+        const id = String(galaxyId || '').toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(this.galaxyWarpRequirement, id)) {
+            return this.galaxyWarpRequirement[id];
+        }
+        const g = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
+            ? planetConfigManager.getGalaxy(id) : null;
+        if (g) return Math.max(1, Math.min(4, Math.round(Number(g.difficultyTier) || 0)));
+        return 99;
+    }
+
+    /**
+     * Warp drive level needed to jump to galaxyId. With fromGalaxyId the jump
+     * is measured from there (tier gap), never more than the direct tier, so
+     * every galaxy can be reached from every other and home stays close.
+     */
+    getGalaxyWarpRequirement(galaxyId, fromGalaxyId) {
+        const to = this.getGalaxyWarpTier(galaxyId);
+        if (!fromGalaxyId) return to;
+        if (String(fromGalaxyId).toLowerCase() === String(galaxyId || '').toLowerCase()) return 0;
+        const from = this.getGalaxyWarpTier(fromGalaxyId);
+        return from >= 99 ? to : Math.min(to, Math.abs(to - from));
+    }
+
+    canTravelToGalaxy(galaxyId, stationLevels, fromGalaxyId) {
+        const req = this.getGalaxyWarpRequirement(galaxyId, fromGalaxyId);
+        if (req <= 0) return true;
+        const warp = Math.max(0, Math.round(Number((stationLevels && stationLevels.warp_drive) || 0)));
+        return warp >= req;
+    }
+
+    /**
+     * Portal shop price in CREDITS for a destination galaxy.
+     * Returns null when the galaxy is not sold (e.g. home milky_way).
+     */
+    getPortalCost(galaxyId) {
+        const id = String(galaxyId || '').toLowerCase();
+        if (!id || id === 'milky_way') return null;
+        let mat = null;
+        if (Object.prototype.hasOwnProperty.call(this.galaxyPortalCost, id)) {
+            mat = Object.assign({}, this.galaxyPortalCost[id]);
+        } else {
+            const req = this.getGalaxyWarpRequirement(id);
+            if (req <= 0) return null;
+            mat = {
+                scrap: 180 + req * 80,
+                ore: 70 + req * 35,
+                crystal: 90 + req * 40,
+                voltex: 40 + req * 30
+            };
+        }
+        return { credits: this.materialCostToCredits(mat) };
+    }
+
+    getPortalTier(galaxyId) {
+        const req = this.getGalaxyWarpRequirement(galaxyId);
+        return Math.max(1, Math.round(Number(req) || 1));
+    }
+
+    getExploreBudget(stationLevels) {
+        const nav = Math.max(0, Math.round(Number((stationLevels && stationLevels.nav_computer) || 0)));
+        return 1 + nav;
+    }
+
+    getShipFrameUpgradeCost(nextLevel) {
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > this.maxShipFrameLevel) return null;
+        const cost = {
+            scrap: 40 + lv * 35,
+            ore: Math.max(0, 10 + lv * 12)
+        };
+        if (lv >= 3) cost.crystal = 10 + (lv - 2) * 15;
+        if (lv >= 6) cost.voltex = 8 + (lv - 5) * 12;
+        return cost;
+    }
+
+    /**
+     * Hull area upgrade (slot size S→M→L). Level 2 adds crystal; the core
+     * costs most (it holds defense + energy), the aft least.
+     */
+    getShipAreaUpgradeCost(areaId, nextLevel) {
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > 2) return null;
+        const mul = { front: 1, center: 1.25, back: 0.9, wing: 1.1 }[areaId];
+        if (!mul) return null;
+        const cost = {
+            scrap: Math.round((lv === 1 ? 90 : 190) * mul),
+            ore: Math.round((lv === 1 ? 30 : 75) * mul)
+        };
+        if (lv >= 2) cost.crystal = Math.round(35 * mul);
+        return cost;
+    }
+
+    getModuleUpgradeCost(category, track, nextLevel) {
+        const cat = this.moduleUpgradeDefs[category];
+        if (!cat || !cat[track]) return null;
+        const meta = cat[track];
+        const max = meta.maxLevel;
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > max) return null;
+        const base = this.moduleUpgradeCatBase[category] || { scrap: 45, ore: 15 };
+        const trackMul = Number(meta.costMul) || 1;
+        // Progressive curve: L1 cheap & distinct, later levels climb steeply.
+        const prog = Math.pow(lv, 1.55);
+        const cost = {
+            scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
+            ore: Math.max(0, Math.round(base.ore * trackMul * prog))
+        };
+        if (category === 'weapons') {
+            if (lv >= 2) cost.crystal = Math.round((10 + lv * 9) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((8 + lv * 6) * trackMul);
+        } else if (category === 'defenses') {
+            cost.ore = Math.round(cost.ore * 1.15);
+            if (lv >= 2) cost.crystal = Math.round((8 + lv * 7) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((6 + lv * 5) * trackMul);
+        } else if (category === 'charge') {
+            if (lv >= 2) cost.crystal = Math.round((12 + lv * 10) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((10 + lv * 7) * trackMul);
+        } else if (category === 'energy') {
+            if (lv >= 2) cost.crystal = Math.round((11 + lv * 9) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((8 + lv * 6) * trackMul);
+        } else if (category === 'collector') {
+            cost.ore = Math.round(cost.ore + lv * 6 * trackMul);
+            if (lv >= 2) cost.crystal = Math.round((8 + lv * 7) * trackMul);
+            if (lv >= 4) cost.voltex = Math.round((6 + lv * 5) * trackMul);
+        } else {
+            // abilities
+            if (lv >= 2) cost.crystal = Math.round((14 + lv * 11) * trackMul);
+            if (lv >= 3) cost.voltex = Math.round((10 + lv * 8) * trackMul);
+        }
+        return cost;
+    }
+
+    emptyModuleUpgrades() {
+        const out = { weapons: {}, defenses: {}, abilities: {} };
+        Object.keys(this.moduleUpgradeDefs).forEach((cat) => {
+            out[cat] = {};
+            Object.keys(this.moduleUpgradeDefs[cat]).forEach((track) => {
+                out[cat][track] = 0;
+            });
+        });
+        return out;
+    }
+
+    getStationUpgradeNode(id) {
+        return this.stationUpgradeNodes[id] || null;
+    }
+
+    getStationUpgradeCost(nodeId, nextLevel) {
+        const node = this.getStationUpgradeNode(nodeId);
+        if (!node) return null;
+        const idx = Math.max(0, Math.round(Number(nextLevel) || 1) - 1);
+        if (idx < 0 || idx >= node.costs.length) return null;
+        return Object.assign({}, node.costs[idx]);
+    }
+}

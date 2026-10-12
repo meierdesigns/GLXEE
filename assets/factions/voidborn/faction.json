@@ -1,0 +1,42 @@
+{
+  "style": {
+    "hull": "#7B2E86",
+    "edge": "#3a1238",
+    "accent": "#f09cff",
+    "engine": "#9ab0c0",
+    "silhouette": "rings",
+    "wingVariants": [
+      "delta",
+      "swept",
+      "razor"
+    ],
+    "anatomy": {
+      "front": {
+        "x": 0.9,
+        "y": 0.7
+      },
+      "center": {
+        "x": 1.3,
+        "y": 1.2
+      },
+      "back": {
+        "x": 0.8,
+        "y": 0.8
+      },
+      "wing": {
+        "x": 0.8,
+        "y": 1.3
+      }
+    },
+    "defaultWeapons": [
+      "wave"
+    ],
+    "prompt": "broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor",
+    "styleStrength": 2
+  },
+  "gui": {
+    "baseColor": "#F09CFF",
+    "secondBaseColor": "#FBE3FF",
+    "vars": {}
+  }
+}

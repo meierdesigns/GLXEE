@@ -1,0 +1,37 @@
+{
+  "style": {
+    "hull": "#3A6EA5",
+    "edge": "#1a3048",
+    "accent": "#7ec8ff",
+    "engine": "#9ab0c0",
+    "silhouette": "modular",
+    "anatomy": {
+      "front": {
+        "x": 1,
+        "y": 1
+      },
+      "center": {
+        "x": 1.1,
+        "y": 1
+      },
+      "back": {
+        "x": 1.1,
+        "y": 1
+      },
+      "wing": {
+        "x": 1,
+        "y": 0.9
+      }
+    },
+    "defaultWeapons": [
+      "laser"
+    ],
+    "prompt": "stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails",
+    "styleStrength": 2
+  },
+  "gui": {
+    "baseColor": "#7EC8FF",
+    "secondBaseColor": "#DBF0FF",
+    "vars": {}
+  }
+}

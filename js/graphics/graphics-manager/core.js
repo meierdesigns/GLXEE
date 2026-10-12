@@ -1,0 +1,419 @@
+"use strict";
+
+/**
+ * Main Graphics Manager - coordinates all graphics subsystems
+ */
+
+// Global color overlay settings
+let globalOverlayColor = 'var(--current-text-secondary)'; // Default gray
+let globalOverlayIntensity = 0.3; // Default intensity
+
+class GraphicsManager {
+    constructor() {
+        this.particleSystem = new ParticleSystem();
+        this.spriteFactory = new SpriteFactory();
+        this.colorPalette = new ColorPalette();
+        this.lightingSystem = new LightingSystem();
+
+        this.colorOverlay = {
+            enabled: false,
+            color: 'var(--current-primary)',
+            intensity: 0.3
+        };
+
+        this.shipModels = null;
+        this.currentPlayerModel = null;
+        this.currentEnemyModel = null;
+        this.shipAssetLoader = null;
+        this._shieldHullCache = Object.create(null);
+        this._shieldSilhouetteBake = false;
+        this._playerModelExplicitlySelected = false;
+
+        this.init();
+    }
+
+    init() {
+        // Initialize ship models
+        this.shipModels = shipModels;
+
+        if (this.shipModels) {
+            this.currentPlayerModel = this.shipModels.getShipModel('player');
+            this.currentEnemyModel = this.shipModels.getShipModel('enemyBasic');
+        } else {
+            console.error('ShipModels not available!');
+        }
+
+        // Initialize sprite factory
+        this.spriteFactory.init();
+
+        // Initialize ship asset loader
+        this.initializeShipAssets();
+
+        // Wait for sprite loader to be ready
+        this.waitForSpriteLoader();
+    }
+
+    waitForSpriteLoader() {
+        if (typeof window === 'undefined' || !window.spriteLoader || window.spriteLoader.loaded) {
+            return;
+        }
+        const checkInterval = setInterval(() => {
+            if (window.spriteLoader && window.spriteLoader.loaded) {
+                clearInterval(checkInterval);
+            }
+        }, 100);
+    }
+
+    setOverlayColor(color) {
+        // Deprecated: Use ColorManager HSL system instead
+        console.warn('setOverlayColor is deprecated, use ColorManager HSL system instead');
+    }
+
+    setOverlayIntensity(intensity) {
+        // Deprecated: Use ColorManager HSL system instead
+        console.warn('setOverlayIntensity is deprecated, use ColorManager HSL system instead');
+    }
+
+    // Initialize ship assets
+    async initializeShipAssets() {
+        try {
+            // Import ship asset loader
+            const { shipAssetLoader } = await import('/js/graphics/ship-assets/ship-asset-loader.js');
+            this.shipAssetLoader = shipAssetLoader;
+
+            // Load all ship assets
+            await this.shipAssetLoader.loadAllShips();
+
+            // Keep the loadout model selected by the hangar while assets load.
+            // Replacing it here silently reset the in-game ship to the default hull.
+            if (!this._playerModelExplicitlySelected) {
+                this.currentPlayerModel = this.shipAssetLoader.getShip('player');
+            } else {
+                // Mission may have started on the tiny hangar stub before PNGs /
+                // modular bases were ready — rebuild from the active ship id.
+                this.refreshPlayerShipFromAssets();
+            }
+            this.currentEnemyModel = this.shipAssetLoader.getShip('enemyBasic');
+
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('vf-ships-loaded'));
+            }
+
+        } catch (error) {
+            console.error('Failed to initialize ship assets:', error);
+            // Fallback to old ship models
+            if (!this._playerModelExplicitlySelected) {
+                this.currentPlayerModel = this.shipModels.getShipModel('player');
+            }
+            this.currentEnemyModel = this.shipModels.getShipModel('enemyBasic');
+        }
+    }
+
+    // Render ship models instead of simple sprites
+    renderPlayerShip(ctx, player, scale = 1) {
+        if (!this.currentPlayerModel || !player) {
+            return;
+        }
+
+        // Late asset arrival mid-fight: swap the stub for the real hull once.
+        if (!this._shipRefreshDone && this.shipAssetLoader && this.shipAssetLoader.isLoaded
+            && this.shipAssetLoader.isLoaded()) {
+            const m = this.currentPlayerModel;
+            if (!m.modular || !m.layout || !m.layout.segments || !m.layout.segments.length) {
+                this._shipRefreshDone = true;
+                this.refreshPlayerShipFromAssets();
+            }
+        }
+
+        const model = this.currentPlayerModel;
+        const mw = Math.max(1, model.width || player.width || 1);
+        const mh = Math.max(1, model.height || player.height || 1);
+        // Fit visual to entity footprint so contentScale stays consistent.
+        const fit = Math.min(player.width / mw, player.height / mh);
+        const drawScale = Math.max(0.25, (scale || 1) * fit);
+        const x = player.x - (mw * drawScale - player.width) / 2;
+        const y = player.y - (mh * drawScale - player.height) / 2;
+
+        // Get current color overlay from color manager
+        let colorOverlay = null;
+        let overlayIntensity = 0;
+
+        if (typeof colorManager !== 'undefined') {
+            colorOverlay = colorManager.getCurrentOverlayColor();
+            overlayIntensity = colorManager.getCurrentOverlayIntensity();
+        }
+
+        const voxel = typeof window !== 'undefined' && window.combatVoxels
+            && window.combatVoxels.active && window.combatVoxels.active();
+        // VOXEL: bake hull once and blit — avoids per-cell fillRect every frame.
+        if (voxel && this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+            const cell = window.combatVoxels.cell() || 1;
+            const dw = Math.max(1, Math.ceil(mw * drawScale));
+            const dh = Math.max(1, Math.ceil(mh * drawScale));
+            const key = String(model.id || model.name || 'player')
+                + '|' + this.getShieldLayoutSignature(model)
+                + '|' + cell + '|' + dw + 'x' + dh
+                + '|' + String(colorOverlay || '') + '|' + String(overlayIntensity || 0);
+            this._voxelShipBake = this._voxelShipBake || Object.create(null);
+            let baked = this._voxelShipBake[key];
+            if (!baked || baked.width !== dw || baked.height !== dh) {
+                baked = document.createElement('canvas');
+                baked.width = dw;
+                baked.height = dh;
+                const bctx = baked.getContext('2d', { willReadFrequently: true });
+                if (bctx) {
+                    bctx.imageSmoothingEnabled = false;
+                    this.shipAssetLoader.renderShip(
+                        bctx, model, 0, 0, drawScale, colorOverlay, overlayIntensity,
+                        { showThrusterGlow: false, allowColorMountSprites: true }
+                    );
+                }
+                // Skip caching empty frames (assets/layout not ready yet).
+                let solid = 0;
+                try {
+                    const data = bctx.getImageData(0, 0, dw, dh).data;
+                    for (let i = 3; i < data.length; i += 16) solid += data[i] > 16 ? 1 : 0;
+                } catch (e) { solid = 1; }
+                if (solid > 2) {
+                    this._voxelShipBake[key] = baked;
+                    const keys = Object.keys(this._voxelShipBake);
+                    if (keys.length > 24) {
+                        delete this._voxelShipBake[keys[0]];
+                    }
+                }
+            }
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(baked, Math.round(x), Math.round(y));
+            return;
+        }
+
+        // Use asset loader if available, otherwise fallback to old system
+        if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+            this.shipAssetLoader.renderShip(
+                ctx,
+                model,
+                x,
+                y,
+                drawScale,
+                colorOverlay,
+                overlayIntensity,
+                {
+                    showThrusterGlow: true,
+                    allowColorMountSprites: true
+                }
+            );
+        } else {
+            this.shipModels.renderShip(ctx, model, x, y, drawScale, colorOverlay, overlayIntensity);
+        }
+    }
+
+    renderEnemyShip(ctx, enemy, scale = 1) {
+        if (!enemy) return;
+
+        let visual = null;
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveFactionShipVisual) {
+            visual = factionShipStyles.resolveFactionShipVisual({
+                faction: enemy.faction,
+                enemyClass: enemy.enemyClass,
+                tier: enemy.tier,
+                level: enemy.level,
+                typeId: enemy.type,
+                width: enemy.width,
+                height: enemy.height
+            });
+        }
+
+        let enemyModel = visual && visual.model ? visual.model : null;
+        if (!enemyModel) {
+            enemyModel = this.currentEnemyModel;
+        }
+        if (!enemyModel) {
+            if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+                enemyModel = this.shipAssetLoader.getShip('enemyBasic');
+            } else if (this.shipModels) {
+                enemyModel = this.shipModels.getShipModel('enemyBasic');
+            }
+        }
+
+        if (!enemyModel) {
+            ctx.fillStyle = (this.colorPalette && this.colorPalette.resolveCssColor)
+                ? (this.colorPalette.resolveCssColor('var(--color-error)') || '#ff4444')
+                : '#ff4444';
+            ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            return;
+        }
+
+        const mw = Math.max(1, enemyModel.width || enemy.width || 1);
+        const mh = Math.max(1, enemyModel.height || enemy.height || 1);
+        // Entity footprint is authoritative (includes tier + contentScale).
+        const finalScale = Math.max(0.25, Math.min(enemy.width / mw, enemy.height / mh) * (scale || 1));
+        const x = enemy.x - (mw * finalScale - enemy.width) / 2;
+        const y = enemy.y - (mh * finalScale - enemy.height) / 2;
+
+        // Faction ships carry their own hull/edge/accent — do not wash with theme overlay
+        let colorOverlay = null;
+        let overlayIntensity = 0;
+        if (!visual && typeof colorManager !== 'undefined') {
+            colorOverlay = colorManager.getCurrentOverlayColor();
+            overlayIntensity = colorManager.getCurrentOverlayIntensity();
+        }
+
+        // Faction ships: seeded livery variant / renegade markings, baked
+        // once per variant (enemy-variants.js).
+        const baked = visual && this.drawEnemyVariant
+            && this.drawEnemyVariant(ctx, enemy, enemyModel, x, y, finalScale);
+        if (baked) {
+            // drawn from the variant cache
+        } else if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+            this.shipAssetLoader.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
+        } else if (this.shipModels) {
+            this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
+        }
+        this.drawEnemyGun(ctx, enemy);
+        if (enemy.renegade && this.drawRenegadeBeacon) this.drawRenegadeBeacon(ctx, enemy);
+    }
+
+    /**
+     * The enemy's weapon on its hull: same per-weapon gun art as the player's,
+     * in the enemy faction's colours, muzzle pointing down at the bottom
+     * centre where its shots spawn (bulletManager.enemyShoot).
+     */
+    drawEnemyGun(ctx, enemy) {
+        const loader = this.shipAssetLoader;
+        if (!loader || !loader.getWeaponTemplate || typeof bulletManager === 'undefined'
+            || !bulletManager.getEnemyWeaponId) return;
+        const weaponId = bulletManager.getEnemyWeaponId(enemy);
+        const style = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+            ? factionShipStyles.getFactionStyle(enemy.faction || 'pirate') : null;
+        // Same generated gun and faction shade ramp as ships in the hangar,
+        // at its S/M/L size on the player's scale (one grid cell = one px).
+        // Side craft (weaponScale set): a shorter gun sitting mostly
+        // on the hull — the long barrel made them look stretched.
+        const side = enemy.weaponScale != null;
+        const gunW = bulletManager.getEnemyGunWidth(enemy);
+        const cols = Math.max(side ? 3 : 4, Math.round(gunW));
+        const rows = side
+            ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
+            : Math.max(8, Math.round(cols * 2.2));
+        const tpl = loader.generateWeaponGrid
+            ? loader.generateWeaponGrid(weaponId, cols, rows)
+            : loader.getWeaponTemplate(weaponId, style, false);
+        if (!tpl || !tpl.length) return;
+        const ramp = loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, weaponId) : null;
+        const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
+        const cell = cv && cv.cell ? cv.cell() : null;
+        const px = cell || 1;
+        const gw = cols * px;
+        const gh = rows * px;
+        let gx = enemy.x + enemy.width / 2 - gw / 2;
+        // Breech tucked under the hull, barrel sticking out below it.
+        let gy = enemy.y + enemy.height - gh * (side ? 0.8 : 0.45);
+        if (cell) {
+            gx = Math.round(gx / cell) * cell;
+            gy = Math.round(gy / cell) * cell;
+        } else {
+            gx = Math.round(gx);
+            gy = Math.round(gy);
+        }
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        for (let r = 0; r < tpl.length; r++) {
+            for (let c = 0; c < tpl[r].length; c++) {
+                const idx = tpl[r][c];
+                if (!idx) continue;
+                const color = (ramp && ramp[idx])
+                    || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
+                    || (loader.getHullMountShade && loader.getHullMountShade(idx));
+                if (!color) continue;
+                // Flip vertically: template muzzle is at the top, enemy guns face down.
+                const bx = gx + c * px;
+                const by = gy + (tpl.length - 1 - r) * px;
+                if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
+                else {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(bx, by, px, px);
+                }
+            }
+        }
+        ctx.restore();
+
+    }
+
+    // Set enemy ship type based on level or difficulty
+    setEnemyShipType(type) {
+        let model = null;
+        const hullId = (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getHullId)
+            ? enemyConfigManager.getHullId(type)
+            : type;
+        if (this.shipAssetLoader && this.shipAssetLoader.isLoaded()) {
+            model = this.shipAssetLoader.getShip(hullId);
+        } else {
+            model = this.shipModels.getShipModel(hullId);
+        }
+        if (typeof enemyConfigManager !== 'undefined' && model) {
+            model = enemyConfigManager.applyOverridesToModel(type, model);
+        } else if (model) {
+            model = Object.assign({}, model, { forceEnemyOrientation: true });
+        }
+        this.currentEnemyModel = model;
+    }
+
+    // Set player ship model
+    setPlayerShipModel(shipModel) {
+        this._playerModelExplicitlySelected = true;
+        this._shipRefreshDone = false;
+        this.currentPlayerModel = shipModel;
+        this._shieldHullCache = Object.create(null);
+        this._voxelShipBake = Object.create(null);
+
+        // Update player manager with ship model
+        if (typeof playerManager !== 'undefined') {
+            playerManager.setShipModel(shipModel);
+        }
+
+        // Update weapon system with ship model
+        if (typeof bulletManager !== 'undefined') {
+            bulletManager.setShipModel(shipModel);
+        }
+    }
+
+    /**
+     * Rebuild the in-game player from shipConfig once asset bases are ready.
+     * Fixes missions that started while the hangar still used the stub hull.
+     */
+    refreshPlayerShipFromAssets() {
+        if (!this.shipAssetLoader || !this.shipAssetLoader.isLoaded()) return false;
+        const cur = this.currentPlayerModel;
+        const shipId = (cur && (cur.id || cur.type))
+            || (typeof profileManager !== 'undefined' && profileManager.getActiveShipId
+                ? profileManager.getActiveShipId() : null)
+            || 'player_scrap';
+        if (typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return false;
+        // Tiny non-modular stub from getHangarShipModel fallback, or missing layout.
+        const needsRebuild = !cur || !cur.modular || !cur.layout
+            || !Array.isArray(cur.layout.segments) || !cur.layout.segments.length
+            || (Number(cur.width) <= 8 && Number(cur.height) <= 8);
+        if (!needsRebuild) return false;
+        const fresh = shipConfigManager.getMergedModel(shipId);
+        if (!fresh || !fresh.layout) return false;
+        this.setPlayerShipModel(fresh);
+        return true;
+    }
+
+    /**
+     * Stable signature of modular layout so loadout swaps invalidate the rim cache.
+     */
+    getShieldLayoutSignature(shipModel) {
+        if (!shipModel || !shipModel.layout) {
+            return 'n|' + Math.round(shipModel && shipModel.width || 0)
+                + 'x' + Math.round(shipModel && shipModel.height || 0);
+        }
+        const L = shipModel.layout;
+        const mods = Array.isArray(L.modules) ? L.modules : [];
+        const ids = mods.map((m) => String((m && m.id) || '')).filter(Boolean).sort();
+        return (L.moduleCount != null ? L.moduleCount : mods.length)
+            + '|' + Math.round(L.width || shipModel.width || 0)
+            + 'x' + Math.round(L.height || shipModel.height || 0)
+            + '|' + ids.join(',');
+    }
+}

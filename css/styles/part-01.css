@@ -1,0 +1,1509 @@
+/* Galaxy map: planet under attack (invasion-scenario.js). */
+.gm-invasion { pointer-events: none; shape-rendering: crispEdges; }
+.gm-invasion .gm-invasion-ring {
+    fill: none;
+    stroke: var(--fac);
+    stroke-width: 3;
+    stroke-dasharray: 8 4;
+    animation: gm-invasion-pulse 1.1s steps(2, end) infinite;
+}
+.gm-invasion .gm-invasion-ring-2 {
+    stroke-width: 2;
+    opacity: 0.5;
+    animation-delay: -0.55s;
+}
+.gm-invasion .gm-invasion-label {
+    fill: var(--fac);
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-anchor: middle;
+    animation: gm-invasion-pulse 1.1s steps(2, end) infinite;
+}
+.gm-invasion .gm-invasion-emblem {
+    width: 20px;
+    height: 20px;
+    background: #000;
+    border: var(--ui-border-width, 2px) solid var(--fac);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+@keyframes gm-invasion-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-invasion .gm-invasion-ring,
+    .gm-invasion .gm-invasion-label { animation: none; }
+}
+
+/* Galaxy map space: black background + pixel starfield (galaxyStarsSvg). */
+.galaxy-map-area {
+    background: #000 !important;
+    position: relative;
+}
+.galaxy-map-area .galaxy-map-svg { overflow: hidden; }
+.gm-locate-ship {
+    position: relative;
+    flex: 0 0 auto;
+    align-self: center;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 8px 0 4px;
+    padding: 0;
+    cursor: pointer;
+    color: var(--faction-accent, var(--color-primary));
+    background: linear-gradient(180deg, color-mix(in srgb, currentColor 22%, #05060a), #05060a);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, currentColor 70%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 2px 0 #000;
+}
+.gm-locate-ship:is(:hover, :focus-visible) {
+    color: var(--color-primary);
+    background: linear-gradient(180deg, color-mix(in srgb, currentColor 40%, #05060a), color-mix(in srgb, currentColor 12%, #05060a));
+    border-color: currentColor;
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 0 0 var(--ui-border-width, 2px) currentColor, 0 0 12px color-mix(in srgb, currentColor 45%, transparent);
+    outline: none;
+}
+.gm-locate-ship:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #05060a, 0 1px 0 #000;
+}
+.gm-locate-map-icon {
+    display: block;
+    width: 32px;
+    height: 32px;
+    overflow: visible;
+    image-rendering: pixelated;
+    transform-box: view-box;
+    transform-origin: 50% 85%;
+}
+.gm-locate-ship:is(:hover, :focus-visible) .gm-locate-map-icon {
+    /* Stepped GPS pin drop — not the hangar gear tick. */
+    animation: gm-locate-pin 0.7s steps(1, end) infinite;
+}
+@keyframes gm-locate-pin {
+    0%   { transform: translateY(0); }
+    50%  { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-locate-ship:is(:hover, :focus-visible) .gm-locate-map-icon { animation: none; }
+}
+.gm-space { pointer-events: none; }
+.gm-space .gm-space-bg { fill: #000; }
+.gm-space .gm-stars rect { fill: #fff; }
+.gm-space .gm-stars { shape-rendering: crispEdges; }
+.gm-space .gm-stars .gm-star-glow { fill: #cfe4ff; opacity: 0.45; }
+.gm-space .gm-stars path { fill: #fff; }
+.gm-space .gm-stars path.gm-star-glow { fill: #cfe4ff; }
+
+/* Pixel lines (pixelLineSvg): square pixels + a dim pixel glow behind. */
+.gm-pxline path { stroke: none; }
+.gm-lines, .gm-pxline { pointer-events: none; }
+.gm-pxline .gm-pxline-core { fill: currentColor; }
+.gm-pxline .gm-pxline-glow { fill: currentColor; opacity: 0.55; }
+.gm-pxline .gm-pxline-halo { fill: currentColor; opacity: 0.2; animation: gm-beam-flicker 1.6s steps(3, end) infinite; }
+.gm-pxline .gm-pxline-hot { fill: color-mix(in srgb, currentColor 20%, #fff); }
+.gm-edge.gm-pxline.dim .gm-pxline-hot { fill: currentColor; }
+@keyframes gm-beam-flicker { 50% { opacity: 0.32; } }
+/* Data packets: bright, blocky pulses travel in separate lanes per direction. */
+.gm-pxline .gm-pxline-flow {
+    stroke: #efffff;
+    stroke-linecap: butt;
+    opacity: 0.95;
+    filter: drop-shadow(0 0 1px currentColor);
+    animation: gm-beam-flow 3.2s steps(16, end) infinite;
+}
+.gm-pxline .gm-pxline-flow-reverse {
+    stroke: #78ffd2;
+    opacity: 0.9;
+    animation-direction: reverse;
+    animation-delay: -1.6s;
+}
+.gm-pxline .gm-post-traffic {
+    opacity: 0.65;
+    animation-duration: 5.4s;
+}
+.gm-pxline .gm-post-traffic.gm-pxline-flow-reverse {
+    opacity: 0.55;
+    animation-delay: -2.7s;
+}
+.gm-edge.gm-pxline.dim .gm-pxline-flow { display: none; }
+.gm-edge.gm-pxline.dim .gm-post-traffic {
+    display: block;
+    stroke: #a8d6d0;
+    opacity: 0.7;
+}
+.gm-edge.gm-pxline.dim .gm-post-traffic.gm-pxline-flow-reverse {
+    opacity: 0.55;
+}
+@keyframes gm-beam-flow {
+    from { stroke-dashoffset: var(--flow-from, 0px); }
+    to { stroke-dashoffset: calc(var(--flow-from, 0px) - var(--flow-len)); }
+}
+/* Border station where reachable space ends. */
+.gm-border-station rect { stroke: none; }
+/* The lines layer ignores the mouse; the station shows its tooltip on hover. */
+.gm-lines .gm-border-station { pointer-events: all; cursor: pointer; }
+.gm-border-station .gm-border-o { fill: #07080c; }
+.gm-border-station .gm-border-k { fill: #24242e; }
+.gm-border-station .gm-border-d { fill: #3a3a48; }
+.gm-border-station .gm-border-m { fill: #5e5e70; }
+.gm-border-station .gm-border-l { fill: #8e8ea4; }
+.gm-border-station .gm-border-w { fill: #ffd9a0; }
+.gm-border-station .gm-border-a { fill: #ff5a3c; animation: gm-lamp-pulse 1.2s steps(2, end) infinite; }
+.gm-border-station .gm-border-r,
+.gm-border-station .gm-border-r2 { fill: var(--faction-accent, var(--color-primary)); opacity: 0.85; animation: gm-border-field 0.8s steps(2, end) infinite; }
+/* Energy field = colour of the lit route line (.gm-edge.gm-pxline.lit). */
+.gm-border-station .gm-border-r2 { fill: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff); animation-delay: -0.4s; }
+.gm-border-station .gm-border-shade { fill: #000; opacity: 0.3; }
+.gm-border-station .gm-border-glint { fill: #fff; opacity: 0.22; }
+.gm-border-station .gm-border-deep { fill: #000; opacity: 0.5; }
+/* Ruling faction: hull tones from its hull colour, lamps in its accent. */
+.gm-border-station.is-faction .gm-border-k { fill: color-mix(in srgb, var(--bf-edge) 35%, #0c0d12); }
+.gm-border-station.is-faction .gm-border-d { fill: color-mix(in srgb, var(--bf-edge) 45%, #2a2d36); }
+.gm-border-station.is-faction .gm-border-m { fill: color-mix(in srgb, var(--bf-hull) 30%, #545a66); }
+.gm-border-station.is-faction .gm-border-l { fill: color-mix(in srgb, var(--bf-hull) 25%, #9097a3); }
+.gm-border-station.is-faction .gm-border-a { fill: var(--bf-accent); }
+.gm-border-station.is-faction .gm-border-w { fill: color-mix(in srgb, var(--bf-accent) 35%, #e8e4d8); }
+/* Selected checkpoint on the map; card art fills the planet slot. */
+.gm-border-station { cursor: pointer; }
+.gm-sector-planet-bg .gm-border-card { width: 100%; height: 100%; }
+@keyframes gm-border-field { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .gm-border-station rect { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .gm-pxline .gm-pxline-flow, .gm-pxline .gm-pxline-halo { animation: none; } }
+.gm-edge.gm-pxline { color: var(--color-border); }
+.gm-edge.gm-pxline.lit { color: var(--faction-accent, var(--color-primary));}
+
+.gm-edge.gm-pxline.dim { opacity: 0.4; }
+.gm-route.gm-pxline { color: var(--faction-accent, var(--color-primary)); opacity: 1; }
+.gm-route.gm-pxline .gm-pxline-core { filter: brightness(2); }
+.gm-route.gm-pxline .gm-pxline-glow { opacity: 0.7; }
+.gm-route.gm-pxline .gm-pxline-halo { opacity: 0.5; }
+.gm-route.gm-pxline { filter: drop-shadow(0 0 4px var(--faction-accent, var(--color-primary))); }
+.gm-route.gm-pxline.risky { color: #ff5a3c; }
+.gm-space .gm-stars .gm-star-twinkle { animation: gm-star-twinkle 3.6s steps(6, end) infinite; }
+@keyframes gm-star-twinkle {
+    0%, 100% { opacity: 0.15; }
+    50%      { opacity: 1; }
+}
+/* At close zoom the off-screen star field still owns most of the animation
+   budget. Keep its stars visible but static while preserving route traffic. */
+.galaxy-map-svg.gm-close-view .gm-star-twinkle {
+    animation: none;
+}
+/* The fights on invaded planets keep flickering at close zoom (only 14 pixels per planet). */
+.galaxy-map-svg.gm-close-view .gm-star-twinkle { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) {
+    .gm-space .gm-stars .gm-star-twinkle { animation: none; }
+}
+
+/* Galaxy map suns (render-explore-controls.js galaxySunsSvg). */
+.gm-sun { pointer-events: none; }
+.gm-sun { shape-rendering: crispEdges; }
+.gm-sun .gm-sun-glow rect { fill: var(--sun-glow); }
+.gm-sun .gm-sun-glow-outer { opacity: 0.12; animation: gm-sun-glow 5s steps(5, end) infinite; }
+.gm-sun .gm-sun-glow-inner { opacity: 0.2; animation: gm-sun-glow 5s steps(5, end) infinite; }
+/* The star itself: slow breathing + flickering surface layers. */
+.gm-sun .gm-sun-body {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: gm-sun-breathe 6s steps(6, end) infinite;
+}
+.gm-sun .gm-sun-inner { animation: gm-sun-flicker 2.3s steps(4, end) infinite; }
+.gm-sun .gm-sun-core { animation: gm-sun-flicker 1.7s steps(3, end) infinite reverse; }
+@keyframes gm-sun-breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+}
+@keyframes gm-sun-flicker {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.78; }
+}
+@keyframes gm-sun-glow {
+    0%, 100% { opacity: 0.12; }
+    50%      { opacity: 0.24; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-sun .gm-sun-body,
+    .gm-sun .gm-sun-inner,
+    .gm-sun .gm-sun-core,
+    .gm-sun .gm-sun-glow-outer,
+    .gm-sun .gm-sun-glow-inner { animation: none; }
+}
+.gm-sun .gm-sun-inner rect { fill: color-mix(in srgb, var(--sun) 60%, #fff); }
+.gm-sun .gm-sun-core rect { fill: #fff; opacity: 0.9; }
+.gm-sun .gm-sun-disc rect { fill: var(--sun); }
+
+:root {
+    --overlay-color: var(--color-primary);
+    --overlay-intensity: 0.1; /* screen-blend faction tint; higher washes out blacks */
+
+    /* Viewport fit (set by viewport-fit.js; fallbacks for first paint) */
+    --vw: 100vw;
+    --vh: 100dvh;
+    /* Slightly wider aspect → fight canvas a bit shorter; room for under-stage. */
+    --playfield-aspect: 1.42;
+    --planet-view-zoom: 1;
+    --design-canvas-w: 480;
+    --design-canvas-h: 400;
+    --canvas-w: min(864px, calc(72 * var(--sv-w)), calc((calc(100 * var(--sv-h)) - 240px) * 1.2));
+    --canvas-h: min(600px, calc(calc(100 * var(--sv-h)) - 240px), calc(calc(72 * var(--sv-w)) / 1.2));
+    --side-panel-w: clamp(220px, calc(20 * var(--sv-w)), 300px);
+    --ui-pad: clamp(6px, calc(1.2 * var(--sv-w)), 14px);
+    --ui-gap: clamp(6px, calc(1 * var(--sv-w)), 14px);
+    /* Normal GLXEE shell scale: equivalent to three browser zoom-out steps. */
+    --gui-zoom: 0.75;
+    --app-scale: 1;
+    --game-scale: 1;
+    --fill-scale: 1;
+    /* Typography: 3 sizes only — lg / md / sm */
+    --font-lg: 20px;
+    --font-md: 14px;
+    --font-sm: 11px;
+    --font-base: var(--font-md);
+    --font-h1: var(--font-lg);
+    --font-h2: var(--font-md);
+    --font-text: var(--font-md);
+    --font-small: var(--font-sm);
+    --font-text-small: var(--font-sm);
+
+    /* Global UI appearance (independent of color themes).
+       Contour tokens stay equal within a weight; NORMAL default = 4px. */
+    --ui-border-width: 4px;
+    --ui-border-width-thin: 4px;
+    --ui-border-width-thick: 4px;
+    --ui-indicator-width: 4px;
+    --ui-font-family: 'Courier New', Courier, monospace;
+
+    /* Retro / arcade FX (driven by uiAppearanceManager) */
+    --vf-glow: 0;
+    --vf-scan: 0;
+    --vf-fx-scale: 1;
+    --vf-crt: 0;
+    --vf-chroma: 0;
+    --vf-vignette: 0;
+    --vf-noise: 0;
+    --vf-flicker: 0;
+    --vf-bloom: 0;
+    --vf-bloom-spread: 0;
+    --vf-bloom-thr: 0;
+    --vf-hdr: 0;
+
+    /* High contrast grayscale palette */
+    --gray-100: #ffffff;
+    --gray-200: #f8f8f8;
+    --gray-300: #e8e8e8;
+    --gray-400: #d0d0d0;
+    --gray-500: #b0b0b0;
+    --gray-600: #888888;
+    --gray-700: #606060;
+    --gray-800: #404040;
+    --gray-900: #202020;
+    --gray-1000: #000000;
+
+    /* Game-specific colors with better contrast */
+    --game-bg-light: var(--gray-200);
+    --game-bg-medium: var(--gray-400);
+    --game-bg-dark: var(--gray-900);
+    --game-text-light: var(--gray-100);
+    --game-text-dark: var(--gray-900);
+    --game-border-light: var(--gray-300);
+    --game-border-dark: var(--gray-700);
+
+    /* UI colors - affected by theme (updated for new system) */
+    --ui-background: var(--color-background);
+    --ui-surface: var(--color-surface);
+    --ui-border: var(--color-border);
+    --ui-text-primary: var(--color-text);
+    --ui-text-secondary: var(--color-text-secondary);
+    --ui-text-disabled: var(--color-text-muted);
+    --ui-hover: var(--color-hover);
+    --ui-active: var(--color-active);
+
+    /* Status colors */
+    --status-success: var(--status-success);
+    --status-warning: var(--status-warning);
+    --status-error: var(--status-error);
+    --status-info: var(--status-info);
+
+    /* Resource tints (synced from economyConfig); vitals map onto three of them */
+    --res-scrap: #b8b0a0;
+    --res-ore: #c49a4a;
+    --res-crystal: #6ec8e8;
+    --res-voltex: #c86ef0;
+    --vital-hull: var(--res-scrap);
+    --vital-energy: var(--res-voltex);
+    --vital-shield: var(--res-crystal);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+}
+
+/* The body IS the 4:3 stage (sized by viewport-fit.js), centered in the window.
+   transform makes it the containing block for position:fixed children. */
+html {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    background-color: #05060a;
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%),
+        url('../../assets/ui/hs-bg-ingame.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+}
+
+body {
+    font-family: var(--ui-font-family);
+    background: var(--color-background);
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    position: relative;
+    transform: scale(var(--stage-scale, 1));
+    transform-origin: center center;
+    justify-content: center;
+    width: var(--vw, 100vw);
+    height: var(--vh, 100dvh);
+    min-height: var(--vh, 100dvh);
+    max-height: var(--vh, 100dvh);
+    overflow: hidden;
+    font-size: var(--font-text);
+    line-height: 1.2;
+    letter-spacing: 1px;
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+/* Soft page-refresh bridge: solid dark while menus boot, so no frame shows
+   the bare background art without its menu; the finished menu fades in. */
+html.vf-booting .vf-bg-parallax-base,
+html.vf-booting .vf-bg-parallax-glow { transition: none !important; }
+.vf-boot-veil[class] { background-color: #05060a; }
+/* Solid cover only while the progress panel has no destination art class yet */
+.vf-boot-veil.vf-boot-veil-loading:not(.vf-boot-veil-start):not(.vf-boot-veil-hs):not(.vf-boot-veil-menu) {
+    background-image: none !important;
+}
+
+.vf-boot-veil {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: auto;
+    z-index: 99990;
+    pointer-events: none;
+    background-color: #000;
+    opacity: 1;
+    transition: opacity 0.32s ease;
+    overflow: hidden;
+    isolation: isolate;
+    --vf-bg-overscan: 112%;
+}
+.vf-boot-veil.vf-boot-veil-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+.vf-boot-veil.is-leaving {
+    opacity: 0;
+    pointer-events: none;
+}
+#vf-boot-loader {
+    position: relative;
+    z-index: 2;
+    width: min(420px, 86vw);
+    padding: 28px 24px 22px;
+    border: 4px solid color-mix(in srgb, var(--color-primary, #3A6EA5) 35%, #2a3340);
+    background: color-mix(in srgb, #0a0d12 88%, var(--color-primary, #3A6EA5) 12%);
+    box-shadow:
+        0 0 0 2px #05060a,
+        0 0 0 6px color-mix(in srgb, var(--color-primary, #3A6EA5) 22%, #1a222c),
+        0 12px 40px rgba(0, 0, 0, 0.55);
+    text-align: center;
+    letter-spacing: 0.06em;
+    font-family: var(--ui-font-family, 'Silkscreen', ui-monospace, monospace);
+    color: var(--color-text, #c8d0d8);
+}
+#vf-boot-loader .vf-boot-brand {
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 700;
+    color: #f2f4f7;
+    margin: 0 0 6px;
+    text-shadow: 0 0 18px color-mix(in srgb, var(--color-primary, #3A6EA5) 55%, transparent);
+}
+#vf-boot-loader .vf-boot-channel {
+    font-size: var(--font-text);
+    color: #6f7f92;
+    margin: 0 0 22px;
+    text-transform: uppercase;
+}
+#vf-boot-track {
+    position: relative;
+    height: 14px;
+    border: 3px solid #3a4656;
+    background: #05070b;
+    padding: 2px;
+    box-sizing: border-box;
+    margin: 0 0 12px;
+    overflow: hidden;
+    direction: ltr;
+}
+#vf-boot-track::after {
+    content: '';
+    position: absolute;
+    inset: 2px auto 2px 0;
+    width: 28%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    animation: vf-boot-sweep 1.2s linear infinite;
+    pointer-events: none;
+}
+#vf-boot-loader.is-done #vf-boot-track::after { display: none; }
+@keyframes vf-boot-sweep {
+    from { transform: translateX(-120%); }
+    to { transform: translateX(380%); }
+}
+#vf-boot-bar {
+    display: block;
+    height: 100%;
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left center;
+    will-change: transform;
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--color-primary, #3A6EA5) 80%, #111),
+        color-mix(in srgb, var(--color-primary, #3A6EA5) 40%, #b8d8ff) 55%,
+        #e8f2ff
+    );
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary, #3A6EA5) 40%, transparent);
+    transition: transform 0.12s linear;
+}
+#vf-boot-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--font-text);
+    color: #8fa0b4;
+    text-transform: uppercase;
+}
+#vf-boot-pct { color: #d7e6f7; min-width: 3.2em; text-align: right; }
+#vf-boot-loader.is-done #vf-boot-status { color: #7dff9a; }
+/* Dim destination art behind the loader panel once restore knows the target */
+.vf-boot-veil-loading.vf-boot-veil-start,
+.vf-boot-veil-loading.vf-boot-veil-hs,
+.vf-boot-veil-loading.vf-boot-veil-menu {
+    background-color: #05060a;
+}
+.vf-boot-veil-loading.vf-boot-veil-start::after,
+.vf-boot-veil-loading.vf-boot-veil-hs::after,
+.vf-boot-veil-loading.vf-boot-veil-menu::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: rgba(5, 6, 10, 0.55);
+    pointer-events: none;
+}
+.vf-boot-veil-start {
+    background-image:
+        linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.42) 0%,
+            rgba(0, 0, 0, 0.28) 45%,
+            rgba(0, 0, 0, 0.55) 100%
+        ),
+        url('../../assets/ui/menu-hangar-bg.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.vf-boot-veil-hs {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%),
+        url('../../assets/ui/hs-bg-station.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.vf-boot-veil-hs[data-hs-tab="station"],
+.vf-boot-veil-hs[data-hs-tab="menu"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%),
+        url('../../assets/ui/hs-bg-station.png');
+}
+.vf-boot-veil-hs[data-hs-tab="upgrade"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.50) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.60) 100%),
+        url('../../assets/ui/hs-bg-upgrade.png');
+}
+.vf-boot-veil-hs[data-hs-tab="hangar"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%),
+        url('../../assets/ui/hs-bg-hangar.png');
+}
+.vf-boot-veil-hs[data-hs-tab="shop"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%),
+        url('../../assets/ui/hs-bg-shop.png');
+}
+.vf-boot-veil-hs[data-hs-tab="craft"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.50) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.60) 100%),
+        url('../../assets/ui/hs-bg-craft.png');
+}
+.vf-boot-veil-hs[data-hs-tab="components"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.50) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.60) 100%),
+        url('../../assets/ui/hs-bg-craft.png');
+}
+.vf-boot-veil-hs[data-hs-tab="travel"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.30) 40%, rgba(0, 0, 0, 0.56) 100%),
+        url('../../assets/ui/hs-bg-travel.png');
+}
+.vf-boot-veil-hs[data-hs-tab="explorations"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.30) 40%, rgba(0, 0, 0, 0.58) 100%),
+        url('../../assets/ui/hs-bg-explorations.png');
+}
+.vf-boot-veil-hs[data-hs-tab="play"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.30) 40%, rgba(0, 0, 0, 0.56) 100%),
+        url('../../assets/ui/hs-bg-travel.png');
+}
+.vf-boot-veil-menu {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%),
+        url('../../assets/ui/hs-bg-explorations.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+}
+@keyframes vf-menu-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.vf-menu-enter {
+    animation: vf-menu-fade-in 0.28s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+    .vf-boot-veil { transition: none; }
+    .vf-menu-enter { animation: none; }
+    #vf-boot-bar { transition: none; }
+
+    #vf-boot-track::after { animation: none; display: none; }
+}
+
+/* UI BG mouse-follow parallax (WoodChunk-style, light) */
+.vf-bg-parallax-host {
+    --vf-bg-overscan: 112%;
+    --vf-ptr-glow: 0.55;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.vf-bg-parallax-host.vf-bg-parallax-ready {
+    background-image: none !important;
+}
+
+/*
+ * First paint = parallax overscan zoom (112%).
+ * Boot veil + hosts before JS promote BG into .vf-bg-parallax-base.
+ */
+.vf-boot-veil-start,
+.vf-boot-veil-hs,
+.vf-boot-veil-menu,
+.start-screen:not(.vf-bg-parallax-ready),
+.start-screen-overlay:not(.vf-bg-parallax-ready),
+.home-station-overlay:not(.vf-bg-parallax-ready),
+.content-viewer-overlay:not(.vf-bg-parallax-ready),
+.profile-selection-overlay:not(.is-inline):not(.vf-bg-parallax-ready),
+.game-container:not(.vf-bg-parallax-ready),
+.victory-screen:not(.vf-bg-parallax-ready),
+.game-over:not(.vf-bg-parallax-ready),
+.ag-overlay:not(.vf-bg-parallax-ready) {
+    --vf-bg-overscan: 112%;
+    overflow: hidden;
+    isolation: isolate;
+    /* Keep background-* for ::before inherit; hide direct paint */
+    background-size: 0 0 !important;
+}
+
+.vf-boot-veil-start::before,
+.vf-boot-veil-hs::before,
+.vf-boot-veil-menu::before,
+.start-screen:not(.vf-bg-parallax-ready)::before,
+.start-screen-overlay:not(.vf-bg-parallax-ready)::before,
+.home-station-overlay:not(.vf-bg-parallax-ready)::before,
+.content-viewer-overlay:not(.vf-bg-parallax-ready)::before,
+.profile-selection-overlay:not(.is-inline):not(.vf-bg-parallax-ready)::before,
+.game-container:not(.vf-bg-parallax-ready)::before,
+.victory-screen:not(.vf-bg-parallax-ready)::before,
+.game-over:not(.vf-bg-parallax-ready)::before,
+.ag-overlay:not(.vf-bg-parallax-ready)::before {
+    content: "";
+    position: absolute;
+    left: -6%;
+    top: -6%;
+    width: var(--vf-bg-overscan, 112%);
+    height: var(--vf-bg-overscan, 112%);
+    z-index: -1;
+    pointer-events: none;
+    background-image: inherit;
+    background-color: inherit;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.vf-bg-parallax-base,
+.vf-bg-parallax-glow {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform;
+    backface-visibility: hidden;
+    z-index: -1;
+}
+
+.vf-bg-parallax-base {
+    left: -6%;
+    top: -6%;
+    width: var(--vf-bg-overscan, 112%);
+    height: var(--vf-bg-overscan, 112%);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    transition: opacity 0.42s ease;
+    z-index: -2;
+}
+
+.vf-bg-parallax-base.is-incoming {
+    /* Above stable base so the opacity fade covers the previous frame */
+    z-index: -1;
+}
+
+.vf-bg-parallax-glow {
+    /* The visible part of the 900px radial gradient is ~650px around the centre; a few % of overscan covers the parallax
+       shift. (Was -75% / -1200px: a ~3700px layer that software compositors had to keep in memory.) */
+    top: -12%;
+    right: -12%;
+    bottom: -12%;
+    left: -12%;
+    opacity: var(--vf-ptr-glow, 0.55);
+    background-repeat: no-repeat;
+    background-image:
+        radial-gradient(
+            circle 900px at 50% 50%,
+            color-mix(in srgb, var(--color-primary) calc(22% * var(--vf-ptr-glow, 0.55)), transparent) 0%,
+            color-mix(in srgb, var(--color-primary) calc(10% * var(--vf-ptr-glow, 0.55)), transparent) 35%,
+            transparent 72%
+        );
+    transform: translate3d(0, 0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vf-bg-parallax-base,
+    .vf-bg-parallax-glow {
+        transform: none !important;
+    }
+    /* Keep opacity fade for BG swaps; only kill motion transforms */
+    .vf-bg-parallax-base {
+        transition: opacity 0.42s ease !important;
+    }
+    .vf-bg-parallax-glow {
+        opacity: 0 !important;
+    }
+}
+
+html[data-vf-bg-parallax="off"] .vf-bg-parallax-glow {
+    opacity: 0 !important;
+}
+
+html[data-vf-bg-parallax="off"] .vf-bg-parallax-base {
+    transform: none !important;
+}
+
+/* === Typography scale: LG (titles) / MD (values) / SM (labels) === */
+.type-lg,
+.type-h1,
+h1,
+.start-screen-title,
+.game-header h1,
+.game-over-content h2,
+.victory-content h2,
+.pause-overlay h2,
+.settings-overlay h2,
+.planet-editor-header h2,
+.theme-editor-title {
+    font-size: var(--font-lg);
+    font-family: var(--ui-font-h1, var(--ui-font-family));
+    font-weight: bold;
+}
+
+.type-md,
+.type-h2,
+.type-text,
+h2,
+h3,
+p,
+button,
+input,
+select,
+textarea,
+.menu-item,
+.start-screen-subtitle,
+.start-screen-profile,
+.start-screen-instructions,
+.font-menu-preview {
+    font-size: var(--font-md);
+    font-family: var(--ui-font-text, var(--ui-font-family));
+}
+
+.type-sm,
+.type-small,
+small,
+label,
+.stat-label,
+.detail-label,
+.menu-cluster-title,
+.menu-item-label,
+.setting-item label,
+.volume-control label,
+.theme-editor-appearance-title,
+.theme-editor-swatch-group-title,
+.theme-editor-gfx-title,
+.ui-controls-hint,
+.profile-selection-instructions {
+    font-size: var(--font-sm);
+    font-family: var(--ui-font-small, var(--ui-font-family));
+    font-weight: bold;
+}
+
+.font-menu-preview {
+    text-align: center;
+    margin: 0 0 16px;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
+    grid-auto-flow: row;
+    gap: 6px;
+}
+
+.font-menu-preview .type-h1,
+.font-menu-preview .type-h2,
+.font-menu-preview .type-text {
+    font-weight: inherit;
+}
+
+.font-menu-preview .type-h1 { font-weight: bold; }
+.font-menu-preview .type-h2 { font-weight: bold; }
+
+/* Color overlay for HTML elements */
+.color-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+    background: var(--overlay-color);
+    opacity: var(--overlay-intensity);
+    mix-blend-mode: screen;
+}
+
+/* Retro FX stack — scanlines / CRT / chroma (pointer-events none) */
+.vf-fx-overlay {
+    /* No box of its own: with mix-blend-mode layers inside, a real container becomes an
+       isolated group and the layers' backdrop-filters (chroma/bloom/HDR/CRT) see nothing. */
+    display: contents;
+}
+
+.vf-fx-scanlines,
+.vf-fx-scanwarp,
+.vf-fx-crt,
+.vf-fx-chroma,
+.vf-fx-hdr,
+.vf-fx-hdr-shadow,
+.vf-fx-bloom,
+.vf-fx-vignette,
+.vf-fx-noise,
+.vf-fx-flicker {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.vf-fx-scanlines {
+    opacity: min(1, calc(var(--vf-scan, 0) * 2.2));
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) calc(1px * var(--vf-fx-scale, 1) * var(--vf-scan-size, 1)),
+        rgba(0, 0, 0, 0.92) calc(2px * var(--vf-fx-scale, 1) * var(--vf-scan-size, 1)),
+        rgba(0, 0, 0, 0) calc(3px * var(--vf-fx-scale, 1) * var(--vf-scan-size, 1))
+    );
+    mix-blend-mode: multiply;
+    /* Drift via transform (compositor) instead of background-position (full repaint per frame):
+       the layer is 12px taller and slides by 12px = 4 gradient periods, so the loop is seamless. */
+    bottom: calc(-12px * var(--vf-fx-scale, 1) * var(--vf-scan-size, 1));
+    will-change: transform;
+    animation: vf-fx-scan-drift var(--vf-scan-dur, 2s) linear infinite;
+}
+
+html[data-vf-scan-drift="off"] .vf-fx-scanlines { animation: none; }
+
+.vf-fx-scanwarp {
+    -webkit-backdrop-filter: url(#vfScanWarpFx);
+    backdrop-filter: url(#vfScanWarpFx);
+}
+html[data-vf-scanwarp="off"] .vf-fx-scanwarp,
+html[data-vf-perf-heavy="off"] .vf-fx-scanwarp { display: none; }
+
+html[data-vf-scanlines="off"] .vf-fx-scanlines {
+    opacity: 0;
+    animation: none;
+}
+
+.vf-fx-crt {
+    /* Tube look without warp/blur: horizontal shadow mask + vignette only.
+       The old 90deg RGB phosphor stripes read as weird semi-transparent
+       vertical lines across the fight screen. */
+    -webkit-backdrop-filter: contrast(calc(1 + 0.18 * var(--vf-crt, 0))) saturate(calc(1 + 0.28 * var(--vf-crt, 0))) brightness(calc(1 + 0.08 * var(--vf-crt, 0)));
+    backdrop-filter: contrast(calc(1 + 0.18 * var(--vf-crt, 0))) saturate(calc(1 + 0.28 * var(--vf-crt, 0))) brightness(calc(1 + 0.08 * var(--vf-crt, 0)));
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) 0px,
+            rgba(0, 0, 0, calc(0.08 * var(--vf-crt, 0))) calc(1px * var(--vf-fx-scale, 1)),
+            transparent calc(1px * var(--vf-fx-scale, 1)),
+            transparent calc(6px * var(--vf-fx-scale, 1))
+        ),
+        radial-gradient(
+            ellipse 70% 65% at 50% 50%,
+            rgba(255, 255, 255, calc(0.05 * var(--vf-crt, 0))) 0%,
+            transparent 70%
+        ),
+        radial-gradient(
+            ellipse 85% 80% at 50% 50%,
+            transparent 55%,
+            rgba(0, 0, 0, calc(0.35 * var(--vf-crt, 0))) 100%
+        );
+    box-shadow: inset 0 0 calc(40px * var(--vf-crt, 0)) calc(4px * var(--vf-crt, 0)) rgba(0, 0, 0, 0.5);
+    animation: vf-fx-crt-flicker 4.5s steps(1, end) infinite;
+}
+
+@keyframes vf-fx-crt-flicker {
+    0%, 100% { opacity: 1; }
+    37% { opacity: 0.93; }
+    38% { opacity: 1; }
+    71% { opacity: 0.95; }
+    72% { opacity: 1; }
+}
+
+html[data-vf-crt="off"] .vf-fx-crt {
+    display: none;
+}
+
+.vf-fx-chroma {
+    /* Doppler-style channel split: the page behind is re-drawn with red and
+       blue pulled apart (filter #vfChromaFx, offsets set from the Chroma value). */
+    -webkit-backdrop-filter: url(#vfChromaFx);
+    backdrop-filter: url(#vfChromaFx);
+}
+
+html[data-vf-chroma="off"] .vf-fx-chroma {
+    display: none;
+}
+
+/* Bloom = bright-pass glow, built as an SVG filter (#vfBloomFx, values set in apply()):
+   threshold -> blur (width) -> gain (strength) -> added on top of the untouched picture. */
+.vf-fx-bloom {
+    -webkit-backdrop-filter: url(#vfBloomFx);
+    backdrop-filter: url(#vfBloomFx);
+}
+/* HDR is faked with blend layers only (no backdrop-filter, no resampling):
+   an overlay-blended warm light lifts mids and highlights but keeps black black,
+   a multiply layer pulls the corners down so the centre reads as hot. */
+.vf-fx-hdr {
+    background: radial-gradient(ellipse 85% 75% at 50% 45%, rgba(255, 244, 222, calc(0.85 * var(--vf-hdr, 0))) 0%, rgba(255, 244, 222, calc(0.45 * var(--vf-hdr, 0))) 100%);
+    mix-blend-mode: overlay;
+}
+.vf-fx-hdr-shadow {
+    background: radial-gradient(ellipse 80% 70% at 50% 45%, rgba(255, 255, 255, 1) 40%, rgba(150, 150, 170, calc(1 - 0.5 * var(--vf-hdr, 0))) 100%);
+    mix-blend-mode: multiply;
+}
+html[data-vf-hdr="off"] .vf-fx-hdr-shadow { display: none; }
+html[data-vf-hdr="off"] .vf-fx-hdr { display: none; }
+html[data-vf-bloom="off"] .vf-fx-bloom { display: none; }
+
+.vf-fx-vignette {
+    background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 35%, rgba(0, 0, 0, calc(0.95 * var(--vf-vignette, 0))) 100%);
+}
+html[data-vf-vignette="off"] .vf-fx-vignette { display: none; }
+
+.vf-fx-noise {
+    opacity: calc(0.5 * var(--vf-noise, 0));
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+    background-size: calc(160px * var(--vf-fx-scale, 1)) calc(160px * var(--vf-fx-scale, 1));
+    mix-blend-mode: overlay;
+    animation: vf-fx-noise-shift 0.5s steps(5, end) infinite;
+}
+html[data-vf-noise="off"] .vf-fx-noise { display: none; }
+@keyframes vf-fx-noise-shift {
+    0% { background-position: 0 0; }
+    20% { background-position: -37px 21px; }
+    40% { background-position: 52px -64px; }
+    60% { background-position: -81px -12px; }
+    80% { background-position: 29px 73px; }
+    100% { background-position: 0 0; }
+}
+
+.vf-fx-flicker {
+    background: #000;
+    opacity: 0;
+    animation: vf-fx-flicker-pulse 0.18s steps(1, end) infinite;
+}
+html[data-vf-flicker="off"] .vf-fx-flicker { display: none; }
+@keyframes vf-fx-flicker-pulse {
+    0%   { opacity: calc(0.30 * var(--vf-flicker, 0)); }
+    25%  { opacity: 0; }
+    50%  { opacity: calc(0.12 * var(--vf-flicker, 0)); }
+    75%  { opacity: calc(0.22 * var(--vf-flicker, 0)); }
+    100% { opacity: 0; }
+}
+
+@keyframes vf-fx-scan-drift {
+    from { transform: translateY(calc(-12px * var(--vf-fx-scale, 1) * var(--vf-scan-size, 1))); }
+    to { transform: translateY(0); }
+}
+
+@keyframes vf-arcade-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.32); }
+}
+
+@keyframes vf-arcade-border-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 calc(calc(6px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 72%, transparent), 0 0 0 calc(calc(6px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 48%, transparent), 0 0 0 calc(calc(6px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 30%, transparent), 0 0 0 calc(calc(6px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 16%, transparent), 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 calc(calc(12px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 72%, transparent), 0 0 0 calc(calc(12px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 48%, transparent), 0 0 0 calc(calc(12px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 30%, transparent), 0 0 0 calc(calc(12px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 16%, transparent), 0 0 0 calc(calc(32px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 72%, transparent), 0 0 0 calc(calc(32px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 48%, transparent), 0 0 0 calc(calc(32px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 30%, transparent), 0 0 0 calc(calc(32px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 16%, transparent);
+    }
+}
+
+/* Glow — titles, borders, selected chrome */
+html[data-vf-glow]:not([data-vf-glow="off"]) .start-screen-title,
+html[data-vf-glow]:not([data-vf-glow="off"]) .hs-menu-panel-title,
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-section-title,
+html[data-vf-glow]:not([data-vf-glow="off"]) .menu-cluster-title,
+html[data-vf-glow]:not([data-vf-glow="off"]) .theme-editor-title {
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 78%, transparent), calc(calc(8px * var(--vf-glow, 0)) * 0.35) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 42%, transparent), calc(-1 * calc(calc(8px * var(--vf-glow, 0)) * 0.35)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 42%, transparent), 0 calc(calc(8px * var(--vf-glow, 0)) * 0.35) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 42%, transparent), 0 calc(-1 * calc(calc(8px * var(--vf-glow, 0)) * 0.35)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 42%, transparent), calc(calc(8px * var(--vf-glow, 0)) * 0.7) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 18%, transparent), calc(-1 * calc(calc(8px * var(--vf-glow, 0)) * 0.7)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 18%, transparent), 0 calc(calc(8px * var(--vf-glow, 0)) * 0.7) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 18%, transparent), 0 calc(-1 * calc(calc(8px * var(--vf-glow, 0)) * 0.7)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 100%, transparent) 18%, transparent), 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 78%, transparent), calc(calc(24px * var(--vf-glow, 0)) * 0.35) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 42%, transparent), calc(-1 * calc(calc(24px * var(--vf-glow, 0)) * 0.35)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 42%, transparent), 0 calc(calc(24px * var(--vf-glow, 0)) * 0.35) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 42%, transparent), 0 calc(-1 * calc(calc(24px * var(--vf-glow, 0)) * 0.35)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 42%, transparent), calc(calc(24px * var(--vf-glow, 0)) * 0.7) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 18%, transparent), calc(-1 * calc(calc(24px * var(--vf-glow, 0)) * 0.7)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 18%, transparent), 0 calc(calc(24px * var(--vf-glow, 0)) * 0.7) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 18%, transparent), 0 calc(-1 * calc(calc(24px * var(--vf-glow, 0)) * 0.7)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 65%, transparent) 18%, transparent), 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 78%, transparent), calc(calc(48px * var(--vf-glow, 0)) * 0.35) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), calc(-1 * calc(calc(48px * var(--vf-glow, 0)) * 0.35)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 calc(calc(48px * var(--vf-glow, 0)) * 0.35) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), 0 calc(-1 * calc(calc(48px * var(--vf-glow, 0)) * 0.35)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 42%, transparent), calc(calc(48px * var(--vf-glow, 0)) * 0.7) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), calc(-1 * calc(calc(48px * var(--vf-glow, 0)) * 0.7)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 calc(calc(48px * var(--vf-glow, 0)) * 0.7) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent), 0 calc(-1 * calc(calc(48px * var(--vf-glow, 0)) * 0.7)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 18%, transparent);
+}
+
+html[data-vf-glow]:not([data-vf-glow="off"]) .menu-item.selected,
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-row.selected {
+    box-shadow: 0 0 0 calc(calc(10px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 72%, transparent), 0 0 0 calc(calc(10px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 48%, transparent), 0 0 0 calc(calc(10px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 30%, transparent), 0 0 0 calc(calc(10px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 75%, transparent) 16%, transparent), 0 0 0 calc(calc(28px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 72%, transparent), 0 0 0 calc(calc(28px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 48%, transparent), 0 0 0 calc(calc(28px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 30%, transparent), 0 0 0 calc(calc(28px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 40%, transparent) 16%, transparent), inset 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 72%, transparent), inset 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 48%, transparent), inset 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 30%, transparent), inset 0 0 0 calc(calc(18px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 22%, transparent) 16%, transparent);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 78%, transparent), calc(calc(14px * var(--vf-glow, 0)) * 0.35) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 42%, transparent), calc(-1 * calc(calc(14px * var(--vf-glow, 0)) * 0.35)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 42%, transparent), 0 calc(calc(14px * var(--vf-glow, 0)) * 0.35) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 42%, transparent), 0 calc(-1 * calc(calc(14px * var(--vf-glow, 0)) * 0.35)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 42%, transparent), calc(calc(14px * var(--vf-glow, 0)) * 0.7) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 18%, transparent), calc(-1 * calc(calc(14px * var(--vf-glow, 0)) * 0.7)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 18%, transparent), 0 calc(calc(14px * var(--vf-glow, 0)) * 0.7) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 18%, transparent), 0 calc(-1 * calc(calc(14px * var(--vf-glow, 0)) * 0.7)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 80%, transparent) 18%, transparent);
+}
+
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-cycle-btn,
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-section {
+    box-shadow: 0 0 0 calc(calc(14px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 72%, transparent), 0 0 0 calc(calc(14px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 48%, transparent), 0 0 0 calc(calc(14px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 30%, transparent), 0 0 0 calc(calc(14px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 50%, transparent) 16%, transparent);
+}
+
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-cycle-btn:hover,
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-cycle-btn:focus-visible {
+    box-shadow: 0 0 0 calc(calc(16px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 72%, transparent), 0 0 0 calc(calc(16px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 48%, transparent), 0 0 0 calc(calc(16px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 30%, transparent), 0 0 0 calc(calc(16px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 16%, transparent), 0 0 0 calc(calc(36px * var(--vf-glow, 0)) * 0.3) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 72%, transparent), 0 0 0 calc(calc(36px * var(--vf-glow, 0)) * 0.6) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 48%, transparent), 0 0 0 calc(calc(36px * var(--vf-glow, 0)) * 0.95) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 30%, transparent), 0 0 0 calc(calc(36px * var(--vf-glow, 0)) * 1.35) color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 16%, transparent);
+}
+
+html[data-vf-glow]:not([data-vf-glow="off"]) .settings-row-value {
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), calc(calc(12px * var(--vf-glow, 0)) * 0.35) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), calc(-1 * calc(calc(12px * var(--vf-glow, 0)) * 0.35)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), 0 calc(calc(12px * var(--vf-glow, 0)) * 0.35) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), 0 calc(-1 * calc(calc(12px * var(--vf-glow, 0)) * 0.35)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), calc(calc(12px * var(--vf-glow, 0)) * 0.7) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), calc(-1 * calc(calc(12px * var(--vf-glow, 0)) * 0.7)) 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), 0 calc(calc(12px * var(--vf-glow, 0)) * 0.7) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), 0 calc(-1 * calc(calc(12px * var(--vf-glow, 0)) * 0.7)) 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent);
+}
+
+/* Arcade mode — juice + pulse */
+html[data-vf-arcade="on"] .menu-item.selected,
+html[data-vf-arcade="on"] .settings-row.selected {
+    animation: vf-arcade-pulse 1.1s ease-in-out infinite, vf-arcade-border-pulse 1.1s ease-in-out infinite;
+}
+
+html[data-vf-arcade="on"] .settings-cycle-btn {
+    transition: transform 0.08s ease, background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+html[data-vf-arcade="on"] .settings-cycle-btn:active {
+    transform: scale(0.88);
+}
+
+html[data-vf-arcade="on"] .settings-section-title {
+    letter-spacing: 0.22em;
+}
+
+html[data-vf-arcade="on"] .settings-row-value {
+    letter-spacing: 0.08em;
+}
+
+.game-container {
+    zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    width: calc(var(--vw, calc(100 * var(--sv-w))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    min-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    max-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    box-sizing: border-box;
+    background-color: #000;
+    background-image:
+        linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.42) 0%,
+            rgba(0, 0, 0, 0.28) 40%,
+            rgba(0, 0, 0, 0.55) 100%
+        ),
+        url('../../assets/ui/hs-bg-ingame.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    color: var(--color-text);
+    font-family: var(--ui-font-family);
+    position: relative;
+    gap: var(--ui-gap);
+    padding: var(--ui-pad);
+    text-align: left;
+    overflow: hidden;
+}
+
+/* Left HUD cluster: info panel + compact vitals — glued to playfield, not viewport edge */
+.game-left-cluster {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex: 0 0 auto;
+    width: var(--side-panel-w);
+    height: 100%;
+    max-height: 100%;
+    align-self: stretch;
+    gap: clamp(3px, calc(0.5 * var(--sv-h)), 6px);
+    z-index: 10;
+}
+
+/* Compact Game Info Panel */
+.game-info-panel {
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    overflow: hidden;
+    box-sizing: border-box;
+    background:
+        linear-gradient(165deg,
+            color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
+            var(--color-background) 60%);
+    border: var(--ui-border-width) solid var(--color-primary);
+    border-radius: 0;
+    padding: clamp(4px, calc(0.5 * var(--sv-h)), 8px);
+    color: var(--color-text);
+    font-size: var(--font-text);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: none;
+    text-rendering: geometricPrecision;
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    visibility: visible;
+    opacity: 1;
+}
+
+.gi-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    flex-shrink: 0;
+}
+
+.gi-size-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    background: var(--ui-surface, #0a0c10);
+    color: var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-border, var(--color-primary));
+    font-family: var(--ui-font-family);
+    font-size: var(--font-small);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    cursor: pointer;
+    line-height: 1.2;
+}
+.gi-size-btn:hover,
+.gi-size-btn:focus-visible,
+.gi-size-btn.is-active {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    color: var(--color-text, #fff);
+    outline: none;
+}
+
+.enemy-size-overlay {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    /* Above home-station (3600) / profile overlays so SIZES works from FLEETS. */
+    z-index: 3800;
+    pointer-events: none;
+    background: transparent;
+}
+.enemy-size-overlay.hidden { display: none; }
+.enemy-size-panel {
+    pointer-events: auto;
+    min-width: 220px;
+    max-width: min(calc(280px * var(--zk)), calc(42 * var(--cw)));
+    background: color-mix(in srgb, #05060a 92%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--color-border, var(--color-primary));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    padding: 10px 12px 12px;
+    font-family: var(--ui-font-family);
+    color: var(--color-text, #e8e8e8);
+}
+.enemy-size-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.enemy-size-head strong {
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--color-primary);
+}
+.enemy-size-close {
+    background: transparent;
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--font-text);
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    padding: 0;
+}
+.enemy-size-close:hover { background: color-mix(in srgb, var(--color-primary) 25%, transparent); }
+.enemy-size-hint {
+    margin: 0 0 8px;
+    font-size: var(--font-small);
+    letter-spacing: 0.5px;
+    color: color-mix(in srgb, var(--color-text) 65%, transparent);
+    text-transform: uppercase;
+}
+.enemy-size-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.enemy-size-section {
+    margin-top: 6px;
+    padding-top: 4px;
+    font-size: var(--font-small);
+    letter-spacing: 1.5px;
+    color: color-mix(in srgb, var(--color-primary) 80%, transparent);
+    text-transform: uppercase;
+}
+.enemy-size-section:first-child { margin-top: 0; padding-top: 0; }
+.enemy-size-row {
+    display: grid;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 0;
+    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.enemy-size-label {
+    grid-area: label;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    color: var(--color-text);
+}
+.enemy-size-value {
+    text-align: center;
+    font-size: var(--font-text);
+    font-weight: 700;
+    color: var(--color-primary);
+}
+.enemy-size-step {
+    background: var(--ui-surface, #0a0c10);
+    border: var(--ui-border-width-thin, 2px) solid var(--color-border, var(--color-primary));
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--font-text);
+    height: 24px;
+    cursor: pointer;
+    padding: 0;
+}
+.enemy-size-step:hover {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+/* Planet fills the info panel as atmosphere, not a corner icon. */
+.game-info-planet {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.42;
+}
+.game-info-planet svg,
+.game-info-planet .game-info-planet-fallback {
+    width: 118%;
+    height: 118%;
+    max-width: none;
+    display: block;
+    object-fit: cover;
+    filter: contrast(1.15) brightness(0.95) saturate(1.1);
+}
+.game-info-planet-fallback {
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--color-text-secondary), var(--color-primary) 70%, var(--color-border));
+}
+.game-info-panel > :not(.game-info-planet) {
+    position: relative;
+    z-index: 1;
+}
+
+.gi-head-text {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.gi-head-text h3,
+.game-info-header h3 {
+    margin: 0;
+    font-size: var(--font-lg);
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 0 #050508, 0 0 4px #050508;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    line-height: 1.15;
+}
+
+/* STAGE left of difficulty on one row */
+.gi-head-meta {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gi-head-text .gi-stage {
+    margin: 0;
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: color-mix(in srgb, #fff 88%, var(--faction-accent, var(--color-primary)));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.15;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.gi-head-text .gi-stage[hidden] {
+    display: none !important;
+}
+
+.game-info-panel .level-difficulty,
+.game-info-panel .gi-diff {
+    margin-top: 0;
+    padding: 2px 7px;
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    color: #fff;
+    border: var(--ui-border-width-thin) solid var(--color-primary);
+    border-radius: 0;
+    font-size: var(--font-sm);
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    display: inline-block;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 0 100%, 0 4px, 2px 4px, 2px 2px, 4px 2px);
+}
+
+.gi-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.gi-cluster {
+    min-width: 0;
+    padding: 4px 6px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    background: color-mix(in srgb, #05060a 88%, var(--color-background));
+    box-shadow: none;
+    flex: 0 0 auto;
+}
+
+.gi-cluster-field {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.gi-cluster-title {
+    margin: 0 0 2px;
+    padding-bottom: 1px;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    font-size: var(--font-sm);
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    line-height: 1.15;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+}
+/* Icon as a left rail beside the body — no header bar / underline. */
+.gi-cluster-iconed {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.gi-cluster-iconed > .gi-cluster-title {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex: 0 0 auto;
+    align-self: center;
+}
+.gi-cluster-iconed > .gi-cluster-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.gi-cluster-title-icon {
+    letter-spacing: 0;
+    line-height: 0;
+    min-height: 24px;
+}
+.gi-cluster-title-icon :is(img, .gi-icon) {
+    width: 24px !important;
+    height: 24px !important;
+    display: block;
+}
+
+.gi-cluster-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+}
+
+.gi-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+}
+
+.gi-metrics-2x2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gi-metric {
+    min-width: 0;
+    padding: 2px 3px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.gi-metric-label {
+    color: var(--color-text-secondary);
+    font-size: var(--font-sm);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 1;
+    line-height: 1.2;
+}
+
+.gi-metric-value {
+    color: #fff;
+    font-weight: bold;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: var(--font-md);
+    line-height: 1.25;
+}

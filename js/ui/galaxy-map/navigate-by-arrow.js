@@ -1,0 +1,365 @@
+"use strict";
+
+// GalaxyMapManager methods, split from galaxy-map.js.
+extendClass(GalaxyMapManager, {
+    /**
+     * Arrow targets from the current cursor. From a planet: linked planets
+     * plus every trading post anchored to it (deep-space posts have two
+     * anchors). From a post: its anchor planets, their linked planets and
+     * the other posts sharing an anchor.
+     */
+    getArrowTargets() {
+        const posts = this.getTradingPosts();
+        const current = this.getSelectedPost();
+        const anchorsOf = (p) => p.anchors || [p.planetId];
+        const origin = current ? anchorsOf(current) : [this.selectedPlanetId];
+        const out = [];
+        const seen = {};
+        const add = (kind, id, x, y) => {
+            const key = kind + ':' + id;
+            if (seen[key]) return;
+            if ((kind === 'post' && current && id === current.id)
+                || (kind === 'planet' && !current && id === this.selectedPlanetId)) return;
+            seen[key] = true;
+            out.push({ kind: kind, id: id, x: x, y: y });
+        };
+        const addPlanet = (pid) => {
+            const n = this.nodeById[pid];
+            if (n) add('planet', pid, n.x, n.y);
+        };
+        origin.forEach((pid) => {
+            if (current) addPlanet(pid);
+            const neighbors = (typeof planetConfigManager !== 'undefined' && pid)
+                ? planetConfigManager.getGalaxyNeighbors(this.galaxyId, pid)
+                : [];
+            neighbors.forEach(addPlanet);
+            posts.forEach((p) => {
+                if (anchorsOf(p).indexOf(pid) !== -1) add('post', p.id, p.x, p.y);
+            });
+        });
+        // Anything close by on screen is reachable too, so arrows are
+        // symmetric (a post right below a planet is one press away both ways).
+        const here = current || this.nodeById[this.selectedPlanetId];
+        if (here) {
+            const near = (x, y) => Math.hypot((x - here.x) * 544, (y - here.y) * 224) < 150;
+            posts.forEach((p) => { if (near(p.x, p.y)) add('post', p.id, p.x, p.y); });
+            (this.map.nodes || []).forEach((n) => { if (near(n.x, n.y)) addPlanet(n.planetId); });
+        }
+        return out;
+    },
+    navigateByArrow(key) {
+        if (this._flight || this._ambush) return;
+        if (!this.selectedPlanetId) return;
+        const post = this.getSelectedPost();
+        const cur = post || this.nodeById[this.selectedPlanetId];
+        if (!cur) return;
+        const targets = this.getArrowTargets();
+        if (!targets.length) return;
+
+        // Compare in map pixels (the map is ~544×224), not normalised 0..1
+        // units, so left/right and up/down weigh distances the way they look.
+        const SX = 544;
+        const SY = 224;
+        const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+        if (!dir) return;
+        let best = null;
+        let bestScore = Infinity;
+        targets.forEach((t) => {
+            const dx = (t.x - cur.x) * SX;
+            const dy = (t.y - cur.y) * SY;
+            const dist = Math.hypot(dx, dy);
+            if (dist < 1) return;
+            // Angle off the pressed direction: within 75° counts, and
+            // straighter + closer targets win.
+            const cos = (dx * dir[0] + dy * dir[1]) / dist;
+            if (cos < Math.cos(75 * Math.PI / 180)) return;
+            const off = Math.acos(Math.min(1, cos));
+            const score = dist * (1 + off * 1.6);
+            if (score < bestScore) {
+                bestScore = score;
+                best = t;
+            }
+        });
+        if (!best) return;
+        if (best.kind === 'post') this.selectPost(best.id);
+        else this.selectPlanet(best.id);
+        // The camera follows: selection and ship stay in view, zooming out with the distance.
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+    },
+    selectPlanet(planetId) {
+        this.selectedPostId = null;
+        this.selectedBorder = null;
+        this.selectedPlanetId = planetId;
+        this.saveGalaxySelection();
+        this.syncNodeHighlight();
+        this.updateDetails();
+        this.syncConfirmButton();
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+    },
+    /**
+     * Select a border checkpoint (route from open → shut). The card shows
+     * it; actions stay those of the open planet whose clearing unseals it.
+     */
+    selectBorder(openId, shutId) {
+        this.selectedPostId = null;
+        this.selectedPlanetId = openId;
+        this.selectedBorder = { open: openId, shut: shutId };
+        this.syncNodeHighlight();
+        this.updateDetails();
+        this.syncConfirmButton();
+    },
+    /** Border checkpoint art sized for the planet card. */
+    borderCardSvg(openId) {
+        const art = this.borderArtFor(this.borderRulerStyle());
+        const w = art[0].length, h = art.length;
+        return `<svg class="gm-border-card" viewBox="${-w / 2} ${-h / 2} ${w} ${h}">` +
+            this.blockadeSvgRaw(0, 0, openId, null, w / 21) + '</svg>';
+    },
+    getStartOptions(planetId) {
+        if (typeof profileManager !== 'undefined' && profileManager.getPlanetStartOptions) {
+            return profileManager.getPlanetStartOptions(planetId);
+        }
+        const pid = planetIdOfLevelId(planetId);
+        return {
+            canChoose: false,
+            startLevelId: pid ? `${pid}-1` : null,
+            resumeLevelId: pid ? `${pid}-1` : null,
+            resumeLabel: 'STAGE 1'
+        };
+    },
+    /** Standalone trading posts of this galaxy (own map nodes). */
+    getTradingPosts() {
+        if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        // A station only shows once a planet it orbits has been unlocked.
+        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
+            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)))
+            .map((p) => this.orbitPost(p));
+    },
+    /** Stations circle their planet: the stored spot is the start, the angle advances with time (one lap ~150 s). */
+    orbitPost(p) {
+        const node = this.nodeById && this.nodeById[p.planetId];
+        if (!node || p.deepSpace) return p;
+        const SX = (GM_MAP_W - GM_MAP_PAD * 2) * 2.0, SY = (GM_MAP_H - GM_MAP_PAD * 2) * 2.0;
+        const ox = (p.x - node.x) * SX, oy = (p.y - node.y) * SY;
+        const R = Math.hypot(ox, oy);
+        if (R < 0.5) return p;
+        const dir = (String(p.id).length % 2) ? 1 : -1;
+        const a = Math.atan2(oy, ox) + dir * 2 * Math.PI * ((Date.now() % 150000) / 150000);
+        return Object.assign({}, p, { x: node.x + Math.cos(a) * R / SX, y: node.y + Math.sin(a) * R / SY, orbitA: a });
+    },
+    /** Moves the orbiting stations (and what hangs on them) in the live map without a re-render. */
+    tickOrbits() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg || !this.isVisible || this._flight) return;
+        const SX = GM_MAP_W - GM_MAP_PAD * 2, SY = GM_MAP_H - GM_MAP_PAD * 2;
+        const px = (p) => ({ x: GM_MAP_W / 2 + (p.x - 0.5) * SX * 2.0, y: GM_MAP_H / 2 + (p.y - 0.5) * SY * 2.0 });
+        const posts = this.getTradingPosts();
+        const byId = {};
+        posts.forEach((p) => {
+            byId[p.id] = p;
+            const node = svg.querySelector('.gm-post-node[data-post="' + p.id + '"]');
+            if (node) { const q = px(p); node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')'); }
+        });
+        svg.querySelectorAll('.gm-lane-rot').forEach((g) => {
+            const p = byId[g.getAttribute('data-post')];
+            if (!p || p.orbitA == null) return;
+            const deg = (p.orbitA - Number(g.getAttribute('data-a'))) * 180 / Math.PI;
+            g.setAttribute('transform', 'rotate(' + deg.toFixed(3) + ' ' + g.getAttribute('data-cx') + ' ' + g.getAttribute('data-cy') + ')');
+        });
+        const loc = typeof profileManager !== 'undefined' && profileManager.getShipLocation
+            ? profileManager.getShipLocation(this.galaxyId) : null;
+        const ship = svg.querySelector(':scope > .gm-ship-marker');
+        if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
+            const q = px(byId[loc.id]);
+            ship.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+        }
+        this._orbitTick = (this._orbitTick || 0) + 1;
+        const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
+        if (routeOnPost && this._orbitTick % 3 === 0 && this.syncRoutePreview) this.syncRoutePreview();
+    },
+    startOrbitLoop() {
+        if (this._orbitTimer) return;
+        this._orbitTimer = setInterval(() => {
+            if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
+            this.tickOrbits();
+        }, 66);
+    },
+    getSelectedPost() {
+        if (!this.selectedPostId) return null;
+        return this.getTradingPosts().find((p) => p.id === this.selectedPostId) || null;
+    },
+    /** Select a trading post; its anchor planet stays the arrow-nav origin. */
+    selectPost(postId) {
+        const post = this.getTradingPosts().find((p) => p.id === postId);
+        if (!post) return;
+        this.selectedBorder = null;
+        this.selectedPostId = post.id;
+        this.selectedPlanetId = post.planetId;
+        this.saveGalaxySelection();
+        this.syncNodeHighlight();
+        this.updateDetails();
+        this.syncConfirmButton();
+        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+    },
+    dockAt(postId) {
+        if (typeof this.onDock !== 'function') return;
+        const post = this.getTradingPosts().find((p) => p.id === postId);
+        if (!post || !profileManager.isTradingPostUnlocked(post)) {
+            if (post) {
+                this.statusMsg = post.name + ' · REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
+            }
+            return;
+        }
+        if (!this.isShipAt('post', post.id)) return;
+        this.onDock(post);
+    },
+    isShipAt(kind, id) {
+        if (typeof profileManager === 'undefined' || !profileManager.isShipAt) return true;
+        return profileManager.isShipAt(this.galaxyId, kind, id);
+    },
+    /**
+     * Move the ship to a planet or post. Only the map SVG and the action row
+     * are redrawn in place — a full createUI would rebuild the overlay and make
+     * the background jump.
+     */
+    commitFlight(kind, id) {
+        if (typeof profileManager === 'undefined' || !profileManager.setShipLocation) return;
+        profileManager.setShipLocation(this.galaxyId, kind, id);
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        if (area) {
+            area.innerHTML = this.renderMapSvg();
+            this.bindNodeClicks();
+            this.bindPostClicks();
+            this.bindMapZoom();
+            this.raiseSelectedMarker();
+        }
+        this.updateDetails();
+        this.syncConfirmButton();
+    },
+    /** Pixel padlock over an unreachable planet / station in the card. */
+    lockBadgeHtml() {
+        return '<span class="gm-lock-badge" title="LOCKED" aria-label="Locked">' +
+            '<svg viewBox="0 0 12 14" width="48" height="56" shape-rendering="crispEdges" aria-hidden="true">' +
+            '<path class="gm-lock-shackle" d="M3 6V3h1V2h1V1h2v1h1v1h1v3H8V3H7V2H5v1H4v3z"/>' +
+            '<rect class="gm-lock-body" x="1" y="6" width="10" height="7"/>' +
+            '<rect class="gm-lock-hole" x="5" y="8" width="2" height="3"/>' +
+            '</svg></span>';
+    },
+    renderConfirmActionsHtml(info) {
+        const post = this.getSelectedPost();
+        if (post) {
+            if (!profileManager.isTradingPostUnlocked(post)) {
+                return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>${this.btnIconHtml('lock')}${post.name} · LOCKED</button>`;
+            }
+            if (!this.isShipAt('post', post.id)) {
+                return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">${this.btnIconHtml('hsTravel')}FLY TO ${post.name}</button>`;
+            }
+            // Faction stations can also be raided (faction-holdings.js).
+            const ownSide = typeof planetConfigManager !== 'undefined' && planetConfigManager.isFriendlyFaction
+                && planetConfigManager.isFriendlyFaction(post.faction);
+            if (post.factionStation && !ownSide) {
+                return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="raid">${this.btnIconHtml('menuWeapons')}RAID</button>` +
+                    `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">${this.btnIconHtml('hsStation')}DOCK · ${post.name}</button>`;
+            }
+            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="dock">${this.btnIconHtml('hsStation')}DOCK · ${post.name}</button>`;
+        }
+        const unlocked = !!(info && info.unlocked);
+        if (!unlocked) {
+            return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>${this.btnIconHtml('lock')}LOCKED</button>`;
+        }
+        if (!this.isShipAt('planet', info.id)) {
+            return `<button class="action-button" id="gmConfirm" data-nav-item data-start-mode="fly">${this.btnIconHtml('hsTravel')}FLY TO ${String(info.name || info.id).toUpperCase()}</button>`;
+        }
+        // The ruler's base, once all its stations are gone, can be assaulted.
+        const hold = profileManager.getFactionHoldings ? profileManager.getFactionHoldings(this.galaxyId) : null;
+        const ownRuler = hold && typeof planetConfigManager !== 'undefined' && planetConfigManager.isFriendlyFaction
+            && planetConfigManager.isFriendlyFaction(hold.ruler);
+        if (hold && !ownRuler && !hold.baseLost && hold.base === info.id && !hold.stations.length
+            && profileManager.isHoldingBaseRevealed(this.galaxyId)) {
+            return `<button class="action-button secondary" id="gmConfirmStart" data-nav-item data-start-mode="assault">${this.btnIconHtml('menuWeapons')}ASSAULT BASE</button>` +
+                `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml ? this.missionIconHtml() : ''}START MISSION</button>`;
+        }
+        // Liberated planet: nothing left to fight (unless it's invaded again;
+        // dev mode can still replay stages).
+        const invaded = profileManager.getInvadedPlanetId && profileManager.getInvadedPlanetId(this.galaxyId) === info.id;
+        if (this.isCleared && this.isCleared(info.id) && !invaded && !(this.isDevMode && this.isDevMode())) {
+            return `<button class="action-button disabled" id="gmConfirm" data-nav-item disabled>LIBERATED</button>`;
+        }
+        const opts = this.getStartOptions(info && info.id);
+        // Dev mode: the stage picked in the stepper is what launches.
+        const pick = this.isDevMode && this.isDevMode() && this.getDevStagePick ? this.getDevStagePick(info && info.id) : null;
+        if (pick) {
+            const n = this.getStagesPerPlanet(info.id);
+            const label = pick > n ? `BOSS ${n + 1}/${n + 1}` : `STAGE ${pick}/${n + 1}`;
+            return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${label}</button>`;
+        }
+        const resumeLabel = opts.canChoose ? (opts.resumeLabel || 'START MISSION') : 'START MISSION';
+        return `<button class="action-button gm-mission-btn" id="gmConfirm" data-nav-item data-start-mode="resume">${this.missionIconHtml(32)}${resumeLabel}</button>`;
+    },
+    /** One faction as a coloured name (faction accent, dark outline). */
+    factionLabelHtml(fid) {
+        const id = String(fid || '').toLowerCase();
+        const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
+            ? planetConfigManager.getFactionMeta(id) : null;
+        const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(id) : null;
+        const color = (st && st.accent) || 'var(--color-primary)';
+        const label = String((meta && meta.label) || id).toUpperCase().replace(/</g, '&lt;');
+        return `<span class="gm-faction-chip" style="--chip:${color}"><span class="gm-faction-dot"></span>${label}</span>`;
+    },
+    /** Factions settling a planet (ruling first), for the sector card. */
+    planetFactionsLabelHtml(planetId) {
+        let list = [];
+        try {
+            list = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions
+                ? planetConfigManager.getPlanetFactions(planetId) || [] : [];
+        } catch (e) { list = []; }
+        return list.length ? list.slice(0, 3).map((f) => this.factionLabelHtml(f)).join(' ') : '—';
+    },
+    syncConfirmButton() {
+        if (!this.overlay) return;
+        const actions = this.overlay.querySelector('#gmActions');
+        if (!actions) return;
+        const info = this.getPlanetInfo(this.selectedPlanetId);
+        const backBtn = actions.querySelector('#gmBack');
+        const backHtml = backBtn ? backBtn.outerHTML : '';
+        this._actionFocus = null; // buttons are rebuilt; focus returns to the map
+        if (this.selectedBorder) {
+            // Checkpoint: nothing to start here — one button jumps to the
+            // planet whose clearing opens it.
+            const openId = this.selectedBorder.open;
+            const name = String((this.getPlanetInfo(openId) || {}).name || openId).toUpperCase();
+            actions.innerHTML = `<button class="action-button" id="gmBorderFocus" data-nav-item>${this.btnIconHtml('hsExplore')}SHOW ${name}</button>` + (backHtml ? ` ${backHtml}` : '');
+            actions.querySelector('#gmBorderFocus').addEventListener('click', () => this.selectPlanet(openId));
+            const back = actions.querySelector('#gmBack');
+            if (back) back.addEventListener('click', () => this.back());
+            return;
+        }
+        actions.innerHTML = this.renderConfirmActionsHtml(info) + (backHtml ? ` ${backHtml}` : '');
+        this.bindConfirmActions();
+        // The stage row reads the same progress as the button: rebuild it
+        // with it, else it kept the state from when the map was opened.
+        const stepper = this.overlay.querySelector('#gmStageStepper');
+        // A selected station / border gate shows no planet stages.
+        if (stepper && info) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
+    },
+    bindConfirmActions() {
+        if (!this.overlay) return;
+        const startBtn = this.overlay.querySelector('#gmConfirmStart');
+        const confirmBtn = this.overlay.querySelector('#gmConfirm');
+        const backBtn = this.overlay.querySelector('#gmBack');
+        if (startBtn && !startBtn.disabled && !startBtn.classList.contains('disabled')) {
+            startBtn.addEventListener('click', () => this.confirm(startBtn.getAttribute('data-start-mode') || 'start'));
+        }
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                const mode = confirmBtn.getAttribute('data-start-mode') || 'resume';
+                this.confirm(mode);
+            });
+        }
+        if (backBtn) {
+            backBtn.addEventListener('click', () => this.back());
+        }
+    },
+});

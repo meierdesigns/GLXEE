@@ -1,0 +1,1501 @@
+.vf-bezel-fx .vf-fx-tabs button.on::before { background: var(--rc-acc); box-shadow: 0 0 6px var(--rc-acc); }
+/* recessed key panel */
+.vf-bezel-fx .vf-fx-body {
+    padding: 12px 10px;
+    background: color-mix(in srgb, var(--rc-hull) 70%, #000);
+    box-shadow: inset 3px 3px 0 var(--rc-dark), inset -3px -3px 0 var(--rc-lit);
+    scrollbar-width: thin;
+}
+.vf-bezel-fx .vf-fx-body .vf-fx-title {
+    display: flex; align-items: center; gap: 8px;
+    color: #cfd6e6; font-size: var(--font-small);
+}
+.vf-bezel-fx .vf-fx-body .vf-fx-title::after { content: ""; flex: 1; height: 2px; background: var(--rc-dark); box-shadow: 0 2px 0 var(--rc-lit); }
+/* push keys */
+.vf-bezel-fx .vf-fx-seg button,
+.vf-bezel-fx .vf-fx-reset {
+    border: 0;
+    background: var(--rc-hull);
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), 0 2px 0 var(--rc-dark);
+    position: relative;
+    padding-top: 6px;
+}
+.vf-bezel-fx .vf-fx-seg button::before { content: ""; position: absolute; top: 2px; left: 50%; width: 4px; height: 2px; transform: translateX(-50%); background: #000; }
+.vf-bezel-fx .vf-fx-seg button.on {
+    border: 0;
+    transform: translateY(1px);
+    background: color-mix(in srgb, var(--rc-acc) 14%, var(--rc-hull));
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-seg button.on::before { background: var(--rc-acc); box-shadow: 0 0 5px var(--rc-acc); }
+.vf-bezel-fx .vf-fx-reset:active { transform: translateY(1px); }
+/* fader slots */
+.vf-bezel-fx input[type="range"]::-webkit-slider-runnable-track { border: 0;}
+.vf-bezel-fx input[type="range"]::-moz-range-track { border: 0;}
+.vf-bezel-fx input[type="range"] { background: linear-gradient(90deg, var(--rc-acc) var(--look-fill, 0%), transparent 0) center / 100% 4px no-repeat; }
+.vf-bezel-fx .vf-fx-row:hover { background: none; }
+.vf-bezel-fx .vf-fx-body .vf-fx-row { background: none; }
+
+.vf-bezel-fx .vf-fx-preview { padding: 8px; background: color-mix(in srgb, var(--rc-acc) 8%, #02070a); box-shadow: inset 2px 2px 0 #000; color: var(--rc-acc); display: flex; flex-direction: column; gap: 4px; letter-spacing: normal; }
+.vf-bezel-fx .vf-fx-tabs button { font-size: var(--font-small); }
+
+.vf-bezel-fx .vf-fx-body { overflow-x: hidden; }
+.vf-bezel-fx .vf-fx-row { min-width: 0;}
+.vf-bezel-fx .vf-fx-row input[type="range"] { min-width: 80px; }
+.vf-bezel-fx .vf-fx-head { cursor: move; user-select: none; touch-action: none; }
+.vf-bezel-fx .vf-fx-grip {
+    position: absolute; right: 14px; bottom: 2px; width: 16px; height: 12px; cursor: nwse-resize; z-index: 2;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--rc-lit) 3px 5px);
+    touch-action: none;
+}
+
+/* Remote layout: steppers, key grid, cards */
+.vf-bezel-fx .vf-fx-row { flex-wrap: nowrap; }
+.vf-bezel-fx .vf-fx-row > span:first-child { flex: 0 0 82px; }
+.vf-bezel-fx .vf-fx-step { flex: 1; min-width: 0; display: flex; align-items: stretch; gap: 4px; }
+.vf-bezel-fx .vf-fx-step button {
+    flex: 0 0 28px; padding: 4px 0; border: 0; border-radius: 0; background: var(--rc-hull);
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), 0 2px 0 var(--rc-dark);
+    color: inherit; font: inherit; cursor: pointer;
+}
+.vf-bezel-fx .vf-fx-step button:active { transform: translateY(1px); box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit); }
+.vf-bezel-fx .vf-fx-step output {
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+    background: color-mix(in srgb, var(--rc-acc) 8%, #02070a); box-shadow: inset 2px 2px 0 #000;
+    color: var(--rc-acc); padding: 4px 2px; white-space: nowrap; overflow: hidden;
+}
+.vf-bezel-fx .vf-fx-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.vf-bezel-fx .vf-fx-key {
+    padding: 8px 4px 6px; border: 0; border-radius: 0; background: var(--rc-hull); color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; position: relative;
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), 0 2px 0 var(--rc-dark);
+}
+.vf-bezel-fx .vf-fx-key::before { content: ""; position: absolute; top: 2px; left: 50%; width: 4px; height: 2px; transform: translateX(-50%); background: #000; }
+.vf-bezel-fx .vf-fx-key.on { transform: translateY(1px); color: #fff; background: color-mix(in srgb, var(--rc-acc) 14%, var(--rc-hull)); box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit); }
+.vf-bezel-fx .vf-fx-key.on::before { background: var(--rc-acc); box-shadow: 0 0 5px var(--rc-acc); }
+.vf-bezel-fx .vf-fx-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: color-mix(in srgb, var(--rc-hull) 55%, #000); box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit); }
+.vf-bezel-fx .vf-fx-card .vf-fx-title { margin: 0; }
+.vf-bezel-fx .vf-fx-tabs { flex-wrap: wrap; }
+.vf-bezel-fx .vf-fx-tabs button { min-width: 0; flex: 1 1 0; padding-left: 0; padding-right: 0; overflow: hidden; }
+
+/* Faction picker keys in the FRAME tab: one row, each in its faction's silhouette + surface. */
+.vf-bezel-fx .vf-fx-facs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.vf-bezel-fx .vf-fx-fac {
+    --faction-color: var(--rc-acc);
+    position: relative; isolation: isolate; min-width: 0; padding: 12px 2px 8px; border: 0; border-radius: 0;
+    background: color-mix(in srgb, var(--faction-color) 16%, var(--rc-hull)); color: var(--faction-color);
+    font: inherit; font-size: var(--font-small); letter-spacing: 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--faction-color) 55%, #000);
+    transition: background-color .35s ease, color .35s ease, box-shadow .35s ease;
+}
+.vf-bezel-fx .vf-fx-fac::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.55; }
+.vf-bezel-fx .vf-fx-fac.on { color: #fff; background: color-mix(in srgb, var(--faction-color) 38%, #000); box-shadow: inset 0 0 0 2px var(--faction-color), inset 0 0 8px var(--faction-color); }
+.vf-bezel-fx .vf-fx-fac.on::before { opacity: 0.25; }
+
+/* Tabs as rubber remote keys: icon over label, domed face, chamfered pill. */
+.vf-bezel-fx .vf-fx-tabs { gap: 5px; padding: 2px 0 4px; }
+.vf-bezel-fx .vf-fx-tabs button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 8px 0 6px; min-height: 52px; font-size: var(--font-small); letter-spacing: 0.04em;
+    background:
+        radial-gradient(ellipse at 50% 18%, color-mix(in srgb, var(--rc-lit) 70%, transparent) 0, transparent 62%),
+        linear-gradient(180deg, var(--rc-hull), color-mix(in srgb, var(--rc-hull) 70%, #000));
+    clip-path: polygon(0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 6px), 0 calc(100% - 6px));
+    box-shadow: inset 0 0 0 2px var(--rc-dark), inset 3px 3px 0 var(--rc-lit), inset -3px -3px 0 var(--rc-dark);
+}
+.vf-bezel-fx .vf-fx-tabs button::before { display: none; }
+.vf-bezel-fx .vf-fx-tabs button svg { width: 26px; height: 26px; flex: none; color: color-mix(in srgb, currentColor 80%, #fff); }
+.vf-bezel-fx .vf-fx-tabs button.on {
+    transform: translateY(1px);
+    background:
+        radial-gradient(ellipse at 50% 80%, color-mix(in srgb, var(--rc-acc) 45%, transparent) 0, transparent 70%),
+        color-mix(in srgb, var(--rc-acc) 12%, var(--rc-hull));
+    box-shadow: inset 0 0 0 2px var(--rc-dark), inset 3px 3px 0 var(--rc-dark), inset -3px -3px 0 var(--rc-lit), inset 0 0 8px var(--rc-acc);
+}
+.vf-bezel-fx .vf-fx-tabs button.on svg { color: #fff; filter: drop-shadow(0 0 3px var(--rc-acc)); }
+
+/* Held in the hand: a slight, slow sway; hover (or dragging) holds it still. */
+@keyframes vf-rc-hold {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    22%  { transform: translate(-1.5px, 1px) rotate(-0.45deg); }
+    48%  { transform: translate(1px, -1.5px) rotate(0.3deg); }
+    73%  { transform: translate(1.5px, 0.5px) rotate(0.5deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+}
+.vf-bezel-fx { animation: vf-rc-hold 7s ease-in-out infinite;}
+.vf-bezel-fx:hover, .vf-bezel-fx.is-dragging { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vf-bezel-fx { animation: none; } }
+
+/* Remote faders: tall, easy to grab. The whole bar is the hit area; no row highlight. */
+.vf-bezel-fx input[type="range"] {
+    height: 24px;
+    min-width: 90px;
+    border: 0;
+    box-shadow: inset 2px 2px 0 #000, inset -2px -2px 0 var(--rc-lit);
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--rc-acc) 70%, #000) var(--look-fill, 0%), transparent 0) 0 0 / 100% 100% no-repeat,
+        color-mix(in srgb, var(--rc-acc) 8%, #02070a);
+    touch-action: none;
+    cursor: ew-resize;
+}
+.vf-bezel-fx input[type="range"]::-webkit-slider-runnable-track { height: 24px; background: transparent; box-shadow: none; }
+.vf-bezel-fx input[type="range"]::-moz-range-track { height: 24px; background: transparent; box-shadow: none; }
+.vf-bezel-fx input[type="range"]::-webkit-slider-thumb {
+    width: 14px; height: 24px; margin-top: 0; border: 0; background: var(--rc-hull);
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), inset 0 0 0 2px #000, inset -6px 0 0 -4px var(--rc-acc), inset 6px 0 0 -4px var(--rc-acc);
+}
+.vf-bezel-fx input[type="range"]::-moz-range-thumb {
+    width: 10px; height: 20px; border: 0; border-radius: 0; background: var(--rc-hull);
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark), 0 0 0 2px #000;
+}
+.vf-bezel-fx input[type="range"]:hover { filter: brightness(1.2); }
+.vf-bezel-fx input[type="range"]:focus-visible { outline: 2px solid var(--rc-acc); outline-offset: 1px; }
+.vf-bezel-fx label.vf-fx-row, .vf-bezel-fx label.vf-fx-row:hover, .vf-bezel-fx label.vf-fx-row:focus-within {
+    background: none !important; box-shadow: none !important; outline: none; cursor: default;
+}
+.vf-bezel-fx .vf-fx-row input[type="range"] { flex: 1 1 auto; }
+.vf-bezel-fx input[type="color"] { width: 32px; height: 24px; border: 0; box-shadow: inset 0 0 0 2px #000; }
+
+/* Held into view: slides up from below the window edge, tilted, and back out. */
+.vf-bezel-fx {
+    transition: translate 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.05), rotate 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.05);
+}
+
+.vf-bezel-fx:not(.is-in) { animation: none; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .vf-bezel-fx { transition: none; } }
+
+/* Slide in from the right window edge (travels the full viewport width, so it also
+   leaves the screen when the remote was dragged elsewhere). */
+.vf-bezel-fx { translate: 100vw 0; rotate: 5deg; transform-origin: 100% 100%; }
+.vf-bezel-fx.is-in { translate: 0 0; rotate: 0deg; }
+
+/* Sway is driven from JS (eased on hover); no CSS keyframes. */
+.vf-bezel-fx, .vf-bezel-fx:hover, .vf-bezel-fx.is-dragging { animation: none !important; }
+
+/* Bezel tool keys: physical hardware keys sitting in a recessed tray in the frame. */
+.vf-bezel .vf-bezel-tools {
+    padding: calc(4 * var(--bz-u));
+    gap: calc(6 * var(--bz-u));
+    background: var(--hull-dark, #05080e);
+    box-shadow:
+        inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 rgba(0, 0, 0, 0.85),
+        inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52),
+        0 calc(1 * var(--bz-u)) 0 var(--hull-lit, #2a3a52);
+}
+.vf-bezel .vf-bezel-tools button {
+    position: relative;
+    border: 0;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--hull-lit, #2a3a52) 75%, #fff 0%) 0, var(--hull, #131a26) 55%, color-mix(in srgb, var(--hull, #131a26) 70%, #000) 100%);
+    box-shadow:
+        inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 color-mix(in srgb, var(--hull-lit, #2a3a52) 60%, #fff),
+        inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-dark, #05080e),
+        0 calc(3 * var(--bz-u)) 0 #000;
+    transform: translateY(calc(-1 * var(--bz-u)));
+    transition: transform 0.08s steps(2, end), box-shadow 0.08s steps(2, end), filter 0.1s;
+}
+.vf-bezel .vf-bezel-tools button::after {
+    /* key LED */
+    content: "";
+    position: absolute;
+    top: calc(3 * var(--bz-u));
+    left: 50%;
+    width: calc(6 * var(--bz-u));
+    height: calc(2 * var(--bz-u));
+    transform: translateX(-50%);
+    background: #000;
+}
+.vf-bezel .vf-bezel-tools button:hover,
+.vf-bezel .vf-bezel-tools button:focus-visible { filter: brightness(1.25); border: 0; color: #fff; }
+.vf-bezel .vf-bezel-tools button:active,
+.vf-bezel .vf-bezel-tools button.is-open {
+    transform: translateY(calc(2 * var(--bz-u)));
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 12%, var(--hull, #131a26));
+    box-shadow:
+        inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 var(--hull-dark, #05080e),
+        inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52),
+        0 calc(1 * var(--bz-u)) 0 #000;
+}
+.vf-bezel .vf-bezel-tools button.is-open::after { background: var(--color-primary, #3dff6a); box-shadow: 0 0 calc(6 * var(--bz-u)) var(--color-primary, #3dff6a); }
+.vf-bezel .vf-bezel-tools button > svg { filter: drop-shadow(0 calc(1 * var(--bz-u)) 0 #000); }
+
+/* Unavailable key: an empty dark socket (the slot stays, so nothing shifts or pops in). */
+.vf-bezel .vf-bezel-tools button.is-off {
+    background: var(--hull-dark, #05080e);
+    box-shadow: inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 #000, inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52);
+    transform: none;
+    filter: none;
+    pointer-events: none;
+    cursor: default;
+}
+.vf-bezel .vf-bezel-tools button.is-off > svg, .vf-bezel .vf-bezel-tools button.is-off::after { opacity: 0; }
+
+/* Resolution key is hidden (the slider plate stays in code, just unreachable from the strip). */
+.vf-bezel .vf-bezel-tools button[data-tool="res"] { display: none !important; }
+
+/* Logout key looks like an empty socket until a pilot is logged in (known from the first paint). */
+html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"] {
+    background: var(--hull-dark, #05080e);
+    box-shadow: inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 #000, inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52);
+    transform: none; filter: none; pointer-events: none;
+}
+html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"] > svg,
+html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"]::after { opacity: 0; }
+
+/* Square screen opening whenever corners are pixel/voxel: the opening, the glass bevel and the
+   backing all read the same radius tokens, so the frame never disagrees with the picture. */
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"]:not([data-vf-frame-px="on"]) .vf-bezel,
+html[data-vf-gui-voxel="on"][data-vf-gv-corners="on"]:not([data-vf-frame-px="on"]) .vf-bezel[data-faction] {
+    --fr-hole-r: 0;
+    --glass-r: 0;
+}
+
+/* Pixel frame: the stage is no longer cut to the smooth faction outline — that cut would
+   shear off the stepped pixel edge of the frame. The pixelated plates define the silhouette. */
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr-p { clip-path: var(--fr-shape); }
+
+/* Pixel frame, no cutting at all: every frame layer is rasterised by the same filter on one
+   shared grid (equal square cells) and none of them keeps a smooth clip-path. The plates are
+   shaped by their own (pre-filter) clips, so corners and rounded openings step like voxels. */
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr,
+html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco,
+html[data-vf-frame-px="on"] #vf-bezel::before,
+html[data-vf-frame-px="on"] #vf-bezel::after {
+    clip-path: none !important;
+    filter: url(#vfFramePx);
+}
+html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { clip-path: none; }
+
+/* Pixel frame: sampling keeps a band only if it is at least one cell wide, so bevels and the
+   glass edge are widened to one cell (otherwise they break up into scattered blocks). */
+
+/* Pixel frame keeps its roundings: the radius stays and the grid filter steps it into
+   voxel stairs. (The generic "square corners" rule must not flatten the frame pieces.) */
+html[data-vf-frame-px="on"] body #vf-bezel .vf-fr-hole { border-radius: var(--fr-hole-r) !important; }
+html[data-vf-frame-px="on"] body #vf-bezel::before,
+html[data-vf-frame-px="on"] body #vf-bezel .vf-bezel-back { border-radius: var(--fr-hole-r) !important; }
+
+/* Pixel frame: one flat hull plate. The offset dark/lit bevel plates leave a dark crescent at a
+   rounded corner once the bands are as wide as a cell, so they are off; the bevel comes from the
+   glass edge (#vf-bezel::before) instead, which is drawn on the same grid. */
+html[data-vf-frame-px="on"] .vf-bezel { --fr-bevel: 0px; }
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr-dark,
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr-lit { display: none; }
+
+/* Pixel frame: the screen opening is rounded by FRAME ROUND cells on every faction; the grid
+   filter steps that radius into voxel stairs. */
+html[data-vf-frame-px="on"] .vf-bezel,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction] {
+    --fr-hole-r: var(--fr-rad, 0px);
+    --glass-r: var(--fr-rad, 0px);
+}
+
+/* Pixel frame: the backing box (its 60u shadow fills the frame area under the hull) would show as
+   a square dark corner outside the stepped silhouette, so it is off; the stage mask replaces it. */
+html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { display: none !important; }
+
+/* Pixel frame: outer corners follow FRAME ROUND too. The inner plate (hullB) is cut to a rounded
+   rect; it sits inside hullA (faction silhouette), so the visible shape is the intersection. */
+html[data-vf-frame-px="on"] #vf-bezel .vf-fr-hullB { clip-path: inset(0 round var(--fr-out, 0px)); }
+
+/* Full-stage layers (tagged by viewport-fit.js) share the pixel-stepped stage clip. */
+html[data-vf-frame-px="on"] [data-vf-stage-clip] { clip-path: url(#vfStageClip); }
+
+/* Empty sub-nav (PROFILES): same bar and frame as the other tabs, nothing inside. */
+.home-station-content .hs-subnav.hs-subnav-empty { pointer-events: none; }
+.home-station-content .hs-subnav.hs-subnav-empty > * { visibility: hidden; }
+html body .home-station-overlay .home-station-content > .hs-subnav.hs-subnav-empty { height: 50px !important; min-height: 50px !important; }
+
+/* Name step: input + GENERATE NAME button side by side. */
+.profile-name-row { display: flex; align-items: stretch; justify-content: center; gap: calc(8 * var(--bz-u)); }
+.profile-name-row .profile-name-input { flex: 1 1 auto; min-width: 0; }
+.profile-name-row .profile-name-gen-wrap { flex: 0 0 auto; margin: 0 !important; padding: 0 !important; width: auto !important; position: static; display: flex; }
+.profile-name-row .profile-name-gen { white-space: nowrap; margin: 0; }
+.profile-name-row .profile-name-gen { font-size: calc(18 * var(--bz-u)) !important; padding: 0 calc(18 * var(--bz-u)) !important; }
+
+/* Fight HUD follows the per-size font settings (TEXT / SMALL family), not just the global font */
+html body .game-container .enemy-vitals-side :is(.enemy-faction, .enemy-name) { font-family: var(--ui-font-text, var(--ui-font-family)); }
+html body .game-container .enemy-vitals-side :is(.enemy-hp-text, .enemy-shield-text) { font-family: var(--ui-font-small, var(--ui-font-family)); }
+html body .game-container #gameInfoPanel { font-family: var(--ui-font-text, var(--ui-font-family)); }
+
+/* Station: small inner pad inside the glass opening. */
+html body .home-station-overlay .home-station-content {
+    padding: calc(10px / var(--hs-z)) calc(12px / var(--hs-z)) !important;
+    box-sizing: border-box !important;
+}
+
+/* Faction relation tabs: every card is the same size in every state and wears
+   its own faction's shape + colour; active / hover only change the frame. */
+.home-station-overlay .hs-faction-tabs.hs-faction-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card,
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card:is(:hover, .nav-focused, .active) {
+    margin: 0 !important;
+    padding: var(--fac-space) !important;
+    border: 0 !important;
+    clip-path: var(--faction-ctl-clip, none) !important;
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 14%, #05060a) 0%, #020203 85%) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 4px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card:is(:hover, .nav-focused) {
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 4px var(--color-primary),
+        inset 0 0 18px color-mix(in srgb, var(--color-primary) 55%, transparent) !important;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 30%, #05060a) 0%, #020203 85%) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px var(--color-primary),
+        inset 0 0 24px var(--color-primary) !important;
+}
+/* Same layout in every card: status badge always on its own line. */
+
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-status {
+    order: 3;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-head::after { order: 2; flex: 0 0 100%; height: 0;}
+
+/* Relation badge sits in the bottom row between planet count and trade icon:
+   fixed layout, nothing wraps or jumps with the card width. */
+.home-station-overlay .hs-faction-tabs .hs-faction-head { flex-wrap: nowrap; }
+.home-station-overlay .hs-faction-tabs .hs-faction-head::after { content: none; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-stats {
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-stats .hs-faction-status {
+    order: 0;
+    margin: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+/* Faction tabs: big crest on the left, name + bar to its right, taller cards. */
+.home-station-overlay .hs-faction-tabs .hs-faction-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.home-station-overlay .hs-faction-tabs .hs-faction-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+html body .home-station-overlay .hs-faction-tabs .hs-faction-crest,
+html body .home-station-overlay .hs-faction-tabs .hs-faction-crest img {
+    width: 56px !important;
+    height: 56px !important;
+    flex: none;
+}
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-tab.hs-faction-card {
+    min-height: 120px !important;
+    gap: 12px;
+}
+html body .home-station-overlay .home-station-content .hs-body { padding-left: 0 !important; }
+/* The framed body has a 4px left border: pull it out so its content (sections) sits at the same 8px as PLAY */
+html body .home-station-overlay .home-station-content .hs-body:not(.hs-body-play) { margin-left: -4px !important; }
+/* Sections: inner containers sit flush on the same left line (16px from the bezel opening) */
+html body .home-station-overlay .home-station-content .hs-body :is(.hs-section, .hs-panel) { padding-left: 0 !important; }
+html body .home-station-overlay .home-station-content .hs-body :is(.hs-factions, .hs-faction-tabpanel) { padding-left: 0 !important; }
+html body .home-station-overlay .home-station-content .hs-menu-host > .start-screen-content { padding-left: 0 !important; border-left-width: 0 !important; }
+
+/* Fleet preview: taller stage (the canvas is 480x290 now, not just a bigger scale). */
+.hs-fd-fleet-stage { min-height: min(680px, 78vh); }
+
+/* Faction colours as a list below the preview; the base (hull) colour is editable. */
+.hs-fd-colors { display: flex; flex-direction: column; gap: 6px; }
+.hs-fd-color-row { display: flex; align-items: center; gap: 10px; font-size: var(--font-text); letter-spacing: 1px; min-width: 0; }
+.hs-fd-color-row em { font-style: normal; opacity: 0.6;}
+.hs-fd-color-row.is-editable { cursor: pointer; }
+.hs-fd-color-row input[type="color"] { width: 20px; height: 20px; padding: 0; border: var(--ui-border-width, 2px) solid #000; box-shadow: 0 0 0 var(--ui-border-width, 2px) rgba(255,255,255,0.25); background: none; cursor: pointer; }
+.hs-fd-color-row .hs-fd-swatch { flex: 1 1 auto; }
+.hs-fd-color-row .hs-fd-swatch em { margin-left: auto; }
+/* PLAY button on the same left line as the sections */
+html body .home-station-overlay .home-station-content .hs-header { padding-left: 0 !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block > :is(.hs-fd-colors, .hs-fd-text) {
+    padding-inline: 16px !important;
+    box-sizing: border-box;
+}
+
+/* Hue sliders (lightness / saturation stay as in the faction's default colour). */
+.hs-fd-color-chip { flex: none; width: 20px; height: 20px; border: var(--ui-border-width, 2px) solid #000; box-shadow: 0 0 0 var(--ui-border-width, 2px) rgba(255,255,255,0.25); }
+.hs-fd-color-label { flex: 0 0 150px; }
+.hs-fd-hue { flex: 1 1 auto; min-width: 80px; height: 10px; appearance: none; -webkit-appearance: none; cursor: pointer; border: var(--ui-border-width, 2px) solid #000;
+    background: linear-gradient(to right, #f00 0%, #ff0 13.3%, #0f0 26.7%, #0ff 40%, #00f 53.3%, #f0f 66.7%, #f00 79.8%,
+        #0c0d12 80% 86.6%, #808890 86.7% 93.3%, #e6eaf0 93.4% 100%); }
+.hs-fd-hue::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 20px; background: #fff; border: 2px solid #000; }
+.hs-fd-hue::-moz-range-thumb { width: 8px; height: 20px; border-radius: 0; background: #fff; border: 2px solid #000; }
+.hs-fd-color-row em { flex: 0 0 76px; margin-left: 0; text-align: right; }
+
+/* The taller fleet stage must push the colour list down, not overlap it. */
+.hs-fd .hs-fd-fleet { height: auto; flex: 0 0 auto; }
+.hs-fd-colors { position: relative; z-index: 1; flex: 0 0 auto; }
+
+/* COLORS: collapsed to one toggle; open, the list overlays the area above on its own background. */
+.hs-fd-colors-wrap { position: relative; flex: 0 0 auto; }
+.hs-fd-colors-wrap .hs-fd-colors { display: none; }
+.hs-fd-colors-wrap.is-open .hs-fd-colors {
+    display: flex;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 6px;
+    padding: 14px 16px;
+    z-index: 20;
+    background: color-mix(in srgb, #05060a 94%, var(--faction-accent, var(--color-primary)));
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.7);
+}
+
+/* While a slider is dragged the panel turns see-through, so the live preview behind it is visible. */
+.hs-fd-colors-wrap.is-dragging .hs-fd-colors { opacity: 0.18; transition: opacity 0.12s; }
+
+/* Per colour: HUE / SAT / LIGHT sliders (LIGHT: middle = the faction's default). */
+.hs-fd-color-block { display: flex;}
+.hs-fd-color-block + .hs-fd-color-block { padding-top: 8px; border-top: var(--ui-border-width, 2px) solid rgba(255, 255, 255, 0.08); }
+.hs-fd-sliders { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; padding-left: 30px;}
+.hs-fd-slider-tag { font-size: var(--font-small); letter-spacing: 1px; opacity: 0.7; }
+.hs-fd-adj { width: 100%; min-width: 0; appearance: none; -webkit-appearance: none; cursor: pointer; border: var(--ui-border-width, 2px) solid #000;}
+.hs-fd-adj-h { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+
+.hs-fd-adj::-webkit-slider-thumb { -webkit-appearance: none; background: #fff; border: 2px solid #000;}
+.hs-fd-adj::-moz-range-thumb { border-radius: 0; background: #fff; border: 2px solid #000;}
+.hs-fd-color-row .hs-fd-color-label { flex: 1 1 auto; }
+
+/* Thicker sliders; SAT / LIGHT are 3-step and narrow, HUE takes the room. */
+.hs-fd-sliders { grid-template-columns: auto minmax(0, 1fr) auto 84px auto 84px; gap: 8px 12px; }
+.hs-fd-adj { height: 18px; }
+.hs-fd-adj::-webkit-slider-thumb { width: 12px; height: 30px; }
+.hs-fd-adj::-moz-range-thumb { width: 12px; height: 30px; }
+
+/* SAT / LIGHT: three distinct blocks instead of a gradient. */
+.hs-fd-adj-s { background: linear-gradient(to right, #8a7a94 0 32%, #05060a 32% 34%, #b060e0 34% 66%, #05060a 66% 68%, #d040ff 68% 100%); }
+.hs-fd-adj-l { background: linear-gradient(to right, #1a1a1e 0 32%, #05060a 32% 34%, #808088 34% 66%, #05060a 66% 68%, #e8e8f0 68% 100%); }
+.hs-fd-colors-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--font-text); letter-spacing: 2px; opacity: 0.9; }
+.hs-fd-colors-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
+/* Nav cards share PLAY's bottom edge: the card row fills the full height of
+   the header (header-main -> topbar -> tabs), so the cards' margins (8px 0 6px)
+   resolve against the same box as PLAY's. */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
+    display: flex !important;
+    flex-direction: column;
+    align-self: stretch;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main > .hs-topbar,
+html body .home-station-overlay .home-station-content .hs-header-main > .hs-topbar > .hs-tabs {
+    display: flex !important;
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-height: 0;
+}
+.hs-fd-sliders { grid-template-columns: auto minmax(0, 1fr) auto 84px auto 84px auto; }
+
+/* Colour rows: picker chip + label sit to the LEFT of the sliders. */
+.hs-fd-color-block { flex-direction: row; align-items: center; gap: 16px; }
+.hs-fd-color-block .hs-fd-color-row { flex: 0 0 230px; flex-wrap: wrap; row-gap: 2px; }
+.hs-fd-color-block .hs-fd-color-label { flex: 1 1 auto; font-size: var(--font-h2); letter-spacing: 2px; }
+.hs-fd-color-block .hs-fd-color-row em { flex: 0 0 100%; text-align: left; padding-left: 30px; font-size: var(--font-small); }
+.hs-fd-color-block .hs-fd-sliders { flex: 1 1 auto; min-width: 0; padding-left: 0; }
+
+/* Frame colours in the visual settings plate: same chip + rainbow / stepped sliders as the fleet colours. */
+.vf-fr-color { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; }
+.vf-fr-color + .vf-fr-color { border-top: var(--ui-border-width, 2px) solid rgba(255, 255, 255, 0.08); }
+.vf-fr-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 8px; padding-left: 0; }
+.vf-fr-sliders .hs-fd-slider-tag { display: none; }
+.vf-fr-color .hs-fd-color-row { display: flex; align-items: center; gap: 10px; }
+.vf-fr-color .hs-fd-color-row em { margin-left: auto; font-style: normal; opacity: 0.6; }
+.vf-fx-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Colour sliders inside the visual-settings plate: same rainbow / stepped tracks as the station. */
+.vf-bezel-fx input.hs-fd-adj[type="range"] {
+    width: 100%;
+    height: 10px;
+    min-width: 0;
+    border: var(--ui-border-width, 2px) solid #000;
+    box-shadow: none;
+}
+.vf-bezel-fx input.hs-fd-adj-h[type="range"] { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.vf-bezel-fx input.hs-fd-adj-s[type="range"] { background: linear-gradient(to right, #8a7a94 0 32%, #05060a 32% 34%, #b060e0 34% 66%, #05060a 66% 68%, #d040ff 68% 100%); }
+.vf-bezel-fx input.hs-fd-adj-l[type="range"] { background: linear-gradient(to right, #1a1a1e 0 32%, #05060a 32% 34%, #808088 34% 66%, #05060a 66% 68%, #e8e8f0 68% 100%); }
+.vf-bezel-fx input.hs-fd-adj[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; box-shadow: none; }
+.vf-bezel-fx input.hs-fd-adj[type="range"]::-moz-range-track { height: 6px; background: transparent; box-shadow: none; }
+.vf-bezel-fx input.hs-fd-adj[type="range"]::-webkit-slider-thumb { width: 10px; height: 20px; margin-top: -7px; background: #fff; border: 2px solid #000; box-shadow: none; }
+.vf-bezel-fx input.hs-fd-adj[type="range"]::-moz-range-thumb { width: 6px; height: 16px; border-radius: 0; background: #fff; border: 2px solid #000; box-shadow: none; }
+.vf-bezel-fx .vf-fr-sliders { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.vf-fx-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vf-fx-title-row .vf-fx-reset { width: auto; flex: 0 0 auto; padding: 2px 12px; }
+
+/* FACTIONS: the faction tab bar stays pinned while the detail below scrolls. */
+html body .home-station-overlay .home-station-content .hs-factions > .hs-faction-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--hs-tabpanel, var(--color-background, #05060a));
+}
+
+/* Pixel frame: the BEVEL slider sets the glass-edge band (never thinner than one grid cell). */
+html[data-vf-frame-px="on"] #vf-bezel { --fr-bv: max(var(--fr-px, 5px), var(--fr-bevel-set, 0px)); }
+
+/* DECO slider: faction deco animations own `opacity`, so the slider fades the art through a
+   mask alpha instead (multiplies with the animation). */
+.vf-bezel .vf-bezel-deco {
+    -webkit-mask: var(--hole), linear-gradient(rgba(0, 0, 0, var(--fr-deco, 1)) 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--hole) exclude, linear-gradient(rgba(0, 0, 0, var(--fr-deco, 1)) 0 0);
+}
+
+/* In-game HUD fonts: Fernbedienung TEXT · LG/MD/SM × IN-GAME %. */
+.game-container {
+    --font-lg: var(--game-font-lg, var(--game-font-h1));
+    --font-md: var(--game-font-md, var(--game-font-h2));
+    --font-sm: var(--game-font-sm, var(--game-font-small));
+    --font-h1: var(--font-lg);
+    --font-h2: var(--font-md);
+    --font-text: var(--font-md);
+    --font-small: var(--font-sm);
+    --font-text-small: var(--font-sm);
+    --font-base: var(--font-md);
+    font-size: var(--font-md);
+}
+/* LG — titles */
+html body .game-container :is(.gi-head-text h3, .game-info-header h3, .mission-start-text:not(.mission-start-count)) {
+    font-size: var(--font-lg) !important;
+}
+/* MD — values & names */
+html body .game-container :is(
+    .gi-metric-value, .gi-row-value, .gi-loot-count, .gi-chip-count, .gi-stage,
+    #currentWeapon, .weapon-display, .weapon-display span, .weapon-selection,
+    .enemy-faction, .enemy-name, .enemy-hp-text, .enemy-shield-text,
+    .mission-start-text.mission-start-go
+) {
+    font-size: var(--font-md) !important;
+}
+/* SM — labels */
+html body .game-container :is(
+    .gi-cluster-title, .gi-metric-label, .gi-row-label, .gi-chip-row-label,
+    .gi-chip-label, .gi-diff, .level-difficulty, .weapon-info, #weaponInfo,
+    .weapon-info .wi-part, .gi-size-btn, .controls-info, .shot-type-display
+) {
+    font-size: var(--font-sm) !important;
+}
+html[data-game-font="custom"] .game-container,
+html[data-game-font="custom"] .game-container :is(div, span, p, h1, h2, h3, h4, button, label, strong, em, small, b, li) {
+    font-family: var(--game-font-family) !important;
+}
+
+/* Nav cards sit exactly where PLAY sits: the top bar / tab row around them add no
+   padding of their own, so the cards' 8px / 6px margins are the only gaps
+   (same distance to the sub-nav below as PLAY). */
+html body .home-station-overlay .home-station-content .hs-header-main > .hs-topbar,
+html body .home-station-overlay .home-station-content .hs-header-main > .hs-topbar > .hs-tabs,
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Final say for the nav cards (measured): same top / bottom edges as PLAY, in every state.
+   The 120px min-height and the -3px bottom margin made them 6px taller than PLAY. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn {
+    margin: 8px 0 6px !important;
+    min-height: 0 !important;
+    height: auto !important;
+    align-self: stretch !important;
+}
+
+/* Active nav card = the same card as the others (same clip, same frame layers, same label
+   strip); it only lights up: brighter inner glow and an accent label. No open bottom. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active {
+    box-shadow: none !important;
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 18%, #05060a) 0%, #020203 80%) !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    display: block !important;
+    inset: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 30%, #05060a) 0%, #020203 80%);
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label {
+    margin: 0 5px 5px !important;
+    font-weight: 700 !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before {
+    background: var(--color-primary) !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 24%, #05060a) 0%, #020203 80%);
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    z-index: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon {
+    position: relative;
+    z-index: 1;
+    background: none !important;
+    box-shadow: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-label { position: relative; z-index: 1; }
+
+/* Active nav card: the icon box fills the whole card, so the holo scanline overlay striped the
+   entire card and swallowed the icon. The card only lights up; the icon keeps its 64px size. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon::after {
+    content: none !important;
+    display: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon :is(img, canvas, .hs-tab-pixel, .ui-icon-tip) {
+    width: 64px !important;
+    height: 64px !important;
+    max-width: 64px;
+    max-height: 64px;
+    flex: none;
+}
+
+/* Active nav card: open at the bottom, its body runs down into the sub-nav panel below. No glow on the
+   card; only the icon gets brighter. Frame (::before) and fill (::after) reach 12-14px past the card. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active {
+    clip-path: none !important;
+    overflow: visible !important;
+    position: relative;
+    z-index: 3;
+    filter: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before {
+    border-radius: 18px 18px 0 0 / 6px 6px 0 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    border-radius: 15px 15px 0 0 / 3px 3px 0 0;
+    background: var(--hs-tabpanel);
+    box-shadow: none;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon {
+    filter: brightness(1.6) !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    position: absolute !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+}
+
+/* Fixed gap between the nav cards and the sub-nav bar below (14px, same in every state);
+   the active card's bridge spans exactly that gap. */
+html body .home-station-overlay .home-station-content .hs-subnav {
+    margin-top: 10px !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before { inset: 0 0 -14px 0 !important; }
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after { inset: 3px 3px -16px 3px !important; }
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before,
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after { clip-path: none !important; }
+
+/* Sub-nav tabs: only the active tab (and hover / keyboard focus) carries the frame;
+   idle tabs are bare label + icon. The frame is the tab's own inset shadow. */
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-subnav-tab, .hs-menu-tab-btn) {
+    box-shadow: none !important;
+    background: transparent !important;
+}
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-subnav-tab, .hs-menu-tab-btn):is(.active, :hover, :focus-visible, .nav-focused) {
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a) !important;
+    box-shadow:
+        inset 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent),
+        inset 0 0 0 4px #05060a,
+        inset 0 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) !important;
+}
+
+/* Remote parked on the left: it slides out / in on the left edge. */
+.vf-bezel-fx.is-left { translate: -100vw 0; rotate: -5deg; transform-origin: 0 100%; }
+.vf-bezel-fx.is-left.is-in { translate: 0 0; rotate: 0deg; }
+
+/* Sub-nav (STORAGE / SHIPYARD / …): larger labels and icons (icons on the 2× pixel grid). */
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn) {
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    gap: 10px;
+}
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-icon, .hs-menu-tab-icon, .hs-tab-icon img, .hs-menu-tab-icon img, .hs-tab-pixel),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab-icon, .hs-tab-pixel) {
+    width: 32px !important;
+    height: 32px !important;
+    flex: 0 0 32px;
+}
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover) :is(.hs-tab-label, .hs-menu-tab-label) {
+    font-size: calc(var(--font-h2) * 1.3) !important;
+}
+
+/* Map bar: ANDROMEDA / INVASION stack on the left, the planet card next to it. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack { order: 1; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet { order: 2; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions { order: 3; }
+
+/* Ruler card (ANDROMEDA / CONTESTED): the faction emblem sits on the left of the name. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-card {
+    flex-direction: row;
+    justify-content: flex-start;
+}
+
+/* Invasion card: a mission-button icon in front of the title; it animates when the card is hovered. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-go {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    background: color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 14%, #05060a);
+    border: var(--ui-border-width, 2px) solid var(--ruler-accent, var(--color-primary));
+    box-shadow: inset 0 0 0 2px #05060a;
+    transition: background 0.12s steps(2, end), box-shadow 0.12s steps(2, end);
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-go .gm-mission-icon {
+    image-rendering: pixelated;
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) .galaxy-map-situation-go {
+    background: color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 38%, #05060a);
+    box-shadow: inset 0 0 0 2px #05060a, 0 0 0 2px color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 60%, transparent);
+    animation: gm-situation-go-pulse 0.7s steps(4, end) infinite;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) .galaxy-map-situation-go .gm-mission-icon {
+    animation: gm-situation-go-nudge 0.7s steps(4, end) infinite;
+}
+@keyframes gm-situation-go-pulse { 50% { transform: scale(1.1); } }
+@keyframes gm-situation-go-nudge { 50% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) {
+    html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) .galaxy-map-situation-go,
+    html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) .galaxy-map-situation-go .gm-mission-icon { animation: none; }
+}
+/* Mission paper: the nudge animation becomes a small tilt-and-lift. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :focus-visible) .galaxy-map-situation-go .gm-mission-icon { animation-name: gm-situation-paper; }
+@keyframes gm-situation-paper { 25% { transform: translateY(-2px) rotate(-6deg); } 75% { transform: translateY(-2px) rotate(6deg); } }
+
+/* Invasion card: bigger sub line under the mission name, bigger mission button. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-sub { font-size: calc(var(--font-text) * 1.3); line-height: 1.25; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-go { width: 58px; height: 58px; margin-right: 12px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-go .gm-mission-icon { width: 36px !important; height: 36px !important; }
+
+/* Invasion card: title and sub line stack to the right of the mission button. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation-text .galaxy-map-situation-sub { font-size: calc(var(--font-text) * 1.1); letter-spacing: 0.5px; }
+
+/* Cleared stages are buttons: click to play from that stage again. */
+.gm-sector-stage.is-replay { cursor: pointer; transition: transform 0.12s steps(2, end), filter 0.12s steps(2, end); }
+.gm-sector-stage.is-replay:is(:hover, :focus-visible) { transform: translateY(-2px) scale(1.12); filter: brightness(1.35); }
+
+/* No divider line between the planet card and the actions column. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet { border-right: 0 !important; }
+
+/* Planet card gets more width (stat boxes); START MISSION is a compact button, centred in its column. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet { flex: 4.4 1 0; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
+    min-width: 200px;
+    max-width: 280px;
+    width: min(calc(26 * var(--sv-w)), 280px);
+    align-items: center;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions {
+    height: auto;
+    justify-content: center;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 8px 14px;
+}
+
+/* START MISSION: icon above the label. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button {
+    flex-direction: column;
+    gap: 4px;
+    height: 84px;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button .gm-mission-icon {
+    width: 30px !important;
+    height: 30px !important;
+}
+
+/* START MISSION in the faction style, turned up: the faction's big stepped panel cut, a thick solid
+   frame in the accent, a dark fill with a strong inner glow and an accent label / icon. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn {
+    position: relative;
+    isolation: isolate;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    clip-path: var(--faction-panel-clip, var(--faction-ctl-clip, none)) !important;
+    color: #fff !important;
+    text-shadow: 2px 2px 0 #000 !important;
+    letter-spacing: 0.16em;
+    font-weight: 800;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn::before,
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute;
+    pointer-events: none;
+    z-index: -1;
+    clip-path: var(--faction-panel-clip, var(--faction-ctl-clip, none)) !important;
+    animation: none !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn::before {
+    inset: 0;
+    background: var(--faction-accent, var(--color-primary));
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn::after {
+    inset: 5px;
+    background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 38%, #05060a) 0%, #020203 85%);
+    box-shadow: inset 0 0 26px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent);
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused)::before {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #fff);
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused)::after {
+    background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a) 0%, #05060a 90%);
+    box-shadow: inset 0 0 38px var(--faction-accent, var(--color-primary));
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions #gmConfirm.action-button.gm-mission-btn::before {
+    display: block !important;
+    clip-path: var(--faction-panel-clip, var(--faction-ctl-clip, none)) !important;
+    background: var(--faction-accent, var(--color-primary)) !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions #gmConfirm.action-button.gm-mission-btn::after {
+    display: block !important;
+    clip-path: var(--faction-panel-clip, var(--faction-ctl-clip, none)) !important;
+    background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 38%, #05060a) 0%, #020203 85%) !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions #gmConfirm.action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused)::before {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #fff) !important;
+}
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions #gmConfirm.action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused)::after {
+    background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a) 0%, #05060a 90%) !important;
+}
+
+/* START MISSION: taller, with more room on its right. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions { padding: 10px 28px 10px 14px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn { height: 116px; gap: 8px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-actions .gm-card-actions .action-button.gm-mission-btn .gm-mission-icon { width: 40px !important; height: 40px !important; }
+
+/* Profile list: keep the pilot name clear of the faction emblem. */
+.profile-list-item .profile-list-emblem { margin-right: 22px !important; }
+.profile-list-item .profile-list-name { padding-left: 8px; }
+
+/* Victory / defeat: the planet is shown large, like on the map. */
+.outcome-planet { gap: 20px; }
+.outcome-planet-icon { width: 112px; height: 112px; }
+.outcome-planet-text { gap: 8px; }
+
+/* Planet / galaxy names: hard black outline so they stay readable over the planet art. */
+.outcome-planet-text :is(strong, span) {
+    text-shadow:
+        -2px -2px 0 #05060a, 2px -2px 0 #05060a, -2px 2px 0 #05060a, 2px 2px 0 #05060a,
+        0 -2px 0 #05060a, 0 2px 0 #05060a, -2px 0 0 #05060a, 2px 0 0 #05060a;
+}
+
+/* Map: stage numbers (e.g. 2/4) only while hovering the planet. */
+.gm-node .gm-stage-anchor { opacity: 0; transition: opacity 0.12s; pointer-events: none; }
+.gm-node:hover .gm-stage-anchor,
+.gm-node.hovered .gm-stage-anchor { opacity: 1; }
+
+/* Planet name over the planet art: black outline so it reads on any planet. */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-heading #gmSectorName {
+    color: #fff;
+    text-shadow:
+        2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000,
+        2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000,
+        3px 3px 0 #000 !important;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+}
+
+/* Map planets: toned down so the lit side never blows out to white. */
+.gm-node .gm-node-icon-wrap:not(.dimmed) { filter: brightness(0.78) saturate(0.88) contrast(0.95); }
+
+/* Big planet portraits (sector card, victory / defeat, galaxy viewer): same toning. */
+.gm-sector-planet-bg .gm-planet-icon,
+.outcome-planet-icon .gm-planet-icon,
+.gv-planet-bg .gm-planet-icon { filter: brightness(0.78) saturate(0.88) contrast(0.95); }
+
+/* The fight screen (.game-container, z 9992) must never hide the end-of-fight overlays. */
+html body .victory-screen,
+html body .game-over,
+html body .pause-overlay { z-index: 9993 !important; }
+html body .settings-overlay { z-index: 9994 !important; }
+
+/* Pause screen: larger title, wider menu, bigger buttons. */
+html body .pause-overlay h2 { font-size: calc(var(--font-h1) * 1.8); letter-spacing: 0.3em; margin-bottom: 28px; }
+html body .pause-overlay .pause-menu {
+    width: min(calc(92 * var(--cw)), calc(680px * var(--zk)));
+    gap: 24px;
+    padding: clamp(28px, calc(5 * var(--sv-h)), 56px) clamp(32px, calc(5 * var(--sv-w)), 64px);
+}
+html body .pause-overlay .pause-button {
+    font-size: calc(var(--font-h2) * 1.5);
+    padding: 22px 32px;
+    letter-spacing: 3px;
+}
+
+/* Pause screen only fills the glass opening of the bezel (same geometry as the fight screen). */
+html body .pause-overlay {
+    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    left: calc(var(--fr-open-side) / var(--_z)) !important;
+    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    width: calc(var(--fr-open-w) / var(--_z)) !important;
+    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Victory screen: only inside the bezel's screen opening (same geometry as the other menu surfaces). */
+html body .victory-screen {
+    --_z: 1;
+    zoom: var(--_z);
+    inset: auto !important;
+    left: calc(var(--fr-open-side) / var(--_z)) !important;
+    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--fr-open-w) / var(--_z)) !important;
+    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+html body .victory-screen .victory-content {
+    width: min(80%, 720px);
+    max-width: none;
+    zoom: 1;
+}
+
+/* Outcome planet: enlarged as a dimmed backdrop behind the header block (stays centred on the small icon's spot). */
+.outcome-planet { position: relative; justify-content: center; }
+.outcome-planet-icon { position: relative; z-index: 0; pointer-events: none; }
+.outcome-planet-icon > * { transform: scale(4.5); transform-origin: center; opacity: 0.45; image-rendering: pixelated; }
+.outcome-planet-text, .outcome-stepper, .outcome-status { position: relative; z-index: 1; }
+.outcome-planet-text {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    align-items: center; text-align: center; white-space: nowrap;
+    text-shadow: 0 0 4px #000, 0 0 8px #000;
+}
+.outcome-planet-text strong, .outcome-planet-text span { text-align: center; }
+.outcome-planet-text strong { font-size: calc(var(--font-h2) * 1.6); line-height: 1.3; }
+.outcome-planet-text span { font-size: calc(var(--font-small) * 1.6); line-height: 1.3; }
+
+/* Station upgrade page: legible chips + hint (the stacked glow made the values blurry). */
+html body .hs-upgrade-root .hs-upg-stats .hs-chip { padding: 8px 14px; gap: 10px; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip-label { font-size: var(--font-h2); letter-spacing: 2px; color: #fff; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip-value {
+    font-size: calc(var(--font-h2) * 1.3);
+    color: #fff;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 2px 0 #000;
+}
+html body .hs-upgrade-root .hs-hint { color: #fff; font-size: var(--font-h2); opacity: 1; margin-bottom: 8px; text-shadow: 0 2px 0 #000; }
+html body .hs-upgrade-root .hs-upg-stats { flex-wrap: nowrap; width: 100%; }
+html body .hs-upgrade-root .hs-upg-stats .hs-chip { flex: 1 1 0; min-width: 0; justify-content: center; }
+html body .hs-upgrade-root { padding-left: 0 !important; padding-right: 0 !important; }
+html body .hs-upgrade-root > * { margin-left: 0 !important; margin-right: 0 !important; padding-left: 24px !important; padding-right: 24px !important; box-sizing: border-box; }
+html body .hs-upgrade-root > .hs-shop-cats { background: transparent !important; background-image: none !important; box-shadow: none !important; }
+
+/* Upgrade-tree nodes: icon at a whole multiple of its 16px grid (48 = 3x), larger box, less muddy locked state. */
+
+/* Node icons: no second inner box (it doubled the frame and shrank the art); locked nodes keep their colour. */
+html body .hs-upg-node .hs-upg-icon { background: transparent; border: 0;}
+html body .hs-upg-node .hs-upg-icon .hs-pixel { width: 64px !important; height: 64px !important; }
+html body .hs-upg-node.locked .hs-upg-face,
+html body .hs-upg-node.locked .hs-upg-icon,
+html body .hs-upg-node.locked .hs-upg-slots { opacity: 0.9; filter: grayscale(0.25) brightness(0.85); }
+
+/* Upgrade nodes: icon sits above a clearly visible level bar (one segment per build level). */
+html body .hs-upg-node { align-items: flex-start; padding-top: 6px; box-sizing: border-box; }
+html body .hs-upg-node .hs-upg-icon { width: 100%; height: 66px; margin-bottom: 0; }
+html body .hs-upg-node .hs-upg-slots { left: 5px; right: 5px; bottom: 5px; height: 14px; gap: 2px; padding: 2px; background: #050308; }
+html body .hs-upg-node .hs-upg-slot { border: 0 !important; background: #3a2a4a; }
+html body .hs-upg-node .hs-upg-slot.filled { background: color-mix(in srgb, var(--color-primary) 95%, #fff); }
+html body .hs-upg-node.maxed .hs-upg-slot.filled { background: #8e8; }
+html body .hs-upg-node.locked .hs-upg-slots { opacity: 1; filter: none; }
+/* PLAY button: darker icon so the label reads first. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover) :is(.hs-tab-icon, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) { filter: brightness(0.45) !important; }
+
+/* Empty station pages (craft …): centred card over the backdrop. */
+.hs-empty-state {
+    width: min(520px, 90%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: color-mix(in srgb, #050308 82%, transparent);
+    border: var(--ui-border-width-thick, 3px) solid color-mix(in srgb, var(--color-primary) 70%, #fff);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) #050308, 4px 4px 0 0 #000;
+}
+.hs-empty-icon { display: inline-flex; line-height: 0; opacity: 0.85; }
+.hs-empty-title { font-size: calc(var(--font-h2) * 1.3); letter-spacing: 0.16em; color: #fff; }
+.hs-empty-text { margin: 0; font-size: var(--font-h2); color: var(--color-text-secondary, #b8aec8); }
+.hs-empty-steps { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.hs-empty-steps li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-left: var(--ui-border-width-thick, 3px) solid var(--color-primary); font-size: var(--font-text); }
+.hs-empty-steps b { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; background: var(--color-primary); color: #050308; }
+/* Empty state fills the page: wide card, big icon/type, steps in a row. */
+.hs-tab-fill:has(> .hs-empty-state) { display: flex; min-height: 0; }
+.hs-empty-state { width: calc(100% - 48px); max-width: none; height: calc(100% - 32px); margin: 16px 24px; justify-content: center; gap: 18px; padding: 32px; box-sizing: border-box; }
+.hs-empty-state .hs-empty-icon .hs-pixel { width: 128px !important; height: 128px !important; }
+.hs-empty-state .hs-empty-title { font-size: calc(var(--font-h2) * 2); }
+.hs-empty-state .hs-empty-text { font-size: calc(var(--font-h2) * 1.3); }
+.hs-empty-state .hs-empty-steps { flex-direction: row; gap: 16px; width: 100%; max-width: 1100px; }
+.hs-empty-state .hs-empty-steps li { flex: 1 1 0; flex-direction: column; text-align: center; padding: 18px 14px; gap: 12px; font-size: var(--font-h2); border-left: 0; border-top: var(--ui-border-width-thick, 3px) solid var(--color-primary); }
+.hs-empty-state .hs-empty-steps b { width: 40px; height: 40px; font-size: var(--font-h2); }
+/* Explorations entries: the tooltip wrapper must fill the icon box, else the 100% img collapses to 0. */
+.hs-explore-item .hs-chip-icon > .ui-icon-tip { display: flex; width: 100%; height: 100%; line-height: 0; }
+.hs-explore-item .hs-chip-icon > .ui-icon-tip > img { width: 100% !important; height: 100% !important; object-fit: contain; }
+/* PLAY button, inactive: darker background. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover),
+html body .home-station-overlay .home-station-content .hs-tab.hs-tab-play:not(.active):not(.nav-focused):not(:hover)::before {
+    background: color-mix(in srgb, var(--color-surface, #14101c) 45%, #000) !important;
+    background-image: none !important;
+}
+
+/* Galaxy map lanes: next jump from the ship = strong beam; other reachable lanes weaker but still bright. */
+.gm-edge.gm-pxline.lit { opacity: 0.62; }
+.gm-edge.gm-pxline.lit .gm-pxline-core { filter: brightness(1.15); }
+.gm-edge.gm-pxline.lit .gm-pxline-glow { opacity: 0.35; }
+.gm-edge.gm-pxline.lit .gm-pxline-halo { opacity: 0.12; }
+.gm-edge.gm-pxline.lit.next { opacity: 1; }
+.gm-edge.gm-pxline.lit.next .gm-pxline-core { filter: brightness(1.9) saturate(1.2); }
+.gm-edge.gm-pxline.lit.next .gm-pxline-glow { opacity: 0.85; }
+.gm-edge.gm-pxline.lit.next .gm-pxline-halo { opacity: 0.4; }
+
+/* PERF switches from the remote's PERF tab */
+html[data-vf-perf-heavy="off"] .vf-fx-chroma,
+html[data-vf-perf-heavy="off"] .vf-fx-bloom,
+html[data-vf-perf-heavy="off"] .vf-fx-crt { display: none; }
+html[data-vf-perf-anim="off"] .vf-fx-scanlines,
+html[data-vf-perf-anim="off"] .vf-fx-crt,
+html[data-vf-perf-anim="off"] .vf-fx-noise,
+html[data-vf-perf-anim="off"] .vf-fx-flicker,
+html[data-vf-perf-anim="off"] .menu-item.selected,
+html[data-vf-perf-anim="off"] .settings-row.selected { animation: none !important; }
+.vf-bezel-fx .vf-fx-fps { font-variant-numeric: tabular-nums; }
+
+/* Faction trait hover modal: all traits stacked, icon container left, info right */
+.hs-trait-modal { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; pointer-events: none; background: rgba(2, 4, 8, 0.55); animation: hs-trait-fade 0.16s ease-out both; }
+.hs-trait-modal.is-out { animation: hs-trait-fade-out 0.16s ease-in both; }
+.hs-trait-modal-card { display: flex; flex-direction: column; gap: 12px; width: min(560px, 86vw); padding: 20px 24px; background: #05060a; border: 3px solid var(--trait-accent); box-shadow: 0 0 0 3px #05060a, 0 0 28px color-mix(in srgb, var(--trait-accent) 55%, transparent); animation: hs-trait-pop 0.32s cubic-bezier(.2, 1.4, .4, 1) both; }
+.hs-trait-modal-fac { font-size: var(--font-text); letter-spacing: 3px; color: var(--trait-accent); padding-bottom: 8px; border-bottom: 2px solid color-mix(in srgb, var(--trait-accent) 35%, transparent); }
+.hs-trait-modal-row { display: flex; align-items: center; gap: 18px; padding: 8px; border: 2px solid transparent; opacity: 0.55; animation: hs-trait-row 0.3s ease-out both; }
+.hs-trait-modal-row.is-hot { opacity: 1; border-color: color-mix(in srgb, var(--trait-accent) 60%, transparent); background: color-mix(in srgb, var(--trait-accent) 10%, transparent); }
+.hs-trait-modal-ico { flex: 0 0 auto; display: grid; place-items: center; width: 88px; height: 88px; background: #05060a; border: 3px solid var(--trait-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--trait-accent) 45%, transparent); }
+.hs-trait-modal-ico img { width: 64px !important; height: 64px !important; image-rendering: pixelated; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--trait-accent) 70%, transparent)); }
+.hs-trait-modal-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-trait-modal-txt b { letter-spacing: 2px; color: var(--color-text, #fff);}
+.hs-trait-modal-txt em { font-style: normal; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent);}
+@keyframes hs-trait-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hs-trait-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hs-trait-pop { 0% { transform: scale(0.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes hs-trait-row { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); } }
+.hs-fd-trait[data-trait-key] { cursor: help; }
+
+/* The icons animate themselves, per trait, in stepped (pixel) motion. The hovered row runs faster. */
+.hs-trait-modal-ico img { animation-duration: 1.6s; animation-iteration-count: infinite; animation-timing-function: steps(8, end); transform-origin: 50% 50%; }
+.hs-trait-modal-row.is-hot .hs-trait-modal-ico img { animation-duration: 0.9s; }
+.hs-trait-modal-ico[data-ico="navCoin"] img { animation-name: hs-ti-spin; }
+.hs-trait-modal-ico[data-ico="navSkull"] img { animation-name: hs-ti-twitch; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navFlag"] img { animation-name: hs-ti-wave; transform-origin: 20% 50%; }
+.hs-trait-modal-ico[data-ico="navGear"] img { animation-name: hs-ti-rot; animation-timing-function: steps(8, end); }
+.hs-trait-modal-ico[data-ico="navAtom"] img { animation-name: hs-ti-rot; animation-timing-function: steps(12, end); animation-duration: 3.2s; }
+.hs-trait-modal-ico[data-ico="navPlanet"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico[data-ico="navFactory"] img { animation-name: hs-ti-pump; }
+.hs-trait-modal-ico[data-ico="navLock"] img { animation-name: hs-ti-shake; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navTrophy"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico[data-ico="navSword"] img { animation-name: hs-ti-swing; animation-timing-function: steps(6, end); }
+.hs-trait-modal-ico[data-ico="navCrosshair"] img { animation-name: hs-ti-lock; }
+.hs-trait-modal-ico[data-ico="navStar"] img { animation-name: hs-ti-twinkle; animation-timing-function: steps(1, end); }
+.hs-trait-modal-ico[data-ico="navChart"] img { animation-name: hs-ti-grow; transform-origin: 50% 100%; }
+.hs-trait-modal-ico[data-ico="navScroll"] img { animation-name: hs-ti-wave; transform-origin: 50% 0%; }
+.hs-trait-modal-ico[data-ico="navQuestion"] img { animation-name: hs-ti-twitch; animation-timing-function: steps(1, end); }
+@keyframes hs-ti-spin { 0% { transform: scaleX(1); } 25% { transform: scaleX(0.5); } 50% { transform: scaleX(0.08); } 75% { transform: scaleX(0.5); } 100% { transform: scaleX(1); } }
+@keyframes hs-ti-twitch { 0%, 60%, 100% { transform: translate(0, 0); } 65% { transform: translate(-3px, 1px) rotate(-4deg); } 75% { transform: translate(3px, -1px) rotate(4deg); } 85% { transform: translate(-2px, 0); } }
+@keyframes hs-ti-wave { 0% { transform: skewY(0); } 25% { transform: skewY(-8deg); } 50% { transform: skewY(0); } 75% { transform: skewY(8deg); } 100% { transform: skewY(0); } }
+@keyframes hs-ti-rot { to { transform: rotate(360deg); } }
+@keyframes hs-ti-glow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.6) drop-shadow(0 0 6px var(--trait-accent)); } }
+@keyframes hs-ti-pump { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14, 0.9); } }
+@keyframes hs-ti-shake { 0%, 70%, 100% { transform: translateX(0); } 75% { transform: translateX(-3px); } 85% { transform: translateX(3px); } 95% { transform: translateX(-2px); } }
+@keyframes hs-ti-swing { 0%, 100% { transform: rotate(-18deg); } 50% { transform: rotate(18deg); } }
+@keyframes hs-ti-lock { 0% { transform: rotate(0) scale(1.15); } 50% { transform: rotate(45deg) scale(0.9); } 100% { transform: rotate(90deg) scale(1.15); } }
+@keyframes hs-ti-twinkle { 0%, 100% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.2); filter: brightness(1.7); } 55% { transform: scale(0.9); } }
+@keyframes hs-ti-grow { 0%, 100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.1); } }
+html[data-vf-perf-anim="off"] .hs-trait-modal-card, html[data-vf-perf-anim="off"] .hs-trait-modal-row, html[data-vf-perf-anim="off"] .hs-trait-modal-ico img { animation: none; }
+
+/* MISSION BOARD rows: four columns (name | difficulty + stage progress | bounty | actions) so the width is used
+   and the text is large enough to read. Scoped to the board, contracts reuse .hs-mission with their own layout. */
+html body .hs-missions-root .hs-mission {
+    grid-template-columns: minmax(180px, 1.1fr) minmax(150px, 0.9fr) auto auto;
+    gap: 20px;
+    padding: 12px 18px;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+html body .hs-missions-root .hs-mission .hs-mission-type { font-size: var(--font-text); }
+html body .hs-missions-root .hs-mission .hs-line-name strong { font-size: 24px; color: var(--color-text, #fff); }
+.hs-mission-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-left: 20px; border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); }
+html body .hs-missions-root .hs-mission-diff { font-size: var(--font-h2); letter-spacing: 2px; color: var(--color-text, #fff); }
+.hs-mission-stages { display: flex; align-items: center; gap: 10px; font-size: var(--font-h2); }
+.hs-mission-stages b { color: var(--color-text, #fff); }
+.hs-mission-stages small { font-size: var(--font-text); letter-spacing: 2px; color: color-mix(in srgb, var(--color-text, #fff) 70%, transparent); }
+.hs-mission-pips { display: inline-flex; gap: 4px; }
+.hs-mission-pips i { width: 18px; height: 10px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent); background: transparent; box-sizing: border-box; }
+.hs-mission-pips i.on { background: var(--faction-accent, var(--color-primary)); }
+html body .hs-missions-root .hs-mission .hs-line-action { min-width: 150px; }
+
+/* Mission board: faction lane (issuer > target) and action-style buttons */
+.hs-mission-lane { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.hs-mission-fac { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fac) 65%, transparent); background: color-mix(in srgb, var(--fac) 12%, #05060a); }
+.hs-mission-fac b { font-size: var(--font-text); letter-spacing: 1px; color: var(--fac); }
+.hs-mission-fac img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-mission-fac.is-target { background: color-mix(in srgb, var(--fac) 24%, #05060a); box-shadow: 0 0 10px color-mix(in srgb, var(--fac) 40%, transparent); }
+.hs-mission-arrow { font-size: var(--font-text); color: var(--color-text, #fff); opacity: 0.75; }
+html body .hs-missions-root .hs-mission .hs-mission-go,
+html body .hs-missions-root .hs-mission .hs-mission-abort { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: bold; letter-spacing: 2px; }
+html body .hs-missions-root .hs-mission .hs-mission-go {
+    min-width: 230px;
+    color: #05060a;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 100%, #fff 18%), var(--faction-accent, var(--color-primary)));
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 100%, #fff 30%);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent), inset 0 -4px 0 rgba(0, 0, 0, 0.28);
+    transition: transform 0.08s steps(2), filter 0.1s;
+}
+html body .hs-missions-root .hs-mission .hs-mission-go:hover:not(:disabled) { filter: brightness(1.18); transform: translateY(-2px); }
+html body .hs-missions-root .hs-mission .hs-mission-go:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3); }
+html body .hs-missions-root .hs-mission .hs-mission-go:disabled, html body .hs-missions-root .hs-mission .hs-mission-go.is-locked { color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); background: #0a0c10; box-shadow: none; border-color: color-mix(in srgb, var(--color-text, #fff) 25%, transparent); }
+.hs-go-ico { display: inline-grid; place-items: center; }
+.hs-go-ico img { width: 24px; height: 24px; image-rendering: pixelated; filter: brightness(0) drop-shadow(0 0 0 transparent); }
+.hs-mission-go:disabled .hs-go-ico img, .hs-mission-go.is-locked .hs-go-ico img { filter: brightness(0.8); }
+.hs-mission-abort .hs-go-ico img { filter: none; }
+html body .hs-missions-root .hs-mission { grid-template-columns: minmax(170px, 0.9fr) minmax(260px, 1.4fr) auto auto; }
+
+/* Mission board bounty: one row of chips, icon exactly as tall as the (larger) amount text. */
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward { justify-self: end; align-self: center; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-cell { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 0; width: auto; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward * { font-size: 24px !important; line-height: 24px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-icon { width: 24px; height: 24px; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-reward img { width: 24px !important; height: 24px !important; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission-bounty .hs-cost-amt { min-height: 0; min-width: 0; padding: 0; }
+
+/* Mission board buttons: text must read on the bright fill (the theme's thin, glowing, wide-spaced button text did not). */
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go span {
+    color: #02040a !important;
+    text-shadow: none !important;
+    font-size: var(--font-h2) !important;
+    font-weight: 900;
+    letter-spacing: 1px !important;
+    opacity: 1;
+}
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go:disabled,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go:disabled span,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go.is-locked span { color: color-mix(in srgb, #fff 70%, transparent) !important; }
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort,
+html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort span { font-size: var(--font-h2) !important; letter-spacing: 1px !important; font-weight: bold; }
+.hs-trait-modal-row { transition: opacity 0.12s, background-color 0.12s, border-color 0.12s; }
+.hs-fd-col[data-im-name] { cursor: help; }
+.hs-trait-modal-ico[data-ico="emblem"] img { animation-name: hs-ti-glow; }
+.hs-trait-modal-ico img { animation-name: hs-ti-glow; }
+
+/* FACTION OVERVIEW: two wide columns instead of four narrow ones, large type, an icon on every label. The blocks also
+   get extra left padding: the faction corner cut was clipping the first letters of titles and labels. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block { padding: 18px 24px 18px 30px !important; gap: 10px !important; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { font-size: 22px; letter-spacing: 3px; padding-bottom: 8px; margin-bottom: 4px;}
+.hs-fd-row-ico { flex: 0 0 auto; display: inline-grid; place-items: center; font-style: normal;}
+.hs-fd-row-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { gap: 14px !important; font-size: 21px; line-height: 1.3; border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);}
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row:last-child { border-bottom: 0; }
+.hs-fd-row-label { color: color-mix(in srgb, var(--color-text, #fff) 80%, transparent); letter-spacing: 1px;}
+
+.hs-fd-resval img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { font-size: 21px; display: inline-flex; align-items: center;}
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-chips { gap: 10px !important; padding-top: 4px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { font-size: 20px;}
+.hs-fd-weapon img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-text { font-size: 20px; line-height: 1.5; color: color-mix(in srgb, var(--color-text, #fff) 88%, transparent); }
+
+/* More air between icon and label in the faction overview. */
+.hs-fd-row-ico { margin-right: 6px;}
+.hs-fd-row-label { gap: 18px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { gap: 18px; }
+.hs-fd-resval { gap: 14px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { gap: 14px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { gap: 14px; padding: 8px 18px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { padding: 10px 0; }
+
+/* Alignment: rows are a two-column grid (icon + label | value), icons sit in fixed boxes so every label starts at the
+   same x, and everything is centred on one line. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); align-items: center; column-gap: 20px !important; }
+.hs-fd-row-label { display: grid; grid-template-columns: 34px auto; align-items: center; column-gap: 16px; white-space: nowrap; line-height: 1; }
+.hs-fd-row-ico { margin: 0; width: 34px; height: 34px; line-height: 0; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { justify-self: end; justify-content: flex-end; text-align: right; line-height: 1.2; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { display: grid; grid-template-columns: 34px auto; align-items: center; column-gap: 16px; line-height: 1; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 .hs-fd-row-ico { margin: 0; }
+.hs-fd-resval { display: inline-flex; align-items: center; line-height: 1; }
+.hs-fd-resval img, .hs-fd-weapon img { flex: 0 0 auto; display: block; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { display: inline-flex; align-items: center; line-height: 1; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-cols { align-items: stretch; }
+.hs-trait-modal-card { max-height: 94vh; overflow: hidden; }
+
+/* The crest sits inside the info box, as its first cell; the hero panel just wraps that one box. */
+.home-station-overlay .hs-fd .hs-fd-hero { grid-template-columns: minmax(0, 1fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info { grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 1.2fr) minmax(0, 0.9fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { align-self: center;}
+
+/* Crest: no frame, no divider next to it. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { border: 0; box-shadow: none; background: transparent; }
+.hs-fd-crest + .hs-fd-col { border-left: 0; }
+
+/* OVERVIEW tab: the identity / playstyle and the traits shown as the stacked big-icon rows (what the hover modals show). */
+.hs-fd-infos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+.hs-fd-infopanel { display: flex; flex-direction: column; gap: 12px; padding: 18px 24px 18px 30px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--trait-accent) 55%, transparent); min-width: 0; }
+.hs-fd-infopanel .hs-trait-modal-row { opacity: 1; animation: none; }
+
+/* Faction section tabs: icon + high-contrast label on a solid backing (readable over animated bg). */
+
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) { background: rgba(5, 6, 10, 0.88) !important; }
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) .hs-tab-label {
+    color: var(--color-text, #fff) !important;
+    text-shadow: 0 1px 0 #000, 0 0 3px #000;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) { opacity: 1 !important; }
+.hs-fd-tabs .hs-fd-tab-ico { display: inline-flex; position: static; margin: 0; line-height: 0;}
+.hs-fd-tabs .hs-fd-tab-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+
+/* Highlight driven by hovering the header blocks; rows also light up under the pointer. */
+.hs-fd-infos.has-hot .hs-trait-modal-row:not(.is-hot) { opacity: 0.5; }
+.hs-fd-infopanel .hs-trait-modal-row:hover { opacity: 1; border-color: color-mix(in srgb, var(--trait-accent) 60%, transparent); background: color-mix(in srgb, var(--trait-accent) 10%, transparent); }
+
+/* Hover panel: replaces the tab content under the faction header while a header block is hovered. */
+.hs-fd-section { position: relative; }
+.hs-fd-hover { position: absolute; top: 0; left: 0; right: 0; min-height: 100%; z-index: 6; box-sizing: border-box; padding: 18px 28px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--trait-accent) 55%, transparent); pointer-events: none; animation: hs-trait-fade 0.14s ease-out both;}
+.hs-fd-hover.is-out { animation: hs-trait-fade-out 0.14s ease-in both; }
+html[data-vf-perf-anim="off"] .hs-fd-hover { animation: none; }
+
+/* Hover panel: the entries sit side by side (one column each), icon on top, text below. */
+.hs-fd-hover { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px;}
+.hs-fd-hover .hs-trait-modal-fac { grid-column: 1 / -1; }
+
+/* Header bar: no explanation texts (goal, playstyle text, trait info); they show in the hover panel. */
+.hs-fd-hero-info .hs-fd-goal,
+.hs-fd-hero-info .hs-fd-col-style .hs-fd-text,
+.hs-fd-hero-info .hs-fd-trait-txt em { display: none; }
+
+/* Header bar, no divider lines, space used evenly: crest | identity | playstyle | traits in a row. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info {
+    grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.7fr);
+    border: 0;
+    background: transparent;
+    align-items: center;
+}
+.hs-fd-hero-info .hs-fd-col, .hs-fd-crest + .hs-fd-col, .hs-fd-col + .hs-fd-col { border: 0; padding: 10px 0; }
+.hs-fd-hero-info .hs-faction-head { border: 0; padding: 0; }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest, .home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest img { width: 112px; height: 112px; margin: 6px 0; }
+.hs-fd-hero-info .hs-faction-name { font-size: 34px; letter-spacing: 3px; }
+.hs-fd-hero-info .hs-faction-status { font-size: var(--font-h2); padding: 4px 12px; }
+.hs-fd-col-id { gap: 12px; }
+.hs-fd-hero-info .hs-fd-col-style { gap: 16px; }
+.hs-fd-hero-info .hs-fd-col-ico { width: 64px; height: 64px; }
+.hs-fd-hero-info .hs-fd-col-ico img { width: 40px; height: 40px; }
+.hs-fd-hero-info .hs-fd-col-label { font-size: var(--font-h2); letter-spacing: 3px; }
+.hs-fd-hero-info .hs-fd-col-traits { gap: 12px; }
+
+.hs-fd-hero-info .hs-fd-trait-txt b { font-size: var(--font-h2); letter-spacing: 1px; }
+
+/* Header bar polish: every cell centred on one line, nothing cut at the left edge, no extra labels. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info { padding: 0 28px 0 24px; column-gap: 40px; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.8fr); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-crest { margin: 8px 0; }
+.hs-fd-hero-info .hs-fd-col-traits > .hs-fd-col-label { display: none; }
+.hs-fd-hero-info .hs-fd-col { align-self: center; justify-content: center; }
+.hs-fd-hero-info .hs-fd-col-style .hs-fd-col-label { font-size: 24px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-fd-hero-info .hs-fd-traits { justify-content: flex-start; }
+
+/* Faction header traits: icon on top, title below. */
+.hs-fd-hero-info .hs-fd-trait { flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.hs-fd-hero-info .hs-fd-trait-txt { align-items: center; }
+
+/* Equal-width trait tiles with wider icon boxes. */
+.hs-fd-hero-info .hs-fd-traits { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 14px; }
+.hs-fd-hero-info .hs-fd-trait { flex: 1 1 0; width: 150px; min-width: 0; }
+.hs-fd-hero-info .hs-fd-trait-ico { width: 100%; height: 56px; }
+.hs-fd-hero-info .hs-fd-trait-ico img { width: 36px; height: 36px; }
+
+/* Hover glow on header traits + playstyle (dark outline first, then glow). */
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style) { transition: filter 0.15s; }
+.hs-fd-hero-info :is(.hs-fd-trait-ico, .hs-fd-col-ico) { transition: box-shadow 0.15s, border-color 0.15s; }
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style):hover :is(.hs-fd-trait-ico, .hs-fd-col-ico) {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 10px var(--faction-accent, var(--color-primary)), inset 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+.hs-fd-hero-info :is(.hs-fd-trait, .hs-fd-col-style):hover :is(.hs-fd-trait-ico, .hs-fd-col-ico) img {
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a) drop-shadow(0 0 6px var(--faction-accent, var(--color-primary)));
+}
+.hs-fd-hero-info .hs-fd-trait:hover .hs-fd-trait-txt b {
+    text-shadow: 0 0 8px var(--faction-accent, var(--color-primary));
+}
+
+/* Faction section tabs: label as tall as the icon, wider buttons, real gap between icon and label. */
+
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab .hs-tab-label { line-height: 24px;}
+.hs-fd-tabs .hs-fd-tab-ico { width: 24px; height: 24px; flex: 0 0 24px; }
+
+/* Faction hero: crest + name stacked in one vertical box on the left, style and traits to the right */
+.hs-fd-idbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; padding: 10px 24px 10px 8px; margin-right: 8px; border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); text-align: center; }
+.hs-fd-idbox .hs-fd-col-id { align-items: center; padding: 0; }
+.hs-fd-idbox .hs-faction-head { flex-direction: column; align-items: center; gap: 6px; }
+
+/* Faction contracts: same four-column layout as the mission board, readable sizes. */
+html body .hs-faction-contracts .hs-mission .hs-mission-goal { display: block; font-size: var(--font-h2); line-height: 1.35; letter-spacing: 0.03em; color: var(--color-text, #fff); }
+html body .hs-faction-contracts .hs-mission .hs-mission-where { font-size: var(--font-text); letter-spacing: 1px; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
+html body .hs-faction-contracts .hs-mission.is-remote .hs-mission-where { color: var(--color-primary); }
+html body .hs-faction-contracts .hs-mission .hs-mission-rep { font-size: var(--font-text); letter-spacing: 1px; color: #ffcf3a; }
+html body .hs-faction-contracts .hs-mission { grid-template-columns: minmax(260px, 1.6fr) minmax(150px, 0.8fr) auto auto; }
+
+html body .hs-faction-contracts .hs-mission .hs-mission-type { font-size: var(--font-h2); }
+
+/* Faction detail: crest + name as a vertical sidebar on the left, hero details and everything below on the right. */
+.home-station-overlay .hs-fd[data-faction] { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.home-station-overlay .hs-fd[data-faction] > .hs-fd-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.home-station-overlay .hs-fd[data-faction] > .hs-fd-idbox { margin: 0; padding: 24px 16px; border-right: 0; justify-content: flex-start; gap: 16px; }
+.home-station-overlay .hs-fd-idbox .hs-fd-crest, .home-station-overlay .hs-fd-idbox .hs-fd-crest img { width: 128px; height: 128px; margin: 0; border: 0; box-shadow: none; background: transparent; }
+.home-station-overlay .hs-fd-idbox .hs-faction-name { font-size: 30px; }
+.home-station-overlay .hs-fd .hs-fd-main > .hs-fd-hero .hs-fd-hero-info { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); padding: 0 24px; }
+.hs-fd-idbox .hs-fd-goal, .hs-fd-idbox .hs-fd-col-style .hs-fd-text { display: none; }
+.hs-fd-idbox .hs-fd-col-style { flex-direction: column; align-items: center; gap: 10px; padding: 14px 0 0; border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); width: 100%; }
+.hs-fd-idbox .hs-fd-col-label { font-size: 22px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-fd-idbox .hs-fd-col-ico { width: 64px; height: 64px; }
+.hs-fd-idbox .hs-fd-col-ico img { width: 40px; height: 40px; }
+.home-station-overlay .hs-fd .hs-fd-main > .hs-fd-hero .hs-fd-hero-info { grid-template-columns: minmax(0, 1fr); }
+
+/* Hovered / pinned header item: fully filled tile, the others dimmed. */
+.hs-fd-hover .hs-trait-modal-row.is-hot { background: color-mix(in srgb, var(--trait-accent) 28%, #05060a); border-color: var(--trait-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--trait-accent) 40%, transparent), inset 0 0 18px color-mix(in srgb, var(--trait-accent) 25%, transparent); }
+.hs-fd-hover.is-pinned { border-color: var(--trait-accent); }
+
+/* Hover panel shows only the hovered entry: big icon left, text right. */
+.hs-fd-hover { display: flex; flex-direction: column; align-content: normal; }
+.hs-fd-hover .hs-trait-modal-row { flex-direction: row; align-items: center; gap: 28px; padding: 24px; opacity: 1; animation: none; }
+.hs-fd-hover .hs-trait-modal-ico { width: 160px; height: 160px; }
+.hs-fd-hover .hs-trait-modal-ico img { width: 112px !important; height: 112px !important; }
+.hs-fd-hover .hs-trait-modal-txt { width: auto; flex: 1 1 auto; gap: 12px; }
+.hs-fd-hover .hs-trait-modal-txt b { font-size: 28px; }
+.hs-fd-hover .hs-trait-modal-txt em { font-size: var(--font-h2); }
+
+/* Explanation text in the hover panel / modal: larger and easier to read. */
+.hs-trait-modal-txt em { font-size: 24px; line-height: 1.4; color: color-mix(in srgb, var(--color-text, #fff) 90%, transparent); }
+.hs-trait-modal-txt b { font-size: 28px; }
+
+/* Traits live in the left sidebar, stacked: icon box + name per row. */
+.hs-fd-idbox .hs-fd-col-traits { width: 100%; align-items: stretch; gap: 12px; padding: 14px 0 0; border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); text-align: left; }
+.hs-fd-idbox .hs-fd-traits { flex-direction: column; flex-wrap: nowrap; gap: 12px; align-items: stretch; }
+.hs-fd-idbox .hs-fd-trait { gap: 14px; }
+.hs-fd-idbox .hs-fd-trait-ico { width: 52px; height: 52px; }
+.hs-fd-idbox .hs-fd-trait-ico img { width: 32px; height: 32px; }
+.hs-fd-idbox .hs-fd-trait-txt b { font-size: var(--font-h2); letter-spacing: 1px; }
+.hs-fd-idbox .hs-fd-trait-txt em { display: none; }
+.hs-fd-idbox .hs-fd-col-traits > .hs-fd-col-label { display: none; }
+
+/* Faction views: less empty space between the station nav and the first row. */
+html body .home-station-overlay .home-station-content .hs-factions { padding-top: 4px !important; }
+
+/* Contract filter bar: bigger buttons spread across the full width. */
+html body .home-station-overlay .hs-fcontract-filters { display: flex; flex-wrap: nowrap; gap: 12px; width: 100%; }
+html body .home-station-overlay .hs-fcontract-filters .hs-shop-cat {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 56px;
+    padding: 0 12px;
+    font-size: 22px;
+    letter-spacing: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+/* Contracts hint: never shifted or clipped at the left edge. */
+html body .hs-faction-contracts > .hs-hint { display: block; box-sizing: border-box; width: 100%; margin: 0 !important; padding: 4px 16px !important; text-indent: 0 !important; transform: none !important; overflow: visible; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+
+/* Mission / contract launch buttons: outlined instead of filled. */
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked),
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) span {
+    color: var(--faction-accent, var(--color-primary)) !important;
+}
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) {
+    background: transparent;
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+}
+html body .hs-body .hs-panel .hs-mission .hs-mission-go:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent);
+    filter: none;
+}
+.hs-mission-go:not(:disabled):not(.is-locked) .hs-go-ico img { filter: none; }
+
+/* Launch buttons v2: dark body, bright accent frame + text (beats the filled gradient and the inherited ::after fill). */
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) {
+    --frame-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked):hover {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 24%, #05060a) !important;
+}
+html body .home-station-overlay .hs-body .hs-panel .hs-mission .hs-mission-go:not(:disabled):not(.is-locked) span {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #fff) !important;
+    opacity: 1 !important;
+}
+
+/* Contracts rows: inner padding + full border so the left edge is not clipped; fixed columns keep rows aligned. */
+html body .hs-faction-contracts .hs-mission {
+    box-sizing: border-box;
+    padding: 12px 18px 12px 22px;
+    margin-inline: 0;
+    grid-template-columns: minmax(260px, 1.6fr) 220px 250px 260px;
+}
+html body .hs-faction-contracts .hs-mission .hs-mission-info { padding-left: 16px; }
+
+/* Faction hero block: one-line heading (label + name), readable rank line, calm lore text. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; white-space: normal; }
+.hs-fd-herobox h4 span { font-size: var(--font-text); letter-spacing: 3px; color: color-mix(in srgb, var(--color-text, #fff) 60%, transparent); }
+.hs-fd-herobox h4 b { font-size: 26px; letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox .hs-fd-goal { display: block; font-size: var(--font-h2); letter-spacing: 1px; line-height: 1.4; color: var(--faction-accent, var(--color-primary)); margin: 0; padding: 0 0 6px; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-herobox .hs-fd-text { margin: 0; padding: 0; text-indent: 0; letter-spacing: 0.5px; }
+
+/* Faction detail fills the available height: sidebar stretches, the section panel takes the free space, actions stay at the bottom. */
+html body .home-station-overlay .home-station-content .hs-factions > .hs-faction-tabpanel { flex: 1 1 auto; min-height: 0; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabpanel > .hs-fd[data-faction] { flex: 1 1 auto; min-height: 100%; grid-template-rows: minmax(0, 1fr); }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-fd-section { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+html body .home-station-overlay .hs-fd[data-faction] > .hs-fd-main > .hs-fd-section > .hs-fd-block { flex: 1 1 auto; }
+html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block > .hs-fd-text { margin: 0; text-indent: 0; letter-spacing: 0.5px; }
+
+/* Faction cards: larger names, relation shown as an icon. */
+html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-name { font-size: var(--font-h2); letter-spacing: 2px; }

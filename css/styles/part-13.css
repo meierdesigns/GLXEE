@@ -1,0 +1,1503 @@
+@media (max-width: 640px) {
+    .home-station-overlay .home-station-content {
+        width: calc(calc(100 * var(--sv-w)) - 8px);
+        max-width: calc(calc(100 * var(--sv-w)) - 8px);
+        height: calc(calc(100 * var(--sv-h)) - 8px);
+        max-height: calc(calc(100 * var(--sv-h)) - 8px);
+    }
+}
+.home-station-overlay[data-hs-tab="missions"] {
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%),
+        url('../../assets/ui/hs-bg-hangar.png');
+}
+/* Panels are translucent too, so the area image reads through everywhere;
+   the hangar bay stays dark so the ship keeps its contrast. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section) {
+    background-image: none !important;
+}
+.home-station-overlay .home-station-content .hs-hangar-bay-stage {
+    background-color: rgba(3, 3, 8, 0.86);
+}
+.hs-mission .hs-line-action {
+    width: auto !important;
+    min-width: max-content;
+    padding-left: 14px;
+    padding-right: 14px;
+}
+.home-station-overlay .hs-mission {
+    background: rgba(4, 3, 10, 0.5);
+}
+
+/* --- FACTIONS area: clickable relation cards, detail view, trade. */
+button.hs-faction-card {
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+}
+button.hs-faction-card:hover,
+button.hs-faction-card.nav-focused {
+    border-color: var(--faction-accent, var(--color-primary));
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) 16%, transparent);
+}
+.hs-faction-detail { overflow-y: auto; }
+.hs-faction-detail-head { display: flex; gap: 14px; align-items: center; }
+.hs-faction-crest-lg, .hs-faction-crest-lg img { width: 96px; height: 96px; }
+.hs-faction-detail-info { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hs-faction-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hs-faction-picker { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.home-station-overlay .hs-faction-picker .hs-tab-label { display: inline; }
+.hs-faction-picker .hs-tab-icon img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-trade-line { display: flex; align-items: center; gap: 10px; }
+.hs-trade-line .hs-line-name { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hs-trade-quote { white-space: nowrap; color: var(--color-text-secondary); }
+.hs-trade-actions { display: flex; gap: 6px; }
+.hs-trade-tag {
+    padding: 1px 5px;
+    border: var(--ui-border-width) solid var(--color-primary);
+    color: var(--color-primary);
+}
+.hs-trade-tag.is-demand { border-color: #e0b040; color: #f0c860; }
+.hs-contract-emblem { display: inline-flex; vertical-align: middle; margin-right: 6px; }
+.hs-contract-emblem img { width: 16px; height: 16px; image-rendering: pixelated; }
+.hs-mission.is-bounty .hs-mission-type { color: #ff8060; }
+.hs-mission.is-remote .hs-mission-meta { color: var(--color-primary); }
+.hs-fcontract-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Faction panels paint their fill in ::after (the frame is ::before) —
+   that fill must be translucent too, or it hides the area image. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section)::after {
+    background-color: rgba(4, 3, 10, 0.6) !important;
+    background-image: none !important;
+}
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section) {
+    background-color: transparent !important;
+}
+/* The frame layer (::before) is a full faction-coloured plate under the
+   fill; with a see-through fill that tints the whole panel. Mask it down to
+   a ring of --frame-w so only the outline stays coloured. */
+.home-station-overlay .home-station-content :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    padding: var(--ring-w, 8px);
+    box-sizing: border-box;
+    --hole: linear-gradient(#000 0 0) var(--ring-w, 8px) var(--ring-w, 8px) / calc(100% - 2 * var(--ring-w, 8px)) calc(100% - 2 * var(--ring-w, 8px)) no-repeat;
+    -webkit-mask: var(--hole), linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--hole) exclude, linear-gradient(#000 0 0);
+}
+
+/* Galaxy map: drag to pan, wheel to zoom. */
+.galaxy-map-svg { cursor: grab; touch-action: none; }
+.galaxy-map-svg.is-panning { cursor: grabbing; }
+
+/* --- Navbar switch animations (header is re-rendered, so keyframes). */
+@keyframes hs-nav-activate-left {
+    0% { transform: translateX(-10px) scale(0.92); filter: brightness(1.8); }
+    60% { transform: translateX(1px) scale(1.04); }
+    100% { transform: none; filter: none; }
+}
+@keyframes hs-nav-activate-right {
+    0% { transform: translateX(10px) scale(0.92); filter: brightness(1.8); }
+    60% { transform: translateX(-1px) scale(1.04); }
+    100% { transform: none; filter: none; }
+}
+@keyframes hs-subnav-enter {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: none; }
+}
+.home-station-overlay .hs-tab.hs-anim-activate.hs-anim-from-left {
+    animation: hs-nav-activate-left 0.28s steps(7, end);
+}
+.home-station-overlay .hs-tab.hs-anim-activate.hs-anim-from-right {
+    animation: hs-nav-activate-right 0.28s steps(7, end);
+}
+.hs-subnav.hs-subnav-enter > .hs-tab {
+    animation: hs-subnav-enter 0.24s steps(6, end) both;
+}
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(2) { animation-delay: 0.04s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(3) { animation-delay: 0.08s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(4) { animation-delay: 0.12s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(5) { animation-delay: 0.16s; }
+.hs-subnav.hs-subnav-enter > .hs-tab:nth-child(n+6) { animation-delay: 0.2s; }
+@media (prefers-reduced-motion: reduce) {
+    .home-station-overlay .hs-tab.hs-anim-activate,
+    .hs-subnav.hs-subnav-enter > .hs-tab { animation: none; }
+}
+
+/* Faction detail: faction tab row on top, content below. */
+.hs-faction-tabs {
+    flex: 0 0 auto;
+    padding-bottom: 6px;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.home-station-overlay .hs-faction-detail .hs-faction-detail-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+}
+.hs-faction-detail .hs-faction-detail-info { max-width: 720px; }
+
+/* Upgrade tab → SHIPS: ship render per row, the upgraded area outlined. */
+.hs-area-thumb {
+    width: 72px;
+    height: 48px;
+    flex: none;
+    image-rendering: pixelated;
+    background: color-mix(in srgb, var(--color-background) 70%, transparent);
+    border: var(--ui-border-width) solid var(--color-border);
+    margin-right: 10px;
+}
+.hs-class-affinity {
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-area-row:not(.is-compact) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+.hs-area-row .hs-area-thumb {
+    margin-right: 0;
+}
+.hs-area-ship > .hs-area-row:not(.is-compact) {
+    padding-left: 12px;
+}
+
+/* --- PARTS sidebar as a list: one row per part
+   (size · icon · name · type glyph · ON/OFF). */
+.hs-hangar-parts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.hs-hangar-part {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+}
+.hs-hangar-part > .hs-slot-size {
+    position: static;
+    order: 0;
+    flex: 0 0 auto;
+}
+.hs-hangar-part-icon {
+    order: 1;
+    flex: 0 0 auto;
+}
+.hs-hangar-part-icon img {
+    width: 24px;
+    height: 24px;
+}
+.hs-hangar-part-name {
+    order: 2;
+    flex: 1 1 auto;
+    font-size: var(--font-small);
+}
+.hs-hangar-part > .hs-hangar-part-glyph {
+    position: static;
+    order: 3;
+    flex: 0 0 auto;
+}
+.hs-hangar-part-state {
+    order: 4;
+    flex: 0 0 auto;
+    min-width: 30px;
+    text-align: center;
+}
+
+/* PARTS sidebar: fill the panel height like the ships list does, and
+   larger rows whose icon stays inside its own box. */
+.hs-hangar-list .hs-hangar-parts {
+    flex: 1 1 0;
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+.hs-hangar-part {
+    min-height: 44px;
+    gap: 10px;
+    padding: 6px 10px 6px 8px;
+}
+.hs-hangar-part-icon {
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-hangar-part-icon img,
+.hs-hangar-part-icon canvas,
+.hs-hangar-part-icon svg {
+    width: 32px;
+    height: 32px;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+.hs-hangar-part-name {
+    font-size: var(--font-text);
+}
+
+/* --- Style picker dropdown (hull / module styles in the component tree). */
+.hs-style-dropdown {
+    position: relative;
+    min-width: 0;
+}
+.hs-style-dropdown-current {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 4px 4px;
+    list-style: none;
+    cursor: pointer;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 45%, transparent);
+    background: #09090d;
+}
+.hs-style-dropdown-current::-webkit-details-marker { display: none; }
+.hs-style-dropdown-current:hover,
+.hs-style-dropdown[open] > .hs-style-dropdown-current {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+.hs-style-dropdown-thumb {
+    flex: 0 0 auto;
+    line-height: 0;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 30%, transparent);
+}
+.hs-style-dropdown-thumb canvas {
+    display: block;
+    width: 96px;
+    height: 72px;
+    image-rendering: pixelated;
+}
+.hs-style-dropdown-text {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    letter-spacing: 1px;
+}
+.hs-style-dropdown-text strong {
+    font-size: var(--font-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-style-dropdown-text small {
+    font-size: var(--font-small);
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    font-variant-numeric: tabular-nums;
+}
+.hs-style-dropdown-caret {
+    color: var(--current-primary, var(--color-primary, #00ffcc));
+    transition: transform 0.15s steps(3, end);
+}
+.hs-style-dropdown[open] .hs-style-dropdown-caret { transform: rotate(180deg); }
+.hs-style-dropdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 4px;
+    max-height: 340px;
+    overflow-y: auto;
+    border: var(--ui-border-width) solid var(--current-primary, var(--color-primary, #00ffcc));
+    background: #09090d;
+}
+.hs-style-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 8px 3px 3px;
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    text-align: left;
+    color: var(--color-text);
+    background: transparent;
+    border: var(--ui-border-width) solid transparent;
+    cursor: pointer;
+}
+.hs-style-option:hover,
+.hs-style-option:focus-visible {
+    border-color: color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 70%, transparent);
+    outline: none;
+}
+.hs-style-option.is-active {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent) 72%, transparent), inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent) 48%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent) 30%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--current-primary, var(--color-primary, #00ffcc)) 40%, transparent) 16%, transparent);
+}
+.hs-style-option.is-active .hs-style-dropdown-thumb {
+    border-color: var(--current-primary, var(--color-primary, #00ffcc));
+}
+
+/* Hangar sidebar AREAS | PARTS tabs: readable text + icon. */
+.hs-hangar-list > .hs-panel-title > .hs-hangar-view-toggle > .hs-hangar-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: var(--font-text);
+    letter-spacing: 2px;
+}
+.hs-hangar-view-btn img,
+.hs-hangar-view-btn .hs-pixel {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    image-rendering: pixelated;
+}
+
+/* Planet map toolbar: jump to galaxy travel. */
+.galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-left: 0;
+    grid-column: 2;
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    flex: 0 0 auto;
+}
+.gm-teleport-icon {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    flex: 0 0 auto;
+}
+
+/* --- Empty weapon slots are always visible (both markers of a wing pair):
+   a slow pulse so free mounts read at a glance without hovering. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    pointer-events: auto;
+    animation: hs-empty-weapon-slot 1.6s ease-in-out infinite !important;
+}
+
+@keyframes hs-empty-weapon-slot {
+    0%, 100% { filter: drop-shadow(2px 0 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)); transform: scale(1); }
+    50% { filter: drop-shadow(4px 0 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(-4px 0 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(0 4px 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)) drop-shadow(0 -4px 0 color-mix(in srgb, var(--slot-shape-color) 55%, transparent)); transform: scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin {
+        animation: none !important;
+    }
+}
+
+/* Area tiles: ON/OFF switch right behind the label, taller row. */
+.hs-area-tile {
+    min-height: 44px;
+    padding: 8px 8px;
+    gap: 4px 8px;
+}
+.hs-area-tile .hs-area-name {
+    gap: 8px;
+}
+.hs-area-tile .hs-area-name .hs-area-switch {
+    margin-left: 0;
+}
+.hs-area-tile .hs-area-btn {
+    padding: 6px 10px;
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"].is-pointer-target .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"].is-drop-target .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin:hover {
+    animation: none !important;
+}
+
+/* --- Area ON/OFF as a real pixel toggle switch: a track with a square knob
+   that snaps right (ON, lit) or left (OFF, dark). Label sits opposite the knob. */
+.hs-area-switch {
+    cursor: pointer;
+}
+.hs-area-switch .hs-area-switch-track {
+    position: relative;
+    box-sizing: border-box;
+    width: 46px;
+    min-width: 46px;
+    height: 20px;
+    padding: 0 20px 0 5px;
+    justify-content: flex-start;
+    font-size: var(--font-small);
+    line-height: 1;
+    border: var(--ui-border-width) solid var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, var(--color-background, #050508));
+    color: var(--color-text, #fff);
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, #000 35%, transparent);
+    transition: background 0.12s steps(2, end), border-color 0.12s steps(2, end);
+}
+/* Knob */
+.hs-area-switch .hs-area-switch-track::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: calc(100% - 16px);
+    width: 12px;
+    height: 12px;
+    background: var(--faction-accent, var(--color-primary));
+    box-shadow: inset -2px -2px 0 color-mix(in srgb, #000 35%, transparent), inset 2px 2px 0 color-mix(in srgb, #fff 45%, transparent);
+    transition: left 0.12s steps(3, end);
+}
+.hs-area-switch input:not(:checked) + .hs-area-switch-track {
+    padding: 0 4px 0 18px;
+    justify-content: flex-end;
+    border-color: var(--color-border);
+    background: color-mix(in srgb, var(--color-background, #050508) 85%, transparent);
+    color: var(--color-text-secondary);
+}
+.hs-area-switch input:not(:checked) + .hs-area-switch-track::before {
+    left: 2px;
+    background: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+}
+.hs-area-switch:hover .hs-area-switch-track {
+    border-color: var(--faction-accent, var(--color-primary));
+    filter: brightness(1.15);
+}
+.hs-area-switch:active .hs-area-switch-track::before {
+    transform: translateY(1px);
+}
+
+/* --- Empty slots drawn as mount sockets instead of type icons: a square
+   base plate with a raised rim, a dark recessed bore and four corner bolts.
+   The slot type only tints the rim (--slot-shape-color). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    /* Fill the slot: size of a part mounted here (set in draw-hangar-bay.js). */
+    width: var(--socket-size, 18px);
+    height: var(--socket-size, 18px);
+    margin: calc(var(--socket-size, 18px) / -2) 0 0 calc(var(--socket-size, 18px) / -2);
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10) !important;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--slot-shape-color) 70%, #000) !important;
+    box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff), inset -1px -1px 0 rgba(0, 0, 0, 0.6), 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--slot-shape-color) 45%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--slot-shape-color) 45%, transparent) 48%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--slot-shape-color) 45%, transparent) 30%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--slot-shape-color) 45%, transparent) 16%, transparent) !important;
+    filter: none;
+    image-rendering: pixelated;
+}
+/* Recessed bore in the middle. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::before {
+    inset: max(4px, calc(var(--socket-size, 18px) * 0.2));
+    clip-path: none;
+    background: #050508;
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.85), inset -1px -1px 0 color-mix(in srgb, var(--slot-shape-color) 40%, transparent);
+}
+/* Four corner bolts (one 2px pixel + three shadows). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::after {
+    inset: auto;
+    left: 0;
+    top: 0;
+    width: 2px;
+    height: 2px;
+    clip-path: none;
+    background: color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+    box-shadow: calc(var(--socket-size, 18px) - 6px) 0 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff), 0 calc(var(--socket-size, 18px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff), calc(var(--socket-size, 18px) - 6px) calc(var(--socket-size, 18px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-dot {
+    display: none;
+}
+/* Drop target / pointer target: the bore lights up — "part goes in here". */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin::before,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin::before {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin {
+    border-color: var(--slot-shape-color) !important;
+}
+@keyframes hs-empty-weapon-slot {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+/* Socket size = the mount size of a part in that area (set per slot in JS). */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    width: var(--socket-size, 28px);
+    height: var(--socket-size, 28px);
+    margin: calc(var(--socket-size, 28px) / -2) 0 0 calc(var(--socket-size, 28px) / -2);
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::before {
+    inset: max(3px, calc(var(--socket-size, 28px) * 0.22));
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin::after {
+    box-shadow: calc(var(--socket-size, 28px) - 6px) 0 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff), 0 calc(var(--socket-size, 28px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff), calc(var(--socket-size, 28px) - 6px) calc(var(--socket-size, 28px) - 6px) 0 color-mix(in srgb, var(--slot-shape-color) 60%, #fff);
+}
+
+/* Narrow component-tree rows: knob-only switch so area names stay readable. */
+.hs-tree-branch > summary .hs-area-switch .hs-area-switch-track {
+    width: 30px;
+    min-width: 30px;
+    height: 16px;
+    padding: 0;
+    font-size: 0;
+}
+.hs-tree-branch > summary .hs-area-switch .hs-area-switch-track::before {
+    top: 1px;
+    width: 10px;
+    height: 10px;
+    left: calc(100% - 13px);
+}
+.hs-tree-branch > summary .hs-area-switch input:not(:checked) + .hs-area-switch-track {
+    padding: 0;
+}
+.hs-tree-branch > summary .hs-area-switch input:not(:checked) + .hs-area-switch-track::before {
+    left: 1px;
+}
+
+/* Empty sockets keep their socket look in every state (hover, linked
+   hover, pointer target, drop target): no zoom, no restyle — only the bore
+   lights up. Both markers of a wing pair react the same way. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin:hover,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-hover-linked[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-pointer-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-drop-target[data-slot-kind] .hs-hangar-slot-pin,
+.hs-hangar-bay-stage[data-drag-kind] .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin {
+    transform: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10) !important;
+    border: var(--ui-border-width) solid var(--slot-shape-color) !important;
+    box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff), inset -1px -1px 0 rgba(0, 0, 0, 0.6), 0 0 0 4px color-mix(in srgb, var(--slot-shape-color) 72%, transparent), 0 0 0 6px color-mix(in srgb, var(--slot-shape-color) 48%, transparent), 0 0 0 10px color-mix(in srgb, var(--slot-shape-color) 30%, transparent), 0 0 0 14px color-mix(in srgb, var(--slot-shape-color) 16%, transparent) !important;
+}
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind] .hs-hangar-slot-pin:hover::before,
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty.is-hover-linked[data-slot-kind] .hs-hangar-slot-pin::before {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* --- Weapon slot bar: top centre of the hangar bay. Drop weapons on a
+   tile, drag an empty tile onto the ship to place its socket. */
+.hs-slot-bar {
+    position: absolute;
+    top: 8px;
+    z-index: 6;
+    display: flex;
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+    padding: 4px 6px;
+    background: color-mix(in srgb, var(--color-background) 80%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    pointer-events: auto;
+}
+.hs-slot-bar:empty {
+    display: none;
+}
+.hs-slot-tile {
+    --slot-shape-color: var(--faction-accent, var(--color-primary));
+    display: flex;
+    font: inherit;
+    color: var(--color-text);
+    background: transparent;
+    border: var(--ui-border-width) solid transparent;
+    cursor: grab;
+    touch-action: none;
+}
+.hs-slot-tile:hover,
+.hs-slot-tile:focus-visible,
+.hs-slot-tile.is-drop-target {
+    border-color: var(--slot-shape-color);
+    outline: none;
+}
+.hs-slot-tile.is-dragging {
+    opacity: 0.4;
+}
+.hs-slot-tile-label {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+.hs-slot-tile-label small {
+    color: var(--slot-shape-color);
+}
+/* Socket: nose tile full size, wing tiles half (a split gun is half size). */
+.hs-slot-tile-socket {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: color-mix(in srgb, var(--slot-shape-color) 18%, #0b0b10);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--slot-shape-color) 70%, #000);
+    box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--slot-shape-color) 55%, #fff), inset -1px -1px 0 rgba(0, 0, 0, 0.6);
+}
+.hs-slot-tile.is-wing .hs-slot-tile-socket {
+    width: 24px;
+    height: 24px;
+}
+.hs-slot-tile-socket img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.hs-slot-tile-bore {
+    position: absolute;
+    inset: 25%;
+    background: #050508;
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.85);
+}
+.hs-slot-tile.is-empty:hover .hs-slot-tile-bore,
+.hs-slot-tile.is-drop-target .hs-slot-tile-bore {
+    background: color-mix(in srgb, var(--slot-shape-color) 75%, #fff);
+}
+.hs-slot-tile.is-drop-target .hs-slot-tile-socket {
+    border-color: var(--slot-shape-color);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--slot-shape-color) 72%, transparent), 0 0 0 6px color-mix(in srgb, var(--slot-shape-color) 48%, transparent), 0 0 0 10px color-mix(in srgb, var(--slot-shape-color) 30%, transparent), 0 0 0 14px color-mix(in srgb, var(--slot-shape-color) 16%, transparent);
+}
+/* Socket following the cursor while placing a slot on the ship. */
+.hs-slot-socket-ghost {
+    position: fixed;
+    left: -14px;
+    top: -14px;
+    width: 28px;
+    height: 28px;
+    z-index: 10000;
+    pointer-events: none;
+    background: #050508;
+    border: var(--ui-border-width) dashed var(--faction-accent, var(--color-primary));
+}
+.hs-slot-socket-ghost.is-wing {
+    left: -9px;
+    top: -9px;
+    width: 18px;
+    height: 18px;
+}
+.hs-slot-socket-ghost.is-valid {
+    border-style: solid;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 72%, transparent), 0 0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 48%, transparent), 0 0 0 10px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent), 0 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent);
+}
+.hs-slot-socket-ghost.is-invalid {
+    border-color: #ff5a3c;
+    opacity: 0.7;
+}
+
+/* Slot menu: per-slot size upgrade row. */
+.hs-slot-upgrade {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: var(--ui-border-width) dashed color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+}
+.hs-slot-upgrade-label { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; }
+.hs-slot-upgrade-cost { display: inline-flex; gap: 6px; }
+.hs-slot-upgrade .hs-slot-upgrade-btn { padding: 4px 10px; font-size: var(--font-small); }
+.hs-slot-upgrade.is-max { border-style: solid; opacity: 0.8; }
+
+/* Hover-only move handle on an equipped slot's corner: drag = move the
+   slot with its weapon (grabbing the weapon itself still unslots it). */
+.hs-slot-move-handle {
+    position: absolute;
+    z-index: 7;
+    width: 24px;
+    height: 24px;
+    padding: 2px;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-background);
+    background: var(--faction-accent, var(--color-primary));
+    border: var(--ui-border-width) solid var(--color-background);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 72%, transparent), 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 48%, transparent), 0 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent), 0 0 0 10px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent);
+    cursor: move;
+    touch-action: none;
+}
+.hs-slot-move-handle[hidden] {
+    display: none;
+}
+.hs-slot-move-handle svg {
+    fill: currentColor;
+}
+.hs-slot-move-handle:hover,
+.hs-slot-move-handle.is-dragging {
+    background: var(--color-text);
+}
+.hs-slot-move-handle.is-invalid {
+    background: #ff5a3c;
+    cursor: not-allowed;
+}
+
+/* Pilot card: just the name, a bit larger. */
+.hs-pilot-card .hs-pilot-name {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: var(--font-h2);
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: var(--color-text);
+}
+
+/* The mirrored half of a split slot is clickable too (pans to it). */
+.hs-hangar-slot-layer .hs-hangar-slot-pin.is-mirror {
+    pointer-events: auto !important;
+    cursor: pointer;
+}
+/* Both halves of an empty split slot can be grabbed and moved. */
+.hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"] .hs-hangar-slot-pin.is-mirror {
+    pointer-events: auto;
+    cursor: grab;
+}
+
+/* Empty weapon slots stay visible and grabbable in every area, also after
+   being moved out of the hovered area (beats the "hidden until the area is
+   hovered" rule on specificity). */
+.hs-hangar-bay-stage .hs-hangar-slot-layer .hs-hangar-slot.is-empty[data-slot-kind="weapon"]:not(.is-pulling) .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+/* Slot focused from the slot bar: every marker of it (both halves of a
+   split slot) lights up, visible in any area. */
+.hs-hangar-bay-stage .hs-hangar-slot-layer .hs-hangar-slot.is-focused .hs-hangar-slot-pin {
+    opacity: 1 !important;
+    outline: var(--ui-border-width) solid var(--color-text);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 72%, transparent), 0 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 48%, transparent), 0 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent), 0 0 0 18px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, transparent) !important;
+    animation: none !important;
+}
+.hs-slot-tile.is-focused {
+    border-color: var(--color-text);
+}
+
+/* --- Hangar header stats: four equal tiles across the full width. */
+.hs-hangar-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+.hs-hangar-stats .hs-hangar-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 10px 6px 6px;
+    white-space: normal;
+}
+.hs-stat-icon {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.hs-stat-icon .ui-icon-tip { display: block; line-height: 0; }
+.hs-stat-icon img { display: block; max-width: none; max-height: none; }
+.hs-stat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.hs-hangar-stats .hs-hangar-stat em {
+    font-size: var(--font-small);
+    letter-spacing: 2px;
+    line-height: 1;
+}
+.hs-stat-value {
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: var(--font-h2);
+    line-height: 16px;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+.hs-stat-of, .hs-stat-x {
+    font-size: var(--font-text);
+    color: var(--color-text-secondary);
+}
+.hs-stat-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.hs-stat-detail small {
+    font-size: var(--font-small);
+    letter-spacing: 1px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hs-stat-bar {
+    display: block;
+    height: 4px;
+    background: color-mix(in srgb, var(--color-text-secondary) 25%, transparent);
+}
+.hs-stat-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--faction-accent, var(--color-primary));
+}
+.hs-hangar-stat.is-negative .hs-stat-bar > span { background: var(--color-danger, #ff4d4d); }
+.hs-stat-chips { display: flex; flex-wrap: wrap; gap: 3px 6px; }
+.hs-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--font-small);
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.hs-stat-chip img { width: 12px; height: 12px; image-rendering: pixelated; }
+.hs-stat-chip.is-full { color: var(--color-text); }
+@media (max-width: 900px) {
+    .hs-hangar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- Left HUD column: info packs to content; weapon + vitals take the rest. */
+.game-left-cluster > .game-info-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+}
+.game-left-cluster > .weapon-selection {
+    flex: 1 1 auto;
+    min-height: clamp(110px, calc(20 * var(--sv-h)), 200px);
+}
+.game-left-cluster > .player-vitals-side {
+    --vitals-h: clamp(140px, calc(24 * var(--sv-h)), 280px);
+    flex: 1 1 auto;
+    height: auto;
+    min-height: var(--vitals-h);
+    max-height: none;
+}
+
+/* HUD rails: 3 sizes — lg titles / md values / sm labels */
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) { font-size: var(--font-md); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-cluster-title { font-size: var(--font-sm); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-metric-label, .gi-row-label, .gi-chip-row-label) {
+    font-size: var(--font-sm);
+    opacity: 1;
+    color: color-mix(in srgb, var(--color-text, #fff) 80%, var(--faction-accent, var(--color-primary)));
+}
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-metric-value { font-size: var(--font-md); color: #fff; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-value { font-size: var(--font-md); color: #fff; }
+:is(.game-info-panel, .gi-loadout-side) .gi-chip-label { font-size: var(--font-sm); }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row { grid-template-columns: 24px minmax(0, 1fr); gap: 2px 6px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) :is(.gi-row-icon, .gi-icon) { width: 24px; height: 24px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon { display: inline-flex; align-items: center; justify-content: center; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon .ui-weapon-tilt { width: 24px; height: 24px; }
+:is(.game-info-panel, .gi-loadout-side, .gi-mission-side) .gi-row-icon img { width: 24px !important; height: 24px !important; }
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon .ui-weapon-tilt {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.game-left-cluster .weapon-info { font-size: var(--font-sm); }
+.player-vitals-side .health-fill {
+    width: 44px;
+}
+
+/* Ship tables (owned ships + blueprints): thumb left, name and stats right. */
+.hs-ship-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+}
+.hs-ship-table th {
+    text-align: left;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    opacity: 0.6;
+    padding: 2px 6px 4px;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.hs-ship-table td {
+    vertical-align: middle;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    font-variant-numeric: tabular-nums;
+}
+.hs-ship-table-weapons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+/* Weapon icon: shot sprite tilted diagonally, tinted per weapon. */
+.hs-weapon-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--weapon-color, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, var(--weapon-color, var(--color-primary)) 10%, transparent);
+}
+/* Faction affinity: this faction deals +20% with the weapon. */
+.hs-weapon-icon.is-affinity {
+    border-color: var(--weapon-color, var(--color-primary));
+    box-shadow: 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 48%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 30%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 16%, transparent);
+}
+.hs-ship-table-action {
+    text-align: right;
+    white-space: nowrap;
+}
+.hs-ship-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    padding: 0;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.hs-ship-icon-btn {
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #05060a);
+    background: #05060a;
+    clip-path: var(--faction-ctl-clip, polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px), 0 4px, 2px 4px, 2px 2px, 4px 2px));
+    image-rendering: pixelated;
+}
+.hs-ship-icon-btn .hs-pixel { width: 20px; height: 20px; image-rendering: pixelated; }
+button.hs-ship-icon-btn:is(:hover, .nav-focused) {
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, #05060a);
+}
+.hs-ship-icon-btn.is-active {
+    color: var(--color-primary);
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #05060a);
+}
+.hs-ship-table-thumb {
+    width: 60px;
+}
+.hs-ship-table-name strong {
+    display: block;
+    letter-spacing: 0.08em;
+}
+.hs-ship-table-name span {
+    opacity: 0.6;
+    letter-spacing: 0.1em;
+}
+.hs-ship-thumb {
+    display: inline-flex;
+    width: 56px;
+    height: 44px;
+}
+.hs-ship-thumb {
+    position: relative;
+}
+/* Placeholder while / if the ship render is missing. */
+.hs-ship-thumb-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.25;
+    filter: grayscale(1);
+}
+.hs-ship-thumb.is-drawn .hs-ship-thumb-empty {
+    display: none;
+}
+.hs-ship-thumb canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+/* Blueprint icon: ship drawn as white line art on grid paper. */
+.hs-ship-thumb-bp {
+    position: relative;
+    border: var(--ui-border-width) solid #9cc8f5;
+    background:
+        linear-gradient(rgba(216, 236, 255, 0.2) 1px, transparent 1px) 0 0 / 6px 6px,
+        linear-gradient(90deg, rgba(216, 236, 255, 0.2) 1px, transparent 1px) 0 0 / 6px 6px,
+        radial-gradient(ellipse at 50% 45%, #2767ad, #1b4f8a 75%);
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45);
+}
+.hs-ship-thumb-bp::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -1px;
+    border-style: solid;
+    border-width: 0 9px 9px 0;
+    border-color: transparent #0f2a4a #5d8fc4 transparent;
+}
+.hs-ship-thumb-type {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+.hs-ship-thumb-type .hs-pixel {
+    width: 32px;
+    height: 32px;
+    filter: grayscale(1) brightness(2.4) drop-shadow(2px 0 0 color-mix(in srgb, rgba(216, 236, 255, 0.7) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, rgba(216, 236, 255, 0.7) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, rgba(216, 236, 255, 0.7) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, rgba(216, 236, 255, 0.7) 55%, transparent));
+}
+
+/* Weapon icons everywhere: tilted 45° so the shot shapes read apart
+   (tint comes from weaponConfigManager.getWeaponUiColor). */
+.ui-weapon-tilt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+.ui-weapon-tilt img {
+    transform: rotate(45deg) scale(0.85);
+}
+
+/* Hangar weapon rows: stats under the name, slotted hardware on the right. */
+.hs-hangar-part[data-part-kind="weapon"] .hs-hangar-part-name,
+.hs-hangar-part[data-part-kind="energy"] .hs-hangar-part-name,
+.hs-hangar-part[data-part-kind="ability"] .hs-hangar-part-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.hs-hangar-weapon-stats {
+    display: flex;
+    gap: 12px;
+    font-size: var(--font-h2);
+    opacity: 0.85;
+    letter-spacing: 0.06em;
+}
+.hs-hangar-weapon-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.hs-hangar-weapon-stat img { display: block; flex: 0 0 auto; }
+.hs-hangar-part[data-part-kind="weapon"].is-equipped .hs-hangar-part-glyph {
+    display: none;
+}
+.hs-hangar-part-mount {
+    order: 3;
+    display: inline-flex;
+    width: 56px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.hs-hangar-part-mount img {
+    width: 100%;
+    height: 100%;
+}
+
+/* Auto sidebar resize handles (js/ui/sidebar-resize-auto.js) */
+.sb-auto-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 20;
+    cursor: col-resize;
+}
+.sb-auto-handle.sb-auto-right { right: -5px; }
+.sb-auto-handle.sb-auto-left { left: -5px; }
+.sb-auto-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: var(--color-primary);
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.sb-auto-handle:hover::after,
+.sb-auto-handle.is-active::after { opacity: 0.8; }
+
+/* Fire key badge on weapon slot tiles (SPACE / A / S / D) */
+.hs-slot-tile { position: relative; }
+.hs-slot-tile-key {
+    /* Own row above the socket instead of overlapping the tile corner. */
+    position: static;
+    order: -1;
+    align-self: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-small);
+    line-height: 1;
+    font-weight: bold;
+    color: var(--color-background, #000);
+    background: var(--color-primary);
+    border: var(--ui-border-width) solid var(--color-text);
+    cursor: pointer;
+    z-index: 2;
+}
+.hs-slot-tile-key.is-space { background: color-mix(in srgb, var(--color-primary) 55%, #000); color: var(--color-text); }
+.hs-slot-tile-key.is-a { background: #ffd23d; }
+.hs-slot-tile-key.is-s { background: #3dd8ff; }
+.hs-slot-tile-key.is-d { background: #ff6aa8; }
+.hs-slot-tile-key:hover { outline: var(--ui-border-width) solid var(--color-text); }
+
+/* Parts list: no row frames — an equipped part is shown by its glowing icon. */
+.hs-hangar-part,
+.hs-hangar-part.is-equipped,
+.hs-hangar-part:hover,
+.hs-hangar-part:focus-visible {
+    border-color: transparent;
+    box-shadow: none;
+}
+.hs-hangar-part:hover,
+.hs-hangar-part:focus-visible {
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.hs-hangar-part .hs-hangar-part-icon {
+    opacity: 0.55;
+    transition: opacity 0.15s, filter 0.15s;
+}
+.hs-hangar-part.is-equipped .hs-hangar-part-icon {
+    opacity: 1;
+    overflow: visible;
+    /* Dark 2px outline first, so the glow starts outside it. */
+    filter: drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a) drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a) drop-shadow(2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(4px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(-4px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 4px 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 -4px 0 color-mix(in srgb, var(--color-primary) 55%, transparent));
+}
+
+/* Active parts: brighter text than the idle rows. */
+.hs-hangar-part.is-equipped .hs-hangar-part-name {
+    color: color-mix(in srgb, var(--color-primary) 70%, #fff);
+    opacity: 1;
+}
+.hs-hangar-part.is-equipped .hs-hangar-part-title {
+    font-weight: bold;
+}
+.hs-hangar-part.is-equipped .hs-hangar-weapon-stats {
+    opacity: 0.9;
+}
+
+/* Fire key badge: bigger, no outline. */
+.hs-slot-tile .hs-slot-tile-key {
+    /* Fixed box: SPC / A / S / D all the same size, no jump when cycling. */
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+    padding: 0;
+    box-sizing: border-box;
+    font-size: var(--font-text);
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+.hs-slot-tile .hs-slot-tile-key:hover {
+    outline: none;
+    filter: brightness(1.2);
+}
+
+/* ALL tile in the weapon slot bar (fire-all key), set apart from the slots. */
+.hs-slot-tile.hs-slot-tile-all {
+    cursor: default;
+    margin-right: 6px;
+}
+.hs-slot-tile.hs-slot-tile-all .hs-slot-tile-all-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-text);
+    font-weight: bold;
+    color: var(--color-text);
+}
+.hs-slot-tile.hs-slot-tile-all.is-wing .hs-slot-tile-all-label {
+    font-size: var(--font-small);
+    letter-spacing: 0;
+}
+/* ALL label centred in its socket: no trailing letter-spacing, tight line box. */
+.hs-slot-tile.hs-slot-tile-all .hs-slot-tile-all-label {
+    letter-spacing: 0;
+    line-height: 1;
+    padding: 0;
+    text-align: center;
+}
+
+/* Part size after the name, in brackets: "CLAW BEAM (S)". */
+.hs-hangar-part-size {
+    opacity: 0.7;
+    white-space: nowrap;
+}
+.hs-hangar-part.is-too-big .hs-hangar-part-size {
+    color: #ff5a5a;
+    opacity: 1;
+}
+/* Slot bar: tiles of different sizes line up at the top. */
+
+/* Status toast (home station): bottom centre, temporary, station panel style. */
+.hs-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 56px;
+    z-index: 10000;
+    max-width: min(560px, calc(calc(100 * var(--sv-w)) - 32px));
+    font-family: var(--ui-font-family, inherit);
+    font-size: var(--font-text, 12px);
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-surface, #0b0b10) 92%, transparent);
+    border: var(--ui-border-width) solid var(--color-primary);
+    box-shadow: 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 35%, transparent) 16%, transparent);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 78%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 42%, transparent), 8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), -8px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), 0 8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent), 0 -8px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 18%, transparent);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 6px), calc(100% - 4px) calc(100% - 6px), calc(100% - 4px) calc(100% - 4px), calc(100% - 6px) calc(100% - 4px), calc(100% - 6px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 0 100%, 0 8px, 2px 8px, 2px 6px, 4px 6px, 4px 4px, 6px 4px, 6px 2px, 8px 2px);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 12px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.hs-toast.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+.hs-toast.hs-status-ok {
+    color: var(--status-success);
+    border-color: var(--status-success);
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--status-success) 45%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--status-success) 45%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--status-success) 45%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--status-success) 45%, transparent) 16%, transparent);
+}
+.hs-toast.hs-status-fail {
+    color: var(--status-error);
+    border-color: var(--status-error);
+    box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 16%, transparent);
+}
+/* Bigger toast. */
+.hs-toast {
+    max-width: min(760px, calc(calc(100 * var(--sv-w)) - 32px));
+    padding: 14px 32px;
+    font-size: calc(var(--font-text, 12px) * 1.5);
+    letter-spacing: 3px;
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 2px) calc(100% - 12px), calc(100% - 2px) calc(100% - 10px), calc(100% - 4px) calc(100% - 10px), calc(100% - 4px) calc(100% - 8px), calc(100% - 6px) calc(100% - 8px), calc(100% - 6px) calc(100% - 6px), calc(100% - 8px) calc(100% - 6px), calc(100% - 8px) calc(100% - 4px), calc(100% - 10px) calc(100% - 4px), calc(100% - 10px) calc(100% - 2px), calc(100% - 12px) calc(100% - 2px), calc(100% - 12px) 100%, 0 100%, 0 12px, 2px 12px, 2px 10px, 4px 10px, 4px 8px, 6px 8px, 6px 6px, 8px 6px, 8px 4px, 10px 4px, 10px 2px, 12px 2px);
+}
+
+/* Dragging a part: slots it is too big for. */
+.hs-slot-tile.is-too-small,
+.hs-hangar-slot.is-too-small .hs-hangar-slot-pin {
+    border-color: #ff4a4a !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, rgba(255, 74, 74, 0.6) 72%, transparent), 0 0 0 4px color-mix(in srgb, rgba(255, 74, 74, 0.6) 48%, transparent), 0 0 0 8px color-mix(in srgb, rgba(255, 74, 74, 0.6) 30%, transparent), 0 0 0 10px color-mix(in srgb, rgba(255, 74, 74, 0.6) 16%, transparent) !important;
+    opacity: 0.8;
+}
+
+/* Upgrade tree: keep the panel inside the body so the tree scroller is
+   shorter than the tree and can pan vertically (it grew to full content
+   height and was clipped by .hs-body's overflow:hidden). */
+.hs-body > .hs-upgrade-root {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.hs-upgrade-root > .hs-tab-fill {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+/* Upgrade tree fits horizontally; only vertical scrolling. */
+.hs-upgrade-root .hs-upg-tree-scroll {
+    overflow-x: hidden;
+}
+
+/* Tab row: still scrollable when narrow, but no scrollbar flashing in while
+   the newly active tab grows during the switch. */
+.hs-tabs {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.hs-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* Keep the station navigation usable at tablet/desktop widths where the
+   pilot card and the full area row do not fit beside each other. */
+@media (max-width: 1100px) {
+    .home-station-content {
+        box-sizing: border-box;
+    }
+
+    .hs-header-split {
+        flex-direction: column;
+    }
+
+    .hs-pilot-card {
+        max-width: none;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .hs-header-main,
+    .hs-header-main .hs-topbar,
+    .hs-header-main .hs-subnav {
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
+/* Enemy HUD rows: no frames — use the space for portrait, name and bar. */
+.enemy-vitals-side .health-bar.enemy-health,
+.enemy-vitals-side .health-bar.enemy-health.is-champion {
+    padding: 4px 2px;
+    gap: 4px;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+.enemy-vitals-side .health-bar.enemy-health + .health-bar.enemy-health {
+    margin-top: 4px;
+}
+.enemy-vitals-side .health-ship-icon {
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-ship-icon {
+    width: 56px !important;
+    height: 56px !important;
+}
+.enemy-vitals-side .enemy-head {
+    gap: 10px;
+}
+.enemy-vitals-side .enemy-name {
+    font-size: var(--font-text);
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-name {
+    font-size: var(--font-text);
+}
+.enemy-vitals-side .health-bar.enemy-health .health-fill,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
+    border: none;
+    height: 14px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #000);
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
+    height: 18px;
+}
+.enemy-vitals-side .health-bar.enemy-health:not(.is-champion) .enemy-hp-text {
+    line-height: 14px;
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-hp-text {
+    line-height: 18px;
+    font-size: var(--font-small);
+}
+
+/* Slot move handle: bigger invisible hit area, so presses at its edge or in
+   the gap to the slot don't fall through to the canvas (wing / segment drag). */
+.hs-slot-move-handle::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+}
+.hs-slot-move-handle.is-dragging {
+    cursor: grabbing;
+}
+
+/* Profiles list: per-row SWITCH / DELETE buttons. */
+.hs-menu-profile-row { cursor: pointer; }
+.hs-menu-profile-actions {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 10px;
+    flex: 0 0 auto;
+}
+.hs-menu-profile-act {
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    color: var(--row-accent, var(--color-primary));
+    background: transparent;
+    border: var(--ui-border-width) solid var(--row-accent, var(--color-primary));
+    cursor: pointer;
+}
+.hs-menu-profile-act {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.hs-menu-profile-act-ico {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: square;
+}
+.hs-menu-profile-act:hover,
+.hs-menu-profile-act:focus-visible {
+    color: var(--color-background, #000);
+    background: var(--row-accent, var(--color-primary));
+    outline: none;
+}
+.hs-menu-profile-act.is-danger {
+    color: var(--status-error, #ff5a3c);
+    border-color: var(--status-error, #ff5a3c);
+}
+.hs-menu-profile-act.is-danger:hover,
+.hs-menu-profile-act.is-danger.is-armed {
+    color: #000;
+    background: var(--status-error, #ff5a3c);
+}
+
+/* Buy tile at the end of the weapon slot bar (purchase model). */
+.hs-slot-tile.hs-slot-tile-buy {
+    cursor: pointer;
+    margin-left: 6px;
+}
+.hs-slot-tile.hs-slot-tile-buy .hs-slot-tile-socket {
+    border-style: dashed;
+    font-size: 20px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-slot-tile.hs-slot-tile-buy .hs-slot-tile-buy-cost {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #000);
+    color: var(--color-text);
+    cursor: pointer;
+}
+.hs-slot-tile.hs-slot-tile-buy:hover .hs-slot-tile-socket {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #0b0b10);
+}
+.hs-slot-tile.hs-slot-tile-buy.is-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Galaxy map host positioning for overlay children. */
+.galaxy-map-embedded,
+.galaxy-map-content {
+    position: relative;
+}
+/* Legacy absolute ruler (non-stage); stage layout overrides this. */
+.galaxy-map-content > .galaxy-map-header .galaxy-map-ruler,
+.galaxy-map-overlay .galaxy-map-ruler {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 5;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    min-width: 260px;
+    justify-content: space-between;
+    background: color-mix(in srgb, var(--color-background, #000) 85%, transparent);
+    border: var(--ui-border-width, 2px) solid var(--ruler-accent);
+    pointer-events: none;
+}
+.galaxy-map-ruler-emblem {
+    display: inline-flex;
+    width: 48px;
+    height: 48px;
+}
+.galaxy-map-ruler-emblem > * {
+    width: 100%;
+    height: 100%;
+}

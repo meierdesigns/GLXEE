@@ -1,0 +1,230 @@
+/* GUI styles for kronax: every rule is scoped with html[data-faction="kronax"] / html[data-pf="kronax"] / html[data-vf-faction="kronax"].
+   Split out of styles.css; loaded after it (index.html). */
+html[data-faction="kronax"],
+.profile-selection-content[data-faction="kronax"] {
+    --faction-clip: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, 100% 0, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 0 100%);
+    --faction-border-width: calc(var(--ui-border-width) + 2px);
+    --faction-surface:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 0px 0px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 4px 4px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 8px 8px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 60%, transparent) 0) 12px 12px / 16px 16px;
+    --faction-surface-opacity: 0.2;
+}
+
+html[data-faction="kronax"],
+.hs-faction-card[data-faction="kronax"],
+.hs-menu-profile-row[data-faction="kronax"],
+.profile-selection-content[data-faction="kronax"] {
+    --faction-panel-clip: polygon(0px 28px, 0px 21px, 7px 21px, 7px 14px, 14px 14px, 14px 7px, 21px 7px, 21px 0px, 28px 0px, calc(50% - 24px) 0px, calc(50% - 24px) 7px, 50% 8px, calc(50% + 24px) 7px, calc(50% + 24px) 0px, 100% 0, 100% calc(100% - 28px), 100% calc(100% - 21px), calc(100% - 7px) calc(100% - 21px), calc(100% - 7px) calc(100% - 14px), calc(100% - 14px) calc(100% - 14px), calc(100% - 14px) calc(100% - 7px), calc(100% - 21px) calc(100% - 7px), calc(100% - 21px) 100%, calc(100% - 28px) 100%, calc(50% + 24px) 100%, calc(50% + 24px) calc(100% - 7px), 50% calc(100% - 8px), calc(50% - 24px) calc(100% - 7px), calc(50% - 24px) 100%, 0 100%);
+    --faction-ctl-clip: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
+}
+
+html[data-faction="kronax"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    padding: 12px 16px 12px 24px;
+}
+
+html[data-faction="kronax"] .home-station-overlay .hs-panel-title {
+    /* Stair-stepped blade banding behind the header. */
+    background:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 0px 0px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 4px 4px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 8px 8px / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 26%, transparent) 0) 12px 12px / 16px 16px;
+}
+
+.profile-selection-content[data-faction="kronax"] {
+    --pf-shape: polygon(0px 42px, 0px 36px, 6px 36px, 6px 30px, 12px 30px, 12px 24px, 18px 24px, 18px 18px, 24px 18px, 24px 12px, 30px 12px, 30px 6px, 36px 6px, 36px 0px, 42px 0px, calc(50% - 30px) 0px, calc(50% - 30px) 6px, calc(50% - 15px) 6px, calc(50% - 15px) 12px, 50% 12px, calc(50% + 15px) 12px, calc(50% + 15px) 6px, calc(50% + 30px) 6px, calc(50% + 30px) 0px, 100% 0, 100% calc(100% - 42px), 100% calc(100% - 36px), calc(100% - 6px) calc(100% - 36px), calc(100% - 6px) calc(100% - 30px), calc(100% - 12px) calc(100% - 30px), calc(100% - 12px) calc(100% - 24px), calc(100% - 18px) calc(100% - 24px), calc(100% - 18px) calc(100% - 18px), calc(100% - 24px) calc(100% - 18px), calc(100% - 24px) calc(100% - 12px), calc(100% - 30px) calc(100% - 12px), calc(100% - 30px) calc(100% - 6px), calc(100% - 36px) calc(100% - 6px), calc(100% - 36px) 100%, calc(100% - 42px) 100%, calc(50% + 30px) 100%, calc(50% + 30px) calc(100% - 6px), calc(50% + 15px) calc(100% - 6px), calc(50% + 15px) calc(100% - 12px), 50% calc(100% - 12px), calc(50% - 15px) calc(100% - 12px), calc(50% - 15px) calc(100% - 6px), calc(50% - 30px) calc(100% - 6px), calc(50% - 30px) 100%, 0 100%);
+    --pf-shape-in: polygon(0px 40px, 0px 35px, 5px 35px, 5px 30px, 10px 30px, 10px 25px, 15px 25px, 15px 20px, 20px 20px, 20px 15px, 25px 15px, 25px 10px, 30px 10px, 30px 5px, 35px 5px, 35px 0px, 40px 0px, calc(50% - 30px) 0px, calc(50% - 30px) 5px, calc(50% - 15px) 5px, calc(50% - 15px) 10px, 50% 10px, calc(50% + 15px) 10px, calc(50% + 15px) 5px, calc(50% + 30px) 5px, calc(50% + 30px) 0px, 100% 0, 100% calc(100% - 40px), 100% calc(100% - 35px), calc(100% - 5px) calc(100% - 35px), calc(100% - 5px) calc(100% - 30px), calc(100% - 10px) calc(100% - 30px), calc(100% - 10px) calc(100% - 25px), calc(100% - 15px) calc(100% - 25px), calc(100% - 15px) calc(100% - 20px), calc(100% - 20px) calc(100% - 20px), calc(100% - 20px) calc(100% - 15px), calc(100% - 25px) calc(100% - 15px), calc(100% - 25px) calc(100% - 10px), calc(100% - 30px) calc(100% - 10px), calc(100% - 30px) calc(100% - 5px), calc(100% - 35px) calc(100% - 5px), calc(100% - 35px) 100%, calc(100% - 40px) 100%, calc(50% + 30px) 100%, calc(50% + 30px) calc(100% - 5px), calc(50% + 15px) calc(100% - 5px), calc(50% + 15px) calc(100% - 10px), 50% calc(100% - 10px), calc(50% - 15px) calc(100% - 10px), calc(50% - 15px) calc(100% - 5px), calc(50% - 30px) calc(100% - 5px), calc(50% - 30px) 100%, 0 100%);
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+
+html[data-faction="kronax"] .victory-title {
+    letter-spacing: 0.22em;
+    font-weight: 900;
+    transform: skewX(-8deg);
+}
+
+html[data-faction="kronax"] .victory-header {
+    background:
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 22%, transparent) 0) 0 0 / 16px 16px,
+        conic-gradient(from 90deg at 4px 4px, transparent 75%, color-mix(in srgb, var(--faction-accent) 22%, transparent) 0) 8px 8px / 16px 16px;
+    padding: 8px 0;
+}
+
+html[data-faction="kronax"] .game-over-content h2 { letter-spacing: 0.22em; transform: skewX(-8deg); }
+
+html[data-faction="kronax"] .pause-overlay h2 { letter-spacing: 0.22em; font-weight: 900; transform: skewX(-8deg); }
+
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"] {
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"] {
+    --pf-ctl: polygon(0px 14px, 0px 7px, 7px 7px, 7px 0px, 14px 0px, 100% 0px, 100% calc(100% - 14px), 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 14px) 100%, 0px 100%);
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="kronax"]::before {
+    /* aggressive hazard slashes */
+    background: repeating-linear-gradient(135deg, transparent 0 6px,
+        color-mix(in srgb, var(--faction-color) 28%, transparent) 6px 9px);
+}
+
+.profile-selection-content[data-faction="kronax"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-width: var(--ui-border-width, 2px);
+    border-style: solid;
+    box-shadow: inset 0 -10px 0 color-mix(in srgb, var(--fp-accent) 22%, transparent);
+    --fp-surface-opacity: 0.4;
+    --fp-ornament:
+        repeating-linear-gradient(-45deg, var(--fp-accent) 0 8px, #05060a 8px 16px) 0 0 / 100% 10px no-repeat,
+        linear-gradient(135deg, var(--fp-accent) 0 18px, transparent 18px) calc(100% - 0px) calc(100% - 0px) / 36px 36px no-repeat;
+}
+
+.profile-selection-content[data-faction="kronax"] .action-button,
+.profile-selection-content[data-faction="kronax"] .profile-faction-swatch {
+    border-width: var(--ui-border-width, 2px);
+    clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+    padding-left: 22px;
+    padding-right: 22px;
+}
+
+.vf-bezel[data-faction="kronax"]::after,
+.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
+}
+
+.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
+    background:
+        repeating-linear-gradient(135deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) 50% calc(4 * var(--u)) / 70% calc(7 * var(--u)) no-repeat,
+        repeating-linear-gradient(135deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) 50% calc(100% - 4 * var(--u)) / 70% calc(7 * var(--u)) no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 50% / calc(6 * var(--u)) 50% no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 100% 50% / calc(6 * var(--u)) 50% no-repeat;
+}
+
+.vf-bezel[data-faction="kronax"]::after, .vf-bezel[data-faction="kronax"] .vf-bezel-deco { }
+
+.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
+    background:
+        /* claw gashes raked across the plates */
+        linear-gradient(112deg, transparent 47%, #000 48% 50%, var(--retro-ink) 50.4% 51.4%, transparent 52%) 8% 0 / 22% 100% no-repeat,
+        linear-gradient(108deg, transparent 46%, #000 47% 49.5%, var(--retro-ink) 50% 51%, transparent 52%) 14% 0 / 22% 100% no-repeat,
+        linear-gradient(116deg, transparent 47%, #000 48% 50%, var(--retro-ink) 50.4% 51.4%, transparent 52%) 70% 0 / 22% 100% no-repeat,
+        linear-gradient(110deg, transparent 46%, #000 47% 49.5%, var(--retro-ink) 50% 51%, transparent 52%) 78% 0 / 22% 100% no-repeat,
+        /* crude iron straps with big rivets */
+        linear-gradient(#000 0 0) 30% calc(28 * var(--u)) / calc(70 * var(--u)) calc(8 * var(--u)) no-repeat,
+        linear-gradient(#000 0 0) 66% calc(100% - calc(30 * var(--u))) / calc(80 * var(--u)) calc(8 * var(--u)) no-repeat,
+        radial-gradient(circle, #8a3a24 0 calc(3 * var(--u)), transparent calc(3.5 * var(--u))) 0 0 / calc(46 * var(--u)) calc(46 * var(--u)) round no-repeat,
+        /* dried blood along the lower edge */
+        linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 50%, transparent), transparent) 0 100% / 100% calc(18 * var(--u)) no-repeat;
+}
+
+html[data-vf-faction="kronax"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
+    clip-path: polygon(0 0, calc(100% - 14px) 0, calc(100% - 14px) 2px, calc(100% - 12px) 2px, calc(100% - 12px) 4px, calc(100% - 10px) 4px, calc(100% - 10px) 6px, calc(100% - 8px) 6px, calc(100% - 8px) 8px, calc(100% - 6px) 8px, calc(100% - 6px) 10px, calc(100% - 4px) 10px, calc(100% - 4px) 12px, calc(100% - 2px) 12px, calc(100% - 2px) 14px, 100% 14px, 100% 100%, 14px 100%, 14px calc(100% - 2px), 12px calc(100% - 2px), 12px calc(100% - 4px), 10px calc(100% - 4px), 10px calc(100% - 6px), 8px calc(100% - 6px), 8px calc(100% - 8px), 6px calc(100% - 8px), 6px calc(100% - 10px), 4px calc(100% - 10px), 4px calc(100% - 12px), 2px calc(100% - 12px), 2px calc(100% - 14px), 0 calc(100% - 14px)) !important;
+    border-width: 3px !important;
+    letter-spacing: 0.14em;
+    box-shadow: inset 0 -4px 0 color-mix(in srgb, #8a1c10 70%, transparent), inset 3px 0 0 #000 !important;
+    text-shadow: 1px 1px 0 #000;
+}
+
+html[data-vf-faction="kronax"] {
+    background-color: #240a06;
+    background-image:
+        radial-gradient(circle at -4% 50%, #ffb070 0 22%, #b8431f 23% 36%, color-mix(in srgb, #b8431f 55%, #240a06) 37% 48%, transparent 49%),
+        radial-gradient(circle at -4% 50%, color-mix(in srgb, #ffb070 50%, transparent) 0 56%, transparent 70%),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #b8431f 70%, transparent) 0 16%, color-mix(in srgb, #b8431f 28%, transparent) 17% 34%, transparent 46%),
+        linear-gradient(color-mix(in srgb, #240a06 28%, transparent), color-mix(in srgb, #240a06 28%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-repeat: no-repeat;
+}
+
+.vf-bezel-fx .vf-fx-fac[data-faction="kronax"] { clip-path: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%); }
+
+.vf-bezel-fx .vf-fx-fac[data-faction="kronax"]::before { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--faction-color) 28%, transparent) 6px 9px); }
+
+html[data-vf-faction="kronax"] {
+    background-image:
+        repeating-linear-gradient(112deg, transparent 0 58px, color-mix(in srgb, #ff7a2a 22%, transparent) 58px 61px, transparent 61px 130px),
+        radial-gradient(ellipse 60% 38% at 50% 112%, color-mix(in srgb, #ff7a2a 75%, transparent) 0 18%, color-mix(in srgb, #b8431f 45%, transparent) 19% 46%, transparent 72%),
+        radial-gradient(circle at -6% 36%, color-mix(in srgb, #ffb070 45%, transparent) 0 8%, color-mix(in srgb, #b8431f 40%, transparent) 9% 22%, transparent 38%),
+        radial-gradient(circle at 104% 22%, color-mix(in srgb, #b8431f 50%, transparent) 0 6%, transparent 28%),
+        linear-gradient(color-mix(in srgb, #240a06 58%, transparent), color-mix(in srgb, #240a06 58%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-size: auto, auto, auto, auto, auto, cover;
+    background-position: 0 0, center, center, center, center, center center;
+}
+
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="kronax"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(0 0, calc(100% - 14px) 0, calc(100% - 14px) 2px, calc(100% - 12px) 2px, calc(100% - 12px) 4px, calc(100% - 10px) 4px, calc(100% - 10px) 6px, calc(100% - 8px) 6px, calc(100% - 8px) 8px, calc(100% - 6px) 8px, calc(100% - 6px) 10px, calc(100% - 4px) 10px, calc(100% - 4px) 12px, calc(100% - 2px) 12px, calc(100% - 2px) 14px, 100% 14px, 100% 100%, 14px 100%, 14px calc(100% - 2px), 12px calc(100% - 2px), 12px calc(100% - 4px), 10px calc(100% - 4px), 10px calc(100% - 6px), 8px calc(100% - 6px), 8px calc(100% - 8px), 6px calc(100% - 8px), 6px calc(100% - 10px), 4px calc(100% - 10px), 4px calc(100% - 12px), 2px calc(100% - 12px), 2px calc(100% - 14px), 0 calc(100% - 14px)) !important;
+    border-width: 3px !important;
+    letter-spacing: 0.14em !important;
+    box-shadow: inset 0 -4px 0 color-mix(in srgb, #8a1c10 70%, transparent), inset 3px 0 0 #000 !important;
+    text-shadow: 1px 1px 0 #000 !important;
+}
+
+.profile-selection-content[data-faction="kronax"] .pp-pick, .profile-selection-content[data-faction="kronax"] .profile-pilot-portrait { --pk: 4px; --pk-shape: polygon(0 calc(var(--pk) * 2), var(--pk) calc(var(--pk) * 2), var(--pk) var(--pk), calc(var(--pk) * 2) var(--pk), calc(var(--pk) * 2) 0, calc(100% - var(--pk) * 2) 0, calc(100% - var(--pk) * 2) var(--pk), calc(100% - var(--pk)) var(--pk), calc(100% - var(--pk)) calc(var(--pk) * 2), 100% calc(var(--pk) * 2), 100% calc(100% - var(--pk) * 2), calc(100% - var(--pk)) calc(100% - var(--pk) * 2), calc(100% - var(--pk)) calc(100% - var(--pk)), calc(100% - var(--pk) * 2) calc(100% - var(--pk)), calc(100% - var(--pk) * 2) 100%, calc(var(--pk) * 2) 100%, calc(var(--pk) * 2) calc(100% - var(--pk)), var(--pk) calc(100% - var(--pk)), var(--pk) calc(100% - var(--pk) * 2), 0 calc(100% - var(--pk) * 2)); }
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="station"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="station"],
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="menu"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="menu"],
+html[data-faction="kronax"] .home-station-overlay:not([data-hs-tab]),
+html[data-faction="kronax"] .vf-boot-veil-hs:not([data-hs-tab]) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/kronax/ui/bg-station.png'), url('../../../assets/ui/hs-bg-station.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="upgrade"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="upgrade"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/kronax/ui/bg-upgrade.png'), url('../../../assets/ui/hs-bg-upgrade.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="hangar"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="hangar"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/kronax/ui/bg-hangar.png'), url('../../../assets/ui/hs-bg-hangar.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="shop"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="shop"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/kronax/ui/bg-shop.png'), url('../../../assets/ui/hs-bg-shop.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="craft"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="craft"],
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="components"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="components"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/kronax/ui/bg-craft.png'), url('../../../assets/ui/hs-bg-craft.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="travel"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="travel"],
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="play"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="play"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.56) 100%), url('../../../assets/factions/kronax/ui/bg-travel.png'), url('../../../assets/ui/hs-bg-travel.png');
+}
+
+html[data-faction="kronax"] .home-station-overlay[data-hs-tab="explorations"],
+html[data-faction="kronax"] .vf-boot-veil-hs[data-hs-tab="explorations"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/kronax/ui/bg-explorations.png'), url('../../../assets/ui/hs-bg-explorations.png');
+}
+
+html[data-faction="kronax"] .start-screen,
+html[data-faction="kronax"] .start-screen-overlay,
+html[data-faction="kronax"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/kronax/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-faction="kronax"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/kronax/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html[data-pf="kronax"] .start-screen,
+html[data-pf="kronax"] .start-screen-overlay,
+html[data-pf="kronax"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/kronax/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-pf="kronax"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/kronax/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="kronax"]:not(.selected) {
+    clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%); border-width: var(--ui-border-width, 2px); padding-left: 22px; padding-right: 22px;
+}

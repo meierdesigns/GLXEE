@@ -1,0 +1,37 @@
+{
+  "style": {
+    "hull": "#2F8F6B",
+    "edge": "#0e3028",
+    "accent": "#50e0a8",
+    "engine": "#9ab0c0",
+    "silhouette": "circuit",
+    "anatomy": {
+      "front": {
+        "x": 1.2,
+        "y": 0.9
+      },
+      "center": {
+        "x": 1.2,
+        "y": 1.1
+      },
+      "back": {
+        "x": 1.2,
+        "y": 1
+      },
+      "wing": {
+        "x": 1.1,
+        "y": 1.1
+      }
+    },
+    "defaultWeapons": [
+      "missile"
+    ],
+    "prompt": "orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels",
+    "styleStrength": 2
+  },
+  "gui": {
+    "baseColor": "#50E0A8",
+    "secondBaseColor": "#CEF6E7",
+    "vars": {}
+  }
+}

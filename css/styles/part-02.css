@@ -1,0 +1,1513 @@
+.gi-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 2px 6px;
+    align-items: start;
+    min-width: 0;
+    padding: 2px 0;
+}
+
+.gi-row-icon {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.gi-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.gi-row-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1px;
+}
+
+.gi-row-label {
+    color: color-mix(in srgb, var(--color-text, #fff) 72%, var(--faction-accent, var(--color-primary)));
+    font-size: var(--font-sm);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 1;
+    flex-shrink: 0;
+    line-height: 1.15;
+}
+
+.gi-row-value {
+    color: #fff;
+    font-weight: bold;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    min-width: 0;
+    max-width: 100%;
+    font-size: var(--font-md);
+    line-height: 1.25;
+}
+
+.gi-chip-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 4px 6px;
+    align-items: center;
+    min-width: 0;
+    padding-top: 2px;
+}
+
+.gi-chip-row-label {
+    color: var(--color-text-secondary);
+    font-size: var(--font-sm);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    text-align: left;
+    justify-self: start;
+}
+.gi-chip-row-label-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    line-height: 0;
+    letter-spacing: 0;
+    opacity: 1;
+}
+.gi-chip-row-label-icon :is(img, .gi-icon) {
+    width: 16px !important;
+    height: 16px !important;
+    display: block;
+}
+
+.gi-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    min-width: 0;
+}
+
+.gi-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    width: min(100%, 72px);
+    min-width: 48px;
+    max-width: 100%;
+    padding: 3px 4px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+    box-sizing: border-box;
+}
+
+.gi-chip-label {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: var(--font-sm);
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gi-chip-loot .gi-chip-count {
+    color: var(--color-text-primary, var(--color-primary));
+    font-weight: bold;
+    font-size: var(--font-md);
+}
+
+/* Legacy hooks kept for any external selectors */
+.game-info-header {
+    text-align: left;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.game-info-panel .game-stats,
+.game-info-panel .game-details {
+    display: none;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 2px 0;
+}
+
+.stat-label {
+    color: var(--color-text);
+    font-size: var(--font-text);
+}
+
+.stat-value {
+    color: var(--color-primary);
+    font-size: var(--font-text);
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+    padding: 1px 0;
+    min-width: 0;
+}
+
+.detail-label {
+    font-weight: bold;
+    color: var(--color-text);
+    font-size: var(--font-text);
+    flex-shrink: 0;
+}
+
+.detail-value {
+    color: var(--color-primary);
+    font-weight: bold;
+    font-size: var(--font-text);
+    text-align: right;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+/* Victory Overlay */
+.victory-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: calc(100 * var(--sv-w));
+    height: calc(100 * var(--sv-h));
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.victory-overlay.hidden {
+    display: none;
+}
+
+.victory-content {
+    background: var(--ui-surface);
+    border: var(--ui-border-width-thick) solid var(--color-primary);
+    color: var(--color-text);
+    font-family: var(--ui-font-family);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    width: min(calc(92 * var(--cw)), calc(520px * var(--zk)));
+    max-height: calc(92 * var(--sv-h));
+    box-sizing: border-box;
+}
+
+.victory-content h2 {
+    color: var(--color-primary);
+    font-size: var(--font-h1);
+    margin: 0 0 20px 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.victory-content p {
+    font-size: var(--font-h2);
+    color: var(--color-text-secondary);
+}
+
+.victory-buttons {
+    align-items: center;
+}
+
+.victory-button {
+    background: var(--ui-surface);
+    border: var(--ui-border-width) solid var(--color-primary);
+    color: var(--color-text);
+    font-family: var(--ui-font-family);
+    font-size: var(--font-h2);
+}
+
+.victory-button:hover {
+    background: var(--color-primary);
+    color: var(--ui-background);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.victory-content p {
+    margin: 0 0 25px 0;
+    font-size: var(--font-h2);
+    color: var(--color-text);
+}
+
+.victory-button {
+    background: var(--color-primary);
+    color: var(--ui-background);
+    border: var(--ui-border-width) solid var(--color-primary);
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+}
+
+.victory-button:hover {
+    background: var(--ui-surface);
+    color: var(--color-primary);
+}
+
+.obstacle-item, .weapon-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 6px;
+    margin-bottom: 3px;
+    background: var(--ui-surface);
+    border: var(--ui-border-width-thin) solid var(--color-border);
+    border-radius: 0;
+    color: var(--color-text);
+}
+
+.obstacle-name, .weapon-name {
+    font-weight: bold;
+    color: var(--color-text);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.obstacle-count, .weapon-damage {
+    color: var(--color-primary);
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Start Screen */
+.start-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    background-image:
+        linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.42) 0%,
+            rgba(0, 0, 0, 0.28) 45%,
+            rgba(0, 0, 0, 0.55) 100%
+        ),
+        url('../../assets/ui/menu-hangar-bg.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    color: var(--color-text);
+    font-family: var(--ui-font-family);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.start-screen.hidden {
+    display: none;
+}
+
+.start-screen-content {
+    padding: clamp(8px, calc(1.5 * var(--sv-h)), 16px) clamp(10px, calc(2 * var(--sv-w)), 24px);
+    width: fit-content;
+    max-width: min(calc(94 * var(--cw)), calc(820px * var(--zk)));
+    max-height: min(calc(94 * var(--ch)), calc(94 * var(--sv-h)));
+    align-items: stretch;
+    height: fit-content;
+}
+
+.game-title {
+    font-size: var(--font-h1);
+    color: var(--color-primary);
+    margin: 0 0 10px 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    letter-spacing: 2px;
+}
+
+.game-subtitle {
+    font-size: var(--font-h2);
+    color: var(--ui-text-secondary);
+    margin: 0 0 30px 0;
+    font-style: italic;
+}
+
+.start-menu {
+    margin: 30px 0;
+}
+
+.menu-item {
+    font-size: var(--font-h2);
+    padding: 8px 16px;
+    border: var(--ui-indicator-width, var(--ui-border-width, 2px)) solid transparent;
+    border-radius: 0;
+}
+
+.menu-item:hover:not(.selected) {
+    background: var(--ui-surface);
+    border-color: var(--color-border);
+}
+
+.menu-item.selected {
+    color: var(--color-text, var(--ui-text-primary));
+    border-left-color: var(--color-primary, var(--ui-border));
+    border-right-color: var(--color-primary, var(--ui-border));
+}
+
+.start-instructions {
+    margin-top: 40px;
+    font-size: var(--font-text);
+    color: var(--ui-text-secondary);
+}
+
+.start-instructions p {
+    margin: 5px 0;
+}
+
+/* Middle fight column: canvas grows, under-stage stays as a single foot bar */
+.game-canvas-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    text-align: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    position: relative;
+    gap: 0;
+}
+
+.game-header {
+    display: none !important;
+}
+
+.game-header h1 {
+    font-size: var(--font-h1);
+    margin-bottom: clamp(2px, calc(0.5 * var(--sv-h)), 6px);
+    text-shadow: 1px 0 0 color-mix(in srgb, var(--color-border) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--color-border) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--color-border) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--color-border) 78%, transparent), 4px 0 0 color-mix(in srgb, var(--color-border) 42%, transparent), -4px 0 0 color-mix(in srgb, var(--color-border) 42%, transparent), 0 4px 0 color-mix(in srgb, var(--color-border) 42%, transparent), 0 -4px 0 color-mix(in srgb, var(--color-border) 42%, transparent), 8px 0 0 color-mix(in srgb, var(--color-border) 18%, transparent), -8px 0 0 color-mix(in srgb, var(--color-border) 18%, transparent), 0 8px 0 color-mix(in srgb, var(--color-border) 18%, transparent), 0 -8px 0 color-mix(in srgb, var(--color-border) 18%, transparent);
+    letter-spacing: 3px;
+    font-weight: bold;
+    text-transform: uppercase;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+.score-display {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-h2);
+    margin-bottom: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+.game-stage {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+html body .game-container .game-stage #gameCanvas {
+    margin: 0 auto;
+    max-width: 100%;
+    max-height: 100%;
+    width: var(--canvas-w);
+    height: var(--canvas-h);
+}
+
+/* SHIP + FIELD strip — one bar under the canvas, not nested framed boxes */
+.gi-under-stage {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 auto;
+    margin: 8px 0 0;
+    min-height: 0;
+    box-sizing: border-box;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, #05060a);
+    overflow: hidden;
+}
+.gi-under-stage[hidden] {
+    display: none !important;
+}
+.gi-under-stage > .gi-cluster {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.gi-under-stage > .gi-cluster + .gi-cluster {
+    border-left: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 45%, transparent) !important;
+}
+.gi-under-stage > .gi-cluster.gi-cluster-iconed {
+    flex-direction: row;
+    align-items: center;
+}
+.gi-under-stage .gi-cluster-title {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex: 0 0 auto;
+}
+.gi-under-stage .gi-cluster-title-icon {
+    min-height: 28px;
+}
+.gi-under-stage .gi-cluster-title-icon :is(img, .gi-icon, canvas) {
+    width: 28px !important;
+    height: 28px !important;
+}
+.gi-under-stage > .gi-cluster-combat {
+    flex: 1.65 1 0;
+}
+.gi-under-stage > .gi-cluster-field {
+    flex: 1 1 0;
+}
+.gi-under-stage .gi-cluster-body {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+}
+.gi-under-stage .gi-metrics-2x2 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 4px;
+}
+.gi-under-stage .gi-metrics-loot {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.gi-under-stage .gi-metric {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: left;
+    gap: 5px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 2px 4px;
+    min-height: 0;
+}
+.gi-under-stage .gi-metric-value {
+    font-size: var(--font-md);
+    line-height: 1;
+    color: #fff;
+}
+.gi-under-stage .gi-loot .gi-loot-count {
+    color: var(--loot-color, #fff);
+    font-weight: bold;
+}
+.gi-under-stage .gi-loot.gi-loot-empty {
+    opacity: 0.4;
+}
+.gi-under-stage .gi-stat-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    line-height: 0;
+}
+.gi-under-stage :is(img, .gi-icon, canvas) {
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+    -ms-interpolation-mode: nearest-neighbor;
+    flex-shrink: 0;
+}
+
+.mission-start-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    /* Flat dim only — old 12%/88% primary hairlines looked like ghost frame contours. */
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.mission-start-overlay.hidden {
+    display: none;
+}
+
+.mission-start-text {
+    position: relative;
+    display: grid;
+    place-items: center;
+    font-family: var(--ui-font-family, monospace);
+    font-size: var(--font-lg);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-primary, #e8e8e8);
+    text-align: center;
+    min-width: min(78%, 300px);
+    min-height: 64px;
+    padding: 16px 22px;
+    border: var(--ui-border-width, 2px) solid var(--color-primary, #b0b0b0);
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent);
+    text-shadow: 0 1px 0 #050508, 0 0 6px #050508;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+.mission-start-text.mission-start-count {
+    position: relative;
+    width: clamp(96px, calc(20 * var(--sv-w)), 136px);
+    min-width: 0;
+    height: clamp(112px, calc(24 * var(--sv-w)), 156px);
+    min-height: 0;
+    padding: 0;
+    border: var(--ui-border-width-thick, 3px) solid var(--color-primary, #b0b0b0);
+    background:
+        repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-primary) 6%, transparent) 3px 4px),
+        color-mix(in srgb, var(--color-background) 92%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+    text-shadow: none;
+    image-rendering: pixelated;
+}
+
+.mission-start-pixel-canvas {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 10%;
+    bottom: 20%;
+    width: 76%;
+    height: 70%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+    filter: drop-shadow(2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent));
+}
+
+/* Stepped progress bar: drains once per countdown second. */
+.mission-start-text.mission-start-count::after {
+    content: '';
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    bottom: 9%;
+    height: 6px;
+    background: var(--color-primary);
+    transform-origin: left center;
+    pointer-events: none;
+}
+.mission-start-text.mission-start-count.mission-start-tick {
+    animation: mission-start-count-in 0.18s steps(3, end);
+}
+.mission-start-text.mission-start-count.mission-start-tick::after {
+    animation: mission-start-drain 0.9s steps(12, end) forwards;
+}
+
+@keyframes mission-start-drain {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+.mission-start-text.mission-start-go {
+    min-width: min(78%, 240px);
+    font-size: var(--font-lg);
+    color: var(--color-primary, #c8f0c8);
+    border-color: var(--color-primary, #c8f0c8);
+}
+
+.mission-start-text.mission-start-pulse {
+    animation: mission-start-pulse 0.85s ease-in-out infinite alternate;
+}
+
+@keyframes mission-start-pulse {
+    from { opacity: 0.68; }
+    to { opacity: 1; }
+}
+
+@keyframes mission-start-count-in {
+    from {
+        opacity: 0;
+        transform: scale(1.12);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes mission-start-radar {
+    to { transform: rotate(360deg); }
+}
+
+.player-vitals-side {
+    --vitals-h: clamp(96px, calc(16 * var(--sv-h)), 150px);
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 6px;
+    flex: 0 0 auto;
+    width: 100%;
+    height: var(--vitals-h);
+    min-height: var(--vitals-h);
+    max-height: var(--vitals-h);
+    box-sizing: border-box;
+    padding: 5px 5px;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background:
+        linear-gradient(165deg,
+            color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
+            var(--color-background) 60%);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.player-vitals-side .health-bar {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    gap: 3px;
+}
+
+.player-vitals-side .health-stat-icon,
+.player-vitals-side .health-ship-icon {
+    margin-right: 0;
+    margin-bottom: 4px;
+    /* Native 16×16 canvas → 3× nearest-neighbor (no Scale2x mush). */
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+    -ms-interpolation-mode: nearest-neighbor;
+    filter: none !important;
+    opacity: 1 !important;
+}
+
+.player-vitals-side .health-fill {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    align-self: center;
+    border-width: max(2px, var(--ui-border-width-thin, 2px));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vital-color, var(--color-border)) 35%, transparent);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.player-vitals-side .health-fill::before {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: var(--health-width, 100%);
+    transition: height 0.12s steps(8, end);
+    /* Hard 2px lattice bands — no soft blend */
+    background-image: repeating-linear-gradient(
+        to top,
+        transparent 0 2px,
+        rgba(0, 0, 0, 0.35) 2px 4px
+    );
+    background-blend-mode: normal;
+}
+
+#gameCanvas {
+    border: var(--ui-border-width-thick) solid var(--ui-border);
+    background: var(--color-background);
+    display: block;
+    margin: 0 auto;
+    box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-border), 0 0 0 var(--ui-border-width) var(--ui-border);
+    width: var(--canvas-w);
+    height: var(--canvas-h);
+    max-width: 100%;
+    max-height: 100%;
+    /* Size from --canvas-w/h (aspect-correct); do not flex-stretch */
+    flex: 0 0 auto;
+    filter: contrast(var(--theme-contrast-filter, 1.15))
+        saturate(var(--theme-saturation-filter, 1))
+        brightness(var(--theme-brightness-filter, 1));
+}
+/* VOXEL: the game canvas stays unfiltered; overlay effects still work but never
+   blur or warp (no blur() / displacement), so the lattice stays crisp. */
+html[data-vf-ship-render="VOXEL"] #gameCanvas {
+    filter: none !important;
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+}
+/* VOXEL CRT inherits the shared no-warp CRT stack above. */
+html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+}
+
+/* Right HUD cluster: loadout top, enemy bars, mission bottom */
+.game-right-cluster {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex: 0 0 auto;
+    width: var(--side-panel-w);
+    height: 100%;
+    max-height: 100%;
+    align-self: stretch;
+    gap: clamp(4px, calc(0.7 * var(--sv-h)), 8px);
+    z-index: 10;
+}
+
+.gi-loadout-side {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    order: -1;
+}
+.gi-loadout-side[hidden] {
+    display: none !important;
+}
+.gi-loadout-side > .gi-cluster {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+}
+.gi-loadout-side .gi-cluster-title {
+    margin: 0 0 6px;
+    padding-bottom: 4px;
+    letter-spacing: 0.12em;
+}
+.gi-loadout-side .gi-cluster-body {
+    gap: 0;
+}
+.gi-loadout-side .gi-row {
+    align-items: center;
+    padding: 6px 0;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 4px 8px;
+}
+.gi-loadout-side .gi-row-text {
+    flex-direction: column;
+    gap: 1px;
+}
+.gi-loadout-side .gi-row-value {
+    text-align: left;
+}
+.gi-loadout-side .gi-row-value,
+.gi-loadout-side .gi-metric-value {
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: #fff;
+}
+.gi-loadout-side .gi-cluster-body > .gi-row {
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.gi-loadout-side .gi-cluster-body > .gi-row:last-of-type {
+    border-bottom: 0;
+}
+.gi-loadout-side .gi-weapon-chips {
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.gi-loadout-side :is(.gi-row-icon, .gi-icon) {
+    width: 28px;
+    height: 28px;
+}
+.gi-loadout-side .gi-row-icon img {
+    width: 28px !important;
+    height: 28px !important;
+}
+
+.gi-mission-side {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    margin-top: auto;
+}
+.gi-mission-side[hidden] {
+    display: none !important;
+}
+.gi-mission-side > .gi-cluster {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+}
+.gi-mission-side .gi-cluster-title {
+    margin: 0 0 6px;
+    padding-bottom: 4px;
+    letter-spacing: 0.12em;
+}
+.gi-mission-side .gi-cluster-body {
+    gap: 8px;
+}
+.gi-mission-side .gi-row {
+    align-items: start;
+}
+.gi-mission-side .gi-row-text {
+    flex-direction: column;
+    gap: 1px;
+}
+.gi-mission-side .gi-row-value {
+    text-align: left;
+}
+.gi-mission-side .gi-row-value,
+.gi-mission-side .gi-metric-value {
+    font-size: var(--font-md);
+    font-weight: bold;
+    color: #fff;
+}
+
+/* Mission card: icon | action → target → status (readable, not cramped) */
+.gi-mission-card {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: center;
+    min-height: 72px;
+    padding: 8px 6px;
+    box-sizing: border-box;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.gi-mission-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+.gi-mission-card-icon :is(img, .gi-icon, canvas) {
+    width: 32px !important;
+    height: 32px !important;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.gi-mission-card-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+.gi-mission-card-action {
+    font-size: var(--font-sm);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, #fff 70%, var(--faction-accent, var(--color-primary)));
+    line-height: 1.2;
+}
+.gi-mission-card-target {
+    font-size: var(--font-md);
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.gi-mission-card-status {
+    margin-top: 2px;
+    font-size: var(--font-sm);
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faction-accent, var(--color-primary));
+    line-height: 1.2;
+}
+
+.enemy-vitals-side {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 6px;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    box-sizing: border-box;
+    padding: 6px 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background:
+        linear-gradient(165deg,
+            color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
+            var(--color-background) 60%);
+    /* No outer ring glow — multi-spread box-shadows drew semi-transparent
+       vertical lines over the playfield beside the sidebar. */
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+    --enemy-bar-h: 14px;
+    --enemy-icon-size: 20px;
+}
+
+.enemy-vitals-side .health-bar.enemy-health {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 6px 4px;
+    gap: 5px;
+    flex: 0 0 auto;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.enemy-vitals-side .enemy-faction {
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+    font-weight: bold;
+    color: var(--color-primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+.enemy-vitals-side .enemy-health-main {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+}
+
+.enemy-vitals-side .health-fill {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    height: var(--enemy-bar-h, 14px);
+    border-width: var(--ui-border-width-thin, 2px);
+}
+
+.enemy-vitals-side .health-ship-icon {
+    width: var(--enemy-icon-size, 20px);
+    height: var(--enemy-icon-size, 20px);
+    margin-right: 0;
+    flex-shrink: 0;
+}
+
+/* Main/champion enemy: vertical health bar */
+.enemy-vitals-side .health-bar.enemy-health.is-champion {
+    padding: 10px 4px 12px;
+    gap: 8px;
+}
+
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-health-main {
+    align-items: flex-start;
+    min-height: clamp(72px, calc(18 * var(--sv-h)), 120px);
+}
+
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill {
+    flex: 0 0 auto;
+    width: var(--enemy-bar-h, 14px);
+    min-width: 0;
+    align-self: flex-start;
+}
+
+.enemy-vitals-side .health-bar.enemy-health.is-champion .health-fill::before {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: var(--health-width, 100%);
+    transition: height 0.3s ease;
+}
+
+.game-left-cluster .weapon-selection {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    margin: 0;
+    gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 7px 8px;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background:
+        linear-gradient(165deg,
+            color-mix(in srgb, var(--color-primary) 4%, var(--color-background)) 0%,
+            var(--color-background) 60%);
+    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+    font-family: var(--ui-font-family);
+    font-size: var(--font-md);
+    color: var(--color-text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    flex: 1 1 auto;
+    min-height: clamp(110px, calc(20 * var(--sv-h)), 200px);
+    max-height: 42%;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+}
+
+.game-left-cluster .weapon-list {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* One cohesive card per weapon: icon | name + stats + reload fill */
+.game-left-cluster .weapon-card {
+    --reload-pct: 100%;
+    position: relative;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 7px;
+    border: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 7%, #05060a);
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    overflow: hidden;
+    transition: opacity 0.12s linear, filter 0.12s linear;
+}
+
+.game-left-cluster .weapon-card-reload {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--reload-pct);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent),
+        color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent)
+    );
+    pointer-events: none;
+    z-index: 0;
+    transition: height 0.05s linear;
+}
+
+.game-left-cluster .weapon-card.is-reloading .weapon-card-reload {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--res-ore, #c49a4a) 10%, transparent),
+        color-mix(in srgb, var(--res-ore, #c49a4a) 34%, transparent)
+    );
+}
+
+.game-left-cluster .weapon-card.is-no-energy .weapon-card-reload {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--res-voltex, #c86ef0) 6%, transparent),
+        color-mix(in srgb, var(--res-voltex, #c86ef0) 18%, transparent)
+    );
+}
+
+.game-left-cluster .weapon-card > :not(.weapon-card-reload) {
+    position: relative;
+    z-index: 1;
+}
+
+.game-left-cluster .weapon-card.is-dim {
+    opacity: 0.42;
+    filter: saturate(0.55);
+}
+
+.game-left-cluster .weapon-card.is-dim.is-active {
+    opacity: 0.55;
+}
+
+.game-left-cluster .weapon-card.is-active {
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, #05060a);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+
+.game-left-cluster .weapon-card-icon,
+#weaponIcon {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    width: 32px;
+    height: 32px;
+    border: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: var(--ui-surface);
+    flex-shrink: 0;
+    justify-self: center;
+}
+
+.game-left-cluster .weapon-card.is-active .weapon-card-icon {
+    border-color: var(--faction-accent, var(--color-primary));
+}
+
+.game-left-cluster .weapon-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.game-left-cluster .weapon-card-name {
+    font-weight: bold;
+    font-size: var(--font-md);
+    line-height: 1.1;
+    color: color-mix(in srgb, var(--color-text, #fff) 88%, var(--faction-accent, var(--color-primary)));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.game-left-cluster .weapon-card.is-active .weapon-card-name {
+    color: #fff;
+}
+
+.game-left-cluster .weapon-card-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 5px;
+    font-size: var(--font-sm);
+    line-height: 1.15;
+    color: color-mix(in srgb, var(--color-text, #fff) 78%, var(--faction-accent, var(--color-primary)));
+    min-width: 0;
+}
+
+.game-left-cluster .weapon-card-stats .wi-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.game-left-cluster .weapon-card-stats .wi-sep {
+    opacity: 0.45;
+    user-select: none;
+}
+
+.game-left-cluster .weapon-card-stats .wi-icon,
+.game-left-cluster .weapon-card-stats .wi-part img.wi-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.game-left-cluster .weapon-card-stats .wi-val {
+    font-variant-numeric: tabular-nums;
+}
+
+.game-left-cluster .weapon-display {
+    display: none;
+}
+
+.health-bar {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 0px;
+    padding: 2px 4px;
+    min-width: 0;
+    width: 100%;
+    flex: 0 0 auto;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+}
+
+.health-icon {
+    font-size: var(--font-h2);
+    margin-right: 8px;
+    flex-shrink: 0;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0;
+}
+
+.health-ship-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    background: transparent;
+}
+
+.health-stat-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    background: transparent;
+}
+
+.health-fill {
+    flex: 1;
+    height: 12px;
+    background: var(--ui-surface);
+    border: var(--ui-border-width-thin) solid var(--color-border);
+    border-radius: 0px;
+    overflow: hidden;
+    position: relative;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+}
+
+.health-fill::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--color-border);
+    transition: width 0.3s ease;
+    width: var(--health-width, 100%);
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+}
+
+.enemy-health .health-fill::before {
+    background: var(--color-border);
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+}
+
+/* Player vitals: scrap / voltex / crystal — one colour per bar */
+.player-vitals-side .player-health { --vital-color: var(--vital-hull); }
+.player-vitals-side .player-energy { --vital-color: var(--vital-energy); }
+.player-vitals-side .player-shield { --vital-color: var(--vital-shield); }
+.player-vitals-side .health-fill {
+    border-color: color-mix(in srgb, var(--vital-color, var(--color-border)) 70%, transparent);
+    background: color-mix(in srgb, var(--vital-color, var(--color-border)) 12%, #05060a);
+}
+.player-vitals-side .player-health .health-fill::before,
+.player-vitals-side .player-energy .health-fill::before,
+.player-vitals-side .player-shield .health-fill::before {
+    background-color: var(--vital-color);
+    opacity: 1;
+}
+
+.health-text {
+    margin-left: 8px;
+    font-size: var(--font-text);
+    color: var(--color-text);
+    font-weight: bold;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0;
+}
+
+.controls {
+    margin-top: clamp(2px, calc(0.5 * var(--sv-h)), 6px);
+    font-size: var(--font-text);
+    color: var(--color-text-secondary);
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 10px;
+    position: relative;
+    width: 100%;
+    max-width: var(--canvas-w, 100%);
+}
+
+.game-canvas-container > .ui-controls-show-btn,
+html[data-ui-controls="off"] .game-canvas-container > .ui-controls-show-btn {
+    display: none !important;
+}
+.game-canvas-container > .controls {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    z-index: 6;
+    margin: 0;
+    max-width: calc(100% - 8px);
+}
+
+.shot-type-display {
+    font-weight: bold;
+    color: var(--color-text);
+}
+
+/* Volume Controls — themed */
+.volume-controls {
+    margin: 0;
+    padding: clamp(6px, calc(1 * var(--sv-w)), 12px);
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface, var(--color-background)));
+    border: var(--ui-border-width) solid var(--color-border, var(--color-primary));
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, calc(0.8 * var(--sv-h)), 10px);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 6%, transparent) 72%, transparent), inset 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 6%, transparent) 48%, transparent), inset 0 0 0 12px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 6%, transparent) 30%, transparent), inset 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 6%, transparent) 16%, transparent);
+}
+
+.settings-content .volume-controls,
+.settings-content .settings-visual-controls,
+.settings-panel .volume-controls,
+.start-screen-menu .volume-controls {
+    width: 100%;
+}
+
+.settings-visual-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0;
+}
+
+.menu-item.volume-settings-item {
+    cursor: default;
+    width: 100%;
+    min-width: 0;
+    padding-left: clamp(4px, calc(1 * var(--sv-w)), 10px);
+    padding-right: clamp(4px, calc(1 * var(--sv-w)), 10px);
+}
+
+.menu-item.volume-settings-item:hover:not(.selected) {
+    background: transparent;
+    border-color: transparent;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: clamp(6px, calc(1.2 * var(--sv-w)), 10px);
+    font-size: var(--font-text);
+    color: var(--color-text);
+    min-width: 0;
+    width: 100%;
+}
+
+.volume-control label {
+    flex: 0 0 auto;
+    min-width: clamp(48px, calc(12 * var(--sv-w)), 64px);
+    max-width: 30%;
+    text-align: left;
+    font-weight: bold;
+    color: var(--color-text);
+    font-family: var(--ui-font-family);
+    letter-spacing: 0.04em;
+}
+
+.volume-slider {
+    flex: 1 1 auto;
+    min-width: 48px;
+    height: clamp(12px, calc(1.8 * var(--sv-h)), 18px);
+    background: linear-gradient(
+        to right,
+        var(--color-primary) 0%,
+        var(--color-primary) var(--vol-fill, 0%),
+        color-mix(in srgb, var(--color-primary) 20%, var(--color-background)) var(--vol-fill, 0%),
+        color-mix(in srgb, var(--color-primary) 20%, var(--color-background)) 100%
+    );
+    border: var(--ui-border-width-thin) solid var(--color-border, var(--color-primary));
+    border-radius: 0;
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}

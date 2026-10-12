@@ -1,0 +1,37 @@
+{
+  "style": {
+    "hull": "#C44B2F",
+    "edge": "#4a1810",
+    "accent": "#ff7a4a",
+    "engine": "#9ab0c0",
+    "silhouette": "spikes",
+    "anatomy": {
+      "front": {
+        "x": 0.8,
+        "y": 1.4
+      },
+      "center": {
+        "x": 0.85,
+        "y": 1
+      },
+      "back": {
+        "x": 0.9,
+        "y": 0.8
+      },
+      "wing": {
+        "x": 1.35,
+        "y": 1.05
+      }
+    },
+    "defaultWeapons": [
+      "claw_beam"
+    ],
+    "prompt": "diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating",
+    "styleStrength": 2
+  },
+  "gui": {
+    "baseColor": "#FF7A4A",
+    "secondBaseColor": "#FFDACC",
+    "vars": {}
+  }
+}

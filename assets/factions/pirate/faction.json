@@ -1,0 +1,37 @@
+{
+  "style": {
+    "hull": "#8B6914",
+    "edge": "#3a2e08",
+    "accent": "#d4a84a",
+    "engine": "#9ab0c0",
+    "silhouette": "scrap",
+    "anatomy": {
+      "front": {
+        "x": 1.1,
+        "y": 0.85
+      },
+      "center": {
+        "x": 1.1,
+        "y": 1
+      },
+      "back": {
+        "x": 1.35,
+        "y": 1.2
+      },
+      "wing": {
+        "x": 0.85,
+        "y": 1
+      }
+    },
+    "defaultWeapons": [
+      "spread"
+    ],
+    "prompt": "asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery",
+    "styleStrength": 2
+  },
+  "gui": {
+    "baseColor": "#D4A84A",
+    "secondBaseColor": "#F3E7CC",
+    "vars": {}
+  }
+}

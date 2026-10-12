@@ -1,0 +1,1547 @@
+.hs-faction-grid .hs-faction-stats {
+    justify-content: space-between;
+    gap: 4px 10px;
+    font-size: clamp(10px, 4cqi, 12px);
+    letter-spacing: 0.5px;
+}
+.hs-faction-grid .hs-faction-stats span { white-space: nowrap; }
+.hs-faction-grid .hs-faction-goal {
+    font-size: clamp(11px, 4.6cqi, 13px);
+    overflow-wrap: anywhere;
+}
+@container (max-width: 260px) {
+    .hs-faction-grid .hs-faction-status { order: 3; margin-left: calc(clamp(32px, 18cqi, 56px) + 10px); }
+}
+
+/* Faction relations as index-card tabs (same frame/active look as the
+   navbar and subnav tabs); the selected faction's details sit below. */
+.home-station-overlay .hs-faction-tabs.hs-faction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+    gap: 8px;
+    align-items: end;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+.home-station-overlay .hs-faction-tabs .hs-tab.hs-faction-card {
+    --bezel: 0px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    height: auto;
+    min-height: 0;
+    width: 100%;
+    padding: 10px 12px;
+    text-align: left;
+    white-space: normal;
+    overflow: hidden;
+    opacity: 0.72;
+}
+.home-station-overlay .hs-faction-tabs .hs-tab.hs-faction-card.active,
+.home-station-overlay .hs-faction-tabs .hs-tab.hs-faction-card:hover,
+.home-station-overlay .hs-faction-tabs .hs-tab.hs-faction-card.nav-focused { opacity: 1; }
+/* Active card sits on the panel below like a raised index-card label. */
+.home-station-overlay .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    padding-bottom: 16px;
+    margin-bottom: -2px;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-crest,
+.home-station-overlay .hs-faction-tabs .hs-faction-crest img { width: clamp(28px, 16cqi, 44px); height: clamp(28px, 16cqi, 44px); }
+.hs-faction-tabpanel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    padding-top: 10px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+}
+/* Faction tabs hold a whole card: lift the fixed 34px subnav-tab height. */
+html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 10px 12px !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    padding-bottom: 14px !important;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.home-station-overlay .hs-faction-tabs .hs-faction-name {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-status { flex-shrink: 0; font-size: var(--font-small); padding: 2px 5px; white-space: nowrap; }
+.home-station-overlay .hs-faction-tabs .hs-faction-stats {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: var(--font-small);
+}
+/* Info panels under the tabs: thin frame, compact padding. */
+.home-station-overlay .hs-faction-tabpanel :is(.hs-panel, .hs-section) {
+    --bezel: 4px;
+    padding: 10px 14px;
+    gap: 6px;
+}
+.home-station-overlay .hs-faction-tabpanel .hs-faction-detail-head { gap: 12px; }
+.home-station-overlay .hs-faction-tabpanel .hs-faction-crest-lg,
+.home-station-overlay .hs-faction-tabpanel .hs-faction-crest-lg img { width: 64px; height: 64px; }
+.home-station-overlay .hs-faction-tabpanel .hs-faction-detail-head .hs-faction-head { justify-content: flex-start; }
+/* Faction tabs carry real info: no fade/blur filters, readable text,
+   a dark card body; the active tab is marked by frame + accent top bar. */
+html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card {
+    opacity: 1 !important;
+    filter: none !important;
+    color: var(--color-text, #e8e8f0);
+    background: rgba(4, 3, 10, 0.72) !important;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 18%, transparent) !important;
+    border-bottom-color: transparent !important;
+}
+html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card:is(:hover, .nav-focused) {
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent) !important;
+    border-bottom-color: transparent !important;
+}
+html body .home-station-overlay .home-station-content .hs-faction-tabs .hs-tab.hs-faction-card.active {
+    background: rgba(12, 8, 18, 0.92) !important;
+    border-color: var(--faction-accent, var(--color-primary)) !important;
+    border-bottom-color: transparent !important;
+    box-shadow: inset 0 3px 0 var(--faction-accent, var(--color-primary)) !important;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-card :is(.hs-faction-name, .hs-faction-stats, .hs-faction-stats span) {
+    color: inherit !important;
+    text-shadow: 1px 1px 0 #000 !important;
+    filter: none !important;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-name { font-size: var(--font-h2); font-weight: bold; letter-spacing: 1px; }
+.home-station-overlay .hs-faction-tabs .hs-faction-stats {
+    font-size: var(--font-text);
+    color: color-mix(in srgb, var(--color-text, #fff) 80%, transparent) !important;
+}
+.home-station-overlay .hs-faction-tabs .hs-faction-crest img { filter: none !important; }
+/* Faction tabs: crest and name sized as one unit (icon ≈ 2× cap height). */
+
+html body .home-station-overlay .hs-faction-tabs .hs-faction-name {
+    font-size: var(--font-h2) !important;
+    line-height: 32px;
+    letter-spacing: 1px;
+}
+html body .home-station-overlay .hs-faction-tabs .hs-faction-head { gap: 10px; }
+
+/* Faction detail (under the faction tabs): readable blocks in a grid. */
+.hs-faction-tabpanel { overflow-y: auto; }
+.hs-fd { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.home-station-overlay .hs-fd :is(.hs-panel, .hs-section) {
+    --bezel: 4px;
+    padding: 12px 16px;
+    gap: 8px;
+}
+.home-station-overlay .hs-fd .hs-fd-hero {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+}
+.home-station-overlay .hs-fd .hs-fd-hero { gap: 24px; padding: 16px 22px; }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg {
+    background: #05060a;
+    border: 3px solid var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 3px #05060a, 0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+}
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg img {
+    width: 96px;
+    height: 96px;
+    filter: contrast(1.35) brightness(1.2) saturate(1.2);
+}
+/* Right side of the faction header: three columns (identity + goal | playstyle | traits)
+   so the wide space is used instead of one tall stack. Own light box, not .hs-panel. */
+.home-station-overlay .hs-fd .hs-fd-hero .hs-fd-hero-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
+    align-self: stretch;
+    gap: 0;
+    box-sizing: border-box;
+    clip-path: var(--faction-ctl-clip, none);
+}
+.hs-fd-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 18px; justify-content: center; }
+.hs-fd-col + .hs-fd-col { border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent); }
+.hs-fd-col-style { flex-direction: row; align-items: center; gap: 12px; }
+.hs-fd-col-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-fd-col-ico { flex: 0 0 auto; display: grid; place-items: center; width: 44px; height: 44px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent); }
+.hs-fd-col-ico img { width: 28px; height: 28px; image-rendering: pixelated; }
+.hs-fd-col-label { font-size: var(--font-text); letter-spacing: 2px; color: var(--faction-accent, var(--color-primary)); }
+.hs-fd-traits { display: flex; flex-direction: column; gap: 8px; }
+.hs-fd-trait { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hs-fd-trait-ico { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; background: #05060a; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent); }
+.hs-fd-trait-ico img { width: 24px; height: 24px; image-rendering: pixelated; }
+.hs-fd-trait-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hs-fd-trait-txt b { font-size: var(--font-text); letter-spacing: 1px; color: var(--color-text, #fff); }
+.hs-fd-trait-txt em { font-style: normal; font-size: var(--font-text); line-height: 1.35; color: color-mix(in srgb, var(--color-text, #fff) 65%, transparent); }
+.hs-fd-hero-info .hs-faction-head { flex-wrap: wrap; }
+.hs-fd-hero-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-fd-hero-info .hs-faction-head { display: flex; align-items: center; gap: 12px; }
+.hs-fd-hero-info .hs-faction-name { flex: 0 1 auto; font-weight: bold;}
+.hs-fd h4 {
+    margin: 0 0 2px;
+    font-size: var(--font-text);
+    color: var(--faction-accent, var(--color-primary));
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+}
+.hs-fd-goal { margin: 0; font-size: var(--font-h2); color: var(--color-text, #eee);}
+.hs-fd-text {
+    margin: 0;
+    font-size: var(--font-text);
+    color: color-mix(in srgb, var(--color-text, #fff) 82%, transparent);
+}
+.hs-fd-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 10px;
+}
+.hs-fd-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--font-text);
+}
+.hs-fd-row span { color: color-mix(in srgb, var(--color-text, #fff) 60%, transparent); letter-spacing: 1px; }
+.hs-fd-row b { text-align: right; color: var(--color-text, #fff); font-weight: bold; }
+.hs-fd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hs-fd-fleet {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 10px;
+}
+.hs-fd-ship { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hs-fd-ship-img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
+}
+.hs-fd-ship-img img { width: 80%; height: 80%; object-fit: contain; image-rendering: pixelated; }
+.hs-fd-ship figcaption { font-size: var(--font-text); letter-spacing: 2px; color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent); }
+.hs-fd-swatch { display: inline-flex; align-items: center; font-size: var(--font-text); letter-spacing: 1px;}
+.hs-fd-swatch i { border: var(--ui-border-width, 2px) solid #000; box-shadow: 0 0 0 var(--ui-border-width, 2px) rgba(255,255,255,0.25);}
+.hs-fd-swatch em { font-style: normal; opacity: 0.6; }
+
+/* Faction detail: section tabs + larger type throughout. */
+.hs-fd-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 6px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab {
+    opacity: 1;
+    filter: none;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab:not(.active) .hs-tab-label {
+    color: color-mix(in srgb, var(--color-text, #fff) 75%, transparent) !important;
+}
+html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab-label { font-size: var(--font-h2) !important; letter-spacing: 2px; }
+.hs-fd-section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hs-fd h4 { font-size: var(--font-h2); letter-spacing: 2px; padding-bottom: 6px; margin-bottom: 4px; }
+
+.hs-fd-hero-info .hs-faction-status { font-size: var(--font-text);}
+.hs-fd-goal { font-size: var(--font-h2); line-height: 1.45; }
+.hs-fd-text { font-size: var(--font-h2); line-height: 1.6; }
+.hs-fd-row { font-size: var(--font-h2); line-height: 1.8; }
+.hs-fd .hs-chip { font-size: var(--font-h2); padding: 4px 10px; }
+.hs-fd-ship figcaption { font-size: var(--font-h2); }
+.hs-fd-swatch { font-size: var(--font-h2); gap: 8px; }
+.hs-fd-swatch i { width: 20px; height: 20px; }
+.hs-fd-cols { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg,
+.home-station-overlay .hs-fd .hs-fd-hero .hs-faction-crest-lg img { width: 88px; height: 88px; }
+.home-station-overlay .hs-fd .hs-faction-actions .action-button { font-size: var(--font-h2); padding: 8px 18px; }
+
+/* --- Big PLAY launch button left of the area navbar + sub navbar:
+   planet miniatures behind a large play triangle. */
+.hs-play-launch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 150px;
+    align-self: stretch;
+    min-height: 88px;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    font: inherit;
+    color: var(--color-primary);
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-primary) 22%, #05060a) 0%, #05060a 80%);
+    clip-path: var(--faction-ctl-clip, none);
+    transition: background 0.15s, filter 0.15s;
+}
+.hs-play-launch:hover,
+.hs-play-launch.focused,
+.hs-play-launch.active {
+    background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-primary) 40%, #05060a) 0%, #05060a 85%);
+    filter: brightness(1.15);
+}
+.hs-play-launch-planets {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.hs-play-launch-planet {
+    position: absolute;
+    display: block;
+    image-rendering: pixelated;
+}
+.hs-play-launch-planet svg { width: 100%; height: 100%; display: block; }
+.hs-play-launch-planet-0 { width: 34px; height: 34px; left: 6px; top: 6px; }
+.hs-play-launch-planet-1 { width: 46px; height: 46px; right: 4px; top: 2px; }
+.hs-play-launch-planet-2 { width: 40px; height: 40px; left: 2px; bottom: 2px; }
+.hs-play-launch-planet-3 { width: 26px; height: 26px; right: 18px; bottom: 8px; }
+.hs-play-launch-planet-4 { width: 18px; height: 18px; left: 64px; top: 4px; }
+.hs-play-launch-icon {
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    border-style: solid;
+    border-color: transparent transparent transparent var(--color-primary);
+}
+.hs-play-launch-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 6px;
+    text-align: center;
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    text-shadow: 0 0 2px #05060a, 0 0 2px #05060a, 0 0 6px var(--color-primary);
+}
+@media (max-width: 700px) {
+    .hs-play-launch { width: 100%; min-height: 72px; }
+}
+/* Section tabs are label-only: keep inactive labels visible. */
+.home-station-overlay .hs-fd-tabs .hs-tab .hs-tab-label { display: inline !important; }
+
+/* Pilot card + PLAY button share the nav frame's vertical edges: the tab
+   outline starts below the top bar's margin+padding (2+6px) and the sub-nav
+   ends above its 6px bottom margin. */
+html body .home-station-overlay .home-station-content .hs-header-split {
+    align-items: stretch;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-pilot-card, .hs-play-launch) {
+    align-self: stretch;
+    box-sizing: border-box;
+    margin: 8px 0 6px;
+    min-height: 0;
+}
+
+/* PLAY launch: strong outline drawn inside the box (inset shadows), so the
+   button keeps its size; the play triangle sits on a lit disc. */
+/* Same look at rest and on hover; only the planets' colour changes. */
+html body .home-station-overlay .home-station-content .hs-play-launch,
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, .nav-focused, .active) {
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-primary) 38%, #05060a) 0%, color-mix(in srgb, var(--color-primary) 12%, #020203) 80%);
+    filter: none;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px var(--color-primary),
+        inset 0 0 22px color-mix(in srgb, var(--color-primary) 80%, transparent);
+}
+/* Planets: tinted in the GUI's faction colour at rest (a colour-blend layer
+   masked to each planet's own shape), their real colours on hover / focus. */
+.hs-play-launch-planets { opacity: 1; }
+/* #hsPlayTint: SVG filter rendered by renderPlayLaunch from --color-primary. */
+.hs-play-launch-filter { position: absolute; width: 0; height: 0; }
+.hs-play-launch-planet {
+    filter: url(#hsPlayTint) brightness(1);
+    /* At rest: small, out at the edges; hover pulls them in and grows them. */
+    transform: translate(calc(var(--pdx, 0px) * -1), calc(var(--pdy, 0px) * -1)) scale(0.9);
+    transition: filter 0.2s, transform 0.2s;
+}
+.hs-play-launch-planet-0 { --pdx: 10px; --pdy: 8px; }
+.hs-play-launch-planet-1 { --pdx: -10px; --pdy: 8px; }
+.hs-play-launch-planet-2 { --pdx: 10px; --pdy: -8px; }
+.hs-play-launch-planet-3 { --pdx: -8px; --pdy: -8px; }
+.hs-play-launch-planet-4 { --pdx: 0px; --pdy: 6px; }
+.hs-play-launch:is(:hover, .nav-focused) .hs-play-launch-planet { filter: none; transform: scale(1.05); }
+.hs-play-launch::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: color-mix(in srgb, #05060a 70%, transparent);
+    box-shadow: 0 0 0 3px var(--color-primary), 0 0 0 5px #05060a, 0 0 14px var(--color-primary);
+    pointer-events: none;
+}
+.hs-play-launch-icon { border-width: 14px 0 14px 23px;}
+.hs-play-launch-label { z-index: 1; font-weight: bold; }
+
+/* Pixel look: stepped disc ring (14x14 grid, 4px cells) + stepped triangle
+   (6x11 grid, 3px cells) instead of smooth circle / border triangle. */
+.hs-play-launch::before,
+.hs-play-launch::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    transform: translate(-50%, -50%);
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: none;
+    clip-path: polygon(71.429% 0%, 71.429% 7.143%, 78.571% 7.143%, 78.571% 14.286%, 85.714% 14.286%, 85.714% 21.429%, 92.857% 21.429%, 92.857% 28.571%, 100% 28.571%, 100% 71.429%, 92.857% 71.429%, 92.857% 78.571%, 85.714% 78.571%, 85.714% 85.714%, 78.571% 85.714%, 78.571% 92.857%, 71.429% 92.857%, 71.429% 100%, 28.571% 100%, 28.571% 92.857%, 21.429% 92.857%, 21.429% 85.714%, 14.286% 85.714%, 14.286% 78.571%, 7.143% 78.571%, 7.143% 71.429%, 0% 71.429%, 0% 28.571%, 7.143% 28.571%, 7.143% 21.429%, 14.286% 21.429%, 14.286% 14.286%, 21.429% 14.286%, 21.429% 7.143%, 28.571% 7.143%, 28.571% 0%);
+}
+.hs-play-launch::before { width: 56px; height: 56px; background: var(--color-primary); }
+.hs-play-launch::after { width: 48px; height: 48px; background: #05060a; }
+.hs-play-launch-icon {
+    width: 18px;
+    height: 33px;
+    border: 0;
+    background: var(--color-primary);
+    transform: translate(-35%, -50%);
+    clip-path: polygon(0% 0%, 16.667% 0%, 16.667% 9.091%, 33.333% 9.091%, 33.333% 18.182%, 50% 18.182%, 50% 27.273%, 66.667% 27.273%, 66.667% 36.364%, 83.333% 36.364%, 83.333% 45.455%, 100% 45.455%, 100% 54.545%, 83.333% 54.545%, 83.333% 63.636%, 66.667% 63.636%, 66.667% 72.727%, 50% 72.727%, 50% 81.818%, 33.333% 81.818%, 33.333% 90.909%, 16.667% 90.909%, 16.667% 100%, 0% 100%);
+    filter: none;
+    z-index: 2;
+}
+
+/* Fleet: model list on the left, live in-game preview on the right. */
+.hs-body:has(.hs-faction-fleets) {
+    min-height: 0;
+}
+.hs-faction-fleets {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.hs-faction-fleets > .hs-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    align-content: stretch;
+}
+.hs-fd .hs-fd-fleet {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) 1fr;
+    gap: 14px;
+    align-items: stretch;
+    min-height: 0;
+}
+@media (max-width: 720px) { .hs-fd .hs-fd-fleet { grid-template-columns: 1fr; } }
+.hs-fd-fleet-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-fd-fleet-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    text-align: left;
+    color: var(--color-text, #eee);
+    background: rgba(0, 0, 0, 0.45);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
+    cursor: pointer;
+}
+.hs-fd-fleet-item:is(:hover, .nav-focused) { border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent); }
+.hs-fd-fleet-item.active {
+    border-color: var(--faction-accent, var(--color-primary));
+    color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, rgba(0, 0, 0, 0.5));
+}
+.hs-fd-fleet-thumb { width: 40px; height: 32px; flex: none; display: flex; align-items: center; justify-content: center; }
+.hs-fd-fleet-thumb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+.hs-fd-fleet-stage {
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    position: relative;
+}
+.hs-fd-fleet-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 4px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    background: color-mix(in srgb, #05060a 86%, var(--faction-accent, var(--color-primary)));
+    z-index: 1;
+}
+.hs-fd-fleet-toolbar .pe-preview-btn {
+    min-width: 28px;
+    padding: 2px 6px;
+}
+.hs-fd-fleet-toolbar .hs-fd-sizes-btn.is-active {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+.hs-fd-fleet-zoom {
+    min-width: 42px;
+    text-align: center;
+    font-size: var(--font-text);
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-fd-fleet-stage canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-width: 100%;
+    max-height: 100%;
+    image-rendering: pixelated;
+    display: block;
+    margin: auto;
+    transform: translate(var(--fleet-px, 0px), var(--fleet-py, 0px)) scale(var(--fleet-zoom, 1));
+    transform-origin: center;
+    transition: transform 0.12s steps(2, end);
+}
+.hs-fd-fleet-stage { cursor: grab; touch-action: none; }
+.hs-fd-fleet-stage.is-panning { cursor: grabbing; }
+.hs-fd-fleet-stage.is-panning canvas { transition: none; }
+
+/* Galaxy map ship panel: fill the width responsively — the ship art grows
+   with the panel, and the stats become tiles in an auto-fitting grid
+   (side by side when wide, wrapping when narrow) instead of long rows
+   with a gulf between label and value. */
+.galaxy-map-panel-ship { container-type: inline-size; }
+.galaxy-map-panel-ship .gm-ship-panel-body { align-items: center; gap: 16px; }
+.galaxy-map-panel-ship .gm-ship-mini-canvas {
+    width: clamp(84px, 20cqi, 180px);
+    height: auto;
+    aspect-ratio: 84 / 120;
+}
+.galaxy-map-panel-ship .gm-ship-detail {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+}
+.galaxy-map-panel-ship .gm-ship-detail .stat-row {
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 10px;
+    border: var(--ui-border-width) solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+    min-width: 0;
+}
+.galaxy-map-panel-ship .gm-ship-detail .stat-row:last-child {
+    border-bottom: var(--ui-border-width) solid var(--color-border);
+}
+.galaxy-map-panel-ship .gm-ship-detail .stat-label {
+    font-size: var(--font-text);
+    opacity: 0.7;
+    letter-spacing: 1px;
+}
+.galaxy-map-panel-ship .gm-ship-detail .stat-value {
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.galaxy-map-panel-ship .gm-ship-loadout { justify-content: flex-start; }
+/* Narrow panel: ship art above the stats. */
+@container (max-width: 420px) {
+    .galaxy-map-panel-ship .gm-ship-panel-body { flex-direction: column; align-items: stretch; }
+    .galaxy-map-panel-ship .gm-ship-mini-canvas { align-self: center; width: clamp(72px, 30cqi, 120px); }
+}
+
+/* Explore controls live in the map toolbar, left of TELEPORT. */
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore {
+    grid-column: 1;
+    justify-self: end;
+    align-self: center;
+    margin: 0;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore .gm-explore-meta {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore #gmExplore {
+    white-space: nowrap;
+}
+
+/* Galaxy travel as a modal over the planet map (mount-play-tab.js). */
+.hs-travel-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.72);
+}
+.hs-travel-dialog {
+    position: relative;
+    width: min(980px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    box-shadow: 6px 6px 0 0 #000;
+}
+.hs-travel-dialog > .hs-panel { margin: 0; }
+.hs-travel-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    min-width: 28px;
+    padding: 2px 8px;
+}
+
+/* Map fills the stage; bottom bar sits under it (map ends above the bar). */
+.galaxy-map-embedded .gm-map-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.home-station-content .hs-body-play .galaxy-map-embedded .gm-map-stage > .galaxy-map-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    flex: 0 0 auto;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow: visible;
+    pointer-events: auto;
+    z-index: 30;
+}
+.galaxy-map-embedded .gm-map-stage > .galaxy-map-panels > .galaxy-map-ruler.is-bar {
+    pointer-events: auto;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-select {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    min-width: 0;
+}
+.galaxy-map-embedded .gm-map-stage .galaxy-map-panel-ship {
+    width: 100%;
+}
+@media (max-width: 900px) {
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar {
+        flex-wrap: wrap;
+    }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet {
+        flex: 1 1 100%;
+        min-width: 0;
+        border-right: 0;
+        border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+    }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
+        flex: 1 1 55%;
+        max-width: none;
+        border-right: 0;
+    }
+    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
+        flex: 1 1 40%;
+        max-width: none;
+    }
+}
+
+/* Nebula layers: slow breathing + a few map units of drift, per layer offset. */
+/* No nebula animation: inside the SVG it repainted the whole map every frame. */
+@media (prefers-reduced-motion: reduce) {
+    .gm-nebula .gm-neb-layer { animation: none; }
+}
+
+/* Ship hover card: art left, name/status + compact stat grid right. */
+.galaxy-map-panel-ship.gm-ship-card {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+}
+.gm-ship-card-art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 96px;
+    background: color-mix(in srgb, var(--color-primary) 8%, #000);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.gm-ship-card .gm-ship-mini-canvas {
+    width: 64px !important;
+    height: 92px !important;
+    image-rendering: pixelated;
+}
+.gm-ship-card-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.gm-ship-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.gm-ship-card-head .gm-panel-value {
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gm-ship-card-status {
+    flex: 0 0 auto;
+    font-size: calc(var(--font-text) - 2px);
+    letter-spacing: 1px;
+    padding: 1px 5px;
+    color: #05060a;
+    background: var(--color-primary);
+}
+.gm-ship-card-class {
+    font-size: calc(var(--font-text) - 2px);
+    letter-spacing: 1px;
+    color: var(--color-text-secondary);
+}
+.gm-ship-card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
+    margin: 2px 0 0;
+}
+.gm-ship-card-stats > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    padding: 2px 0;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+.gm-ship-card-stats .gm-ship-card-wide { grid-column: 1 / -1; }
+.gm-ship-card-stats dt {
+    font-size: calc(var(--font-text) - 2px);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.gm-ship-card-stats dd {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    font-size: var(--font-text);
+    color: #fff;
+}
+.gm-ship-card-stats .gm-stat-chip img { width: 24px !important; height: 24px !important; }
+.gm-muted { color: var(--color-text-secondary); }
+
+/* Map planets as images (galaxy-map planetIconHtml asImage). */
+.gm-planet-icon.gm-planet-icon-img { position: relative; overflow: visible; }
+.gm-planet-icon-img .gm-planet-img {
+    position: absolute;
+    max-width: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+}
+
+/* Planet card buttons: bigger, glowing faction accent, animated on hover. */
+.galaxy-map-panel-select .gm-card-actions {
+    gap: 8px;
+    margin-top: 8px;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button {
+    position: relative;
+    overflow: hidden;
+    padding: 11px 16px;
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    font-weight: bold;
+    color: #fff;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 38%, #05060a);
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    box-shadow:
+        3px 3px 0 0 #000,
+        0 0 0 var(--ui-border-width, 2px) #000,
+        0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    text-shadow: 1px 1px 0 #000;
+    transition: transform 0.12s steps(2, end), box-shadow 0.12s steps(2, end), background-color 0.12s steps(2, end);
+}
+.galaxy-map-panel-select .gm-card-actions .action-button.secondary {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #05060a);
+    opacity: 1;
+}
+/* Pixel shine sweeping across on hover. */
+.galaxy-map-panel-select .gm-card-actions .action-button::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -40%;
+    width: 24%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    transform: skewX(-20deg);
+    pointer-events: none;
+    opacity: 0;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused) {
+    transform: translate(-2px, -2px);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 62%, #05060a);
+    box-shadow:
+        5px 5px 0 0 #000,
+        0 0 0 var(--ui-border-width, 2px) #000,
+        0 0 20px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 75%, transparent);
+    animation: gm-card-btn-pulse 1.2s ease-in-out infinite;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button:not(:disabled):is(:hover, :focus-visible, .nav-focused)::after {
+    animation: gm-card-btn-shine 0.9s ease-out;
+    opacity: 1;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button:not(:disabled):active {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 0 #000, 0 0 0 var(--ui-border-width, 2px) #000;
+    animation: none;
+}
+.galaxy-map-panel-select .gm-card-actions .action-button:disabled {
+    opacity: 0.45;
+    box-shadow: 2px 2px 0 0 #000;
+}
+@keyframes gm-card-btn-shine {
+    from { left: -40%; }
+    to   { left: 130%; }
+}
+@keyframes gm-card-btn-pulse {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .galaxy-map-panel-select .gm-card-actions .action-button { transition: none; }
+    .galaxy-map-panel-select .gm-card-actions .action-button:is(:hover, :focus-visible, .nav-focused),
+    .galaxy-map-panel-select .gm-card-actions .action-button::after { animation: none; }
+}
+
+/* ==========================================================================
+   Pilot creation / profile section: responsive pass.
+   Fluid sizes instead of fixed px, and stacking breakpoints at 900 / 640 px.
+   ========================================================================== */
+.profile-selection-content.profile-selection-floating.profile-selection-name-mode:has(.profile-faction-info-row) {
+    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
+    padding: clamp(14px, calc(2.4 * var(--sv-w)), 32px) clamp(12px, calc(2.6 * var(--sv-w)), 32px);
+    box-sizing: border-box;
+}
+.profile-selection-name-mode:has(.profile-faction-info-row) h2 { font-size: clamp(20px, calc(3.2 * var(--sv-w)), 34px); }
+.profile-selection-name-mode .profile-faction-preview-name { font-size: clamp(16px, calc(2 * var(--sv-w)), 22px); }
+.profile-selection-name-mode .profile-faction-preview-trait,
+.profile-selection-name-mode .profile-faction-preview-hero { font-size: clamp(12px, calc(1.3 * var(--sv-w)), 14px); }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-ship,
+.profile-selection-name-mode.is-name-step .profile-faction-ship {
+    width: clamp(150px, calc(24 * var(--sv-w)), 260px) !important;
+    height: auto !important;
+    aspect-ratio: 10 / 7;
+    max-width: 100%;
+}
+.profile-selection-name-mode.is-name-step .profile-faction-preview {
+    max-width: min(640px, 100%);
+}
+
+/* Start options: label column shrinks, content always gets the room. */
+.profile-start-options,
+.profile-selection-name-mode.is-name-step .profile-start-options {
+    max-width: min(1040px, 100%);
+    box-sizing: border-box;
+}
+
+.profile-start-chip { min-height: 30px; }
+
+/* Galaxy card: ‹ map info › — the map is fluid (keeps its 56:22 ratio),
+   the info column wraps, the arrows stretch to the card height. */
+.profile-start-galaxy {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 0.45fr) auto;
+    grid-template-areas: "prev map info next";
+    align-items: stretch;
+    gap: clamp(6px, calc(1.2 * var(--sv-w)), 12px);
+    min-width: 0;
+}
+.profile-start-galaxy > .profile-start-galaxy-nav:first-child { grid-area: prev; }
+.profile-start-galaxy > .profile-start-galaxy-nav:last-child { grid-area: next; }
+.profile-start-galaxy > .profile-start-galaxy-map { grid-area: map; }
+.profile-start-galaxy > .profile-start-galaxy-info { grid-area: info; align-self: center; }
+.profile-start-galaxy-map,
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-map {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 560 / 220;
+    min-width: 0;
+}
+.profile-start-galaxy-nav,
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-nav {
+    height: auto;
+    min-height: 44px;
+    width: clamp(28px, calc(3 * var(--sv-w)), 34px);
+}
+.profile-start-galaxy-name,
+.profile-selection-name-mode.is-name-step .profile-start-galaxy-name {
+    font-size: clamp(15px, calc(1.9 * var(--sv-w)), 22px);
+    overflow-wrap: anywhere;
+}
+.profile-start-galaxy-meta { overflow-wrap: anywhere; }
+
+/* Wizard card with the start-galaxy list: ‹ list map info › (the list is scrollable, the map keeps its ratio). */
+.profile-start-galaxy.has-side {
+    grid-template-columns: auto minmax(160px, 0.62fr) minmax(0, 1.4fr) minmax(150px, 0.5fr) auto;
+    grid-template-areas: "prev side map info next";
+}
+.profile-start-galaxy > .profile-start-galaxy-side { grid-area: side; }
+.profile-start-galaxy-side {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    min-height: 0;
+    overflow-y: auto;
+    background: #05060a;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+}
+.profile-start-galaxy-side li {
+    text-align: left;
+    display: flex;
+    flex-wrap: wrap;                 /* name on its own line, rivals + tag below it */
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-weight: 700;
+    font-size: var(--font-text);
+    line-height: 16px;
+    letter-spacing: 1px;
+    color: #d8dbe2;
+    cursor: pointer;
+}
+.profile-start-galaxy-side li:hover { background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #05060a); color: #fff; }
+.profile-start-galaxy-side li.selected { background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, #05060a); color: #fff; }
+.profile-start-galaxy-side .ruler { display: inline-flex; width: 20px; height: 20px; flex: none; }
+.profile-start-galaxy-side .name { flex: 1 1 calc(100% - 30px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-start-galaxy-side .rivals { margin-left: 28px; }
+.profile-start-galaxy-side .rivals { display: inline-flex; gap: 2px; opacity: 0.8; flex: none; }
+.profile-start-galaxy-side .tag { flex: none; font-size: var(--font-small); line-height: 8px; padding: 2px 3px; color: #000; background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #fff); }
+.profile-start-galaxy-side .tag.is-home { background: var(--faction-accent, var(--color-primary)); }
+
+@media (max-width: 900px) {
+    .profile-faction-info-row { grid-template-columns: 1fr; }
+    /* Info goes under the map; arrows keep flanking the map. */
+    .profile-start-galaxy {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            "prev map next"
+            "prev info next";
+    }
+    .profile-start-galaxy.has-side {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            "prev side next"
+            "prev map next"
+            "prev info next";
+    }
+    .profile-start-galaxy-side { max-height: 130px; }
+    .profile-start-galaxy > .profile-start-galaxy-info { text-align: center; align-items: center; }
+}
+@media (max-width: 640px) {
+    /* Label above its content. */
+    .profile-start-row,
+    .profile-selection-name-mode.is-name-step .profile-start-row[data-start-row="galaxy"] {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+    .profile-start-label { text-align: left; }
+    /* Chips share the row evenly and are easy to tap. */
+    .profile-start-chips {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    }
+    .profile-start-chip { min-height: 40px; }
+    .profile-selection-name-mode.is-name-step .profile-faction-preview { gap: 12px; padding: 10px; }
+    .profile-selection-name-mode .profile-modal-crest { width: 40px; height: 40px; top: 10px; left: 10px; }
+}
+
+/* Map toolbar: progress label sits left of a square icon-only TELEPORT
+   (wormhole) button; its text is the tooltip. */
+.galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+.galaxy-map-embedded .galaxy-map-toolbar > .galaxy-map-progress-bar {
+    margin: 0;
+    white-space: nowrap;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    padding: 0;
+}
+
+/* Planet icon before the progress label; TELEPORT fills the header height
+   (both rows), kept square. */
+.galaxy-map-embedded .galaxy-map-toolbar > .galaxy-map-progress-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.gm-progress-icon {
+    width: 22px !important;
+    height: 22px !important;
+    image-rendering: pixelated;
+    flex: 0 0 auto;
+}
+.galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: center;
+    width: 100%;
+}
+/* Same height as the ruler / conflict cards in that row. */
+.galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-btn.action-button {
+    width: 68px;
+    height: 68px;
+    min-height: 0;
+    align-self: center;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .gm-teleport-icon {
+    width: 70% !important;
+    height: 70% !important;
+}
+
+/* Locked planets keep their colours, just darker; a pixel lock replaces
+   the LOCKED text under them. */
+.gm-node-icon-wrap.dimmed { filter: brightness(0.45); }
+.gm-locked-icon .gm-lock-shackle,
+.gm-locked-icon .gm-lock-body { fill: #ff9b54; stroke: #050508; stroke-width: 1.5px; paint-order: stroke; }
+.gm-locked-icon .gm-lock-hole { fill: #050508; }
+
+/* Ship summary: [art] [name/class/status stacked] [Weapons · Modules] [buttons]. */
+.galaxy-map-toolbar .gm-ship-bar {
+    flex: 1 1 auto;
+    margin-right: auto;
+    min-width: 0;
+    max-width: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 16px;
+    background: none;
+    border: 0;
+    border-left: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    box-shadow: none;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-art {
+    flex: 0 0 auto;
+    width: 72px;
+    height: 100px;
+    background: none;
+    border: 0;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-mini-canvas { width: 70px !important; height: 100px !important; }
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-info {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-info .gm-panel-value {
+    line-height: 1.1;
+    white-space: nowrap;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-class {
+    font-size: 0.85em;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+    line-height: 1.1;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-status {
+    justify-self: start;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 28px;
+    margin: 0;
+    min-width: 0;
+    align-self: stretch;
+    align-content: center;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats > div {
+    flex-direction: column;
+    align-items: flex-start;
+    grid-column: auto;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats > div {
+    border: 0;
+    padding: 0;
+    gap: 6px;
+    justify-content: flex-start;
+}
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats dd { justify-content: flex-start; }
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img,
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.hs-pixel,
+.galaxy-map-toolbar .gm-ship-bar .gm-ship-card-stats .gm-stat-chip img.gm-stat-icon {
+    width: 40px !important;
+    height: 40px !important;
+}
+/* Header toolbar: EXPLORE button with its budget / reason line underneath. */
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore .gm-explore-meta { margin: 0; }
+/* Progress label with the explore budget / warp-drive line under it,
+   left of TELEPORT; more room between the ruler card and EXPLORE. */
+.galaxy-map-embedded .galaxy-map-toolbar .gm-progress-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+.galaxy-map-embedded .galaxy-map-toolbar .gm-progress-col .gm-explore-meta { margin: 0; white-space: nowrap; }
+.galaxy-map-embedded .galaxy-map-header .galaxy-map-toolbar { gap: 24px; }
+.galaxy-map-embedded .galaxy-map-toolbar .gm-progress-col .galaxy-map-explore { align-items: flex-end; }
+.galaxy-map-explore .gm-explore-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.galaxy-map-explore .gm-explore-progress .gm-progress-icon {
+    width: 32px !important;
+    height: 32px !important;
+    flex: none;
+}
+.galaxy-map-explore .gm-explore-progress .gm-progress-text {
+    font-size: var(--font-h2);
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-explore .gm-explore-progress {
+    align-self: flex-end;
+}
+/* EXPLORE cost: resource icon + amount chips inside the button. */
+.gm-explore-btn { display: inline-flex; align-items: center; gap: 12px; }
+.gm-explore-costs { display: inline-flex; align-items: center; gap: 10px; }
+.gm-explore-cost { display: inline-flex; align-items: center; gap: 4px; }
+.gm-explore-cost-icon { width: 16px !important; height: 16px !important; image-rendering: pixelated; }
+/* Faction emblems keep their own faction colour (tinted by iconRenderer):
+   no tab silhouette recolour into the player's accent. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) .hs-tab-icon:has(> .hs-faction-emblem, .ui-icon-tip > .hs-faction-emblem),
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) .hs-tab-icon :is(img.hs-faction-emblem, .profile-faction-emblem-img) {
+    filter: none !important;
+    transform: none !important;
+    overflow: visible;
+}
+/* Mission buttons: outlined with a double border instead of a solid fill,
+   launch icon before the label. */
+.galaxy-map-overlay .action-button.gm-mission-btn,
+.action-button.gm-mission-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #fff) !important;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary)) !important;
+    box-shadow: inset 0 0 0 3px #05060a, inset 0 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+}
+.action-button.gm-mission-btn:is(:hover, :focus-visible, .nav-focused) {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, #05060a) !important;
+    color: #fff !important;
+}
+.gm-mission-icon { width: 18px !important; height: 18px !important; image-rendering: pixelated; }
+
+/* Home-station readability and stable wide launch control. */
+.home-station-overlay .hs-play-launch {
+    flex: 0 0 180px;
+    width: 180px;
+    min-width: 180px;
+    min-height: 92px;
+}
+.home-station-overlay .hs-tabs,
+.home-station-overlay .hs-subnav {
+    gap: 8px;
+}
+.home-station-overlay .hs-tab {
+    min-height: 38px;
+    padding: 7px 12px;
+}
+.home-station-overlay .hs-tab-label,
+.home-station-overlay .hs-play-launch-label {
+    font-size: max(var(--font-text), 13px);
+    letter-spacing: 1px;
+}
+.home-station-overlay .hs-header-split {
+    gap: 12px;
+}
+@media (max-width: 700px) {
+    .home-station-overlay .hs-play-launch {
+        flex-basis: 100%;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+/* PLAY launch reacts like a main nav tab: label + icon light up in the
+   faction colour on hover / keyboard focus, and stay accented while active. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
+    color: var(--color-text, #f0e6dc);
+    font-family: var(--ui-font-family);
+    letter-spacing: 0.08em;
+    transition: none;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused) .hs-play-launch-label {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
+    color: var(--faction-accent, var(--color-primary));
+    text-shadow: 2px 2px 0 #000;
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused, .active)::before,
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused, .active) .hs-play-launch-icon {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff);
+}
+html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover, :focus-visible, .nav-focused) {
+    outline: none;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff),
+        inset 0 0 28px var(--faction-accent, var(--color-primary));
+}
+
+/* Enemy rows: shield bar under the HP bar (cyan), pulsing while it recharges. */
+.enemy-vitals-side .health-bar.enemy-health .enemy-health-main,
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-health-main {
+    flex-direction: column;
+    gap: 3px;
+}
+.enemy-vitals-side .health-bar.enemy-health .health-fill {
+    width: 100%;
+    flex: 0 0 auto;
+}
+.enemy-vitals-side .enemy-shield-fill {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    background: #000;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, #4fd8ff 55%, transparent);
+    box-sizing: border-box;
+}
+.enemy-vitals-side .health-bar.enemy-health.is-champion .enemy-shield-fill { height: 12px; }
+.enemy-vitals-side .enemy-shield-fill::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: var(--shield-width, 100%);
+    background: #4fd8ff;
+    transition: width 0.25s linear;
+}
+.enemy-vitals-side .enemy-shield-fill.is-charging::before {
+    animation: enemy-shield-charge 0.6s steps(2) infinite;
+}
+.enemy-vitals-side .enemy-shield-fill.is-down { border-color: #ff4f4f; }
+@keyframes enemy-shield-charge {
+    50% { background: color-mix(in srgb, #4fd8ff 45%, #fff); }
+}
+.enemy-vitals-side .enemy-shield-text {
+    position: relative;
+    z-index: 1;
+    display: block;
+    text-align: center;
+    font-family: var(--ui-font-family);
+    font-size: var(--font-small);
+    line-height: 8px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+.enemy-vitals-side .enemy-shield-fill.is-down .enemy-shield-text { color: #ff8080; }
+.enemy-vitals-side .enemy-shield-fill.is-none { border-color: color-mix(in srgb, #4fd8ff 22%, transparent); }
+.enemy-vitals-side .enemy-shield-fill.is-none .enemy-shield-text { color: #6f8a96; }
+
+/* Left sidebar: pack clusters tightly so vitals below get height. */
+.game-left-cluster > .game-info-panel {
+    padding: 5px 6px;
+    gap: 3px;
+}
+.game-left-cluster > .game-info-panel .gi-head {
+    padding-bottom: 5px;
+    gap: 0;
+    align-items: flex-start;
+}
+.game-left-cluster > .game-info-panel .gi-body {
+    justify-content: flex-start;
+    gap: 2px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+.game-left-cluster > .game-info-panel .gi-cluster:not(.gi-cluster-field) .gi-cluster-body {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    gap: 0;
+}
+/* SESSION: no nested box / no header — sits flat in the panel. */
+.game-left-cluster > .game-info-panel .gi-cluster-session {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    gap: 0;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-session > .gi-cluster-title {
+    display: none;
+}
+.game-left-cluster > .game-info-panel .gi-metric {
+    padding: 2px 4px;
+    gap: 0;
+}
+.game-left-cluster > .game-info-panel .gi-row { padding: 2px 0; }
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics {
+    flex: 0 0 auto;
+    grid-auto-rows: auto;
+    align-content: start;
+    gap: 2px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session {
+    grid-template-columns: minmax(0, 1fr);
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-metric {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    text-align: left;
+    padding: 2px 3px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-stat-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    line-height: 0;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-stat-icon :is(.gi-icon, img, canvas) {
+    width: 20px !important;
+    height: 20px !important;
+    image-rendering: pixelated;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric {
+    justify-content: flex-start;
+    gap: 1px;
+}
+/* No outlines between the tiles: separated by the gap and a soft fill only
+   (border stays transparent so the stat-change flash can still light it). */
+.game-left-cluster > .game-info-panel .gi-metric {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+    box-shadow: none;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics .gi-metric-value {
+    font-size: var(--font-md);
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row {
+    flex: 0 0 auto;
+    min-height: 0;
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.game-left-cluster > .game-info-panel .gi-cluster-body > .gi-row:last-child { border-bottom: 0; }
+.game-left-cluster > .game-info-panel .gi-cluster {
+    padding: 3px 4px;
+}
+.game-left-cluster > .game-info-panel .gi-cluster-title {
+    margin: 0;
+    padding-bottom: 0;
+}
+.game-left-cluster > .game-info-panel .gi-chips {
+    gap: 3px;
+    padding-top: 2px;
+}
+
+/* Victory / game-over menu: the selected button is a solid lit block
+   (accent fill, dark text + icon, glow); the others stay quiet — a thin dim
+   frame only — so the selection is obvious at a glance. */
+html body #victoryOverlay .victory-button {
+    background: color-mix(in srgb, #05060a 85%, transparent) !important;
+    color: color-mix(in srgb, var(--color-text, #fff) 70%, transparent) !important;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transform: none !important;
+}
+html body #victoryOverlay .victory-button::before,
+html body #victoryOverlay .victory-button::after {
+    display: none !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) {
+    background: var(--faction-accent, var(--color-primary)) !important;
+    color: #05060a !important;
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff) !important;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        0 0 0 3px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent),
+        0 0 18px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) .button-text {
+    color: #05060a !important;
+    text-shadow: none !important;
+}
+html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) .button-icon :is(img, canvas) {
+    filter: brightness(0) !important;
+}
+
+/* FIELD → LOOT: label above the chips; larger, resource-coloured icons. */
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chips { gap: 5px; }
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot {
+    border-color: color-mix(in srgb, var(--loot-color) 60%, transparent);
+}
+.game-info-panel .gi-chip.gi-chip-loot :is(.gi-icon, img) {
+    width: 32px !important;
+    height: 32px !important;
+}
+.gi-under-stage .gi-stat-icon :is(.gi-icon, img, canvas) {
+    width: 32px !important;
+    height: 32px !important;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot .gi-chip-count {
+    color: var(--loot-color);
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+/* FIELD → LOOT: bare icon + count below, no chip frame; empty resources dimmed. */
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot {
+    width: auto;
+    min-width: 32px;
+    padding: 0;
+    border: 0;
+    background: none;
+    clip-path: none;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chip.gi-chip-loot.gi-chip-empty { opacity: 0.35; }
+
+/* LOOT: more headroom above the label; chips share the row evenly,
+   icon and count centred in each column. */
+:is(.game-info-panel, .gi-under-stage) .gi-cluster-field .gi-chip-row {
+    padding-top: 8px;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row-label {
+    margin-bottom: 2px;
+    text-align: left;
+    justify-self: start;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-chip-row .gi-chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    justify-items: start;
+    width: 100%;
+}
+.game-info-panel .gi-chip.gi-chip-loot {
+    width: 100%;
+    max-width: 56px;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+.game-info-panel .gi-chip.gi-chip-loot .gi-chip-count {
+    text-align: center;
+    width: 100%;
+}
+
+/* SHIP stats: improved values light up green with their delta, lowered
+   ones dim red; the weapon box glows while shots are boosted. */
+:is(.game-info-panel, .gi-under-stage) .gi-stat .gi-stat-delta {
+    margin-left: 5px;
+    font-size: 0.7em;
+    vertical-align: middle;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-up {
+    border-color: #5dff9a !important;
+    background: color-mix(in srgb, #5dff9a 18%, #05060a) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #5dff9a 35%, transparent), 0 0 12px color-mix(in srgb, #5dff9a 45%, transparent);
+    animation: gi-stat-pulse 0.5s steps(2) 4;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-up :is(.gi-metric-label, .gi-metric-value) { color: #5dff9a !important; }
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-down {
+    border-color: color-mix(in srgb, #ff6a5d 60%, transparent) !important;
+}
+:is(.game-info-panel, .gi-under-stage) .gi-stat.gi-stat-down .gi-metric-value { color: #ff8a80 !important; }
+@keyframes gi-stat-pulse { 50% { background: color-mix(in srgb, #5dff9a 40%, #05060a); } }
+
+.gi-weapon-boosted {
+    border-color: #ffcf3a !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #ffcf3a 35%, transparent), 0 0 14px color-mix(in srgb, #ffcf3a 45%, transparent) !important;
+}
+.gi-weapon-boosted .weapon-card.is-active {
+    border-color: #ffcf3a;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffcf3a 45%, transparent);
+}
+.gi-weapon-boosted .weapon-card.is-active .weapon-card-name::after {
+    content: ' ▲';
+    color: #ffcf3a;
+    font-weight: bold;
+}
+.gi-weapon-flash { animation: gi-stat-pulse 0.5s steps(2) 4; }
+
+/* LOADOUT → all slotted weapons; breathing glow during temporary boosts (power shot). */
+:is(.game-info-panel, .gi-loadout-side) .gi-weapon-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 4px;
+}
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon :is(.gi-icon, img) {
+    filter: drop-shadow(0 0 1px #05060a);
+}
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon.gi-chip-boosted {
+    border-color: #ffcf3a;
+    animation: gi-weapon-breath 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
+}
+:is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon.gi-chip-boosted :is(.gi-icon, img) {
+    animation: gi-weapon-breath-icon 1.6s ease-in-out var(--gi-breath-delay, 0s) infinite;
+}
+@keyframes gi-weapon-breath {
+    0%, 100% { background: color-mix(in srgb, #ffcf3a 8%, transparent); }
+    50% { background: color-mix(in srgb, #ffcf3a 30%, transparent); }
+}
+@keyframes gi-weapon-breath-icon {
+    0%, 100% { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #ffcf3a); }
+    50% { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 5px #ffcf3a) brightness(1.3); }
+}

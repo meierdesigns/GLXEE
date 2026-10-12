@@ -1,0 +1,399 @@
+"use strict";
+
+// ShipLoadoutManager methods, split from ship-loadout.js.
+extendClass(ShipLoadoutManager, {
+    /** buildLayout phase 4: apply segment/module offsets and dock parts to their segments. */
+    dockLayoutParts(ctx, segments) {
+        const { coreWidth, L, parts, segmentOffset, moduleOffset, totalCoreH } = ctx;
+        // Offsets are fractions of the unscaled hull height, so resizing one
+        // part never shifts the others (the scaled total changed with it).
+        const offsetH = ctx.baseCoreH || totalCoreH;
+
+        const moveFor = (id) => {
+            const key = id === 'wingLeft' || id === 'wingRight' ? 'wing' : id;
+            const off = segmentOffset[key] || { x: 0, y: 0 };
+            return {
+                x: Math.round(coreWidth * off.x),
+                y: Math.round(offsetH * off.y)
+            };
+        };
+        segments.forEach((seg) => {
+            const off = moveFor(seg.id);
+            seg.x += off.x;
+            seg.y += off.y;
+        });
+        parts.forEach((part) => {
+            const off = moveFor(part.mountSegment);
+            part.x += off.x;
+            part.y += off.y;
+            const key = String(part.kind || 'module') + ':' + String(part.id || '');
+            const modOff = moduleOffset[key] || { x: 0, y: 0 };
+            part.x += Math.round(coreWidth * modOff.x);
+            part.y += Math.round(offsetH * modOff.y);
+        });
+        // Re-dock modules to their segment roots after segment moves/scales so
+        // growing frames stay attached to the hull instead of floating in empty space.
+        parts.forEach((part) => {
+            const segmentId = part.mountSegment === 'wing'
+                ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
+                : part.mountSegment;
+            const segment = segments.find((seg) => seg.id === segmentId);
+            if (!segment) return;
+            // Expand segment plate symmetrically to contain the module frame.
+            if (part.width > segment.width) {
+                const grow = part.width - segment.width;
+                segment.x -= Math.floor(grow / 2);
+                segment.width = part.width;
+            }
+            if (part.height > segment.height) {
+                const grow = part.height - segment.height;
+                segment.y -= Math.floor(grow / 2);
+                segment.height = part.height;
+            }
+            const docked = this.dockModuleOnSegment(
+                segment,
+                { w: part.width, h: part.height },
+                part.face
+            );
+            part.x = docked.x;
+            // Wing mounts keep their stacked row (one per wing pair); docking
+            // them to the wing's vertical centre put every pair on top of
+            // each other, so each wing showed only one weapon.
+            const onWing = part.face === 'left' || part.face === 'right';
+            if (docked.y != null && !onWing) part.y = docked.y;
+            if (onWing) {
+                part.y = Math.max(segment.y, Math.min(segment.y + segment.height - part.height, part.y));
+            }
+            // Defense / center mounts stay on the hull midline.
+            if (part.kind === 'defense' || part.face === 'center') {
+                part.x = segment.x + Math.floor((segment.width - part.width) / 2);
+            }
+        });
+        // Full-hull bounding box (all segments combined) — a dragged module's
+        // travel range is not limited to its own small mount plate, so the
+        // player can pull a wing-mounted weapon back onto the front/center
+        // hull (or anywhere else) to line it up with the drawn art.
+        const hullBBox = segments.reduce((box, seg) => ({
+            x: Math.min(box.x, seg.x),
+            y: Math.min(box.y, seg.y),
+            right: Math.max(box.right, seg.x + seg.width),
+            bottom: Math.max(box.bottom, seg.y + seg.height)
+        }), {
+            x: 0,
+            y: ctx.frontY != null ? ctx.frontY : 0,
+            right: coreWidth,
+            bottom: ctx.hullBottom != null ? ctx.hullBottom : totalCoreH
+        });
+
+        // Module offsets are local to their owning component, so moving or
+        // scaling a component keeps its installed hardware attached to it.
+        parts.forEach((part) => {
+            const skins = L.moduleSkins && L.moduleSkins[part.kind];
+            const slotSkins = L.slotSkins && L.slotSkins[part.kind];
+            const moduleSkin = skins ? skins[this.moduleOffsetKey(part.id, part.face)] : null;
+            const slotSkin = slotSkins ? slotSkins[String(part.slotIndex)] : null;
+            const skin = moduleSkin || slotSkin;
+            if (skin) part.skin = skin;
+            const segmentId = part.mountSegment === 'wing'
+                ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
+                : part.mountSegment;
+            const segment = segments.find((seg) => seg.id === segmentId);
+            const stored = L.moduleOffsets && L.moduleOffsets[part.kind]
+                ? (L.moduleOffsets[part.kind][this.moduleOffsetKey(part.id, part.face)]
+                    || L.moduleOffsets[part.kind][part.id])
+                : null;
+            if (!segment || !stored) {
+                if (segment && (part.kind === 'defense' || part.face === 'center')) {
+                    part.x = segment.x + Math.floor((segment.width - part.width) / 2);
+                }
+                return;
+            }
+            const baseX = segment.x + (segment.width - part.width) / 2;
+            const baseY = segment.y + (segment.height - part.height) / 2;
+            const minX = hullBBox.x;
+            const minY = hullBBox.y;
+            const maxX = Math.max(minX, hullBBox.right - part.width);
+            const maxY = Math.max(minY, hullBBox.bottom - part.height);
+            if (part.kind === 'defense' || part.face === 'center') {
+                // Defense stays horizontally centered; only vertical nudge is kept.
+                part.x = baseX;
+                part.y = Math.max(minY, Math.min(maxY,
+                    baseY + Number(stored.y || 0) * segment.height));
+            } else {
+                part.x = Math.max(minX, Math.min(maxX,
+                    baseX + Number(stored.x || 0) * segment.width));
+                part.y = Math.max(minY, Math.min(maxY,
+                    baseY + Number(stored.y || 0) * segment.height));
+            }
+        });
+    },
+
+    /** Weapon size follows its slot size (factors from getWeaponSlotScales). */
+    applyWeaponSlotScales(parts, scales) {
+        if (!scales) return;
+        const even = (v) => Math.max(2, Math.round(v / 2) * 2);
+        parts.forEach((part) => {
+            if (part.kind !== 'weapon' || part.slotIndex == null) return;
+            const f = Number(scales[part.slotIndex]) || 1;
+            if (f === 1) return;
+            part.scaleW = even((part.scaleW != null ? part.scaleW : part.width) * f);
+            part.scaleH = even((part.scaleH != null ? part.scaleH : part.height) * f);
+            part.slotSizeScale = f;
+        });
+    },
+
+    /** buildLayout phase 5: per-module scale. */
+    applyLayoutModuleScales(parts, segments) {
+        // Apply per-module scale from the placed center so the hangar slider
+        // grows in place instead of sliding left/right off the dock root.
+        parts.forEach((part) => {
+            const sw = part.scaleW != null ? part.scaleW : part.width;
+            const sh = part.scaleH != null ? part.scaleH : part.height;
+            delete part.scaleW;
+            delete part.scaleH;
+            if (sw === part.width && sh === part.height) return;
+            const oldX = part.x;
+            const oldY = part.y;
+            const oldRight = part.x + part.width;
+            const oldBottom = part.y + part.height;
+            const cx = part.x + part.width / 2;
+            const cy = part.y + part.height / 2;
+            part.width = sw;
+            part.height = sh;
+            part.x = part.face === 'left'
+                ? Math.round(oldRight - sw)
+                : (part.face === 'right' ? Math.round(oldX) : Math.round(cx - sw / 2));
+            part.y = part.face === 'up'
+                ? Math.round(oldBottom - sh)
+                : (part.face === 'down' ? Math.round(oldY) : Math.round(cy - sh / 2));
+            const segmentId = part.mountSegment === 'wing'
+                ? (part.face === 'left' ? 'wingLeft' : 'wingRight')
+                : part.mountSegment;
+            const segment = segments.find((seg) => seg.id === segmentId);
+            if (!segment) return;
+            if (part.width > segment.width) {
+                const grow = part.width - segment.width;
+                segment.x -= Math.floor(grow / 2);
+                segment.width = part.width;
+            }
+            if (part.height > segment.height) {
+                const grow = part.height - segment.height;
+                segment.y -= Math.floor(grow / 2);
+                segment.height = part.height;
+            }
+            if (part.kind === 'defense' || part.face === 'center') {
+                part.x = segment.x + Math.floor((segment.width - part.width) / 2);
+            }
+        });
+    },
+
+    /** buildLayout phase 6: sync wing panels, normalize to bbox and assemble the result. */
+    /** Rotate a layout point with its wing around the wing root (renderProceduralWing pivot). */
+    rotateOnWing(seg, degrees, x, y) {
+        const deg = Math.max(-180, Math.min(180, Number(degrees) || 0));
+        if (!seg || Math.abs(deg) < 0.001) return { x: x, y: y };
+        const isLeft = seg.id === 'wingLeft';
+        const px = isLeft ? seg.x + seg.width : seg.x;
+        const py = seg.y + seg.height / 2;
+        const a = deg * Math.PI / 180 * (isLeft ? -1 : 1);
+        const dx = x - px;
+        const dy = y - py;
+        return {
+            x: px + dx * Math.cos(a) - dy * Math.sin(a),
+            y: py + dx * Math.sin(a) + dy * Math.cos(a)
+        };
+    },
+
+    finalizeLayout(ctx, segments, wingPanels) {
+        const { coreWidth, L, parts, segGap, wingGap, armorIds, shieldIds, drives,
+            systemPods, expandFront, expandBack, insertH, totalCoreH } = ctx;
+
+        // Keep wingPanels in sync with final wing segment frames.
+        const syncedWings = [];
+        segments.forEach((seg) => {
+            if (seg.id === 'wingLeft') {
+                syncedWings.push({
+                    side: 'left',
+                    x: seg.x,
+                    y: seg.y,
+                    width: seg.width,
+                    height: seg.height
+                });
+            } else if (seg.id === 'wingRight') {
+                syncedWings.push({
+                    side: 'right',
+                    x: seg.x,
+                    y: seg.y,
+                    width: seg.width,
+                    height: seg.height
+                });
+            }
+        });
+        if (syncedWings.length) {
+            wingPanels.length = 0;
+            syncedWings.forEach((w) => wingPanels.push(w));
+        }
+
+        // Nose/core weapon mounts: single on the centreline or a mirrored
+        // pair, placed from the final area frame (same formula as the
+        // hangar marker, see weaponBodySpot).
+        parts.forEach((p) => {
+            if (!p.bodyMount || !this.getBodyWeaponMount) return;
+            const m = this.getBodyWeaponMount(L, p.slotIndex);
+            const spot = m && this.weaponBodySpot(segments, m);
+            if (!spot) return;
+            const cx = p.side === 'right' ? spot.mx : spot.x;
+            p.x = Math.round(cx - p.width / 2);
+            p.y = Math.round(spot.y - p.height / 2);
+        });
+
+        // Each wing weapon slot is one mirrored pair (both halves carry the
+        // slot's index): the right wing always shows the mirror of its left
+        // half, so stored per-side offsets can't make the wings drift apart.
+        const segL = segments.find((sg) => sg.id === 'wingLeft');
+        const segR = segments.find((sg) => sg.id === 'wingRight');
+        if (segL && segR) {
+            const wingWeapons = parts.filter((p) => p.kind === 'weapon' && p.mountSegment === 'wing');
+            // Every wing slot owns a fixed row (same rule as the hangar's
+            // empty-slot markers), so empty and filled slots never overlap.
+            const slotList = (L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [];
+            const rows = Math.max(1, slotList.length - 1, Number(L.wingSlotRows) || 0);
+            const offs = (L.moduleOffsets && L.moduleOffsets.weapon) || {};
+            wingWeapons.filter((p) => p.face === 'left').forEach((l) => {
+                const wm = this.getWingWeaponMount ? this.getWingWeaponMount(L, l.slotIndex) : null;
+                if (!wm && !(l.slotIndex >= 1)) return;
+                if (wm) {
+                    // Slot moved by the player: its stored spot on the wing.
+                    const sx = segL.x + segL.width * wm.fx;
+                    const sy = segL.y + segL.height * wm.ny;
+                    l.x = Math.round(Math.max(segL.x, Math.min(segL.x + segL.width - l.width, sx - l.width / 2)));
+                    l.y = Math.round(Math.max(segL.y, Math.min(segL.y + segL.height - l.height, sy - l.height / 2)));
+                    return;
+                }
+                if (offs[this.moduleOffsetKey(l.id, l.face)] || offs[l.id]) return;
+                const cy = segL.y + segL.height * (l.slotIndex - 0.5) / rows;
+                l.y = Math.round(Math.max(segL.y, Math.min(segL.y + segL.height - l.height, cy - l.height / 2)));
+                // About a third out from the hull root (the hangar slot spot,
+                // see buildHangarSlots), so the gun sits on its socket.
+                const cx = segL.x + segL.width * (1 - 0.36);
+                l.x = Math.round(Math.max(segL.x, Math.min(segL.x + segL.width - l.width, cx - l.width / 2)));
+            });
+            wingWeapons.filter((p) => p.face === 'left').forEach((l) => {
+                const r = wingWeapons.find((p) => p.face === 'right' && p.slotIndex === l.slotIndex && !p._mirrored)
+                    || wingWeapons.find((p) => p.face === 'right' && p.id === l.id && !p._mirrored);
+                if (!r) return;
+                r._mirrored = true;
+                r.width = l.width;
+                r.height = l.height;
+                r.x = segR.x + (segL.x + segL.width) - (l.x + l.width);
+                r.y = segR.y + (l.y - segL.y);
+            });
+            wingWeapons.forEach((p) => { delete p._mirrored; });
+        }
+
+        // Wing mounts swing with a rotated wing (same root pivot as the art).
+        parts.forEach((p) => {
+            if (p.mountSegment !== 'wing' || (p.face !== 'left' && p.face !== 'right')) return;
+            const seg = segments.find((sg) => sg.id === (p.face === 'left' ? 'wingLeft' : 'wingRight'));
+            const c = this.rotateOnWing(seg, L.wingRotation, p.x + p.width / 2, p.y + p.height / 2);
+            p.x = c.x - p.width / 2;
+            p.y = c.y - p.height / 2;
+        });
+
+        // Hull spans frontY..hullBottom (the body is anchored, so the nose can
+        // sit above y=0 or below it) — start the bbox there, not at 0..total.
+        let minX = 0;
+        let minY = ctx.frontY != null ? ctx.frontY : 0;
+        let maxX = coreWidth;
+        let maxY = ctx.hullBottom != null ? ctx.hullBottom : totalCoreH;
+        segments.forEach((seg) => {
+            minX = Math.min(minX, seg.x);
+            minY = Math.min(minY, seg.y);
+            maxX = Math.max(maxX, seg.x + seg.width);
+            maxY = Math.max(maxY, seg.y + seg.height);
+        });
+        parts.forEach((p) => {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x + p.width);
+            maxY = Math.max(maxY, p.y + p.height);
+        });
+
+        const ox = -minX;
+        const oy = -minY;
+        const modules = parts.map((p) => ({
+            id: p.id,
+            kind: p.kind,
+            slotIndex: p.slotIndex,
+            split: !!p.split,
+            side: p.side || null,
+            bodyMount: !!p.bodyMount,
+            role: p.role || this.getModuleVisualRole(p.kind, p.id),
+            x: p.x + ox,
+            y: p.y + oy,
+            width: p.width,
+            height: p.height,
+            face: p.face || 'up',
+            integrate: p.integrate || 'attach',
+            zone: p.zone || null,
+            moduleOffsetKey: String(p.kind || 'module') + ':' + String(p.id || ''),
+            mountSegment: p.mountSegment || null,
+            skin: p.skin || null,
+            slotSizeScale: p.slotSizeScale || 1
+        }));
+
+        const appearance = {
+            weapons: L.weapons.length,
+            armor: armorIds.length,
+            shields: shieldIds.length,
+            energy: L.energy.length,
+            pods: systemPods.length,
+            thrusters: drives.length,
+            wide: true,
+            long: expandFront + expandBack + insertH > 0,
+            segments: true,
+            wingSplit: true,
+            segmentGap: segGap,
+            wingGap: wingGap
+        };
+
+        return {
+            width: Math.max(1, Math.round(maxX - minX)),
+            height: Math.max(1, Math.round(maxY - minY)),
+            // Actual hull span (nose top → aft bottom) for the renderers.
+            core: {
+                x: ox,
+                y: oy + (ctx.frontY != null ? ctx.frontY : 0),
+                width: coreWidth,
+                height: totalCoreH
+            },
+            // Fixed reference point (layout origin, where the unscaled nose
+            // starts). It never moves when a part is resized, so the hangar
+            // pins the view on it instead of on the core.
+            anchor: { x: ox, y: oy },
+            segments: segments.map((seg) => ({
+                id: seg.id,
+                x: seg.x + ox,
+                y: seg.y + oy,
+                width: seg.width,
+                height: seg.height,
+                mirror: !!seg.mirror,
+                uv: seg.uv,
+                replace: seg.replace || null,
+                inserts: seg.inserts || null
+            })),
+            wingPanels: wingPanels.map((wing) => ({
+                side: wing.side,
+                x: wing.x + ox,
+                y: wing.y + oy,
+                width: wing.width,
+                height: wing.height
+            })),
+            modules: modules,
+            mountSizes: ctx.mountSizes || null,
+            loadout: L,
+            moduleCount: this.moduleCount(L),
+            appearance: appearance
+        };
+    },
+});

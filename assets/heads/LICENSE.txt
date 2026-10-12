@@ -1,0 +1,6 @@
+head-scan.glb, head-scan-color.jpg, head-scan-normal.jpg
+
+"3D Head Scan" by Lee Perry-Smith (Infinite Realities), based on a work at www.triplegangers.com.
+Licensed under the Creative Commons Attribution 3.0 Unported License (https://creativecommons.org/licenses/by/3.0/).
+Obtained from the three.js examples (examples/models/gltf/LeePerrySmith). Permissions beyond the scope of this license: http://www.ir-ltd.net/
+Changes: none to the files; the mesh is deformed and re-coloured at render time.

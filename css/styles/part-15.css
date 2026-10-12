@@ -1,0 +1,1500 @@
+.home-station-overlay :is(.hs-subnav, .hs-tabs, .hs-tab-row, .hs-area-row) img.hs-tab-pixel,
+.home-station-overlay .hs-tab-pixel,
+.home-station-overlay .hs-menu-tab-icon img,
+.hs-layout-editor img,
+.hs-layout-icon-modal img {
+    max-width: none !important;
+    padding: 0 !important;
+    flex: 0 0 auto;
+}
+.home-station-overlay .hs-menu-tab-icon img { image-rendering: pixelated; display: block; }
+.hs-layout-rename { font-size: 20px; padding: 2px 6px; }
+
+/* Boss stage marker under planets (skull + "/4"). */
+.gm-boss-icon path {
+    fill: #ff5a3c;
+    stroke: none;
+}
+/* Stage stepper in the planet card (1..3 + boss), between stats and buttons. */
+.gm-stage-stepper {
+    display: flex;
+    align-items: center;
+    padding: 30px 8px 22px;
+}
+.gm-stage-stepper:empty { display: none; }
+.gm-stage-stepper .gm-sector-stage {
+    position: relative;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 5px;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid #6b7690;
+    color: #cfd6e6;
+    image-rendering: pixelated;
+    /* Dark outline so the tiles read on top of the planet. */
+    box-shadow: 0 0 0 2px #05060a;
+}
+.gm-stage-stepper .gm-sector-stage svg {
+    width: 100%;
+    height: 100%;
+}
+.gm-stage-stepper .gm-stage-open { fill: currentColor; }
+.gm-stage-link {
+    flex: 1 1 auto;
+    height: 0;
+    border-top: var(--ui-border-width, 2px) dashed #3a4256;
+}
+.gm-stage-link.is-walked { border-top: var(--ui-border-width, 2px) solid #5fd37a; }
+.gm-stage-tag {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, 4px);
+    color: inherit;
+    font-size: var(--font-text);
+    line-height: 13px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+/* Cleared: frameless solid green tile with a dark check. */
+.gm-stage-stepper .gm-sector-stage.is-done {
+    padding: 3px;
+    background: none;
+    border: none;
+    box-shadow: none;
+    color: #5fd37a;
+}
+/* Outline on the green square itself, not the padded box. */
+.gm-stage-stepper .gm-sector-stage.is-done svg { outline: var(--ui-border-width, 2px) solid #05060a; }
+.gm-stage-stepper .gm-stage-done-bg { fill: #5fd37a; }
+.gm-stage-stepper .gm-stage-check { fill: #05060a; }
+.gm-stage-stepper .gm-sector-stage.is-boss:not(.is-done) {
+    border-color: #ff5a3c;
+    color: #ff5a3c;
+}
+/* Current stage: white frame, the player ship hovers above it. */
+.gm-stage-stepper .gm-sector-stage.is-current {
+    color: #fff;
+    border-color: #fff;
+}
+.gm-stage-stepper .gm-sector-stage.is-current .gm-stage-ship {
+    position: absolute;
+    left: 50%;
+    bottom: 75%;
+    width: 30px;
+    height: 30px;
+    margin-left: -15px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 4px 2px rgba(0, 0, 0, 0.7));
+    animation: gm-stage-hover 1.4s ease-in-out infinite;
+}
+@keyframes gm-stage-hover {
+    0%, 100% { transform: rotate(180deg) translateY(0); }
+    50% { transform: rotate(180deg) translateY(5px); }
+}
+
+/* Galaxy map cards (sector + ship): plain rows, no outline per row. */
+.galaxy-map-panels .stat-row {
+    background: transparent;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Narrow top bar: resources become a strip above the nav bar (JS toggles .is-res-stacked). */
+html .home-station-overlay .home-station-content .hs-topbar.is-res-stacked {
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+.hs-topbar.is-res-stacked .hs-topbar-res {
+    order: -1;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    margin: 0 4px 2px;
+    padding-bottom: 6px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, transparent);
+}
+
+/* Profile rows: emblem · name · faction · ACTIVE badge · actions — one line. */
+
+/* Profile overview: resource rows with their icon. */
+.profile-details-res-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.profile-details-res-icon,
+.profile-details-res-icon img,
+.profile-details-res-icon canvas {
+    width: 20px;
+    height: 20px;
+    image-rendering: pixelated;
+}
+
+/* Tighter top bar: resources as a compact 3-column grid (2 rows) beside the tabs. */
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    column-gap: 12px;
+    row-gap: 2px;
+    margin: 0 8px 0 10px;
+}
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit { gap: 5px; }
+
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-amount {
+    font-size: var(--font-text);
+    line-height: 18px;
+}
+
+/* Main menu: big chunky 16×16 icons shown at 64 px (4 screen px per pixel). */
+.start-screen-menu-clustered .menu-item-icon,
+.menu-item-icon {
+    width: 64px;
+    height: 64px;
+}
+.menu-item-icon .menu-pixel-icon,
+.menu-item-icon .ui-icon-tip {
+    width: 64px !important;
+    height: 64px !important;
+    image-rendering: pixelated;
+}
+
+/* Hangar parts: details panel under an expanded, assigned weapon row. */
+.hs-hangar-part.is-expanded {
+    border-color: var(--faction-accent, var(--color-primary));
+}
+.hs-hangar-part-details {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: -2px 0 6px;
+    padding: 8px 10px;
+    font-size: var(--font-text);
+    letter-spacing: 1px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #05060a);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    border-top: none;
+}
+/* Details clustered into titled groups; each row = icon · label · value. */
+.hs-hangar-part-detail-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 0 4px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 20%, transparent);
+}
+.hs-hangar-part-detail-group:first-child { padding-top: 0; }
+.hs-hangar-part-detail-head {
+    font-size: var(--font-small);
+    letter-spacing: 2px;
+    color: var(--faction-accent, var(--color-primary));
+    margin-bottom: 2px;
+}
+.hs-hangar-part-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hs-hangar-part-detail-icon { display: inline-flex; flex: 0 0 auto; opacity: 0.85; }
+.hs-hangar-part-detail-icon img, .hs-hangar-part-icon-btn img, .hs-hangar-part-fire-modes img { display: block; }
+.hs-hangar-part-detail-key { flex: 1 1 auto; color: var(--color-text-secondary); }
+.hs-hangar-part-detail-val { color: var(--color-text); font-variant-numeric: tabular-nums; }
+.hs-hangar-part-fire-modes {
+    display: flex;
+    gap: 6px;
+}
+.hs-hangar-part-fire-modes .action-button {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: var(--font-text);
+}
+.hs-hangar-part-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 6px;
+}
+.hs-hangar-part-detail-actions .hs-hangar-part-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+/* Main menu selection: no frame — label + icon glow instead. */
+html .start-screen-menu-clustered .menu-item,
+html .start-screen-menu-clustered .menu-item.menu-item-primary,
+html .start-screen-menu-clustered .menu-item.selected,
+html .start-screen-menu-clustered .menu-item.menu-item-primary.selected {
+    border-color: transparent !important;
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
+html .start-screen-menu-clustered .menu-item.selected .menu-item-label {
+    color: var(--color-primary);
+    text-shadow: 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 78%, transparent), 2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), -2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), 0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), 0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 42%, transparent), 4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), -4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), 0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), 0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 90%, transparent) 18%, transparent), 1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 78%, transparent), -1px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 78%, transparent), 0 1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 78%, transparent), 0 -1px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 78%, transparent), 6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 42%, transparent), -6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 42%, transparent), 0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 42%, transparent), 0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 42%, transparent), 12px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 18%, transparent), -12px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 18%, transparent), 0 12px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 18%, transparent), 0 -12px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 18%, transparent) !important;
+}
+html .start-screen-menu-clustered .menu-item.selected .menu-item-desc {
+    color: color-mix(in srgb, var(--color-primary) 70%, var(--color-text));
+}
+html .start-screen-menu-clustered .menu-item.selected .menu-pixel-icon {
+    filter:
+        drop-shadow(2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent))
+        drop-shadow(4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(-4px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(0 4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(0 -4px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) !important;
+}
+html .start-screen-menu-clustered .menu-item:not(.selected) .menu-pixel-icon { opacity: 0.75; }
+
+/* Main menu: the focused entry's text grows a little (others keep their size). */
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item-label,
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item-desc {
+    transition: font-size 0.12s ease;
+}
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item.selected .menu-item-label { font-size: 21px; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item-primary.selected .menu-item-label { font-size: 25px; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item.selected .menu-item-desc { font-size: var(--font-h2); }
+
+/* Main menu: no dividers between groups, every entry evenly spaced and aligned. */
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered { gap: 6px; }
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-cluster,
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-cluster + .menu-cluster {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-top: none !important;
+}
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item,
+:is(.start-screen-content, .start-menu-row) > .start-screen-menu-clustered .menu-item.menu-item-primary {
+    margin: 0 !important;
+    padding: 10px 14px !important;
+}
+
+/* Main menu icons: one dark sprite pixel (4 px at 64 px) of outline around
+   the shape, then the glow outside it on the focused entry. */
+html .start-screen-menu-clustered .menu-item .menu-item-icon .menu-pixel-icon {
+    filter:
+        drop-shadow(4px 0 0 #05060a) drop-shadow(-4px 0 0 #05060a)
+        drop-shadow(0 4px 0 #05060a) drop-shadow(0 -4px 0 #05060a) !important;
+}
+html .start-screen-menu-clustered .menu-item.selected .menu-item-icon .menu-pixel-icon {
+    filter:
+        drop-shadow(4px 0 0 #05060a) drop-shadow(-4px 0 0 #05060a)
+        drop-shadow(0 4px 0 #05060a) drop-shadow(0 -4px 0 #05060a)
+        drop-shadow(2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 95%, transparent) 55%, transparent))
+        drop-shadow(6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(-6px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(0 6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) drop-shadow(0 -6px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 60%, transparent) 55%, transparent)) !important;
+}
+html .start-screen-menu-clustered .menu-item-icon { overflow: visible; }
+
+/* Main menu focus: glow only around the icon; the label stays crisp
+   (accent colour, no text glow — the pixel text glow made it unreadable). */
+html .start-screen-menu-clustered .menu-item,
+html .start-screen-menu-clustered .menu-item.selected,
+html .start-screen-menu-clustered .menu-item.selected .menu-item-label,
+html .start-screen-menu-clustered .menu-item.selected .menu-item-desc {
+    text-shadow: none !important;
+}
+
+/* Top-bar resources: own frame on a black background (all layouts). */
+html .home-station-overlay .hs-topbar .hs-topbar-res,
+html .home-station-overlay .hs-topbar.is-res-stacked .hs-topbar-res {
+    padding: 6px 12px;
+    background: #000;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent);
+    box-shadow: none;
+    box-sizing: border-box;
+}
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res { padding: 4px 10px; }
+
+/* Top-bar resource icons: exact 2× of their 16 px grid (30 px scaling made
+   the pixels uneven and blurry), crisp nearest-neighbour, full strength. */
+html .home-station-overlay .hs-topbar .hs-topbar-res .hs-credit-icon,
+html .home-station-overlay .hs-topbar .hs-topbar-res .hs-credit-icon img,
+html .home-station-overlay .hs-topbar .hs-topbar-res .hs-credit-icon canvas {
+    width: 32px !important;
+    height: 32px !important;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* Stronger colours on the black strip. */
+    filter: saturate(1.9) contrast(1.2) brightness(1.15) !important;
+    opacity: 1;
+}
+/* Empty resources: dim only the number, not the icon. */
+html .home-station-overlay .hs-topbar .hs-topbar-res .hs-res-empty { opacity: 1; }
+html .home-station-overlay .hs-topbar .hs-topbar-res .hs-res-empty .hs-credit-amount { opacity: 0.5; }
+/* Compact grid: exact 1× (16 px) instead of 18 px. */
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon,
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon img,
+html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon canvas {
+    width: 16px !important;
+    height: 16px !important;
+}
+
+/* Hangar parts: on/off parts get a switch, single-slot kinds a radio button. */
+.hs-hangar-part-switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 18px;
+    margin-left: auto;
+    box-sizing: border-box;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid #4a5268;
+}
+.hs-hangar-part-switch > span {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background: #6b7690;
+    transition: left 0.12s steps(3, end), background 0.12s;
+}
+.hs-hangar-part-switch.is-on {
+    border-color: var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, #05060a);
+}
+.hs-hangar-part-switch.is-on > span {
+    left: 18px;
+    background: var(--faction-accent, var(--color-primary));
+}
+.hs-hangar-part-radio {
+    position: relative;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid #4a5268;
+    background: #05060a;
+    /* Pixel "circle": corners cut. */
+    clip-path: polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px), 0 4px, 2px 4px, 2px 2px, 4px 2px);
+}
+.hs-hangar-part-radio.is-on { border-color: var(--faction-accent, var(--color-primary)); }
+.hs-hangar-part-radio.is-on::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: var(--faction-accent, var(--color-primary));
+}
+
+/* Tooltips: multi-line info (name, what it does, stats). */
+.ui-tooltip {
+    white-space: pre-line;
+    max-width: 280px;
+    text-align: left;
+}
+/* Rich tooltip: heading + label/value rows + note. */
+.ui-tooltip.ui-tooltip-rich {
+    white-space: normal;
+    min-width: 320px;
+    max-width: min(460px, calc(calc(100 * var(--sv-w)) - 16px));
+    max-height: calc(calc(100 * var(--sv-h)) - 16px);
+    overflow: visible;
+    display: grid;
+    gap: 8px;
+    padding: 14px 18px;
+    font-size: calc(var(--font-text) + 3px);
+    line-height: 1.35;
+}
+.ui-tooltip.ui-tooltip-rich .ui-tooltip-head { font-size: calc(var(--font-text) + 5px); }
+.ui-tooltip-head {
+    color: var(--faction-accent, var(--color-primary));
+    letter-spacing: 0.08em;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+}
+.ui-tooltip-row { display: flex; justify-content: space-between; gap: 12px; }
+.ui-tooltip-key { opacity: 0.6; }
+.ui-tooltip-val { text-align: right; }
+.ui-tooltip-note { opacity: 0.7; font-size: 0.9em; margin-top: 2px; text-transform: none; }
+
+/* Weapon rows: the icon is the drag handle. The row is a <button>, so the
+   row itself switches cursor while the icon is hovered. */
+.hs-hangar-part-icon.is-drag-handle { cursor: grab; touch-action: none; }
+.hs-hangar-part:has(.hs-hangar-part-icon.is-drag-handle:hover),
+.hs-hangar-part .hs-hangar-part-icon.is-drag-handle * { cursor: grab; }
+body.hs-part-grabbing .hs-hangar-part-icon.is-drag-handle { cursor: grabbing; }
+
+/* No idle animation on equipped sidebar icons: anything animating inside
+   their 12-layer drop-shadow glow re-renders that filter every frame and
+   made the whole hangar stutter. */
+
+/* Live preview: right-drag pans. */
+#hsHangarPreviewViewport.is-panning, #hsHangarPreviewViewport.is-panning * { cursor: grabbing !important; }
+
+/* Ability effects: penalties in red; hover preview change on the SPEED tile. */
+.hs-hangar-weapon-stat.is-bad { color: var(--color-danger, #ff4d4d); }
+.hs-stat-delta { margin-left: 6px; font-size: var(--font-text); }
+.hs-stat-delta.is-up { color: #6dff8a; }
+.hs-stat-delta.is-down { color: var(--color-danger, #ff4d4d); }
+.hs-hangar-weapon-stats.is-desc {
+    font-size: var(--font-text);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Parts sections: collapsible header with a slot strip (filled = assigned). */
+.hs-hangar-parts-title[data-part-section-toggle] { cursor: pointer; user-select: none; }
+.hs-hangar-parts-label { flex: 0 0 auto; }
+.hs-hangar-parts-caret { font-size: var(--font-small); color: var(--color-text-secondary);}
+.hs-hangar-parts-section.is-collapsed > .hs-hangar-parts-grid { display: none; }
+.hs-section-slots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    letter-spacing: 0;
+}
+.hs-section-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--kind-color, var(--color-primary)) 45%, transparent);
+    background: #05060a;
+}
+.hs-section-slot.is-filled {
+    border-style: solid;
+    border-color: var(--kind-color, var(--color-primary));
+    background: color-mix(in srgb, var(--kind-color, var(--color-primary)) 18%, #05060a);
+    cursor: pointer;
+}
+.hs-section-slot.is-filled:hover { background: color-mix(in srgb, var(--color-danger, #ff4d4d) 30%, #05060a); }
+.hs-section-slot img { display: block; }
+.hs-section-slot-count { margin-left: 4px; font-size: var(--font-text); color: var(--kind-color, var(--color-text-secondary)); }
+.hs-section-slot-count.is-full { color: var(--color-text-secondary); }
+.hs-section-slots.is-denied { animation: hs-slots-denied 0.35s steps(2, end); }
+@keyframes hs-slots-denied {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+/* Hangar head: slots · areas · stats in one row. Area tiles are compact:
+   pixel-ship icon (label in tooltip), switch, level, upgrade button. */
+/* All areas in one frame (like the slot / stat groups); tiles frameless. */
+.hs-hangar-stats.is-row .hs-hangar-areas {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, transparent);
+}
+.hs-hangar-stats.is-row .hs-area-tile {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+}
+.hs-area-lv { font: inherit; font-size: 0.85em; font-weight: bold; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+.hs-area-lv.is-max { cursor: default; }
+.hs-area-lv[disabled] { cursor: not-allowed; opacity: 0.55; }
+.hs-area-lv-up { font-size: var(--font-small); }
+button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
+.hs-hangar-stats.is-row .hs-area-tile .hs-area-name { gap: 5px; }
+.hs-hangar-stats.is-row .hs-area-tile .hs-area-btn { padding: 3px 7px; font-size: var(--font-text); }
+.hs-hangar-stats.is-row .hs-area-tile .hs-area-costs { display: none; }
+.hs-area-icon { display: inline-flex; line-height: 0; }
+.hs-area-icon svg { display: block; }
+.hs-area-icon .is-dim { fill: color-mix(in srgb, var(--color-text-secondary) 45%, transparent); }
+.hs-area-icon .is-lit { fill: var(--faction-accent, var(--color-primary)); }
+.hs-area-tile.is-off .hs-area-icon .is-lit { fill: var(--color-text-secondary); }
+
+/* Parts section headers: bigger label, type glyph and slot boxes. */
+.hs-hangar-parts-title { font-size: var(--font-h2); padding-bottom: 5px; }
+.hs-hangar-parts-title .hs-slot-glyph { width: 22px; height: 22px; }
+.hs-section-slot { width: 36px; height: 36px; overflow: hidden; }
+.hs-section-slot img,
+.hs-section-slot .hs-pixel { width: 24px; height: 24px; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+.hs-section-slot-count { font-size: var(--font-text); }
+.hs-hangar-parts-caret { font-size: var(--font-h2); line-height: 1; margin-left: 8px; color: var(--kind-color, var(--color-primary)); }
+
+/* Parts section headers: pixel sprite + label in the section's colour. */
+.hs-hangar-parts-icon { display: inline-flex; flex: 0 0 auto; line-height: 0; }
+.hs-hangar-parts-icon img { display: block; }
+.hs-hangar-parts-section .hs-hangar-parts-title {
+    color: var(--kind-color, var(--color-primary));
+    border-bottom-color: color-mix(in srgb, var(--kind-color, var(--color-primary)) 45%, transparent);
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0 #05060a;
+}
+
+/* Part stat lines: each value coloured by its stat type (icon tinted to match). */
+.hs-hangar-weapon-stat[data-stat="damage"]    { color: #ff6a4a; }
+.hs-hangar-weapon-stat[data-stat="shotspeed"] { color: #4ad8ff; }
+.hs-hangar-weapon-stat[data-stat="firerate"]  { color: #ffa04a; }
+.hs-hangar-weapon-stat[data-stat="speed"]     { color: #6dff8a; }
+.hs-hangar-weapon-stat[data-stat="armor"]     { color: #7aa8ff; }
+.hs-hangar-weapon-stat[data-stat="energy"]    { color: #ffd24a; }
+.hs-hangar-weapon-stat.is-bad { color: var(--color-danger, #ff4d4d); }
+/* Stat raised by the ship class / faction: bright, glowing, boxed, ▲ marker. */
+.hs-hangar-weapon-stat.is-boosted {
+    color: #fff3c4;
+    font-weight: 700;
+    padding: 1px 4px 1px 2px;
+    border: var(--ui-border-width, 2px) solid #ffd24a;
+    background: rgba(255, 210, 74, 0.14);
+    text-shadow: 0 0 1px #05060a, 0 0 6px rgba(255, 210, 74, 0.8);
+}
+.hs-stat-boost { color: #ffd24a; font-size: 0.8em; margin-left: 1px; }
+
+/* Galaxy map: node labels, badges and icons are never text-selectable
+   (dragging / double-clicking the map selected them). Inputs stay editable. */
+.galaxy-map-overlay,
+.galaxy-map-overlay *,
+.galaxy-map-embedded,
+.galaxy-map-embedded *,
+.galaxy-map-svg,
+.galaxy-map-svg * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+:is(.galaxy-map-overlay, .galaxy-map-embedded) :is(input, textarea, [contenteditable="true"]) {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Hangar parts list: bigger part name (stats line keeps its own size). */
+.hs-hangar-part .hs-hangar-part-title {
+    font-size: var(--font-h2);
+}
+
+/* Parts section headers: reserve icon + row height so nothing jumps while
+   the pixel sprites / Silkscreen font load on refresh. */
+.hs-hangar-parts-icon { width: 32px; height: 32px; }
+.hs-hangar-parts-icon img { width: 32px; height: 32px; }
+.hs-hangar-parts-section .hs-hangar-parts-title { min-height: 38px; box-sizing: border-box; }
+/* More vertical air between the collapsible sections and their content. */
+.hs-hangar-parts-section { margin-top: 14px; }
+.hs-hangar-parts-section:first-child { margin-top: 4px; }
+.hs-hangar-parts-section .hs-hangar-parts-title { margin-bottom: 8px; }
+.hs-hangar-parts-section > .hs-hangar-parts-grid { padding-bottom: 6px; }
+
+/* Replay boot intro from the main menu footer */
+.ui-intro-btn {
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+    letter-spacing: 0.12em;
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-background) 70%, transparent);
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    padding: 2px 8px;
+    cursor: pointer;
+    line-height: 1.2;
+}
+.ui-intro-btn:hover,
+.ui-intro-btn:focus-visible {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+/* ? + INTRO side by side; hidden until hovered/focused (space stays reserved) */
+.ui-menu-util-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 22px;
+    margin: 4px auto 6px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+.ui-menu-util-row:hover,
+.ui-menu-util-row:focus-within {
+    opacity: 1;
+}
+.ui-menu-util-row > .ui-controls-show-btn {
+    margin: 0;
+}
+/* Dev hint on its own line under the hover buttons */
+.ui-menu-util-row > .start-screen-footer {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+/* ── Retro skin for the main start menu ─────────────────────────────── */
+.start-screen-content.start-screen-retro {
+    --retro-ink: var(--color-primary, #ff5a1f);
+    --retro-dim: color-mix(in srgb, var(--retro-ink) 35%, #000);
+    font-family: 'Silkscreen', var(--ui-font-family);
+    border: 0;
+    padding: 22px 30px 14px;
+    backdrop-filter: none;
+    /* Chunky double pixel frame with notched corners */
+    box-shadow:
+        0 0 0 4px var(--retro-ink),
+        0 0 0 8px #05060a,
+        0 0 0 12px var(--retro-dim),
+        12px 12px 0 12px rgba(0, 0, 0, 0.7) !important;
+    image-rendering: pixelated;
+}
+.start-screen-content.start-screen-retro::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+.start-screen-retro .start-screen-title {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    font-weight: 700;
+    font-size: clamp(40px, calc(6 * var(--sv-w)), 64px);
+    letter-spacing: 0.08em;
+    color: var(--retro-ink);
+    text-shadow: 4px 4px 0 var(--retro-dim), 8px 8px 0 #000;
+    filter: none;
+    margin-bottom: 2px;
+}
+.start-screen-retro .start-screen-subtitle {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    letter-spacing: 0.3em;
+    color: var(--color-text-secondary);
+}
+.start-screen-retro .start-screen-subtitle::after {
+    content: '_';
+    animation: vf-retro-blink 1s steps(1) infinite;
+}
+.start-screen-retro .start-screen-profile {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    border-style: solid;
+    border-radius: 0;
+}
+.start-screen-retro .menu-item {
+    position: relative;
+    border-radius: 0;
+    transition: none;
+}
+.start-screen-retro .menu-item-label {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    font-size: clamp(16px, calc(2 * var(--sv-w)), 22px);
+    letter-spacing: 0.12em;
+}
+.start-screen-retro .menu-item .menu-pixel-icon {
+    filter: none !important;
+    image-rendering: pixelated;
+}
+/* Selected entry: hard inverted bar + blinking ▶ caret, no soft glow */
+.start-screen-retro .menu-item.selected {
+    background: color-mix(in srgb, var(--retro-ink) 18%, transparent) !important;
+    box-shadow: inset 4px 0 0 var(--retro-ink) !important;
+    text-shadow: none !important;
+}
+.start-screen-retro .menu-item.selected .menu-item-label {
+    color: var(--retro-ink);
+    text-shadow: 2px 2px 0 #000;
+}
+.start-screen-retro .menu-item .menu-item-label::before {
+    content: '\25B6\00a0';
+    color: var(--retro-ink);
+    visibility: hidden;
+}
+.start-screen-retro .menu-item.selected .menu-item-label::before {
+    visibility: visible;
+    animation: vf-retro-blink 0.6s steps(1) infinite;
+}
+.start-screen-retro .ui-intro-btn,
+.start-screen-retro .ui-controls-show-btn,
+.start-screen-retro .dev-mode-hint,
+.start-screen-retro .start-screen-instructions {
+    font-family: 'Silkscreen', var(--ui-font-family);
+}
+@keyframes vf-retro-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .start-screen-retro .menu-item.selected .menu-item-label::before,
+    .start-screen-retro .start-screen-subtitle::after { animation: none; }
+}
+/* Retro menu: no zoom-in or label size tweening — nothing may shift on refresh */
+.start-screen-content.start-screen-retro {
+    animation: none !important;
+    transform: none !important;
+}
+.start-screen-retro .menu-item-label,
+.start-screen-retro .menu-item.selected .menu-item-label {
+    transition: none !important;
+    font-size: clamp(16px, calc(2 * var(--sv-w)), 22px) !important;
+}
+
+/* ── Start screen: recent pilots scoreboard (right of the menu) ─────── */
+.start-menu-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: clamp(16px, calc(3 * var(--sv-w)), 40px);
+}
+.start-menu-row > .start-screen-menu-clustered {
+    margin-left: 0;
+    margin-right: 0;
+}
+.start-scoreboard {
+    width: min(420px, 100%);
+    min-width: 360px;
+    flex-shrink: 0;
+    margin-top: clamp(2px, calc(0.6 * var(--sv-h)), 8px);
+    padding: 10px 16px;
+    background: #05060a;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary, #ff5a1f) 70%, #000);
+    font-family: 'Silkscreen', var(--ui-font-family);
+    text-transform: uppercase;
+}
+.start-scoreboard-title {
+    color: var(--color-primary, #ff5a1f);
+    letter-spacing: 0.2em;
+    font-size: var(--font-h2);
+    text-align: center;
+    text-shadow: 2px 2px 0 #000;
+    padding-bottom: 6px;
+    border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--color-primary, #ff5a1f) 40%, transparent);
+}
+.start-scoreboard-head,
+.start-scoreboard-row {
+    display: grid;
+    grid-template-columns: 22px 28px minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 10px;
+}
+.start-scoreboard-head {
+    padding: 6px 4px 2px;
+    font-size: var(--font-small);
+    letter-spacing: 0.15em;
+    color: var(--color-text-secondary);
+}
+.start-scoreboard-head span:last-child { text-align: right; }
+.start-scoreboard-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary, #ff5a1f) transparent;
+}
+.start-scoreboard-row {
+    padding: 5px 4px;
+    font-size: var(--font-text);
+    letter-spacing: 0.08em;
+    color: var(--color-text, #eee);
+}
+.start-scoreboard-row:nth-child(odd) { background: rgba(255, 255, 255, 0.03); }
+.start-scoreboard-row.is-active {
+    background: color-mix(in srgb, var(--color-primary, #ff5a1f) 18%, transparent);
+    box-shadow: inset 3px 0 0 var(--color-primary, #ff5a1f);
+}
+.start-scoreboard-rank { color: var(--color-text-secondary); text-align: right; }
+.start-scoreboard-row:nth-child(1) .start-scoreboard-rank { color: #ffd23f; }
+.start-scoreboard-row:nth-child(2) .start-scoreboard-rank { color: #c8d0dc; }
+.start-scoreboard-row:nth-child(3) .start-scoreboard-rank { color: #d08a4a; }
+.start-scoreboard-emblem { display: flex; }
+.start-scoreboard-emblem img { width: 24px; height: 24px; image-rendering: pixelated; }
+.start-scoreboard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.start-scoreboard-score {
+    text-align: right;
+    color: var(--color-primary, #ff5a1f);
+    font-variant-numeric: tabular-nums;
+}
+.start-scoreboard-empty {
+    padding: 14px 4px;
+    text-align: center;
+    font-size: var(--font-text);
+    color: var(--color-text-secondary);
+}
+@media (max-width: 800px) {
+    .start-menu-row { flex-direction: column; align-items: center; }
+    .start-scoreboard { min-width: 0; }
+}
+/* Menu keeps its full width next to the scoreboard; labels never clip. */
+.start-menu-row > .start-screen-menu-clustered { flex: 0 0 auto; width: max-content; min-width: 280px; }
+.start-menu-row .menu-item-label { white-space: nowrap; overflow: visible; text-overflow: clip; }
+
+.start-screen-content.start-screen-retro {
+    width: min(calc(96 * var(--cw)), calc(980px * var(--zk))) !important;
+    max-width: min(calc(96 * var(--cw)), calc(980px * var(--zk))) !important;
+    padding-left: clamp(24px, calc(4 * var(--sv-w)), 48px);
+    padding-right: clamp(24px, calc(4 * var(--sv-w)), 48px);
+}
+.start-screen-retro .start-menu-row {
+    gap: clamp(24px, calc(4 * var(--sv-w)), 56px);
+}
+.start-screen-retro .start-scoreboard { flex: 1 1 380px; min-width: 0;}
+.start-scoreboard-name { text-align: left; }
+.start-scoreboard-head span:nth-child(3) { text-align: left; }
+.start-scoreboard-row.is-empty { color: var(--color-text-secondary); opacity: 0.45; }
+.start-scoreboard-row.is-empty .start-scoreboard-rank { color: inherit; }
+.start-scoreboard-row .start-scoreboard-emblem { min-height: 24px; }
+.start-scoreboard-list { max-height: none; }
+.start-scoreboard-row.is-pickable { cursor: pointer; }
+.start-scoreboard-row.is-pickable:not(.is-active):hover,
+.start-scoreboard-row.is-pickable:not(.is-active):focus-visible {
+    background: color-mix(in srgb, var(--color-primary, #ff5a1f) 10%, transparent);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary, #ff5a1f) 50%, transparent);
+    outline: none;
+}
+.start-scoreboard-row.is-active .start-scoreboard-name { color: var(--color-primary, #ff5a1f); }
+
+/* ── Start screen as a machine terminal: pixel housing around a screen ─
+   GLXEE look: flat colors, hard pixel shadows, notched corners, no blur. */
+.start-screen-content.start-screen-retro {
+    --bezel: 32px;
+    --hull: #1c1f26;
+    --hull-lit: #2c313b;
+    --hull-dark: #0c0e12;
+    overflow: visible !important;
+    isolation: isolate;
+    border-radius: 0;
+    background: #05060a !important;
+    /* Screen glass: hard inner pixel bevel + orange trim line */
+    box-shadow:
+        inset 0 0 0 2px var(--retro-ink),
+        inset 0 0 0 6px #05060a,
+        inset 0 0 0 8px var(--retro-dim),
+        inset 0 0 60px color-mix(in srgb, var(--retro-ink) 8%, transparent) !important;
+}
+.start-screen-content.start-screen-retro::after {
+    border-radius: 0;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+.start-screen-content.start-screen-retro::before,
+.home-station-overlay::after,
+.vf-bezel::after {
+    content: 'GLX-OS \25AA  NAV TERMINAL \25AA  MK-II';
+    position: absolute;
+    inset: calc(var(--bezel) * -1);
+    z-index: -1;
+    pointer-events: none;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: 'Silkscreen', var(--ui-font-family);
+    font-size: var(--font-text);
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    line-height: var(--bezel);
+    color: var(--retro-ink);
+    text-shadow: 2px 2px 0 #000;
+    image-rendering: pixelated;
+    /* Notched 8-bit corners */
+    clip-path: polygon(
+        16px 0, calc(100% - 16px) 0, calc(100% - 16px) 8px, calc(100% - 8px) 8px, calc(100% - 8px) 16px, 100% 16px,
+        100% calc(100% - 16px), calc(100% - 8px) calc(100% - 16px), calc(100% - 8px) calc(100% - 8px), calc(100% - 16px) calc(100% - 8px), calc(100% - 16px) 100%,
+        16px 100%, 16px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 16px), 0 calc(100% - 16px),
+        0 16px, 8px 16px, 8px 8px, 16px 8px);
+    background:
+        /* square pixel bolts */
+        linear-gradient(var(--retro-ink) 0 0) 20px 20px / 6px 6px no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20px) 20px / 6px 6px no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) 20px calc(100% - 20px) / 6px 6px no-repeat,
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20px) calc(100% - 20px) / 6px 6px no-repeat,
+        /* status lights, top right */
+        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48px) 12px / 8px 8px no-repeat,
+        linear-gradient(#3dff6a 0 0) calc(100% - 62px) 12px / 8px 8px no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76px) 12px / 8px 8px no-repeat,
+        /* vent slots, top left */
+        repeating-linear-gradient(90deg, var(--hull-dark) 0 4px, transparent 4px 8px) 40px 12px / 96px 8px no-repeat,
+        /* orange hazard strips along the bottom */
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 8px, var(--hull-dark) 8px 16px) 40px calc(100% - 12px) / 96px 8px no-repeat,
+        repeating-linear-gradient(90deg, var(--retro-ink) 0 8px, var(--hull-dark) 8px 16px) calc(100% - 40px) calc(100% - 12px) / 96px 8px no-repeat,
+        /* flat panel with hard light/dark pixel bevel */
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / 100% 4px no-repeat,
+        linear-gradient(var(--hull-lit) 0 0) 0 0 / 4px 100% no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 0 100% / 100% 4px no-repeat,
+        linear-gradient(var(--hull-dark) 0 0) 100% 0 / 4px 100% no-repeat,
+        var(--hull);
+    /* Only the frame paints; the screen stays visible through the hole. */
+    --hole: linear-gradient(#000 0 0) var(--bezel) var(--bezel) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel)) no-repeat;
+    -webkit-mask: var(--hole), linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--hole) exclude, linear-gradient(#000 0 0);
+}
+
+/* Profiles page inside the terminal screen */
+.start-screen-retro .start-screen-profiles-body {
+    width: 100%;
+    max-height: min(calc(56 * var(--ch)), calc(520px * var(--zk)));
+    overflow-y: auto;
+    text-align: left;
+}
+/* Profiles page in the terminal: compact one-line filter tabs, tidy rows. */
+.start-screen-profiles-body { font-family: 'Silkscreen', var(--ui-font-family); padding: 0 4px; }
+.start-screen-profiles-body .hs-menu-panel-copy { display: none; }
+.start-screen-profiles-body .hs-menu-profile-filters {
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: var(--ui-border-width, 2px) dashed color-mix(in srgb, var(--retro-ink) 35%, transparent);
+}
+.start-screen-profiles-body .hs-menu-profile-filter,
+.start-screen-profiles-body .hs-menu-profile-filter:not(.hs-menu-profile-create) {
+    width: auto;
+    flex: 0 1 auto;
+    flex-direction: row;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: var(--font-text);
+    letter-spacing: 0.12em;
+    border-width: var(--ui-border-width, 2px);
+    white-space: nowrap;
+}
+.start-screen-profiles-body .hs-menu-profile-filter-ico { width: 18px; height: 18px; }
+.start-screen-profiles-body .hs-menu-profile-create { margin-left: auto; }
+.start-screen-profiles-body .hs-menu-profile-create .hs-menu-profile-act-ico { width: 14px; height: 14px; }
+.start-screen-profiles-body .hs-menu-profile-split {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 36%);
+    gap: 16px;
+}
+.start-screen-profiles-body .hs-menu-profile-list { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.start-screen-profiles-body .hs-menu-profile-row {
+    margin: 0;
+    padding: 6px 8px;
+    min-height: 0;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--row-accent, var(--retro-ink)) 45%, transparent);
+    box-shadow: none;
+    transform: none;
+    background: rgba(255, 255, 255, 0.02);
+    font-size: var(--font-text);
+}
+.start-screen-profiles-body .hs-menu-profile-row:hover,
+.start-screen-profiles-body .hs-menu-profile-row:focus-visible {
+    background: color-mix(in srgb, var(--row-accent, var(--retro-ink)) 12%, transparent);
+    outline: none;
+}
+.start-screen-profiles-body .hs-menu-profile-act { padding: 3px 8px; font-size: var(--font-small); border-width: var(--ui-border-width, 2px); }
+.start-screen-profiles-body .hs-menu-profile-stats {
+    border-width: var(--ui-border-width, 2px);
+    max-height: min(calc(44 * var(--ch)), calc(400px * var(--zk)));
+    font-size: var(--font-text);
+}
+.start-screen-retro .hs-credits-crawl-back {
+    font-family: 'Silkscreen', var(--ui-font-family);
+    letter-spacing: 0.2em;
+    font-size: var(--font-text);
+    margin-top: auto;
+}
+.start-screen-retro .start-screen-profiles-body + .hs-credits-crawl-back { margin-top: 18px; }
+
+/* Terminal as large as the profiles modal. */
+.start-screen-content.start-screen-retro {
+    width: min(calc(calc(96 * var(--sv-w)) - 2 * var(--bezel) - 40px), 1240px) !important;
+    max-width: min(calc(calc(96 * var(--sv-w)) - 2 * var(--bezel) - 40px), 1240px) !important;
+    height: min(calc(calc(92 * var(--sv-h)) - 2 * var(--bezel) - 40px), 940px);
+    min-height: 0;
+    max-height: none !important;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+.start-screen-retro .start-menu-row { flex: 1 1 auto;}
+
+/* Profile dialog rendered inside the terminal screen. */
+.start-screen-profiles-host { flex: 1 1 auto; min-height: 0; display: flex; }
+.profile-selection-overlay.is-inline {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    background: none !important;
+    background-image: none !important;
+}
+.profile-selection-overlay.is-inline .profile-selection-content {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    clip-path: none !important;
+    background: transparent !important;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.profile-selection-overlay.is-inline .profile-selection-content::before,
+.profile-selection-overlay.is-inline .profile-selection-content::after { display: none !important; }
+.profile-selection-overlay.is-inline .profile-selection-body { flex: 1 1 auto; min-height: 0; }
+.profile-selection-overlay.is-inline .profile-selection-title,
+.profile-selection-overlay.is-inline .action-button { font-family: 'Silkscreen', var(--ui-font-family); }
+
+/* Responsive fill: the menu + scoreboard group scales with the screen. */
+.start-screen-content.start-screen-retro {
+    height: min(calc(calc(88 * var(--sv-h)) - 2 * var(--bezel) - 32px), 900px);
+    margin: auto !important;
+    padding-top: clamp(14px, calc(3 * var(--sv-h)), 36px);
+    padding-bottom: clamp(14px, calc(3 * var(--sv-h)), 36px);
+}
+.start-screen-retro .start-menu-row {
+    width: 100%;
+    max-width: 1080px;
+    margin: 0 auto;
+    justify-content: center;
+    align-items: center;
+    gap: clamp(24px, calc(6 * var(--sv-w)), 96px);
+}
+.start-screen-retro .start-menu-row > .start-screen-menu-clustered {
+    gap: clamp(4px, calc(2.2 * var(--sv-h)), 26px);
+}
+.start-screen-retro .start-menu-row .menu-item-label {
+    font-size: clamp(16px, min(calc(2.2 * var(--sv-w)), calc(3.2 * var(--sv-h))), 30px) !important;
+}
+.start-screen-retro .start-menu-row .menu-pixel-icon {
+    width: clamp(40px, min(calc(5 * var(--sv-w)), calc(8 * var(--sv-h))), 80px) !important;
+    height: clamp(40px, min(calc(5 * var(--sv-w)), calc(8 * var(--sv-h))), 80px) !important;
+}
+.start-screen-retro .start-scoreboard {
+    flex: 0 1 clamp(320px, calc(40 * var(--sv-w)), 540px);
+    max-width: 540px;
+    margin-top: 0;
+    padding: clamp(10px, calc(1.6 * var(--sv-h)), 20px) clamp(12px, calc(1.6 * var(--sv-w)), 24px);
+}
+.start-screen-retro .start-scoreboard-title { font-size: clamp(13px, min(calc(1.4 * var(--sv-w)), calc(2 * var(--sv-h))), 20px); }
+.start-screen-retro .start-scoreboard-head { font-size: clamp(9px, calc(1 * var(--sv-w)), 13px); }
+.start-screen-retro .start-scoreboard-row {
+    font-size: clamp(12px, min(calc(1.3 * var(--sv-w)), calc(2 * var(--sv-h))), 18px);
+    padding: clamp(5px, calc(1.1 * var(--sv-h)), 12px) 6px;
+}
+.start-screen-retro .start-scoreboard-emblem img,
+.start-screen-retro .start-scoreboard-emblem svg { width: clamp(22px, calc(2.4 * var(--sv-w)), 32px); height: clamp(22px, calc(2.4 * var(--sv-w)), 32px); }
+@media (max-width: 900px), (max-height: 560px) {
+    .start-screen-retro .start-menu-row { flex-direction: column; gap: 16px; }
+    .start-screen-retro .start-scoreboard { flex: 0 0 auto; width: min(100%, 460px); }
+    .start-screen-content.start-screen-retro { height: auto; }
+}
+
+/* Even spacing: all four entries on one grid, same row height, same label size. */
+.start-screen-retro .start-menu-row > .start-screen-menu-clustered .menu-cluster {
+    display: contents;
+}
+.start-screen-retro .start-menu-row > .start-screen-menu-clustered .menu-cluster-title { display: none; }
+.start-screen-retro .start-menu-row > .start-screen-menu-clustered {
+    grid-auto-rows: 1fr;
+    gap: clamp(6px, calc(2 * var(--sv-h)), 22px) !important;
+}
+.start-screen-retro .start-menu-row .menu-item {
+    margin: 0 !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    min-height: 0 !important;
+    display: flex;
+    align-items: center;
+}
+.start-screen-retro .start-menu-row .menu-item-icon {
+    width: clamp(40px, min(calc(5 * var(--sv-w)), calc(8 * var(--sv-h))), 80px);
+    height: clamp(40px, min(calc(5 * var(--sv-w)), calc(8 * var(--sv-h))), 80px);
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+html .start-screen-retro .start-menu-row .menu-item .menu-item-label,
+html .start-screen-retro .start-menu-row .menu-item.selected .menu-item-label,
+html .start-screen-retro .start-menu-row .menu-item-primary .menu-item-label,
+html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-label {
+    font-size: clamp(16px, min(calc(2.2 * var(--sv-w)), calc(3.2 * var(--sv-h))), 30px) !important;
+}
+
+/* Station window: the same terminal housing around the whole modal; the
+   content inside keeps its faction styling. */
+.home-station-overlay {
+    --bezel: 28px;
+    --hs-frame-gap: 6px;
+    --retro-ink: var(--color-primary, #ff5a1f);
+    --hull: #1c1f26;
+    --hull-lit: #2c313b;
+    --hull-dark: #0c0e12;
+}
+.home-station-overlay::after {
+    position: fixed;
+    z-index: 50;
+    font-size: var(--font-small);
+}
+.home-station-overlay .home-station-content {
+    /* Uniform GUI scale; geometry matches the bezel screen opening exactly.
+       top/left ÷ zoom (CSS zoom quirk); size ÷ zoom so used layout = glass. */
+    zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --hs-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    width: calc(var(--fr-open-w) / var(--hs-z)) !important;
+    max-width: none !important;
+    height: calc(var(--fr-open-h) / var(--hs-z)) !important;
+    max-height: none !important;
+    position: fixed !important;
+    top: calc(var(--fr-open-top) / var(--hs-z)) !important;
+    left: calc(var(--fr-open-side) / var(--hs-z)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-shadow:
+        inset 0 0 0 2px var(--retro-ink),
+        inset 0 0 60px rgba(0, 0, 0, 0.45) !important;
+}
+@media (max-width: 640px) {
+    .home-station-overlay { --bezel: 16px; --hs-frame-gap: 2px; }
+    .home-station-overlay::after { content: ''; }
+}
+
+/* Station tab rows: no frames around the row or the buttons — a tab is lit
+   when active, dimmed otherwise, and brightens on hover. */
+html .home-station-overlay .home-station-content .hs-subnav,
+html .home-station-overlay .home-station-content .hs-tabs {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+html .home-station-overlay .home-station-content .hs-subnav::before,
+html .home-station-overlay .home-station-content .hs-subnav::after,
+html .home-station-overlay .home-station-content .hs-tabs::before,
+html .home-station-overlay .home-station-content .hs-tabs::after { display: none !important; }
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none;
+    opacity: 0.5;
+    filter: saturate(0.6);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn)::before,
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn)::after,
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) .hs-tab-fill { display: none !important; }
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(:hover, :focus-visible, .nav-focused) {
+    opacity: 0.85;
+    filter: none;
+}
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-primary) 70%, transparent));
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
+}
+html .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active :is(.hs-tab-label, .hs-menu-tab-label) {
+    color: var(--color-primary) !important;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 60%, transparent), 2px 2px 0 #000;
+}
+/* Active nav row: no outline/glow frame — the lit tab shows where focus is. */
+html .home-station-overlay .home-station-content .is-nav-row-active {
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+/* The focused row stays lit: its tabs at full brightness, only the rows
+   without focus are dimmed. */
+html .home-station-overlay .home-station-content .is-nav-row-active :is(.hs-tab, .hs-menu-tab-btn) {
+    opacity: 1;
+    filter: none;
+}
+html .home-station-overlay .home-station-content .is-nav-row-active :is(.hs-tab, .hs-menu-tab-btn).active {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-primary) 70%, transparent));
+}
+
+/* Folder-tab look: the active main tab and the sub-nav share one panel
+   colour, and the tab's colour runs down into the sub-nav so the sub-nav
+   grows out of the active main button. */
+html .home-station-overlay .home-station-content {
+    --hs-tabpanel: color-mix(in srgb, var(--color-primary) 16%, #0a0b10);
+}
+html .home-station-overlay .home-station-content .hs-subnav {
+    background: var(--hs-tabpanel) !important;
+    position: relative;
+    z-index: 1;
+}
+html .home-station-overlay .home-station-content .hs-area-btn.active {
+    background: var(--hs-tabpanel) !important;
+    /* Fills the gap down to the sub-nav row. */
+    box-shadow: 0 18px 0 0 var(--hs-tabpanel) !important;
+    /* Stays under the sub-nav (z 1) so any overlap never hides sub tabs. */
+}
+/* No sub-nav below (e.g. single-view tabs): keep the tab compact. */
+html .home-station-overlay .home-station-content:not(:has(.hs-subnav)) .hs-area-btn.active {
+    box-shadow: none !important;
+}
+
+/* Index-card tab: the active main button is a raised tab in the panel colour
+   whose body runs straight down into the sub-nav panel. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active,
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active {
+    position: relative;  /* lit tab edge */
+    filter: none !important;
+    opacity: 1 !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active::after {
+    content: '' !important;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 80px;   /* reaches the sub-nav; the sub-nav (z 1) covers the rest */
+    background: var(--hs-tabpanel);
+    pointer-events: none;
+}
+html body .home-station-overlay .home-station-content:not(:has(.hs-subnav)) .hs-tab.hs-area-btn.active::after {
+    display: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-subnav {
+    background: var(--hs-tabpanel) !important;
+    position: relative;
+    z-index: 1;
+}
+
+/* Index-card outline: tab top + sides in the faction colour, running into
+   the sub-nav's frame; the frame line is open right under the tab. */
+
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active::after {
+    height: calc(var(--hs-tab-drop, 12px) + 2px);
+    z-index: 2;
+    box-shadow:
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary);
+}
+html body .home-station-overlay .home-station-content .hs-subnav {
+    box-shadow: inset 0 0 0 2px var(--color-primary) !important;
+}
+/* Bridge element (create-ui.js syncTabDrop) replaces the clipped ::after. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active::after { display: none !important; }
+.home-station-overlay .home-station-content > .hs-tab-bridge {
+    position: absolute;
+    z-index: 30;
+    pointer-events: none;
+    background: var(--hs-tabpanel);
+    box-shadow:
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary);
+}
+/* Sub-nav: more vertical breathing room inside its card frame. */
+html body .home-station-overlay .home-station-content .hs-subnav {
+    padding: 8px 10px !important;
+    align-items: center;
+}
+.home-station-overlay .home-station-content > .hs-tab-bridge {
+    background: linear-gradient(transparent 0 var(--tab-h, 0px), var(--hs-tabpanel) var(--tab-h, 0px));
+    box-shadow:
+        inset 0 2px 0 var(--color-primary),
+        inset 2px 0 0 var(--color-primary),
+        inset -2px 0 0 var(--color-primary);
+}
+/* The bridge draws the tab outline (with padding), so the tab itself is
+   flat: no own fill or lines that would stop short of the padded outline. */
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.active,
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+/* Sub-nav sits closer under the main tab row. */
+
+/* Main + sub nav: larger buttons and labels, nothing dimmed. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn),
+html body .home-station-overlay .home-station-content .is-nav-row-active :is(.hs-tab, .hs-menu-tab-btn) {
+    opacity: 1 !important;
+    filter: none !important;
+}
+html body .home-station-overlay .home-station-content:has(.is-nav-row-active) :is(.hs-topbar, .hs-subnav, .hs-shop-cats):not(.is-nav-row-active),
+html body .home-station-overlay .home-station-content .hs-topbar {
+    opacity: 1 !important;
+}
+
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn :is(.hs-tab-label) {
+    font-size: var(--font-h2) !important;
+    letter-spacing: 0.1em;
+}
+
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab-label, .hs-menu-tab-label) {
+    font-size: var(--font-text) !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):not(.active) :is(.hs-tab-label, .hs-menu-tab-label) {
+    color: var(--color-text, #f0e6dc) !important;
+}
+
+/* Active tabs: no lit button — only the icon and label take the faction
+   colour. The icon image is recoloured by shifting it out of its box and
+   drawing a hard faction-coloured drop-shadow back in its place. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active,
+html body .home-station-overlay .home-station-content .is-nav-row-active :is(.hs-tab, .hs-menu-tab-btn).active {
+    filter: none !important;
+    box-shadow: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn).active {
+    background: transparent !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active :is(.hs-tab-label, .hs-menu-tab-label) {
+    text-shadow: 2px 2px 0 #000 !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active :is(.hs-tab-icon, .hs-menu-tab-icon) {
+    filter: none !important;
+    overflow: hidden;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).active :is(.hs-tab-icon, .hs-menu-tab-icon) img {
+    transform: translateX(-200px) !important;
+    filter: drop-shadow(200px 0 0 var(--faction-accent, var(--color-primary))) !important;
+}
+
+/* Tab labels: one font, size and spacing for every state — active only
+   changes the colour, so nothing jumps when switching tabs. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover) :is(.hs-tab-label, .hs-menu-tab-label) {
+    font-family: var(--ui-font-family) !important;
+    font-weight: 700 !important;
+    font-style: normal !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    transform: none !important;
+    animation: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn :is(.hs-tab-label),
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:is(.active, .nav-focused, :hover) :is(.hs-tab-label) {
+    font-size: var(--font-h2) !important;
+}
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover) :is(.hs-tab-label, .hs-menu-tab-label) {
+    font-size: var(--font-text) !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover),
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn).hs-anim-activate {
+    transform: none !important;
+    animation: none !important;
+}
+
+/* Hover / focus never moves a tab or its parts — only colours get stronger. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(:hover, :focus, :focus-visible, :active, .nav-focused),
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(:hover, :focus, :focus-visible, :active, .nav-focused) * {
+    transform: none !important;
+    translate: none !important;
+    scale: none !important;
+    top: auto;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation: none !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(:hover, :focus-visible, .nav-focused) {
+    outline: none !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):not(.active):is(:hover, :focus-visible, .nav-focused) :is(.hs-tab-label, .hs-menu-tab-label) {
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #fff) !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):not(.active):is(:hover, :focus-visible, .nav-focused) :is(.hs-tab-icon, .hs-menu-tab-icon) {
+    filter: brightness(1.35) !important;
+}
+
+/* Both tab rows: same icon and label size — smaller icons, larger text. */
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-icon, .hs-menu-tab-icon, .hs-tab-icon img, .hs-menu-tab-icon img, .hs-tab-pixel),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab-icon, .hs-tab-pixel) {
+    width: 22px !important;
+    height: 22px !important;
+}
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn) :is(.hs-tab-label, .hs-menu-tab-label),
+html body .home-station-overlay .home-station-content .hs-subnav :is(.hs-tab, .hs-menu-tab-btn):is(.active, .nav-focused, :hover) :is(.hs-tab-label, .hs-menu-tab-label) {
+    font-size: var(--font-h2) !important;
+}
+
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn :is(.hs-tab-label),
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:is(.active, .nav-focused, :hover) :is(.hs-tab-label) {
+    font-size: var(--font-h2) !important;
+}
+/* Switching areas: the sub-nav tabs appear in place, no drop-in animation. */
+html body .home-station-overlay .home-station-content .hs-subnav,
+html body .home-station-overlay .home-station-content .hs-subnav > .hs-tab,
+html body .home-station-overlay .home-station-content .hs-subnav.hs-subnav-enter > .hs-tab,
+html body .home-station-overlay .home-station-content .hs-tab.hs-anim-activate,
+html body .home-station-overlay .home-station-content .hs-tab.hs-anim-activate * {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+}
+/* WIKI sub-nav: categories without discoveries stay visible but muted. */
+html body .home-station-overlay .home-station-content .hs-subnav .hs-explore-subtab.is-empty {
+    opacity: 0.4 !important;
+    cursor: default;
+}
+html body .home-station-overlay .home-station-content .hs-subnav-explore { overflow-x: auto; }
+
+/* WIKI viewer embedded in the station body (openExplorationInline). */
+.home-station-overlay .hs-body.hs-body-viewer { position: relative; }
+.home-station-overlay .hs-body.hs-body-viewer > :not(.hs-viewer-host) { display: none !important; }
+.home-station-overlay .hs-viewer-host {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    min-height: 0;
+}
+.content-viewer-overlay.is-embedded {
+    position: relative !important;
+    inset: auto !important;
+    z-index: auto !important;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    background: none !important;
+    background-image: none !important;
+}
+.content-viewer-overlay.is-embedded::before,
+.content-viewer-overlay.is-embedded::after { display: none !important; }
+.content-viewer-overlay.is-embedded .content-viewer-panel {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+}
+/* The WIKI sub-nav already names the category. */
+.content-viewer-overlay.is-embedded .content-viewer-title { display: none; }
+
+/* Faction cards: keep everything inside the panel frame at any width —
+   shrinkable columns, container-relative sizing, wrapping head/stats. */
+.hs-faction-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+.hs-faction-grid .hs-faction-card {
+    container-type: inline-size;
+    min-width: 0;
+    min-height: 0;
+    /* Panels inherit the overlay's --bezel as their frame-ring width
+       (masked ::before), so content must start inside that ring. */
+    --bezel: 14px;
+    padding: calc(var(--bezel) + 16px) calc(var(--bezel) + 14px) calc(var(--bezel) + 14px);
+    gap: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.hs-faction-grid .hs-faction-card > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.hs-faction-grid .hs-faction-head { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+.hs-faction-grid .hs-faction-crest,
+.hs-faction-grid .hs-faction-crest img { width: clamp(32px, 18cqi, 56px); height: clamp(32px, 18cqi, 56px); }
+.hs-faction-grid .hs-faction-name {
+    min-width: 0;
+    font-size: clamp(12px, 6cqi, 16px);
+    letter-spacing: clamp(1px, 0.6cqi, 2px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-faction-grid .hs-faction-status {
+    flex-shrink: 0;
+    font-size: clamp(9px, 3.6cqi, 11px);
+    padding: 2px 6px;
+    white-space: nowrap;
+}

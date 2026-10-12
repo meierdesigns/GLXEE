@@ -1,0 +1,218 @@
+/* GUI styles for terran: every rule is scoped with html[data-faction="terran"] / html[data-pf="terran"] / html[data-vf-faction="terran"].
+   Split out of styles.css; loaded after it (index.html). */
+html[data-faction="terran"],
+.profile-selection-content[data-faction="terran"] {
+    --faction-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, calc(100% - 10px) 0px, calc(100% - 5px) 0px, calc(100% - 5px) 5px, 100% 5px, 100% 10px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 10px 100%, 5px 100%, 5px calc(100% - 5px), 0px calc(100% - 5px), 0px calc(100% - 10px));
+    --faction-surface:
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 55%, transparent) 0 2px, transparent 2px) 0 0 / 100% 12px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 34%, transparent) 0 2px, transparent 2px) 0 0 / 20px 100%;
+}
+
+/* --- Station GUI follows the faction frame language ---------------------
+   Panels, sections, tabs and station buttons take the faction's stepped
+   silhouette instead of one shared chamfer. Shapes are deliberately bold so
+   each faction reads at a glance. */
+
+html[data-faction="terran"],
+.hs-faction-card[data-faction="terran"],
+.hs-menu-profile-row[data-faction="terran"],
+.profile-selection-content[data-faction="terran"] {
+    --faction-panel-clip: polygon(0px 16px, 0px 12px, 4px 12px, 4px 8px, 8px 8px, 8px 4px, 12px 4px, 12px 0px, 16px 0px, calc(100% - 16px) 0px, calc(100% - 12px) 0px, calc(100% - 12px) 4px, calc(100% - 8px) 4px, calc(100% - 8px) 8px, calc(100% - 4px) 8px, calc(100% - 4px) 12px, 100% 12px, 100% 16px, 100% calc(100% - 16px), 100% calc(100% - 12px), calc(100% - 4px) calc(100% - 12px), calc(100% - 4px) calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) calc(100% - 4px), calc(100% - 12px) calc(100% - 4px), calc(100% - 12px) 100%, calc(100% - 16px) 100%, 16px 100%, 12px 100%, 12px calc(100% - 4px), 8px calc(100% - 4px), 8px calc(100% - 8px), 4px calc(100% - 8px), 4px calc(100% - 12px), 0px calc(100% - 12px), 0px calc(100% - 16px));
+    --faction-ctl-clip: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
+}
+
+html[data-faction="terran"] .home-station-overlay .hs-panel-title {
+    box-shadow: inset 2px 0 0 var(--faction-accent);
+    background: linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 0) 0 100% / 100% 2px no-repeat;
+}
+
+.profile-selection-content[data-faction="terran"] {
+    --pf-shape: polygon(0px 24px, 0px 18px, 6px 18px, 6px 12px, 12px 12px, 12px 6px, 18px 6px, 18px 0px, 24px 0px, calc(100% - 24px) 0px, calc(100% - 18px) 0px, calc(100% - 18px) 6px, calc(100% - 12px) 6px, calc(100% - 12px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 18px, 100% 18px, 100% 24px, 100% calc(100% - 24px), 100% calc(100% - 18px), calc(100% - 6px) calc(100% - 18px), calc(100% - 6px) calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) calc(100% - 6px), calc(100% - 18px) calc(100% - 6px), calc(100% - 18px) 100%, calc(100% - 24px) 100%, 24px 100%, 18px 100%, 18px calc(100% - 6px), 12px calc(100% - 6px), 12px calc(100% - 12px), 6px calc(100% - 12px), 6px calc(100% - 18px), 0px calc(100% - 18px), 0px calc(100% - 24px));
+    --pf-shape-in: polygon(0px 20px, 0px 15px, 5px 15px, 5px 10px, 10px 10px, 10px 5px, 15px 5px, 15px 0px, 20px 0px, calc(100% - 20px) 0px, calc(100% - 15px) 0px, calc(100% - 15px) 5px, calc(100% - 10px) 5px, calc(100% - 10px) 10px, calc(100% - 5px) 10px, calc(100% - 5px) 15px, 100% 15px, 100% 20px, 100% calc(100% - 20px), 100% calc(100% - 15px), calc(100% - 5px) calc(100% - 15px), calc(100% - 5px) calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) calc(100% - 5px), calc(100% - 15px) calc(100% - 5px), calc(100% - 15px) 100%, calc(100% - 20px) 100%, 20px 100%, 15px 100%, 15px calc(100% - 5px), 10px calc(100% - 5px), 10px calc(100% - 10px), 5px calc(100% - 10px), 5px calc(100% - 15px), 0px calc(100% - 15px), 0px calc(100% - 20px));
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+
+html[data-faction="terran"] .victory-header {
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent) 40%, transparent);
+    padding-bottom: 10px;
+}
+
+html[data-faction="terran"] .pause-overlay h2 {
+    border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent) 40%, transparent);
+    padding-bottom: 6px;
+}
+
+/* --- Faction picker: swatches above preview, each cut + tinted in its own faction style. */
+
+.profile-selection-content .profile-faction-swatch[data-faction="terran"] {
+    --pf-ctl: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%);
+}
+
+/* Faction picker cards: each wears its own faction's control silhouette
+   and surface pattern; emblem centred, larger label. */
+
+.profile-selection-content .profile-faction-swatch[data-faction="terran"] {
+    --pf-ctl: polygon(0px 10px, 0px 5px, 5px 5px, 5px 0px, 10px 0px, 100% 0px, 100% calc(100% - 10px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, calc(100% - 10px) 100%, 0px 100%);
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="terran"]::before {
+    /* clean hull plating */
+    background: repeating-linear-gradient(0deg, transparent 0 9px,
+        color-mix(in srgb, var(--faction-color) 30%, transparent) 9px 10px);
+}
+
+.profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: double;
+    border-width: var(--ui-border-width, 2px);
+    box-shadow: inset 0 0 0 2px #05060a, inset 0 0 0 4px color-mix(in srgb, var(--fp-accent) 45%, transparent);
+    --fp-surface-opacity: 0.32;
+    --fp-ornament:
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px 8px / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px 8px / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) 8px / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) 8px / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px calc(100% - 8px) / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 8px calc(100% - 8px) / 4px 22px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) calc(100% - 8px) / 22px 4px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) calc(100% - 8px) calc(100% - 8px) / 4px 22px no-repeat,
+        linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--fp-accent) 70%, transparent) 40% 60%, transparent 60%) 50% 0 / 80px 4px no-repeat;
+}
+
+/* ───── Darker, more distinct faction bezels ───── */
+
+.vf-bezel[data-faction="terran"]::after, .vf-bezel[data-faction="terran"] .vf-bezel-deco { }
+
+.vf-bezel[data-faction="terran"] .vf-bezel-deco {
+    background:
+        /* gold double rule along the top and bottom (the law is written in the walls) */
+        linear-gradient(var(--gold) 0 0) 50% calc(20 * var(--u)) / 62% calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--gold) 0 0) 50% calc(26 * var(--u)) / 54% calc(1 * var(--u)) no-repeat,
+        linear-gradient(var(--gold) 0 0) 50% calc(100% - calc(20 * var(--u))) / 62% calc(2 * var(--u)) no-repeat,
+        linear-gradient(var(--gold) 0 0) 50% calc(100% - calc(26 * var(--u))) / 54% calc(1 * var(--u)) no-repeat,
+        /* fluted columns left and right */
+        repeating-linear-gradient(90deg, #ffffff22 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(4 * var(--u)), var(--hull-dark) calc(4 * var(--u)) calc(5 * var(--u)), transparent calc(5 * var(--u)) calc(8 * var(--u))) calc(8 * var(--u)) 22% / calc(26 * var(--u)) 56% no-repeat,
+        repeating-linear-gradient(90deg, #ffffff22 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(4 * var(--u)), var(--hull-dark) calc(4 * var(--u)) calc(5 * var(--u)), transparent calc(5 * var(--u)) calc(8 * var(--u))) calc(100% - calc(8 * var(--u))) 22% / calc(26 * var(--u)) 56% no-repeat,
+        /* seal at the crown */
+        radial-gradient(circle, var(--gold) 0 calc(4 * var(--u)), var(--hull-dark) calc(4.5 * var(--u)) calc(8 * var(--u)), transparent calc(9 * var(--u))) 50% calc(24 * var(--u)) / calc(20 * var(--u)) calc(20 * var(--u)) no-repeat;
+}
+
+/* ───── Faction-styled GUI: panels, tabs and buttons follow the pilot's faction ───── */
+
+html[data-vf-faction="terran"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
+    clip-path: polygon(6px 0, calc(100% - 6px) 0, calc(100% - 6px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 6px), 0 calc(100% - 6px), 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #c9a24a 60%, transparent), inset 0 -2px 0 color-mix(in srgb, #c9a24a 35%, transparent) !important;
+}
+
+/* Window backdrop behind the screen shows the active faction's world.
+   Only a margin around the 4:3 stage is visible, so the home planet sits
+   large at the left edge with a second glow at the right, and the veil
+   over the nebula art is light. */
+
+html[data-vf-faction="terran"] {
+    background-color: #0a1424;
+    background-image:
+        radial-gradient(circle at -4% 50%, #9fd0ff 0 22%, #3A6EA5 23% 36%, color-mix(in srgb, #3A6EA5 55%, #0a1424) 37% 48%, transparent 49%),
+        radial-gradient(circle at -4% 50%, color-mix(in srgb, #9fd0ff 50%, transparent) 0 56%, transparent 70%),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #3A6EA5 70%, transparent) 0 16%, color-mix(in srgb, #3A6EA5 28%, transparent) 17% 34%, transparent 46%),
+        linear-gradient(color-mix(in srgb, #0a1424 28%, transparent), color-mix(in srgb, #0a1424 28%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-repeat: no-repeat;
+}
+
+.vf-bezel-fx .vf-fx-fac[data-faction="terran"] { clip-path: polygon(0px 8px, 0px 4px, 4px 4px, 4px 0px, 8px 0px, 100% 0px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, calc(100% - 8px) 100%, 0px 100%); }
+
+.vf-bezel-fx .vf-fx-fac[data-faction="terran"]::before { background: repeating-linear-gradient(0deg, transparent 0 9px, color-mix(in srgb, var(--faction-color) 30%, transparent) 9px 10px); }
+
+/* Window backdrops, one mood per faction (only the margins around the 4:3 stage show): hints, not
+   pictures. Terran: sealed order and a ruled grid. Kronax: ash, embers and claw slashes. Voidborn: a
+   pale ring opening in the dark. Pirate: welded scrap bands and lamp light. Machine: an echo ring and
+   scan lines. The nebula art stays underneath, tinted by each veil. */
+
+html[data-vf-faction="terran"] {
+    background-image:
+        repeating-linear-gradient(0deg, transparent 0 46px, color-mix(in srgb, #9fd0ff 13%, transparent) 46px 47px),
+        repeating-linear-gradient(90deg, transparent 0 46px, color-mix(in srgb, #9fd0ff 13%, transparent) 46px 47px),
+        radial-gradient(circle at -6% 50%, color-mix(in srgb, #9fd0ff 70%, transparent) 0 14%, #3A6EA5 15% 18%, color-mix(in srgb, #3A6EA5 40%, transparent) 19% 30%, transparent 44%),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #3A6EA5 55%, transparent) 0 10%, transparent 34%),
+        linear-gradient(color-mix(in srgb, #0a1424 52%, transparent), color-mix(in srgb, #0a1424 52%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-size: auto, auto, auto, auto, auto, cover;
+    background-position: 0 0, 0 0, center, center, center, center center;
+}
+
+/* Faction detail view follows the viewed faction's GUI shape, not the pilot's. */
+
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="terran"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(6px 0, calc(100% - 6px) 0, calc(100% - 6px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 2px) calc(100% - 6px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 6px) calc(100% - 2px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 6px), 0 calc(100% - 6px), 0 6px, 2px 6px, 2px 4px, 4px 4px, 4px 2px, 6px 2px) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #c9a24a 60%, transparent), inset 0 -2px 0 color-mix(in srgb, #c9a24a 35%, transparent) !important;
+}
+
+.profile-selection-content[data-faction="terran"] .pp-pick, .profile-selection-content[data-faction="terran"] .profile-pilot-portrait { --pk-shape: polygon(0 calc(var(--pk) * 3), calc(var(--pk) * 3) 0, calc(100% - var(--pk) * 3) 0, 100% calc(var(--pk) * 3), 100% calc(100% - var(--pk) * 3), calc(100% - var(--pk) * 3) 100%, calc(var(--pk) * 3) 100%, 0 calc(100% - var(--pk) * 3)); }
+
+/* Per-faction station backdrops (assets/factions/<volk>/ui/bg-<screen>.png, made by tools/build-faction-station-bgs.py).
+   Layered: faction image first, the shared room behind it, so a missing file falls back to the default look. */
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="station"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="station"],
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="menu"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="menu"],
+html[data-faction="terran"] .home-station-overlay:not([data-hs-tab]),
+html[data-faction="terran"] .vf-boot-veil-hs:not([data-hs-tab]) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-station.png'), url('../../../assets/ui/hs-bg-station.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="upgrade"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="upgrade"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/terran/ui/bg-upgrade.png'), url('../../../assets/ui/hs-bg-upgrade.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="hangar"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="hangar"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/terran/ui/bg-hangar.png'), url('../../../assets/ui/hs-bg-hangar.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="shop"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="shop"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-shop.png'), url('../../../assets/ui/hs-bg-shop.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="craft"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="craft"],
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="components"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="components"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/terran/ui/bg-craft.png'), url('../../../assets/ui/hs-bg-craft.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="travel"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="travel"],
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="play"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="play"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.56) 100%), url('../../../assets/factions/terran/ui/bg-travel.png'), url('../../../assets/ui/hs-bg-travel.png');
+}
+
+html[data-faction="terran"] .home-station-overlay[data-hs-tab="explorations"],
+html[data-faction="terran"] .vf-boot-veil-hs[data-hs-tab="explorations"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-explorations.png'), url('../../../assets/ui/hs-bg-explorations.png');
+}
+
+/* Per-faction menu + profile backdrops. html[data-faction] = the pilot's faction; html[data-pf] = the faction being picked in the pilot wizard (listed last, wins while it is open). */
+
+html[data-faction="terran"] .start-screen,
+html[data-faction="terran"] .start-screen-overlay,
+html[data-faction="terran"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/terran/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-faction="terran"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html[data-pf="terran"] .start-screen,
+html[data-pf="terran"] .start-screen-overlay,
+html[data-pf="terran"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/terran/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-pf="terran"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}

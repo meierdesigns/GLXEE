@@ -1,0 +1,195 @@
+@media (max-width: 720px) {
+    html body .start-screen-content:has(> .settings-panel-master) {
+        width: 94%;
+        height: 88%;
+        padding: 10px;
+    }
+    html body .settings-panel.settings-panel-master {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    html body .settings-panel-master .settings-nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-right: 0;
+        border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 38%, transparent);
+        padding-bottom: 10px;
+    }
+}
+
+/* Start step: use the full height (big ship, tight gaps) and one text size everywhere. */
+html body .profile-start-main { --ps-font: var(--font-h2); height: auto !important; align-items: stretch; gap: 10px; margin-top: 4px; }
+html body .profile-start-main :is(.profile-kit-item, .profile-kit-text, .profile-kit-text b, .profile-kit-text small, .profile-kit-ship > strong, .profile-kit-stats small, .profile-kit-stats b, .profile-loadout, .profile-loadout-title, .profile-loadout-line, .profile-loadout-line b, .profile-area-row, .profile-area-row small, .profile-area-size, .profile-area-btn, .profile-area-left) { font-size: var(--ps-font) !important; }
+html body .profile-start-main .profile-kit-list { gap: 8px; height: 100%; }
+html body .profile-start-main .profile-kit-item { flex: 1 1 0; min-height: 52px; padding: 8px 12px; }
+html body .profile-start-main .profile-faction-info-row, html body .profile-start-main .profile-faction-preview { height: 100% !important; }
+html body .profile-start-main .profile-faction-preview { padding: 8px 14px; gap: 6px; justify-content: space-between; }
+html body .profile-start-main .profile-faction-info-row .profile-faction-ship { width: auto !important; height: clamp(150px, 34vh, 340px) !important; max-width: 100%; aspect-ratio: 200 / 140; margin: 0 auto !important; }
+html body .profile-start-main .profile-kit-stats { gap: 28px; }
+html body .profile-start-main .profile-loadout { padding: 8px 14px; gap: 8px; }
+html body .profile-start-main .profile-area-row { grid-template-columns: 90px 40px 48px 40px 1fr; }
+
+/* Keep the narrow visual-settings rail readable at large stage font scales. */
+html body .vf-bezel-fx .vf-fx-tabs {
+    flex: 0 0 150px;
+    min-width: 150px;
+}
+html body .vf-bezel-fx .vf-fx-tabs button {
+    font-size: 11px !important;
+    line-height: 1 !important;
+    letter-spacing: 0.05em !important;
+    white-space: nowrap;
+}
+html body .profile-start-main .profile-area-btn { min-height: 34px; }
+
+/* Hull editor: two columns of area rows, title and kit line span the full width. */
+html body .profile-start-main .profile-loadout { display: grid !important; grid-template-columns: 1fr 1fr; column-gap: 36px; row-gap: 10px; align-items: center; }
+html body .profile-start-main .profile-loadout > :is(.profile-loadout-title, .profile-loadout-line) { grid-column: 1 / -1; }
+html body .profile-start-main .profile-loadout-title { display: flex; justify-content: space-between; align-items: center; text-align: left; padding-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent); }
+html body .profile-start-main .profile-loadout-line { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent); }
+html body .profile-start-main .profile-area-left { float: none; }
+html body .profile-start-main .profile-area-row { grid-template-columns: 80px 40px 1fr 40px auto; gap: 8px; }
+html body .profile-start-main .profile-area-row small { text-align: right; white-space: nowrap; }
+
+/* Ship stats: icon + number + label, colour coded. */
+html body .profile-start-main .profile-kit-stats .pk-stat { display: grid; grid-template-columns: auto auto; grid-template-areas: "i v" "i l"; column-gap: 8px; align-items: center; justify-items: start; color: var(--pk-c); }
+html body .profile-start-main .profile-kit-stats .pk-stat img { grid-area: i; width: 28px; height: 28px; image-rendering: pixelated; }
+html body .profile-start-main .profile-kit-stats .pk-stat b { grid-area: v; color: var(--pk-c); text-shadow: 1px 1px 0 #05060a; }
+html body .profile-start-main .profile-kit-stats .pk-stat small { grid-area: l; color: var(--pk-c); opacity: .85; letter-spacing: 1px; }
+.pk-speed { --pk-c: #5ee7ff; } .pk-hull { --pk-c: #6dff8a; } .pk-armor { --pk-c: #ffc24a; } .pk-damage { --pk-c: #ff6a5e; }
+
+/* Start step order: stats strip on top (full width), then name, big ship, hull editor at the bottom. */
+html body .profile-start-main .profile-faction-preview { justify-content: flex-start; gap: 8px; }
+html body .profile-start-main .profile-kit-ship { display: contents; }
+html body .profile-start-main .profile-kit-stats { order: 0; width: 100%; justify-content: space-between; gap: 12px; padding: 4px 8px 8px; border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent); box-sizing: border-box; }
+html body .profile-start-main .profile-kit-ship > strong { order: 1; text-align: center; }
+html body .profile-start-main .profile-kit-ship > small { display: none; }
+html body .profile-start-main .profile-faction-info-row .profile-faction-ship { order: 2 !important; flex: 1 1 auto !important; min-height: 0; height: auto !important; width: auto !important; max-width: 100% !important; max-height: clamp(220px, 46vh, 460px); margin: auto !important; }
+html body .profile-start-main .profile-loadout { order: 3; grid-area: nav; padding-top: 4px; }
+
+/* Start-step ship: plain in-game rendering, no outline filter. */
+html body .profile-start-main .profile-faction-info-row .profile-faction-ship { filter: none !important; image-rendering: pixelated; }
+html body .profile-start-main .profile-faction-info-row .profile-faction-ship { aspect-ratio: auto !important; image-rendering: pixelated; }
+html body .profile-start-main .profile-faction-info-row .profile-faction-ship { flex: 0 0 auto !important; height: clamp(220px, 44vh, 440px) !important; width: auto !important; }
+
+/* Start profile list: compact cards, big icon tile, name over description, packed at the top. */
+html body .profile-start-main .profile-kit-list { justify-content: flex-start; align-content: flex-start; height: auto; gap: 8px; }
+html body .profile-start-main .profile-kit-item { flex: 0 0 auto; min-height: 76px; padding: 10px 14px; gap: 14px; align-items: center; }
+html body .profile-start-main .profile-kit-icon { flex: 0 0 auto; width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; padding: 6px; box-sizing: border-box; }
+html body .profile-start-main .profile-kit-item .profile-kit-text { gap: 4px; justify-content: center; }
+html body .profile-start-main .profile-kit-item .profile-kit-text b { letter-spacing: 3px; }
+html body .profile-start-main .profile-kit-item .profile-kit-text small { line-height: 1.3; text-transform: uppercase; }
+
+/* Stats strip: tinted icon + big number, evenly spread, label only as tooltip. */
+html body .profile-start-main .profile-kit-stats { justify-content: space-around; gap: 8px; padding: 6px 8px 10px; }
+html body .profile-start-main .profile-kit-stats .pk-stat { display: inline-flex; flex-direction: row; align-items: center; gap: 10px; cursor: help; }
+html body .profile-start-main .profile-kit-stats .pk-ico { display: block; width: 40px; height: 40px; background: var(--pk-c); -webkit-mask: var(--pk-img) center / contain no-repeat; mask: var(--pk-img) center / contain no-repeat; image-rendering: pixelated; filter: drop-shadow(1px 1px 0 #05060a); }
+html body .profile-start-main .profile-kit-stats .pk-stat b { font-size: calc(var(--font-h2) * 1.8) !important; line-height: 1; }
+
+/* Kit bonus bar: icon + label left, bonus right in accent colour, on a tinted strip. */
+html body .profile-start-main .profile-loadout-line.profile-kit-bonus { align-items: center; padding: 8px 12px; margin-top: 2px; border: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 55%, transparent); background: color-mix(in srgb, var(--faction-accent, #3ad) 12%, #05060a); }
+html body .profile-start-main .pkb-label { display: inline-flex; align-items: center; gap: 10px; letter-spacing: 2px; opacity: .85; }
+html body .profile-start-main .pkb-label img { width: 24px; height: 24px; image-rendering: pixelated; }
+html body .profile-start-main .profile-kit-bonus b { color: var(--faction-accent, #fff); text-align: right; letter-spacing: 1px; }
+
+/* Settings sidebar: smaller labels (tabs, group heads, add button). */
+html body .settings-panel-master .settings-nav :is(.settings-nav-item, .settings-nav-item span, .settings-nav-add, .settings-cluster-head, .settings-group-head) {
+    font-size: clamp(12px, 1.05vw, 16px);
+    letter-spacing: 0.5px;
+}
+html body .settings-panel-master .settings-nav-item { min-height: 36px; padding: 8px 10px; }
+
+/* Station PROFILES tab: pilot list left, detail view right. Wider detail column, compact detail blocks, no clipping. */
+.hs-menu-profile-split { grid-template-columns: minmax(0, 1fr) minmax(340px, 42%); gap: 10px; }
+.hs-menu-profile-stats.profile-details {
+    padding: 10px 12px !important;
+    gap: 8px;
+    max-height: calc(66 * var(--sv-h));
+    overflow-y: auto;
+}
+.hs-menu-profile-stats .pd-hero { gap: 10px; padding-bottom: 8px; }
+.hs-menu-profile-stats :is(.pd-hero-emblem, .pd-hero-emblem *) { width: 44px !important; height: 44px !important; flex: none; }
+.hs-menu-profile-stats .pd-hero-portrait, .hs-menu-profile-stats .pd-hero-portrait > * { width: 44px !important; height: 49px !important; flex: none; }
+.hs-menu-profile-stats .pd-hero-name { font-size: 18px; letter-spacing: 2px; }
+.hs-menu-profile-stats .pd-tile { padding: 6px 8px; gap: 8px; }
+.hs-menu-profile-stats :is(.pd-tile-icon, .pd-tile-icon *) { width: 26px !important; height: 26px !important; flex: none; }
+.hs-menu-profile-stats .pd-tile-value { font-size: 16px; }
+.hs-menu-profile-stats .pd-block-title { font-size: var(--font-text); letter-spacing: 2px; display: flex; align-items: center; gap: 6px; }
+.hs-menu-profile-stats .pd-res { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.hs-menu-profile-stats .pd-res-item { padding: 5px 8px; gap: 6px; }
+.hs-menu-profile-stats :is(.pd-res-icon, .pd-res-icon *) { width: 22px !important; height: 22px !important; flex: none; }
+.hs-menu-profile-stats .pd-res-value, .hs-menu-profile-stats .pd-ship { font-size: var(--font-text); }
+.hs-menu-profile-stats .pd-ship { padding: 5px 10px; }
+.hs-menu-profile-stats .pd-galaxies { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.hs-menu-profile-stats .pd-galaxy { padding: 6px 8px; column-gap: 8px; row-gap: 4px; grid-template-columns: 32px minmax(0, 1fr) auto; font-size: var(--font-text); min-height: 44px; }
+.hs-menu-profile-stats .pd-galaxy-planet { width: 32px; height: 32px; }
+.hs-menu-profile-stats .pd-galaxy-planet > *, .hs-menu-profile-stats .pd-galaxy-planet img { width: 32px; height: 32px; }
+
+/* Create-profile wizard: step indicator above the faction bar */
+.profile-stepper { position: absolute; top: 0; left: calc(-1 * var(--ps-bleed-l, 0px)); right: calc(-1 * var(--ps-bleed-r, 0px)); z-index: 2; box-sizing: border-box; height: 100px; display: flex; justify-content: center; background-clip: border-box; align-items: flex-start; padding-top: 18px !important; gap: 0; list-style: none; margin: 0; padding: 0 20px;
+    background: color-mix(in srgb, var(--faction-accent, #4a8cff) 14%, #05060a); border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, #4a8cff) 55%, transparent); }
+html body .profile-selection-overlay:has(> .profile-stepper) { padding-top: 100px; box-sizing: border-box; }
+.profile-stepper-step { display: flex; align-items: flex-start; gap: 8px; opacity: .45; color: var(--color-text); letter-spacing: 3px; font-size: 18px; }
+.profile-stepper-step + .profile-stepper-step::before { content: ""; width: 110px; height: 2px; margin: 19px 18px 0; background: currentColor; opacity: .6; }
+/* icon only: no frame, no fill */
+.profile-stepper-dot { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
+.profile-stepper-step.is-done { opacity: .8; }
+.profile-stepper-step.is-current { opacity: 1; color: var(--faction-accent, var(--color-text)); text-shadow: 0 0 6px currentColor; }
+.profile-stepper-btn { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-shadow: inherit; }
+button.profile-stepper-btn { cursor: pointer; }
+button.profile-stepper-btn:hover { color: var(--faction-accent, #fff); opacity: 1; }
+.profile-stepper-icon { display: block; width: 40px; height: 40px; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a); }
+
+/* Wizard bottom bar: sits on the overlay (not in the dialog) so it fills the screen width, like the stepper on top. */
+html body .profile-selection-overlay:has(> .profile-selection-bar) { padding-bottom: 112px; box-sizing: border-box; }
+html body .profile-selection-overlay > .profile-selection-bar {
+    position: absolute; left: calc(-1 * var(--ps-bleed-l, 0px)); right: calc(-1 * var(--ps-bleed-r, 0px)); bottom: 0; z-index: 2; box-sizing: border-box; width: auto; margin: 0 !important; padding: 14px 32px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 24px;
+    background: #05060a; border-top: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+/* CANCEL/BACK hugs the left edge, NEXT/START the right edge, the key hint sits between them. */
+html body .profile-selection-overlay > .profile-selection-bar .profile-selection-actions { display: contents; }
+html body .profile-selection-overlay > .profile-selection-bar .action-button.secondary { grid-column: 1; grid-row: 1; }
+html body .profile-selection-overlay > .profile-selection-bar .action-button:not(.secondary) { grid-column: 3; grid-row: 1; }
+html body .profile-selection-overlay > .profile-selection-bar .profile-selection-instructions { grid-column: 2; grid-row: 1; text-align: center; }
+html body .profile-selection-overlay > .profile-selection-bar .profile-selection-actions .action-button { font-size: calc(var(--font-h2) * 1.6) !important; padding: 20px 56px !important; min-width: 280px; }
+html body .profile-selection-overlay > .profile-selection-bar .profile-selection-instructions p { margin: 0 !important; color: #d8dbe2; text-shadow: 1px 1px 0 #05060a; font-size: var(--font-text) !important; }
+
+/* Galaxy step: prev/next sit under the card instead of flanking it. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side {
+    grid-template-columns: minmax(160px, 0.62fr) minmax(0, 2.1fr) minmax(220px, 1fr) !important;
+    grid-template-areas: "side map info" "nav nav nav" !important;
+}
+.profile-start-galaxy-navrow { grid-area: nav; display: flex; justify-content: center; gap: 24px; padding-top: 4px; }
+html body .profile-selection-name-mode .profile-start-galaxy-navrow .profile-start-galaxy-nav {
+    width: auto !important; height: auto !important; min-height: 0 !important; min-width: 300px; padding: 14px 36px; font-size: 28px; letter-spacing: 4px; outline: 0 !important; box-shadow: none !important;
+    display: inline-flex; align-items: center; justify-content: center; gap: 14px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, #05060a); border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent) !important;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-navrow .profile-start-galaxy-nav:hover { background: var(--faction-accent, var(--color-primary)); color: #05060a; }
+html body .profile-selection-name-mode .profile-start-galaxy-navrow .profile-stepper-icon { width: 36px; height: 36px; }
+html body .profile-selection-name-mode .profile-start-galaxy-navrow .ps-btn-icon { width: 24px; height: 24px; }
+
+/* Inline (terminal screen) dialog is position: static; the wizard bars anchor to it, not to a distant ancestor. */
+html body .profile-selection-overlay.is-inline:has(> .profile-stepper),
+html body .profile-selection-overlay.is-inline:has(> .profile-selection-bar) { position: relative; }
+
+/* Wizard bottom bar buttons: clear hover / press / keyboard-focus feedback (the pixel clip-path hides glows, so the fill changes). */
+html body .profile-selection-overlay > .profile-selection-bar .action-button { cursor: pointer; transition: background-color .08s, color .08s, transform .05s; }
+html body .profile-selection-overlay > .profile-selection-bar .action-button:hover,
+html body .profile-selection-overlay > .profile-selection-bar .action-button.nav-focused {
+    background: var(--faction-accent, var(--color-primary)) !important; color: #05060a !important; opacity: 1;
+}
+html body .profile-selection-overlay > .profile-selection-bar .action-button:hover .ps-btn-icon,
+html body .profile-selection-overlay > .profile-selection-bar .action-button.nav-focused .ps-btn-icon { color: #05060a; }
+html body .profile-selection-overlay > .profile-selection-bar .action-button:active {
+    transform: translateY(3px); background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, #05060a) !important;
+}
+
+/* Faction bar: bigger keys, emblem above the name. */
+html body .profile-selection-name-mode .profile-faction-swatch {
+    display: flex !important; flex-direction: column !important; align-items: center; justify-content: center; gap: 10px !important; padding: 20px 8px 16px !important; min-height: 150px;
+}
+html body .profile-selection-name-mode .profile-faction-swatch-emblem { width: 72px !important; height: 72px !important; flex: 0 0 auto; }
+html body .profile-selection-name-mode .profile-faction-swatch-label { font-size: 20px; letter-spacing: 3px; text-align: center; }
+html body .profile-selection-name-mode .profile-faction-swatch-emblem :is(img, canvas, svg), html body .profile-selection-name-mode .profile-faction-swatch-emblem > * { width: 100% !important; height: 100% !important; }

@@ -1,0 +1,216 @@
+/* GUI styles for machine: every rule is scoped with html[data-faction="machine"] / html[data-pf="machine"] / html[data-vf-faction="machine"].
+   Split out of styles.css; loaded after it (index.html). */
+html[data-faction="machine"],
+.profile-selection-content[data-faction="machine"] {
+    --faction-clip: polygon(
+        0 0, 100% 0,
+        100% 20%, calc(100% - 9px) 20%, calc(100% - 9px) 31%, 100% 31%,
+        100% 69%, calc(100% - 9px) 69%, calc(100% - 9px) 80%, 100% 80%,
+        100% 100%, 0 100%,
+        0 80%, 9px 80%, 9px 69%, 0 69%,
+        0 31%, 9px 31%, 9px 20%, 0 20%
+    );
+    --faction-surface:
+        repeating-linear-gradient(0deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px),
+        repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb, var(--faction-accent) 52%, transparent) 7px 8px, transparent 8px 16px);
+    --faction-surface:
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 52%, transparent) 0 2px, transparent 2px) 0 0 / 100% 8px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 52%, transparent) 0 2px, transparent 2px) 0 0 / 8px 100%;
+}
+
+html[data-faction="machine"],
+.hs-faction-card[data-faction="machine"],
+.hs-menu-profile-row[data-faction="machine"],
+.profile-selection-content[data-faction="machine"] {
+    --faction-panel-clip: polygon(0 12px, 12px 12px, 12px 0, calc(100% - 12px) 0, calc(100% - 12px) 12px, 100% 12px, 100% calc(50% - 10px), calc(100% - 6px) calc(50% - 10px), calc(100% - 6px) calc(50% + 10px), 100% calc(50% + 10px), 100% calc(100% - 12px), calc(100% - 12px) calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 12px calc(100% - 12px), 0 calc(100% - 12px), 0 calc(50% + 10px), 6px calc(50% + 10px), 6px calc(50% - 10px), 0 calc(50% - 10px));
+    --faction-ctl-clip: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
+}
+
+html[data-faction="machine"] .home-station-overlay .hs-panel-title {
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px;
+    background-size: 6px 6px;
+    background-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 5%, transparent);
+}
+
+.profile-selection-content[data-faction="machine"] {
+    --pf-shape: polygon(0 16px, 16px 16px, 16px 0, calc(100% - 16px) 0, calc(100% - 16px) 16px, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 16px calc(100% - 16px), 0 calc(100% - 16px));
+    --pf-shape-in: polygon(0 13px, 13px 13px, 13px 0, calc(100% - 13px) 0, calc(100% - 13px) 13px, 100% 13px, 100% calc(100% - 13px), calc(100% - 13px) calc(100% - 13px), calc(100% - 13px) 100%, 13px 100%, 13px calc(100% - 13px), 0 calc(100% - 13px));
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px));
+}
+
+html[data-faction="machine"] .victory-title {
+    letter-spacing: 0.4em;
+    font-size: 0.85em;
+}
+
+html[data-faction="machine"] .victory-stats {
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-accent) 14%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-accent) 14%, transparent) 0 1px, transparent 1px) 0 0 / 6px 6px;
+}
+
+html[data-faction="machine"] .game-over-content h2 { letter-spacing: 0.4em; }
+
+html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
+
+.profile-selection-content .profile-faction-swatch[data-faction="machine"] {
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px));
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="machine"] {
+    --pf-ctl: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(50% - 4px), calc(100% - 3px) calc(50% - 4px), calc(100% - 3px) calc(50% + 4px), 100% calc(50% + 4px), 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 calc(50% + 4px), 3px calc(50% + 4px), 3px calc(50% - 4px), 0 calc(50% - 4px));
+}
+
+.profile-selection-content .profile-faction-swatch[data-faction="machine"]::before {
+    /* circuit grid */
+    background:
+        linear-gradient(color-mix(in srgb, var(--faction-color) 25%, transparent) 1px, transparent 1px) 0 0 / 10px 10px,
+        linear-gradient(90deg, color-mix(in srgb, var(--faction-color) 25%, transparent) 1px, transparent 1px) 0 0 / 10px 10px;
+}
+
+.profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact) {
+    border-style: dashed;
+    border-width: var(--ui-border-width, 2px);
+    outline: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fp-accent) 55%, transparent);
+    outline-offset: -9px;
+    --fp-surface-opacity: 0.38;
+    --fp-ornament:
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 0 50% / 14px 3px no-repeat,
+        linear-gradient(var(--fp-accent), var(--fp-accent)) 100% 50% / 14px 3px no-repeat,
+        radial-gradient(circle, var(--fp-accent) 0 4px, transparent 4.5px) 14px 50% / 10px 10px no-repeat,
+        radial-gradient(circle, var(--fp-accent) 0 4px, transparent 4.5px) calc(100% - 14px) 50% / 10px 10px no-repeat,
+        linear-gradient(90deg, transparent, color-mix(in srgb, var(--fp-accent) 60%, transparent), transparent) 0 0 / 40% 2px no-repeat;
+    animation: fp-machine-scan 2.6s linear infinite;
+}
+
+.profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    background-position: 0 50%, 100% 50%, 14px 50%, calc(100% - 14px) 50%, var(--fp-scan, -40%) 0;
+}
+
+.vf-bezel[data-faction="machine"] .vf-bezel-deco {
+    background:
+        repeating-linear-gradient(90deg, color-mix(in srgb, var(--retro-ink) 55%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(18 * var(--u))) 0 calc(14 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
+        repeating-linear-gradient(90deg, color-mix(in srgb, var(--retro-ink) 55%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(18 * var(--u))) 0 calc(100% - 16 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
+        repeating-linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 45%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(22 * var(--u))) calc(12 * var(--u)) 0 / calc(2 * var(--u)) 100% no-repeat,
+        repeating-linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 45%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(22 * var(--u))) calc(100% - 14 * var(--u)) 0 / calc(2 * var(--u)) 100% no-repeat;
+}
+
+.vf-bezel[data-faction="machine"]::after,
+.vf-bezel[data-faction="machine"] .vf-bezel-deco {
+}
+
+html[data-vf-faction="machine"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 60%, transparent), inset 0 2px 0 color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+}
+
+html[data-vf-faction="machine"] {
+    background-color: #04161a;
+    background-image:
+        radial-gradient(circle at -4% 50%, #9ffff0 0 22%, #1fa88f 23% 36%, color-mix(in srgb, #1fa88f 55%, #04161a) 37% 48%, transparent 49%),
+        radial-gradient(circle at -4% 50%, color-mix(in srgb, #9ffff0 50%, transparent) 0 56%, transparent 70%),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #1fa88f 70%, transparent) 0 16%, color-mix(in srgb, #1fa88f 28%, transparent) 17% 34%, transparent 46%),
+        linear-gradient(color-mix(in srgb, #04161a 28%, transparent), color-mix(in srgb, #04161a 28%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-repeat: no-repeat;
+}
+
+.vf-bezel-fx .vf-fx-fac[data-faction="machine"] { clip-path: polygon(0 5px, 5px 5px, 5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px)); }
+
+.vf-bezel-fx .vf-fx-fac[data-faction="machine"]::before { background: repeating-linear-gradient(90deg, transparent 0 5px, color-mix(in srgb, var(--faction-color) 25%, transparent) 5px 6px); }
+
+html[data-vf-faction="machine"] {
+    background-image:
+        repeating-linear-gradient(0deg, transparent 0 5px, color-mix(in srgb, #9ffff0 8%, transparent) 5px 6px),
+        repeating-radial-gradient(circle at 0% 50%, transparent 0 62px, color-mix(in srgb, #9ffff0 34%, transparent) 62px 64px),
+        repeating-linear-gradient(90deg, transparent 0 140px, color-mix(in srgb, #1fa88f 26%, transparent) 140px 142px),
+        radial-gradient(circle at 106% 50%, color-mix(in srgb, #1fa88f 50%, transparent) 0 10%, transparent 36%),
+        linear-gradient(color-mix(in srgb, #04161a 58%, transparent), color-mix(in srgb, #04161a 58%, transparent)),
+        url('../../../assets/ui/hs-bg-ingame.png');
+    background-size: auto, auto, auto, auto, auto, cover;
+    background-position: 0 0, center, 0 0, center, center, center center;
+}
+
+html[data-vf-faction="machine"][data-vf-faction] body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::before {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
+}
+
+html[data-vf-faction="machine"][data-vf-faction] body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn:not(.active)::after {
+    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%) !important;
+}
+
+html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="machine"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 60%, transparent), inset 0 2px 0 color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+}
+
+.profile-selection-content[data-faction="machine"] .pp-pick, .profile-selection-content[data-faction="machine"] .profile-pilot-portrait { --pk-shape: polygon(0 0, 38% 0, 38% var(--pk), 62% var(--pk), 62% 0, 100% 0, 100% 38%, calc(100% - var(--pk)) 38%, calc(100% - var(--pk)) 62%, 100% 62%, 100% 100%, 62% 100%, 62% calc(100% - var(--pk)), 38% calc(100% - var(--pk)), 38% 100%, 0 100%, 0 62%, var(--pk) 62%, var(--pk) 38%, 0 38%); }
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="station"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="station"],
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="menu"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="menu"],
+html[data-faction="machine"] .home-station-overlay:not([data-hs-tab]),
+html[data-faction="machine"] .vf-boot-veil-hs:not([data-hs-tab]) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/machine/ui/bg-station.png'), url('../../../assets/ui/hs-bg-station.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="upgrade"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="upgrade"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/machine/ui/bg-upgrade.png'), url('../../../assets/ui/hs-bg-upgrade.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="hangar"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="hangar"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 40%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/machine/ui/bg-hangar.png'), url('../../../assets/ui/hs-bg-hangar.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="shop"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="shop"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/machine/ui/bg-shop.png'), url('../../../assets/ui/hs-bg-shop.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="craft"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="craft"],
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="components"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="components"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 40%, rgba(0, 0, 0, 0.6) 100%), url('../../../assets/factions/machine/ui/bg-craft.png'), url('../../../assets/ui/hs-bg-craft.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="travel"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="travel"],
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="play"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="play"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.56) 100%), url('../../../assets/factions/machine/ui/bg-travel.png'), url('../../../assets/ui/hs-bg-travel.png');
+}
+
+html[data-faction="machine"] .home-station-overlay[data-hs-tab="explorations"],
+html[data-faction="machine"] .vf-boot-veil-hs[data-hs-tab="explorations"] {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/machine/ui/bg-explorations.png'), url('../../../assets/ui/hs-bg-explorations.png');
+}
+
+html[data-faction="machine"] .start-screen,
+html[data-faction="machine"] .start-screen-overlay,
+html[data-faction="machine"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/machine/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-faction="machine"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/machine/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html[data-pf="machine"] .start-screen,
+html[data-pf="machine"] .start-screen-overlay,
+html[data-pf="machine"] .vf-boot-veil-start {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0.55) 100%), url('../../../assets/factions/machine/ui/bg-menu.png'), url('../../../assets/ui/menu-hangar-bg.png');
+}
+
+html[data-pf="machine"] .profile-selection-overlay:not(.home-station-overlay) {
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/machine/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="machine"]:not(.selected) {
+    border-style: dashed; outline: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fp-accent, currentColor) 55%, transparent); outline-offset: -7px;
+}

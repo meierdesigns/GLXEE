@@ -1,0 +1,326 @@
+"use strict";
+
+// ObstacleManager members, continued from spawn-patterns.js (kept under ~500 lines per file).
+extendClass(ObstacleManager, {
+    terrainZoneId(idx, prof) {
+        // The first stretch is always a plain canyon to ease into the stage.
+        if (idx <= 0) return 'canyon';
+        // Never the same area twice in a row.
+        const cur = this.terrainZonePick(idx, prof);
+        const prev = idx === 1 ? 'canyon' : this.terrainZonePick(idx - 1, prof);
+        if (cur !== prev) return cur;
+        const i = TERRAIN_ZONES.indexOf(cur);
+        return TERRAIN_ZONES[(i + 1 + Math.floor(this.terrainHash(idx, 211) * (TERRAIN_ZONES.length - 1))) % TERRAIN_ZONES.length];
+    },
+    terrainZonePick(idx, prof) {
+        const total = prof.zones.reduce((s, z) => s + z.weight, 0);
+        let h = this.terrainHash(idx, prof.seed % 7919) * total;
+        for (const z of prof.zones) {
+            h -= z.weight;
+            if (h <= 0) return z.id;
+        }
+        return 'canyon';
+    },
+    terrainZoneShape(id, wr, t) {
+        // Envelope: shapes ramp in from the zone start so edges stay smooth.
+        const env = Math.min(1, t / 0.15);
+        switch (id) {
+            case 'narrows': // walls close in: a tight squeeze
+                return { left: 0.17 * env, right: 0.17 * env, mul: 1, structures: false };
+            case 'open': // the canyon opens up into an open field
+                return { left: 0, right: 0, mul: 1 - 0.65 * env, structures: false };
+            case 'winding': { // corridor snakes left and right
+                const s = Math.sin(wr * 0.035) * 0.22 * env;
+                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.8, structures: false };
+            }
+            case 'teeth': { // alternating jagged spurs from each side
+                const p = ((wr % 36) + 36) % 36;
+                const spur = p < 12 ? (1 - Math.abs(p - 6) / 6) * 0.26 * env : 0;
+                const left = Math.floor(wr / 36) % 2 ? spur : 0;
+                return { left, right: spur - left, mul: 0.9, structures: false };
+            }
+            case 'funnel': { // walls slowly close in, then snap open at the end
+                const k = (t < 0.85 ? t / 0.85 : (1 - t) / 0.15) * env;
+                return { left: 0.19 * k, right: 0.19 * k, mul: 1, structures: false };
+            }
+            case 'terraces': { // stepped shelves, offset per side
+                const step = (o) => (Math.floor((((wr + o) % 48) + 48) % 48 / 12)) * 0.055 * env;
+                return { left: step(0), right: step(24), mul: 0.85, structures: true };
+            }
+            case 'bulges': { // round boulders bulging out of both walls
+                const b = (o) => Math.max(0, Math.sin((wr + o) * 0.11)) ** 2 * 0.2 * env;
+                return { left: b(0), right: b(14), mul: 0.9, structures: false };
+            }
+            case 'zigzag': { // sharp diagonal switchbacks
+                const p = (((wr % 40) + 40) % 40) / 40;
+                const tri = (p < 0.5 ? p * 2 : 2 - p * 2) * 2 - 1;
+                const s = tri * 0.2 * env;
+                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.75, structures: false };
+            }
+            case 'gorge': { // deep narrow cut with alcoves to dodge into
+                const alcove = ((((wr % 30) + 30) % 30) < 8) ? 0.1 : 0;
+                const side = Math.floor(wr / 30) % 2;
+                const n = 0.16 * env;
+                return { left: n - (side ? 0 : alcove * env), right: n - (side ? alcove * env : 0), mul: 1.15, structures: false };
+            }
+            case 'spires': { // thin needle spikes stabbing in from both sides
+                const sp = (o) => { const p = (((wr + o) % 16) + 16) % 16; return p < 4 ? (1 - Math.abs(p - 1.5) / 2.5) * 0.24 * env : 0; };
+                return { left: sp(0), right: sp(8), mul: 0.8, structures: false };
+            }
+            case 'ruins': { // collapsed blocks: stepped, square-edged chunks
+                const blk = (o) => Math.floor(this.terrainHash(Math.floor((wr + o) / 14), 503 + o) * 4) * 0.05 * env;
+                return { left: blk(0), right: blk(7), mul: 0.9, structures: true };
+            }
+            case 'reef': { // lumpy organic growth
+                const lump = (o) => Math.max(0, Math.sin((wr + o) * 0.21) * 0.08 + Math.sin((wr + o) * 0.07) * 0.09 + 0.03) * env;
+                return { left: lump(0), right: lump(31), mul: 0.85, structures: false };
+            }
+            case 'chasm': { // one cliff juts far out, the other side falls away
+                const side = Math.floor(wr / 60) % 2;
+                const c = 0.28 * env * Math.min(1, Math.min((((wr % 60) + 60) % 60), 60 - (((wr % 60) + 60) % 60)) / 8);
+                return { left: side ? c : 0, right: side ? 0 : c, mul: side ? 1.2 : 0.5, structures: false };
+            }
+            case 'icefall': { // sawtooth icicles, sharp tip pointing downstream
+                const saw = (o) => ((((wr + o) % 12) + 12) % 12) / 12 * 0.17 * env;
+                return { left: saw(0), right: saw(6), mul: 0.9, structures: false };
+            }
+            case 'pipes': { // conduits reaching across in flat bands
+                const p = ((wr % 24) + 24) % 24;
+                const band = p < 3 ? 0.22 * env : 0.03 * env;
+                const left = Math.floor(wr / 24) % 2 ? band : 0.03 * env;
+                return { left, right: left === band ? 0.03 * env : band, mul: 1, structures: true };
+            }
+            case 'ribs': { // dense thin ribs like a skeleton
+                const rb = ((((wr % 6) + 6) % 6) < 2 ? 0.09 : 0.02) * env;
+                return { left: rb, right: rb, mul: 0.85, structures: false };
+            }
+            case 'delta': { // slow braided channel: walls swell and recede out of phase
+                const a = (0.5 + 0.5 * Math.sin(wr * 0.05)) * 0.18 * env;
+                const b = (0.5 + 0.5 * Math.sin(wr * 0.05 + 2.4)) * 0.18 * env;
+                return { left: a, right: b, mul: 0.7, structures: false };
+            }
+            default: // canyon: the regular look with faction structures
+                return { left: 0, right: 0, mul: 1, structures: true };
+        }
+    },
+    /** Terrain art cell in logical px (shared by walls, ground and obstacles). */
+    terrainCell() {
+        if (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell) {
+            const cell = renderManager.getCombatVoxelCell();
+            if (cell != null && cell > 0) return cell;
+        }
+        return typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
+    },
+    /** Deterministic 0..1 hash for terrain segments. */
+    terrainHash(a, b) {
+        let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    },
+    /**
+     * Wall material of a ~40-row segment on one side. Each has its own look,
+     * silhouette and toughness (hits per cell): loose rock crumbles fast,
+     * armour plating takes a beating, crystal shatters, magma vents in between.
+     */
+    terrainMaterial(wr, side) {
+        const seg = Math.floor(wr / TERRAIN_SEGMENT_ROWS);
+        const prof = this.terrainProfile();
+        // Each area has its own wall material (fixed per planet + zone);
+        // now and then a segment breaks the pattern for variety.
+        const zi = this.terrainZoneIndex(wr, prof);
+        const zoneMat = prof.zoneMats[this.terrainZoneId(zi, prof)];
+        if (zoneMat && this.terrainHash(seg * 2 + side, 881) > 0.04) return TERRAIN_MATERIALS[zoneMat];
+        const h = this.terrainHash(seg * 2 + side, 4099 + prof.seed % 997);
+        const w = prof.materials;
+        if (h < w[0]) return TERRAIN_MATERIALS.rock;
+        if (h < w[1]) return TERRAIN_MATERIALS.metal;
+        if (h < w[2]) return TERRAIN_MATERIALS.crystal;
+        return TERRAIN_MATERIALS.magma;
+    },
+    /**
+     * Canyon wall widths (in cells) at world row `wr`: base rock plus the
+     * faction structure jutting out, shaped by the segment's material and
+     * minus what has been shot away. Used by drawing and collisions alike.
+     */
+    terrainWallCells(wr, W) {
+        const cell = this.terrainCell();
+        const style = this.getEnvironment().style;
+        const prof = this.terrainProfile();
+        const zone = this.terrainZoneAt(wr, prof);
+        // Area threshold: light pillars — floor stripe still marks the seam.
+        const gd = this.terrainGateRow(wr, prof);
+        // Pillar reaches ~4% of W; never seal the enemy band.
+        const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
+        // Occasional big outcrop reaching far into the passage (one side per slot).
+        const outcrop = (side) => {
+            const slot = Math.floor(wr / 70);
+            if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
+            if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
+            const t = (wr - slot * 70 - 10) / 44;
+            if (t < 0 || t > 1) return 0;
+            const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
+            // Rounded bump with a flat-ish top.
+            return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
+        };
+        const depth = (side, mat) => {
+            const s = side * 37.1 + prof.phase;
+            const f = prof.freq;
+            const n = Math.sin(wr * 0.05 * f + s) * 0.5 + Math.sin(wr * 0.11 * f + s * 2) * 0.3
+                + Math.sin(wr * 0.23 * f + s * 3) * 0.2;
+            let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
+                + gate;
+            // Per-material silhouette on top of the shared canyon curve.
+            if (mat.id === 'metal') d = Math.round(d / 3) * 3 + 1;              // stepped blocks
+            else if (mat.id === 'crystal') d += 3 * (1 - Math.abs(((wr % 8) + 8) % 8 - 4) / 4); // spikes
+            else if (mat.id === 'rock') d += Math.floor(this.terrainHash(wr, side + 7) * 3) - 1; // rubble
+            else d += Math.sin(wr * 0.4 + side) * 1.5;                             // bulging vents
+            return Math.max(2, Math.round(d));
+        };
+        const structure = (side) => {
+            const slot = Math.floor(wr / 48);
+            if ((slot + side) % 2) return 0;
+            const t = (wr - slot * 48 - 16) / 12;
+            if (t < 0 || t > 1) return 0;
+            let v;
+            switch (style) {
+                case 'tech': v = 0.045; break;
+                case 'organic': v = 0.055 * Math.sin(t * Math.PI); break;
+                case 'spike': v = 0.09 * (1 - Math.abs(t - 0.5) * 2); break;
+                case 'scrap': v = t < 0.25 || t > 0.75 ? 0.065 : 0.02; break;
+                default: v = 0.03 * Math.sin(t * Math.PI);
+            }
+            return Math.round((W * v) / cell);
+        };
+        const out = {};
+        // Always leave a flyable passage (~62% of the width) so the upper
+        // enemy band stays usable even at zone seams.
+        const maxCells = Math.floor((W * 0.38) / cell);
+        // Threshold sill marks the new area — skip when a gate is already
+        // active so the two never stack into a sealed wall.
+        const zi = this.terrainZoneIndex(wr, prof);
+        const local = wr - zi * prof.zoneRows;
+        let sill = 0;
+        if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
+            const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
+            sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
+        }
+        const fullOf = [0, 1].map((side) => {
+            const mat = this.terrainMaterial(wr, side);
+            const base = depth(side, mat);
+            return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
+        });
+        const over = fullOf[0].full + fullOf[1].full - maxCells;
+        if (over > 0) {
+            const tot = fullOf[0].full + fullOf[1].full;
+            fullOf.forEach((f) => {
+                f.full = Math.max(2, f.full - Math.ceil(over * f.full / tot));
+                f.base = Math.min(f.base, f.full);
+            });
+        }
+        for (let side = 0; side < 2; side++) {
+            const { mat, base, full } = fullOf[side];
+            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + wr) || 0) : 0;
+            const eroded = Math.floor(dmg / mat.hp);
+            // Fully carveable — blast the wall away to open the corridor.
+            const width = Math.max(0, full - eroded);
+            const k = side ? 'right' : 'left';
+            out[k] = width;
+            out[k + 'Base'] = Math.min(base, width);
+            out[k + 'Mat'] = mat;
+            out[k + 'Cracked'] = width > 0 && (dmg % mat.hp) > 0; // edge cell already hit
+            // Sill cells (between the base wall and the edge) get their own look.
+            out[k + 'Sill'] = fullOf[side].sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
+        }
+        return out;
+    },
+    /** World row of the wall layer at screen y. */
+    terrainRowAtY(y) {
+        const cell = this.terrainCell();
+        const offset = this.terrainOffset || 0;
+        return Math.floor(offset / cell) - Math.floor((y - offset % cell) / cell);
+    },
+    /**
+     * How hard a shot bites into the walls: `power` = damage points on the
+     * hit row, `radius` = rows around it that crumble too (crater size),
+     * `pierce` = the shot keeps going, `vsMetal` = bonus on armour plating.
+     * Scaled by the shot's damage (10 = baseline).
+     */
+    terrainWeaponProfile(bullet) {
+        const type = String((bullet && bullet.type) || '').replace(/^enemy_/, '');
+        const base = {
+            missile_shot: { power: 10, radius: 5 },
+            nova_shot: { power: 9, radius: 5 },
+            plasma_beam: { power: 7, radius: 3 },
+            plasma: { power: 7, radius: 3 },
+            ion_beam: { power: 5, radius: 2, vsMetal: 3 },
+            pierce_beam: { power: 5, radius: 2, pierce: true },
+            laser_beam: { power: 5, radius: 2 },
+            laser: { power: 5, radius: 2 },
+            wave_beam: { power: 5, radius: 2 },
+            spread_beam: { power: 5, radius: 2 },
+            spread: { power: 5, radius: 2 },
+            rapid_beam: { power: 4, radius: 1 },
+            rapid: { power: 4, radius: 1 },
+            burst_shot: { power: 5, radius: 2 }
+        }[type] || { power: 5, radius: 2 };
+        const dmg = Number(bullet && bullet.damage);
+        const scale = Number.isFinite(dmg) && dmg > 0 ? Math.max(1, Math.min(4, dmg / 6)) : 1;
+        return {
+            power: Math.max(3, Math.round(base.power * scale)),
+            radius: base.radius,
+            pierce: !!base.pierce,
+            vsMetal: base.vsMetal || 2
+        };
+    },
+    /**
+     * A shot hit the wall on `side` at screen y: carve into it. Returns the
+     * number of cells that broke off (0 = only chipped).
+     */
+    damageTerrain(y, side, profile) {
+        if (!this.terrainDamage) this.terrainDamage = new Map();
+        const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
+        const wr = this.terrainRowAtY(y);
+        let broken = 0;
+        for (let d = -pr.radius; d <= pr.radius; d++) {
+            const row = wr + d;
+            const mat = this.terrainMaterial(row, side);
+            // Full power at the hit row, falling off towards the crater rim,
+            // with a little randomness so the edge looks torn.
+            const fall = 1 - Math.abs(d) / (pr.radius + 1);
+            let pts = pr.power * fall * (mat.id === 'metal' ? pr.vsMetal : 1);
+            // Always break at least one cell on the impact row.
+            pts = Math.max(d === 0 ? 2 : 1, Math.floor(pts + Math.random() * 0.9));
+            const k = side + ':' + row;
+            const before = this.terrainDamage.get(k) || 0;
+            this.terrainDamage.set(k, before + pts);
+            broken += Math.floor((before + pts) / mat.hp) - Math.floor(before / mat.hp);
+        }
+        if (this.terrainDamage.size > 4000) {
+            // Forget rows that scrolled far past the bottom.
+            const cutoff = wr - 400;
+            this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
+        }
+        return broken;
+    },
+    /** Wall extents in px at screen y: { left, right } = inner edges. */
+    terrainWallsAtY(y, W) {
+        if (!this.hasTerrain()) return null;
+        const cell = this.terrainCell();
+        const c = this.terrainWallCells(this.terrainRowAtY(y), W);
+        return { left: c.left * cell, right: W - c.right * cell };
+    },
+    /** Innermost wall edges over the vertical span [y0, y1]. */
+    terrainWallsOver(y0, y1, W) {
+        if (!this.hasTerrain()) return null;
+        const cell = this.terrainCell();
+        let left = 0, right = W;
+        for (let y = y0; y <= y1 + cell; y += cell) {
+            const w = this.terrainWallsAtY(Math.min(y, y1), W);
+            if (!w) return null;
+            left = Math.max(left, w.left);
+            right = Math.min(right, w.right);
+        }
+        return { left, right };
+    },
+});

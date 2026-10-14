@@ -219,6 +219,47 @@ extendClass(ShipAssetLoader, {
         return out;
     },
 
+    /** Lit cells of a nose / core / aft grid as layout points, plus the cell size (mirrors renderProceduralBodyBand). Memoized. */
+    bodyLitCells(seg, shipModel, scale) {
+        const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
+        const voxelScale = Number(loadout && loadout.voxelScale) || 0.5;
+        const zoom = Math.max(0.25, Number(scale) || 1);
+        const wPx = Math.max(1, seg.width * zoom);
+        const hPx = Math.max(1, seg.height * zoom);
+        const prevCell = this._shipVoxelCell;
+        this._shipVoxelCell = this.shipVoxelCell(shipModel, scale);
+        const res = this.hullPartResolution(wPx, hPx, voxelScale, zoom);
+        this._shipVoxelCell = prevCell;
+        const resW = res.resW + (res.resW % 2);
+        const resH = res.resH;
+        const cell = res.cell;
+        const gridW = (resW * cell) / wPx;
+        const gridH = (resH * cell) / hPx;
+        const factionStyle = this.resolvePlayerFactionStyle(shipModel);
+        const shapeSeed = this.resolveHullShapeSeed(shipModel);
+        const override = this.resolveSegmentVariantOverride(shipModel, seg.id);
+        const variant = override != null ? override : this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id));
+        const key = [seg.id, seg.x, seg.y, seg.width, seg.height, resW, resH, variant, shapeSeed, factionStyle ? factionStyle.silhouette : ''].join('|');
+        if (!this._bodyLitCache) this._bodyLitCache = new Map();
+        if (this._bodyLitCache.has(key)) return this._bodyLitCache.get(key);
+        let grid;
+        if (seg.id === 'front') grid = this.buildNoseGrid(resW, resH, factionStyle, variant);
+        else if (seg.id === 'back') grid = this.buildAftGrid(resW, resH, factionStyle, variant);
+        else grid = this.buildCenterGrid(resW, resH, factionStyle, variant);
+        const pts = [];
+        for (let r = 0; r < grid.length; r++) {
+            for (let c = 0; c < grid[r].length; c++) {
+                if (!grid[r][c]) continue;
+                pts.push([seg.x + seg.width * ((1 - gridW) / 2 + ((c + 0.5) / resW) * gridW),
+                    seg.y + seg.height * ((1 - gridH) / 2 + ((r + 0.5) / resH) * gridH)]);
+            }
+        }
+        const out = { pts: pts, cell: Math.max(0.3, (seg.width / resW) * gridW) };
+        if (this._bodyLitCache.size > 128) this._bodyLitCache.clear();
+        this._bodyLitCache.set(key, out);
+        return out;
+    },
+
     wingBridgeEnd(seg, shipModel, scale, hullEdgeX, hullY) {
         const lit = this.wingLitCells(seg, shipModel, scale);
         const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
@@ -385,14 +426,15 @@ extendClass(ShipAssetLoader, {
             return { widthMul: 0.3 + 0.82 * Math.sin(tt * Math.PI), offsetMul: 0 };
         }
         if (silhouette === 'scrap') {
-            // Lopsided welded salvage: big irregular steps, shifted off-centre.
+            // Welded salvage: big irregular steps (patches stay lopsided), body centred on the axis.
             // Two or three large bolted-on blocks per part (low frequency).
             // Width is held per third of the part, so each block is several
             // voxel rows tall (single odd rows read as loose stripes).
             const block = Math.min(2, Math.floor(tt * 3));
             const jitter = Math.sin((block * 0.9 + seedIndex * 1.7) * 3.1) * 0.5 + 0.5;
             const chunk = Math.round(jitter * 2) / 2;
-            return { widthMul: 0.62 + chunk * 0.45, offsetMul: (chunk - 0.5) * 0.18 };
+            // Irregular widths, but every row stays centred on the hull axis (no sideways drift off the axis).
+            return { widthMul: 0.62 + chunk * 0.45, offsetMul: 0 };
         }
         if (silhouette === 'circuit') {
             // Rigid slab with deep rectangular notches cut at fixed intervals —

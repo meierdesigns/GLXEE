@@ -206,28 +206,24 @@ extendClass(FactionShipStyles, {
 
     buildPirateHull(d, s, seed) {
         const L = s.len;
-        // Mirror the whole layout per ship so pirates lean either way.
-        const side = (seed & 1) ? 1 : -1;
-        const sx = (c) => (side > 0 ? c : -c - 1);
-        const rect = (c0, c1, r0, r1, v) => {
-            const a = sx(c0), b = sx(c1);
-            d.sRect(Math.min(a, b), Math.max(a, b), r0, r1, v);
-        };
-        // Off-centre main hull, blunt nose.
-        rect(-2, 1, 1, L - 2, 2);
-        rect(-1, 0, 0, 0, 2);
-        rect(-1, -1, 2, 3, 3);                               // cockpit, off-centre
-        // Big bolted-on engine pod on one side.
-        rect(-s.hw, -3, L - 5, L - 1, 2);
-        rect(-s.hw + 1, -4, L - 4, L - 4, 3);                // hazard stripe
-        // Thin strut + gun on the other side.
+        // Salvage look from big bolted-on blocks, but every part is mirrored
+        // on the centre line so the hull stays horizontally symmetric.
+        const rect = (c0, c1, r0, r1, v) => d.mRect(Math.min(c0, c1), Math.max(c0, c1), r0, r1, v);
+        // Blunt-nosed main hull, cockpit on the axis.
+        rect(0, 1, 1, L - 2, 2);
+        rect(0, 0, 0, 0, 2);
+        rect(0, 0, 2, 3, 3);
+        // Twin bolted-on engine pods.
+        rect(s.hw - 3, s.hw - 1, L - 5, L - 1, 2);
+        rect(s.hw - 4, s.hw - 2, L - 4, L - 4, 3);           // hazard stripe
+        // Thin struts + guns.
         if (s.i >= 1) {
             const wr = Math.floor(L * 0.5);
             rect(2, s.hw - 1, wr, wr, 2);
             rect(s.hw - 1, s.hw - 1, wr - 3, wr + 1, 2);
             rect(s.hw - 1, s.hw - 1, wr - 3, wr - 3, 3);     // muzzle
         }
-        // Junk plates from the seed.
+        // Junk plates from the seed (mirrored pairs).
         const n = s.i + 1;
         for (let k = 0; k < n; k++) {
             const h = (seed >>> (k * 5)) & 31;
@@ -235,7 +231,7 @@ extendClass(FactionShipStyles, {
             const r = 1 + ((h >> 2) % Math.max(1, L - 4));
             rect(c, c + (h & 1), r, r + 1, 2);
         }
-        return [{ dx: sx(-s.hw + 1), y: L }, { dx: sx(-1), y: L - 1 }];
+        return [{ dx: s.hw - 2, y: L }, { dx: 0, y: L - 1 }];
     },
 
     buildMachineHull(d, s) {

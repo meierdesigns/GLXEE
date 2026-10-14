@@ -143,19 +143,9 @@ extendClass(FactionShipStyles, {
                 break;
             }
             case 'scrap': {
-                // Asymmetric L-blocks — chop one side, pad the other
-                const leftHeavy = (seed & 1) === 0;
-                if (leftHeavy) {
-                    this.fillRect(g, cx - 6, 6, 2, 2, 1);
-                    this.fillRect(g, cx - 5, 7, 3, 1, 2);
-                    this.clearPx(g, cx + 4, 4);
-                    this.clearPx(g, cx + 5, 5);
-                } else {
-                    this.fillRect(g, cx + 4, 6, 2, 2, 1);
-                    this.fillRect(g, cx + 2, 7, 3, 1, 2);
-                    this.clearPx(g, cx - 5, 4);
-                    this.clearPx(g, cx - 6, 5);
-                }
+                // Salvage L-blocks, mirrored so the hull stays symmetric
+                this.fillRect(g, cx - 6, 6, 2, 2, 1);
+                this.fillRect(g, cx - 5, 7, 3, 1, 2);
                 break;
             }
             case 'circuit': {

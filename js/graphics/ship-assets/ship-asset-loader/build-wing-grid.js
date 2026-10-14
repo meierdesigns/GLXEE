@@ -217,7 +217,7 @@ extendClass(ShipAssetLoader, {
         // Accent blocks sit at fixed fractions of the frame; clip them to
         // the hull so none float beside a lopsided or tapered silhouette.
         this.clipGridToMask(g, hullMask);
-        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
+        this.mirrorGridLeftToRight(g);   // pirate hull parts are symmetric too
         return g;
     },
 
@@ -302,7 +302,7 @@ extendClass(ShipAssetLoader, {
         // the hull so none float beside a lopsided or tapered silhouette.
         if (!this.hullBrandStamps) g.forEach((row, i) => row.forEach((v, j) => { row[j] = plainHull[i][j]; }));   // bright accent stamps are off; plating / outline stay
         this.clipGridToMask(g, hullMask);
-        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
+        this.mirrorGridLeftToRight(g);   // pirate hull parts are symmetric too
         return g;
     },
 });

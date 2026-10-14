@@ -90,9 +90,8 @@ extendClass(ShipAssetLoader, {
             return Math.abs(u) < taper;
         }
         if (silhouette === 'scrap') {
-            // Single diagonal bite out of one corner — asymmetric welded-on
-            // salvage notch rather than two mirrored rectangular slots.
-            return !((u - v) > 0.75 && u > 0.15);
+            // Diagonal salvage bite out of both lower corners (mirrored).
+            return !((Math.abs(u) - v) > 0.75 && Math.abs(u) > 0.15);
         }
         if (silhouette === 'circuit') {
             // Chamfered corners on all four sides — a beveled circuit-board

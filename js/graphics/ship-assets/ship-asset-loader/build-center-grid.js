@@ -33,7 +33,7 @@ extendClass(ShipAssetLoader, {
             const prof = this.factionRowProfile(silhouette, t, 4);
             const width = this.evenSpan(cols, Math.max(1, Math.round(cols * taper * variantMul * prof.widthMul)));
             const c0 = Math.max(0, Math.min(cols - width,
-                Math.round((cols - width) / 2 + prof.offsetMul * cols)));
+                Math.round((cols - width) / 2 + (silhouette === 'scrap' ? 0 : prof.offsetMul * cols))));
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
@@ -80,7 +80,7 @@ extendClass(ShipAssetLoader, {
                 this.gridFillRect(g, cols - c - armW, r, armW, 1, 3);
             }
         } else if (silhouette === 'scrap') {
-            // Off-center welded patches — irregular, not centered or mirrored.
+            // Welded patches on the left half (mirrored below).
             this.gridFillRect(g, cols * 0.08, rows * 0.5, cols * 0.34, Math.max(1, rows * 0.3), 3);
             this.gridFillRect(g, cols * 0.62, rows * 0.12, cols * 0.28, Math.max(1, rows * 0.18), 3);
         } else if (silhouette === 'circuit') {
@@ -102,12 +102,12 @@ extendClass(ShipAssetLoader, {
         } else if (silhouette === 'modular') {
             this.gridFillRect(g, cols * 0.3, rows * 0.28, cols * 0.4, Math.max(1, rows * 0.22), 3);
         }
-        // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
+        // The core is symmetric for every faction; pirate lopsidedness lives in wings / pods.
         // Accent blocks sit at fixed fractions of the frame; clip them to
         // the hull so none float beside a lopsided or tapered silhouette.
         if (!this.hullBrandStamps) g.forEach((row, i) => row.forEach((v, j) => { row[j] = plainHull[i][j]; }));   // bright accent stamps are off; plating / outline stay
         this.clipGridToMask(g, hullMask);
-        if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
+        this.mirrorGridLeftToRight(g);
         return g;
     },
 

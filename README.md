@@ -140,7 +140,9 @@ Run the server from the repository root.
 
 The repository itself is the itch.io runtime package: the GitHub download
 contains only the game entry point, runtime code, CSS, and game assets
-(982 tracked files). README media and development-only archive/package sources
+(under 800 tracked files, kept well below GitHub's 1000-file download cap).
+README media, development-only archive/package sources, local Cursed bridge
+packages, and unreferenced generated sprite dumps (`assets/{levels,ships,weapons}/sprites/`)
 are excluded from the runtime tree.
 README screenshots, documentation graphics, development tools, and package
 sources stay in the repository but are excluded from the upload.
@@ -366,6 +368,16 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
 - Frame-edge resize keeps the grabbed handle under the pointer at every scale.
 - Station storage columns (ships / blueprints / parts) are drag-resizable with
   remembered `fr` weights.
+- The hangar bay has an **INVENTORY** panel on the left: a fixed 8-column grid
+  of 48 px tiles, icon filters per part kind (weapon / defense / ability /
+  energy), and drag & drop straight onto the ship's slots.
+- Parts render as **physical items** (`physical-item.js`): a generated pixel
+  casing per part instead of a flat glyph; the part icon lives in the compact
+  tooltip (description first, key/value facts below).
+- Equipping and unequipping play a short pop / sweep animation; installed items
+  pulse and bob while hovered (disabled under `prefers-reduced-motion`).
+- The station content scales with `transform: scale` instead of CSS `zoom`, so
+  DevTools and `getBoundingClientRect` match what is drawn.
 
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
@@ -379,6 +391,12 @@ new-pilot, floppy LOAD, hangar, factions, and explorations. Profile details use
 stat tiles and per-galaxy progress cell bars; faction filters narrow the list.
 An unfinished New Pilot flow (faction / name step) restores after reload.
 Subtitle reads *…a MRDSN Production*.
+
+The main menu is full-screen with the pilot's own **home station** drawn as the
+backdrop (`station-backdrop.js`); menu and scoreboard sit left and right so the
+station shows through the middle. Menu and station backgrounds are darkened with
+a cheap black overlay (no fullscreen filter under the parallax), and the menu
+buttons get a raised, high-contrast frame.
 
 **New Pilot flow** runs faction → pilot → start setup. The pilot step shows the
 faction crest left of the name field and a generated 96×108 pixel portrait of a
@@ -525,6 +543,8 @@ Short index — details live in the sections above.
 - Five factions / galaxies with relations, contracts, trade, fleet preview, universe save.
 - Home Station loop: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
 - Modular loadouts, area pager, hangar bay zoom, VOXEL combat with field presence.
+- Hangar inventory panel with physical pixel items, kind filters, and equip animations.
+- Full-screen start menu with the pilot's station as backdrop.
 - Galaxy explore: one-pixel-size map, stored nebulae, checkpoints, traffic, ship locator.
 - 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
@@ -717,6 +737,10 @@ be reviewed or reverted independently.
 | 63I | Viewport-fit scope | Parts share `window.vfFitScope` instead of globals |
 | 63J | Runtime performance | Cached terrain rows and layers, pixel-written layers, cheaper hangar preview |
 | 64A | Hangar and selection polish | Remove the redundant hangar area bar; stabilize faction-styled planet selection indicators and zoom rendering |
+| 64B | Hangar inventory | Inventory panel, physical items, kind filters, equip / hover animations, compact tooltips |
+| 64C | Ship hulls | Faction hull builders, paint topology, voxel grids, lit bounds, shield hull |
+| 64D | Start screen | Station backdrop menu, darker backgrounds, raised menu buttons |
+| 64E | Repo footprint | Tracked files under 800; local bridge packages and unused sprite dumps ignored |
 
 The wave commit convention is:
 

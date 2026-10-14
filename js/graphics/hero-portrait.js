@@ -516,11 +516,10 @@ const heroPortrait = (() => {
         return `<svg class="hero-portrait" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin slice" shape-rendering="crispEdges" role="img" aria-label="Pilot portrait">${out}</svg>`;
     }
 
-    // 3D WebGL2 renderer when available (hero-portrait-gl/), otherwise the SVG pixel generator above.
+    // Voxel portrait renderer with an SVG pixel fallback.
     function html(look, accent, opts) {
         const lk = typeof look === 'string' ? heroLook(look) : (look || heroLook('terran'));
         if (typeof voxelPortrait !== 'undefined') return voxelPortrait.canvasHtml({ faction: lk.faction, v: normalize(lk).v }, accent, opts);
-        if (typeof heroPortraitGL !== 'undefined' && heroPortraitGL.supported()) return heroPortraitGL.canvasHtml(lk, accent);
         return svgHtml(lk, accent);
     }
     const data = { SPECIES, PAINTS, HAIRS, EYE_COLS, EYE_SHAPES, GLOWS };

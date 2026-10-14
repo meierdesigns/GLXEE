@@ -28,7 +28,6 @@ extendClass(StartScreenManager, {
             '<div class="hs-credits-crawl-line hs-credits-crawl-title">GLXEE</div>' +
             '<div class="hs-credits-crawl-line">A RETRO SPACE SHOOTER</div>' +
             '<div class="hs-credits-crawl-line hs-credits-crawl-role">PILOT PORTRAITS</div>' +
-            '<div class="hs-credits-crawl-line">3D HEAD SCAN BY LEE PERRY-SMITH</div>' +
             '<div class="hs-credits-crawl-line">INFINITE REALITIES / TRIPLEGANGERS - CC BY 3.0</div>' +
             '</div>' +
             '</div>' +

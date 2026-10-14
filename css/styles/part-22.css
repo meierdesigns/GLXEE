@@ -193,3 +193,488 @@ html body .profile-selection-name-mode .profile-faction-swatch {
 html body .profile-selection-name-mode .profile-faction-swatch-emblem { width: 72px !important; height: 72px !important; flex: 0 0 auto; }
 html body .profile-selection-name-mode .profile-faction-swatch-label { font-size: 20px; letter-spacing: 3px; text-align: center; }
 html body .profile-selection-name-mode .profile-faction-swatch-emblem :is(img, canvas, svg), html body .profile-selection-name-mode .profile-faction-swatch-emblem > * { width: 100% !important; height: 100% !important; }
+
+/* Active nav card: same styled body as the other cards (dark radial fill, inner glow, label strip);
+   only the bottom stays open so it still joins the sub-nav. Glow is drawn on top + sides only. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {
+    background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--color-primary) 24%, #05060a) 0%, #020203 80%) !important;
+    box-shadow:
+        inset 0 0 14px -4px color-mix(in srgb, var(--color-primary) 80%, transparent),
+        inset 0 14px 14px -10px color-mix(in srgb, var(--color-primary) 80%, transparent) !important;
+}
+
+/* LAUNCH: rocket instead of the play triangle. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%20shape-rendering='crispEdges'%3E%3Crect%20x='12'%20y='0'%20width='4'%20height='1'/%3E%3Crect%20x='11'%20y='1'%20width='6'%20height='1'/%3E%3Crect%20x='11'%20y='2'%20width='6'%20height='1'/%3E%3Crect%20x='9'%20y='3'%20width='10'%20height='1'/%3E%3Crect%20x='9'%20y='4'%20width='10'%20height='1'/%3E%3Crect%20x='8'%20y='5'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='6'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='7'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='8'%20width='4'%20height='1'/%3E%3Crect%20x='16'%20y='8'%20width='4'%20height='1'/%3E%3Crect%20x='8'%20y='9'%20width='4'%20height='1'/%3E%3Crect%20x='16'%20y='9'%20width='4'%20height='1'/%3E%3Crect%20x='8'%20y='10'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='11'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='12'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='13'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='14'%20width='12'%20height='1'/%3E%3Crect%20x='7'%20y='15'%20width='14'%20height='1'/%3E%3Crect%20x='7'%20y='16'%20width='14'%20height='1'/%3E%3Crect%20x='5'%20y='17'%20width='18'%20height='1'/%3E%3Crect%20x='5'%20y='18'%20width='18'%20height='1'/%3E%3Crect%20x='4'%20y='19'%20width='20'%20height='1'/%3E%3Crect%20x='4'%20y='20'%20width='6'%20height='1'/%3E%3Crect%20x='12'%20y='20'%20width='4'%20height='1'/%3E%3Crect%20x='18'%20y='20'%20width='6'%20height='1'/%3E%3Crect%20x='4'%20y='21'%20width='5'%20height='1'/%3E%3Crect%20x='12'%20y='21'%20width='4'%20height='1'/%3E%3Crect%20x='19'%20y='21'%20width='5'%20height='1'/%3E%3Crect%20x='4'%20y='22'%20width='5'%20height='1'/%3E%3Crect%20x='12'%20y='22'%20width='4'%20height='1'/%3E%3Crect%20x='19'%20y='22'%20width='5'%20height='1'/%3E%3Crect%20x='5'%20y='23'%20width='2'%20height='1'/%3E%3Crect%20x='12'%20y='23'%20width='4'%20height='1'/%3E%3Crect%20x='21'%20y='23'%20width='2'%20height='1'/%3E%3Crect%20x='12'%20y='24'%20width='4'%20height='1'/%3E%3Crect%20x='11'%20y='25'%20width='6'%20height='1'/%3E%3Crect%20x='11'%20y='26'%20width='6'%20height='1'/%3E%3Crect%20x='10'%20y='27'%20width='8'%20height='1'/%3E%3Crect%20x='10'%20y='28'%20width='3'%20height='1'/%3E%3Crect%20x='15'%20y='28'%20width='3'%20height='1'/%3E%3Crect%20x='10'%20y='29'%20width='2'%20height='1'/%3E%3Crect%20x='16'%20y='29'%20width='2'%20height='1'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%20shape-rendering='crispEdges'%3E%3Crect%20x='12'%20y='0'%20width='4'%20height='1'/%3E%3Crect%20x='11'%20y='1'%20width='6'%20height='1'/%3E%3Crect%20x='11'%20y='2'%20width='6'%20height='1'/%3E%3Crect%20x='9'%20y='3'%20width='10'%20height='1'/%3E%3Crect%20x='9'%20y='4'%20width='10'%20height='1'/%3E%3Crect%20x='8'%20y='5'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='6'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='7'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='8'%20width='4'%20height='1'/%3E%3Crect%20x='16'%20y='8'%20width='4'%20height='1'/%3E%3Crect%20x='8'%20y='9'%20width='4'%20height='1'/%3E%3Crect%20x='16'%20y='9'%20width='4'%20height='1'/%3E%3Crect%20x='8'%20y='10'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='11'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='12'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='13'%20width='12'%20height='1'/%3E%3Crect%20x='8'%20y='14'%20width='12'%20height='1'/%3E%3Crect%20x='7'%20y='15'%20width='14'%20height='1'/%3E%3Crect%20x='7'%20y='16'%20width='14'%20height='1'/%3E%3Crect%20x='5'%20y='17'%20width='18'%20height='1'/%3E%3Crect%20x='5'%20y='18'%20width='18'%20height='1'/%3E%3Crect%20x='4'%20y='19'%20width='20'%20height='1'/%3E%3Crect%20x='4'%20y='20'%20width='6'%20height='1'/%3E%3Crect%20x='12'%20y='20'%20width='4'%20height='1'/%3E%3Crect%20x='18'%20y='20'%20width='6'%20height='1'/%3E%3Crect%20x='4'%20y='21'%20width='5'%20height='1'/%3E%3Crect%20x='12'%20y='21'%20width='4'%20height='1'/%3E%3Crect%20x='19'%20y='21'%20width='5'%20height='1'/%3E%3Crect%20x='4'%20y='22'%20width='5'%20height='1'/%3E%3Crect%20x='12'%20y='22'%20width='4'%20height='1'/%3E%3Crect%20x='19'%20y='22'%20width='5'%20height='1'/%3E%3Crect%20x='5'%20y='23'%20width='2'%20height='1'/%3E%3Crect%20x='12'%20y='23'%20width='4'%20height='1'/%3E%3Crect%20x='21'%20y='23'%20width='2'%20height='1'/%3E%3Crect%20x='12'%20y='24'%20width='4'%20height='1'/%3E%3Crect%20x='11'%20y='25'%20width='6'%20height='1'/%3E%3Crect%20x='11'%20y='26'%20width='6'%20height='1'/%3E%3Crect%20x='10'%20y='27'%20width='8'%20height='1'/%3E%3Crect%20x='10'%20y='28'%20width='3'%20height='1'/%3E%3Crect%20x='15'%20y='28'%20width='3'%20height='1'/%3E%3Crect%20x='10'%20y='29'%20width='2'%20height='1'/%3E%3Crect%20x='16'%20y='29'%20width='2'%20height='1'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+/* Wizard step bar sits flush on the screen's top edge: it bleeds upwards like it does sideways. */
+html body .profile-selection-overlay > .profile-stepper {
+    top: calc(-1 * var(--ps-bleed-t, 0px));
+    height: calc(100px + var(--ps-bleed-t, 0px));
+    padding-top: calc(18px + var(--ps-bleed-t, 0px)) !important;
+}
+html body .profile-selection-overlay > .profile-selection-bar {
+    bottom: calc(-1 * var(--ps-bleed-b, 0px));
+    padding-bottom: calc(14px + var(--ps-bleed-b, 0px));
+}
+
+/* Start step: use the full width; wider profile column, bigger profile names. */
+html body .profile-selection-name-mode .profile-start-main {
+    grid-template-columns: minmax(340px, 34%) minmax(0, 1fr) !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    gap: 14px;
+}
+html body .profile-start-main .profile-kit-item .profile-kit-text b {
+    font-size: calc(var(--ps-font, var(--font-h2)) * 1.35) !important;
+    letter-spacing: 2px;
+    line-height: 1.15;
+    white-space: normal;
+    overflow-wrap: normal;
+}
+
+/* Start step: the hull editor is a right sidebar (settings stacked), kit text sits under the KIT BONUS. */
+html body .profile-start-main .profile-faction-preview {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    grid-template-rows: auto auto 1fr;
+    column-gap: 14px;
+    align-items: start;
+}
+html body .profile-start-main .profile-faction-preview > .profile-kit-ship { display: contents; }
+html body .profile-start-main .profile-faction-preview .profile-kit-stats { grid-column: 1 / -1; grid-row: 1; }
+html body .profile-start-main .profile-faction-preview .profile-kit-ship > strong { grid-column: 1; grid-row: 2; }
+html body .profile-start-main .profile-faction-preview .profile-faction-ship { grid-column: 1; grid-row: 3; justify-self: center; align-self: center; }
+html body .profile-start-main .profile-faction-preview > .profile-loadout {
+    grid-column: 2; grid-row: 2 / 4; align-self: stretch;
+    grid-template-columns: 1fr !important; column-gap: 0; border-left: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent);
+    align-content: start; padding: 8px 14px;
+}
+html body .profile-start-main .profile-loadout .profile-area-row { grid-template-columns: 70px 36px 1fr 36px auto; }
+html body .profile-start-main .profile-loadout .profile-kit-desc { grid-column: 1 / -1; margin: 6px 0 0; line-height: 1.4; text-transform: uppercase; text-align: left; color: #d8dbe2; font-size: var(--ps-font, var(--font-h2)); }
+
+/* Profile list: 16px sprite icons in the faction colour, shown big and crisp; list hugs the left edge,
+   the column is narrower so the ship / editor container gets the room. */
+html body .profile-selection-name-mode .profile-start-main {
+    grid-template-columns: minmax(280px, 25%) minmax(0, 1fr) !important;
+    gap: 18px;
+}
+html body .profile-start-main .profile-kit-list { align-items: stretch; margin: 0; }
+html body .profile-start-main .profile-kit-item { justify-content: flex-start; text-align: left; gap: 16px; padding: 10px 14px 10px 10px; }
+html body .profile-start-main .profile-kit-icon { width: 72px; height: 72px; padding: 4px; }
+html body .profile-start-main .profile-kit-icon .pk-kit-ico {
+    display: block; width: 100%; height: 100%;
+    background: var(--faction-accent, var(--color-primary));
+    -webkit-mask: var(--pk-img) center / contain no-repeat; mask: var(--pk-img) center / contain no-repeat;
+    image-rendering: pixelated;
+}
+html body .profile-start-main .profile-kit-item.selected .profile-kit-icon .pk-kit-ico { background: #fff; }
+
+/* Stats strip = a slim bar flush on the top edge of the container (full width, no floating gap above). */
+html body .profile-start-main .profile-faction-preview { padding-top: 0 !important; align-content: start; }
+html body .profile-start-main .profile-faction-preview .profile-kit-stats {
+    grid-column: 1 / -1; grid-row: 1; align-self: start;
+    margin: 0 -20px; width: auto; box-sizing: border-box;
+    min-height: 0; height: 56px; padding: 0 24px !important;
+    align-items: center; justify-content: space-around;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, #05060a);
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+html body .profile-start-main .profile-faction-preview .profile-kit-stats .pk-ico { width: 28px; height: 28px; }
+html body .profile-start-main .profile-faction-preview .profile-kit-stats .pk-stat b { font-size: calc(var(--font-h2) * 1.3) !important; }
+
+/* Left column: top bar = ship name + stats; big ship below. Right column: hull sidebar over the full height. */
+html body .profile-start-main .profile-faction-preview .profile-kit-ship {
+    display: flex !important; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px;
+    grid-column: 1; grid-row: 1; align-self: start; margin: 0 0 0 -20px; width: auto; box-sizing: border-box;
+    height: 56px; padding: 0 20px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, #05060a);
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+html body .profile-start-main .profile-faction-preview .profile-kit-ship > strong { grid-column: auto; grid-row: auto; order: 0; text-align: left; white-space: nowrap; flex: 0 0 auto; }
+html body .profile-start-main .profile-faction-preview .profile-kit-ship .profile-kit-stats {
+    order: 1; flex: 1 1 auto; width: auto; height: auto; margin: 0; padding: 0 !important; background: none; border: 0; justify-content: space-around;
+}
+html body .profile-start-main .profile-faction-preview > .profile-loadout {
+    grid-column: 2; grid-row: 1 / -1; align-self: stretch; margin: 0 -20px 0 0; padding: 14px 18px;
+    display: flex !important; flex-direction: column; justify-content: flex-start; gap: 12px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #05060a);
+}
+html body .profile-start-main .profile-faction-preview > .profile-loadout .profile-loadout-title { flex-direction: column; align-items: flex-start; gap: 4px; }
+html body .profile-start-main .profile-faction-preview > .profile-loadout .profile-area-row { flex: 1 1 0; align-items: center; }
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    grid-column: 1; grid-row: 2 / -1; justify-self: center; align-self: center;
+    height: auto !important; width: min(100%, 560px) !important; max-height: clamp(300px, 62vh, 640px); object-fit: contain;
+}
+
+/* Ship: centred in the area under the top bar (both axes). */
+html body .profile-start-main .profile-faction-preview { grid-template-rows: 56px minmax(0, 1fr) !important; align-items: stretch; }
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    grid-column: 1; grid-row: 2; align-self: center; justify-self: center; margin: 0 !important;
+    width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important;
+    min-height: 0; aspect-ratio: 320 / 224 !important; object-fit: contain;
+    height: min(100%, clamp(300px, 62vh, 640px)) !important;
+}
+
+/* Bigger start ship: fills the area under the top bar. */
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    height: 100% !important; max-height: none !important; width: auto !important; max-width: 100% !important;
+    image-rendering: pixelated;
+}
+
+/* Ship fills the area with side padding; sidebar text larger and calmer. */
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    width: calc(100% - 56px) !important; height: 100% !important; max-width: none !important; object-fit: contain; margin: 0 28px !important;
+}
+html body .profile-start-main .profile-faction-preview > .profile-loadout { padding: 18px 20px; gap: 14px; min-width: 340px; }
+html body .profile-start-main .profile-loadout :is(.profile-loadout-title, .profile-area-row, .profile-area-name, .profile-area-size, .profile-area-row small, .profile-area-left) { font-size: calc(var(--ps-font, var(--font-h2)) * 1.2) !important; letter-spacing: 2px; }
+html body .profile-start-main .profile-loadout .profile-loadout-title { line-height: 1.5; padding-bottom: 12px; }
+html body .profile-start-main .profile-loadout .profile-area-row { grid-template-columns: 84px 44px 1fr 44px auto; gap: 10px; }
+html body .profile-start-main .profile-loadout .profile-area-btn { min-height: 44px; font-size: calc(var(--ps-font, var(--font-h2)) * 1.4) !important; }
+html body .profile-start-main .profile-loadout .profile-kit-bonus { padding: 12px 14px; }
+html body .profile-start-main .profile-loadout .profile-kit-bonus :is(.pkb-label, b) { font-size: calc(var(--ps-font, var(--font-h2)) * 1.2) !important; white-space: nowrap; }
+html body .profile-start-main .profile-loadout .profile-kit-desc { font-size: calc(var(--ps-font, var(--font-h2)) * 1.15) !important; line-height: 1.55; letter-spacing: 1px; }
+
+/* Definite ship size (a % height collapsed to the canvas' tiny intrinsic size when the container is content-sized). */
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    height: clamp(340px, 58vh, 780px) !important; width: auto !important; max-width: calc(100% - 56px) !important; object-fit: contain;
+}
+html body .profile-start-main .profile-faction-preview { min-height: clamp(420px, 66vh, 860px); }
+
+/* Even bigger start ship: takes nearly the whole area under the top bar. */
+html body .profile-start-main .profile-faction-preview .profile-faction-ship {
+    height: clamp(440px, 76vh, 1100px) !important; max-width: calc(100% - 40px) !important;
+}
+html body .profile-start-main .profile-faction-preview { min-height: clamp(520px, 84vh, 1180px); }
+
+/* Start-step ship size. Earlier rules (name-mode.is-name-step ... width 34%, height auto !important) outrank the
+   rules above by specificity, so this one repeats the classes. */
+html body .profile-selection-name-mode.is-name-step .profile-start-main .profile-faction-info-row .profile-faction-preview .profile-faction-ship.profile-faction-ship {
+    grid-column: 1; grid-row: 2; align-self: center; justify-self: center; margin: 0 !important;
+    width: calc(100% - 40px) !important; height: auto !important; max-width: none !important;
+    max-height: 100% !important; aspect-ratio: 320 / 224 !important; object-fit: contain; image-rendering: pixelated;
+}
+html body .profile-start-main .profile-faction-preview { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px) !important; }
+html body .profile-start-main .profile-faction-preview > .profile-loadout { min-width: 280px; }
+
+/* NEW GALAXY sits at the left end of the galaxy nav bar (BACK / NEXT stay centred-right). */
+html body .profile-selection-name-mode .profile-start-galaxy-navrow { justify-content: center; align-items: center; position: relative; }
+html body .profile-selection-name-mode .profile-start-galaxy-navrow > .profile-start-galaxy-new {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%); margin: 0; align-self: auto; width: auto; padding: 14px 24px;
+}
+
+/* Wizard stepper: the current step glows, upcoming steps are dimmed, finished ones sit in between. */
+html body .profile-stepper-step { opacity: .28; filter: saturate(.4); }
+html body .profile-stepper-step.is-done { opacity: .75; filter: none; }
+html body .profile-stepper-step.is-current {
+    opacity: 1; filter: none; color: var(--faction-accent, #fff);
+    text-shadow: 0 0 4px currentColor, 0 0 12px currentColor, 0 0 22px currentColor;
+}
+html body .profile-stepper-step.is-current .profile-stepper-icon {
+    color: var(--faction-accent, #fff);
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 5px var(--faction-accent, #fff)) drop-shadow(0 0 12px var(--faction-accent, #fff)) brightness(1.25);
+}
+html body .profile-stepper-step.is-current + .profile-stepper-step::before { opacity: .3; }
+html body .profile-stepper-step.is-current::before { opacity: 1; box-shadow: 0 0 8px currentColor; }
+html body .profile-start-main .profile-faction-preview > .profile-loadout { box-sizing: border-box; padding: 18px 16px; }
+html body .profile-start-main .profile-loadout > * { min-width: 0; box-sizing: border-box; max-width: 100%; }
+
+/* NEW GALAXY modal: label | options on one line per setting, every option group on a single row, preview on the right. */
+html body .profile-galaxy-modal-box { width: min(1060px, 100%); }
+html body .profile-galaxy-modal-body { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: stretch; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form { gap: 10px; justify-content: space-between; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-row {
+    display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; column-gap: 14px; text-align: left;
+}
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-label { text-align: left; margin: 0; white-space: nowrap; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-chips,
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-galaxy-modal-name { display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; min-width: 0; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-chips .profile-start-chip { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; justify-content: center; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-galaxy-modal-input { flex: 1 1 auto; min-width: 0; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form [data-gm-row="planetCount"] .profile-start-chip,
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form [data-gm-row="sunCount"] .profile-start-chip { flex: 0 0 64px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form [data-gm-row="control"] .profile-start-chip { flex: 0 1 180px; }
+html body .profile-galaxy-modal-preview { justify-content: flex-start; align-self: stretch; }
+html body .profile-galaxy-modal-buttons { margin-top: 6px; }
+@media (max-width: 760px) {
+    html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-row { grid-template-columns: 1fr; row-gap: 6px; }
+    html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form .profile-start-chips { flex-wrap: wrap; }
+}
+
+/* NEW GALAXY sliders (planets / suns / difficulty): a stepped range with the option names as ticks. */
+html body .profile-galaxy-modal .profile-gm-slider { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0 10px; }
+html body .profile-galaxy-modal .profile-gm-range {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 14px; margin: 0; background: transparent; cursor: pointer; outline: 0;
+}
+html body .profile-galaxy-modal .profile-gm-range::-webkit-slider-runnable-track {
+    height: 6px; background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+}
+html body .profile-galaxy-modal .profile-gm-range::-moz-range-track {
+    height: 6px; background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+}
+html body .profile-galaxy-modal .profile-gm-range::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 22px; margin-top: -9px; border-radius: 0;
+    background: var(--faction-accent, var(--color-primary)); border: 2px solid #fff; box-shadow: 0 0 8px var(--faction-accent, var(--color-primary));
+}
+html body .profile-galaxy-modal .profile-gm-range::-moz-range-thumb {
+    width: 14px; height: 18px; border-radius: 0; background: var(--faction-accent, var(--color-primary)); border: 2px solid #fff;
+}
+html body .profile-galaxy-modal .profile-gm-ticks { display: flex; justify-content: space-between; }
+html body .profile-galaxy-modal .profile-gm-tick {
+    flex: 1 1 0; text-align: center; cursor: pointer; opacity: .55; white-space: nowrap;
+    font-size: var(--font-small, 11px); letter-spacing: 1px;
+}
+html body .profile-galaxy-modal .profile-gm-tick.selected { opacity: 1; color: #fff; text-shadow: 0 0 6px var(--faction-accent, var(--color-primary)); }
+html body .profile-galaxy-modal .profile-gm-slider { padding: 0 22px; }
+html body .profile-galaxy-modal .profile-gm-ticks { position: relative; display: block; height: 18px; }
+html body .profile-galaxy-modal .profile-gm-tick {
+    position: absolute; top: 0; flex: none; left: calc(9px + var(--i) / (var(--gm-n) - 1) * (100% - 18px)); transform: translateX(-50%);
+    font-size: calc(var(--font-small, 11px) * 1.15); padding: 2px 4px;
+}
+html body .profile-galaxy-modal .profile-gm-slider[style*="--gm-n:3"] .profile-gm-tick:first-child { text-align: left; }
+
+/* NEW GALAXY: bigger modal, preview column with a structured summary. */
+html body .profile-galaxy-modal .profile-galaxy-modal-box { width: min(1280px, 96%); padding-left: 32px; padding-right: 32px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-body { grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr); gap: 32px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form { gap: 16px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form .profile-start-row { grid-template-columns: 130px minmax(0, 1fr); }
+html body .profile-galaxy-modal .profile-galaxy-modal-sum { gap: 10px; line-height: 1.2; }
+html body .profile-galaxy-modal .gm-sum-name { display: block; text-align: center; font-size: calc(var(--font-h2) * 1.25); letter-spacing: 3px; padding: 6px 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent); }
+html body .profile-galaxy-modal .gm-sum-list { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; row-gap: 8px; margin: 0; align-items: center; }
+html body .profile-galaxy-modal .gm-sum-list dt { margin: 0; opacity: .6; font-size: var(--font-small, 11px); letter-spacing: 2px; text-align: left; }
+html body .profile-galaxy-modal .gm-sum-list dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; justify-content: flex-end; text-align: right; color: #fff; }
+html body .profile-galaxy-modal .gm-sum-list dd.vs { color: inherit; }
+html body .profile-galaxy-modal .gm-sum-list dd.vs span { display: inline-flex; align-items: center; gap: 6px; }
+html body .profile-galaxy-modal .gm-sum-state { font-style: normal; padding: 1px 8px; border: 1px solid currentColor; opacity: .85; font-size: var(--font-small, 11px); letter-spacing: 2px; }
+html body .profile-galaxy-modal .gm-sum-state.is-contested { color: #ff8a5c; }
+html body .profile-galaxy-modal .gm-sum-arrow { font-style: normal; opacity: .6; }
+html body .profile-galaxy-modal .gm-sum-list dd { font-size: calc(var(--font-h2) * 1.15) !important; }
+html body .profile-galaxy-modal .gm-sum-list dt { font-size: var(--font-text) !important; }
+html body .profile-galaxy-modal .gm-sum-list { row-gap: 12px; }
+html body .profile-galaxy-modal .gm-sum-state { font-size: var(--font-text) !important; }
+html body .profile-galaxy-modal .gm-sum-name { font-size: calc(var(--font-h2) * 1.5) !important; }
+/* Galaxy step: the bar only holds NEW GALAXY now (PREV / NEXT removed; arrows and the list switch galaxies). */
+html body .profile-selection-name-mode .profile-start-galaxy-navrow { justify-content: flex-start; }
+html body .profile-selection-name-mode .profile-start-galaxy-navrow > .profile-start-galaxy-new { position: static; transform: none; }
+
+/* Galaxy step: the map takes the whole width and height; the galaxy info is a card laid over it. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side {
+    grid-template-columns: minmax(170px, 0.5fr) minmax(0, 3.2fr) !important;
+    grid-template-areas: "side map" "nav nav" !important;
+    position: relative;
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-map {
+    grid-area: map; width: 100% !important; height: 100% !important; max-height: none !important; aspect-ratio: auto !important; min-height: 0;
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info {
+    grid-area: map; align-self: start !important; justify-self: end; z-index: 2; margin: 14px; padding: 14px 18px !important;
+    width: auto !important; max-width: min(300px, 44%); height: auto !important; box-sizing: border-box;
+    background: color-mix(in srgb, #05060a 82%, transparent);
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+    box-shadow: 0 0 0 2px #05060a, 0 6px 18px rgba(0, 0, 0, .55);
+    backdrop-filter: blur(2px);
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side { grid-template-columns: minmax(200px, 0.62fr) minmax(0, 3fr) !important; }
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info { max-width: min(340px, 48%); }
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info :is(.profile-start-galaxy-name, .profile-start-galaxy-pick) { white-space: normal !important; overflow-wrap: anywhere; font-size: calc(var(--font-h2) * 1.1) !important; }
+
+/* The map runs the full height of the card; NEW GALAXY sits under the list in the left column. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side {
+    grid-template-areas: "side map" "nav map" !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-navrow { grid-area: nav; padding-top: 8px; }
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-navrow > .profile-start-galaxy-new { width: 100%; }
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-map { grid-row: 1 / -1; }
+/* Zoomed out: the whole chart is visible (meet) with a free strip on the right for the info card. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-map { background: #000; }
+.profile-start-galaxy-map .start-house { fill: var(--faction-accent, #fff); stroke: #05060a; stroke-width: 2; paint-order: stroke fill; stroke-linejoin: miter; }
+.profile-galaxy-modal-map .start-house { fill: var(--faction-accent, #fff); stroke: #05060a; stroke-width: 2; paint-order: stroke fill; }
+
+/* Galaxy map zoom controls + cursor. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-zoom {
+    grid-area: map; align-self: end; justify-self: end; z-index: 3; margin: 14px; display: flex; flex-direction: column; gap: 6px;
+}
+.profile-start-galaxy-zoom button {
+    width: 36px; height: 36px; padding: 0; cursor: pointer; font: inherit; font-size: 20px; line-height: 1; color: #fff;
+    background: color-mix(in srgb, #05060a 82%, transparent); border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+}
+.profile-start-galaxy-zoom button:hover { background: var(--faction-accent, var(--color-primary)); color: #05060a; }
+.profile-start-galaxy-map { cursor: zoom-in; touch-action: none; }
+.profile-start-galaxy-map.is-zoomed { cursor: grab; }
+.profile-start-galaxy-map.is-panning { cursor: grabbing; }
+
+/* Ship editor panel: everything stays inside the frame (no clipped BASE label / kit bonus). */
+html body .profile-start-main .profile-faction-preview > .profile-loadout { min-width: 0; max-width: 100%; box-sizing: border-box; margin: 0; overflow: hidden; padding: 14px 16px; gap: 10px; }
+html body .profile-start-main .profile-loadout :is(.profile-loadout-title, .profile-area-row, .profile-area-name, .profile-area-size, .profile-area-row small, .profile-area-left) { font-size: calc(var(--ps-font, var(--font-h2)) * .95) !important; letter-spacing: 1px; }
+html body .profile-start-main .profile-loadout .profile-area-row { grid-template-columns: minmax(0, 64px) 38px minmax(0, 1fr) 38px minmax(0, auto); gap: 6px; min-width: 0; }
+html body .profile-start-main .profile-loadout .profile-area-btn { min-height: 38px; font-size: calc(var(--ps-font, var(--font-h2)) * 1.1) !important; }
+html body .profile-start-main .profile-loadout .profile-kit-bonus { flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px; min-width: 0; box-sizing: border-box; }
+html body .profile-start-main .profile-loadout .profile-kit-bonus :is(.pkb-label, b) { font-size: calc(var(--ps-font, var(--font-h2)) * .95) !important; white-space: normal; min-width: 0; overflow-wrap: anywhere; letter-spacing: 1px; }
+html body .profile-start-main .profile-loadout .profile-kit-desc { font-size: calc(var(--ps-font, var(--font-h2)) * .9) !important; overflow-wrap: anywhere; }
+html body .profile-start-main .profile-loadout .profile-area-row.is-off { opacity: .45; }
+
+/* Start step frame: top bar, ship area and hull sidebar share ONE clean frame (no padding gaps, no ragged edges). */
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview {
+    padding: 0 !important; column-gap: 0 !important; overflow: hidden; box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr) 300px !important;
+}
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview .profile-kit-ship { margin: 0 !important; grid-column: 1; grid-row: 1; width: auto; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-loadout {
+    margin: 0 !important; grid-column: 2; grid-row: 1 / -1; align-self: stretch; box-sizing: border-box; min-width: 0; width: 300px;
+    border: 0; border-left: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+
+/* Start-profile icons: big and crisp (outranks the older 28-44px sizes). */
+html body .profile-selection-name-mode .profile-start-main .profile-kit-item .profile-kit-icon.profile-kit-icon {
+    flex: 0 0 72px; width: 72px !important; height: 72px !important; min-width: 72px; padding: 6px; box-sizing: border-box;
+}
+html body .profile-selection-name-mode .profile-start-main .profile-kit-item { min-height: 88px; }
+
+/* Kit bonus + blurb: a full-width strip along the bottom of the mother container (under ship area and hull sidebar). */
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview { grid-template-rows: 56px minmax(0, 1fr) auto !important; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-loadout { grid-row: 1 / 3; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-kit-info {
+    grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; gap: 24px; box-sizing: border-box; min-width: 0;
+    padding: 12px 20px; margin: 0;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, #05060a);
+    border-top: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
+}
+html body .profile-start-main .profile-kit-info .profile-kit-bonus { flex: 1 1 50%; min-width: 0; margin: 0; padding: 0; border: 0; background: none; display: flex; align-items: center; justify-content: flex-start; gap: 6px 16px; flex-wrap: wrap; }
+html body .profile-start-main .profile-kit-info .profile-kit-bonus b { text-align: left; }
+html body .profile-start-main .profile-kit-info .profile-kit-desc { flex: 1 1 50%; min-width: 0; margin: 0; text-align: left; text-transform: uppercase; color: #d8dbe2; line-height: 1.4; font-size: var(--ps-font, var(--font-h2)); }
+
+/* Frame: the sidebar runs down to the info strip (no gap), and the hull editor text is large enough to read when the stage is scaled down. */
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview { grid-template-columns: minmax(0, 1fr) 340px !important; row-gap: 0 !important; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-loadout {
+    width: 340px; height: auto !important; max-height: none !important; align-self: stretch; justify-self: stretch; grid-row: 1 / 3;
+}
+html body .profile-selection-name-mode .profile-start-main .profile-loadout :is(.profile-loadout-title, .profile-area-name, .profile-area-row small, .profile-area-left) {
+    font-size: 16px !important; line-height: 1.35; letter-spacing: 1.5px;
+}
+html body .profile-selection-name-mode .profile-start-main .profile-loadout .profile-area-size { font-size: 20px !important; }
+html body .profile-selection-name-mode .profile-start-main .profile-loadout .profile-area-row { grid-template-columns: 76px 44px 1fr 44px auto; gap: 8px; }
+html body .profile-selection-name-mode .profile-start-main .profile-loadout .profile-area-name { color: #fff; }
+html body .profile-selection-name-mode .profile-start-main .profile-loadout .profile-area-row small { color: #d8dbe2; }
+html body .profile-selection-name-mode .profile-start-main .profile-loadout .profile-area-row.is-off :is(.profile-area-name, small) { color: #9aa0ad; }
+html body .profile-start-main .profile-kit-info .profile-kit-bonus :is(.pkb-label, b) { font-size: 18px !important; }
+html body .profile-start-main .profile-kit-info .profile-kit-desc { font-size: 18px !important; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview .profile-kit-ship { align-items: center; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview .profile-kit-ship .profile-kit-stats { align-self: center; align-items: center; height: 100%; }
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview .profile-kit-ship .pk-stat { align-items: center; }
+html body .profile-selection-name-mode .profile-start-main .profile-start-label { font-size: 16px !important; }
+
+/* LAUNCH never collapses on narrow screens (the other nav cards give way); above that the nav cards' own clamp keeps all cards equal. */
+@media (max-width: 1100px) {
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+        min-width: 132px !important;
+        flex-shrink: 0 !important;
+    }
+}
+@media (min-width: 1101px) and (max-width: 1650px) {
+    /* Same card size as the nav cards (part-18 makes PLAY wider; here it matches them). */
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+        flex: 0 1 clamp(88px, calc(8.25 * var(--sv-w)), 132px) !important;
+        width: clamp(88px, calc(8.25 * var(--sv-w)), 132px) !important;
+    }
+}
+html body .profile-start-main .profile-loadout > .pl-wrap { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+html body .profile-start-main .pl-row { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 10px; flex: 0 0 auto; font-size: calc(var(--ps-font, var(--font-h2)) * .95); letter-spacing: 2px; }
+html body .profile-start-main .pl-row.is-off { opacity: .45; }
+html body .profile-start-main .pl-size { text-align: center; }
+html body .profile-start-main .pl-slots { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+html body .profile-start-main .pl-slots em { font-style: normal; opacity: .6; }
+html body .profile-start-main .pk-slot { display: inline-grid; place-items: center; width: 40px; height: 40px; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent); background: #05060a; }
+html body .profile-start-main .pk-slot img { display: block; width: 28px; height: 28px; image-rendering: pixelated; }
+html body .profile-start-main .pk-slot.is-filled { border-color: var(--color-primary); }
+html body .profile-start-main .pk-slot.is-filled img { opacity: 1; }
+html body .profile-start-main .pl-parts { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent); }
+html body .profile-start-main .pk-slot.pk-lv0 { width: 44px; height: 44px; }
+html body .profile-start-main .pk-slot.pk-lv0 img { width: 32px; height: 32px; }
+html body .profile-start-main .pk-slot.pk-lv1 { width: 60px; height: 60px; }
+html body .profile-start-main .pk-slot.pk-lv1 img { width: 48px; height: 48px; }
+html body .profile-start-main .pk-slot.pk-lv2 { width: 76px; height: 76px; }
+html body .profile-start-main .pk-slot.pk-lv2 img { width: 64px; height: 64px; }
+html body .profile-start-main .pl-ico { display: grid; place-items: center; width: 40px; height: 40px; }
+html body .profile-start-main .pl-ico svg { width: 36px; height: 36px; fill: color-mix(in srgb, var(--color-primary) 30%, transparent); filter: drop-shadow(1px 1px 0 #05060a); }
+html body .profile-start-main .pl-ico svg g.on { fill: var(--color-primary); }
+html body .profile-start-main .pl-ico img { width: 32px; height: 32px; image-rendering: pixelated; }
+html body .profile-start-main .pk-slot .hs-slot-glyph { width: 55%; height: 55%; margin: 0; vertical-align: 0; }
+html body .profile-start-main .pk-slot .hs-slot-glyph::after { inset: 4px; background: #05060a; }
+html body .profile-start-main .pk-slot-val { display: flex; flex-direction: column; gap: 2px; margin: 0 8px 0 4px; line-height: 1.1; }
+html body .profile-start-main .pk-slot-val b { color: #fff; font-size: calc(var(--ps-font, var(--font-h2)) * 1.05); letter-spacing: 1px; }
+html body .profile-start-main .pk-slot-val i { font-style: normal; color: var(--color-primary); font-size: calc(var(--ps-font, var(--font-h2)) * 1.05); }
+html body .profile-start-main .pk-slot > * { pointer-events: none; }
+html body .profile-start-main .pk-slot { border-color: color-mix(in srgb, var(--pk-c, var(--color-primary)) 45%, transparent); --faction-accent: var(--pk-c, var(--color-primary)); }
+html body .profile-start-main .pk-slot.is-filled { border-color: var(--pk-c, var(--color-primary)); box-shadow: inset 0 0 8px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent); }
+/* Empty slots: neutral steel instead of the part colour; filled slots keep the colour. */
+html body .profile-start-main .pk-slot:not(.is-filled) { opacity: .7; --pk-c: #7f8fb0; border-color: #3a4560; }
+html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { background: #7f8fb0; }
+
+.profile-start-galaxy-map,
+.profile-start-galaxy-map *,
+.profile-start-planet,
+.profile-start-planet * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Hangar sidebar → SLOTS view */
+.hs-slotview { display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; min-height: 0; }
+.hs-slotview-row { min-height: var(--sv, 44px); display: grid; --lw: 96px; grid-template-columns: var(--lw) 1fr; align-items: center; gap: 10px; }
+.hs-slotview-name { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-h3, 12px); letter-spacing: 2px; opacity: .85; }
+.hs-slotview-slots { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: flex-end; }
+.hs-slotview-slots em { font-style: normal; opacity: .5; font-size: var(--font-h3, 12px); letter-spacing: 2px; }
+.hs-slotview-cell { display: inline-grid; place-items: center; width: var(--svw, 44px); height: var(--svh, 44px); box-sizing: border-box; background: #05060a; border: 0; outline: 2px dashed color-mix(in srgb, var(--pk-c) 55%, transparent); outline-offset: -2px; }
+.hs-slotview-cell.is-filled { outline-style: solid; outline-color: var(--pk-c); }
+.hs-slotview-cell img { display: block; width: 28px; height: 28px; image-rendering: pixelated; }
+
+/* Hangar slot picker: grid inventory with sort buttons on top. */
+html body .hs-slot-picker .hs-pick-dialog { width: min(760px, 92vw); max-height: 84vh; display: flex; flex-direction: column; gap: 12px; }
+html body .hs-slot-picker .hs-pick-sort { display: flex; flex-wrap: wrap; gap: 8px; }
+html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: var(--color-primary); color: #05060a; }
+html body .hs-slot-picker .hs-pick-grid { display: grid; grid-template-columns: repeat(8, 64px); grid-auto-rows: 64px; box-sizing: content-box; width: calc(8 * 64px + 7 * 4px); overflow-x: hidden; scrollbar-gutter: stable; grid-auto-flow: dense; gap: 4px; justify-content: start; align-content: start; overflow-y: auto; padding: 4px; min-height: calc(3 * 64px + 2 * 4px + 8px); max-height: max(208px, calc(100vh - 380px)); background-color: #03030a; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Crect x='.5' y='.5' width='63' height='63' fill='%2312101c' stroke='%23c88bff' stroke-opacity='.4'/%3E%3C/svg%3E"); background-size: 68px 68px; background-position: 4px 4px; background-attachment: local; }
+html body .hs-slot-picker .hs-pick-cell { position: relative; display: grid; place-items: center; padding: 0; min-width: 0; min-height: 0; background: #05060a; border: 2px solid var(--pk-c, var(--color-primary)); color: inherit; font: inherit; cursor: pointer; }
+html body .hs-slot-picker .hs-pick-cell:hover:not(:disabled), html body .hs-slot-picker .hs-pick-cell:focus-visible { border-color: var(--pk-c, var(--color-primary)); box-shadow: inset 0 0 10px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent); }
+html body .hs-slot-picker .hs-pick-cell.is-current { border-color: var(--pk-c, var(--color-primary)); background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); }
+html body .hs-slot-picker .hs-pick-cell.is-used { opacity: 1; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked { opacity: .5; cursor: not-allowed; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-pick-ico { opacity: .45; }
+html body .hs-slot-picker .hs-pick-ico { display: grid; place-items: center; width: 48px; height: 48px; font-size: 28px; }
+html body .hs-slot-picker .hs-pick-ico img { width: 40px; height: 40px; image-rendering: pixelated; }
+html body .hs-slot-picker .hs-pick-size { position: absolute; top: 2px; right: 4px; font-size: 11px; opacity: .8; }
+html body .hs-slotview-cell[data-slot-pick] { cursor: pointer; }
+html body .hs-slot-picker .hs-pick-sortbtn { background: #05060a; color: var(--color-text, #fff); border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); padding: 6px 12px; min-height: 0; }
+html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: var(--color-primary); color: #05060a; border-color: var(--color-primary); }
+
+.hs-slotview-ico { width: 18px; height: 18px; flex: 0 0 auto; image-rendering: pixelated; fill: color-mix(in srgb, var(--color-primary) 30%, transparent); }
+.hs-slotview-ico g.on { fill: var(--color-primary); }
+
+/* Slot picker: shortcut (fire key) sidebar next to the part grid */
+.hs-pick-body { display: flex; align-items: flex-start; gap: 16px; }
+.hs-pick-body > .hs-pick-grid { flex: 0 0 auto; max-width: 100%; }
+.hs-pick-keys { flex: 0 0 150px; display: flex; flex-direction: column; gap: 8px; padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); }
+.hs-pick-keys-label { letter-spacing: 2px; opacity: .85; margin-bottom: 4px; }
+.hs-pick-keyopt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 12px; cursor: pointer; text-align: left; background: #05060a !important; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent) !important; clip-path: none !important; box-shadow: none !important; }
+.hs-pick-keyopt::before, .hs-pick-keyopt::after { display: none !important; }
+.hs-pick-keyopt.is-off { opacity: .35; cursor: not-allowed; }
+.hs-pick-keyopt.is-on { border-color: #fff !important; }
+.hs-pick-keybox { flex: 0 0 22px; width: 22px; height: 22px; box-sizing: border-box; border: 2px solid #fff; background: transparent; }
+.hs-pick-keyopt.is-on .hs-pick-keybox { background: var(--faction-accent, var(--color-primary)); box-shadow: inset 0 0 0 3px #05060a; }
+.hs-pick-keyname { color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 4px; }
+
+.hs-slotview-cell { position: relative; }
+.hs-slotview-size { position: absolute; top: 1px; right: 3px; font-size: 10px; line-height: 1; opacity: .85; pointer-events: none; }
+
+/* Installed part inside its slot box: keep its footprint vertically centered. */
+.hs-slotview-cell.is-filled { align-items: center; justify-items: center; }
+.hs-slotview-part { display: grid; place-items: center; box-sizing: border-box; border: 2px solid var(--pk-c); background: color-mix(in srgb, var(--pk-c) 14%, #05060a); }
+
+/* Hangar SHIPS list: ship miniature per entry */
+.hs-hangar-ship-pick { display: flex; align-items: center; gap: 12px; }
+.hs-hangar-ship-pick .hs-area-thumb { width: 108px; height: 72px; margin: 0; }

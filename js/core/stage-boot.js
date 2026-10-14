@@ -151,12 +151,12 @@
     r.setProperty('--stage-scale', String(Number(scale.toFixed(5))));
 })();
 
-// Faction-switch debug log: window.vfLog(tag, msg, data). On by default; silence with `window.vfDebugFactionGui = false` (or localStorage vf-debug = 0).
+// Faction-switch debug log: opt-in with localStorage vf-debug = 1.
 // vfLog.watch(label, ms) also reports every frame gap > 32 ms and every long task while a switch plays.
 (function () {
     var T0 = performance.now();
     var off = false;
-    try { off = localStorage.getItem('vf-debug') === '0'; } catch (e) { /* ignore */ }
+    try { off = localStorage.getItem('vf-debug') !== '1'; } catch (e) { /* ignore */ }
     function on() { return !off && window.vfDebugFactionGui !== false && window.console && console.log; }
     function vfLog(tag, msg, data) {
         if (!on()) return;

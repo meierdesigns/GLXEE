@@ -17646,7 +17646,10 @@ var SystemManager = class SystemManager {
         }
 
         // Render Manager
-        if (typeof CoreRenderManager !== 'undefined') {
+        if (typeof renderManager !== 'undefined' && renderManager
+            && typeof renderManager.renderFrame === 'function') {
+            this.subsystems.renderManager = renderManager;
+        } else if (typeof CoreRenderManager !== 'undefined') {
             this.subsystems.renderManager = new CoreRenderManager(this.gameState);
             this.subsystems.renderManager.init();
             window.renderManager = this.subsystems.renderManager;
@@ -21091,9 +21094,11 @@ var CoreRenderManager = class CoreRenderManager {
             parallaxManager.render(this.ctx);
         }
         
-        // Render game objects
-        if (typeof graphicsManager !== 'undefined') {
-            graphicsManager.render(this.ctx);
+        // Render game objects through the combat renderer. GraphicsManager
+        // provides ship/effect primitives; it is not the frame renderer.
+        if (typeof renderManager !== 'undefined' && renderManager !== this
+            && typeof renderManager.render === 'function') {
+            renderManager.render(this.ctx, this.width, this.height);
         }
     }
 

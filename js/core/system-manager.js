@@ -51,7 +51,10 @@ class SystemManager {
         }
 
         // Render Manager
-        if (typeof CoreRenderManager !== 'undefined') {
+        if (typeof renderManager !== 'undefined' && renderManager
+            && typeof renderManager.renderFrame === 'function') {
+            this.subsystems.renderManager = renderManager;
+        } else if (typeof CoreRenderManager !== 'undefined') {
             this.subsystems.renderManager = new CoreRenderManager(this.gameState);
             this.subsystems.renderManager.init();
             window.renderManager = this.subsystems.renderManager;

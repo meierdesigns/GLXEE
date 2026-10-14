@@ -73,9 +73,11 @@ class CoreRenderManager {
             parallaxManager.render(this.ctx);
         }
         
-        // Render game objects
-        if (typeof graphicsManager !== 'undefined') {
-            graphicsManager.render(this.ctx);
+        // Render game objects through the combat renderer. GraphicsManager
+        // provides ship/effect primitives; it is not the frame renderer.
+        if (typeof renderManager !== 'undefined' && renderManager !== this
+            && typeof renderManager.render === 'function') {
+            renderManager.render(this.ctx, this.width, this.height);
         }
     }
 

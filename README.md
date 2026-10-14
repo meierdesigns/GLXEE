@@ -138,6 +138,11 @@ npm run icons:preview   # render icon previews
 
 Run the server from the repository root.
 
+`GLXEE-itch-upload.zip` is the trimmed itch.io runtime package: it contains
+only `index.html`, CSS, JavaScript, and game assets (797 archive entries).
+README screenshots, documentation graphics, development tools, and package
+sources stay in the repository but are excluded from the upload.
+
 <img src="assets/ui/readme-h-controls.svg" alt="CH.02 CONTROLS" width="960" />
 
 ## Controls

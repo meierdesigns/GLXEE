@@ -627,7 +627,10 @@ html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { backgrou
 /* Hangar sidebar → SLOTS view */
 .hs-slotview { display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; min-height: 0; }
 .hs-slotview-row { min-height: var(--sv, 44px); display: grid; --lw: 96px; grid-template-columns: var(--lw) 1fr; align-items: center; gap: 10px; }
-.hs-slotview-name { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-h3, 12px); letter-spacing: 2px; opacity: .85; }
+.hs-slotview-name { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-h3, 12px); letter-spacing: 2px; opacity: .85; }
+.hs-slotview-name .hs-slotview-ico { width: 24px; height: 24px; }
+.hs-slotview-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; color: var(--color-primary); font-size: 9px; letter-spacing: 1px; cursor: pointer; }
+.hs-slotview-toggle input { accent-color: var(--color-primary); width: 13px; height: 13px; margin: 0; }
 .hs-slotview-slots { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: flex-end; }
 .hs-slotview-slots em { font-style: normal; opacity: .5; font-size: var(--font-h3, 12px); letter-spacing: 2px; }
 .hs-slotview-cell { display: inline-grid; place-items: center; width: var(--svw, 44px); height: var(--svh, 44px); box-sizing: border-box; background: #05060a; border: 0; outline: 2px dashed color-mix(in srgb, var(--pk-c) 55%, transparent); outline-offset: -2px; }

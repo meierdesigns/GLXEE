@@ -17,11 +17,23 @@
  * force layout during initial parse (FOUC warning).
  */
 (function () {
-    function effectiveZoom(el) {
+    // CSS `zoom` only: what legacy engines leave un-zoomed in getBoundingClientRect.
+    function cssZoom(el) {
         let z = 1;
         for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
             const v = parseFloat(getComputedStyle(n).zoom);
             if (Number.isFinite(v) && v > 0) z *= v;
+        }
+        return z;
+    }
+    // Visual px per CSS px inside `el`: CSS zoom plus the station's transform scale (.home-station-content, --hs-z).
+    function effectiveZoom(el) {
+        let z = cssZoom(el);
+        for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+            if (n.classList && n.classList.contains('home-station-content')) {
+                const v = parseFloat(getComputedStyle(n).getPropertyValue('--hs-z'));
+                if (Number.isFinite(v) && v > 0) z *= v;
+            }
         }
         return z;
     }
@@ -43,7 +55,7 @@
     function applyLegacyPatch() {
         Element.prototype.getBoundingClientRect = function () {
             const r = nativeRect.call(this);
-            const z = effectiveZoom(this);
+            const z = cssZoom(this);
             if (Math.abs(z - 1) < 0.001) return r;
             return new DOMRect(r.x * z, r.y * z, r.width * z, r.height * z);
         };
@@ -53,7 +65,7 @@
             SVGGraphicsElement.prototype.getScreenCTM = function () {
                 const m = nativeCtm.call(this);
                 if (!m) return m;
-                const z = effectiveZoom(this);
+                const z = cssZoom(this);
                 if (Math.abs(z - 1) < 0.001) return m;
                 return new DOMMatrix([m.a * z, m.b * z, m.c * z, m.d * z, m.e * z, m.f * z]);
             };

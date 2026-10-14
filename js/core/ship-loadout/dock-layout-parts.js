@@ -216,8 +216,17 @@ extendClass(ShipLoadoutManager, {
         const deg = Math.max(-180, Math.min(180, Number(degrees) || 0));
         if (!seg || Math.abs(deg) < 0.001) return { x: x, y: y };
         const isLeft = seg.id === 'wingLeft';
-        const px = isLeft ? seg.x + seg.width : seg.x;
-        const py = seg.y + seg.height / 2;
+        let px = isLeft ? seg.x + seg.width : seg.x;
+        let py = seg.y + seg.height / 2;
+        // The art turns about the root of its lit pixels (see renderProceduralWing), not the frame edge.
+        try {
+            const ldr = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            const mdl = typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastModel : null;
+            if (ldr && ldr.wingAttachPoint && mdl && mdl.layout) {
+                const ap = ldr.wingAttachPoint(seg, mdl, (ldr._voxelRef && ldr._voxelRef.scale) || homeStationUI._hangarLastScale || 1);
+                if (ap && isFinite(ap.x) && isFinite(ap.y)) { px = ap.x; py = ap.y; }
+            }
+        } catch (e) { /* keep the frame pivot */ }
         const a = deg * Math.PI / 180 * (isLeft ? -1 : 1);
         const dx = x - px;
         const dy = y - py;

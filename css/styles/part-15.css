@@ -1131,20 +1131,22 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
 }
 .home-station-overlay .home-station-content {
     /* Uniform GUI scale; geometry matches the bezel screen opening exactly.
-       top/left ÷ zoom (CSS zoom quirk); size ÷ zoom so used layout = glass. */
-    zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+       size ÷ scale so the scaled layout = glass. */
+    /* transform: scale (not CSS zoom): DevTools and getBoundingClientRect then agree with what is drawn. */
+    zoom: 1;
     --hs-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
     width: calc(var(--fr-open-w) / var(--hs-z)) !important;
     max-width: none !important;
     height: calc(var(--fr-open-h) / var(--hs-z)) !important;
     max-height: none !important;
     position: fixed !important;
-    top: calc(var(--fr-open-top) / var(--hs-z)) !important;
-    left: calc(var(--fr-open-side) / var(--hs-z)) !important;
+    top: var(--fr-open-top) !important;
+    left: var(--fr-open-side) !important;
     right: auto !important;
     bottom: auto !important;
     margin: 0 !important;
-    transform: none !important;
+    transform: scale(var(--hs-z)) !important;
+    transform-origin: 0 0 !important;
     box-shadow:
         inset 0 0 0 2px var(--retro-ink),
         inset 0 0 60px rgba(0, 0, 0, 0.45) !important;

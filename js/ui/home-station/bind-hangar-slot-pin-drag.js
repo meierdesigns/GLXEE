@@ -156,7 +156,8 @@ extendClass(HomeStationUI, {
                         drag.kind,
                         drag.index,
                         snappedNx,
-                        ny
+                        ny,
+                        lastModel && lastModel.layout
                     );
                     // Say why the slot does not follow into a full area.
                     const reason = res && res.ok === false ? res.reason : null;

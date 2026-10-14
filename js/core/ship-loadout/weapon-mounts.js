@@ -13,8 +13,8 @@
     const proto = ShipLoadoutManager.prototype;
     // Offset from the centreline (share of the area's width) below which a
     // socket snaps onto the centreline and becomes a single mount.
-    // Generous on purpose: a fifth of the area's width either side.
-    const SNAP_OFF = 0.2;
+    // Small: only the centreline itself snaps; every other pixel of the area takes a mirrored pair.
+    const SNAP_OFF = 0.06;
 
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // Default wing spot: about a third out from the hull root.
@@ -31,7 +31,7 @@
             out[String(Math.max(0, Math.round(Number(k) || 0)))] = {
                 area: area,
                 split: area === 'wing' ? true : !!m.split,
-                off: clamp(Number(m.off) || 0, 0, 0.45),
+                off: clamp(Number(m.off) || 0, 0, 0.5),
                 ny: clamp(m.ny == null ? 0.5 : Number(m.ny) || 0, 0, 1),
                 // Wing mounts: spot along the left wing from its tip (0) to
                 // the hull root (1); the right wing mirrors it.
@@ -106,7 +106,8 @@
         if (!layout) return null;
         const lw = Math.max(1, layout.width || 1);
         const lh = Math.max(1, layout.height || 1);
-        const c = this.clampToSlotArea('weapon', nx, ny, layout);
+        // Already snapped onto lit pixels by the drag; this layout is rebuilt, so only keep it inside the area.
+        const c = this.clampToSlotArea('weapon', nx, ny, layout, true);
         if (!c || !c.area) return null;
         if (c.area === 'wingLeft' || c.area === 'wingRight') {
             // Into the left wing's own (unrotated) frame; the right wing is
@@ -126,12 +127,16 @@
         if (c.area !== 'front' && c.area !== 'center') return null;
         const seg = (layout.segments || []).find((s) => s.id === c.area);
         if (!seg) return null;
-        const off = Math.abs(c.nx * lw - (seg.x + seg.width / 2)) / Math.max(1, seg.width);
+        // Measured from the hull axis, the same one weaponBodySpot places the gun on.
+        let lo = Infinity, hi = -Infinity;
+        (layout.segments || []).forEach((sg) => { lo = Math.min(lo, sg.x); hi = Math.max(hi, sg.x + sg.width); });
+        const mid = isFinite(lo) && hi > lo ? (lo + hi) / 2 : seg.x + seg.width / 2;
+        const off = Math.abs(c.nx * lw - mid) / Math.max(1, seg.width);
         const split = off > SNAP_OFF;
         return {
             area: c.area,
             split: split,
-            off: split ? clamp(off, 0.25, 0.45) : 0,
+            off: split ? clamp(off, SNAP_OFF, 0.5) : 0,
             ny: clamp((c.ny * lh - seg.y) / Math.max(1, seg.height), 0, 1)
         };
     };
@@ -209,7 +214,7 @@
 
     // Dropping an empty weapon socket also sets that slot's mount.
     const baseAnchor = proto.setEmptySlotAnchor;
-    proto.setEmptySlotAnchor = function (shipId, kind, index, nx, ny) {
+    proto.setEmptySlotAnchor = function (shipId, kind, index, nx, ny, screenLayout) {
         const before = this.getLoadout(shipId).slotAnchors;
         const prev = before && before[kind] && before[kind][String(Math.max(0, Math.round(Number(index) || 0)))];
         const res = baseAnchor.call(this, shipId, kind, index, nx, ny);
@@ -223,7 +228,8 @@
         const cls = this.resolveModelClass(shipId);
         const core = this.getCoreSize(cls, null);
         const caps = this.getSlotCaps(shipId, cls);
-        const layout = this.buildLayout(core.width, core.height, Object.assign({}, L,
+        // The anchor is normalized to the layout on screen, so read it back against that same layout.
+        const layout = screenLayout || this.buildLayout(core.width, core.height, Object.assign({}, L,
             { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const mount = this.weaponMountAt(layout, nx, ny);
         if (!mount) return res;

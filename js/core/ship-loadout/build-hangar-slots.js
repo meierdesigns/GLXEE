@@ -31,7 +31,7 @@ extendClass(ShipLoadoutManager, {
      * type (returns it unchanged when already inside one, or when the layout
      * has none of those areas). Returns { nx, ny, area }.
      */
-    clampToSlotArea(kind, nx, ny, layout) {
+    clampToSlotArea(kind, nx, ny, layout, rectOnly) {
         const lw = Math.max(1, layout.width || 1);
         const lh = Math.max(1, layout.height || 1);
         const allowed = this.getSlotAreas(kind);
@@ -45,25 +45,28 @@ extendClass(ShipLoadoutManager, {
         const model = typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastModel : null;
         const rot = (layout.loadout && layout.loadout.wingRotation) || 0;
         segs.forEach((s) => {
-            if ((s.id === 'wingLeft' || s.id === 'wingRight') && loader && loader.wingLitCells && model && model.layout) {
-                const lit = loader.wingLitCells(s, model, typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastScale || 1 : 1);
+            const isWing = s.id === 'wingLeft' || s.id === 'wingRight';
+            if (!rectOnly && loader && model && model.layout && (isWing ? loader.wingLitCells : loader.bodyLitCells)) {
+                // The art is voxelised at the fit scale (draw-hangar-bay), so the lit pixels must be read at that scale too.
+                const sc = (loader._voxelRef && loader._voxelRef.scale) || (typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastScale || 1 : 1);
+                const lit = isWing ? loader.wingLitCells(s, model, sc) : loader.bodyLitCells(s, model, sc);
                 if (lit && lit.pts.length) {
-                    const q = this.rotateOnWing(s, -rot, nx * lw, ny * lh);
+                    const q = isWing ? this.rotateOnWing(s, -rot, nx * lw, ny * lh) : { x: nx * lw, y: ny * lh };
                     let bp = null, bd = Infinity;
                     lit.pts.forEach((p) => { const d = Math.hypot(p[0] - q.x, p[1] - q.y); if (d < bd) { bd = d; bp = p; } });
                     // Inside a lit cell: keep the exact point.
                     const at = bd <= lit.cell * 0.75 ? q : { x: bp[0], y: bp[1] };
-                    const g = this.rotateOnWing(s, rot, at.x, at.y);
+                    const g = isWing ? this.rotateOnWing(s, rot, at.x, at.y) : at;
                     const d = Math.hypot(g.x / lw - nx, g.y / lh - ny);
                     if (d < bestD) { bestD = d; best = { nx: g.x / lw, ny: g.y / lh, area: s.id }; }
                     return;
                 }
             }
-            // Keep a little inside the edge so the marker sits on the part.
-            const x0 = (s.x + Math.min(1, s.width * 0.2)) / lw;
-            const x1 = (s.x + s.width - Math.min(1, s.width * 0.2)) / lw;
-            const y0 = (s.y + Math.min(1, s.height * 0.2)) / lh;
-            const y1 = (s.y + s.height - Math.min(1, s.height * 0.2)) / lh;
+            // The whole area is placeable, edge pixels included.
+            const x0 = s.x / lw;
+            const x1 = (s.x + s.width) / lw;
+            const y0 = s.y / lh;
+            const y1 = (s.y + s.height) / lh;
             const cx = Math.max(x0, Math.min(x1, nx));
             const cy = Math.max(y0, Math.min(y1, ny));
             const d = Math.hypot(cx - nx, cy - ny);

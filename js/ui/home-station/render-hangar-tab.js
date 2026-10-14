@@ -183,7 +183,7 @@ extendClass(HomeStationUI, {
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
                         <div class="hs-hangar-bay hs-panel">
-                            <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
+                            <div class="hs-hangar-bay-stage${this._bayInv ? ' is-inventory' : ''}" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-bay-zoom" role="group" aria-label="Zoom">
                                     <input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">
@@ -196,6 +196,8 @@ extendClass(HomeStationUI, {
                                         <path d="M4 0h1v1h1v1H3V1h1zM4 2h1v5H4zM0 4h7v1H0zM1 3h1v3H1zM7 3h1v3H7zM8 4h1v1H8zM3 7h3v1H5v1H4V8H3zM2 4h5v1H2z"/>
                                     </svg>
                                 </button>
+                                <button type="button" class="hs-bay-invtoggle" data-bay-inv aria-pressed="${!!this._bayInv}" title="Switch between the ship and the part inventory">${this._bayInv ? 'HIDE INVENTORY' : 'INVENTORY'}</button>
+                                ${this._bayInv && typeof physicalItem !== 'undefined' ? physicalItem.bayInventoryHtml(this) : ''}
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
                                     <svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>
                                     ${slotHtml}

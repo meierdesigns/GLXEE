@@ -165,7 +165,7 @@ extendClass(HomeStationUI, {
     startHangarPartDrag(cell, downEvent, pull) {
         const stage = this.overlay && this.overlay.querySelector('#hsHangarBayStage');
         const kind = pull ? pull.kind : cell.getAttribute('data-part-kind');
-        const iconEl = pull ? pull.iconEl : cell.querySelector('.hs-hangar-part-icon img');
+        const iconEl = pull ? pull.iconEl : cell.querySelector('.hs-hangar-part-icon img, .hs-pick-ico img');
         const SNAP_PX = 64;
         const startX = downEvent.clientX;
         const startY = downEvent.clientY;

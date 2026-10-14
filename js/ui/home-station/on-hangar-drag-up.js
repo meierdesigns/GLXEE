@@ -345,9 +345,6 @@ extendClass(HomeStationUI, {
             ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED')
             : 'SLOT CLEARED';
         if (sourceEl) this.playButtonResult(sourceEl, true, label);
-        else {
-            if (this.showStatusToast) this.showStatusToast(label);
-            this.createUI();
-        }
+        else this.createUI(); // no success toast: the slot / inventory animation already shows it
     },
 });

@@ -86,7 +86,10 @@ extendClass(HomeStationUI, {
         // The fit scale is sticky per ship and bay size: editing a part
         // grows or shrinks the bounding box, and re-fitting on every change
         // popped the whole ship to a new size.
-        const fitKey = shipId + '|' + w + '|' + h;
+        // Inventory open on the left: the ship is fitted and centred in the part of the bay that stays visible.
+        const invPx = this._bayInv ? Math.min(428, Math.floor(w * 0.6)) : 0;
+        const wv = w - invPx, cxView = invPx + wv / 2;
+        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx;
         // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
         // hangar UI (clicking an area, releasing a drag) lays the canvas out at slightly different sizes first, and
         // re-fitting on each of those threw the user's zoom and pan away.
@@ -103,11 +106,11 @@ extendClass(HomeStationUI, {
             if (vis) {
                 const padTop = Math.max(110, Math.floor(h * 0.22));
                 const padBottom = Math.max(40, Math.floor(h * 0.15));
-                const padSide = Math.max(80, Math.floor(w * 0.24));
+                const padSide = Math.max(40, Math.floor(wv * 0.24));
                 const bw = vis.w / fitScale;
                 const bh = vis.h / fitScale;
                 const s = Math.max(2, Math.min(
-                    Math.floor((w - padSide * 2) / bw),
+                    Math.floor((wv - padSide * 2) / bw),
                     Math.floor((h - padTop - padBottom) / bh),
                     10
                 ));
@@ -118,7 +121,7 @@ extendClass(HomeStationUI, {
                 const cy = (vis.y + vis.h / 2) / fitScale * s;
                 this._hangarBayZoom = 1;
                 this._hangarZoomTarget = 1;
-                this._hangarBayPanX = Math.round(w / 2 - (ox0 + cx));
+                this._hangarBayPanX = Math.round(cxView - (ox0 + cx));
                 this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (oy0 + cy));
             }
         }
@@ -134,7 +137,7 @@ extendClass(HomeStationUI, {
                 const s = baseScale * z;
                 const cx = (vis.x + vis.w / 2) / baseScale * s;
                 const cy = (vis.y + vis.h / 2) / baseScale * s;
-                this._hangarBayPanX = Math.round(w / 2 - (Math.floor((w - mw * s) / 2) + cx));
+                this._hangarBayPanX = Math.round(cxView - (Math.floor((w - mw * s) / 2) + cx));
                 this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (Math.floor((h - mh * s) / 2) + cy));
                 this._hangarLastOx = null;
             }

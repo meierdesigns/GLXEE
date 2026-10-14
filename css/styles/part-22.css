@@ -681,9 +681,162 @@ html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: var(--color-p
 .hs-slotview-size { position: absolute; top: 1px; right: 3px; font-size: 10px; line-height: 1; opacity: .85; pointer-events: none; }
 
 /* Installed part inside its slot box: keep its footprint vertically centered. */
-.hs-slotview-cell.is-filled { align-items: center; justify-items: center; }
+.hs-slotview-cell.is-filled { align-items: center; justify-items: center; align-content: center; }
 .hs-slotview-part { display: grid; place-items: center; box-sizing: border-box; border: 2px solid var(--pk-c); background: color-mix(in srgb, var(--pk-c) 14%, #05060a); }
 
 /* Hangar SHIPS list: ship miniature per entry */
 .hs-hangar-ship-pick { display: flex; align-items: center; gap: 12px; }
 .hs-hangar-ship-pick .hs-area-thumb { width: 108px; height: 72px; margin: 0; }
+
+/* Menu / station backgrounds darker (brightness on the background layer itself) so buttons stand out from them */
+/* No CSS filter here: the layer moves every frame (mouse parallax) and a fullscreen filter is re-run each time. A black overlay is cheap. */
+html body .vf-bg-parallax-base::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: #000; opacity: calc(1 - var(--vf-bg-brightness, 0.45));
+}
+
+/* Start screen: menu buttons clearly lifted off the (now darker) background */
+html body .start-screen-retro .start-menu-row .menu-item {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 30%, #0a1020), #04070f) !important;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 85%, #fff) !important;
+  box-shadow: 0 0 0 2px #03050b, 0 5px 0 #02040a, 0 0 18px color-mix(in srgb, var(--color-primary) 30%, transparent), inset 0 0 14px color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
+  opacity: 1;
+}
+html body .start-screen-retro .start-menu-row .menu-item .menu-item-label { color: #fff !important; text-shadow: 0 2px 0 #000 !important; }
+html body .start-screen-retro .start-menu-row .menu-item .menu-pixel-icon { filter: drop-shadow(0 2px 0 #000) brightness(1.15); }
+html body .start-screen-retro .start-menu-row .menu-item.selected {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 62%, #0a1020), color-mix(in srgb, var(--color-primary) 30%, #04070f)) !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px #03050b, 0 5px 0 #02040a, 0 0 30px color-mix(in srgb, var(--color-primary) 70%, transparent), inset 0 0 18px color-mix(in srgb, var(--color-primary) 45%, transparent) !important;
+}
+html body .start-screen-retro .start-menu-row .menu-item:is(.disabled, [aria-disabled="true"]) { opacity: .55; }
+
+/* ── Start screen main menu: full-screen layout with the pilot's station as backdrop ── */
+.start-station-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: #02040a; }
+.start-station-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated;
+  opacity: 1; transition: opacity .12s steps(3);
+}
+.start-station-canvas.is-swapping { opacity: 0; }
+.start-station-caption {
+  position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+  font-family: 'Silkscreen', var(--ui-font-family); font-size: var(--font-text); letter-spacing: .2em;
+  color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px color-mix(in srgb, var(--color-primary) 60%, transparent);
+  background: rgba(3, 5, 11, .65); padding: 4px 12px; border: 2px solid color-mix(in srgb, var(--color-primary) 60%, #000); white-space: nowrap;
+}
+
+/* The menu content fills the screen (no terminal bezel, transparent) so the station shows through the middle */
+html body .start-screen-content.start-screen-retro.start-screen-main {
+  position: relative; z-index: 1;
+  width: 100% !important; max-width: none !important; height: 100% !important; max-height: none !important;
+  padding: clamp(14px, 3vh, 36px) clamp(24px, 5vw, 80px) clamp(14px, 3vh, 30px);
+  background: transparent !important; box-shadow: none !important; overflow: visible !important;
+}
+html body .start-screen-content.start-screen-retro.start-screen-main::before,
+html body .start-screen-content.start-screen-retro.start-screen-main::after { display: none; }
+html body .start-screen-main .start-menu-row {
+  flex: 1 1 auto; align-self: stretch; width: 100% !important; max-width: none !important; justify-content: space-between !important; align-items: center; min-height: 0;
+}
+html body .start-screen-main .start-menu-row > .start-screen-menu-clustered { align-self: center; min-width: clamp(260px, 24vw, 360px); }
+html body .start-screen-main .start-scoreboard {
+  flex: 0 0 clamp(320px, 28vw, 440px); width: clamp(320px, 28vw, 440px); align-self: center; margin-top: 0;
+  background: rgba(3, 5, 11, .82);
+}
+@media (max-width: 800px) {
+  html body .start-screen-main .start-menu-row { flex-direction: column; justify-content: flex-start; gap: 16px; }
+  html body .start-screen-main .start-scoreboard { flex-basis: auto; width: 100%; }
+}
+
+/* Physical item casing behind the part icon (generated by physical-item.js). */
+.hs-item-body { position: absolute; inset: 2px; background-size: 100% 100%; background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none; }
+.hs-slotview-part { position: relative; display: grid; place-items: center; }
+html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part img { position: relative; z-index: 1; }
+html body .hs-slot-picker .hs-pick-ico img, .hs-slotview-part img { filter: drop-shadow(0 0 3px var(--pk-c, #fff)) drop-shadow(0 1px 0 #05060a); }
+html body .hs-slot-picker .hs-pick-size { z-index: 2; text-shadow: 0 1px 0 #05060a; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-item-body { filter: grayscale(.8) brightness(.7); }
+.hs-slotview-part:has(.hs-item-body) { border-color: transparent; background: none; }
+/* The object IS the item; the old glyph is only a small engraved emblem on it. */
+html body .hs-slot-picker .hs-pick-ico { position: absolute; left: 4px; bottom: 4px; width: 20px; height: 20px; z-index: 1; opacity: .9; }
+html body .hs-slot-picker .hs-pick-ico img { width: 20px; height: 20px; }
+html body .hs-slot-picker .hs-pick-cell { background: radial-gradient(circle at 50% 40%, #1b1830, #05060a 80%); }
+.hs-slotview-part:has(.hs-item-body) img { width: 18px; height: 18px; position: absolute; left: 3px; bottom: 3px; }
+/* Emblem sits top-left and only shows on hover; items are never dimmed. */
+html body .hs-slot-picker .hs-pick-ico { left: 4px; top: 4px; bottom: auto; opacity: 0; transition: opacity .12s; filter: drop-shadow(0 1px 0 #05060a); }
+html body .hs-slot-picker .hs-pick-cell:hover .hs-pick-ico, html body .hs-slot-picker .hs-pick-cell:focus-visible .hs-pick-ico { opacity: 1; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked { opacity: 1; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-pick-ico { opacity: 0; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked:hover .hs-pick-ico { opacity: 1; }
+html body .hs-slot-picker .hs-pick-cell:disabled { color: inherit; }
+html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-item-body { filter: none; }
+.hs-slotview-part:has(.hs-item-body) img { left: 3px; top: 3px; bottom: auto; opacity: 0; transition: opacity .12s; }
+.hs-slotview-cell:hover .hs-slotview-part img { opacity: 1; }
+/* Emblem: same size on every item, 8x8 px. */
+html body .hs-slot-picker .hs-pick-ico, html body .hs-slot-picker .hs-pick-ico img { width: 8px; height: 8px; font-size: 8px; }
+html body .hs-slot-picker .hs-pick-ico { left: 5px; top: 5px; }
+.hs-slotview-part:has(.hs-item-body) img { width: 8px; height: 8px; left: 5px; top: 5px; }
+/* Part icon lives only in the tooltip. */
+html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img { display: none !important; }
+/* Hangar bay: inventory panel next to the ship (ship and slots stay usable for drag & drop). */
+.hs-bay-invtoggle { position: absolute; top: 10px; left: 10px; z-index: 6; appearance: none; background: #05060a; color: var(--color-text, #fff); border: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent); padding: 6px 12px; font: inherit; letter-spacing: 2px; cursor: pointer; }
+.hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
+.hs-bay-inv { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; width: 444px; box-sizing: border-box; padding: 8px; overflow-y: auto; background: #0a0912; border-left: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); --cs: 88px; }
+.hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
+.hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
+.hs-bay-inv-zoom input { flex: 1; }
+html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { grid-template-columns: repeat(auto-fill, var(--cs)); grid-auto-rows: var(--cs); width: auto; max-height: none; min-height: 0; overflow: visible; background: #03030a; }
+.hs-bay-inv[data-filter="weapon"] .hs-pick-cell:not([data-part-kind="weapon"]), .hs-bay-inv[data-filter="defense"] .hs-pick-cell:not([data-part-kind="defense"]), .hs-bay-inv[data-filter="ability"] .hs-pick-cell:not([data-part-kind="ability"]), .hs-bay-inv[data-filter="energy"] .hs-pick-cell:not([data-part-kind="energy"]) { opacity: .22; filter: grayscale(.7); }
+html body .hs-bay-inv .hs-pick-cell { cursor: grab; }
+html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: 0 0 0 2px #05060a, 0 0 0 4px var(--pk-c); }
+/* Bay zoom sits at the left, under the INVENTORY button. */
+html body .hs-hangar-bay-stage .hs-bay-zoom { top: 52px; right: auto; left: 10px; }
+html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: 10px; right: auto; }
+/* Inventory filter: small icon buttons, thin border; inactive dimmed, active a touch brighter with a soft glow. */
+/* Inventory filter: icon buttons; active = filled with the kind colour, dark icon. */
+html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; background: #05060a; border: 1px solid color-mix(in srgb, var(--fc) 45%, #05060a); opacity: .5; filter: brightness(.7) saturate(.8); transition: opacity .12s, filter .12s; }
+.hs-bay-inv-filter img { width: 18px; height: 18px; display: block; image-rendering: pixelated; }
+.hs-bay-inv-filter .is-on { display: none; }
+.hs-bay-inv-filter.is-active .is-off { display: block; }
+.hs-bay-inv-filter.is-active .is-on { display: none; }
+.hs-bay-inv-filter:hover:not(.is-active) { opacity: .8; filter: none; }
+html body .hs-bay-inv .hs-bay-inv-filter.is-active { opacity: 1; filter: brightness(1.15); border-color: color-mix(in srgb, var(--fc) 80%, #05060a); box-shadow: 0 0 6px color-mix(in srgb, var(--fc) 45%, transparent); }
+/* Inventory panel: visible empty-cell grid that fills the whole panel (tile = cell + 4px gap). */
+.hs-bay-inv { display: flex; flex-direction: column; }
+html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { flex: 1 1 auto; align-content: start; background-color: #151223; background-image: linear-gradient(90deg, transparent calc(100% - 4px), #03030a 0), linear-gradient(180deg, transparent calc(100% - 4px), #03030a 0); background-size: calc(var(--cs) + 4px) calc(var(--cs) + 4px); background-position: 0 0; }
+
+/* Fixed inventory scale: 8 columns of 48px, items sit exactly on the grid tiles. */
+html body .hs-bay-inv { --cs: 48px; width: calc(8 * 48px + 7 * 4px + 16px); }
+html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { grid-template-columns: repeat(8, 48px); grid-auto-rows: 48px; padding: 0; width: calc(8 * 48px + 7 * 4px); scrollbar-gutter: auto; }
+html body .hs-bay-inv .hs-pick-size { font-size: 9px; top: 1px; right: 3px; }
+html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a; }
+
+/* Equip / unequip animation on the inventory item. */
+@keyframes hs-item-equip { 0% { transform: scale(1.35); filter: brightness(2.6) saturate(1.4); } 45% { transform: scale(.92); filter: brightness(1.6); } 70% { transform: scale(1.06); filter: brightness(1.2); } 100% { transform: scale(1); filter: none; } }
+@keyframes hs-item-equip-ring { 0% { box-shadow: 0 0 0 0 var(--pk-c), inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a; } 100% { box-shadow: 0 0 0 16px transparent, inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a; } }
+@keyframes hs-item-unequip { 0% { transform: scale(1); filter: brightness(1.8); } 40% { transform: scale(.82); filter: grayscale(.8) brightness(.6); } 100% { transform: scale(1); filter: none; } }
+@keyframes hs-item-sweep { from { transform: translateY(-110%); } to { transform: translateY(110%); } }
+html body .hs-bay-inv .hs-pick-cell.is-anim-equip { animation: hs-item-equip .5s cubic-bezier(.2, .9, .3, 1), hs-item-equip-ring .6s ease-out; z-index: 3; }
+html body .hs-bay-inv .hs-pick-cell.is-anim-unequip { animation: hs-item-unequip .4s ease-out; }
+html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 40%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 70%, #fff), transparent); opacity: .7; pointer-events: none; animation: hs-item-sweep .5s ease-out; }
+@media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-anim-equip, html body .hs-bay-inv .hs-pick-cell.is-anim-unequip, html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { animation: none; } }
+/* Inventory on the left: covers the bay's left-hand GUI (zoom etc.); only the INVENTORY toggle stays on top to close it. */
+html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 50px; z-index: 8; border-left: 0; border-right: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); }
+html body .hs-hangar-bay-stage .hs-bay-invtoggle { z-index: 9; }
+/* Installed items animate while hovered: pulsing frame, gentle bob, slow light sweep. */
+@keyframes hs-item-hover-ring { 0%, 100% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 10px 2px var(--pk-c); } }
+@keyframes hs-item-hover-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes hs-item-hover-sweep { from { transform: translateY(-120%); } to { transform: translateY(260%); } }
+html body .hs-bay-inv .hs-pick-cell.is-equipped:hover:not(.is-anim-equip):not(.is-anim-unequip) { animation: hs-item-hover-ring 1s ease-in-out infinite, hs-item-hover-bob 1s ease-in-out infinite; z-index: 2; overflow: hidden; }
+html body .hs-bay-inv .hs-pick-cell.is-equipped:hover:not(.is-anim-equip):not(.is-anim-unequip)::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 60%, #fff), transparent); opacity: .45; pointer-events: none; animation: hs-item-hover-sweep 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-equipped:hover, html body .hs-bay-inv .hs-pick-cell.is-equipped:hover::after { animation: none; } }
+
+/* Compact tooltip (inventory items): roomier, larger type, description first, key/value facts below. */
+html body .ui-tooltip.ui-tooltip-rich.ui-tooltip-compact { min-width: 280px; max-width: 380px; gap: 8px; padding: 16px 20px; font-size: calc(var(--font-text) + 2px); line-height: 1.4; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head { display: flex; align-items: center; font-size: calc(var(--font-text) + 5px); padding-bottom: 8px; margin-bottom: 4px; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note { font-size: .95em; opacity: .85; margin-top: 0; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-row { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent); }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note:last-child { opacity: .55; font-size: .8em; letter-spacing: 1px; padding-top: 4px; }
+
+/* Bay zoom: bottom right. */
+html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: auto; right: 10px; }

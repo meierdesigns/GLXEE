@@ -162,11 +162,20 @@ class UiTooltipManager {
         // as a small table; plain tips stay a single text block.
         const head = anchor && anchor.getAttribute && anchor.getAttribute('data-ui-tip-head');
         tip.classList.toggle('ui-tooltip-rich', !!head);
+        tip.classList.toggle('ui-tooltip-compact', !!(anchor && anchor.hasAttribute && anchor.hasAttribute('data-ui-tip-compact')));
         if (head) {
             tip.textContent = '';
             const h = document.createElement('div');
             h.className = 'ui-tooltip-head';
-            h.textContent = head;
+            // Item cells show their part icon in the tooltip only (the cell itself shows just the object).
+            const ico = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
+            if (ico && ico.src) {
+                const im = document.createElement('img');
+                im.src = ico.src; im.alt = ''; im.draggable = false;
+                im.style.cssText = 'width:20px;height:20px;image-rendering:pixelated;vertical-align:middle;margin-right:8px';
+                h.appendChild(im);
+            }
+            h.appendChild(document.createTextNode(head));
             tip.appendChild(h);
             String(text).split('\n').forEach((line) => {
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
@@ -181,7 +190,21 @@ class UiTooltipManager {
                     v.textContent = m[2];
                     row.append(k, v);
                 } else {
-                    row.textContent = line;
+                    // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" -> the same stat icons as the hangar rows.
+                    const sm = line.match(/^DMG (\S+) · SPD (\S+) · (\S+)$/);
+                    const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+                    if (sm && ir) {
+                        row.className = 'ui-tooltip-stats';
+                        row.style.cssText = 'display:flex;gap:14px;align-items:center';
+                        [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], ['shotRapid', sm[3], '#ffa04a']].forEach(([key, val, col]) => {
+                            const s = document.createElement('span');
+                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
+                            row.appendChild(s);
+                        });
+                    } else {
+                        row.textContent = line;
+                    }
                 }
                 tip.appendChild(row);
             });
@@ -226,6 +249,18 @@ class UiTooltipManager {
             const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
             tip.classList.add('side-right');
             tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
+            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            return;
+        }
+        // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
+        const invPanel = anchor.closest('.hs-bay-inv');
+        if (invPanel) {
+            const b = invPanel.getBoundingClientRect();
+            let sl = b.right + 20;
+            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, b.left - tw - 20);
+            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
+            tip.classList.add('side-right');
+            tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
             tip.style.top = Math.round(toCss(st, 'y')) + 'px';
             return;
         }

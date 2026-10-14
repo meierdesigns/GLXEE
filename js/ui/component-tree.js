@@ -99,6 +99,14 @@ class ComponentTree {
         const symmetryControl = styleConfig.isWing
             ? `<button type="button" class="hs-tree-wing-symmetry${styleConfig.symmetric ? ' is-active' : ''}" data-tree-wing-symmetry="${styleConfig.symmetric ? 'on' : 'off'}">SYMMETRY ${styleConfig.symmetric ? 'ON' : 'OFF'}</button>`
             : '';
+        const toggleable = ['front', 'back', 'wings'].indexOf(area) !== -1;
+        const toggleArea = area === 'wings' ? 'wing' : area;
+        const areaToggle = toggleable && typeof shipLoadoutManager !== 'undefined'
+            ? (() => {
+                const on = shipLoadoutManager.isAreaEnabled(this.shipId, toggleArea);
+                return `<label class="hs-tree-area-toggle" title="${on ? 'Switch off' : 'Switch on'}" onclick="event.stopPropagation()"><input type="checkbox" data-area-toggle="${this.shipId}|${toggleArea}"${on ? ' checked' : ''} aria-label="${label} on/off"><span>${on ? 'ON' : 'OFF'}</span></label>`;
+            })()
+            : '';
 
         return `
             <details class="hs-tree-branch" ${isExpanded ? 'open' : ''} id="${nodeId}">
@@ -106,6 +114,7 @@ class ComponentTree {
                     <span class="hs-tree-toggle">▶</span>
                     <span class="hs-tree-icon">${this.iconForArea(area)}</span>
                     <span class="hs-tree-text">${label} ${slots.length}</span>
+                    ${areaToggle}
                 </summary>
                 <div class="hs-tree-items">
                     ${symmetryControl}

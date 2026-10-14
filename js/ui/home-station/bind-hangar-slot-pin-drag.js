@@ -25,8 +25,8 @@ extendClass(HomeStationUI, {
                 if (!kind || typeof shipLoadoutManager === 'undefined') return;
                 const model = this._hangarLastModel;
                 if (!model || !model.layout) return;
-                if (!modId) {
-                    // Empty slot — nothing to look up in layout.modules, so
+                if (!modId || kind === 'weapon') {
+                    // Empty slot (and weapon slots with a gun: the slot moves, the gun stays in) — nothing to look up in layout.modules, so
                     // drag a standalone per-slot anchor instead of a module
                     // offset (see setEmptySlotAnchor / slotAnchors).
                     if (!shipLoadoutManager.setEmptySlotAnchor) return;
@@ -116,9 +116,17 @@ extendClass(HomeStationUI, {
                     sx = canvas.width / Math.max(1, rect.width);
                     sy = canvas.height / Math.max(1, rect.height);
                 }
-                if (!drag.moved && (Math.abs(e.clientX - drag.startX) > 3 || Math.abs(e.clientY - drag.startY) > 3)) {
-                    drag.moved = true;
-                    pin._hsJustDragged = true;
+                if (!drag.moved) {
+                    // Dead zone: nothing moves until the pointer has really travelled, and the drag then starts from
+                    // that point, so the slot does not jump by the dead-zone distance (or by a first snap) on grab.
+                    if (Math.abs(e.clientX - drag.startX) > 4 || Math.abs(e.clientY - drag.startY) > 4) {
+                        drag.moved = true;
+                        pin._hsJustDragged = true;
+                        drag.startX = e.clientX;
+                        drag.startY = e.clientY;
+                    }
+                    e.preventDefault();
+                    return;
                 }
                 if (drag.moved && this.showHangarSlotsInArea) {
                     // Reveal the slots already in the area it is moved into.

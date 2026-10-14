@@ -210,13 +210,19 @@ extendClass(HomeStationUI, {
                 const nY = left ? -dX : dX;
                 const endShift = Math.max(-1, Math.min(1, Number(loadout.wingConnectionYEnd) || 0))
                     * loader.wingVisibleRect(seg, model, scale).height * 0.5;
+                const hullEdgeX = left ? center.x : center.x + center.width;
+                const hullYc = center.y + center.height * (0.5 + connectionY * 0.5);
+                const pixEnd = loader.wingBridgeEnd(seg, model, scale, hullEdgeX, hullYc);
+                const endY = pixEnd ? pixEnd.y + nY * endShift : attach.y + nY * endShift;
                 return {
                     id: seg.id,
                     left: left,
                     x0: left ? center.x : center.x + center.width,
-                    y0: center.y + center.height * (0.5 + connectionY * 0.5),
-                    x1: attach.x + nX * endShift,
-                    y1: attach.y + nY * endShift,
+                    // Hull end slid toward the wing pivot height, like the renderer (hull-segment-parts.js).
+                    y0: center.y + center.height * (0.5 + connectionY * 0.5) + Math.max(-center.height * 0.32, Math.min(center.height * 0.32, (endY - (center.y + center.height * (0.5 + connectionY * 0.5))) * 0.7)),
+                    // The bridge meets the wing's real pixels (see wingBridgeEnd), shifted along the turned root like the renderer.
+                    x1: pixEnd ? pixEnd.x + nX * endShift : attach.x + nX * endShift,
+                    y1: endY,
                     // Outer extents exactly as renderHullSegments draws them:
                     // plate widens the band, double splits it into two
                     // struts whose outer edges reach further out.

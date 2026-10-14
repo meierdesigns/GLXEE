@@ -49,14 +49,19 @@
         const onMove = (e) => {
             if (!resizingSide) return;
             const rect = body.getBoundingClientRect();
-            const rightVal = hasRight ? rightW : 0;
-            const handles = hasRight ? handleW * 2 : handleW;
+            // Pointer is in visual px, column widths in CSS px: measure the real scale (zoomed / scaled stage).
+            const sc = body.offsetWidth && rect.width ? rect.width / body.offsetWidth : 1;
+            const total = body.offsetWidth || rect.width;
+            const gaps = 4 * (hasRight ? 4 : 2);   // grid column gaps
+            const rightOff = hasRight && typeof options.isRightHidden === 'function' && options.isRightHidden();
+            const rightVal = hasRight && !rightOff ? rightW : 0;
+            const handles = (hasRight && !rightOff ? handleW * 2 : handleW + (options.hiddenRightW || 0)) + gaps;
             if (resizingSide === 'left') {
-                const maxLeft = rect.width - rightVal - mins.center - handles;
-                leftW = Math.round(clamp(e.clientX - rect.left, mins.left, maxLeft));
+                const maxLeft = total - rightVal - mins.center - handles;
+                leftW = Math.round(clamp((e.clientX - rect.left) / sc, mins.left, maxLeft));
             } else if (hasRight) {
-                const maxRight = rect.width - leftW - mins.center - handles;
-                rightW = Math.round(clamp(rect.right - e.clientX, mins.right, maxRight));
+                const maxRight = total - leftW - mins.center - handles;
+                rightW = Math.round(clamp((rect.right - e.clientX) / sc, mins.right, maxRight));
             }
             apply();
         };

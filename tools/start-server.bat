@@ -1,0 +1,9 @@
+@echo off
+echo Starting GLXEE Game Server...
+echo.
+echo Opening game in browser...
+start http://localhost:8000
+echo.
+echo Starting Python HTTP server...
+python -m http.server 8000
+pause

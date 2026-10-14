@@ -97,9 +97,10 @@ extendClass(ProfileSelectionManager, {
             const keep = Array.from(this.overlay.querySelectorAll(
                 ':scope > .vf-bg-parallax-base, :scope > .vf-bg-parallax-glow'
             ));
-            this.overlay.innerHTML = html;
+            const ov = this.overlay;
+            ov.innerHTML = html;
             for (let i = keep.length - 1; i >= 0; i--) {
-                this.overlay.insertBefore(keep[i], this.overlay.firstChild);
+                ov.insertBefore(keep[i], ov.firstChild);
             }
         };
 

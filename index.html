@@ -13,7 +13,7 @@
     <style id="vf-boot-critical">
         html, body { margin: 0; background: #05060a; }
         #vf-boot-veil.vf-boot-veil-loading {
-            position: fixed; inset: 0; z-index: 99990; pointer-events: auto;
+            position: fixed; inset: 0; z-index: 9980; pointer-events: auto;   /* under the bezel (9990): the screen frame is already there while loading */
             display: flex; align-items: center; justify-content: center;
             background: #05060a; color: #c8d0d8;
             font-family: 'Silkscreen', ui-monospace, monospace;
@@ -84,26 +84,26 @@
     <link rel="stylesheet" href="css/styles/part-17.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-18.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-19.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-20.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-21.css?v=split-2i">
-    <link rel="stylesheet" href="css/styles/part-22.css?v=split-2">
+    <link rel="stylesheet" href="css/styles/part-20.css?v=split-3">
+    <link rel="stylesheet" href="css/styles/part-21.css?v=split-2l">
+    <link rel="stylesheet" href="css/styles/part-22.css?v=split-8">
     <link rel="stylesheet" href="assets/factions/terran/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/kronax/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/voidborn/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/pirate/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/machine/gui.css?v=split-2">
-    <link rel="stylesheet" href="css/pilot-hud.css?v=6">
-    <link rel="stylesheet" href="css/screen-frame.css?v=3">
+    <link rel="stylesheet" href="css/pilot-hud.css?v=9">
+    <link rel="stylesheet" href="css/screen-frame.css?v=9">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
-    <script src="js/core/stage-boot.js?v=boot-8"></script>
+    <script src="js/core/stage-boot.js?v=boot-10"></script>
     <script src="js/core/boot-loader.js"></script>
     <script src="js/core/reload-keys.js?v=f4-4"></script>
     <script src="js/core/zoom-rect-fix.js"></script>
     <script src="js/graphics/pixel-cursors.js?v=pull-1"></script>
 </head>
 <body>
-    <div id="vf-bezel" class="vf-bezel"><div class="vf-bezel-back" aria-hidden="true"></div><div class="vf-fr" aria-hidden="true"><i class="vf-fr-p vf-fr-dark"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-lit"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-hullA"><i class="vf-fr-p vf-fr-hullB"><b class="vf-fr-hole"></b></i></i></div><div class="vf-bezel-tools" style="pointer-events:auto"><button type="button" data-tool="res" title="Resolution" aria-label="Resolution"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="8"/><path d="M8 11v3M5 14h6"/></svg></button><button type="button" data-tool="fx" title="Visual settings" aria-label="Visual settings"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/></svg></button><button type="button" data-tool="fs" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/></svg></button><button type="button" data-tool="logout" title="Logout" aria-label="Logout"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/></svg></button></div></div>
+    <div id="vf-bezel" class="vf-bezel" data-faction="terran"><div class="vf-bezel-back" aria-hidden="true"></div><div class="vf-fr" aria-hidden="true"><i class="vf-fr-p vf-fr-dark"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-lit"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-hullA"><i class="vf-fr-p vf-fr-hullB"><b class="vf-fr-hole"></b></i></i></div><div class="vf-bezel-tools" style="pointer-events:auto"><button type="button" data-tool="res" title="Resolution" aria-label="Resolution"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="8"/><path d="M8 11v3M5 14h6"/></svg></button><button type="button" data-tool="fx" title="Visual settings" aria-label="Visual settings"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/></svg></button><button type="button" data-tool="fs" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/></svg></button><button type="button" data-tool="logout" title="Logout" aria-label="Logout"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/></svg></button></div></div>
     <script>try{var gs=window.vfGuiPreview||window.vfGuiState;if(gs&&gs.id){var bz=document.getElementById("vf-bezel");bz.setAttribute("data-faction",gs.id);if(window.vfGuiPreview)bz.setAttribute("data-preview","1")}}catch(e){}</script>
     <script>
     /* Pixel-frame boot: the cached look is applied before the first paint (attributes, cell vars and the
@@ -117,8 +117,8 @@
         svg.style.position="absolute";svg.setAttribute("aria-hidden","true");
         document.body.appendChild(svg);
       }
-      /* One sample per odd cell, dilated back to exact square cells; then a global light from the
-         top-left: cells whose left/top neighbour is empty are lit, right/bottom neighbour empty are shaded. */
+      /* One sample per odd cell, dilated back to exact square cells; square cells; only a faint light/shade on cell
+         edges from the top-left so the grid stays readable without looking laid over. */
       svg.innerHTML='<filter id="vfFramePx" x="-1%" y="-1%" width="102%" height="102%" color-interpolation-filters="sRGB">'+
         '<feFlood x="'+half+'" y="'+half+'" width="1" height="1"/>'+
         '<feComposite width="'+cell+'" height="'+cell+'"/><feTile result="t"/>'+
@@ -130,8 +130,8 @@
         '<feOffset in="px" dx="-'+cell+'" dy="0" result="aR"/><feComposite in="px" in2="aR" operator="out" result="eR"/>'+
         '<feOffset in="px" dx="0" dy="-'+cell+'" result="aD"/><feComposite in="px" in2="aD" operator="out" result="eD"/>'+
         '<feMerge result="shM"><feMergeNode in="eR"/><feMergeNode in="eD"/></feMerge>'+
-        '<feFlood flood-color="#ffffff" flood-opacity="0.3" result="fw"/><feComposite in="fw" in2="litM" operator="in" result="litC"/>'+
-        '<feFlood flood-color="#000000" flood-opacity="0.42" result="fb"/><feComposite in="fb" in2="shM" operator="in" result="shC"/>'+
+        '<feFlood flood-color="#ffffff" flood-opacity="0.1" result="fw"/><feComposite in="fw" in2="litM" operator="in" result="litC"/>'+
+        '<feFlood flood-color="#000000" flood-opacity="0.16" result="fb"/><feComposite in="fb" in2="shM" operator="in" result="shC"/>'+
         '<feMerge><feMergeNode in="px"/><feMergeNode in="litC"/><feMergeNode in="shC"/></feMerge></filter>';
     };
     (function(){try{
@@ -205,16 +205,6 @@
                 <canvas id="gameCanvas" width="360" height="300"></canvas>
             </div>
             <div id="giUnderStage" class="gi-under-stage" aria-label="Ship and field"></div>
-            <div class="controls ui-controls-hint">
-                <div class="shot-type-display">
-                    <span>SHOT: <span id="shotType">NORMAL</span></span>
-                </div>
-                <div class="controls-info">
-                    <span>ARROW KEYS: Move | SPACE: Shoot | SHIFT: Boost | P: Pause</span>
-                </div>
-                <button type="button" class="ui-controls-hide-btn" id="hideGameControls" title="Hide controls (Shift+H)" aria-label="Hide controls">HIDE</button>
-            </div>
-            <button type="button" class="ui-controls-show-btn" id="showGameControls" title="Show controls (Shift+H)" aria-label="Show controls">?</button>
         </div>
         <div class="game-right-cluster" id="gameRightCluster">
             <div id="giLoadoutSide" class="gi-loadout-side" aria-label="Loadout"></div>
@@ -380,501 +370,6 @@
             }
         });
     </script>
-<script defer src="js/core/extend-class.js"></script>
-<script defer src="js/core/game-state-manager.js"></script>
-<script defer src="js/core/menu-state/core.js"></script>
-<script defer src="js/core/menu-state/restore.js?v=pcreate-3"></script>
-<script defer src="js/core/menu-state.js"></script>
-<script defer src="js/core/economy-config/station-upgrades-base.js"></script>
-<script defer src="js/core/economy-config/station-upgrades-advanced.js"></script>
-<script defer src="js/core/economy-config/core.js?v=loot-12s"></script>
-<script defer src="js/core/economy-config/compute-station-stats.js"></script>
-<script defer src="js/core/economy-config/pick-weighted-resource-id.js"></script>
-<script defer src="js/core/economy-config.js"></script>
-<script defer src="js/core/difficulty-config.js?v=role-diff-1"></script>
-<script defer src="js/core/planet-config/core.js"></script>
-<script defer src="js/core/planet-config/get-faction-meta.js?v=galaxy-gen-2"></script>
-<script defer src="js/core/planet-config/next-enemy-id.js"></script>
-<script defer src="js/core/planet-config/sync-available-enemy-types.js"></script>
-<script defer src="js/core/planet-config/create-main-planet-defaults.js"></script>
-<script defer src="js/core/planet-config/create-pluto-defaults.js"></script>
-<script defer src="js/core/planet-config/apply-playfield-to-runtime.js?v=stages-2"></script>
-<script defer src="js/core/planet-config/generate-explored-planet.js?v=galaxy-gen-1"></script>
-<script defer src="js/core/planet-config/add-planet.js?v=world-1"></script>
-<script defer src="js/core/planet-config/sync-galaxy-membership.js?v=pull-1"></script>
-<script defer src="js/core/planet-config/ambush-encounter.js?v=ambush-1"></script>
-<script defer src="js/core/planet-config/galaxy-control.js?v=control-2"></script>
-<script defer src="js/core/planet-config.js"></script>
-<script defer src="js/core/profile-manager/core.js?v=mount-5"></script>
-<script defer src="js/core/profile-manager/owns-portal.js?v=warp-rel-1"></script>
-<script defer src="js/core/profile-manager/get-module-upgrade-bonuses.js?v=faction-gui-4"></script>
-<script defer src="js/core/profile-manager/has-discovered-galaxy.js?v=played-1"></script>
-<script defer src="js/core/profile-manager/create.js?v=faction-gui-4"></script>
-<script defer src="js/core/profile-manager/try-blueprint-drop.js?v=faction-gui-4"></script>
-<script defer src="js/core/profile-manager/buy-blueprint.js?v=stages-2"></script>
-<script defer src="js/core/profile-manager/get-resume-level-id.js?v=stages-2"></script>
-<script defer src="js/core/profile-manager/style-unlocks.js?v=sell-1"></script>
-<script defer src="js/core/profile-manager/trading-posts.js?v=pull-1"></script>
-<script defer src="js/core/profile-manager/missions.js?v=missions-2"></script>
-<script defer src="js/core/profile-manager/ship-location.js?v=reach-1"></script>
-<script defer src="js/core/profile-manager/sell-items.js?v=sell-1"></script>
-<script defer src="js/core/profile-manager/ship-areas.js?v=areas-1"></script>
-<script defer src="js/core/profile-manager.js?v=faction-gui-4"></script>
-<script defer src="js/core/faction-manager.js"></script>
-<script defer src="js/core/faction-relations.js?v=frel-1"></script>
-<script defer src="js/core/profile-manager/faction-holdings.js?v=1"></script>
-<script defer src="js/core/profile-manager/invasion-scenario.js?v=2"></script>
-<script defer src="js/core/profile-manager/profile-score.js?v=1"></script>
-<script defer src="js/core/world-control.js?v=1"></script>
-<script defer src="js/core/flight-profiles.js"></script>
-<script defer src="js/core/weapon-config/core.js?v=laser-1"></script>
-<script defer src="js/core/weapon-config/make-weapon.js?v=shot-size-2"></script>
-<script defer src="js/core/weapon-config.js"></script>
-<script defer src="js/core/ability-config/core.js"></script>
-<script defer src="js/core/ability-config/create-combat-ability-defaults.js"></script>
-<script defer src="js/core/ability-config/delete-ability.js"></script>
-<script defer src="js/core/ability-config.js"></script>
-<script defer src="js/core/combat-event-config.js"></script>
-<script defer src="js/core/explosion-config.js"></script>
-<script defer src="js/core/enemy-config/core.js"></script>
-<script defer src="js/core/enemy-config/create-hull-enemy-defaults.js"></script>
-<script defer src="js/core/enemy-config/make-enemy.js"></script>
-<script defer src="js/core/enemy-config/apply-overrides-to-model.js"></script>
-<script defer src="js/core/enemy-config.js"></script>
-<script defer src="js/core/ship-config/core.js"></script>
-<script defer src="js/core/ship-config/create-ship.js"></script>
-<script defer src="js/core/ship-config/get-all-merged-player-models.js"></script>
-<script defer src="js/core/ship-config.js"></script>
-<script defer src="js/core/ship-loadout/core.js?v=jshift-1"></script>
-<script defer src="js/core/ship-loadout/get-available-skins.js?v=mount-2"></script>
-<script defer src="js/core/ship-loadout/resolve-model-class.js?v=fixsize-5"></script>
-<script defer src="js/core/ship-loadout/create-layout-context.js?v=pull-1"></script>
-<script defer src="js/core/ship-loadout/place-layout-modules.js?v=fixsize-3"></script>
-<script defer src="js/core/ship-loadout/dock-layout-parts.js"></script>
-<script defer src="js/core/ship-loadout/resolve-module-icon.js?v=mount-3"></script>
-<script defer src="js/core/ship-loadout/compute-power-budget.js?v=mount-3"></script>
-<script defer src="js/core/ship-loadout/set-slot-module.js?v=jshift-1"></script>
-<script defer src="js/core/ship-loadout/build-hangar-slots.js?v=pull-8"></script>
-<script defer src="js/core/ship-loadout/ship-areas.js?v=nose-2"></script>
-<script defer src="js/core/ship-loadout/no-area-overlap.js?v=overlap-2"></script>
-<script defer src="js/core/ship-loadout/area-toggles.js?v=toggle-5"></script>
-<script defer src="js/core/ship-loadout/faction-layout-defaults.js?v=jshift-1"></script>
-<script defer src="js/core/ship-loadout/weapon-mounts.js?v=fixsize-3"></script>
-<script defer src="js/core/ship-loadout/weapon-keys.js?v=1"></script>
-<script defer src="js/core/ship-loadout/slot-sizes.js?v=1"></script>
-<script defer src="js/core/ship-loadout/ability-stats.js?v=1"></script>
-<script defer src="js/core/ship-loadout/weapon-slot-purchase.js?v=1"></script>
-<script defer src="js/core/ship-loadout.js"></script>
-<script defer src="js/core/objective-manager.js"></script>
-<script defer src="js/core/daily-tracker.js"></script>
-<script defer src="js/core/level-manager/core.js?v=stages-2"></script>
-<script defer src="js/core/level-manager/build-stage-level.js?v=boss-1"></script>
-<script defer src="js/core/level-manager.js"></script>
-<script defer src="js/core/system-manager.js"></script>
-<script defer src="js/core/game-control-system/core.js?v=1791486957"></script>
-<script defer src="js/core/game-control-system/begin-victory-loot-phase.js?v=1791486957"></script>
-<script defer src="js/core/game-control-system/show-victory-overlay.js?v=1791486957"></script>
-<script defer src="js/core/game-control-system/stage-stepper.js?v=2"></script>
-<script defer src="js/core/game-control-system/leave-game-session.js?v=1791486957"></script>
-<script defer src="js/core/game-control-system.js"></script>
-<script defer src="js/core/game-loop.js?v=voxel-gb-1"></script>
-<script defer src="js/core/menu-nav.js"></script>
-<script defer src="js/core/ui-dialog.js?v=btn-1"></script>
-<script defer src="js/core/input-handler/core.js"></script>
-<script defer src="js/core/input-handler/handle-key-up.js?v=enemy-size-3"></script>
-<script defer src="js/core/input-handler.js"></script>
-<script defer src="js/core/ui-manager/core.js?v=hud-1"></script>
-<script defer src="js/core/ui-manager/update-game-over-menu-display.js"></script>
-<script defer src="js/core/ui-manager.js"></script>
-<script defer src="js/core/cheat-system.js"></script>
-<script defer src="js/core/settings-manager.js"></script>
-<script defer src="js/core/render-manager.js?v=1791486957"></script>
-<script defer src="js/core/viewport-fit.js?v=scan-2"></script>
-<script defer src="js/core/viewport-fit-part2.js?v=scan-2"></script>
-<script defer src="js/core/viewport-fit-plate.js?v=split-2"></script>
-<script defer src="js/core/viewport-fit-part3.js?v=cable-9"></script>
-<script defer src="js/core/viewport-fit-cables.js?v=cable-9"></script>
-<script defer src="js/core/viewport-fit-morph.js?v=morph-4"></script>
-<script defer src="js/core/viewport-fit-part4.js?v=scan-2"></script>
-<script defer src="js/core/faction-gui.js?v=8"></script>
-<script defer src="js/core/core/core.js?v=1791486957"></script>
-<script defer src="js/core/core/show-start-screen.js"></script>
-<script defer src="js/core/core.js"></script>
-<script defer src="js/game/sounds/core.js"></script>
-<script defer src="js/game/sounds/play-game-over.js"></script>
-<script defer src="js/game/sounds.js"></script>
-<script defer src="js/game/youtube-soundtrack/core.js"></script>
-<script defer src="js/game/youtube-soundtrack/create-player.js"></script>
-<script defer src="js/game/youtube-soundtrack.js"></script>
-<script defer src="js/game/beat-sync.js"></script>
-<script defer src="js/game/charge-system.js"></script>
-<script defer src="js/game/player/core.js?v=voxel-gb-1"></script>
-<script defer src="js/game/player/set-ship-model.js?v=shot-size-2"></script>
-<script defer src="js/game/player.js?v=player-2"></script>
-<script defer src="js/game/bullets/core.js?v=voxel-gb-1"></script>
-<script defer src="js/game/bullets/get-weapon-icon-key.js?v=voxel-all-1"></script>
-<script defer src="js/game/bullets/get-weapon-icon-key-part2.js?v=voxel-all-1"></script>
-<script defer src="js/game/bullets/shoot-with-legacy-system.js?v=shot-size-2"></script>
-<script defer src="js/game/bullets/shoot-burst.js?v=shot-size-2"></script>
-<script defer src="js/game/bullets/reset.js"></script>
-<script defer src="js/game/bullets.js"></script>
-<script defer src="js/game/enemies/core.js?v=role-diff-1"></script>
-<script defer src="js/game/enemies/resolve-enemy-hit-profile.js?v=enemy-size-5"></script>
-<script defer src="js/game/enemies/spawn-scheduled-normal.js?v=role-diff-1"></script>
-<script defer src="js/game/enemies/update-side-enemies.js?v=fieldclear-1"></script>
-<script defer src="js/game/enemies/get-enemy-ship-model.js"></script>
-<script defer src="js/game/enemies/update.js?v=voxel-gb-1"></script>
-<script defer src="js/game/enemies/spawn-enemy.js?v=top-band-1"></script>
-<script defer src="js/game/enemies/boss.js?v=shot-size-2"></script>
-<script defer src="js/game/enemies/start-explosion.js?v=voxel-debris-1"></script>
-<script defer src="js/game/enemies/wave-director.js"></script>
-<script defer src="js/game/enemies.js"></script>
-<script defer src="js/game/obstacles/core.js"></script>
-<script defer src="js/game/obstacles/spawn-obstacle.js?v=env-break-1"></script>
-<script defer src="js/game/obstacles/spawn-patterns.js?v=env-carve-2"></script>
-<script defer src="js/game/obstacles/spawn-patterns-part2.js?v=env-carve-2"></script>
-<script defer src="js/game/obstacles/spawn-ladder.js"></script>
-<script defer src="js/game/obstacles/remove-obstacle.js?v=voxel-all-1"></script>
-<script defer src="js/game/obstacles/damage-obstacle.js?v=voxel-size-1"></script>
-<script defer src="js/game/obstacles.js"></script>
-<script defer src="js/game/pickups.js?v=voxel-gb-1"></script>
-<script defer src="js/game/power-crates.js?v=voxel-all-1"></script>
-<script defer src="js/game/collisions/core.js?v=env-carve-2"></script>
-<script defer src="js/game/collisions/redirect-laser-clash.js"></script>
-<script defer src="js/game/collisions/is-sprite-solid-at.js"></script>
-<script defer src="js/game/collisions/apply-optical-bullet-hit.js"></script>
-<script defer src="js/game/collisions.js"></script>
-<script defer src="js/graphics/particle-system.js?v=voxel-size-1"></script>
-<script defer src="js/graphics/explosion-system.js?v=voxel-size-1"></script>
-<script defer src="js/graphics/icon-sprites/shots.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/abilities-offense.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/abilities-defense.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/stats.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/menu.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/home-station-tabs.js?v=star-1"></script>
-<script defer src="js/graphics/icon-sprites/home-station-panels.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-sprites/emblems.js?v=pirate-seal-2"></script>
-<script defer src="js/graphics/icon-sprites/emblems-hires.js?v=pirate-seal-3"></script>
-<script defer src="js/graphics/icon-sprites/resources-hires.js?v=1"></script>
-<script defer src="js/graphics/icon-sprites/ui-nav.js?v=3"></script>
-<script defer src="js/graphics/icon-sprites/ui-nav-part2.js?v=3"></script>
-<script defer src="js/graphics/icon-sprites/menu-hd.js?v=2"></script>
-<script defer src="js/graphics/icon-sprites.js?v=star-1"></script>
-<script defer src="js/graphics/module-sprites/weapons-abilities.js?v=pull-1"></script>
-<script defer src="js/graphics/module-sprites/defenses-energy.js?v=pull-1"></script>
-<script defer src="js/graphics/module-sprites.js?v=pull-1"></script>
-<script defer src="js/graphics/icon-renderer/core.js?v=1791506395"></script>
-<script defer src="js/graphics/icon-renderer/get-module-kind-color.js?v=px-1"></script>
-<script defer src="js/graphics/icon-renderer.js?v=voxel-all-1"></script>
-<script defer src="js/ui/ui-tooltip.js?v=1791506393"></script>
-<script defer src="js/ui/fullscreen-toggle.js?v=1"></script>
-<script defer src="js/ui/color-picker-overlay/core.js"></script>
-<script defer src="js/ui/color-picker-overlay/sync-ui.js"></script>
-<script defer src="js/ui/color-picker-overlay.js"></script>
-<script defer src="js/graphics/faction-ship-styles/core.js?v=pack-10"></script>
-<script defer src="js/graphics/faction-ship-styles/grid-helpers.js?v=split-2"></script>
-<script defer src="js/graphics/faction-ship-styles/paint-class-topology.js?v=pull-1"></script>
-<script defer src="js/graphics/faction-ship-styles/build-all-pixel-sprites.js?v=pull-1"></script>
-<script defer src="js/graphics/faction-ship-styles/faction-hull-builders.js?v=hull-2"></script>
-<script defer src="js/graphics/faction-ship-styles.js?v=hull-1"></script>
-<script defer src="js/ui/game-over-wreck.js?v=1"></script>
-<script defer src="js/graphics/asset-gen-registry/core.js?v=pull-1"></script>
-<script defer src="js/graphics/asset-gen-registry/find-from-element.js?v=pull-1"></script>
-<script defer src="js/graphics/asset-gen-registry/faction-ids.js?v=pull-1"></script>
-<script defer src="js/graphics/asset-gen-registry.js?v=pull-1"></script>
-<script defer src="js/graphics/asset-gen-client.js?v=pull-1"></script>
-<script defer src="js/graphics/sprite-meta.js?v=pull-1"></script>
-<script defer src="js/graphics/sprite-factory.js?v=pull-1"></script>
-<script defer src="js/graphics/color-palette.js?v=pull-1"></script>
-<script defer src="js/graphics/lighting-system.js?v=pull-1"></script>
-<script defer src="js/graphics/graphics-manager/core.js?v=ship-assets-move-1"></script>
-<script defer src="js/graphics/graphics-manager/draw-shield-hull.js?v=voxel-all-1"></script>
-<script defer src="js/graphics/graphics-manager/enemy-variants.js?v=voxel-all-1"></script>
-<script defer src="js/graphics/graphics-manager.js?v=pull-1"></script>
-<script defer src="js/graphics/graphics.js?v=pull-1"></script>
-<script defer src="js/graphics/color-palette-system/core.js?v=pull-1"></script>
-<script defer src="js/graphics/color-palette-system/save-global-look.js?v=pull-1"></script>
-<script defer src="js/graphics/color-palette-system/normalize-palette.js?v=boot-theme-4"></script>
-<script defer src="js/graphics/color-palette-system.js?v=pull-1"></script>
-<script defer src="js/graphics/performance-optimizer.js?v=pull-1"></script>
-<script defer src="js/graphics/theme-context.js?v=pack-1"></script>
-<script defer src="js/graphics/ui-appearance.js?v=scan-2"></script>
-<script defer src="js/graphics/ui-appearance-part2.js?v=scan-6"></script>
-<script defer src="js/graphics/ui-appearance-part3.js?v=scan-6"></script>
-<script defer src="js/ui/enhanced-palette-ui/core.js"></script>
-<script defer src="js/ui/enhanced-palette-ui/create-palette-history.js"></script>
-<script defer src="js/ui/enhanced-palette-ui.js"></script>
-<script defer src="js/graphics/color-manager.js?v=pull-1"></script>
-<script defer src="js/graphics/ship-models/core.js?v=pull-1"></script>
-<script defer src="js/graphics/ship-models/render-ship.js?v=pull-1"></script>
-<script defer src="js/graphics/ship-models.js?v=pull-1"></script>
-<script defer src="js/ui/theme-editor/core.js"></script>
-<script defer src="js/ui/theme-editor/setup-panel-resize.js"></script>
-<script defer src="js/ui/theme-editor/get-contrast-filter.js"></script>
-<script defer src="js/ui/theme-editor.js"></script>
-<script defer src="js/ui/asset-gen-ui/core.js"></script>
-<script defer src="js/ui/asset-gen-ui/hide.js"></script>
-<script defer src="js/ui/asset-gen-ui/faction-ids.js"></script>
-<script defer src="js/ui/asset-gen-ui/draw-pixel-matrix.js"></script>
-<script defer src="js/ui/asset-gen-ui/clear-staging.js"></script>
-<script defer src="js/ui/asset-gen-ui/read-settings-from-form.js"></script>
-<script defer src="js/ui/asset-gen-ui.js"></script>
-<script defer src="js/ui/component-editor/core.js"></script>
-<script defer src="js/ui/component-editor/build-shell-html.js"></script>
-<script defer src="js/ui/component-editor/hide-background-ui.js"></script>
-<script defer src="js/ui/component-editor/get-palette-shades.js"></script>
-<script defer src="js/ui/component-editor/refresh-all.js"></script>
-<script defer src="js/ui/component-editor/draw-center.js"></script>
-<script defer src="js/ui/component-editor/set-view-zoom.js"></script>
-<script defer src="js/ui/component-editor/start-ship-preview.js"></script>
-<script defer src="js/ui/component-editor/on-generate.js"></script>
-<script defer src="js/ui/component-editor/on-component-property-change.js"></script>
-<script defer src="js/ui/component-editor.js"></script>
-<script defer src="js/ui/difficulty-editor.js?v=role-diff-1"></script>
-<script defer src="js/ui/faction-command.js"></script>
-<script defer src="js/graphics/sprite-loader/core.js"></script>
-<script defer src="js/graphics/sprite-loader/when-loaded.js"></script>
-<script defer src="js/graphics/sprite-loader.js"></script>
-<script defer src="js/ui/render/core.js?v=voxel-perf-1"></script>
-<script defer src="js/ui/render/core-part2.js?v=voxel-perf-1"></script>
-<script defer src="js/ui/render/draw-crystal-obstacle.js?v=voxel-all-1"></script>
-<script defer src="js/ui/render/draw-environment.js?v=voxel-perf-1"></script>
-<script defer src="js/ui/render/draw-environment-part2.js?v=voxel-perf-1"></script>
-<script defer src="js/ui/render/draw-environment-part3.js?v=voxel-perf-1"></script>
-<script defer src="js/ui/render/draw-bullet.js?v=voxel-all-1"></script>
-<script defer src="js/ui/render.js?v=voxel-bg-1"></script>
-<script defer src="js/ui/parallax/core.js"></script>
-<script defer src="js/ui/parallax/draw-custom-tile.js"></script>
-<script defer src="js/ui/parallax.js"></script>
-<script defer src="js/ui/bg-mouse-parallax/state.js?v=inline-1"></script>
-<script defer src="js/ui/bg-mouse-parallax/backgrounds.js"></script>
-<script defer src="js/ui/bg-mouse-parallax/hosts.js"></script>
-<script defer src="js/ui/bg-mouse-parallax.js"></script>
-<script defer src="js/ui/panel-resize.js"></script>
-<script defer src="js/ui/sidebar-resize-auto.js"></script>
-<script defer src="js/ui/dev-profile-toggles.js"></script>
-<script defer src="js/ui/planet-viewer/core.js"></script>
-<script defer src="js/ui/planet-viewer/mount-dev-toggles.js"></script>
-<script defer src="js/ui/planet-viewer/update-preview-obstacles.js"></script>
-<script defer src="js/ui/planet-viewer/open-editor.js"></script>
-<script defer src="js/ui/planet-viewer.js"></script>
-<script defer src="js/ui/enemy-viewer/core.js"></script>
-<script defer src="js/ui/enemy-viewer/create-ui.js"></script>
-<script defer src="js/ui/enemy-viewer/update-preview-sim.js"></script>
-<script defer src="js/ui/enemy-viewer/open-gfx-editor.js"></script>
-<script defer src="js/ui/enemy-viewer.js"></script>
-<script defer src="js/ui/ship-viewer/core.js"></script>
-<script defer src="js/ui/ship-viewer/bind-preview-controls.js"></script>
-<script defer src="js/ui/ship-viewer/stat-icon-html.js"></script>
-<script defer src="js/ui/ship-viewer.js"></script>
-<script defer src="js/ui/ability-viewer/core.js"></script>
-<script defer src="js/ui/ability-viewer/apply-preview-view.js"></script>
-<script defer src="js/ui/ability-viewer/render-detail.js"></script>
-<script defer src="js/ui/ability-viewer.js"></script>
-<script defer src="js/ui/weapon-viewer/core.js"></script>
-<script defer src="js/ui/weapon-viewer/apply-preview-view.js"></script>
-<script defer src="js/ui/weapon-viewer/persist.js"></script>
-<script defer src="js/ui/weapon-viewer.js"></script>
-<script defer src="js/ui/defense-viewer/core.js"></script>
-<script defer src="js/ui/defense-viewer/apply-preview-view.js"></script>
-<script defer src="js/ui/defense-viewer/render-detail.js"></script>
-<script defer src="js/ui/defense-viewer.js"></script>
-<script defer src="js/ui/explosion-viewer/core.js"></script>
-<script defer src="js/ui/explosion-viewer/make-slider.js"></script>
-<script defer src="js/ui/explosion-viewer.js"></script>
-<script defer src="js/ui/faction-viewer/core.js?v=faction-wiki-3"></script>
-<script defer src="js/ui/faction-viewer/bind-preview-controls.js?v=faction-wiki-3"></script>
-<script defer src="js/ui/faction-viewer/render-detail.js?v=faction-wiki-3"></script>
-<script defer src="js/ui/faction-viewer.js"></script>
-<script defer src="js/ui/event-viewer.js"></script>
-<script defer src="js/ui/planet-editor/core.js"></script>
-<script defer src="js/ui/planet-editor/apply-preview-view.js"></script>
-<script defer src="js/ui/planet-editor/select-planet-now.js"></script>
-<script defer src="js/ui/planet-editor/render-background-tab.js"></script>
-<script defer src="js/ui/planet-editor/render-obstacles-tab.js"></script>
-<script defer src="js/ui/planet-editor/render-obstacle-card.js"></script>
-<script defer src="js/ui/planet-editor/render-enemies-tab.js"></script>
-<script defer src="js/ui/planet-editor/render-objectives-tab.js"></script>
-<script defer src="js/ui/planet-editor/render-graphics-tab.js"></script>
-<script defer src="js/ui/planet-editor/make-multi-check.js"></script>
-<script defer src="js/ui/planet-editor/open-pattern-editor.js?v=btn-1"></script>
-<script defer src="js/ui/planet-editor/draw-pattern-thumbnail.js"></script>
-<script defer src="js/ui/planet-editor/update-preview-obstacles.js"></script>
-<script defer src="js/ui/planet-editor.js"></script>
-<script defer src="js/ui/enemy-editor/core.js"></script>
-<script defer src="js/ui/enemy-editor/show.js"></script>
-<script defer src="js/ui/enemy-editor/make-multi-check.js"></script>
-<script defer src="js/ui/enemy-editor/reset.js"></script>
-<script defer src="js/ui/enemy-editor/spawn-preview-enemy-shot.js"></script>
-<script defer src="js/ui/enemy-editor.js"></script>
-<script defer src="js/ui/ship-editor/core.js"></script>
-<script defer src="js/ui/ship-editor/show.js"></script>
-<script defer src="js/ui/ship-editor/render-abilities-tab.js"></script>
-<script defer src="js/ui/ship-editor/update-preview-sim.js"></script>
-<script defer src="js/ui/ship-editor.js"></script>
-<script defer src="js/ui/ability-editor.js"></script>
-<script defer src="js/ui/level-info-manager/core.js?v=field-1"></script>
-<script defer src="js/ui/level-info-manager/core-part2.js?v=field-1"></script>
-<script defer src="js/ui/level-info-manager/update-element.js?v=field-2"></script>
-<script defer src="js/ui/level-info-manager.js"></script>
-<script defer src="js/ui/mission-start/core.js"></script>
-<script defer src="js/ui/mission-start/prepare-fly-in.js"></script>
-<script defer src="js/ui/mission-start.js"></script>
-<script defer src="js/levels/mars.js"></script>
-<script defer src="js/levels/jupiter.js"></script>
-<script defer src="js/levels/saturn.js"></script>
-<script defer src="js/levels/neptune.js"></script>
-<script defer src="js/levels/pluto.js"></script>
-<script defer src="js/levels/level-manager.js?v=stages-2"></script>
-<script defer src="js/ui/ship-renderer.js"></script>
-<script defer src="js/ui/combined-selection/core.js"></script>
-<script defer src="js/ui/combined-selection/create-fallback-player-ships.js"></script>
-<script defer src="js/ui/combined-selection/show.js"></script>
-<script defer src="js/ui/combined-selection/create-combined-selection-ui.js?v=btn-1"></script>
-<script defer src="js/ui/combined-selection/render-level-preview.js"></script>
-<script defer src="js/ui/combined-selection/handle-key-down.js"></script>
-<script defer src="js/ui/combined-selection/update-ship-details.js"></script>
-<script defer src="js/ui/combined-selection.js"></script>
-<script defer src="js/ui/galaxy-selection.js"></script>
-<script defer src="js/ui/galaxy-map/core.js?v=atmo-detail-7"></script>
-<script defer src="js/ui/galaxy-map/core-part2.js?v=atmo-detail-7"></script>
-<script defer src="js/ui/galaxy-map/create-ui.js?v=tip-1"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part2.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part3.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part4.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part5.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part6.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part7.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part8.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/render-explore-controls-part9.js?v=1791506827"></script>
-<script defer src="js/ui/galaxy-map/navigate-by-arrow.js?v=orbit-1"></script>
-<script defer src="js/ui/galaxy-map/navigate-by-arrow-part2.js?v=orbit-1"></script>
-<script defer src="js/ui/galaxy-map/flight-travel.js?v=lines-4"></script>
-<script defer src="js/ui/galaxy-map/flight-travel-part2.js?v=lines-4"></script>
-<script defer src="js/ui/galaxy-map.js"></script>
-<script defer src="js/ui/profile-selection/core.js?v=pcreate-27"></script>
-<script defer src="js/ui/profile-selection/core-look.js?v=split-2"></script>
-<script defer src="js/ui/profile-selection/core-ui.js?v=split-2"></script>
-<script defer src="js/ui/profile-selection/core-kits.js?v=split-2"></script>
-<script defer src="js/ui/profile-selection/core-part2.js?v=wiz-8b"></script>
-<script defer src="js/ui/profile-selection/start-galaxy-card.js?v=split-2"></script>
-<script defer src="js/ui/profile-selection/core-part3.js?v=wiz-13n"></script>
-<script defer src="js/ui/profile-selection/faction-tabs.js?v=1"></script>
-<script defer src="js/core/universe-save.js"></script>
-<script defer src="js/ui/galaxy-viewer.js?v=galaxy-directory-scroll-8"></script>
-<script defer src="js/ui/galaxy-viewer-part2.js?v=galaxy-directory-scroll-8"></script>
-<script defer src="js/ui/profile-selection/render-profile-details.js?v=pull-3l"></script>
-<script defer src="js/ui/profile-selection.js"></script>
-<script defer src="js/ui/onboarding.js"></script>
-<script defer src="js/ui/hangar-test-arena/core.js"></script>
-<script defer src="js/ui/hangar-test-arena/render-stats.js"></script>
-<script defer src="js/ui/hangar-test-arena/apply-defense.js"></script>
-<script defer src="js/ui/hangar-test-arena/update.js"></script>
-<script defer src="js/ui/hangar-test-arena/get-shield-threat-proximity.js"></script>
-<script defer src="js/ui/hangar-test-arena.js"></script>
-<script defer src="js/ui/hangar-ui/core.js"></script>
-<script defer src="js/ui/hangar-ui/on-slot-equipment-change.js"></script>
-<script defer src="js/ui/hangar-ui.js"></script>
-<script defer src="js/ui/component-tree.js?v=sdrop-2"></script>
-<script defer src="js/ui/menu-order.js?v=names-3"></script>
-<script defer src="js/ui/home-station/core.js?v=names-5"></script>
-<script defer src="js/ui/home-station/resource-icon-key.js?v=wiki-5"></script>
-<script defer src="js/ui/home-station/open-main-menu-overlay.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/get-missing-materials.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/get-portal-faction-filters.js?v=nav-3"></script>
-<script defer src="js/ui/home-station/create-ui.js?v=star-1"></script>
-<script defer src="js/ui/home-station/mount-play-tab.js?v=nav-3"></script>
-<script defer src="js/ui/home-station/switch-sub-tab.js?v=1791506393"></script>
-<script defer src="js/ui/home-station/bind-upgrade-tip-events.js?v=1791506393"></script>
-<script defer src="js/graphics/galaxy-icon.js?v=1"></script>
-<script defer src="js/graphics/hero-portrait.js?v=27"></script>
-<script defer src="js/graphics/voxel-portrait-presets.js?v=11"></script>
-<script defer src="js/graphics/voxel-portrait-build.js?v=36"></script>
-<script defer src="js/graphics/voxel-portrait-bg.js?v=6"></script>
-<script defer src="js/graphics/voxel-portrait.js?v=6"></script>
-<script defer src="js/graphics/faction-packs.js?v=7"></script>
-<script defer src="js/graphics/hero-portrait-gl/glsl-lib.js?v=5"></script>
-<script defer src="js/graphics/hero-portrait-gl/glsl-scene.js?v=20"></script>
-<script defer src="js/graphics/hero-portrait-gl/glsl-shade.js?v=18"></script>
-<script defer src="js/graphics/hero-portrait-gl/glsl-post.js?v=19"></script>
-<script defer src="js/graphics/hero-portrait-gl/glsl-mesh.js?v=17"></script>
-<script defer src="js/graphics/hero-portrait-gl/mesh-assets.js?v=1"></script>
-<script defer src="js/graphics/hero-portrait-gl/renderer.js?v=23"></script>
-<script defer src="js/ui/home-station/render-module-type-upgrades.js?v=noweap-1"></script>
-<script defer src="js/ui/home-station/render-parts-list.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/render-shop-part-rows.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/render-shop-tab.js?v=1791506582"></script>
-<script defer src="js/ui/home-station/render-shop-style-rows.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/trading-post-shop.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/render-missions-tab.js?v=missions-1"></script>
-<script defer src="js/ui/home-station/shop-sell.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/render-hangar-tab.js?v=stats-1"></script>
-<script defer src="js/ui/home-station/render-factions-tab.js?v=sizes-btn-2"></script>
-<script defer src="js/ui/home-station/render-factions-tab-part2.js?v=sizes-btn-2"></script>
-<script defer src="js/ui/home-station/faction-fleet-preview.js?v=1791506393"></script>
-<script defer src="js/ui/home-station/draw-hangar-bay.js?v=slotsz-1"></script>
-<script defer src="js/ui/home-station/draw-hangar-bay-part2.js?v=slotsz-1"></script>
-<script defer src="js/ui/home-station/update-component-details.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/wing-preview-pixel-zoom.js?v=jshift-1"></script>
-<script defer src="js/ui/home-station/draw-hangar-connection-marker.js?v=jshift-2"></script>
-<script defer src="js/ui/home-station/draw-hangar-connection-marker-part2.js?v=jshift-2"></script>
-<script defer src="js/ui/home-station/hangar-drag-layout-point.js?v=jshift-1"></script>
-<script defer src="js/ui/home-station/hangar-drag-layout-point-part2.js?v=jshift-1"></script>
-<script defer src="js/ui/home-station/on-hangar-drag-down.js?v=jshift-1"></script>
-<script defer src="js/ui/home-station/on-hangar-drag-up.js?v=nose-1"></script>
-<script defer src="js/ui/home-station/bind-hangar-slot-events.js?v=span-3"></script>
-<script defer src="js/ui/home-station/hangar-parts-grid.js?v=tabicon-1"></script>
-<script defer src="js/ui/home-station/hangar-parts-grid-part2.js?v=tabicon-1"></script>
-<script defer src="js/ui/home-station/hangar-slot-bar.js?v=bar-1"></script>
-<script defer src="js/ui/home-station/bind-hangar-slot-pin-drag.js?v=mount-1"></script>
-<script defer src="js/ui/home-station/reset-hangar-preview-sim.js?v=jshift-1"></script>
-<script defer src="js/ui/home-station/update-hangar-preview-sim.js?v=shot-5"></script>
-<script defer src="js/ui/home-station/update-hangar-preview-sim-part2.js?v=shot-5"></script>
-<script defer src="js/ui/home-station/bind-controls-toggle.js?v=wiki-2"></script>
-<script defer src="js/ui/home-station/bind-controls-toggle-part2.js?v=wiki-2"></script>
-<script defer src="js/ui/home-station/bind-navigation-events.js?v=crest-3"></script>
-<script defer src="js/ui/home-station/station-col-resize.js?v=1"></script>
-<script defer src="js/ui/home-station/bind-station-events.js?v=pull-1"></script>
-<script defer src="js/ui/home-station/render-component-tree.js?v=sdrop-2"></script>
-<script defer src="js/ui/home-station/render-component-tree-part2.js?v=sdrop-2"></script>
-<script defer src="js/ui/home-station/area-pager.js"></script>
-<script defer src="js/ui/home-station/area-upgrades.js?v=nocenter-1"></script>
-<script defer src="js/ui/home-station/slot-upgrades.js?v=stats-1"></script>
-<script defer src="js/ui/home-station.js?v=faction-gui-4"></script>
-<script defer src="js/ui/player-selection/core.js"></script>
-<script defer src="js/ui/player-selection/create-fallback-player-ships.js"></script>
-<script defer src="js/ui/player-selection/create-player-selection-ui.js"></script>
-<script defer src="js/ui/player-selection/update-ship-details.js"></script>
-<script defer src="js/ui/player-selection.js"></script>
-<script defer src="js/ui/planet-selection.js"></script>
-<script defer src="js/ui/start-screen/core.js?v=scan-2"></script>
-<script defer src="js/ui/start-screen/settings-items.js?v=scan-2"></script>
-<script defer src="js/ui/start-screen/settings-items-part2.js?v=scan-2"></script>
-<script defer src="js/ui/start-screen/build-font-menu-items.js?v=1791486957"></script>
-<script defer src="js/ui/start-screen/show-overlay.js?v=galaxies-2"></script>
-<script defer src="js/ui/start-screen/create-main-menu-ui.js?v=inline-3"></script>
-<script defer src="js/ui/start-screen/create-main-menu-ui-part2.js?v=inline-3"></script>
-<script defer src="js/ui/start-screen/fill-embedded-credits.js?v=reorder-4"></script>
-<script defer src="js/ui/start-screen/settings-reorder.js?v=reorder-11"></script>
-<script defer src="js/ui/start-screen/fill-embedded-layout.js?v=btn-4"></script>
-<script defer src="js/ui/start-screen/build-settings-row.js?v=1791486957"></script>
-<script defer src="js/ui/start-screen/build-theme-strip.js?v=pull-1"></script>
-<script defer src="js/ui/start-screen/refresh-settings-row.js?v=1791486957"></script>
-<script defer src="js/ui/start-screen/build-controls-show-btn.js?v=inline-2"></script>
-<script defer src="js/ui/start-screen/handle-arrow-down.js?v=reorder-1"></script>
-<script defer src="js/ui/start-screen/refresh-asset-bridge-status.js?v=1791486957"></script>
-<script defer src="js/ui/start-screen/apply-settings.js?v=size-px-1"></script>
-<script defer src="js/ui/start-screen.js?v=enemy-size-2"></script>
-<script defer src="js/ui/startup-sound.js"></script>
-<script defer src="js/ui/start-intro.js"></script>
-<script defer src="js/ui/volume-controls.js"></script>
-<script defer src="js/graphics/planet-svgs/core.js?v=pull-1"></script>
-<script defer src="js/graphics/planet-svgs/apply-rings.js?v=atmo-detail-3"></script>
-<script defer src="js/graphics/planet-svgs/apply-rings-part2.js?v=atmo-detail-3"></script>
-<script defer src="js/graphics/planet-svgs/extra-styles.js?v=pull-1"></script>
-<script defer src="js/graphics/planet-svgs/get-planet-svg.js?v=pull-1"></script>
-<script defer src="js/graphics/planet-svgs/spin-frames.js?v=pull-1"></script>
-<script defer src="js/graphics/planet-svgs.js?v=pull-1"></script>
+<script defer src="js/bundles/deferred.js"></script>
 </body>
 </html>

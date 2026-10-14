@@ -6,18 +6,24 @@ extendClass(ProfileSelectionManager, {
     fitWizardBars() {
         const ov = this.overlay;
         if (!ov || !ov.isConnected) return;
-        const screen = this.host && this.host.closest('.start-screen');
+        const screen = this.host && this.host.closest('.start-screen-content, .start-screen');
         let l = 0;
         let r = 0;
+        let t = 0;
+        let b = 0;
         if (screen) {
             const o = ov.getBoundingClientRect();
             const s = screen.getBoundingClientRect();
             const k = ov.offsetWidth ? o.width / ov.offsetWidth : 1;   // stage scale
             l = Math.max(0, (o.left - s.left) / k);
             r = Math.max(0, (s.right - o.right) / k);
+            t = Math.max(0, (o.top - s.top) / k);
+            b = Math.max(0, (s.bottom - o.bottom) / k);
         }
         ov.style.setProperty('--ps-bleed-l', l + 'px');
         ov.style.setProperty('--ps-bleed-r', r + 'px');
+        ov.style.setProperty('--ps-bleed-t', t + 'px');
+        ov.style.setProperty('--ps-bleed-b', b + 'px');
         if (!this._bleedResize) {
             this._bleedResize = () => this.fitWizardBars();
             window.addEventListener('resize', this._bleedResize);
@@ -68,7 +74,7 @@ extendClass(ProfileSelectionManager, {
                     ${pilotStep ? '' : '<small class="profile-faction-preview-trait pfc-traits"></small><small class="profile-faction-preview-hero pfc-hero"></small>'}
                     ${create && !pickFaction && !pilotStep ? this.renderPreferredWeaponHtml() : ''}
                 </div>`}
-                ${startStep ? `<div class="profile-loadout">${this.renderLoadoutHtml()}</div>` : ''}
+                ${startStep ? `<div class="profile-loadout">${this.renderLoadoutHtml()}</div><div class="profile-kit-info">${this.renderKitInfoHtml()}</div>` : ''}
             </div>
             <div class="profile-faction-lore profile-faction-tabcard" role="note">
                 <div class="profile-faction-tabs" role="tablist">
@@ -224,11 +230,16 @@ extendClass(ProfileSelectionManager, {
                 }
                 const loadout = group === 'kit' && this.overlay.querySelector('.profile-loadout');
                 if (loadout) loadout.innerHTML = this.renderLoadoutHtml();
+                const kitInfo = group === 'kit' && this.overlay.querySelector('.profile-kit-info');
+                if (kitInfo) kitInfo.innerHTML = this.renderKitInfoHtml();
                 if (group === 'kit' || group === 'ship') { this.savePilotState && this.savePilotState(); this.renderFactionShipPreview(this.pendingFaction); }
             });
         });
 
         const loadoutEl = this.overlay.querySelector('.profile-loadout');
+        // Hovering the ship preview outlines its weapon mounts.
+        this.overlay.addEventListener('mouseover', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship')) this.highlightPreviewWeapon(true); });
+        this.overlay.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.profile-faction-ship'))) this.highlightPreviewWeapon(false); });
         if (loadoutEl) loadoutEl.addEventListener('click', (e) => {
             const b = e.target.closest('[data-area]');
             if (!b || b.disabled) return;
@@ -237,7 +248,8 @@ extendClass(ProfileSelectionManager, {
             const used = Object.keys(areas).reduce((n, k) => n + areas[k], 0);
             const d = Number(b.getAttribute('data-d'));
             if (d > 0 && used >= this.startAreaBudget()) return;
-            areas[id] = Math.max(0, Math.min(2, (areas[id] || 0) + d));
+            const kitBase = Number(((this.currentKit().bonus || {}).areas || {})[id]) || 0;
+            areas[id] = Math.max(0, Math.min(2 - kitBase, (areas[id] || 0) + d));
             loadoutEl.innerHTML = this.renderLoadoutHtml();
         });
 

@@ -334,12 +334,7 @@ class FactionShipStyles {
     stampDocumentTheme(id) {
         const style = this.getFactionStyle(id);
         const root = document.documentElement;
-        // Switching faction on a live screen: fade colours instead of snapping.
-        if (root.dataset.faction && root.dataset.faction !== id) {
-            root.classList.add('vf-faction-fade');
-            clearTimeout(this._factionFadeTimer);
-            this._factionFadeTimer = setTimeout(() => root.classList.remove('vf-faction-fade'), 600);
-        }
+        // The theme flips in ONE step (no colour tween): tweening ~24 inherited variables re-styled and re-filtered every frame (flicker).
         root.dataset.faction = id;
         root.style.setProperty('--faction-hull', style.hull || '#7a8490');
         root.style.setProperty('--faction-edge', style.edge || '#2a3038');

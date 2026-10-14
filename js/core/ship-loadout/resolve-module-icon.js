@@ -84,6 +84,21 @@ extendClass(ShipLoadoutManager, {
         const loadout = model.factionPreview && model.faction
             ? Object.assign(this.defaultLoadoutFromShip(id, model.faction), { faction: model.faction })
             : this.getLoadout(id);
+        if (model.factionPreview && model.previewDisabledAreas) loadout.disabledAreas = Object.assign({ front: false, back: false, wing: false }, model.previewDisabledAreas);
+        if (model.factionPreview && model.previewSingleGun) {
+            const gun = (loadout.weaponSlots || []).find(Boolean) || (loadout.weapons && loadout.weapons[0]) || 'laser';
+            loadout.weaponSlots = [gun];
+            loadout.weapons = [gun];
+            loadout.defenses = (loadout.defenses || []).slice(0, 1);
+            loadout.abilities = (loadout.abilities || []).slice(0, 1);
+            loadout.energy = (loadout.energy || []).slice(0, 1);
+        }
+        if (model.factionPreview && model.previewCoreGun) {
+            loadout.weaponMounts = Object.assign({}, loadout.weaponMounts, { 0: { area: 'center', split: model.previewCoreGun === 'split', off: 0.2, ny: 0.5, fixed: true } });
+            const ws = (loadout.weaponSlots || []).slice();
+            ws[0] = ws[0] || (loadout.weapons && loadout.weapons[0]) || 'laser';
+            loadout.weaponSlots = ws;
+        }
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const caps = this.getSlotCaps(id, model.modelClass);
         // Same wing rows as the hangar markers (see buildHangarSlots).

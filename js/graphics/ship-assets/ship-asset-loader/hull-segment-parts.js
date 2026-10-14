@@ -40,6 +40,8 @@ extendClass(ShipAssetLoader, {
                     centerSeg.y + centerSeg.height * (0.5 + connectionY * 0.5)
                 ) * scale;
                 const wingY = y + attach.y * scale;
+                const wingPix = this.wingBridgeEnd(wing, shipModel, scale, isLeft ? centerSeg.x : centerSeg.x + centerSeg.width,
+                    centerSeg.y + centerSeg.height * (0.5 + connectionY * 0.5));
                 const style = layout.loadout && layout.loadout.wingConnectionStyle || 'strut';
                 if (!this.wingConnectionVisible(layout, isLeft, centerEdge, wingEdge, scale)) return;
                 // Bridges use the ship-wide voxel size like every hull part.
@@ -52,7 +54,7 @@ extendClass(ShipAssetLoader, {
                 const rootOverlap = voxelSize * 2;
                 // The hull flank often tapers inward (faction silhouettes),
                 // so reach a fifth of the body in to stay under it.
-                const hullOverlap = Math.max(rootOverlap, centerSeg.width * scale * 0.2);
+                const hullOverlap = Math.max(rootOverlap, centerSeg.width * scale * 0.36);
                 const bridgeStart = isLeft ? centerEdge + hullOverlap : centerEdge - hullOverlap;
                 const bridgeEnd = isLeft ? wingEdge - rootOverlap : wingEdge + rootOverlap;
                 const sides = this.wingJointSides(layout.loadout);
@@ -106,15 +108,28 @@ extendClass(ShipAssetLoader, {
                 // into visible chunks.
                 const wingDepth = voxelSize * 3;
                 const drawBridge = (fromY, wingOffset, upA, downA, upB, downB) => {
-                    const bx = wingEdge + nX * (wingOffset + endShift) + dirX * wingDepth;
-                    const by = wingY + nY * (wingOffset + endShift) + dirY * wingDepth;
+                    // A wing swung past 90 degrees points back at the hull: its root faces away, so the bridge meets the side that
+                    // faces the core instead (the far end of the wing along its own direction). Blends in between 90 and 120.
+                    let bx = wingEdge + nX * (wingOffset + endShift) + dirX * wingDepth;
+                    let by = wingY + nY * (wingOffset + endShift) + dirY * wingDepth;
+                    // Meet the wing's real pixels: the lit cells nearest the hull edge, not its geometric root.
+                    if (wingPix) {
+                        bx = x + wingPix.x * scale + nX * (wingOffset + endShift);
+                        by = y + wingPix.y * scale + nY * (wingOffset + endShift);
+                    }
                     const ax = bridgeStart;
-                    const ay = fromY;
+                    // Hull end: slid along the body's side toward the wing's pivot height, so a turned wing is met by a
+                    // short, nearly straight strut on the side of the hull instead of a long diagonal one.
+                    const slide = Math.max(-centerSeg.height * scale * 0.32, Math.min(centerSeg.height * scale * 0.32, (by - fromY) * 0.7));
+                    const ay = fromY + slide;
                     // Hull end: vertical edge. Wing end: along the turned root.
                     const aTop = [ax, ay - upA];
                     const aBot = [ax, ay + downA];
-                    const bTop = [bx - nX * upB, by - nY * upB];
-                    const bBot = [bx + nX * downB, by + nY * downB];
+                    let bTop = [bx - nX * upB, by - nY * upB];
+                    let bBot = [bx + nX * downB, by + nY * downB];
+                    // Swung past 90 degrees the root line flips: join the top to the top and the bottom to the bottom,
+                    // otherwise the two edges of the bridge cross over.
+                    if (bTop[1] > bBot[1]) { const t = bTop; bTop = bBot; bBot = t; }
                     const pinch = shapeProfile(0.5);
                     const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
                     const mc = mid([ax, ay], [bx, by]);
@@ -203,7 +218,7 @@ extendClass(ShipAssetLoader, {
             const sh = Math.max(1, renderSeg.height * scale);
 
             // Module replace: draw mount art stretched into the segment box
-            if (seg.replace && seg.replace.id && seg.replace.kind === 'weapon') {
+            if (seg.replace && seg.replace.id && seg.replace.kind === 'weapon' && !(renderOptions && renderOptions.hideModules)) {
                 const replaceModule = (layout.modules || []).find(
                     (m) => m.kind === seg.replace.kind && m.id === seg.replace.id
                 );

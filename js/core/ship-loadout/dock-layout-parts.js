@@ -142,6 +142,29 @@ extendClass(ShipLoadoutManager, {
         });
     },
 
+    /**
+     * buildLayout phase 5b (after the module scales): parts on the hull axis (middle of all segments) sit exactly on it.
+     * Singles are widened by a voxel when their width has the wrong parity; body-mounted split pairs are exact mirrors.
+     */
+    centerAxisParts(parts, segments) {
+        let lo = Infinity, hi = -Infinity;
+        (segments || []).forEach((sg) => { lo = Math.min(lo, sg.x); hi = Math.max(hi, sg.x + sg.width); });
+        if (!isFinite(lo) || hi <= lo) return;
+        const axis = (lo + hi) / 2;
+        parts.forEach((p) => {
+            if (p.mountSegment === 'wing' || p.face === 'left' || p.face === 'right' || p.split || p.side) return;
+            if (Math.abs(p.x + p.width / 2 - axis) > 1.5) return;
+            if (((axis - p.width / 2) % 1 + 1) % 1 > 1e-6) p.width += 1;
+            p.x = Math.round(axis - p.width / 2);
+        });
+        parts.filter((p) => p.bodyMount && p.split && p.side === 'left').forEach((l) => {
+            const r = parts.find((q) => q.bodyMount && q.split && q.side === 'right' && q.slotIndex === l.slotIndex && q.id === l.id);
+            if (!r) return;
+            r.width = l.width;
+            r.x = Math.round(2 * axis - l.x - l.width);
+        });
+    },
+
     /** buildLayout phase 5: per-module scale. */
     applyLayoutModuleScales(parts, segments) {
         // Apply per-module scale from the placed center so the hangar slider
@@ -242,8 +265,9 @@ extendClass(ShipLoadoutManager, {
             const m = this.getBodyWeaponMount(L, p.slotIndex);
             const spot = m && this.weaponBodySpot(segments, m);
             if (!spot) return;
-            const cx = p.side === 'right' ? spot.mx : spot.x;
-            p.x = Math.round(cx - p.width / 2);
+            // Split pairs: the right half is the exact mirror of the left one about the hull axis (no rounding drift).
+            const leftX = Math.round(spot.x - p.width / 2);
+            p.x = p.side === 'right' && spot.split ? Math.round(spot.x + spot.mx - leftX - p.width) : (p.side === 'right' ? Math.round(spot.mx - p.width / 2) : leftX);
             p.y = Math.round(spot.y - p.height / 2);
         });
 

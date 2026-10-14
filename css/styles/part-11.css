@@ -1165,18 +1165,20 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 
 /* Galaxy map cursor: per-faction look (see selectionFrameSvg). */
 .gm-selection-frame { color: var(--faction-accent, var(--color-primary)); }
-.gm-selection-frame .gm-corner { fill: currentColor; }
+.gm-selection-frame .gm-corner { fill: currentColor; vector-effect: non-scaling-stroke; }
 .gm-corner-stroke,
 .gm-corner-organic {
     fill: none;
     stroke: currentColor;
-    stroke-width: var(--cursor-t, 3px);
+    stroke-width: max(3px, var(--cursor-t, 3px));
+    opacity: 1;
     stroke-linecap: round;
     stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
 }
 .gm-corner-stroke { stroke-linecap: square; stroke-linejoin: miter; }
 /* Voidborn: organic, softly glowing and breathing instead of snapping. */
-.gm-cursor-voidborn { filter: drop-shadow(2px 0 0 color-mix(in srgb, currentColor 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, currentColor 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, currentColor 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, currentColor 55%, transparent)); }
+.gm-cursor-voidborn { filter: none; }
 .galaxy-map-overlay .gm-node.selected .gm-cursor-voidborn,
 .galaxy-map-overlay .gm-node.hovered .gm-cursor-voidborn,
 .galaxy-map-embedded.is-input-active .gm-node.selected .gm-cursor-voidborn,

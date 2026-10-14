@@ -39,10 +39,10 @@ const MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // tabs of the active area show up next to it as small icon tabs.
 // The first tab of an area is where a click on the area lands first.
 const MENU_AREAS = [
-    { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station', 'hangar'], defaultTab: 'station' },
+    { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station'], defaultTab: 'station' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
-    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
+    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
     { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
     { id: 'explore', label: 'WIKI', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
 ];
@@ -141,7 +141,7 @@ function applyMenuAreasLayout(layout) {
     });
     next.forEach((a) => { if (a.tabs.indexOf(a.defaultTab) === -1) a.defaultTab = a.tabs[0]; });
     MENU_AREAS.length = 0;
-    next.filter((a) => a.tabs.length).forEach((a) => MENU_AREAS.push(a));
+    next.forEach((a) => MENU_AREAS.push(a));
     return true;
 }
 

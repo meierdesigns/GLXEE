@@ -974,8 +974,8 @@ html body .profile-selection-name-mode .pp-ctl .pp-ico { width: clamp(34px, calc
     background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sweep) 35%, transparent) 70%, var(--sweep) 98%, transparent);
     animation: vf-fsweep 0.7s cubic-bezier(.5, 0, .2, 1) forwards; }
 @keyframes vf-fsweep { to { left: 100%; } }
-.vf-fswap { animation: vf-fswap 0.5s steps(8, end) both; }
-@keyframes vf-fswap { 0% { opacity: 0; transform: translateX(-14px); filter: brightness(2.2); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; filter: none; } }
+.vf-fswap { animation: none; }   /* content swap-in flashed the whole dialog on every faction pick */
+@keyframes vf-fswap { 0% { opacity: 0.55; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .vf-fswap { animation: none; } }
 
 /* Faction switch: cables are unplugged (pulled out toward the window edge), then the new set plugs in. */
@@ -1143,9 +1143,9 @@ html body .profile-selection-name-mode .profile-faction-info-row:not(.profile-st
 .pfx-tile-ico { grid-row: 1 / 3; display: inline-flex; }
 .pfx-tile-val { font-size: var(--font-h2, 16px); color: #fff; overflow-wrap: anywhere; }
 .pfx-bars { display: flex; flex-direction: column; gap: 10px; }
-.pfx-bar { display: grid; grid-template-columns: 34px 138px 1fr auto; align-items: center; gap: 10px; }
-.pfx-bar-ico { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; }
-.pfx-bar-ico svg { width: 30px; height: 30px; }
+.pfx-bar { display: grid; grid-template-columns: 48px 138px 1fr auto; align-items: center; gap: 10px; }
+.pfx-bar-ico { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; }
+.pfx-bar-ico svg { width: 44px; height: 44px; }
 .pfx-bar-label { font-size: var(--font-small, 12px); letter-spacing: 2px; color: color-mix(in srgb, var(--color-primary) 70%, #fff); }
 .pfx-bar-cells { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
 .pfx-bar-cells i { height: 12px; background: color-mix(in srgb, var(--color-primary) 14%, #05060a); border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent); box-sizing: border-box; }
@@ -1515,3 +1515,13 @@ html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-side {
     }
     html body .profile-selection-name-mode.is-name-step .profile-start-galaxy-side { height: auto; min-height: 0; max-height: 130px; }
 }
+
+/* Cable switch: hold the motion until the swap frame is painted, and (pixel frame) run it without the full-screen #vfFramePx
+   filter: re-filtering two full-screen layers on every animation frame was the stall. The cables sit on the pixel lattice already,
+   so the filter is applied again once they are at rest. */
+.vfc-hold .vfc { animation-play-state: paused !important; }
+html[data-vf-frame-px="on"] #vf-cables.vfc-in,
+html[data-vf-frame-px="on"] #vf-cables-old { filter: none !important; }
+.pfx-bar-ico :is(img, canvas) { width: 44px; height: 44px; image-rendering: pixelated; }
+.pfx-bar-ico .pfx-ico { display: block; width: 44px; height: 44px; background: var(--pfx-c, var(--color-primary)); -webkit-mask: var(--pfx-img) center / contain no-repeat; mask: var(--pfx-img) center / contain no-repeat; image-rendering: pixelated; filter: drop-shadow(1px 1px 0 #05060a); }
+html body .profile-start-main .profile-area-row { grid-template-columns: 90px 44px 1fr; }

@@ -16,7 +16,8 @@ extendClass(ProfileSelectionManager, {
     pfxBar(label, iconKey, n, max, valueText) {
         const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
         const acc = this.pfxAccent;
-        const icon = ir && iconKey ? ir.imgHtml(iconKey, 20, '', acc, false) : '';
+        const m = ir && iconKey ? /src="([^"]+)"/.exec(ir.imgHtml(iconKey, 40, '', acc, false) || '') : null;
+        const icon = m ? `<i class="pfx-ico" style="--pfx-img:url('${m[1]}');--pfx-c:${acc}"></i>` : '';
         const cells = Array.from({ length: max }, (_, i) => `<i class="${i < Math.round(n) ? 'on' : ''}"></i>`).join('');
         return `<div class="pfx-bar"><span class="pfx-bar-ico">${icon}</span><span class="pfx-bar-label">${label}</span>` +
             `<span class="pfx-bar-cells">${cells}</span><b class="pfx-bar-val">${valueText}</b></div>`;

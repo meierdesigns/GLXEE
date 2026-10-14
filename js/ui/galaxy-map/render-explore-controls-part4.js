@@ -409,9 +409,10 @@ extendClass(GalaxyMapManager, {
             ? planetConfigManager.getHostileFactions(planetId)
             : planetConfigManager.getPlanetFactions(planetId);
         if (!factions.length) return '';
+        const visibleFactions = factions.slice(0, 1);
         if (typeof profileSelectionManager === 'undefined' || !profileSelectionManager.getFactionEmblemHtml) return '';
         // Bare faction icons — no boxes around them.
-        const names = factions.map((f) =>
+        const names = visibleFactions.map((f) =>
             `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16, this.getMapDetail())}</span>`
         ).join('');
         const w = 80;

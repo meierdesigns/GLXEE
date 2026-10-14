@@ -71,14 +71,11 @@ class ProfileManager {
     ensureEconomyDefaults(profile) {
         if (!profile) return null;
         const starter = this.getStarterShipId();
-        if (!Array.isArray(profile.ownedShipIds)) {
+        if (!Array.isArray(profile.ownedShipIds) || !profile.ownedShipIds.length) {
             profile.ownedShipIds = [starter];
         }
-        if (profile.ownedShipIds.indexOf(starter) === -1) {
-            profile.ownedShipIds.unshift(starter);
-        }
         if (!profile.activeShipId || profile.ownedShipIds.indexOf(profile.activeShipId) === -1) {
-            profile.activeShipId = starter;
+            profile.activeShipId = profile.ownedShipIds[0];
         }
         if (!Array.isArray(profile.unlockedShopIds)) {
             profile.unlockedShopIds = [];

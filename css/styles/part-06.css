@@ -1163,7 +1163,7 @@
 .galaxy-map-overlay .gm-node.selected .gm-selection-frame,
 .galaxy-map-embedded.is-input-active .gm-node.hovered .gm-selection-frame,
 .galaxy-map-embedded.is-input-active .gm-node.selected .gm-selection-frame {
-    animation: gm-select-pulse 0.95s steps(4, end) infinite alternate;
+    animation: none;
 }
 @keyframes gm-select-pulse {
     from { transform: scale(0.88); }

@@ -166,6 +166,15 @@
                 attributes: true,
                 attributeFilter: ['class', 'style', 'data-hs-tab', 'hidden']
             });
+            // A faction change is stamped on <html>, outside the body observer: repaint the backdrops once per frame.
+            var facRaf = 0;
+            new MutationObserver(function () {
+                if (facRaf) return;
+                facRaf = requestAnimationFrame(function () {
+                    facRaf = 0;
+                    if (typeof global.vfRepaintBackdrops === 'function') global.vfRepaintBackdrops();
+                });
+            }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-faction', 'data-pf'] });
         }
     }
 

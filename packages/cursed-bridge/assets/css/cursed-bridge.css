@@ -1,0 +1,195 @@
+/* CursedBridge — drop-in module picker (theme-light defaults, works on matrix too) */
+.cursed-bridge {
+  --cb-fg: var(--fg, var(--text, #e8f0ea));
+  --cb-muted: var(--muted, #8aa090);
+  --cb-border: var(--border, rgba(88, 255, 168, 0.22));
+  --cb-surface: var(--surface, rgba(8, 18, 12, 0.72));
+  --cb-accent: var(--accent, #58ffa8);
+  --cb-danger: var(--danger, #e07070);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 12rem;
+  max-height: min(70vh, 40rem);
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--cb-border);
+  border-radius: 8px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.cursed-bridge * {
+  box-sizing: border-box;
+}
+
+.cursed-bridge-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.cursed-bridge-title {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.cursed-bridge-status {
+  font-size: 0.72rem;
+  color: var(--cb-muted);
+}
+
+.cursed-bridge-status.is-error {
+  color: var(--cb-danger);
+}
+
+.cursed-bridge-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.cursed-bridge-search,
+.cursed-bridge-tags {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--cb-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.cursed-bridge-btn {
+  appearance: none;
+  border: 1px solid var(--cb-border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cursed-bridge-btn:hover {
+  border-color: var(--cb-accent);
+}
+
+.cursed-bridge-btn-primary {
+  border-color: color-mix(in srgb, var(--cb-accent) 55%, var(--cb-border));
+  background: color-mix(in srgb, var(--cb-accent) 14%, transparent);
+}
+
+.cursed-bridge-meta {
+  font-size: 0.72rem;
+  color: var(--cb-muted);
+}
+
+.cursed-bridge-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-right: 0.15rem;
+}
+
+.cursed-bridge-empty {
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+}
+
+.cursed-bridge-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.45rem 0.55rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cursed-bridge-item:hover {
+  border-color: var(--cb-border);
+  background: color-mix(in srgb, var(--cb-accent) 6%, transparent);
+}
+
+.cursed-bridge-item:has(input:checked) {
+  border-color: color-mix(in srgb, var(--cb-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--cb-accent) 10%, transparent);
+}
+
+.cursed-bridge-item input {
+  margin-top: 0.2rem;
+}
+
+.cursed-bridge-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.cursed-bridge-item-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.cursed-bridge-item-id {
+  font-size: 0.68rem;
+  color: var(--cb-muted);
+  word-break: break-all;
+}
+
+.cursed-bridge-item-desc {
+  font-size: 0.75rem;
+  color: var(--cb-muted);
+  line-height: 1.35;
+}
+
+.cursed-bridge-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  font-size: 0.68rem;
+  color: var(--cb-muted);
+}
+
+.cursed-bridge-tag {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--cb-border);
+  border-radius: 999px;
+  font-size: 0.65rem;
+}
+
+.cursed-bridge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--cb-border);
+}
+
+.cursed-bridge-log {
+  margin: 0;
+  max-height: 10rem;
+  overflow: auto;
+  font-size: 0.68rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cursed-bridge .muted {
+  color: var(--cb-muted);
+}

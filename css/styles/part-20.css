@@ -274,12 +274,10 @@ html[data-vf-frame-px="on"] body #vf-bezel .vf-fr-hole { border-radius: var(--fr
 html[data-vf-frame-px="on"] body #vf-bezel::before,
 html[data-vf-frame-px="on"] body #vf-bezel .vf-bezel-back { border-radius: var(--fr-hole-r) !important; }
 
-/* Pixel frame: one flat hull plate. The offset dark/lit bevel plates leave a dark crescent at a
-   rounded corner once the bands are as wide as a cell, so they are off; the bevel comes from the
-   glass edge (#vf-bezel::before) instead, which is drawn on the same grid. */
-html[data-vf-frame-px="on"] .vf-bezel { --fr-bevel: 0px; }
-html[data-vf-frame-px="on"] #vf-bezel .vf-fr-dark,
-html[data-vf-frame-px="on"] #vf-bezel .vf-fr-lit { display: none; }
+/* Pixel frame: the lit/dark bevel plates stay on, one grid cell wide, so the outer edge keeps its
+   light (up-left) and shade (down-right) like the smooth frame. The opening's own edge bevel is
+   drawn by the hull hole shadow (screen-frame.css). */
+html[data-vf-frame-px="on"] .vf-bezel { --fr-bevel: var(--fr-px, 3px); }
 
 /* Pixel frame: the screen opening is rounded by FRAME ROUND cells on every faction; the grid
    filter steps that radius into voxel stairs. */

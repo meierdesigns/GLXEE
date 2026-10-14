@@ -305,7 +305,7 @@ extendClass(PlanetSVGManager, {
      * part behind the planet is hidden.
      */
     moonRects(grid, geo, palette) {
-        const moons = geo && geo.moons;
+        const moons = geo && Array.isArray(geo.moons) ? geo.moons.slice(0, 1) : null;
         if (!Array.isArray(moons) || !moons.length) return [];
         const k = geo.k || 1;
         const out = [];

@@ -74,6 +74,10 @@ extendClass(ShipLoadoutManager, {
     getSlotCaps(shipId, modelClass) {
         const caps = this.getBaseSlotCaps(modelClass);
         caps.weapons = this.baseWeaponMounts(caps);
+        // A start profile begins with a small base set of slots (the area levels then open more).
+        const limit = typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+            ? (((profileManager.getActiveProfile() || {}).shipUpgrades || {})[shipId] || {}).baseSlotCaps : null;
+        if (limit) Object.keys(limit).forEach((k) => { if (caps[k] != null) caps[k] = Math.min(caps[k], Number(limit[k]) || 0); });
         const lv = this.getAreaLevels(shipId);
         SHIP_AREAS.forEach((a) => {
             this.getAreaSlotBonus(a.id, lv[a.id] || 0).forEach((key) => { caps[key] += 1; });

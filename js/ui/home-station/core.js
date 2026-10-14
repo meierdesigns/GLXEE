@@ -45,9 +45,9 @@ class HomeStationUI {
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
         // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
-        this._hangarLeftView = 'areas';
+        this._hangarLeftView = 'ships';
         try {
-            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships') this._hangarLeftView = v; }
+            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships' || v === 'slots') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
         try {
             const raw = localStorage.getItem('vf_hs_hangar_sidebar_prefs_v1');
@@ -117,7 +117,7 @@ class HomeStationUI {
             ftrade: { label: 'TRADE', icon: 'hsShop' },
             ffleet: { label: 'FLEETS', icon: 'hsHangar' },
             fcontracts: { label: 'CONTRACTS', icon: 'hsExplore' },
-            play: { label: 'PLAY', icon: 'menuStart' }
+            play: { label: 'LAUNCH', icon: 'menuStart' }
         };
         // Initialize HangarUI module — DISABLED TEMPORARILY for debugging
         // if (typeof HangarUI !== 'undefined') {
@@ -393,6 +393,13 @@ class HomeStationUI {
         const hd = { station: 'navStation32', hangar: 'navHangar32', factions: 'navFactions32', explore: 'navExplore32', explorations: 'navExplore32', menu: 'navMenu32' }[areaId];
         if (hd && typeof IconSprites !== 'undefined' && IconSprites[hd]) {
             return this.iconHtml(hd, 64, 'hs-tab-pixel', false);
+        }
+        // No 32x32 art: one Scale2x pass of the cleaned 16x16 icon, so every nav card has the same fine 2 px cells.
+        const base = this.tabIconKey(fallbackKey);
+        if (typeof IconSprites !== 'undefined' && typeof iconRenderer !== 'undefined' && iconRenderer.scale2x && IconSprites[base]) {
+            const key = base + '__nav32';
+            if (!IconSprites[key]) IconSprites[key] = iconRenderer.scale2x(IconSprites[base]);
+            return this.iconHtml(key, 64, 'hs-tab-pixel', false);
         }
         return this.tabIconHtml(fallbackKey, true);
     }

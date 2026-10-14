@@ -122,6 +122,12 @@ extendClass(ShipConfigManager, {
             );
         }
         merged.faction = cfg.faction != null ? cfg.faction : (baseModel.faction || null);
+        // The stock hulls are tagged 'terran' only as a default: the pilot's own faction skins them (colours + silhouette).
+        if (merged.faction === 'terran' && !cfg.custom && typeof profileManager !== 'undefined'
+            && profileManager.hasActiveProfile && profileManager.hasActiveProfile()) {
+            const pf = profileManager.getActiveProfile().faction;
+            if (pf) merged.faction = pf;
+        }
         merged.speed = cfg.speed;
         merged.maxHealth = cfg.maxHealth;
         merged.armor = cfg.armor;

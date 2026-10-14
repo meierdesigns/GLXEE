@@ -69,7 +69,7 @@ class CombinedSelectionManager {
 
         // Try to load from asset loader if available
         try {
-            const { shipAssetLoader } = await import('../../graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import(new URL('js/graphics/ship-assets/ship-asset-loader.js', document.baseURI).href);
             if (shipAssetLoader && shipAssetLoader.isLoaded()) {
                 const assetShips = shipAssetLoader.getPlayerShipModels();
                 if (assetShips && assetShips.length > 0) {

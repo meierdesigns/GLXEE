@@ -7,6 +7,7 @@
 // (boot / refresh) are applied instantly, so a reload paints the saved faction without any animation.
 const factionGui = (() => {
     const ROOT = document.documentElement;
+    const log = (m, d) => { if (window.vfLog) window.vfLog('gui', m, d); };
     let shown = ROOT.getAttribute('data-faction') || '';       // faction currently stamped on the page (stage-boot.js sets it on the first frame)
     let desired = shown;
     let busy = false;
@@ -21,6 +22,7 @@ const factionGui = (() => {
 
     // The frame (bezel attribute, cable styling attribute) and the remembered values follow the stamped theme.
     function commit(id, stamp) {
+        log('commit ' + shown + ' -> ' + id);
         shown = id;
         stamp();
         const bz = bezel();
@@ -41,13 +43,24 @@ const factionGui = (() => {
     // (or the wizard previewing one) left e.g. the menu hangar in the old faction's image. Repaint every host from its CSS.
     function repaintBackdrops() {
         const P = window.VFBgMouseParallaxParts;
-        if (!P || !P.getPrimaryBase || !P.readHostBackground || !P.paintBaseInstant) return;
+        if (!P || !P.getPrimaryBase || !P.readHostBackground || !P.paintBaseInstant) return Promise.resolve();
+        const done = [];
         document.querySelectorAll('.vf-bg-parallax-host').forEach((host) => {
             try {
                 const base = P.getPrimaryBase(host), bg = P.readHostBackground(host);
-                if (base && bg && bg.img && bg.img !== 'none' && base.style.backgroundImage !== bg.img) P.paintBaseInstant(base, bg.img, bg.bgColor);
+                if (!base || !bg || !bg.img || bg.img === 'none' || base.style.backgroundImage === bg.img) return;
+                // Paint only once the new art is decoded; otherwise the shared fallback room flashes before it.
+                const t0 = performance.now();
+                const paint = () => {
+                    log('backdrop ' + (host.className || host.tagName).toString().slice(0, 40) + ' decoded in ' + Math.round(performance.now() - t0) + 'ms' + (performance.now() - t0 >= 690 ? ' (TIMEOUT: art not ready, fallback may show)' : ''));
+                    if (!base.isConnected) return;
+                    const cur = P.readHostBackground(host);
+                    if (cur && cur.img && cur.img !== 'none' && base.style.backgroundImage !== cur.img) P.paintBaseInstant(base, cur.img, cur.bgColor);
+                };
+                if (P.preloadBg) done.push(P.preloadBg(bg.img).then(paint, paint)); else paint();
             } catch (e) { /* host not ready */ }
         });
+        return Promise.all(done);                                  // resolves once every backdrop shows the new art
     }
     window.vfRepaintBackdrops = repaintBackdrops;
 
@@ -57,20 +70,26 @@ const factionGui = (() => {
         const bz = bezel();
         const same = id === shown && (!bz || bz.getAttribute('data-faction') === id);
         if (same) { stamp(); return id; }                        // colour edits of the same faction: no animation
-        if (window.console && console.info) console.info('[factionGui] ' + shown + ' -> ' + id + (ready ? ' (animated)' : ' (instant)'), new Error().stack.split('\n').slice(2, 6).join(' | '));
-        if (busy) { pendingStamp = stamp; return id; }           // a switch is playing: the newest request wins afterwards
+        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] ' + shown + ' -> ' + id + (ready ? ' (animated)' : ' (instant)'), new Error().stack.split('\n').slice(2, 6).join(' | '));
+        log('go ' + shown + ' -> ' + id + ' | ready=' + ready + ' busy=' + busy + ' reduce=' + reduce());
+        if (window.vfLog && window.vfLog.watch) window.vfLog.watch('go ' + id);
+        if (busy) { log('busy: request queued, newest wins'); pendingStamp = stamp; return id; }           // a switch is playing: the newest request wins afterwards
         const sw = window.vfFitScope && window.vfFitScope.cableSwitch;
-        if (!ready || !bz || !sw || reduce()) { commit(id, stamp); return id; }
+        if (!ready || !bz || !sw || reduce()) { log('instant commit (ready=' + ready + ' bezel=' + !!bz + ' cableSwitch=' + !!sw + ')'); commit(id, stamp); return id; }
         busy = true;
         pendingStamp = null;
-        sw(id, () => {
+        // Decode the target faction's backdrops first so the swap never reveals the fallback room.
+        const fp = typeof factionPacks !== 'undefined' && factionPacks.warmFaction ? factionPacks.warmFaction(id, 700) : Promise.resolve();
+        const tw = performance.now();
+        fp.catch((e) => { log('warmFaction FAILED', e && e.message); }).then(() => log('art warmed in ' + Math.round(performance.now() - tw) + 'ms')).then(() => sw(id, () => {
+            log('apply (inside cable swap)');
             busy = false;
             commit(id, stamp);
             if (desired !== id) go(desired, pendingStamp || stamp);
-        });
+        }));
         return id;
     }
-    let pendingStamp = null;
+    let pendingStamp = null, swapTok = null;
 
     /** Pilot-plate sync: bring the GUI back in line with the active profile unless something is previewing. */
     function follow(id) {
@@ -85,7 +104,11 @@ const factionGui = (() => {
     function swap(id, apply) {
         const sw = window.vfFitScope && window.vfFitScope.cableSwitch;
         if (!ready || !sw || reduce()) { apply(); return; }
-        sw(id, apply);
+        // Decode the target faction's art first, so the cable/background swap never shows the fallback room.
+        const fp = typeof factionPacks !== 'undefined' && factionPacks.warmFaction ? factionPacks.warmFaction(id, 500) : Promise.resolve();
+        if (window.vfLog) { window.vfLog('gui', 'swap -> ' + id + ' | ready=' + ready); if (window.vfLog.watch) window.vfLog.watch('swap ' + id); }
+        const tok = swapTok = {};
+        Promise.resolve(fp).catch(() => {}).then(() => { if (tok === swapTok) sw(id, apply); });
     }
 
     /**
@@ -106,7 +129,7 @@ const factionGui = (() => {
         if (!want) return;
         const docOk = ROOT.getAttribute('data-faction') === want && ROOT.getAttribute('data-vf-faction') === want;
         if (docOk && bz.getAttribute('data-faction') === want) return;
-        if (window.console && console.info) console.info('[factionGui] reconcile -> ' + want + ' (instant)');
+        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] reconcile -> ' + want + ' (instant)');
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) factionShipStyles.applyDocumentFactionTheme(want);
         else commit(want, () => {});
     }

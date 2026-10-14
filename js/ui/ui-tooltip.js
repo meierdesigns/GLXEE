@@ -153,7 +153,7 @@ class UiTooltipManager {
             this._delayTimer = 0;
             if (this._active !== anchor || !anchor.isConnected) return;
             this.reveal(anchor, text);
-        }, UiTooltipManager.SHOW_DELAY_MS);
+        }, anchor.hasAttribute('data-ui-tip-instant') ? 0 : UiTooltipManager.SHOW_DELAY_MS);
     }
 
     reveal(anchor, text) {
@@ -219,6 +219,16 @@ class UiTooltipManager {
         tip.classList.remove('below', 'side-left', 'side-right');
         // Sidebars: open beside the panel (right of the left one, left of the
         // right one) instead of covering the neighbouring rows.
+        // Slot-layout cells: right beside the cell itself.
+        if (anchor.closest('.hs-slotview')) {
+            let sl = r.right + 10;
+            if (sl + tw > window.innerWidth - 8) sl = r.left - tw - 10;
+            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
+            tip.classList.add('side-right');
+            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
+            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            return;
+        }
         const leftBar = anchor.closest('.hs-hangar-list, [data-tip-side="right"]');
         const rightBar = !leftBar && anchor.closest('.hs-hangar-preview, [data-tip-side="left"]');
         if (leftBar || rightBar) {

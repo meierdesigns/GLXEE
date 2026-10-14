@@ -20,6 +20,26 @@ const factionPacks = (() => {
     const url = (f, name) => BASE + f + '/' + name;
     const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
 
+    // One decode per image, kept alive in vfBgKeep so the decoded bitmap is not dropped before the CSS uses it.
+    const warmed = {};
+    function warmSrc(src) {
+        if (warmed[src]) return warmed[src];
+        const im = new Image(); im.src = src;
+        (window.vfBgKeep = window.vfBgKeep || []).push(im);
+        const t0 = performance.now(), nm = src.split('/').slice(-3).join('/');
+        return (warmed[src] = im.decode ? im.decode().then(() => { if (window.vfLog) window.vfLog('load', 'decoded ' + nm + ' in ' + Math.round(performance.now() - t0) + 'ms'); }, (e) => { if (window.vfLog) window.vfLog('load', 'FAILED ' + nm + ' after ' + Math.round(performance.now() - t0) + 'ms: ' + (e && e.message)); }) : Promise.resolve());
+    }
+    // Decodes every backdrop of one faction; resolves when all are ready or after maxMs (never blocks longer).
+    function warmFaction(f, maxMs) {
+        const list = (files[f] || []).filter((n) => /^ui\/bg-[\w-]+\.png$/.test(n)).map((n) => url(f, n));
+        if (!list.length) return Promise.resolve();
+        const t0 = performance.now();
+        const lim = maxMs || 700;
+        if (window.vfLog) window.vfLog('load', 'warm ' + f + ': ' + list.length + ' backdrops (cap ' + lim + 'ms)');
+        let done = false;
+        return Promise.race([Promise.all(list.map(warmSrc)).then(() => { done = true; if (window.vfLog) window.vfLog('load', 'warm ' + f + ' complete in ' + Math.round(performance.now() - t0) + 'ms'); }), new Promise((r) => setTimeout(() => { if (!done && window.vfLog) window.vfLog('load', 'warm ' + f + ' CAP HIT after ' + lim + 'ms: some art still loading'); r(); }, lim))]);
+    }
+
     async function listFiles() {
         // Manifests first (tools/build-faction-manifests.py): a plain static host then logs no 404 at all. Only without
         // any manifest does it ask the dev server (/__factions), which lists the folders live.
@@ -71,8 +91,7 @@ const factionPacks = (() => {
             factionShipStyles.buildAllPixelSprites();
             if (factionShipStyles.invalidateColorCaches) factionShipStyles.invalidateColorCaches();
             if (factionShipStyles.applyDocumentFactionTheme) {                       // silent: no bezel cable swap on a plain reload
-                factionShipStyles._cablesDone = true;
-                try { factionShipStyles.applyDocumentFactionTheme(); } finally { factionShipStyles._cablesDone = false; }
+                factionShipStyles.applyDocumentFactionTheme();
             }
         }
         // Backdrops (menu, wizard, station tabs): decode them ahead of use so a screen or faction switch never paints the fallback
@@ -84,11 +103,7 @@ const factionPacks = (() => {
         Object.keys(files).forEach((f) => files[f].forEach((n) => { if (/^ui\/bg-[\w-]+\.png$/.test(n)) bgs.push(url(f, n)); }));
         bgs.sort((a, b) => rank(a) - rank(b));
         const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 120));
-        const warm = (src) => {
-            const im = new Image(); im.src = src;
-            (window.vfBgKeep = window.vfBgKeep || []).push(im);
-            return im.decode ? im.decode().catch(() => {}) : Promise.resolve();
-        };
+        const warm = warmSrc;
         const warmNext = () => { const src = bgs.shift(); if (src) warm(src).then(() => idle(warmNext)); };
         while (bgs.length && rank(bgs[0]) < 10) warm(bgs.shift());
         idle(warmNext);
@@ -96,5 +111,5 @@ const factionPacks = (() => {
         document.dispatchEvent(new CustomEvent('vf-faction-packs-ready'));
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
-    return { ready, has, url, config: (f) => cfg[f] || {}, files: (f) => (files[f] || []).slice() };
+    return { ready, has, url, warmFaction, config: (f) => cfg[f] || {}, files: (f) => (files[f] || []).slice() };
 })();

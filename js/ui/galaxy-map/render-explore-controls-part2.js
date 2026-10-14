@@ -56,7 +56,6 @@ extendClass(GalaxyMapManager, {
                             ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y), true)}
                         </div>
                     </foreignObject>
-                    ${this.planetFactionsSvg(n.planetId, size)}
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `
                         <g class="gm-base-marker" style="--fac:${rulerAccent}">

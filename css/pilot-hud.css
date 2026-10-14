@@ -9,27 +9,27 @@
 
 .vf-bezel {
     --ph-accent: var(--retro-ink, var(--color-primary));
-    --ph-top: 14;           /* distance from bezel top */
-    --ph-height: 46;
+    --ph-top: 24;           /* distance from bezel top (tab top = this - tab-up must stay below the silhouette notches, 16) */
+    --ph-height: 30;
     --ph-left: 130;         /* plate left edge */
     --ph-plate-w: 360;
     --ph-gap: 24;           /* space between the two screens */
-    --ph-rim-top: 9;        /* dither rim thickness */
+    --ph-rim-top: 8;        /* dither rim thickness */
     --ph-rim-side: 4;
-    --ph-line: 2;           /* accent line */
+    --ph-line: 3;           /* accent line */
     --ph-crest-w: 54;
     --ph-crest-h: 60;
-    --ph-crest-top: -10;    /* crest offset inside plate (must end above the game screen) */
+    --ph-crest-top: -20;    /* crest offset inside plate (must end above the game screen) */
     --ph-crest-left: -6;
-    --ph-name-size: 22;
+    --ph-name-size: 18;
     --ph-res-icon: 22;
-    --ph-tab-up: 4;         /* grey tab: how far it reaches above / around the screen */
-    --ph-tab-side: 10;
-    --ph-tab-down: 4;
+    --ph-tab-up: 8;         /* grey tab: how far it reaches above / around the screen */
+    --ph-tab-side: 14;
+    --ph-tab-down: 2;
     --ph-hull: #2b3240;
     --ph-dither-a: #2a64b4;
     --ph-dither-b: #123566;
-    --ph-tab-a: #4a5366;
+    --ph-tab-a: #5a6479;
     --ph-tab-b: #333a4a;
 }
 
@@ -77,7 +77,7 @@
     border-bottom-color: transparent;
     background:
         linear-gradient(var(--ph-hull) 0 0) padding-box,
-        conic-gradient(var(--ph-tab-a) 25%, var(--ph-tab-b) 0 50%, var(--ph-tab-a) 0 75%, var(--ph-tab-b) 0) 0 0 / calc(6 * var(--bz-u)) calc(6 * var(--bz-u));
+        conic-gradient(var(--ph-tab-a) 25%, var(--ph-tab-b) 0 50%, var(--ph-tab-a) 0 75%, var(--ph-tab-b) 0) 0 0 / calc(8 * var(--bz-u)) calc(8 * var(--bz-u));
 }
 
 /* ---- crest + name screen ---------------------------------------------- */

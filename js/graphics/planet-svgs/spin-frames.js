@@ -39,7 +39,7 @@ extendClass(PlanetSVGManager, {
         this._lights = spec ? spec.lights.map((l) => ({ v: this.planetLightVector(l.step), w: l.w })) : null;
         const built = this.buildBaseGrid(n, seedKey + '|' + id, radiusBias, k, (feat.rings ? 2 : 1) * k);
         this._lights = null;
-        built.moons = feat.moons;
+        built.moons = Array.isArray(feat.moons) ? feat.moons.slice(0, 1) : [];
         const base = built.grid.map((row) => row.slice());
         this.applyStyleDetails(built.grid, style, seedKey + '|' + style, built, feat);
         const model = {

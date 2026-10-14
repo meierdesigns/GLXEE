@@ -55,12 +55,21 @@ extendClass(ShipAssetLoader, {
                 if (row[cols - 1 - c] && row[cols - 1 - c] !== 1) row[cols - 1 - c] = 1;
             }
         }
+        const plainHull = g.map((row) => row.slice());   // before the bright brand / thruster stamps
         if (silhouette === 'rings') {
-            // Twin hollow ring apertures — the voidborn's hallmark void gap.
-            const holeR = Math.max(1, Math.round(Math.min(cols, rows) * 0.22));
-            this.gridFillRect(g, cols / 2 - holeR / 2, rows * 0.38 - holeR / 2, holeR, holeR, 3);
-            const holeR2 = Math.max(1, Math.round(holeR * 0.6));
-            this.gridFillRect(g, cols * 0.72 - holeR2 / 2, rows * 0.68 - holeR2 / 2, holeR2, holeR2, 0);
+            // Hollow ring apertures — the voidborn's hallmark void gap: round accent rings around a
+            // see-through eye (corner pixels cut), not filled rectangles.
+            const ringAt = (cx, cy, size) => {
+                const sz = Math.max(4, size);
+                const c0 = Math.round(cx - sz / 2), r0 = Math.round(cy - sz / 2);
+                this.gridFillRect(g, c0, r0, sz, sz, 3);
+                this.gridFillRect(g, c0 + 1, r0 + 1, sz - 2, sz - 2, 0);
+                [[0, 0], [sz - 1, 0], [0, sz - 1], [sz - 1, sz - 1]].forEach(([dc, dr]) => this.gridFillRect(g, c0 + dc, r0 + dr, 1, 1, 2));
+                if (sz >= 6) this.gridFillRect(g, c0 + sz / 2 - 1, r0 + sz / 2 - 1, 2, 2, 3);
+            };
+            const holeR = Math.max(4, Math.round(Math.min(cols, rows) * 0.3));
+            ringAt(cols / 2, rows * 0.4, holeR);
+            if (rows >= 12) ringAt(cols / 2, rows * 0.72, Math.max(4, Math.round(holeR * 0.7)));
         } else if (silhouette === 'spikes') {
             // Diagonal chevron brand — an angled raider V etched into the hull.
             const armW = Math.max(1, Math.round(cols * 0.12));
@@ -86,7 +95,7 @@ extendClass(ShipAssetLoader, {
                 }
             }
         }
-        if (variant === 1) {
+        if (variant === 1 && silhouette !== 'rings') {   // paneled slab brand; the voidborn keep their round apertures
             this.gridFillRect(g, cols * 0.22, rows * 0.24, cols * 0.56, Math.max(1, rows * 0.24), 3);
             this.gridFillRect(g, 1, rows * 0.62, Math.max(1, cols * 0.1), Math.max(1, rows * 0.15), 3);
             this.gridFillRect(g, cols - 1 - Math.max(1, cols * 0.1), rows * 0.62, Math.max(1, cols * 0.1), Math.max(1, rows * 0.15), 3);
@@ -96,6 +105,7 @@ extendClass(ShipAssetLoader, {
         // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
         // Accent blocks sit at fixed fractions of the frame; clip them to
         // the hull so none float beside a lopsided or tapered silhouette.
+        if (!this.hullBrandStamps) g.forEach((row, i) => row.forEach((v, j) => { row[j] = plainHull[i][j]; }));   // bright accent stamps are off; plating / outline stay
         this.clipGridToMask(g, hullMask);
         if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;

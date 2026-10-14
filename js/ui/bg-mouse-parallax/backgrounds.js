@@ -82,6 +82,15 @@
         var bgColor = cs.backgroundColor || '#000';
         if (probe.parentNode) probe.parentNode.removeChild(probe);
 
+        if ((!img || img === 'none') && host.parentNode) {
+            // Rules that need the host's context: probe as its sibling instead of toggling the host (no ::before snap).
+            var sib = probe.cloneNode(false);
+            host.parentNode.insertBefore(sib, host);
+            var cs2 = getComputedStyle(sib);
+            img = cs2.backgroundImage;
+            bgColor = cs2.backgroundColor || bgColor;
+            sib.remove();
+        }
         if (!img || img === 'none') {
             var hadReady = host.classList.contains('vf-bg-parallax-ready');
             if (hadReady) host.classList.remove('vf-bg-parallax-ready');

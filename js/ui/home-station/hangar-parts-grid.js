@@ -84,7 +84,7 @@ extendClass(HomeStationUI, {
             if (toggleable.indexOf(area) === -1) return '';
             const on = !slm.isAreaEnabled || slm.isAreaEnabled(this.hangarShipId, area);
             const areaLabel = this.areaLabel ? this.areaLabel(area) : area.toUpperCase();
-            return `<label class="hs-slotview-toggle" title="${on ? 'Switch off' : 'Switch on'}"><input type="checkbox" data-area-toggle="${this.hangarShipId}|${area}"${on ? ' checked' : ''} aria-label="${areaLabel} on/off"><span>${on ? 'ON' : 'OFF'}</span></label>`;
+            return `<button type="button" class="hs-slotview-toggle" title="${on ? 'Switch off' : 'Switch on'}" data-slot-area-toggle-button="${this.hangarShipId}|${area}" aria-pressed="${on}" aria-label="${areaLabel} on/off"><span class="hs-slotview-switch${on ? ' is-on' : ''}" aria-hidden="true"></span><span>${on ? 'ON' : 'OFF'}</span></button>`;
         };
         const row = (label, items, lvl, ico, area) => `<div class="hs-slotview-row" style="--sv:${Math.max(...[dims[Math.min(2, Math.max(0, lvl | 0))][1]].concat(items.map((sl) => dims[sl.split && sl.kind === 'weapon' ? Math.max(0, slotLv(sl) - 1) : slotLv(sl)][1])))}px"><span class="hs-slotview-name">${ico || ''}<span>${label}</span>${areaToggle(area)}</span>` +
             `<span class="hs-slotview-slots">${items.length ? items.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('') : '<em>NO SLOT</em>'}</span></div>`;
@@ -464,6 +464,29 @@ extendClass(HomeStationUI, {
     },
     bindHangarPartsGrid() {
         if (!this.overlay) return;
+        this.overlay.querySelectorAll('[data-slot-area-toggle]').forEach((input) => {
+            input.onchange = () => {
+                const [id, area] = input.getAttribute('data-slot-area-toggle').split('|');
+                const res = shipLoadoutManager.setAreaEnabled(id, area, input.checked);
+                if (!res.ok) return;
+                this._hangarLastModel = null;
+                this._hangarRecenter = true;
+                this.createUI();
+            };
+        });
+        this.overlay.querySelectorAll('[data-slot-area-toggle-button]').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const [id, area] = button.getAttribute('data-slot-area-toggle-button').split('|');
+                const res = shipLoadoutManager.setAreaEnabled(id, area, !shipLoadoutManager.isAreaEnabled(id, area));
+                if (res.ok) {
+                    this._hangarLastModel = null;
+                    this._hangarRecenter = true;
+                    this.createUI();
+                }
+            });
+        });
         this.overlay.querySelectorAll('[data-hangar-left-view]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();

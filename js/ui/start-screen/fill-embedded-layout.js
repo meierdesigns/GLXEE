@@ -114,7 +114,7 @@ extendClass(StartScreenManager, {
 
         panel.innerHTML =
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
-            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. Every area keeps at least one tab. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
+            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
             `<div class="hs-layout-areas">${areasHtml}${menuHtml}</div>` +
             '<div class="hs-menu-panel-actions"><button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
@@ -196,9 +196,9 @@ extendClass(StartScreenManager, {
                     next.splice(insertAt(next), 0, d.tab);
                     setMenu(next);
                 } else if (spot.area === MENU) {
-                    // Area → menu (station pages only; the area keeps one tab).
+                    // Area → menu (station pages only; an emptied area is hidden).
                     const src = MENU_AREAS.find((a) => a.id === d.area);
-                    if (!src || src.tabs.length < 2 || STATION_TABS.indexOf(d.tab) === -1) return;
+                    if (!src || STATION_TABS.indexOf(d.tab) === -1) return;
                     src.tabs = src.tabs.filter((t) => t !== d.tab);
                     if (src.defaultTab === d.tab) src.defaultTab = src.tabs[0];
                     const next = ids.filter((t) => t !== d.tab);
@@ -217,8 +217,6 @@ extendClass(StartScreenManager, {
             const src = MENU_AREAS.find((a) => a.id === d.area);
             const dst = MENU_AREAS.find((a) => a.id === spot.area);
             if (!src || !dst || spot.tab === d.tab) return;
-            // Every area keeps at least one tab.
-            if (src !== dst && src.tabs.length < 2) return;
             src.tabs = src.tabs.filter((t) => t !== d.tab);
             if (src !== dst && src.defaultTab === d.tab) src.defaultTab = src.tabs[0];
             let idx = spot.tab ? dst.tabs.indexOf(spot.tab) : dst.tabs.length;

@@ -56,7 +56,7 @@ extendClass(HomeStationUI, {
         const onProfiles = this.tab === 'menu' && typeof startScreenManager !== 'undefined' && startScreenManager.embeddedMenuTab === 'profiles';
         const profilesBtn = (oi) => `<button type="button" class="hs-tab hs-area-btn${onProfiles ? ' active' : ''}${this.holoJustOn('profiles', onProfiles) ? ' holo-on' : ''}" data-open-menu="1" data-menu-open-tab="profiles" data-area-order-index="${oi}" data-nav-item>` +
             this.areaDecoHtml('profiles') +
-            `<span class="hs-tab-icon">${this.tabIconHtml(this.menuIconFor('area:profiles', 'menuProfiles'), true)}</span>` +
+            `<span class="hs-tab-icon">${this.navIconHtml('profiles', this.menuIconFor('area:profiles', 'menuProfiles'))}</span>` +
             `<span class="hs-tab-label">${this.menuLabelFor('area:profiles', 'PROFILES')}</span>` +
             `</button>`;
         const menuOn = this.isMenuRowTab() && !onProfiles;
@@ -70,7 +70,7 @@ extendClass(HomeStationUI, {
             if (entry === 'profiles') return profilesBtn(oi);
             if (entry === 'menu') return menuBtn(oi);
             const area = MENU_AREAS.find((a) => a.id === entry);
-            if (!area) return '';
+            if (!area || !area.tabs.length) return '';
             const areaLabel = this.menuLabelFor('area:' + area.id, area.label);
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
@@ -180,7 +180,7 @@ extendClass(HomeStationUI, {
             return svg ? `<span class="hs-play-launch-planet hs-play-launch-planet-${i}">${svg}</span>` : '';
         }).join('');
         const tint = this.factionTintFilter();
-        const label = this.menuLabelFor('play', 'PLAY');
+        const label = this.menuLabelFor('play', 'LAUNCH');
         return `<button type="button" class="hs-play-launch${this.tab === 'play' ? ' active' : ''}${this.holoJustOn('play', this.tab === 'play') ? ' holo-on' : ''}" data-play-launch data-nav-item title="${label}">` +
             (tint ? this.factionTintSvg(tint) : '') +
             `<span class="hs-play-launch-planets" aria-hidden="true">${planets}</span>` +

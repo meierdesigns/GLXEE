@@ -243,7 +243,7 @@
         if (cur.trim()) out.push(cur.trim());
         return out;
     }
-    let silhouetteRaf = 0;
+    let silhouetteRaf = 0, silKey = '';
     function clearSilhouette(body, frame) {
         body.style.clipPath = '';
         frame.style.clipPath = '';
@@ -251,6 +251,7 @@
     }
     function updateSilhouette() {
         silhouetteRaf = 0;
+        const tS = performance.now();
         const body = document.body, frame = document.getElementById('vf-bezel');
         if (!body || !frame) return;
         const off = document.documentElement.getAttribute('data-vf-frame-px') !== 'on';
@@ -261,8 +262,14 @@
         const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fr-px')) || 0;
         const W = body.offsetWidth, H = body.offsetHeight;
         const shape = getComputedStyle(frame).getPropertyValue('--fr-shape').trim();
-        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(body, frame); return; }
+        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(body, frame); silKey = ''; return; }
+        // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
+        // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
+        const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
+        const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow;
+        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && body.style.clipPath) { tagStageLayers(body, frame); return; }
         const probe = document.createElement('div');
+        probe.id = 'vfSilProbe';
         probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;width:' + W + 'px;height:' + H + 'px';
         const dot = document.createElement('div');
         dot.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0';
@@ -305,7 +312,7 @@
             } else ok = false;
         } catch (e) { ok = false; }
         probe.remove();
-        if (!ok) { clearSilhouette(body, frame); return; }
+        if (!ok) { clearSilhouette(body, frame); silKey = ''; return; }
         const data = sx.getImageData(0, 0, cw, ch).data;
         // One path of merged runs of whole cells (square staircase), in 0..1 box units.
         const nx = function (x) { return Math.min(1, x * cell / W).toFixed(6); };
@@ -343,18 +350,24 @@
             document.documentElement.appendChild(svg);
         }
         document.getElementById('vfStageClipPath').setAttribute('d', d);
+        if (window.vfLog) window.vfLog('mask', 'pixel silhouette rebuilt in ' + Math.round(performance.now() - tS) + 'ms (' + cw + 'x' + ch + ' cells, path ' + d.length + ' chars)');
         body.style.clipPath = 'url(#vfStageClip)';
         frame.style.clipPath = 'url(#vfStageClip)';
-        // Fixed-position stage layers (start screen, station, overlays) ignore the body's clip, so
-        // every full-stage layer gets the same clip. Anything with another box (tooltips, the
-        // remote) is left alone.
+        silKey = silKeyNow;
+        tagStageLayers(body, frame);
+    }
+    // Fixed-position stage layers (start screen, station, overlays) ignore the body's clip, so
+    // every full-stage layer gets the same clip. Anything with another box (tooltips, the
+    // remote) is left alone.
+    function tagStageLayers(body, frame) {
         const br = body.getBoundingClientRect();
         Array.prototype.forEach.call(body.children, function (el) {
             if (el === frame || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'svg') return;
             const r = el.getBoundingClientRect();
             const full = Math.abs(r.left - br.left) < 2 && Math.abs(r.top - br.top) < 2
                 && Math.abs(r.width - br.width) < 2 && Math.abs(r.height - br.height) < 2;
-            if (full) el.setAttribute('data-vf-stage-clip', ''); else el.removeAttribute('data-vf-stage-clip');
+            if (full) { if (!el.hasAttribute('data-vf-stage-clip')) el.setAttribute('data-vf-stage-clip', ''); }
+            else if (el.hasAttribute('data-vf-stage-clip')) el.removeAttribute('data-vf-stage-clip');
         });
     }
     function scheduleSilhouette() {
@@ -363,10 +376,20 @@
     (function watchSilhouette() {
         const frame = document.getElementById('vf-bezel');
         if (!frame || !document.body) { document.addEventListener('DOMContentLoaded', watchSilhouette, { once: true }); return; }
-        new MutationObserver(scheduleSilhouette).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
+        // A faction change rebuilds the stepped mask in the same task (before paint): a frame late showed the new frame under the old mask.
+        new MutationObserver(function () {
+            if (silhouetteRaf) { cancelAnimationFrame(silhouetteRaf); silhouetteRaf = 0; }
+            updateSilhouette();
+        }).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
         new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
         if (window.ResizeObserver) new ResizeObserver(scheduleSilhouette).observe(document.body);
-        new MutationObserver(scheduleSilhouette).observe(document.body, { childList: true });
+        // The rebuild itself adds / removes its own probe on <body>: ignoring that stops it re-triggering itself every frame.
+        new MutationObserver(function (recs) {
+            const other = recs.some(function (r) {
+                return Array.prototype.concat.call([], Array.prototype.slice.call(r.addedNodes), Array.prototype.slice.call(r.removedNodes)).some(function (n) { return n.id !== 'vfSilProbe'; });
+            });
+            if (other) scheduleSilhouette();
+        }).observe(document.body, { childList: true });
         window.addEventListener('resize', scheduleSilhouette);
         scheduleSilhouette();
     })();

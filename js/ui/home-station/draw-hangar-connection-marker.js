@@ -18,7 +18,10 @@ extendClass(HomeStationUI, {
         ctx.fillStyle = accent;
         ctx.beginPath();
         if (k) {
-            [k.s0, k.e0, k.e1, k.s1].forEach((p, i) => {
+            // Wing end corners ordered top / bottom so the outline never crosses when the wing swings past 90 degrees.
+            const eTop = k.e0[1] <= k.e1[1] ? k.e0 : k.e1;
+            const eBot = eTop === k.e0 ? k.e1 : k.e0;
+            [k.s0, eTop, eBot, k.s1].forEach((p, i) => {
                 const [x, y] = pt(p);
                 if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
             });
@@ -144,7 +147,7 @@ extendClass(HomeStationUI, {
      */
     drawHangarPixelHandle(ctx, cx, cy, w, h, hot, accent) {
         const c = this.hangarHandleColors(accent);
-        const grow = hot && (this.hangarAnimStep() % 2) ? 2 : 0;
+        const grow = 0;
         const W = Math.round(w + grow);
         const H = Math.round(h + grow);
         const x = Math.round(cx - W / 2);

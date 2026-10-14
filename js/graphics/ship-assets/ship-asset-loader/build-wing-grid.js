@@ -261,6 +261,7 @@ extendClass(ShipAssetLoader, {
         // nudges it, so a Kronax tail never reads like a Machine tail.
         const r0 = Math.round(rows * 0.4);
         const h = Math.max(1, Math.round(rows * 0.5));
+        const plainHull = g.map((row) => row.slice());   // before the bright brand / thruster stamps
         if (silhouette === 'rings') {
             // One large annular thruster with a hollow core.
             const w = Math.max(3, Math.round(cols * 0.52));
@@ -299,6 +300,7 @@ extendClass(ShipAssetLoader, {
         // Scrap (pirate) hulls are deliberately lopsided; the rest are symmetric.
         // Accent blocks sit at fixed fractions of the frame; clip them to
         // the hull so none float beside a lopsided or tapered silhouette.
+        if (!this.hullBrandStamps) g.forEach((row, i) => row.forEach((v, j) => { row[j] = plainHull[i][j]; }));   // bright accent stamps are off; plating / outline stay
         this.clipGridToMask(g, hullMask);
         if (silhouette !== 'scrap') this.mirrorGridLeftToRight(g);
         return g;

@@ -134,6 +134,7 @@ extendClass(ProfileSelectionManager, {
             difficultyTier: tiers.map((t, i) => [i, t, ''])
         };
         const labels = { faction: 'RULER', control: 'CONTROL', planetCount: 'PLANETS', sunCount: 'SUNS', difficultyTier: 'DIFFICULTY' };
+        const sliders = ['planetCount', 'sunCount', 'difficultyTier'];
         const rows = ['name', 'faction', 'control', 'planetCount', 'sunCount', 'difficultyTier', 'buttons'];
         const modal = document.createElement('div');
         modal.className = 'profile-galaxy-modal';
@@ -152,8 +153,12 @@ extendClass(ProfileSelectionManager, {
                 ${Object.keys(groups).map((g) => `
                 <div class="profile-start-row" data-gm-row="${g}">
                     <span class="profile-start-label">${labels[g]}</span>
-                    <div class="profile-start-chips">${groups[g].map(([v, l, icon]) =>
-                        `<button type="button" class="profile-start-chip${st[g] === v ? ' selected' : ''}" data-gm-opt="${g}" data-value="${v}" tabindex="-1">${icon}${l}</button>`).join('')}</div>
+                    ${sliders.indexOf(g) >= 0 ? `<div class="profile-gm-slider" style="--gm-n:${groups[g].length}">
+                        <input type="range" class="profile-gm-range" data-gm-slider="${g}" min="0" max="${groups[g].length - 1}" step="1" value="${groups[g].findIndex((o) => o[0] === st[g])}" tabindex="-1" aria-label="${labels[g]}">
+                        <div class="profile-gm-ticks">${groups[g].map(([v, l], i) =>
+                            `<span class="profile-gm-tick${st[g] === v ? ' selected' : ''}" style="--i:${i}" data-gm-opt="${g}" data-value="${v}">${l}</span>`).join('')}</div>
+                    </div>` : `<div class="profile-start-chips">${groups[g].map(([v, l, icon]) =>
+                        `<button type="button" class="profile-start-chip${st[g] === v ? ' selected' : ''}" data-gm-opt="${g}" data-value="${v}" tabindex="-1">${icon}${l}</button>`).join('')}</div>`}
                 </div>`).join('')}
                 </div>
                 <div class="profile-galaxy-modal-preview" data-gm-preview></div>
@@ -180,6 +185,8 @@ extendClass(ProfileSelectionManager, {
             if (g === 'planetCount') st.seed = Math.floor(Math.random() * 1e9);
             modal.querySelectorAll(`[data-gm-opt="${g}"]`).forEach((b) =>
                 b.classList.toggle('selected', String(v) === b.getAttribute('data-value')));
+            const range = modal.querySelector(`[data-gm-slider="${g}"]`);
+            if (range) range.value = String(groups[g].findIndex((o) => o[0] === v));
             refresh();
         };
         const sync = () => {
@@ -245,6 +252,14 @@ extendClass(ProfileSelectionManager, {
                 close();
             }
         });
+        modal.addEventListener('input', (e) => {
+            const range = e.target.closest && e.target.closest('[data-gm-slider]');
+            if (!range) return;
+            const g = range.getAttribute('data-gm-slider');
+            setOpt(g, groups[g][Number(range.value)][0]);
+            const r = rows.indexOf(g);
+            if (r >= 0) { row = r; sync(); }
+        });
         input.addEventListener('input', refresh);
         sync();
         refresh();
@@ -284,6 +299,9 @@ extendClass(ProfileSelectionManager, {
             edges += `<line x1="${pts[i].x | 0}" y1="${pts[i].y | 0}" x2="${pts[j].x | 0}" y2="${pts[j].y | 0}"/>`;
         }
         const rivals = st.control === 'contested' ? (st.rivals || []) : [];
+        // Home planet marker: a pixel house (2px cells) with its top-left corner at (hx, hy).
+        const houseRows = ['....X....', '...XXX...', '..XXXXX..', '.XXXXXXX.', 'XXXXXXXXX', '.XXX.XXX.', '.XXX.XXX.', '.XXX.XXX.'];
+        const houseD = (hx, hy) => houseRows.map((row, ry) => row.split('').map((ch, cx) => (ch === 'X' ? `M${(hx + cx * 2) | 0} ${(hy + ry * 2) | 0}h2v2h-2z` : '')).join('')).join('');
         const planets = pts.map((p, i) => {
             const tier = Math.min(tiers.length - 1, st.difficultyTier + Math.floor(i / 2));
             const r = i === 0 ? 9 : 6 + Math.floor(rnd() * 3);
@@ -294,7 +312,7 @@ extendClass(ProfileSelectionManager, {
                 `<circle cx="${x}" cy="${y}" r="${r}" fill="${color(st.faction)}"/>` +
                 (rival ? `<path d="M${x} ${y - r}A${r} ${r} 0 0 1 ${x} ${y + r}Z" fill="${color(rival)}"/>` : '') +
                 `<rect x="${x - 3}" y="${y + r + 3}" width="${(tier + 1) * 3}" height="2" class="tier"/>` +
-                (i === 0 ? `<path class="start" d="M${x - r - 4} ${y - r - 4}h5v2h-3v3h-2zM${x + r + 4} ${y - r - 4}h-5v2h3v3h2zM${x - r - 4} ${y + r + 4}h5v-2h-3v-3h-2zM${x + r + 4} ${y + r + 4}h-5v-2h3v-3h2z"/>` : '') +
+                (i === 0 ? `<path class="start start-house" d="${houseD(x - 9, y - r - 22)}"/>` : '') +
                 `</g>`;
         }).join('');
         // Suns on the map edge, spread so they don't overlap.
@@ -320,10 +338,14 @@ extendClass(ProfileSelectionManager, {
                 <g class="lanes">${edges}</g>${planets}
             </svg>
             <div class="profile-galaxy-modal-sum">
-                <strong>${String(name || '').trim().toUpperCase() || '—'}</strong>
-                <span>${emblem(st.faction)}${st.faction.toUpperCase()} · ${rivals.length ? 'CONTESTED' : 'HELD'}</span>
-                ${rivals.length ? `<span class="vs">VS ${rivals.map((f) => emblem(f) + f.toUpperCase()).join(' · ')}</span>` : ''}
-                <span>${n} PLANETS · ${st.sunCount || 1} SUN${(st.sunCount || 1) > 1 ? 'S' : ''} · ${tiers[st.difficultyTier]}${last !== st.difficultyTier ? ' → ' + tiers[last] : ''}</span>
+                <strong class="gm-sum-name">${String(name || '').trim().toUpperCase() || '—'}</strong>
+                <dl class="gm-sum-list">
+                    <dt>RULER</dt><dd>${emblem(st.faction)}${st.faction.toUpperCase()}<em class="gm-sum-state${rivals.length ? ' is-contested' : ''}">${rivals.length ? 'CONTESTED' : 'HELD'}</em></dd>
+                    ${rivals.length ? `<dt>RIVALS</dt><dd class="vs">${rivals.map((f) => '<span>' + emblem(f) + f.toUpperCase() + '</span>').join('')}</dd>` : ''}
+                    <dt>PLANETS</dt><dd>${n}</dd>
+                    <dt>SUNS</dt><dd>${st.sunCount || 1}</dd>
+                    <dt>DIFFICULTY</dt><dd>${tiers[st.difficultyTier]}${last !== st.difficultyTier ? '<i class="gm-sum-arrow">→</i>' + tiers[last] : ''}</dd>
+                </dl>
             </div>`;
     },
     /**

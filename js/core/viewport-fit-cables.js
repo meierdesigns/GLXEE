@@ -27,11 +27,16 @@
         const svg = document.getElementById('vf-cables');
         if (!svg || !svg.firstChild || !lastCableArgs || reduceNow()) { apply(); return; }
         if (cableBusy) { cableQueued = [fac, apply]; return; }
+        if (window.vfLog) window.vfLog('cables', 'switch -> ' + fac);
+        playSwitch(fac, apply);
+    }
+    function playSwitch(fac, apply) {
+        const svg = document.getElementById('vf-cables');
         cableBusy = true;
         // Old cables leave as a ghost copy while the new set already glides in underneath.
         const ghost = svg.cloneNode(true);
         ghost.id = 'vf-cables-old';
-        ghost.classList.add('vfc-out');
+        ghost.classList.add('vfc-out', 'vfc-hold');
         svg.parentNode.insertBefore(ghost, svg.nextSibling);
         cableFac = '';
         cableTarget = fac;
@@ -39,33 +44,29 @@
         drawCables(lastCableArgs[0], lastCableArgs[1], lastCableArgs[2]);
         cableBusy = true;
         cableTarget = '';
-        svg.classList.add('vfc-in');
+        svg.classList.add('vfc-in', 'vfc-hold');
         // Frame shape, colours, palette and window background change together with the cables (one shared run),
         // instead of waiting for the cables to finish first.
         const bz = document.getElementById('vf-bezel');
         const from = bz && bz.getAttribute('data-faction');
-        ghostSnapshot();
+        const tA = performance.now();
         apply();
+        if (window.vfLog) window.vfLog('cables', 'apply() took ' + Math.round(performance.now() - tA) + 'ms');
         if (bz && from && from !== fac && NS.morphBezelShape) NS.morphBezelShape(from, fac, 700);
-        setTimeout(function () {
-            ghost.remove();
-            svg.classList.remove('vfc-in');
-            cableBusy = false;
-            const q = cableQueued; cableQueued = null;
-            if (q) cableSwitch(q[0], q[1]);
-        }, 750);
-    }
-    // Faction recolour: freeze the old window background as a ghost that fades out over the new one
-    // (gradients cannot be tweened, so they cross-fade instead).
-    function ghostSnapshot() {
-        if (reduceNow()) return;
-        const cs = getComputedStyle(ROOT);
-        const bg = document.createElement('div');
-        bg.className = 'vf-ghost vf-ghost-bg';
-        ['backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat'].forEach(function (k) { bg.style[k] = cs[k]; });
-        const cables = document.getElementById('vf-cables');
-        ROOT.insertBefore(bg, cables || document.body);
-        setTimeout(function () { bg.remove(); }, 800);
+        // The swap repaints every filtered frame layer in one go (a long frame). Start the cable motion only after that frame,
+        // so the animation does not begin inside the stall and then jump.
+        // The end timer only starts once the motion has been released, so a long swap frame can never cut the animation short.
+        requestAnimationFrame(function () { requestAnimationFrame(function () {
+            ghost.classList.remove('vfc-hold'); svg.classList.remove('vfc-hold');
+            setTimeout(function () {
+                if (window.vfLog) window.vfLog('cables', 'switch finished (ghost removed)');
+                ghost.remove();
+                svg.classList.remove('vfc-in');
+                cableBusy = false;
+                const q = cableQueued; cableQueued = null;
+                if (q) cableSwitch(q[0], q[1]);
+            }, 750);
+        }); });
     }
     // Every cable moves at its own speed (0.30 - 0.66 s), deterministic per position in the set.
     let cableN = 0;

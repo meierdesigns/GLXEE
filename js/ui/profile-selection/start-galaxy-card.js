@@ -2,7 +2,7 @@
 
 // ProfileSelectionManager members, continued from core-part2.js: start galaxy card and preferred weapon.
 /** Map height (viewBox units, width is 560) of the wizard's start-galaxy card: the step has the whole content area to itself. */
-const GALAXY_MAP_H = 420;
+const GALAXY_MAP_H = 280;
 
 extendClass(ProfileSelectionManager, {
     /**
@@ -129,9 +129,18 @@ extendClass(ProfileSelectionManager, {
             const q = pos[n.planetId];
             const start = n.planetId === map.startPlanetId;
             const sz = start ? 34 : 26;
-            // Start planet: pixel corner brackets.
+            // Start planet: a pixel house (see `br`).
             const b = sz / 2 + 4;
-            const br = start ? `<path class="start-bracket" d="M${q.x - b} ${q.y - b}h6v2h-4v4h-2zM${q.x + b} ${q.y - b}h-6v2h4v4h2zM${q.x - b} ${q.y + b}h6v-2h-4v-4h-2zM${q.x + b} ${q.y + b}h-6v-2h4v-4h2z"/>` : '';
+            const br = start ? (() => {
+                // Home planet: a little pixel house on top of it (not a selection frame).
+                const rows = ['....X....', '...XXX...', '..XXXXX..', '.XXXXXXX.', 'XXXXXXXXX', '.XXX.XXX.', '.XXX.XXX.', '.XXX.XXX.'];
+                const u = 2;
+                const hx = Math.round(q.x - 4.5 * u);
+                const hy = Math.round(q.y - sz / 2 - rows.length * u - 3);
+                let d = '';
+                rows.forEach((row, ry) => { for (let cx = 0; cx < row.length; cx++) if (row[cx] === 'X') d += `M${hx + cx * u} ${hy + ry * u}h${u}v${u}h-${u}z`; });
+                return `<path class="start-house" d="${d}"/>`;
+            })() : '';
             const icon = gm
                 ? `<foreignObject x="${q.x - sz / 2}" y="${q.y - sz / 2}" width="${sz}" height="${sz}"><div xmlns="http://www.w3.org/1999/xhtml" class="profile-start-planet">${gm.planetIconHtml(n.planetId, sz, true)}</div></foreignObject>`
                 : `<rect x="${q.x - 4}" y="${q.y - 4}" width="8" height="8"${start ? ' class="is-start"' : ''}/>`;
@@ -144,7 +153,7 @@ extendClass(ProfileSelectionManager, {
         return `
             ${mapH ? '' : '<button type="button" class="profile-start-galaxy-nav" data-galaxy-step="-1" tabindex="-1" aria-label="Previous galaxy">‹</button>'}
             ${mapH ? this.renderStartGalaxyListHtml(gid, home) : ''}
-            <svg class="profile-start-galaxy-map" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
+            <svg class="profile-start-galaxy-map" viewBox="${mapH ? `-24 -24 ${W + 48 + Math.round(W * 0.28)} ${H + 48}` : `0 0 ${W} ${H}`}" preserveAspectRatio="${mapH ? 'xMinYMid meet' : 'xMidYMid slice'}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
                 <g class="dust">${dust}</g><g class="stars">${stars}</g>
                 <g class="suns">${nodes.length && pcm.getGalaxySuns ? pcm.getGalaxySuns(gid).map((sun) => {
                     const sx = Math.round(P + sun.x * (W - P * 2));
@@ -164,12 +173,16 @@ extendClass(ProfileSelectionManager, {
                 <span class="profile-start-galaxy-meta">${nodes.length
                     ? nodes.length + ' PLANETS · START ' + String(map.startPlanetId || '—').toUpperCase()
                     : 'UNCHARTED · ARRIVAL SECTOR CHARTED ON START'}</span>
-                <button type="button" class="profile-start-galaxy-new" data-galaxy-new tabindex="-1" title="Create a new galaxy (N)">+ NEW GALAXY</button>
+                ${mapH ? '' : '<button type="button" class="profile-start-galaxy-new" data-galaxy-new tabindex="-1" title="Create a new galaxy (N)">+ NEW GALAXY</button>'}
             </div>
             ${mapH ? '' : '<button type="button" class="profile-start-galaxy-nav" data-galaxy-step="1" tabindex="-1" aria-label="Next galaxy">›</button>'}
+            ${mapH ? `<div class="profile-start-galaxy-zoom" role="group" aria-label="Zoom map">
+                <button type="button" data-gz="in" tabindex="-1" title="Zoom in (mouse wheel)">+</button>
+                <button type="button" data-gz="out" tabindex="-1" title="Zoom out">−</button>
+                <button type="button" data-gz="reset" tabindex="-1" title="Reset view">⌖</button>
+            </div>` : ''}
             ${mapH ? `<div class="profile-start-galaxy-navrow">
-                <button type="button" class="profile-start-galaxy-nav" data-galaxy-step="-1" tabindex="-1" aria-label="Previous galaxy">${ProfileSelectionManager.btnIconHtml('back')}${ProfileSelectionManager.stepIconHtml('galaxy')}<span>PREV</span></button>
-                <button type="button" class="profile-start-galaxy-nav" data-galaxy-step="1" tabindex="-1" aria-label="Next galaxy"><span>NEXT</span>${ProfileSelectionManager.stepIconHtml('galaxy')}${ProfileSelectionManager.btnIconHtml('next')}</button>
+                <button type="button" class="profile-start-galaxy-new" data-galaxy-new tabindex="-1" title="Create a new galaxy (N)">+ NEW GALAXY</button>
             </div>` : ''}`;
     },
     /** Preferred weapon of the pending faction as an icon + name (name step). */
@@ -185,3 +198,80 @@ extendClass(ProfileSelectionManager, {
             `<span>${String((w && w.name) || id).toUpperCase()}</span></span>`;
     },
 });
+
+// Start-step galaxy map: mouse wheel / +- buttons zoom, drag pans (works on the viewBox, so it stays pixel-crisp).
+(function initGalaxyMapZoom() {
+    const MAX_ZOOM = 6;
+    const view = (svg) => {
+        if (!svg._gz) {
+            const [x, y, w, h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+            svg._gz = { x0: x, y0: y, w0: w, h0: h, z: 1, cx: x + w / 2, cy: y + h / 2 };
+        }
+        return svg._gz;
+    };
+    const apply = (svg) => {
+        const v = view(svg);
+        const w = v.w0 / v.z;
+        const h = v.h0 / v.z;
+        v.cx = Math.max(v.x0 + w / 2, Math.min(v.x0 + v.w0 - w / 2, v.cx));
+        v.cy = Math.max(v.y0 + h / 2, Math.min(v.y0 + v.h0 - h / 2, v.cy));
+        svg.setAttribute('viewBox', `${(v.cx - w / 2).toFixed(2)} ${(v.cy - h / 2).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+        svg.classList.toggle('is-zoomed', v.z > 1.001);
+    };
+    // Zoom by `f`, keeping the point under (clientX, clientY) fixed (or the view centre when omitted).
+    const zoomBy = (svg, f, clientX, clientY) => {
+        const v = view(svg);
+        const nz = Math.max(1, Math.min(MAX_ZOOM, v.z * f));
+        if (nz === v.z) return;
+        const m = svg.getScreenCTM();
+        let px = v.cx;
+        let py = v.cy;
+        if (m && clientX != null) {
+            const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+            px = p.x;
+            py = p.y;
+        }
+        const k = v.z / nz;
+        v.cx = px + (v.cx - px) * k;
+        v.cy = py + (v.cy - py) * k;
+        v.z = nz;
+        apply(svg);
+    };
+    const mapOf = (t) => (t && t.closest ? t.closest('.has-side .profile-start-galaxy-map') : null);
+    document.addEventListener('wheel', (e) => {
+        const svg = mapOf(e.target);
+        if (!svg) return;
+        e.preventDefault();
+        zoomBy(svg, e.deltaY < 0 ? 1.25 : 0.8, e.clientX, e.clientY);
+    }, { passive: false });
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('[data-gz]');
+        if (!b) return;
+        const svg = b.closest('.profile-start-galaxy') && b.closest('.profile-start-galaxy').querySelector('.profile-start-galaxy-map');
+        if (!svg) return;
+        const act = b.getAttribute('data-gz');
+        if (act === 'reset') { const v = view(svg); v.z = 1; v.cx = v.x0 + v.w0 / 2; v.cy = v.y0 + v.h0 / 2; apply(svg); } else zoomBy(svg, act === 'in' ? 1.5 : 1 / 1.5);
+    });
+    let drag = null;
+    document.addEventListener('pointerdown', (e) => {
+        const svg = mapOf(e.target);
+        if (!svg || e.button !== 0 || view(svg).z <= 1.001) return;
+        drag = { svg, x: e.clientX, y: e.clientY };
+        svg.classList.add('is-panning');
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    document.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const m = drag.svg.getScreenCTM();
+        if (!m) return;
+        const v = view(drag.svg);
+        v.cx -= (e.clientX - drag.x) / m.a;
+        v.cy -= (e.clientY - drag.y) / m.d;
+        drag.x = e.clientX;
+        drag.y = e.clientY;
+        apply(drag.svg);
+    });
+    const stop = () => { if (drag) drag.svg.classList.remove('is-panning'); drag = null; };
+    document.addEventListener('pointerup', stop);
+    document.addEventListener('pointercancel', stop);
+})();

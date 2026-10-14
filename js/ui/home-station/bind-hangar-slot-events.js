@@ -182,6 +182,34 @@ extendClass(HomeStationUI, {
             this.drawHangarBay();
             requestAnimationFrame(() => this.drawHangarBay());
         });
+        // Ship art (faction sprites) can still be arriving on the first frames: redraw a few times so the
+        // ship appears on its own instead of waiting for a hover.
+        const redraw = () => { if (this.isVisible && this.tab === 'hangar') this.drawHangarBay(); };
+        // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
+        const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+        // Only on a fresh open of the hangar; a re-render while working (clicking an area) must not blank the bay.
+        const fresh = performance.now() - (this._hangarBayStamp || 0) > 1500;
+        if (bayCanvas && fresh) bayCanvas.style.visibility = 'hidden';
+        const reveal = () => { if (bayCanvas) bayCanvas.style.visibility = ''; };
+        setTimeout(() => { redraw(); reveal(); }, 200);
+        setTimeout(reveal, 700);   // safety: never stay hidden
+        [600, 1500].forEach((ms) => setTimeout(redraw, ms));
+        // Click (or Enter) on a slot in the SLOTS list opens the part picker.
+        if (this.overlay && !this.overlay._slotPickBound) {
+            this.overlay._slotPickBound = true;
+            const open = (e) => {
+                const c = e.target.closest && e.target.closest('[data-slot-pick]');
+                if (!c || (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ')) return;
+                e.preventDefault();
+                this.openHangarSlotPicker(c.getAttribute('data-slot-pick'), Number(c.getAttribute('data-slot-index')) || 0);
+            };
+            this.overlay.addEventListener('click', open);
+            this.overlay.addEventListener('keydown', open);
+        }
+        if (!this._hangarPacksBound) {
+            this._hangarPacksBound = true;
+            document.addEventListener('vf-faction-packs-ready', () => { if (this.isVisible && this.tab === 'hangar') this.drawHangarBay(); });
+        }
     },
 
     bindHangarSlotCardDrag() {

@@ -334,8 +334,7 @@ extendClass(ProfileSelectionManager, {
         // Each start profile brings its own hull: owned, active and discovered before the kit and hull-area bonuses land on it.
         const kitShip = this.startShipId();
         if (kitShip && typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig(kitShip)) {
-            if (!Array.isArray(p.ownedShipIds)) p.ownedShipIds = [];
-            if (p.ownedShipIds.indexOf(kitShip) < 0) p.ownedShipIds.push(kitShip);
+            p.ownedShipIds = [kitShip];
             p.activeShipId = kitShip;
             if (profileManager.discoverShipContents) profileManager.discoverShipContents(kitShip);
         }
@@ -357,9 +356,41 @@ extendClass(ProfileSelectionManager, {
             if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
             const e = p.shipUpgrades[ship];
             const lv = Object.assign({ front: 0, center: 0, back: 0, wing: 0 }, e.areaLevels || {});
-            Object.keys(o.areas).forEach((k) => { lv[k] = (Number(lv[k]) || 0) + (Number(o.areas[k]) || 0); });
+            Object.keys(o.areas).filter((k) => (kit.off || []).indexOf(k) < 0).forEach((k) => { lv[k] = Math.min(2, (Number(lv[k]) || 0) + (Number(o.areas[k]) || 0) + (Number((bonus.areas || {})[k]) || 0)); });
             e.areaLevels = lv;
             e.frameLevel = Object.values(lv).reduce((n, v) => n + v, 0);
+        }
+        // Areas this hull is built without (no nose / aft / wings).
+        if (kit.off && kit.off.length && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.setAreaEnabled) {
+            kit.off.forEach((a) => { try { shipLoadoutManager.setAreaEnabled(p.activeShipId, a, false); } catch (e) { /* cosmetic */ } });
+        }
+        // A start profile begins with exactly one weapon (the others are bought later).
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                const gun = (L.weaponSlots || []).find(Boolean) || (L.weapons && L.weapons[0]) || 'laser';
+                L.weaponSlots = [gun];
+                L.weapons = [gun];
+                // Small base set: one weapon, one defense, one energy core, one ability.
+                L.defenses = (L.defenses || []).slice(0, 1);
+                L.abilities = (L.abilities || []).slice(0, 1);
+                L.energy = (L.energy || []).slice(0, 1);
+                if (!p.shipUpgrades) p.shipUpgrades = {};
+                if (!p.shipUpgrades[p.activeShipId]) p.shipUpgrades[p.activeShipId] = { frameLevel: 0 };
+                p.shipUpgrades[p.activeShipId].baseSlotCaps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
+                shipLoadoutManager.setLoadout(p.activeShipId, L);
+            } catch (e) { /* cosmetic */ }
+        }
+        // Start profile with a core gun: slot 0 sits in the core (single on the axis or split left / right).
+        if (kit.coreGun && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                L.weaponMounts = Object.assign({}, L.weaponMounts, { 0: { area: 'center', split: kit.coreGun === 'split', off: 0.2, ny: 0.5, fixed: true } });
+                const ws = (L.weaponSlots || []).slice();
+                ws[0] = ws[0] || (L.weapons && L.weapons[0]) || 'laser';
+                L.weaponSlots = ws;
+                shipLoadoutManager.setLoadout(p.activeShipId, L);
+            } catch (e) { /* cosmetic */ }
         }
         if (o.look) p.portrait = Object.assign({}, o.look);
         p.startKit = kit.id;

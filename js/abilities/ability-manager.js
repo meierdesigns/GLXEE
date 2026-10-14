@@ -168,3 +168,6 @@ export class AbilityManager {
 
 // Create global instance
 export const abilityManager = new AbilityManager();
+
+// Classic scripts (profile selection tooltips) read the ability numbers too.
+window.abilityManager = abilityManager;

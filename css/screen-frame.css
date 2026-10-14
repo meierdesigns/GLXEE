@@ -156,36 +156,15 @@ body:has(> .vf-bezel[data-faction="machine"]) { clip-path: var(--fr-shape-machin
 @property --current-surface { syntax: '<color>'; inherits: true; initial-value: #101010; }
 @property --current-border { syntax: '<color>'; inherits: true; initial-value: #808080; }
 @property --current-text { syntax: '<color>'; inherits: true; initial-value: #e0e0e0; }
-:root.vf-faction-fade {
-    transition: --faction-hull .45s ease,
-        --faction-edge .45s ease,
-        --faction-accent .45s ease,
-        --color-primary .45s ease,
-        --color-secondary .45s ease,
-        --color-accent .45s ease,
-        --color-background .45s ease,
-        --color-background-light .45s ease,
-        --color-surface .45s ease,
-        --color-border .45s ease,
-        --color-text .45s ease,
-        --color-text-secondary .45s ease,
-        --color-hover .45s ease,
-        --color-active .45s ease,
-        --color-glow .45s ease,
-        --color-basecolor .45s ease,
-        --color-second-basecolor .45s ease,
-        --current-primary .45s ease,
-        --current-secondary .45s ease,
-        --current-accent .45s ease,
-        --current-background .45s ease,
-        --current-surface .45s ease,
-        --current-border .45s ease,
-        --current-text .45s ease;
-}
-
-/* The station overlay carries its own copy of the tokens — fade those too. */
-.vf-faction-fade [data-hs-faction] {
-    transition: --faction-hull .45s ease, --faction-edge .45s ease, --faction-accent .45s ease,
-        --color-primary .45s ease, --color-secondary .45s ease, --color-accent .45s ease,
-        --color-border .45s ease, --color-selected .45s ease, --color-active .45s ease, --color-hover .45s ease;
+/* ── Screen opening edge bevel ────────────────────────────────────────────
+   The glass ::before is retired, so the opening gets its bevel from the hull plate itself:
+   two offset copies of the opening (dark up-left, lit down-right: the screen is recessed) peek out as a band just
+   outside the screen edge, under the hull colour. Width: BEVEL slider in the pixel frame
+   (--fr-bv), else 3 units. Paints only on the hull, never over the playfield. */
+.vf-fr-hullA > .vf-fr-p .vf-fr-hole {
+    --fr-eb: var(--fr-bv, calc(3 * var(--u)));
+    box-shadow:
+        calc(-1 * var(--fr-eb)) calc(-1 * var(--fr-eb)) 0 0 color-mix(in srgb, var(--hull-dark) 35%, #000),
+        var(--fr-eb) var(--fr-eb) 0 0 color-mix(in srgb, var(--hull-lit) 55%, #fff),
+        0 0 0 200vmax var(--fr-c);
 }

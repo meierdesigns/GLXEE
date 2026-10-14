@@ -150,13 +150,10 @@ extendClass(GalaxyMapManager, {
             const iy = -sy;
             switch (faction) {
                 case 'voidborn': {
-                    // Curling tendril: bulb at the corner, two tapering curves.
                     const c = L * 1.1;
                     body += `<path class="gm-corner-organic" d="M${x + ix * c} ${y + iy} ` +
                         `Q${x + ix * c * 0.35} ${y - iy * 2.5} ${x} ${y} ` +
                         `Q${x - ix * 2.5} ${y + iy * c * 0.35} ${x + ix} ${y + iy * c}"/>`;
-                    body += `<circle class="gm-corner" cx="${x + ix * 0.5}" cy="${y + iy * 0.5}" r="${t * 0.9}"/>`;
-                    body += `<circle class="gm-corner" cx="${x + ix * c * 0.72}" cy="${y + iy * c * 0.2}" r="${t * 0.45}"/>`;
                     break;
                 }
                 case 'kronax': {

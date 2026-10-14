@@ -1,6 +1,33 @@
 "use strict";
 
 // ProfileSelectionManager members, continued from core.js: faction look, lore, facts and ship preview.
+// Debug: one line describing which parts of the wizard are hidden / empty right now (logged by vfLog.watch whenever it changes).
+if (window.vfLog) window.vfLog.probe = function () {
+    const ov = document.querySelector('.profile-selection-name-mode');
+    if (!ov) return 'wizard not open';
+    const bad = [];
+    const chk = (label, sel, ink) => {
+        const el = ov.querySelector(sel);
+        if (!el) { bad.push(label + ': MISSING'); return; }
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        if (!r.width || !r.height) bad.push(label + ': 0x0');
+        else if (cs.visibility === 'hidden' || cs.display === 'none') bad.push(label + ': ' + (cs.display === 'none' ? 'display:none' : 'hidden'));
+        else if (+cs.opacity < 0.99) bad.push(label + ': opacity ' + (+cs.opacity).toFixed(2));
+        if (ink === 'img') { const im = el.querySelector('img'); if (!im) bad.push(label + ': no <img>'); else if (!im.complete || !im.naturalWidth) bad.push(label + ': img not decoded'); }
+        if (ink === 'text' && !el.textContent.trim()) bad.push(label + ': EMPTY text');
+        if (ink === 'canvas' && el.getContext) {
+            try { const d = el.getContext('2d').getImageData(0, 0, el.width, el.height).data; let n = 0; for (let i = 3; i < d.length; i += 32) if (d[i]) n++; if (!n) bad.push(label + ': canvas BLANK'); } catch (e) { /* tainted */ }
+        }
+    };
+    chk('emblem', '.profile-faction-preview-emblem', 'img');
+    chk('ship', '.profile-faction-ship', 'canvas');
+    chk('name', '.profile-faction-preview-name', 'text');
+    chk('lore', '.profile-faction-lore-text', 'text');
+    chk('tabs', '.profile-faction-tab');
+    ov.querySelectorAll('.profile-faction-swatch img').forEach((im, i) => { if (!im.complete || !im.naturalWidth) bad.push('swatch' + i + ': img not decoded'); });
+    const bz = document.getElementById('vf-bezel'), lore = ov.querySelector('.profile-faction-lore-text');
+    return (bad.length ? 'GLITCH ' + bad.join(' | ') : 'all content visible') + ' [box=' + (ov.dataset.faction || '?') + ' bezel=' + (bz && bz.getAttribute('data-faction')) + ' loreFs=' + (lore ? getComputedStyle(lore).fontSize : '-') + ']';
+};
 extendClass(ProfileSelectionManager, {
     /** Faction emblem as a pixel icon, tinted in the faction accent. */
     getFactionEmblemHtml(id, size = 16, detail) {
@@ -31,18 +58,28 @@ extendClass(ProfileSelectionManager, {
         if (!this.overlay) return;
         const id = this.pendingFaction;
         if (typeof menuStateManager !== 'undefined' && this.mode === 'create') menuStateManager.save({ pfaction: id });
+        const box = this.overlay.querySelector('.profile-selection-name-mode');
+        // Backdrop, cables, colours and the dialog content all change in ONE step (inside the cable swap), not in three staggered phases.
+        const content = () => {
+            if (!this.overlay || this.pendingFaction !== id) { if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' skipped (newer pick)'); return; }                 // a newer pick replaced this one
+            const tC = performance.now();
+            this.applyFactionContent(id);
+            if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' rendered in ' + Math.round(performance.now() - tC) + 'ms');
+        };
+        if (window.vfLog) window.vfLog('wizard', 'pick ' + id);
+        this.applyFactionVars(box, id, content);
+    },
+    applyFactionContent(id) {
         // The menu / profile backdrops follow the faction being picked (CSS: html[data-pf]).
-        if (this.mode === 'create' && typeof document !== 'undefined' && document.documentElement.getAttribute('data-pf') !== id) {
+        if (this.mode === 'create' && document.documentElement.getAttribute('data-pf') !== id) {
             document.documentElement.setAttribute('data-pf', id);
             if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) VFBgMouseParallax.refresh();
-            if (window.vfRepaintBackdrops) window.vfRepaintBackdrops();   // frozen (covered) hosts too: the menu hangar behind the dialog
+            if (window.vfRepaintBackdrops) window.vfRepaintBackdrops();
         }
-        const box = this.overlay.querySelector('.profile-selection-name-mode');
-        this.applyFactionVars(box, id);
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
-        if (emblem) emblem.innerHTML = this.getFactionEmblemHtml(id, 192, 4);
+        if (emblem && emblem.dataset.emblemFaction !== id) { emblem.innerHTML = this.getFactionEmblemHtml(id, 192, 4); emblem.dataset.emblemFaction = id; }
         const nameCrest = this.overlay.querySelector('.profile-name-crest');
-        if (nameCrest) nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48);
+        if (nameCrest && nameCrest.dataset.emblemFaction !== id) { nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48); nameCrest.dataset.emblemFaction = id; }
         const name = this.overlay.querySelector('.profile-faction-preview-name');
         if (name) name.textContent = this.getFactionLabel(id);
         const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
@@ -193,11 +230,11 @@ extendClass(ProfileSelectionManager, {
         if (this.renderFactionTabsRich) { try { this.renderFactionTabsRich(id, meta); } catch (e) { /* keep the plain facts */ } }
     },
     /** Faction palette + frame shape on one dialog box. */
-    applyFactionVars(box, id) {
+    applyFactionVars(box, id, after) {
         const style = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
             ? factionShipStyles.getFactionStyle(id)
             : null;
-        if (!box || !style) return;
+        if (!box || !style) { if (after) after(); return; }
         const accent = style.accent || '#c8d0d8';
         const hull = style.hull || '#7a8490';
         // Everything coloured follows the bezel: it waits until the new faction's cables are plugged in.
@@ -240,13 +277,14 @@ extendClass(ProfileSelectionManager, {
                 bz.style.setProperty('--color-primary', accent);
                 const crest = bz.querySelector('.vf-pilot-crest');
                 if (crest) crest.setAttribute('data-f', id);
+                if (after) after();
             };
             if (bz.getAttribute('data-faction') !== id && typeof factionGui !== 'undefined') {
                 // Cables are swapped first; the bezel recolours after the new ones are in.
                 bz.dataset.pendingFaction = id;
                 factionGui.swap(id, applyBezel);
             } else applyBezel();
-        } else paint();
+        } else { paint(); if (after) after(); }
     },
     /** Default player hull drawn in the faction's silhouette and colours. */
     renderFactionShipPreview(id, attempt) {
@@ -271,31 +309,141 @@ extendClass(ProfileSelectionManager, {
             const shipId = inStart ? this.startShipId() : 'player_scrap';
             if (inStart) this.renderKitShipInfo();
             const model = Object.assign({}, shipConfigManager.getMergedModel(shipId), { id: shipId, faction: id, factionPreview: true });
+            if (inStart) {
+                const dis = {};
+                (this.currentKit().off || []).forEach((a) => { dis[a] = true; });
+                model.previewDisabledAreas = dis;
+                model.previewCoreGun = this.currentKit().coreGun || null;
+                model.previewSingleGun = true;
+            }
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(model, shipId);
             }
             model.faction = id;
             const mw = Math.max(1, model.width || 20);
             const mh = Math.max(1, model.height || 16);
-            // Start step: draw at in-game resolution (18 px wide hull) and let CSS scale it up, so pixels are as chunky as in the game.
+            // Start step: draw at 2x model resolution (finer detail) and let CSS scale it up crisply.
             if (inStart) {
-                const gw = Math.round(mw * 0.5) + 6, gh = Math.round(mh * 0.5) + 6;
+                const gw = Math.round(mw * 2) + 24, gh = Math.round(mh * 2) + 24;
                 if (canvas.width !== gw || canvas.height !== gh) { canvas.width = gw; canvas.height = gh; canvas.style.aspectRatio = `${gw} / ${gh}`; }
             }
-            const scale = inStart ? 0.5 : Math.max(1, Math.floor(Math.min((canvas.width - 16) / mw, (canvas.height - 16) / mh)));
+            const scale = inStart ? 2 : Math.max(1, Math.floor(Math.min((canvas.width - 16) / mw, (canvas.height - 16) / mh)));
             ctx.imageSmoothingEnabled = false;
+            const ox = Math.floor((canvas.width - mw * scale) / 2), oy = Math.floor((canvas.height - mh * scale) / 2);
+            const lay = model.layout || {};
+            const gunMods = (lay.modules || []).filter((m) => m && m.kind === 'weapon');
+            const fs = loader.resolveModuleFactionStyle ? loader.resolveModuleFactionStyle(model) : undefined;
+            // Solid pixels of one gun drawn alone: its bounds, with thin strays (soft shadow lips) trimmed away.
+            const measure = (m) => {
+                const t2 = document.createElement('canvas');
+                t2.width = canvas.width; t2.height = canvas.height;
+                const c2 = t2.getContext('2d');
+                c2.imageSmoothingEnabled = false;
+                loader.withShipVoxelRaster(model, ox, oy, scale, () => {
+                    loader.renderShipModule(c2, m, Math.round(ox + m.x * scale), Math.round(oy + m.y * scale),
+                        Math.max(1, Math.round(m.width * scale)), Math.max(1, Math.round((m.height != null ? m.height : m.width) * scale)),
+                        null, 0, { showThrusterGlow: true, allowColorMountSprites: true }, fs);
+                });
+                const p2 = c2.getImageData(0, 0, canvas.width, canvas.height).data;
+                const colN = new Array(canvas.width).fill(0), rowN = new Array(canvas.height).fill(0);
+                for (let i = 3; i < p2.length; i += 4) {
+                    if (p2[i] >= 200) { const k = i >> 2, cx = k % canvas.width; colN[cx]++; rowN[(k - cx) / canvas.width]++; }
+                }
+                const span = (arr) => { const mx = Math.max.apply(null, arr); let lo = -1, hi = -1; for (let i = 0; i < arr.length; i++) if (mx && arr[i] >= mx * 0.6) { if (lo < 0) lo = i; hi = i; } return [lo, hi]; };
+                const [x0, x1] = span(colN), [y0, y1] = span(rowN);
+                return x1 >= 0 ? { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } : null;
+            };
+            // Single nose / core guns: nudge the gun so its body sits on the horizontal middle of its area.
+            gunMods.filter((m) => m.mountSegment !== 'wing' && !m.side).forEach((m) => {
+                try {
+                    const bx = measure(m);
+                    const area = m.mountSegment || ((Number(m.slotIndex) || 0) === 0 ? 'front' : 'center');
+                    const seg = (lay.segments || []).find((sg) => sg.id === area) || (lay.segments || []).find((sg) => sg.id === 'front');
+                    if (!bx || !seg) return;
+                    const dx = ((ox + (seg.x + seg.width / 2) * scale) - (bx.x + bx.w / 2)) / scale;
+                    if (Math.abs(dx) >= 0.5) m.x += Math.round(dx * 2) / 2;
+                } catch (e3) { /* keep the original spot */ }
+            });
             // Same renderer and options as the in-game player ship, no extra outline or filter.
             const tmp = document.createElement('canvas');
             tmp.width = canvas.width; tmp.height = canvas.height;
             const tctx = tmp.getContext('2d');
             tctx.imageSmoothingEnabled = false;
-            loader.renderShip(tctx, model, Math.floor((canvas.width - mw * scale) / 2),
-                Math.floor((canvas.height - mh * scale) / 2), scale, null, 0, { showThrusterGlow: true, allowColorMountSprites: true });
+            loader.renderShip(tctx, model, ox, oy, scale, null, 0, { showThrusterGlow: true, allowColorMountSprites: true });
             ctx.drawImage(tmp, 0, 0);
+            // The outline hugs each gun as it is drawn now.
+            const boxes = [];
+            gunMods.forEach((m) => { try { const bx = measure(m); if (bx) boxes.push(bx); } catch (e2) { /* keep the other boxes */ } });
+            // Empty wing slots have nothing to measure: estimated boxes, converted to canvas px.
+            this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale }));
+            this._previewDraw = { boxes };
         } catch (e) {
             /* preview is cosmetic, but assets may still be arriving */
             retry();
         }
+    },
+    /** Weapon mount boxes of the previewed hull in model px: placed guns plus the empty wing slots, always mirror-symmetric. */
+    previewWeaponBoxes(model) {
+        const lay = model.layout || {};
+        const mw = model.width || lay.width || 20;
+        const mods = (lay.modules || []).filter((m) => m && m.kind === 'weapon').map((m) => ({ slotIndex: Number(m.slotIndex) || 0, wing: m.mountSegment === 'wing' }));
+        const boxes = [];
+        // Wing slots without a gun yet: one pair per slot row on the wing, like the hangar's empty markers.
+        const segs = lay.segments || [];
+        const wl = segs.find((sg) => sg.id === 'wingLeft'), wr = segs.find((sg) => sg.id === 'wingRight');
+        // A fresh pilot has no wing guns unless the kit opens a wing level (same rule as the HULL AREAS list).
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const kit = this.currentKit ? this.currentKit() : null;
+        const wingLv = Math.min(2, Number(((kit && kit.bonus && kit.bonus.areas) || {}).wing) || 0);
+        const off = (kit && kit.off) || [];
+        const wingSlots = off.indexOf('wing') >= 0 || !slm || !slm.getAreaSlotBonus ? 0
+            : slm.getAreaSlotBonus('wing', wingLv).filter((k) => k === 'weapons').length;
+        if (wl && wr) {
+            const rows = Math.max(1, Math.ceil(wingSlots / 2));
+            for (let i = 1; i <= rows && wingSlots; i++) {
+                if (mods.some((m) => m.slotIndex === i && m.wing)) continue;
+                const w = 8, h = 8;
+                const cy = wl.y + wl.height * (i - 0.5) / rows;
+                const x = Math.round(wl.x + wl.width * (1 - 0.36) - w / 2);
+                boxes.push({ x, y: Math.round(cy - h / 2), width: w, height: h, empty: true });
+                boxes.push({ x: Math.round(mw - x - w), y: Math.round(cy - h / 2), width: w, height: h, empty: true });
+            }
+        }
+        // Drop duplicates (same box twice after mirroring).
+        const uniq = {};
+        return boxes.filter((b) => { const k = [b.x, b.y, b.width, b.height].join(','); if (uniq[k]) return false; uniq[k] = 1; return true; });
+    },
+    /** Hovering the ship preview: outline every weapon mount on the ship with a soft pulse. on=false clears it. */
+    highlightPreviewWeapon(on) {
+        const canvas = this.overlay && this.overlay.querySelector('.profile-faction-ship');
+        if (this._fxRaf) { cancelAnimationFrame(this._fxRaf); this._fxRaf = 0; }
+        let fx = this.overlay && this.overlay.querySelector('.profile-faction-ship-fx');
+        if (!on || !canvas || !this._previewDraw) { if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height); return; }
+        const d = this._previewDraw;
+        const mods = d.boxes || [];
+        if (!mods.length) return;
+        if (!fx) {
+            fx = document.createElement('canvas');
+            fx.className = 'profile-faction-ship-fx';
+            canvas.insertAdjacentElement('afterend', fx);
+        }
+        fx.width = canvas.width; fx.height = canvas.height;
+        fx.style.cssText = `position:absolute;pointer-events:none;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;width:${canvas.offsetWidth}px;height:${canvas.offsetHeight}px;image-rendering:pixelated;`;
+        const c = fx.getContext('2d');
+        const col = this.pendingFaction && this.getFactionColor ? (this.getFactionColor(this.pendingFaction) || '#9fd6ff') : '#9fd6ff';
+        const t0 = performance.now();
+        const frame = (now) => {
+            if (!fx.isConnected) return;
+            const t = (now - t0) / 1000;
+            c.clearRect(0, 0, fx.width, fx.height);
+            c.strokeStyle = col; c.lineWidth = 1;
+            c.globalAlpha = Math.min(1, t * 4) * (0.55 + 0.35 * Math.sin(t * 3));
+            mods.forEach((m) => {
+                c.strokeRect(Math.round(m.x) - 1.5, Math.round(m.y) - 1.5, Math.round(m.w) + 3, Math.round(m.h) + 3);
+            });
+            this._fxRaf = requestAnimationFrame(frame);
+        };
+        this._fxRaf = requestAnimationFrame(frame);
     },
     getFactionLabel(id) {
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta) {

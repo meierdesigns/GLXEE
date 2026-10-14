@@ -100,6 +100,8 @@
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         // Pixel frame: the stepped mask (updateSilhouette) owns the inline clip-path of body and frame. A smooth polygon
         // would overwrite it on the body only and wipe it at the end, so the new silhouette is applied in one step instead.
+        // The per-frame polygon on <body> repaints the whole page for 700 ms (flicker): the new silhouette is applied in one step instead.
+        if (!window.vfMorphBezel) return;
         if (ROOT.getAttribute('data-vf-frame-px') === 'on') return;
         const A = outline(bz, fromName), B = outline(bz, toName);
         if (!A || !B) return;

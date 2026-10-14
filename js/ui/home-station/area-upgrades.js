@@ -186,6 +186,7 @@ extendClass(HomeStationUI, {
                 const [id, area] = (input.getAttribute('data-area-toggle') || '').split('|');
                 const res = shipLoadoutManager.setAreaEnabled(id, area, input.checked);
                 if (!res.ok) return;
+                this._hangarLastModel = null;
                 this.statusMsg = this.areaLabel(area) + (input.checked ? ' ON' : ' OFF');
                 this._hangarRecenter = true;
                 this.createUI();
@@ -295,45 +296,6 @@ extendClass(HomeStationUI, {
     slotKindName(key) {
         return { weapons: 'WEAPON', defenses: 'DEFENSE', abilities: 'ABILITY', energy: 'ENERGY' }[key]
             || String(key || '').toUpperCase();
-    },
-
-    /**
-     * ON/OFF switch in the NOSE and AFT branch headers of the component
-     * tree. A switched-off area is dimmed and its contents collapsed.
-     */
-    appendAreaToggles(treeContainer, shipId) {
-        if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getToggleableAreas) return;
-        shipLoadoutManager.getToggleableAreas().forEach((area) => {
-            // Wings are one branch, or left/right branches when asymmetric.
-            const branch = area === 'wing'
-                ? treeContainer.querySelector('#hs-tree-area-wings, #hs-tree-area-wingLeft')
-                : treeContainer.querySelector(`#hs-tree-area-${area}`);
-            const summary = branch && branch.querySelector(':scope > summary');
-            if (!summary || summary.querySelector('.hs-area-switch')) return;
-            const on = shipLoadoutManager.isAreaEnabled(shipId, area);
-            const branches = area === 'wing'
-                ? Array.from(treeContainer.querySelectorAll('#hs-tree-area-wings, #hs-tree-area-wingLeft, #hs-tree-area-wingRight'))
-                : [branch];
-            branches.forEach((b) => {
-                b.classList.toggle('is-area-off', !on);
-                if (!on) b.removeAttribute('open');
-            });
-            const sw = document.createElement('label');
-            sw.className = 'hs-area-switch';
-            sw.title = (on ? 'Switch off ' : 'Switch on ') + this.areaLabel(area);
-            sw.innerHTML = `<input type="checkbox"${on ? ' checked' : ''} aria-label="${this.areaLabel(area)} on/off">` +
-                `<span class="hs-area-switch-track"><span class="hs-area-switch-label">${on ? 'ON' : 'OFF'}</span></span>`;
-            // Clicks on the switch must not open/close the branch.
-            sw.addEventListener('click', (e) => e.stopPropagation());
-            sw.querySelector('input').addEventListener('change', (e) => {
-                const res = shipLoadoutManager.setAreaEnabled(shipId, area, e.target.checked);
-                if (!res.ok) return;
-                this.statusMsg = this.areaLabel(area) + (e.target.checked ? ' ON' : ' OFF');
-                this._hangarRecenter = true;
-                this.createUI();
-            });
-            summary.appendChild(sw);
-        });
     },
 
     areaLabel(areaId) {

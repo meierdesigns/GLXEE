@@ -1,0 +1,36 @@
+{
+  "schema": "cursed.package/v1",
+  "id": "cursed-bridge",
+  "name": "cursed-bridge",
+  "title": "Cursed Bridge",
+  "description": "Drop-in JS-Client: Cursed-Server anbinden, analysierte Module für die KI auswählen und per Inject/Scaffold in neue Projekte übernehmen.",
+  "tags": ["scripts", "styles", "ai", "core"],
+  "files": [
+    "assets/js/cursed-bridge.js",
+    "assets/css/cursed-bridge.css"
+  ],
+  "dependencies": [],
+  "sourceProject": "/mnt/quicky2/Cursor/Cursed",
+  "source": "core",
+  "exports": [
+    {
+      "id": "cursed-bridge",
+      "kind": "script",
+      "path": "assets/js/cursed-bridge.js",
+      "label": "CursedBridge"
+    },
+    {
+      "id": "cursed-bridge-css",
+      "kind": "style",
+      "path": "assets/css/cursed-bridge.css",
+      "label": "CursedBridge CSS"
+    }
+  ],
+  "links": [],
+  "embed": {
+    "script": "assets/js/cursed-bridge.js",
+    "css": "assets/css/cursed-bridge.css",
+    "global": "CursedBridge",
+    "example": "const cursed = CursedBridge.create({ baseUrl: 'http://127.0.0.1:6190', targetProject: '/path/to/project' }); await cursed.mountPicker('#cursed-modules');"
+  }
+}

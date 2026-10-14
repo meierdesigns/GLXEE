@@ -315,6 +315,9 @@ class BulletManager {
             id: m.id,
             // Trigger of this slot: 'space' (default) or 'a' / 's' / 'd'.
             fireKey: (m.slotIndex != null && fireKeys[String(m.slotIndex)]) || 'space',
+            // Every key that fires this slot (SPACE / A / S / D, any combination).
+            keys: m.slotIndex != null && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getWeaponKeySet
+                ? shipLoadoutManager.getWeaponKeySet(model.loadout, m.slotIndex) : ['space'],
             // Split halves (wings, or a nose/core pair) are the weaker mount.
             mount: (m.mountSegment === 'wing' || m.split) ? 'wing' : 'front',
             key: String(m.id || '') + '@' + String(m.face || 'up')

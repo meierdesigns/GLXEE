@@ -178,6 +178,81 @@ extendClass(ShipAssetLoader, {
     },
 
     /**
+     * Where the bridge should meet a wing's actual pixels, in layout units: the lit cell(s) of the turned wing that sit
+     * nearest the hull edge (and the bridge height), so the joint grows out of the wing art itself instead of ending at
+     * its geometric root. Returns null when the wing has no cells.
+     */
+    /** Lit cells of a wing's own grid as layout points in the wing's unturned frame, plus the cell size. Memoized. */
+    wingLitCells(seg, shipModel, scale) {
+        const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
+        const voxelScale = Number(loadout && loadout.voxelScale) || 0.5;
+        const zoom = Math.max(0.25, Number(scale) || 1);
+        const wPx = Math.max(1, seg.width * zoom);
+        const hPx = Math.max(1, seg.height * zoom);
+        const prevCell = this._shipVoxelCell;
+        this._shipVoxelCell = this.shipVoxelCell(shipModel, scale);
+        const { resW, resH, cell } = this.hullPartResolution(wPx, hPx, voxelScale, zoom);
+        this._shipVoxelCell = prevCell;
+        const gridW = (resW * cell) / wPx;
+        const gridH = (resH * cell) / hPx;
+        const factionStyle = this.resolvePlayerFactionStyle(shipModel);
+        const shapeSeed = this.resolveHullShapeSeed(shipModel);
+        const override = this.resolveSegmentVariantOverride(shipModel, seg.id);
+        const shapeVariant = override != null ? override : this.defaultWingVariant(shapeSeed, factionStyle);
+        const key = [seg.id, seg.x, seg.y, seg.width, seg.height, resW, resH, shapeVariant, shapeSeed, factionStyle ? factionStyle.silhouette : ''].join('|');
+        if (!this._wingLitCache) this._wingLitCache = new Map();
+        if (this._wingLitCache.has(key)) return this._wingLitCache.get(key);
+        const grid = this.buildWingGrid(seg, resW, resH, factionStyle, shapeVariant);
+        const crop = this.normalizeWingCrop(null);
+        this.applyWingCrop(grid, seg, { x: crop.cropX, y: crop.cropY, w: crop.cropW, h: crop.cropH });
+        const pts = [];
+        for (let r = 0; r < grid.length; r++) {
+            for (let c = 0; c < grid[r].length; c++) {
+                if (!grid[r][c]) continue;
+                pts.push([seg.x + seg.width * ((1 - gridW) / 2 + ((c + 0.5) / resW) * gridW),
+                    seg.y + seg.height * ((1 - gridH) / 2 + ((r + 0.5) / resH) * gridH)]);
+            }
+        }
+        const out = { pts: pts, cell: Math.max(0.3, (seg.width / resW) * gridW) };
+        if (this._wingLitCache.size > 128) this._wingLitCache.clear();
+        this._wingLitCache.set(key, out);
+        return out;
+    },
+
+    wingBridgeEnd(seg, shipModel, scale, hullEdgeX, hullY) {
+        const lit = this.wingLitCells(seg, shipModel, scale);
+        const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
+        const resW = Math.max(1, Math.round(seg.width / lit.cell));
+        const left = seg.id === 'wingLeft';
+        const deg = Math.max(-180, Math.min(180, Number(loadout && loadout.wingRotation) || 0));
+        const a = deg * Math.PI / 180 * (left ? -1 : 1);
+        const cos = Math.cos(a), sin = Math.sin(a);
+        const pivot = this.wingAttachPoint(seg, shipModel, scale);
+        const cells = [];
+        let sx = 0, sy = 0;
+        lit.pts.forEach((q) => {
+            const dx = q[0] - pivot.x, dy = q[1] - pivot.y;
+            const x = pivot.x + dx * cos - dy * sin, y = pivot.y + dx * sin + dy * cos;
+            cells.push([x, y]);
+            sx += x; sy += y;
+        });
+        if (!cells.length) return null;
+        // Nearest to the hull edge horizontally; the bridge height breaks ties.
+        const score = (p) => Math.abs(p[0] - hullEdgeX) + 0.2 * Math.abs(p[1] - hullY);
+        let best = Infinity;
+        cells.forEach((p) => { const v = score(p); if (v < best) best = v; });
+        const near = cells.filter((p) => score(p) <= best + lit.cell * 1.6);
+        let ex = 0, ey = 0;
+        near.forEach((p) => { ex += p[0]; ey += p[1]; });
+        ex /= near.length; ey /= near.length;
+        // Pushed a little into the wing, toward its middle, so the wing's own outline closes the seam.
+        const mx = sx / cells.length, my = sy / cells.length;
+        const len = Math.max(0.0001, Math.hypot(mx - ex, my - ey));
+        const push = lit.cell * 1.2;
+        return { x: ex + (mx - ex) / len * push, y: ey + (my - ey) / len * push };
+    },
+
+    /**
      * Where the hull connection meets a wing, in layout units. The wing art is
      * rotated about its frame centre, so the root edge swings with it — the
      * bridge has to follow or it ends in empty space beside a tilted wing.

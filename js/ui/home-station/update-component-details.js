@@ -182,8 +182,6 @@ extendClass(HomeStationUI, {
                 profileManager.setSegmentShapeVariant(shipId, segmentId, Number(control.getAttribute('data-panel-style')));
                 this.showFloatingAreaStyle(area);
                 this.drawHangarBay();
-                this.renderAllComponentTrees();
-                this.bindComponentTreeEvents();
             });
         });
         panel.querySelectorAll('[data-show-joint]').forEach((input) => {

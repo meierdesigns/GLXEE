@@ -271,8 +271,6 @@ extendClass(HomeStationUI, {
             this.setupHangarPanelResize();
             this.startHangarPreview();
             this.drawHangarBay();
-            this.renderAllComponentTrees();
-            this.bindComponentTreeEvents();
             this.bindHangarSlotEvents();
             this.bindHangarPartsGrid();
         } else {

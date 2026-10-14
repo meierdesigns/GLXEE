@@ -97,8 +97,7 @@ extendClass(PlanetSVGManager, {
                 tint: tints[Math.floor(rng() * tints.length)]
             };
         }
-        const moonRoll = rng();
-        const moonCount = moonRoll < 0.12 ? 2 : (moonRoll < 0.38 ? 1 : 0);
+        const moonCount = 1;
         if (moonCount) {
             feat.moons = [];
             for (let i = 0; i < moonCount; i++) {
@@ -148,6 +147,11 @@ extendClass(PlanetSVGManager, {
     ensurePlanetGraphic(planetId) {
         const id = String(planetId || '').toLowerCase();
         if (!id) return '';
+        if (this._selectorVariantVersion !== 1) {
+            this._selectorVariantVersion = 1;
+            Object.keys(this.planets || {}).forEach((key) => delete this.planets[key]);
+            if (this.planetsDetailed) this.planetsDetailed = {};
+        }
         if (this.planets[id]) return this.planets[id];
         if (typeof planetConfigManager !== 'undefined') {
             const cfg = planetConfigManager.getConfig(id);

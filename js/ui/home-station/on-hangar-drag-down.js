@@ -60,6 +60,26 @@ extendClass(HomeStationUI, {
             return;
         }
         const grabModule = target.type === 'module' ? target.module : null;
+        // A weapon on the ship moves its SLOT when dragged (the gun stays in): hand the press to that slot's pin.
+        if (grabModule && grabModule.kind === 'weapon' && this.hangarSlotForModule) {
+            const slotEl = this.hangarSlotForModule(grabModule);
+            const slotPin = slotEl && slotEl.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+            if (slotPin) {
+                slotPin.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    button: 0,
+                    buttons: 1,
+                    pointerId: e.pointerId,
+                    pointerType: e.pointerType,
+                    isPrimary: true,
+                    bubbles: true,
+                    cancelable: true
+                }));
+                e.preventDefault();
+                return;
+            }
+        }
         if (grabModule && this.startHangarModuleGrab(grabModule, e)) {
             e.preventDefault();
             return;

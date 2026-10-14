@@ -40,8 +40,8 @@
     };
 
     /**
-     * Size factor per weapon slot for the layout: each size step above the
-     * slot's base (S split / M single) makes the weapon 25% bigger — and its
+     * Size factor per weapon slot for the layout. Single guns: S 0.5, M 0.7, L 1 (the full gun).
+     * Split (wing) guns: each step above S makes the weapon 25% bigger — and its
      * shots (see shootWithShipWeapon). { slotIndex: factor }, 1 omitted.
      */
     slm.getWeaponSlotScales = function (shipId) {
@@ -51,7 +51,14 @@
         const slots = (L.weaponSlots && L.weaponSlots.length ? L.weaponSlots : L.weapons) || [];
         slots.forEach((id, i) => {
             if (!id) return;
-            const step = this.getSlotSizeLevel(shipId, 'weapon', i) - this.getSlotBaseSizeLevel(shipId, 'weapon', i);
+            const level = this.getSlotSizeLevel(shipId, 'weapon', i);
+            if (!this.isSplitSlot(shipId, 'weapon', i)) {
+                // Single (centre-line) guns: L is the full gun size, M a clearly smaller one, S smaller still.
+                const f = [0.5, 0.7, 1][Math.max(0, Math.min(2, level))];
+                if (f !== 1) out[i] = f;
+                return;
+            }
+            const step = level - this.getSlotBaseSizeLevel(shipId, 'weapon', i);
             if (step > 0) out[i] = 1 + 0.25 * step;
         });
         return out;

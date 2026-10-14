@@ -39,7 +39,26 @@ extendClass(ShipLoadoutManager, {
         if (!segs.length) return { nx: nx, ny: ny, area: null };
         let best = null;
         let bestD = Infinity;
+        // Wings: work in the wing's own (unturned) frame and only allow its lit pixels, then turn back with the wing,
+        // so a gun can sit anywhere on the visible, rotated wing.
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        const model = typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastModel : null;
+        const rot = (layout.loadout && layout.loadout.wingRotation) || 0;
         segs.forEach((s) => {
+            if ((s.id === 'wingLeft' || s.id === 'wingRight') && loader && loader.wingLitCells && model && model.layout) {
+                const lit = loader.wingLitCells(s, model, typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastScale || 1 : 1);
+                if (lit && lit.pts.length) {
+                    const q = this.rotateOnWing(s, -rot, nx * lw, ny * lh);
+                    let bp = null, bd = Infinity;
+                    lit.pts.forEach((p) => { const d = Math.hypot(p[0] - q.x, p[1] - q.y); if (d < bd) { bd = d; bp = p; } });
+                    // Inside a lit cell: keep the exact point.
+                    const at = bd <= lit.cell * 0.75 ? q : { x: bp[0], y: bp[1] };
+                    const g = this.rotateOnWing(s, rot, at.x, at.y);
+                    const d = Math.hypot(g.x / lw - nx, g.y / lh - ny);
+                    if (d < bestD) { bestD = d; best = { nx: g.x / lw, ny: g.y / lh, area: s.id }; }
+                    return;
+                }
+            }
             // Keep a little inside the edge so the marker sits on the part.
             const x0 = (s.x + Math.min(1, s.width * 0.2)) / lw;
             const x1 = (s.x + s.width - Math.min(1, s.width * 0.2)) / lw;
@@ -74,6 +93,13 @@ extendClass(ShipLoadoutManager, {
         const lh = Math.max(1, layout.height || 1);
         const coreBox = layout.core || { x: 0, y: 0, width: core.width, height: core.height };
 
+        // Hull axis: middle of all segments. Slots on the centre line use it, so they sit exactly centred on the art.
+        const hullAxis = (() => {
+            let lo = Infinity, hi = -Infinity;
+            (layout.segments || []).forEach((sg) => { lo = Math.min(lo, sg.x); hi = Math.max(hi, sg.x + sg.width); });
+            return isFinite(lo) && hi > lo ? (lo + hi) / 2 / lw : 0.5;
+        })();
+
         const modulesByKind = {
             weapon: [],
             defense: [],
@@ -96,7 +122,7 @@ extendClass(ShipLoadoutManager, {
                 const seg = segs.find((sg) => sg.id === segId);
                 if (!seg) return { nx: 0.5, ny: fallbackY };
                 return {
-                    nx: (seg.x + seg.width / 2) / lw,
+                    nx: hullAxis,
                     ny: (seg.y + seg.height * (k + 1) / (n + 1)) / lh
                 };
             };
@@ -121,7 +147,7 @@ extendClass(ShipLoadoutManager, {
             const wingL = segs.find((sg) => sg.id === 'wingLeft');
             const wingR = segs.find((sg) => sg.id === 'wingRight');
             weaponSpotFor[0] = nose
-                ? { nx: (nose.x + nose.width / 2) / lw, ny: (nose.y + Math.min(nose.height * 0.35, 3)) / lh }
+                ? { nx: hullAxis, ny: (nose.y + Math.min(nose.height * 0.35, 3)) / lh }
                 : { nx: 0.5, ny: Math.max(0.06, (coreBox.y - 4) / lh) };
             const pairs = Math.max(1, cap - 1);
             for (let i = 1; i < cap; i++) {
@@ -212,7 +238,7 @@ extendClass(ShipLoadoutManager, {
                     && loadout.slotAnchors.weapon && loadout.slotAnchors.weapon[String(i)];
                 if (weaponAnchor) {
                     const c = this.clampToSlotArea('weapon', weaponAnchor.nx, weaponAnchor.ny, layout);
-                    const centreNx = (coreBox.x + coreBox.width / 2) / lw;
+                    const centreNx = hullAxis;
                     const onWing = c.area === 'wingLeft' || c.area === 'wingRight';
                     spot = {
                         area: c.area,
@@ -267,6 +293,8 @@ extendClass(ShipLoadoutManager, {
                         else if (nx > 0.68) side = 'right';
                     }
                 }
+                // A pin within 1.5 voxels of the hull axis sits exactly on it (module x is rounded to whole voxels).
+                if (Math.abs(nx - hullAxis) * lw < 1.5) nx = hullAxis;
                 slots.push({
                     mirrorNx: spot && spot.mirrorNx != null ? spot.mirrorNx : null,
                     mirrorNy: spot && spot.mirrorNy != null ? spot.mirrorNy : null,

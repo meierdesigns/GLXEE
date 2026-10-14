@@ -143,11 +143,12 @@ extendClass(ShipLoadoutManager, {
 
     getInventory(shipId) {
         const defaults = this.defaultLoadoutFromShip(shipId);
+        // A hull brings one part per type (the start profile's kit); everything else has to be bought / found.
         const owned = {
-            weapons: defaults.weapons.slice(),
-            defenses: defaults.defenses.slice(),
-            abilities: defaults.abilities.filter((id) => !this.isEnergyId(id)),
-            energy: defaults.energy.slice()
+            weapons: defaults.weapons.slice(0, 1),
+            defenses: defaults.defenses.slice(0, 1),
+            abilities: defaults.abilities.filter((id) => !this.isEnergyId(id)).slice(0, 1),
+            energy: defaults.energy.slice(0, 1)
         };
         const add = (arr, id) => {
             if (id && arr.indexOf(id) === -1) arr.push(id);
@@ -155,14 +156,8 @@ extendClass(ShipLoadoutManager, {
         if (typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
             const profile = profileManager.getActiveProfile();
             profileManager.ensureEconomyDefaults(profile);
-            profileManager.getDiscovered('weapons').forEach((id) => add(owned.weapons, id));
-            profileManager.getDiscovered('defenses').forEach((id) => add(owned.defenses, id));
-            profileManager.getDiscovered('abilities').forEach((id) => {
-                if (this.isEnergyId(id)) add(owned.energy, id);
-                else if (this.isDefenseId(id)) add(owned.defenses, id);
-                else add(owned.abilities, id);
-            });
-            profileManager.getDiscovered('energy').forEach((id) => add(owned.energy, id));
+            // Owned = the hull's own part per type + bought / found parts (profile.parts) + what is equipped.
+            // "Discovered" (codex) entries are not owned.
             Object.keys((profile.parts && profile.parts.weapons) || {}).forEach((id) => {
                 if ((profile.parts.weapons[id] || 0) > 0) add(owned.weapons, id);
             });

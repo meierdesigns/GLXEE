@@ -59,7 +59,9 @@ extendClass(HomeStationUI, {
             leftVar: '--hs-hangar-left-w',
             rightVar: '--hs-hangar-right-w',
             defaults: { left: 210, right: 220 },
-            mins: { left: 110, right: 160, center: 240 }
+            mins: { left: 110, right: 160, center: 140 },
+            isRightHidden: () => !!this._hangarRightCollapsed,
+            hiddenRightW: 44
         });
     },
 

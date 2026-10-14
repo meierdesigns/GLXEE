@@ -35,7 +35,9 @@
                 ny: clamp(m.ny == null ? 0.5 : Number(m.ny) || 0, 0, 1),
                 // Wing mounts: spot along the left wing from its tip (0) to
                 // the hull root (1); the right wing mirrors it.
-                fx: clamp(m.fx == null ? WING_FX : Number(m.fx) || 0, 0, 1)
+                fx: clamp(m.fx == null ? WING_FX : Number(m.fx) || 0, 0, 1),
+                // Only mounts a start profile / faction layout fixed in place count; moved ones from old saves don't.
+                fixed: !!m.fixed
             };
         });
         return out;
@@ -85,7 +87,11 @@
         }
         const seg = (segments || []).find((s) => s.id === mount.area);
         if (!seg) return null;
-        const mid = seg.x + seg.width / 2;
+        // The hull's own axis (middle of all segments), so single guns sit exactly centred even when a
+        // body segment is a pixel off.
+        let lo = Infinity, hi = -Infinity;
+        (segments || []).forEach((sg) => { lo = Math.min(lo, sg.x); hi = Math.max(hi, sg.x + sg.width); });
+        const mid = isFinite(lo) && hi > lo ? (lo + hi) / 2 : seg.x + seg.width / 2;
         const y = seg.y + seg.height * mount.ny;
         const dx = mount.split ? mount.off * seg.width : 0;
         return { area: mount.area, split: mount.split, x: mid - dx, y: y, mx: mid + dx, my: y };

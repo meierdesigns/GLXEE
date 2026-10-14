@@ -45,25 +45,11 @@ extendClass(HomeStationUI, {
                     : null));
         const frameMaxed = frameLevel >= frameMax;
 
-        // Areas view: only the current ship's tree. Ships view: a plain picker.
-        const shipButtons = (this._hangarLeftView === 'ships' ? [] : owned.filter((id) => id === shipId)).map((id) => {
-            const selected = id === profile.activeShipId ? ' ★' : '';
-            return `
-                <details class="hs-hangar-ship-tree" data-ship-tree="${id}"${id === shipId ? ' open' : ''}>
-                    <summary class="hs-hangar-ship${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">
-                        <span class="hs-btn-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
-                        <span>${this.shipName(id)}${selected}</span>
-                    </summary>
-                    <div class="hs-component-tree-container" aria-label="${this.shipName(id)} components">
-                        <div class="hs-component-tree-header">COMPONENTS</div>
-                        <div class="hs-component-tree" data-ship-id="${id}"></div>
-                    </div>
-                </details>`;
-        }).join('');
+        // Ships view: a plain picker.
         const shipPicker = owned.map((id) => {
             const selected = id === profile.activeShipId ? ' ★' : '';
             return `<button type="button" class="hs-hangar-ship hs-hangar-ship-pick${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>` +
+                `<canvas class="hs-area-thumb is-ship" width="72" height="48" data-area-thumb="${id}|"></canvas>` +
                 `<span>${this.shipName(id)}${selected}</span></button>`;
         }).join('');
 
@@ -158,7 +144,6 @@ extendClass(HomeStationUI, {
                                 `${label}: ${n} of ${cap} used (${this.shipName(shipId)})`, '', ' is-slot' + (n >= cap ? ' is-full' : ''),
                                 (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor(kind) : null)).join('')}
                         </div>
-                        ${this.renderHangarAreaUpgrades(shipId, profile)}
                         <div class="hs-stat-group is-stats" role="group" aria-label="Ship stats">
                         ${this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '')}
                         ${this.hangarStatTile('hsUpgrade', 'AREAS', `${frameLevel}<span class="hs-stat-of">/${frameMax}</span>`, 'Hull area levels (open new slots, add hull HP)', '')}
@@ -177,7 +162,7 @@ extendClass(HomeStationUI, {
                     <aside class="hs-hangar-list hs-panel">
                         <h3 class="hs-panel-title">
                             <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'}</span>
+                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : this._hangarLeftView === 'slots' ? 'SLOTS' : 'SHIPS'}</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
                             ${this.renderHangarLeftViewToggle()}
                             <button type="button" class="hs-sidebar-toggle hs-sidebar-strip" data-hangar-sidebar="left"
@@ -185,9 +170,9 @@ extendClass(HomeStationUI, {
                         </h3>
                         ${this._hangarLeftView === 'parts'
                             ? this.renderHangarPartsGrid(inventory, loadout)
-                            : this._hangarLeftView === 'ships'
-                            ? `<div class="hs-actions-col hs-hangar-ships is-picker" id="hsHangarShipsContainer">${shipPicker}</div>`
-                            : `<div class="hs-actions-col hs-hangar-ships" id="hsHangarShipsContainer">${shipButtons}</div>`}
+                            : this._hangarLeftView === 'slots'
+                            ? this.renderHangarSlotsView(hangarSlots.slots, layout)
+                            : `<div class="hs-actions-col hs-hangar-ships is-picker" id="hsHangarShipsContainer">${shipPicker}</div>`}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -205,7 +190,6 @@ extendClass(HomeStationUI, {
                                     <output id="hsBayZoomOut" class="hs-bay-zoom-out">100%</output>
                                     <button type="button" class="hs-bay-zoom-btn is-fit" data-bay-zoom="fit" title="Fit ship" aria-label="Fit ship">FIT</button>
                                 </div>
-                                <div class="hs-slot-bar" id="hsSlotBar" role="group" aria-label="Weapon slots"></div>
                                 <button type="button" class="hs-slot-move-handle" id="hsSlotMoveHandle" hidden
                                     aria-label="Move slot" title="Drag to move this slot (keeps the weapon)">
                                     <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true">

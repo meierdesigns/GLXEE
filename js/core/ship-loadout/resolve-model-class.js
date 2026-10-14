@@ -225,6 +225,7 @@ extendClass(ShipLoadoutManager, {
         this.dockLayoutParts(ctx, segments);
         this.applyWeaponSlotScales(ctx.parts, loadout && loadout.weaponSlotScales);
         this.applyLayoutModuleScales(ctx.parts, segments);
+        this.centerAxisParts(ctx.parts, segments);
         return this.finalizeLayout(ctx, segments, wingPanels);
     },
 });

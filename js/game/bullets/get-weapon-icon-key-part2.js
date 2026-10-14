@@ -20,7 +20,13 @@ extendClass(BulletManager, {
         this.getWeaponFirePositions(playerPosition).forEach((slot) => {
             // The ALL key (default Space) fires every slot; any other key fires
             // only the slots assigned to it. Calls without a key fire all.
-            if (opts.fireKey && opts.fireKey !== 'all' && (slot.fireKey || 'space') !== opts.fireKey) return;
+            const slotKeys = slot.keys || ['space'];
+            if (opts.fireKey && opts.fireKey !== 'all') {
+                if (slotKeys.indexOf(opts.fireKey) === -1) return;
+            } else if (opts.fireKey === 'all' && slotKeys.indexOf('space') === -1
+                && (((this.currentShipModel.loadout || {}).allFireKey) || 'space') === 'space') {
+                return;
+            }
             // Weapons slotted later aren't in the ship's own weaponConfig
             // (built from its stock weapons): use the weapon's defaults.
             const weaponConfig = this.currentShipModel.weaponConfig[slot.id]

@@ -5,7 +5,7 @@ extendClass(EnemyManager, {
     // Get enemy ship model for weapon configuration
     async getEnemyShipModel(type) {
         try {
-            const { shipAssetLoader } = await import('../../graphics/ship-assets/ship-asset-loader.js');
+            const { shipAssetLoader } = await import(new URL('js/graphics/ship-assets/ship-asset-loader.js', document.baseURI).href);
             if (shipAssetLoader && shipAssetLoader.isLoaded()) {
                 const hullId = (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getHullId)
                     ? enemyConfigManager.getHullId(type)

@@ -35,6 +35,7 @@ extendClass(HomeStationUI, {
     },
     drawHangarBay(deferSlotSync) {
         if (!this.overlay) return;
+        this._hangarBayStamp = performance.now();
         const canvas = this.overlay.querySelector('#hsHangarBayCanvas');
         if (!canvas) return;
         const stage = this.overlay.querySelector('#hsHangarBayStage');
@@ -86,11 +87,18 @@ extendClass(HomeStationUI, {
         // grows or shrinks the bounding box, and re-fitting on every change
         // popped the whole ship to a new size.
         const fitKey = shipId + '|' + w + '|' + h;
+        // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
+        // hangar UI (clicking an area, releasing a drag) lays the canvas out at slightly different sizes first, and
+        // re-fitting on each of those threw the user's zoom and pan away.
+        const f0 = this._hangarFit;
+        const sameView = !!f0 && f0.ship === shipId && (w < 50 || h < 50
+            || (Math.abs(w - f0.w) <= f0.w * 0.12 && Math.abs(h - f0.h) <= f0.h * 0.12));
+        if (sameView && f0.key !== fitKey) f0.key = fitKey;
         if (!this._hangarFit || this._hangarFit.key !== fitKey) {
             // Default view: fit and centre the ship's visible pixels (the
             // bbox has empty rows), with margin on every side and extra room
             // at the top for the slot bar. Pan/zoom start fresh.
-            this._hangarFit = { key: fitKey, scale: fitScale };
+            this._hangarFit = { key: fitKey, scale: fitScale, ship: shipId, w: w, h: h };
             const vis = this.measureHangarShipVisible(model, fitScale);
             if (vis) {
                 const padTop = Math.max(110, Math.floor(h * 0.22));
@@ -371,6 +379,14 @@ extendClass(HomeStationUI, {
         );
         const slots = (hangarSlots && hangarSlots.slots) || [];
         const layout = merged && merged.layout;
+        // SLOTS sidebar tab: follow slots dragged to another area without a full re-render.
+        const slotView = this.overlay.querySelector('.hs-slotview');
+        if (slotView && this.renderHangarSlotsView) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = this.renderHangarSlotsView(slots, layout);
+            const fresh = tmp.firstElementChild;
+            if (fresh && fresh.innerHTML !== slotView.innerHTML) slotView.innerHTML = fresh.innerHTML;
+        }
         const shipW = parseFloat(layer.style.getPropertyValue('--bay-ship-w')) || 0;
         const pxPerUnit = layout && layout.width ? shipW / layout.width : 0;
         const modsLeft = ((layout && layout.modules) || []).slice();
@@ -450,7 +466,6 @@ extendClass(HomeStationUI, {
             }
         });
         this.updateHangarSlotLinks();
-        if (this.renderHangarSlotBar) this.renderHangarSlotBar(slots);
         this.setHangarHoverArea(this._hangarHoverArea || null);
     },
 });

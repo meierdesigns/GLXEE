@@ -55,6 +55,12 @@ extendClass(HomeStationUI, {
         const seg = this.hangarModuleSegment(layout, mod);
         const cx = mod.x + mod.width / 2;
         const cy = mod.y + mod.height / 2;
+        // A gun on a turned wing sits where the wing carries it; clamping it into the wing's unturned frame pulled the
+        // grab box off the drawn gun, so the press fell through to the knob / wing underneath.
+        const wingDeg = Math.abs(Number(layout && layout.loadout && layout.loadout.wingRotation) || 0);
+        if (mod.mountSegment === 'wing' && wingDeg > 0.5) {
+            return { x: mod.x, y: mod.y, width: mod.width, height: mod.height };
+        }
         if (!seg) return { x: mod.x, y: mod.y, width: mod.width, height: mod.height };
         const mates = ((layout && layout.modules) || []).filter((m) => m.kind === 'weapon'
             && this.hangarModuleSegment(layout, m) === seg);
@@ -93,8 +99,11 @@ extendClass(HomeStationUI, {
      */
     hangarNearestModuleAt(h, e) {
         const pt = this.hangarDragLayoutPoint(h, e);
-        // Tiny parts get a grab zone of at least ~22 screen px.
-        const minUnits = 22 / Math.max(1, h.scale);
+        // Tiny parts get a grab zone of at least ~44 screen px, so a gun is easy to hit with the mouse.
+        // (screen px: the bay canvas is usually displayed smaller than its backing size)
+        const cvRect = h.canvas && h.canvas.getBoundingClientRect ? h.canvas.getBoundingClientRect() : null;
+        const shown = cvRect && h.canvas.width ? cvRect.width / h.canvas.width : 1;
+        const minUnits = 44 / Math.max(0.05, h.scale * shown);
         let best = null;
         let bestD = Infinity;
         (h.model.layout.modules || []).forEach((mod) => {
@@ -289,9 +298,17 @@ extendClass(HomeStationUI, {
         const len = Math.max(0.0001, Math.hypot(x - pivot.x, y - pivot.y));
         // Far enough out that the (large) knob clears the wing tip.
         const push = 28 / Math.max(1, scale);
+        // Always on the outer side of the ship: a wing swung inward must not put the knob over the hull.
+        const outward = left ? -1 : 1;
+        let kx = x + (x - pivot.x) / len * push;
+        let ky = y + (y - pivot.y) / len * push;
+        if ((kx - pivot.x) * outward < vis.width * 0.5) {
+            kx = pivot.x + outward * (vis.width * 0.5 + push);
+            ky = y;
+        }
         return {
-            x: x + (x - pivot.x) / len * push,
-            y: y + (y - pivot.y) / len * push,
+            x: kx,
+            y: ky,
             tipX: x,
             tipY: y,
             pivot

@@ -1,76 +1,7 @@
 "use strict";
 
-// HomeStationUI: weapon slot bar at the top centre of the hangar bay.
-// One tile per weapon slot (NOSE, then one per wing pair). Weapons are
-// dropped onto a tile to equip that slot; an empty tile is dragged onto the
-// ship to place its socket (nose slot → nose, wing slots → wings); a filled
-// tile is dragged like the part on the ship (move / swap / unequip).
+// HomeStationUI: weapon slot buy dialog, hover move handle and area helpers of the hangar bay.
 extendClass(HomeStationUI, {
-    /** Rebuild the tiles when the weapon slots change (called from updateHangarSlotPins). */
-    renderHangarSlotBar(slots) {
-        const bar = this.overlay && this.overlay.querySelector('#hsSlotBar');
-        if (!bar) return;
-        const weapons = (slots || []).filter((s) => s.kind === 'weapon');
-        // Tile size follows where the slot sits on the ship (like its socket):
-        // big on the nose, half size on a wing.
-        const onWing = (s) => !!s.split
-            || String(s.area || (s.index > 0 ? 'wingLeft' : 'front')).indexOf('wing') === 0;
-        const L = shipLoadoutManager.getLoadout(this.hangarShipId);
-        const fireKey = (i) => (shipLoadoutManager.getWeaponFireKey ? shipLoadoutManager.getWeaponFireKey(L, i) : 'space');
-        const allKey = shipLoadoutManager.getAllFireKey ? shipLoadoutManager.getAllFireKey(L) : 'space';
-        const keyLabel = (k) => (k === 'space' ? 'SPC' : String(k).toUpperCase());
-        // Buy tile: next weapon slot (new-profile purchase model only).
-        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
-        const buy = pm && pm.usesWeaponSlotPurchase && pm.usesWeaponSlotPurchase()
-            ? pm.canPurchaseWeaponSlot(this.hangarShipId) : null;
-        const costLabel = (c) => Object.keys(c || {}).map((k) => c[k] + ' ' + k.toUpperCase()).join(' · ');
-        const buyTile = !buy || buy.reason === 'MAX SLOTS' || buy.reason === 'N/A' ? ''
-            : `<button type="button" class="hs-slot-tile hs-slot-tile-buy${buy.ok ? '' : ' is-locked'}" data-buy-weapon-slot="1"` +
-              ` title="BUY WEAPON SLOT — ${costLabel(buy.cost)}${buy.ok ? '' : ' · NOT ENOUGH RESOURCES'}">` +
-              `<span class="hs-slot-tile-key hs-slot-tile-buy-cost">BUY</span>` +
-              `<span class="hs-slot-tile-socket hs-slot-tile-all-label">+</span>` +
-              `</button>`;
-        const sig = 'buy:' + (buy ? (buy.ok ? 1 : 0) + costLabel(buy.cost) : '-') + '|all:' + allKey + '|' + weapons.map((s) => s.index + ':' + (s.id || '') + ':' + (onWing(s) ? 'w' : 'n') + ':' + fireKey(s.index)).join('|');
-        if (bar.dataset.sig !== sig) {
-            bar.dataset.sig = sig;
-            // ALL tile: the key that fires every weapon at once.
-            // As tall as the biggest slot: wing size only when every slot is a wing slot.
-            const allSmall = weapons.length > 0 && weapons.every(onWing);
-            const allTile = `<div class="hs-slot-tile hs-slot-tile-all is-filled${allSmall ? ' is-wing' : ''}" aria-label="ALL WEAPONS · ${keyLabel(allKey)}"` +
-                ` title="ALL WEAPONS — this key fires every gun at once">` +
-                `<span class="hs-slot-tile-socket hs-slot-tile-all-label">ALL</span>` +
-                `<span class="hs-slot-tile-key is-${allKey}" data-fire-key-all="1"` +
-                ` title="FIRE-ALL KEY — click to cycle SPACE · A · S · D">${keyLabel(allKey)}</span>` +
-                `</div>`;
-            bar.innerHTML = allTile + weapons.map((s) => {
-                const wing = s.index > 0;
-                const label = wing ? 'WING ' + s.index : 'NOSE';
-                const small = onWing(s);
-                const name = s.id ? this.hangarModuleLabel(s.id) : 'EMPTY';
-                const body = s.id
-                    ? this.moduleIconHtml('weapon', s.id, 32, 'hs-pixel', false)
-                    : '<span class="hs-slot-tile-bore" aria-hidden="true"></span>';
-                const hint = s.id
-                    ? 'drag to move or remove'
-                    : 'drag onto nose or core (centre = single, off-centre = split)' + (wing ? ' or a wing' : '');
-                return `<button type="button" class="hs-slot-tile${s.id ? ' is-filled' : ' is-empty'}${small ? ' is-wing' : ''}"` +
-                    ` data-slot-kind="weapon" data-slot-index="${s.index}" aria-label="${label} · ${name}"` +
-                    ` title="${label} · ${name}${wing ? ' · SPLIT ONTO BOTH WINGS' : ''} — ${hint}">` +
-
-                    `<span class="hs-slot-tile-socket">${body}</span>` +
-                    (s.id
-                        ? `<span class="hs-slot-tile-key is-${fireKey(s.index)}" data-fire-key-slot="${s.index}"` +
-                          ` title="SOLO FIRE KEY — click to cycle SPACE · A · S · D">${keyLabel(fireKey(s.index))}</span>`
-                        : '') +
-                    `</button>`;
-            }).join('') + buyTile;
-        }
-        if (bar.dataset.bound !== '1') {
-            bar.dataset.bound = '1';
-            bar.addEventListener('pointerdown', (e) => this.onHangarSlotTileDown(e));
-        }
-    },
-
     /** Confirm dialog for buying the next weapon slot (reuses the area-upgrade modal look). */
     openWeaponSlotBuyModal(shipId) {
         const root = this.overlay && this.overlay.querySelector('.home-station-content');
@@ -117,125 +48,6 @@ extendClass(HomeStationUI, {
         (confirmBtn.disabled ? modal.querySelector('[data-area-modal-cancel]') : confirmBtn).focus();
     },
 
-    onHangarSlotTileDown(e) {
-        if (e.button !== 0) return;
-        // ALL tile: its badge cycles the fire-all key; the tile itself is inert.
-        if (e.target.closest && e.target.closest('[data-fire-key-all]')) {
-            e.preventDefault();
-            e.stopPropagation();
-            // No status line: the badge itself shows the new key.
-            shipLoadoutManager.cycleAllFireKey(this.hangarShipId);
-            this.drawHangarBay();
-            return;
-        }
-        if (e.target.closest && e.target.closest('.hs-slot-tile-all')) return;
-        // Buy tile: purchase the next weapon slot for this ship.
-        if (e.target.closest && e.target.closest('[data-buy-weapon-slot]')) {
-            e.preventDefault();
-            this.openWeaponSlotBuyModal(this.hangarShipId);
-            return;
-        }
-        // Key badge: cycle this slot's fire key instead of dragging.
-        const keyBadge = e.target.closest && e.target.closest('[data-fire-key-slot]');
-        if (keyBadge) {
-            e.preventDefault();
-            e.stopPropagation();
-            const idx = Number(keyBadge.getAttribute('data-fire-key-slot') || 0);
-            shipLoadoutManager.cycleWeaponFireKey(this.hangarShipId, idx);
-            // The key badge itself shows the new key; no status line needed.
-            this.drawHangarBay();
-            return;
-        }
-        const tile = e.target.closest && e.target.closest('.hs-slot-tile');
-        if (!tile) return;
-        e.preventDefault();
-        const index = Number(tile.getAttribute('data-slot-index') || 0);
-        // A plain click (no drag) focuses the slot on the ship — both
-        // halves of a split slot.
-        const sx = e.clientX;
-        const sy = e.clientY;
-        const up = (ev) => {
-            document.removeEventListener('pointerup', up, true);
-            if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) this.focusHangarSlot(index);
-        };
-        document.addEventListener('pointerup', up, true);
-        if (tile.classList.contains('is-filled')) {
-            // Same as grabbing the installed part on the ship.
-            const slotEl = this.overlay.querySelector(
-                `.hs-hangar-slot[data-slot-kind="weapon"][data-slot-index="${index}"]`);
-            if (slotEl) this.startHangarSlotPull(slotEl, e);
-            return;
-        }
-        this.startHangarSocketDrag(tile, index, e);
-    },
-
-    /** Highlight a weapon slot on the ship (every marker of it) and its tile. */
-    focusHangarSlot(index) {
-        if (!this.overlay) return;
-        this.overlay.querySelectorAll('.hs-hangar-slot.is-focused, .hs-slot-tile.is-focused')
-            .forEach((el) => el.classList.remove('is-focused'));
-        const slot = this.overlay.querySelector(
-            `.hs-hangar-slot[data-slot-kind="weapon"][data-slot-index="${index}"]`);
-        const tile = this.overlay.querySelector(`.hs-slot-tile[data-slot-index="${index}"]`);
-        if (slot) slot.classList.add('is-focused');
-        if (tile) tile.classList.add('is-focused');
-        // Cleared by the next press anywhere else.
-        const clear = (ev) => {
-            if (ev.target.closest && ev.target.closest('.hs-slot-tile')) return;
-            document.removeEventListener('pointerdown', clear, true);
-            if (slot) slot.classList.remove('is-focused');
-            if (tile) tile.classList.remove('is-focused');
-        };
-        document.addEventListener('pointerdown', clear, true);
-    },
-
-    /** Drag an empty slot tile onto the ship to place its socket. */
-    startHangarSocketDrag(tile, index, downEvent) {
-        const startX = downEvent.clientX;
-        const startY = downEvent.clientY;
-        let ghost = null;
-        const move = (e) => {
-            if (!ghost) {
-                if (Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return;
-                ghost = document.createElement('div');
-                ghost.className = 'hs-slot-socket-ghost' + (index > 0 ? ' is-wing' : '');
-                document.body.appendChild(ghost);
-                tile.classList.add('is-dragging');
-            }
-            const spot = this.hangarSocketSpotAt(index, e.clientX, e.clientY);
-            this.showHangarSlotsInArea(spot ? spot.area : null);
-            ghost.style.transform = `translate(${Math.round(e.clientX)}px, ${Math.round(e.clientY)}px)`;
-            ghost.classList.toggle('is-valid', !!(spot && spot.ok));
-            ghost.classList.toggle('is-invalid', !!(spot && !spot.ok));
-        };
-        const finish = (e, cancelled) => {
-            document.removeEventListener('pointermove', move);
-            document.removeEventListener('pointerup', up);
-            document.removeEventListener('pointercancel', cancel);
-            tile.classList.remove('is-dragging');
-            this.showHangarSlotsInArea(null);
-            if (!ghost) return;
-            ghost.remove();
-            if (cancelled) return;
-            const spot = this.hangarSocketSpotAt(index, e.clientX, e.clientY);
-            if (!spot) return;
-            if (!spot.ok) {
-                this.setStatus(index > 0 ? 'WEAPONS GO ON NOSE, CORE OR WINGS' : 'THE NOSE SLOT GOES ON NOSE OR CORE');
-                return;
-            }
-            const res = shipLoadoutManager.setEmptySlotAnchor(this.hangarShipId, 'weapon', index, spot.nx, spot.ny);
-            if (res && res.ok === false && res.reason === 'SLOT_OCCUPIED') {
-                this.setStatus('NO ROOM THERE — SLOTS CAN\'T OVERLAP');
-            }
-            this.drawHangarBay();
-        };
-        const up = (e) => finish(e, false);
-        const cancel = (e) => finish(e, true);
-        document.addEventListener('pointermove', move);
-        document.addEventListener('pointerup', up);
-        document.addEventListener('pointercancel', cancel);
-    },
-
     /**
      * Hover-only move handle on the corner of an equipped weapon slot.
      * Dragging it moves the slot (weapon stays in) — dragging the weapon
@@ -245,6 +57,8 @@ extendClass(HomeStationUI, {
         const handle = this.overlay && this.overlay.querySelector('#hsSlotMoveHandle');
         const stage = this.overlay && this.overlay.querySelector('#hsHangarBayStage');
         if (!handle || !stage) return;
+        // Slots are dragged directly now: no separate move handle.
+        slotEl = null;
         // Split slots get a second handle on the mirrored half.
         let mirror = this.overlay.querySelector('#hsSlotMoveHandleMirror');
         if (!mirror) {
@@ -269,18 +83,23 @@ extendClass(HomeStationUI, {
         this._hangarMoveHandleSlot = slotEl;
         const sr = stage.getBoundingClientRect();
         const index = slotEl.getAttribute('data-slot-index') || '0';
-        // Beside its half, on the outer side (away from the hull), never over it.
+        // On the outer top corner of its half (away from the hull).
         const place = (h, p, outward) => {
             if (!p) {
                 h.hidden = true;
                 return;
             }
             const r = p.getBoundingClientRect();
-            // Rects are visual px; the stage is zoomed, so convert to CSS px.
-            const z = window.vfEffectiveZoom ? window.vfEffectiveZoom(stage) : 1;
-            const x = outward < 0 ? (r.left - sr.left) / z - 16 : (r.right - sr.left) / z + 16;
-            h.style.left = Math.round(x) + 'px';
-            h.style.top = Math.round((r.top + r.height / 2 - sr.top) / z) + 'px';
+            // Self-calibrating: park the handle at its own origin, measure where that lands on screen and
+            // its real scale, then shift it by the visual distance to the slot's outer top corner.
+            h.hidden = false;
+            h.style.left = '0px';
+            h.style.top = '0px';
+            const hr = h.getBoundingClientRect();
+            const sc = (hr.width && h.offsetWidth) ? hr.width / h.offsetWidth : 1;
+            const tx = outward < 0 ? r.left : r.right;
+            h.style.left = Math.round((tx - (hr.left + hr.width / 2)) / sc) + 'px';
+            h.style.top = Math.round((r.top - (hr.top + hr.height / 2)) / sc) + 'px';
             h.setAttribute('data-slot-index', index);
             h.hidden = false;
             if (h.dataset.bound !== '1') {

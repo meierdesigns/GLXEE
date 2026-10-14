@@ -89,7 +89,7 @@
     try {
         var bootMeta = document.querySelector('meta[name="vf-boot"]');
         var bootId = (bootMeta && bootMeta.getAttribute('content')) || '';
-        var sheet = document.querySelector('link[rel="stylesheet"][href*="styles.css"]');
+        var sheet = document.querySelector('link[rel="stylesheet"][href*="styles/part-01.css"]');
         var mv = sheet && /[?&]v=([^&]+)/.exec(sheet.getAttribute('href'));
         var sheetV = mv ? mv[1] : '';
         BUILD = bootId && sheetV ? (bootId + ':' + sheetV) : (bootId || sheetV || '');
@@ -131,6 +131,14 @@
             ln.rel = 'preload'; ln.as = 'image'; ln.href = bg;
             document.head.appendChild(ln);
         }
+        // The faction's other main backdrops too, so the first tab/screen change after the start is already decoded.
+        if (fid) ['menu', 'profiles'].forEach(function (n) {
+            var u = fbg(n);
+            if (u === bg) return;
+            var l2 = document.createElement('link');
+            l2.rel = 'preload'; l2.as = 'image'; l2.href = u;
+            document.head.appendChild(l2);
+        });
     } catch (e) { /* ignore */ }
     // Animations/transitions stay off until the first render has settled (no load-time jumping).
     document.documentElement.classList.add('vf-loading');
@@ -141,4 +149,49 @@
     r.setProperty('--vw', LW + 'px');
     r.setProperty('--vh', LH + 'px');
     r.setProperty('--stage-scale', String(Number(scale.toFixed(5))));
+})();
+
+// Faction-switch debug log: window.vfLog(tag, msg, data). On by default; silence with `window.vfDebugFactionGui = false` (or localStorage vf-debug = 0).
+// vfLog.watch(label, ms) also reports every frame gap > 32 ms and every long task while a switch plays.
+(function () {
+    var T0 = performance.now();
+    var off = false;
+    try { off = localStorage.getItem('vf-debug') === '0'; } catch (e) { /* ignore */ }
+    function on() { return !off && window.vfDebugFactionGui !== false && window.console && console.log; }
+    function vfLog(tag, msg, data) {
+        if (!on()) return;
+        var t = (performance.now() - T0).toFixed(0);
+        var line = '%c[vf +' + t + 'ms] %c' + tag + '%c ' + msg;
+        var a = [line, 'color:#888', 'color:#5cf;font-weight:bold', 'color:inherit'];
+        if (data !== undefined) a.push(data);
+        console.log.apply(console, a);
+    }
+    var watching = 0, raf = 0, last = 0, longObs = null, lastProbe = '';
+    vfLog.watch = function (label, ms) {
+        if (!on()) return;
+        var until = performance.now() + (ms || 1800);
+        if (until > watching) watching = until;
+        if (raf) return;
+        vfLog('watch', 'frame monitor on (' + label + ')');
+        last = performance.now(); lastProbe = '';
+        if (window.PerformanceObserver && !longObs) {
+            try {
+                longObs = new PerformanceObserver(function (l) {
+                    l.getEntries().forEach(function (e) { if (performance.now() < watching + 200) vfLog('LONGTASK', e.duration.toFixed(0) + 'ms at +' + (e.startTime - T0).toFixed(0) + 'ms'); });
+                });
+                longObs.observe({ entryTypes: ['longtask'] });
+            } catch (e) { longObs = null; }
+        }
+        var tick = function (now) {
+            var gap = now - last; last = now;
+            if (gap > 32) vfLog('FRAME', 'gap ' + gap.toFixed(0) + 'ms (' + (1000 / gap).toFixed(0) + ' fps)');
+            if (typeof vfLog.probe === 'function') {
+                var st = ''; try { st = vfLog.probe(); } catch (e) { st = 'probe error ' + e.message; }
+                if (st !== lastProbe) { lastProbe = st; vfLog('CONTENT', st); }
+            }
+            if (now < watching) raf = requestAnimationFrame(tick); else { raf = 0; vfLog('watch', 'frame monitor off'); }
+        };
+        raf = requestAnimationFrame(tick);
+    };
+    window.vfLog = vfLog;
 })();

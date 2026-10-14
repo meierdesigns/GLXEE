@@ -132,6 +132,9 @@ extendClass(ProfileManager, {
         this.discover('ships', id);
         // Starter hull alone does not reveal arsenal entries.
         if (id === this.getStarterShipId()) return;
+        // A profile's only hull (the start profile's ship) does not reveal the arsenal either.
+        const own = this.getActiveProfile();
+        if (own && Array.isArray(own.ownedShipIds) && own.ownedShipIds.length === 1 && own.ownedShipIds[0] === id) return;
         let loadout = null;
         const profile = this.getActiveProfile();
         if (profile && profile.shipLoadouts && profile.shipLoadouts[id]) {

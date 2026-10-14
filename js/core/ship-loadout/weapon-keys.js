@@ -24,10 +24,24 @@
         return out;
     };
 
+    // weaponKeySets[slot] = ['space', 'a', ...]: every key that fires this slot (any combination). No entry =
+    // the legacy single key from weaponKeys (A / S / D), else SPACE only.
+    proto.normalizeWeaponKeySets = function (raw) {
+        const out = {};
+        if (!raw || typeof raw !== 'object') return out;
+        Object.keys(raw).forEach((k) => {
+            if (!Array.isArray(raw[k])) return;
+            const set = KEYS.filter((key) => raw[k].map((v) => String(v).toLowerCase()).indexOf(key) !== -1);
+            out[String(Math.max(0, Math.round(Number(k) || 0)))] = set;
+        });
+        return out;
+    };
+
     const baseNormalize = proto.normalizeLoadout;
     proto.normalizeLoadout = function (src) {
         const L = baseNormalize.call(this, src);
         L.weaponKeys = this.normalizeWeaponKeys(src && src.weaponKeys);
+        L.weaponKeySets = this.normalizeWeaponKeySets(src && src.weaponKeySets);
         const all = String((src && src.allFireKey) || 'space').toLowerCase();
         L.allFireKey = KEYS.indexOf(all) !== -1 ? all : 'space';
         // Heal saved loadouts where a slot shares the ALL key.
@@ -64,6 +78,36 @@
         return m || 'space';
     };
 
+    /** Every key that fires a weapon slot. */
+    proto.getWeaponKeySet = function (L, index) {
+        const slot = String(Math.max(0, Math.round(Number(index) || 0)));
+        const set = L && L.weaponKeySets && L.weaponKeySets[slot];
+        if (Array.isArray(set)) return set.slice();
+        const legacy = L && L.weaponKeys && L.weaponKeys[slot];
+        return [legacy || 'space'];
+    };
+
+    proto.setWeaponKeySet = function (shipId, index, keys) {
+        const L = this.getLoadout(shipId);
+        const slot = String(Math.max(0, Math.round(Number(index) || 0)));
+        L.weaponKeySets = this.normalizeWeaponKeySets(L.weaponKeySets);
+        L.weaponKeySets[slot] = KEYS.filter((k) => (keys || []).indexOf(k) !== -1);
+        // Keep the single-key field in step (slot badge, older readers): the first A / S / D key, else none.
+        L.weaponKeys = this.normalizeWeaponKeys(L.weaponKeys);
+        const solo = L.weaponKeySets[slot].find((k) => k !== 'space');
+        if (solo) L.weaponKeys[slot] = solo; else delete L.weaponKeys[slot];
+        this.setLoadout(shipId, L);
+        return L.weaponKeySets[slot].slice();
+    };
+
+    proto.toggleWeaponKey = function (shipId, index, key) {
+        const set = this.getWeaponKeySet(this.getLoadout(shipId), index);
+        const k = String(key || '').toLowerCase();
+        const at = set.indexOf(k);
+        if (at === -1) set.push(k); else set.splice(at, 1);
+        return this.setWeaponKeySet(shipId, index, set);
+    };
+
     proto.setWeaponFireKey = function (shipId, index, key) {
         const L = this.getLoadout(shipId);
         const k = String(key || 'space').toLowerCase();
@@ -71,6 +115,8 @@
         L.weaponKeys = this.normalizeWeaponKeys(L.weaponKeys);
         if (k === 'a' || k === 's' || k === 'd') L.weaponKeys[slot] = k;
         else delete L.weaponKeys[slot];
+        L.weaponKeySets = this.normalizeWeaponKeySets(L.weaponKeySets);
+        L.weaponKeySets[slot] = [k === 'a' || k === 's' || k === 'd' ? k : 'space'];
         this.setLoadout(shipId, L);
         return this.getWeaponFireKey(L, index);
     };

@@ -136,8 +136,10 @@ extendClass(HomeStationUI, {
             : loader.bodyShapeVariantCount(segmentId);
         const saved = profileManager.getSegmentShapeVariant(shipId, segmentId);
         const fallbackId = segmentId === 'wing' ? 'wingLeft' : segmentId;
+        // Same faction-focus default the hull renders when nothing is picked.
+        const factionStyle = loader.resolveModuleFactionStyle ? loader.resolveModuleFactionStyle(null) : null;
         const active = saved == null
-            ? loader.hullShapeVariantIndex(loader.resolveHullShapeSeed({ id: shipId }), fallbackId, count)
+            ? loader.hullShapeVariantIndex(loader.resolveHullShapeSeed({ id: shipId }), fallbackId, count, factionStyle)
             : saved;
 
         const panel = document.createElement('div');

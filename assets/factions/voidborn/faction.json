@@ -5,11 +5,6 @@
     "accent": "#f09cff",
     "engine": "#9ab0c0",
     "silhouette": "rings",
-    "wingVariants": [
-      "delta",
-      "swept",
-      "razor"
-    ],
     "anatomy": {
       "front": {
         "x": 0.9,
@@ -28,10 +23,35 @@
         "y": 1.3
       }
     },
+    "focus": {
+      "role": "evasive",
+      "parts": {
+        "front": [
+          "BULB",
+          "POINTED"
+        ],
+        "center": [
+          "HOURGLASS",
+          "BARREL"
+        ],
+        "back": [
+          "WAIST",
+          "TAPER"
+        ],
+        "wing": [
+          "crescent",
+          "swept",
+          "razor"
+        ]
+      },
+      "armor": 0,
+      "hardpoints": "center",
+      "wingGap": true
+    },
     "defaultWeapons": [
       "wave"
     ],
-    "prompt": "broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor",
+    "prompt": "broken ring arcs, hollow center gap, compact pod hull, crescent wings floating detached from the body, ancient alien geometry, void apertures and floating segmented armor",
     "styleStrength": 2
   },
   "gui": {

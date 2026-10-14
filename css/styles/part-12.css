@@ -778,6 +778,31 @@
     filter: drop-shadow(2px 0 0 color-mix(in srgb, var(--faction-accent, #fff) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, var(--faction-accent, #fff) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, var(--faction-accent, #fff) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, var(--faction-accent, #fff) 55%, transparent));
     will-change: transform;
 }
+.hs-hangar-part-ghost.is-item,
+.hs-hangar-part-ghost.is-item.is-snapped {
+    filter: none !important;
+}
+.hs-hangar-part-ghost.is-item .hs-slot-picker {
+    pointer-events: none;
+}
+/* Lifted item: just the object, no cell frame, background or labels. */
+html body .hs-hangar-part-ghost.is-item .hs-slot-picker .hs-pick-cell {
+    border: 0 !important;
+    outline: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+}
+html body .hs-hangar-part-ghost.is-item .hs-slot-picker::before,
+html body .hs-hangar-part-ghost.is-item .hs-slot-picker::after,
+html body .hs-hangar-part-ghost.is-item .hs-slot-picker .hs-pick-cell::before,
+html body .hs-hangar-part-ghost.is-item .hs-slot-picker .hs-pick-cell::after,
+html body .hs-hangar-part-ghost.is-item .hs-pick-size,
+html body .hs-hangar-part-ghost.is-item .hs-pick-ico {
+    display: none !important;
+}
+html body .hs-bay-inv .hs-pick-cell.is-dragging {
+    visibility: hidden;
+}
 .hs-hangar-part-ghost img {
     width: 32px;
     height: 32px;
@@ -1502,4 +1527,21 @@ body.hs-part-grabbing * {
     height: calc(calc(100 * var(--sv-h)) - 24px);
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.34) 100%);
     box-shadow: 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 72%, transparent), 0 0 0 16px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 48%, transparent), 0 0 0 26px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 30%, transparent), 0 0 0 38px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 25%, transparent) 16%, transparent), inset 0 0 60px rgba(0, 0, 0, 0.45);
+}
+
+/* Inventory drag: outline of the tiles the item would land on. */
+html body .hs-bay-inv.hs-slot-picker .hs-pick-grid {
+    position: relative;
+}
+.hs-inv-drop-preview {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    box-sizing: border-box;
+    border: 2px dashed var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);
+}
+.hs-inv-drop-preview.is-blocked {
+    border-color: #ff4a4a;
+    background: color-mix(in srgb, #ff4a4a 18%, transparent);
 }

@@ -13,10 +13,33 @@ extendClass(FactionShipStyles, {
 
     getPixelSprite(faction, enemyClass) {
         const key = this.spriteKey(faction, enemyClass);
-        if (!this.pixelCache[key]) {
+        const cached = this.pixelCache[key];
+        if (!cached || this.isPixelSpriteStale(cached)) {
             this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass);
+            // Variant bakes / hit masks of the stand-in hull are outdated now.
+            if (cached) this.dropBakedEnemyHulls();
         }
         return this.pixelCache[key];
+    },
+
+    /**
+     * A stand-in hull (built before the part builders loaded) or one built
+     * for the other render style (FLAT ↔ VOXEL detail) is rebuilt.
+     */
+    isPixelSpriteStale(sprite) {
+        const loader = this.partLoader ? this.partLoader() : null;
+        if (!loader) return false;
+        if (sprite._fallback) return true;
+        const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
+        return !!sprite._renderStyle && sprite._renderStyle !== (voxel ? 'voxel' : 'flat');
+    },
+
+    dropBakedEnemyHulls() {
+        const gm = this.partLoader() ? graphicsManager : null;   // partLoader guards graphicsManager's TDZ
+        if (gm && gm._variantCache) gm._variantCache.clear();
+        if (typeof enemyManager !== 'undefined' && enemyManager && enemyManager._hitMaskCache) {
+            enemyManager._hitMaskCache = Object.create(null);
+        }
     },
 
     hasPng(spriteKey) {

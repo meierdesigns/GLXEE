@@ -346,6 +346,11 @@ extendClass(ProfileSelectionManager, {
         const bonus = kit.bonus || {};
         if (bonus.credits) p.credits = (Number(p.credits) || 0) + bonus.credits;
         Object.keys(bonus.res || {}).forEach((r) => addRes(r, bonus.res[r]));
+        if (bonus.weapon2) {
+            if (!p.parts || typeof p.parts !== 'object') p.parts = {};
+            if (!p.parts.weapons || typeof p.parts.weapons !== 'object') p.parts.weapons = {};
+            p.parts.weapons[bonus.weapon2] = Math.max(1, Number(p.parts.weapons[bonus.weapon2]) || 0);
+        }
         if (bonus.slot) {
             const ship = p.activeShipId;
             if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
@@ -391,6 +396,13 @@ extendClass(ProfileSelectionManager, {
                 L.weaponSlots = ws;
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
+        }
+        // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.
+        if (p.activeShipId && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.inventoryGrowth) {
+            if (!p.shipUpgrades[p.activeShipId]) p.shipUpgrades[p.activeShipId] = { frameLevel: 0 };
+            const st = shipLoadoutManager.inventoryStart(p.activeShipId);
+            p.shipUpgrades[p.activeShipId].invStart = [Math.max(3, Math.min(8, st[0] + (Number(bonus.invCols) || 0))), Math.max(1, st[1] + (Number(bonus.invRows) || 0))];
+            p.shipUpgrades[p.activeShipId].invGrowth = Math.max(0.1, shipLoadoutManager.inventoryGrowth(p.activeShipId) + (Number(bonus.invGrowth) || 0));
         }
         if (o.look) p.portrait = Object.assign({}, o.look);
         p.startKit = kit.id;

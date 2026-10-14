@@ -69,11 +69,6 @@
     box-shadow: inset 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent) 72%, transparent), inset 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent) 48%, transparent), inset 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent) 30%, transparent), inset 0 0 0 14px color-mix(in srgb, color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent) 16%, transparent);
 }
 
-@media (max-width: 640px) {
-    .galaxy-map-panels {
-        grid-template-columns: 1fr;
-    }
-}
 
 /* Home Station */
 .home-station-overlay {

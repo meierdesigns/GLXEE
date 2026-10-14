@@ -11,7 +11,15 @@ extendClass(ProfileSelectionManager, {
         // Hulls built without a nose carry their gun in the core: a pair left / right of the axis ('split') or one on the axis ('single').
         const roleCore = { player_heavy: 'split' };
         const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff[ship] || [], coreGun: roleCore[ship] || null, bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
-        return {
+        // Faction doctrine, added on top of every profile of the faction: cargo shape, an extra hull area level and a stash.
+        const DOCTRINE = {
+            terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold
+            kronax: { invCols: -1, invGrowth: -0.15, areas: { center: 1 }, second: { player_assault: 'plasma', player_interceptor: 'spike_burst' } },                       // brutes: armoured core, cramped hold
+            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'nova', player_interceptor: 'ion' } },                                // wanderers: wing level, crystal shards
+            pirate: { invCols: 2, invGrowth: 0.25, res: { scrap: 20 }, second: { player_assault: 'burst', player_interceptor: 'rapid' } },                           // smugglers: wide hold that fills fast
+            machine: { invCols: -1, invRows: 1, invGrowth: 0.25, res: { ore: 20 }, areas: { front: 1 }, second: { player_assault: 'pierce' } }   // drones: tall modular hold, nose module
+        };
+        const defs = {
             terran: [
                 K('standard_issue', 'STANDARD ISSUE', 'Alliance-issue fighter and a small stipend', 'kitStandardIssue', 'player_scrap', { credits: 100 }),
                 K('fleet_charter', 'FLEET CHARTER', 'A navy commission: fast patrol interceptor', 'kitFleetCharter', 'player_interceptor', { credits: 200 }),
@@ -34,15 +42,27 @@ extendClass(ProfileSelectionManager, {
                 K('scavenger', 'SCAVENGER', 'Patched-up wreck and a heap of scrap', 'kitScavenger', 'player_scrap', { res: { scrap: 120 } }),
                 K('smuggler', 'SMUGGLER', 'Fast ship and a stash of dirty credits', 'kitSmuggler', 'player_interceptor', { credits: 250 }),
                 K('brigand', 'BRIGAND', 'Stolen assault frame with an extra gun mount', 'kitBrigand', 'player_assault', { slot: 1 }),
-                K('hauler_thief', 'HAULER THIEF', 'Hijacked freighter hull with loaded holds', 'kitHaulerThief', 'player_heavy', { res: { scrap: 80, ore: 60 } })
+                K('hauler_thief', 'HAULER THIEF', 'Hijacked freighter hull with loaded holds', 'kitHaulerThief', 'player_heavy', { res: { scrap: 80, ore: 60 }, invRows: 1, invGrowth: 0.25 })
             ],
             machine: [
                 K('boot_sequence', 'BOOT SEQUENCE', 'Freshly compiled unit with spare parts', 'kitBootSequence', 'player_scrap', { res: { scrap: 60 } }),
-                K('harvester', 'HARVESTER UNIT', 'Resource drone chassis, holds full of ore', 'kitHarvester', 'player_heavy', { res: { ore: 100, scrap: 40 } }),
+                K('harvester', 'HARVESTER UNIT', 'Resource drone chassis, holds full of ore', 'kitHarvester', 'player_heavy', { res: { ore: 100, scrap: 40 }, invRows: 1, invGrowth: 0.25 }),
                 K('scout_unit', 'SCOUT UNIT', 'Fast recon frame with a credit cache', 'kitScoutUnit', 'player_interceptor', { credits: 150 }),
                 K('combat_protocol', 'COMBAT PROTOCOL', 'War routine loaded: assault frame, +1 weapon slot', 'kitCombatProtocol', 'player_assault', { slot: 1 })
             ]
         };
+        Object.keys(defs).forEach((f) => {
+            const d = DOCTRINE[f] || {};
+            defs[f].forEach((kit) => {
+                const b = kit.bonus;
+                // Some hulls also start with a second weapon type, owned in the inventory.
+                if (d.second && d.second[kit.ship]) b.weapon2 = d.second[kit.ship];
+                ['credits', 'invRows', 'invCols', 'invGrowth'].forEach((n) => { if (d[n]) b[n] = (Number(b[n]) || 0) + d[n]; });
+                if (d.res) { b.res = Object.assign({}, b.res); Object.keys(d.res).forEach((r) => { b.res[r] = (b.res[r] || 0) + d.res[r]; }); }
+                if (d.areas) { b.areas = Object.assign({}, b.areas); Object.keys(d.areas).forEach((a) => { const t = (kit.off || []).indexOf(a) < 0 ? a : 'center'; b.areas[t] = (b.areas[t] || 0) + d.areas[a]; }); }   // a hull without that area levels its core instead
+            });
+        });
+        return defs;
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -91,17 +111,51 @@ extendClass(ProfileSelectionManager, {
         if (!k) { k = list[0]; o.kit = k.id; o.ship = k.ship; }
         return k;
     },
+    /** Top-down hull pictogram with one area lit up (front / center / back / wing). */
+    areaSvg(id) {
+        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
+        return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' +
+            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg>';
+    },
+    /** Cargo hold pictogram: 3 x 3 cells with a column / row lit up, or a growth arrow (up = fast, down = slow). */
+    cargoSvg(kind, up) {
+        const cell = (x, y, on) => `<rect class="${on ? 'on' : ''}" x="${x}" y="${y}" width="4" height="4"/>`;
+        if (kind === 'growth') {
+            return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' + cell(1, 11, true) + cell(6, 11, true) + cell(11, 11, true) +
+                (up ? '<path class="on" d="M8 1 L13 6 H10 V9 H6 V6 H3Z"/>' : '<path class="on" d="M6 1 H10 V4 H13 L8 9 L3 4 H6Z"/>') + '</svg>';
+        }
+        let cells = '';
+        [1, 6, 11].forEach((y) => [1, 6, 11].forEach((x) => { cells += cell(x, y, kind === 'col' ? x === 11 : y === 11); }));
+        return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' + cells + '</svg>';
+    },
+    /** Kit bonuses as items: full text (tooltip / summary), icon html, short value, drawback flag. */
+    kitBonusItems(k) {
+        const b = k.bonus || {};
+        const items = [];
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const rk = (id) => (typeof homeStationUI !== 'undefined' && homeStationUI.resourceIconKey ? homeStationUI.resourceIconKey(id) : null);
+        const resIco = (id) => { const key = rk(id); return ir && key ? ir.imgHtml(key, 24, 'hs-pixel', undefined, false) : ''; };
+        const add = (text, ico, val, minus) => items.push({ text, ico, val, minus: !!minus });
+        if (b.credits) add('+' + b.credits + ' CR', resIco('credits'), '+' + b.credits);
+        Object.keys(b.res || {}).forEach((r) => add('+' + b.res[r] + ' ' + r.toUpperCase(), resIco(r), '+' + b.res[r]));
+        if (b.slot) add('+' + b.slot + ' WEAPON SLOT', ir ? ir.imgHtml('statWeapon', 24, 'hs-pixel', undefined, false) : '', '+' + b.slot);
+        const names = { front: 'NOSE', center: 'CORE', back: 'AFT', wing: 'WINGS' };
+        Object.keys(b.areas || {}).forEach((a) => add('+' + b.areas[a] + ' ' + (names[a] || a.toUpperCase()), this.areaSvg(a), '+' + b.areas[a]));
+        if (b.weapon2) {
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon ? weaponConfigManager.getWeapon(b.weapon2) : null;
+            const ico = ir && ir.weaponImgHtml ? ir.weaponImgHtml(b.weapon2, 24, 'hs-pixel', false) : '';
+            add('+' + String((w && w.name) || b.weapon2).replace(/_/g, ' ').toUpperCase() + ' WEAPON', ico, '+');
+        }
+        const sign = (n) => (n > 0 ? '+' : '-') + Math.abs(n);
+        if (b.invRows) add(sign(b.invRows) + ' CARGO ROW', this.cargoSvg('row'), sign(b.invRows), b.invRows < 0);
+        if (b.invCols) add(sign(b.invCols) + ' CARGO COL', this.cargoSvg('col'), sign(b.invCols), b.invCols < 0);
+        if (b.invGrowth) add(b.invGrowth > 0 ? 'FAST CARGO GROWTH' : 'SLOW CARGO GROWTH', this.cargoSvg('growth', b.invGrowth > 0), sign(Math.round(b.invGrowth * 100)) + '%', b.invGrowth < 0);
+        (k.off || []).forEach((a) => add('NO ' + (names[a] || a.toUpperCase()), this.areaSvg(a), 'OFF', true));
+        return items;
+    },
     /** Short bonus summary, e.g. "+120 SCRAP · +40 ORE". */
     kitBonusText(k) {
-        const b = k.bonus || {};
-        const parts = [];
-        if (b.credits) parts.push('+' + b.credits + ' CR');
-        Object.keys(b.res || {}).forEach((r) => parts.push('+' + b.res[r] + ' ' + r.toUpperCase()));
-        if (b.slot) parts.push('+' + b.slot + ' WEAPON SLOT');
-        const names = { front: 'NOSE', center: 'CORE', back: 'AFT', wing: 'WINGS' };
-        Object.keys(b.areas || {}).forEach((a) => parts.push('+' + b.areas[a] + ' ' + (names[a] || a.toUpperCase())));
-        (k.off || []).forEach((a) => parts.push('NO ' + (names[a] || a.toUpperCase())));
-        return parts.join(' · ') || 'NO BONUS';
+        return this.kitBonusItems(k).map((it) => it.text).join(' · ') || 'NO BONUS';
     },
     /** Starter kits: [id, label, what you get, icon key]. */
     startKits() {
@@ -229,13 +283,18 @@ extendClass(ProfileSelectionManager, {
             const sizeTxt = '&#10;SLOT SIZE: ' + size(sLv) + (partSz ? '&#10;PART SIZE: ' + partSz : '');
             const title = (id ? tipOf(kind, id) : 'NO PART INSTALLED') + sizeTxt;
             const raw = !id || !ir ? '' : (kind === 'weapon' && ir.weaponImgHtml ? ir.weaponImgHtml(id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', kindColor[kind], false));
-            const img = id ? (ir ? String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '') : `<span class="hs-slot-glyph" data-slot-kind="${kind}"></span>`;
+            let img = id ? (ir ? String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '') : `<span class="hs-slot-glyph" data-slot-kind="${kind}"></span>`;
+            // Filled slot: the part as its physical item, at its own footprint inside the slot.
+            if (id && typeof physicalItem !== 'undefined') {
+                const box = [40, 56, 72][Math.max(0, Math.min(2, sLv))] - 4;
+                const pLv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
+                const w = pLv === 1 ? Math.round(box / 2) : box;
+                img = `<span class="hs-slotview-part" style="width:${w}px;height:${box}px">${physicalItem.wrap(kind, id, w - 4, box - 4, kindColor[kind], img)}</span>`;
+            }
             return `<span style="--pk-c:${kindColor[kind]}" data-kind="${kind}"${hoverKey ? ` data-wslot="${hoverKey}"` : ''} class="pk-slot${lvl != null ? ' pk-lv' + lvl : ''}${id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${title}" aria-label="${name}">${img}</span>`;
         };
         // Area pictogram: top-down hull with the area lit up (replaces the text label).
-        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
-        const areaIco = (id, label) => `<span class="pl-ico" title="${label}" aria-label="${label}"><svg viewBox="0 0 16 16" shape-rendering="crispEdges">` +
-            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg></span>';
+        const areaIco = (id, label) => `<span class="pl-ico" title="${label}" aria-label="${label}">${this.areaSvg(id)}</span>`;
         const kindIco = (kind, label) => {
             const img = ir ? ir.imgHtml(kindIcon[kind], 32, 'hs-pixel') : '';
             return `<span class="pl-ico" title="${label}" aria-label="${label}">${img}</span>`;
@@ -273,17 +332,75 @@ extendClass(ProfileSelectionManager, {
         const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null)).join('') || '<em>–</em>';
         const parts = `<div class="pl-parts">` +
             [['defense', caps.defenses, dl.defenses], ['energy', caps.energy, dl.energy], ['ability', caps.abilities, dl.abilities]].map(([k, n, l]) => `<div class="pl-row">${kindIco(k, k.toUpperCase())}<span class="pl-slots">${many(k, n || 0, l)}</span></div>`).join('') + `</div>`;
-        return `<div class="profile-loadout-title">HULL AREAS</div>
-            <div class="pl-wrap" data-tip-side="left">${rows}${parts}</div>`;
+        const invHtml = this.renderStartInvHtml(kitObj, [['weapon', (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId],
+            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', kitObj.bonus && kitObj.bonus.weapon2, false]], kindColor, tipOf);
+        // Ship stats take the sidebar's top (the inventory below already shows every part).
+        const ir2 = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const stat = (l, v, key, cls) => {
+            const m = ir2 ? /src="([^"]+)"/.exec(ir2.imgHtml(key, 28, 'hs-pixel') || '') : null;
+            // Layout inline: older start-step rules restyle .pk-stat.
+            return `<span class="pk-stat pk-${cls}" style="display:grid;grid-template-columns:32px 1fr;grid-template-areas:'i v' 'i l';column-gap:10px;align-items:center;padding:8px 10px">` +
+                `<i class="pk-ico" style="grid-area:i;display:block;width:32px;height:32px${m ? `;--pk-img:url('${m[1]}')` : ''}"></i>` +
+                `<b style="grid-area:v;font-size:20px;line-height:1.1">${v != null ? v : '–'}</b><small style="grid-area:l;font-size:12px;letter-spacing:2px">${l}</small></span>`;
+        };
+        const stats = stat('SPEED', cfg.speed, 'statSpeed', 'speed') + stat('HULL', cfg.maxHealth, 'statHealth', 'hull') +
+            stat('ARMOR', cfg.armor, 'statArmor', 'armor') + stat('DAMAGE', cfg.weaponDamage || cfg.damage, 'statDamage', 'damage');
+        // Weapon types of the profile: the faction's weapon in focus, plus the hull's start weapon when it differs (1-2 types).
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const facW = (fss && fss.getFactionDefaultWeapons ? fss.getFactionDefaultWeapons(this.pendingFaction) : null)
+            || (wcm && wcm.getFactionWeaponAffinity ? wcm.getFactionWeaponAffinity(this.pendingFaction) : []);
+        const focusId = (facW && facW[0]) || gunId;
+        const second = (kitObj.bonus || {}).weapon2 || (gunId !== focusId ? gunId : null);
+        const fam = second ? [focusId, second] : [focusId];
+        const weapons = fam.map((wid, wi) => {
+            const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
+            const wname = String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
+            const ico = ir && ir.weaponImgHtml ? String(ir.weaponImgHtml(wid, 32, 'hs-pixel', false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+            const facBonus = wcm && wcm.getFactionWeaponMul && wcm.getFactionWeaponMul(this.pendingFaction, wid) > 1;
+            const hullBonus = wcm && wcm.getShipClassWeaponMul && wcm.getShipClassWeaponMul(cls, wid) > 1;
+            const tip = [wi === 0 ? 'FACTION WEAPON' : 'SECOND WEAPON (IN INVENTORY)', facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
+            const col = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(wid) : '#ff6a4a';
+            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}</span>`;
+        }).join('');
+        return `<div class="profile-loadout-title">WEAPONS</div>
+            <div class="profile-side-weapons" data-tip-side="left">${weapons}</div>
+            <div class="profile-loadout-title">STATS</div>
+            <div class="profile-side-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">${stats}</div>
+            <div class="profile-start-inv" data-tip-side="left">${invHtml}</div>`;
     },
-    /** Kit bonus + blurb: its own full-width strip under the ship and the hull sidebar. */
+    /** Start inventory: the kit's grid (hull start size + kit rows) holding the start parts. */
+    renderStartInvHtml(kitObj, parts, kindColor, tipOf) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const ship = this.startShipId();
+        const st = slm && slm.inventoryStart ? slm.inventoryStart(ship) : [4, 2];
+        const cols = Math.max(3, Math.min(8, st[0] + (Number((kitObj.bonus || {}).invCols) || 0)));
+        const rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
+        const cells = parts.filter((p) => p[1]).map(([kind, id, inst = true]) => {
+            const lv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
+            const span = [[1, 1], [1, 2], [2, 2]][lv];
+            const body = typeof physicalItem !== 'undefined' ? physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, kindColor[kind], '') : '';
+            const name = String(id).replace(/_/g, ' ').toUpperCase();
+            // Same data as the shipyard inventory: full part stats, size, status.
+            const tip = (tipOf ? tipOf(kind, id) + '&#10;' : '') + 'SIZE: ' + (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S') + '&#10;STATUS: ' + (inst ? 'INSTALLED' : 'IN INVENTORY');
+            return `<span class="hs-pick-cell${inst ? ' is-equipped' : ''}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColor[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-size">${slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : ''}</span></span>`;
+        }).join('');
+        // Cells as big as the sidebar allows, at most 56px: fitted to the free width AND height (.profile-start-inv is a size
+        // container), so a tall grid scales down instead of scrolling. 50px = title + gap + picker padding / border; 16px = picker padding / border.
+        const cs = `clamp(16px, min((100cqw - 16px - ${(cols - 1) * 4}px) / ${cols}, (100cqh - 50px - ${(rows - 1) * 4}px) / ${rows}), 56px)`;
+        return `<div class="profile-start-inv-title">INVENTORY <b>${cols} × ${rows}</b></div><div class="hs-slot-picker hs-bay-inv" style="--cs:${cs}"><div class="hs-pick-grid" style="grid-template-columns: repeat(${cols}, var(--cs)); grid-template-rows: repeat(${rows}, var(--cs)); width: calc(${cols} * var(--cs) + ${cols - 1} * 4px); height: calc(${rows} * var(--cs) + ${rows - 1} * 4px)">${cells}</div></div>`;
+    },
+    /** Kit bonus + blurb: its own strip above the ship, beside the hull sidebar. */
     renderKitInfoHtml() {
         const kitObj = this.currentKit();
-        const res = this.kitBonusText(kitObj);
         const kitRow = this.startKits().find((k) => k[0] === kitObj.id);
         const kitIcon = kitRow && kitRow[3] && typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml(kitRow[3], 24, 'hs-pixel') : '';
-        return `<div class="profile-loadout-line profile-kit-bonus"><span class="pkb-label">${kitIcon}KIT BONUS</span><b>${res}</b></div>
-            <p class="profile-kit-desc">${kitObj.desc || (kitRow && kitRow[2]) || ''}</p>`;
+        // One chip per bonus: icon + short value, the full text as tooltip; drawbacks (cargo cuts, missing hull areas) greyed.
+        const chips = this.kitBonusItems(kitObj).map((it) => `<span class="pkb-chip${it.minus ? ' is-minus' : ''}" data-ui-tip-instant data-ui-tip="${it.text}" aria-label="${it.text}">` +
+            `<span class="pkb-ico">${it.ico}</span><b>${it.val}</b></span>`).join('');
+        return `<div class="pkb-head"><span class="pkb-label">${kitIcon}KIT BONUS</span><p class="profile-kit-desc">${kitObj.desc || (kitRow && kitRow[2]) || ''}</p></div>
+            <div class="pkb-chips">${chips}</div>`;
     },
     /** Accent colour of the pending faction (portrait glow). */
     pilotAccent() {

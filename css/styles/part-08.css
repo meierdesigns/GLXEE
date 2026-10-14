@@ -232,17 +232,6 @@
     height: min(calc(34 * var(--ch)), calc(280px * var(--zk)));
     margin-bottom: 0;
 }
-@media (max-width: 720px) {
-    .galaxy-map-embedded {
-        grid-template-columns: 1fr;
-    }
-    .galaxy-map-embedded .galaxy-map-toolbar {
-        grid-column: 1;
-    }
-    .galaxy-map-embedded .galaxy-map-area {
-        grid-row: 3;
-    }
-}
 .galaxy-map-embedded .galaxy-map-panels {
     grid-column: 1 / -1;
     grid-row: 4;

@@ -37,7 +37,7 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 4, false, true);
+        this.applyFactionPlating(g, silhouette, 4, false, true, this.factionFocus(factionStyle).armor);
         // Hull footprint: accent stamps below may only land on the hull.
         const hullMask = g.map((row) => row.map((v) => v !== 0));
         // Air intakes: a dark slot just inside each flank, upper body —

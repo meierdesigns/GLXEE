@@ -23,10 +23,35 @@
         "y": 1
       }
     },
+    "focus": {
+      "role": "opportunist",
+      "parts": {
+        "front": [
+          "SHOVEL",
+          "BLUNT"
+        ],
+        "center": [
+          "BARREL",
+          "RIBBED"
+        ],
+        "back": [
+          "STUB",
+          "SKIRT"
+        ],
+        "wing": [
+          "stub",
+          "box",
+          "plank",
+          "twin"
+        ]
+      },
+      "armor": 0,
+      "hardpoints": "wingTips"
+    },
     "defaultWeapons": [
       "spread"
     ],
-    "prompt": "asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery",
+    "prompt": "wide salvage hauler, shovel nose, gun pods welded to stubby wing tips, offset junk plates, improvised welded wreckage, mismatched armor and exposed machinery",
     "styleStrength": 2
   },
   "gui": {

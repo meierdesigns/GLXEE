@@ -1,15 +1,20 @@
 "use strict";
 
-// FactionShipStyles methods: one hull builder per faction. The faction sets
-// the construction language (how the ship is built), the class only sets
-// size and how many parts it gets — so a Kronax scout and a Kronax capital
-// read as the same people, and no two factions share an outline.
-//   terran   — orthogonal modules, straight wings, cockpit, parallel engines
-//   kronax   — arrow ram nose, swept serrated blades, one big thruster
-//   voidborn — open crescent rings around a floating core, no wings
-//   pirate   — asymmetric salvage: off-centre hull, odd pods, junk plates
-//   machine  — square nodes on thin struts, a lattice with visible gaps
-// Pixel values: 1 edge, 2 hull, 3 accent. Nose = row 0 (enemies are flipped).
+// FactionShipStyles methods: enemy hulls. Enemies are assembled from the
+// same part builders as the player's ship (nose / core / aft / wings from
+// ShipAssetLoader), so they share its plating, eight-tone palette and accent
+// shading. The faction's combat focus (style.focus, see core.js) picks the
+// parts and adds its marks; the class only sets size and part count — so a
+// Kronax scout and a Kronax capital read as the same people:
+//   terran   — line ship: stepped plates, armoured rim, straight wings
+//   kronax   — brawler: needle nose, twin claw lances, forward claws, big thruster
+//   voidborn — evasive: compact pod, crescent wings floating apart from the hull
+//   pirate   — opportunist: wide salvage hull, gun pods on stubby wing tips
+//   machine  — grinder: armoured forge block, wings slotted as missile racks
+// Before the ship assets are up, the older one-builder-per-faction hulls
+// below stand in (buildLegacyPixelSprite) and are replaced on next use.
+// Pixel values: 1 edge, 2 hull, 3 accent, 4/5 hull shade/light, 6/7 accent
+// shade/light. Nose = row 0 (enemies are flipped).
 extendClass(FactionShipStyles, {
     /** Size set for a class: half width, length in rows, extra part count. */
     hullSizeForClass(enemyClass) {
@@ -22,6 +27,292 @@ extendClass(FactionShipStyles, {
     },
 
     buildPixelSprite(faction, enemyClass) {
+        const loader = this.partLoader();
+        if (loader) {
+            try {
+                const grid = this.composeEnemyHull(faction, enemyClass, loader);
+                if (grid) return grid;
+            } catch (e) {
+                if (typeof console !== 'undefined') console.warn('enemy hull compose failed', e);
+            }
+        }
+        const legacy = this.buildLegacyPixelSprite(faction, enemyClass);
+        legacy._fallback = true;   // rebuilt from parts once the loader is up (getPixelSprite)
+        return legacy;
+    },
+
+    /** The ship asset loader that owns the part builders, or null before it exists. */
+    partLoader() {
+        // graphicsManager is a `let` declared later in the bundle: while this
+        // runs during boot it is still in its TDZ, where even typeof throws.
+        let gm = null;
+        try { gm = typeof graphicsManager !== 'undefined' ? graphicsManager : null; } catch (e) { return null; }
+        const loader = gm && gm.shipAssetLoader;
+        return loader && loader.buildNoseGrid && loader.buildWingGrid && loader.focusVariantPool ? loader : null;
+    },
+
+    /** Enemy sprite grid per class (cols × rows): about display size / 2.2, the part voxel density. */
+    enemyGridForClass(enemyClass) {
+        const i = Math.max(0, this.classes.indexOf(this.normalizeClass(enemyClass)));
+        return [{ w: 26, h: 20 }, { w: 32, h: 24 }, { w: 40, h: 30 }, { w: 44, h: 34 }, { w: 52, h: 40 }][i];
+    },
+
+    /**
+     * Class layout: body width share, wing span share (0 = none), and the
+     * extra parts bigger classes carry.
+     */
+    enemyClassLayout(enemyClass) {
+        switch (this.normalizeClass(enemyClass)) {
+            case 'scout': return { body: 0.34, wings: 0 };
+            case 'assault': return { body: 0.28, wings: 0.95 };
+            case 'heavy': return { body: 0.36, wings: 0.7, pods: true };
+            case 'elite': return { body: 0.26, wings: 1, rearWings: 0.62 };
+            case 'capital':
+            default: return { body: 0.26, wings: 0.8, rearWings: 0.6, outriggers: true };
+        }
+    },
+
+    /**
+     * Assemble an enemy hull from the player's part builders. Returns an
+     * indexed grid; engine cells are kept in _hullEngines.
+     */
+    composeEnemyHull(faction, enemyClass, loader) {
+        const f = this.normalizeFaction(faction);
+        const cls = this.normalizeClass(enemyClass);
+        const style = this.getFactionStyle(f);
+        const focus = style.focus || {};
+        const A = this.getFactionAnatomy(f) || {};
+        const ax = (part, axis) => (A[part] && Number.isFinite(A[part][axis]) ? A[part][axis] : 1);
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const layout = this.enemyClassLayout(cls);
+        const { w: W, h: H } = this.enemyGridForClass(cls);
+        const cx = W / 2;
+        // Even widths keep every part centred on the axis (W is even).
+        const even = (v, lo, hi) => {
+            const n = Math.round(clamp(v, lo, hi));
+            return n % 2 ? n + 1 : n;
+        };
+        const pick = (segId, key) => {
+            const pool = loader.focusVariantPool(style, segId);
+            const h = this.hash(f + '|' + cls + '|' + (key || segId));
+            if (pool.length) return pool[h % pool.length];
+            const count = /^wing/.test(segId) ? loader.wingShapeVariants.length : loader.bodyShapeVariantCount(segId);
+            return h % count;
+        };
+        const g = [];
+        for (let r = 0; r < H; r++) g.push(new Array(W).fill(0));
+        const stamp = (part, c0, r0) => {
+            if (!part) return;
+            for (let r = 0; r < part.length; r++) {
+                const rr = r0 + r;
+                if (rr < 0 || rr >= H) continue;
+                for (let c = 0; c < part[r].length; c++) {
+                    const v = part[r][c];
+                    const cc = c0 + c;
+                    if (!v || cc < 0 || cc >= W) continue;
+                    g[rr][cc] = v;
+                }
+            }
+        };
+        const mirror = (part) => part.map((row) => row.slice().reverse());
+
+        // Kronax claw lances run ahead of the nose: the hull starts lower.
+        const top = focus.hardpoints === 'twinNose' ? Math.max(2, Math.round(H * 0.12)) : 0;
+        // Band lengths from the faction anatomy (adjacent bands overlap one row).
+        const span = H - top + 2;
+        const wf = 0.3 * ax('front', 'y');
+        const wc = 0.4 * ax('center', 'y');
+        const wb = 0.3 * ax('back', 'y');
+        const sum = wf + wc + wb;
+        const frontH = Math.max(4, Math.round(span * wf / sum));
+        const backH = Math.max(4, Math.round(span * wb / sum));
+        const centerH = Math.max(4, span - frontH - backH);
+        const rFront = top;
+        const rCenter = rFront + frontH - 1;
+        const rBack = rCenter + centerH - 1;
+        // Band widths from the anatomy, relative to the core.
+        const bodyW = even(W * layout.body * clamp(ax('center', 'x'), 0.6, 1.6), 6, W * 0.6);
+        const frontW = even(bodyW * clamp(ax('front', 'x') / ax('center', 'x'), 0.6, 1.3), 4, W * 0.6);
+        const backW = even(bodyW * clamp(ax('back', 'x') / ax('center', 'x'), 0.6, 1.5), 4, W * 0.7);
+
+        const front = loader.buildNoseGrid(frontW, frontH, style, pick('front'));
+        const center = loader.buildCenterGrid(bodyW, centerH, style, pick('center'));
+        const back = loader.buildAftGrid(backW, backH, style, pick('back'));
+        const backVariant = pick('back');
+
+        // Body mask: where wings / pods attach (core, plus outrigger hulls).
+        const body = [];
+        for (let r = 0; r < H; r++) body.push(new Array(W).fill(0));
+        const mark = (part, c0, r0) => part.forEach((row, r) => row.forEach((v, c) => {
+            if (v && r0 + r >= 0 && r0 + r < H && c0 + c >= 0 && c0 + c < W) body[r0 + r][c0 + c] = 1;
+        }));
+        mark(center, cx - bodyW / 2, rCenter);
+
+        // Capital outrigger hulls: shorter side stacks beside the core.
+        const side = [];
+        if (layout.outriggers) {
+            const ow = even(bodyW * 0.5, 4, W * 0.2);
+            const ofH = Math.max(4, Math.round(frontH * 0.6));
+            const ocH = Math.max(4, Math.round(centerH * 0.85));
+            const obH = Math.max(4, Math.round(backH * 0.8));
+            const r0 = H - (ofH + ocH + obH - 2);
+            const c0 = cx + bodyW / 2 - 1;
+            const parts = {
+                front: loader.buildNoseGrid(ow, ofH, style, pick('front', 'outFront')),
+                center: loader.buildCenterGrid(ow, ocH, style, pick('center', 'outCenter')),
+                back: loader.buildAftGrid(ow, obH, style, pick('back', 'outBack'))
+            };
+            side.push({ parts, c0, r0, ofH, ocH, w: ow, variant: pick('back', 'outBack') });
+            mark(parts.center, c0, r0 + ofH - 1);
+            mark(mirror(parts.center), W - c0 - ow, r0 + ofH - 1);
+        }
+
+        // Outermost body column (right half) across rows r0..r1.
+        const bodyEdge = (r0, r1) => {
+            let edge = Infinity;
+            for (let r = Math.max(0, r0); r <= Math.min(H - 1, r1); r++) {
+                let last = -1;
+                for (let c = W - 1; c >= cx; c--) if (body[r][c]) { last = c; break; }
+                if (last >= 0) edge = Math.min(edge, last);
+            }
+            return Number.isFinite(edge) ? edge : cx + bodyW / 2 - 1;
+        };
+        // Wings attach one voxel under the hull; Voidborn wings float two voxels off it.
+        const wingRoot = (r0, rows) => bodyEdge(r0 + 1, r0 + rows - 2) + (focus.wingGap ? 3 : 0);
+        const buildWing = (share, rows, r0, key) => {
+            const root = wingRoot(r0, rows);
+            const cols = Math.round(clamp((W - 1 - root) * share * clamp(ax('wing', 'x'), 0.6, 1.4), 0, W - root));
+            if (cols < 3 || rows < 4) return null;
+            const grid = loader.buildWingGrid({ id: 'wingRight' }, cols, rows, style, pick('wingLeft', key));
+            // A floating wing's root is exposed: give it the rim the hull joint would hide.
+            if (focus.wingGap) loader.outlineGridEdges(grid);
+            this.liftThinEdges(grid);
+            return { grid, c0: root, r0 };
+        };
+        const wings = [];
+        if (layout.wings) {
+            // Tall frames: swept / crescent planforms are thin bands of the frame.
+            const rows = Math.round(clamp(centerH * 1.6 * clamp(ax('wing', 'y'), 0.6, 1.6), 6, H * 0.8));
+            const r0 = Math.round(clamp(rCenter + (centerH - rows) / 2, 0, H - rows));
+            const w = buildWing(layout.wings, rows, r0, 'wing');
+            if (w) wings.push(w);
+        }
+        if (layout.rearWings) {
+            const rows = Math.round(clamp(backH * 1.6, 5, H * 0.5));
+            const r0 = H - rows;
+            const w = buildWing(layout.rearWings * (wings[0] ? 0.75 : 1), rows, r0, 'rearWing');
+            if (w) wings.push(w);
+        }
+        // Heavy engine pods: small aft blocks on the core's flanks.
+        let pods = null;
+        if (layout.pods) {
+            const pw = even(bodyW * 0.42, 4, W * 0.18);
+            const ph = Math.max(5, Math.round(centerH * 0.85));
+            const r0 = rBack + backH - ph;
+            pods = { grid: loader.buildAftGrid(pw, ph, style, backVariant), c0: bodyEdge(r0, r0 + ph - 1), r0, w: pw, h: ph };
+        }
+
+        // Draw back to front: aft, wings, pods, outriggers, core, nose.
+        stamp(back, cx - backW / 2, rBack);
+        wings.forEach((w) => {
+            stamp(w.grid, w.c0, w.r0);
+            stamp(mirror(w.grid), W - w.c0 - w.grid[0].length, w.r0);
+        });
+        if (pods) {
+            stamp(pods.grid, pods.c0, pods.r0);
+            stamp(mirror(pods.grid), W - pods.c0 - pods.w, pods.r0);
+        }
+        side.forEach((o) => {
+            const rows = [o.r0, o.r0 + o.ofH - 1, o.r0 + o.ofH - 1 + o.ocH - 1];
+            [['back', 2], ['center', 1], ['front', 0]].forEach(([k, i]) => {
+                stamp(o.parts[k], o.c0, rows[i]);
+                stamp(mirror(o.parts[k]), W - o.c0 - o.w, rows[i]);
+            });
+        });
+        stamp(center, cx - bodyW / 2, rCenter);
+        stamp(front, cx - frontW / 2, rFront);
+
+        // Twin claw lances (Kronax): two prongs reaching past the nose tip.
+        if (focus.hardpoints === 'twinNose') {
+            const dx = Math.max(1, Math.round(frontW / 2) - 2);
+            const len = Math.min(top + Math.round(frontH * 0.45), Math.round(H * 0.32));
+            // Glowing inner blade (the claw beam's emitter), dark outer rim.
+            for (let r = 0; r < len; r++) {
+                g[r][cx + dx] = 3;
+                g[r][cx + dx + 1] = 1;
+                g[r][cx - dx - 1] = 3;
+                g[r][cx - dx - 2] = 1;
+            }
+        }
+        // Thrusters: per faction aft layout (buildAftGrid), on every aft block.
+        const engines = [];
+        const addEngines = (c0, w, r0, h, variant) => {
+            this.aftEngineFractions(style.silhouette, variant).forEach((u) => {
+                const at = c0 + u * (w - 1);
+                // A centred engine on an even-width block burns in both middle columns.
+                const cols = at % 1 === 0.5 ? [at - 0.5, at + 0.5] : [Math.round(at)];
+                cols.forEach((c) => {
+                    let last = -1;
+                    for (let r = r0; r < Math.min(H, r0 + h); r++) if (g[r][c]) last = r;
+                    if (last >= 0) engines.push({ x: c, y: Math.min(H - 1, last + 1) });
+                });
+            });
+        };
+        addEngines(cx - backW / 2, backW, rBack, backH, backVariant);
+        if (pods) {
+            addEngines(pods.c0, pods.w, pods.r0, pods.h, backVariant);
+            addEngines(W - pods.c0 - pods.w, pods.w, pods.r0, pods.h, backVariant);
+        }
+        side.forEach((o) => {
+            const r0 = o.r0 + o.ofH + o.ocH - 2;
+            addEngines(o.c0, o.w, r0, H - r0, o.variant);
+            addEngines(W - o.c0 - o.w, o.w, r0, H - r0, o.variant);
+        });
+        if (!this._hullEngines) this._hullEngines = Object.create(null);
+        this._hullEngines[f + '|' + cls] = engines;
+
+        // Accent blocks get the parts' lit top / shaded sides (not in VOXEL).
+        const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
+        const out = voxel ? g : loader.shadeAccentBlocks(g);
+        out._renderStyle = voxel ? 'voxel' : 'flat';
+        return out;
+    },
+
+    /** Engine columns (0..1 across the aft block) per faction aft layout, as in buildAftGrid. */
+    aftEngineFractions(silhouette, variant) {
+        switch (silhouette) {
+            case 'rings': return [0.5];
+            case 'circuit': return [0.16, 0.39, 0.61, 0.84];
+            case 'spikes': return [0.2, 0.5, 0.8];
+            case 'scrap': return [0.25, 0.75];
+            default: return variant === 1 ? [0.5] : [0.29, 0.71];
+        }
+    },
+
+    /**
+     * Blades too thin to have an interior are all outline at enemy scale;
+     * keep them hull-coloured (as the old hulls did) so they don't read as
+     * dark scratches. Rims next to an interior cell stay dark.
+     */
+    liftThinEdges(g) {
+        const H = g.length, W = g[0].length;
+        const inner = (r, c) => r >= 0 && c >= 0 && r < H && c < W && g[r][c] > 1;
+        const lift = [];
+        for (let r = 0; r < H; r++) {
+            for (let c = 0; c < W; c++) {
+                if (g[r][c] !== 1) continue;
+                let near = false;
+                for (let dr = -1; dr <= 1 && !near; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) if ((dr || dc) && inner(r + dr, c + dc)) { near = true; break; }
+                }
+                if (!near) lift.push([r, c]);
+            }
+        }
+        lift.forEach(([r, c]) => { g[r][c] = 2; });
+    },
+
+    /** The original one-builder-per-faction hull: stand-in until the part builders load. */
+    buildLegacyPixelSprite(faction, enemyClass) {
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
         const g = this.blankGrid();
@@ -276,16 +567,20 @@ extendClass(FactionShipStyles, {
         const cx = Math.floor(this.spriteW / 2);
         const list = (this._hullEngines && this._hullEngines[f + '|' + cls]) || this.enginePositions(cls, cx);
         const style = this.getFactionStyle(f);
+        // Composed hulls differ in size per class: use the sprite's own grid.
+        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls)];
+        const w = sprite && sprite[0] ? sprite[0].length : this.spriteW * this.spriteScale;
+        const h = sprite ? sprite.length : this.spriteH * this.spriteScale;
         return {
             positions: list.map((p) => ({
-                x: Math.max(0, Math.min(this.spriteW * this.spriteScale - 1, p.x)),
-                y: Math.max(0, Math.min(this.spriteH * this.spriteScale - 1, p.y)),
+                x: Math.max(0, Math.min(w - 1, p.x)),
+                y: Math.max(0, Math.min(h - 1, p.y)),
                 intensity: 0.55 + t * 0.08
             })),
             // Thrusters burn in the faction accent.
             color: style.accent || this.sharedEngine,
-            width: this.spriteW * this.spriteScale,
-            height: this.spriteH * this.spriteScale
+            width: w,
+            height: h
         };
     }
 });

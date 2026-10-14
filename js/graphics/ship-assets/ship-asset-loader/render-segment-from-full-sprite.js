@@ -223,7 +223,7 @@ extendClass(ShipAssetLoader, {
      * cells are touched, so the silhouette and its outline survive, and it
      * runs before each part's own accent marks so those stay on top.
      */
-    applyFactionPlating(g, silhouette, seedIndex = 0, flipX = false, symmetric = false) {
+    applyFactionPlating(g, silhouette, seedIndex = 0, flipX = false, symmetric = false, armor = 0, openSide = null) {
         const rows = g.length;
         const cols = rows ? g[0].length : 0;
         if (rows < 3 || cols < 3) return;
@@ -231,6 +231,55 @@ extendClass(ShipAssetLoader, {
         // VOXEL: keep hard flat colour blocks (no rim/panel soft-volume shading).
         if (!this.isVoxelStyle()) {
             this.applySurfaceDetail(g, seedIndex, flipX, symmetric);
+        }
+        if (armor > 0) this.applyArmorSeams(g, armor, openSide);
+    },
+
+    /**
+     * Armour-focused factions (style.focus.armor) wear a plate rim: a dark
+     * seam two voxels in from the hull edge, and with armor 2 a second one
+     * further in — thick bolted plates around the part instead of a bare
+     * shell. openSide ('left' | 'right') is a wing root that continues into
+     * the hull, so no seam runs along it.
+     */
+    applyArmorSeams(g, armor, openSide = null) {
+        const rows = g.length;
+        const cols = rows ? g[0].length : 0;
+        const minSide = Math.min(rows, cols);
+        if (minSide < 7) return;
+        const hull = (v) => v === 2 || v === 4 || v === 5;
+        // Voxel distance from the nearest non-hull cell (outline, gap or border).
+        const depth = g.map((row) => row.map((v) => (hull(v) ? Infinity : 0)));
+        const queue = [];
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (!depth[r][c]) continue;
+                const border = r === 0 || r === rows - 1
+                    || (c === 0 && openSide !== 'left') || (c === cols - 1 && openSide !== 'right');
+                const nearOpen = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]
+                    .some(([rr, cc]) => rr >= 0 && rr < rows && cc >= 0 && cc < cols && !hull(g[rr][cc]));
+                if (border || nearOpen) { depth[r][c] = 1; queue.push([r, c]); }
+            }
+        }
+        for (let i = 0; i < queue.length; i++) {
+            const [r, c] = queue[i];
+            [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => {
+                if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) return;
+                if (depth[rr][cc] !== Infinity) return;
+                depth[rr][cc] = depth[r][c] + 1;
+                queue.push([rr, cc]);
+            });
+        }
+        const seams = armor >= 2 && minSide >= 12 ? [2, 4] : [2];
+        const at = (r, c) => (r < 0 || r >= rows || c < 0 || c >= cols ? 0 : depth[r][c]);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const d = depth[r][c];
+                if (seams.indexOf(d) < 0) continue;
+                // Only where plate interior lies behind the seam — on thin
+                // strips it would otherwise run down the middle as a stripe.
+                if (at(r - 1, c) > d || at(r + 1, c) > d || at(r, c - 1) > d || at(r, c + 1) > d) g[r][c] = 4;
+            }
         }
     },
 

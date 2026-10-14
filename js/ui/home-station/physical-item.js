@@ -114,6 +114,71 @@ const physicalItem = (() => {
     };
 })();
 
+// Inventory grid positions per ship: { 'kind:id': [col, row] } (1-based grid lines).
+physicalItem.invPositions = function (shipId) {
+    try { return (JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {})[shipId] || {}; } catch (e) { return {}; }
+};
+/** Grid target for an inventory item with its top-left at client (x, y): { grid, col, row, w, h, free, all, at } or null. */
+physicalItem.gridTarget = function (cell, x, y) {
+    const grid = cell && cell.closest('.hs-bay-inv .hs-pick-grid');
+    if (!grid) return null;
+    const gr = grid.getBoundingClientRect();
+    const k = gr.width / Math.max(1, grid.offsetWidth);
+    const step = (48 + 4) * k;
+    const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
+    const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
+    const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
+    // Over the grid at all (by the item's centre)?
+    const cx = x + w * step / 2, cy = y + h * step / 2;
+    if (cx < gr.left || cx > gr.right || cy < gr.top || cy > gr.bottom) return null;
+    const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - gr.left) / step) + 1));
+    const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
+    const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - gr.top) / step) + 1));
+    // Every other item keeps its current tile; the target must be free.
+    const all = Array.from(grid.querySelectorAll('.hs-pick-cell'));
+    const at = (c) => {
+        const r = c.getBoundingClientRect();
+        return [Math.round((r.left - gr.left) / step) + 1, Math.round((r.top - gr.top) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
+    };
+    const free = !all.some((c) => {
+        if (c === cell) return false;
+        const [c0, r0, cw, ch] = at(c);
+        return col < c0 + cw && c0 < col + w && row < r0 + ch && r0 < row + h;
+    });
+    return { grid, col, row, w, h, free, all, at };
+};
+/** Show where the dragged item would land (null x clears it). */
+physicalItem.previewInGrid = function (cell, x, y) {
+    const old = document.querySelector('.hs-inv-drop-preview');
+    const t = x == null ? null : physicalItem.gridTarget(cell, x, y);
+    if (!t) { if (old) old.remove(); return; }
+    const el = old && old.parentNode === t.grid ? old : document.createElement('div');
+    if (el !== old && old) old.remove();
+    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-blocked');
+    el.style.left = `${(t.col - 1) * 52}px`;
+    el.style.top = `${(t.row - 1) * 52}px`;
+    el.style.width = `${t.w * 52 - 4}px`;
+    el.style.height = `${t.h * 52 - 4}px`;
+    if (!el.parentNode) t.grid.appendChild(el);
+};
+/** Drop an inventory item with its top-left at client (x, y). Returns true when it landed in the grid. */
+physicalItem.dropInGrid = function (ui, cell, x, y) {
+    physicalItem.previewInGrid(null);
+    const t = physicalItem.gridTarget(cell, x, y);
+    if (!t) return false;
+    if (!t.free) return true; // over the grid but occupied: stay where it was
+    const key = (c) => c.getAttribute('data-part-kind') + ':' + c.getAttribute('data-part-id');
+    let store = {};
+    try { store = JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {}; } catch (e) { /* ignore */ }
+    // Pin every item to where it is now, so the others don't reflow around the moved one.
+    const ship = store[ui.hangarShipId] = {};
+    t.all.forEach((c) => { const [c0, r0] = t.at(c); ship[key(c)] = [c0, r0]; });
+    ship[key(cell)] = [t.col, t.row];
+    try { localStorage.setItem('vf_hs_inv_pos', JSON.stringify(store)); } catch (e) { /* ignore */ }
+    ui.createUI();
+    return true;
+};
+
 // Hangar bay: switch the centre ship view to the part inventory (same physical items as the slot picker).
 physicalItem.bayInventoryHtml = function (ui) {
     const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
@@ -123,6 +188,7 @@ physicalItem.bayInventoryHtml = function (ui) {
     const inv = slm.getInventory(ui.hangarShipId) || {}, L = slm.getLoadout(ui.hangarShipId) || {};
     const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
     const cells = [];
+    const pos = physicalItem.invPositions(ui.hangarShipId);
     // Cells whose installed state changed since the last draw play an equip / unequip animation.
     const prev = ui._bayInvPrev && ui._bayInvPrev.ship === ui.hangarShipId ? ui._bayInvPrev.set : null;
     const now = {};
@@ -139,18 +205,20 @@ physicalItem.bayInventoryHtml = function (ui) {
             const tipLines = String(ui.hangarModuleTip(kind, id)).split('\n').filter((l, n) => !(n === 0 && l.trim().toUpperCase() === String(label).trim().toUpperCase()));
             const tip = (tipLines.join('\n') + '\nSIZE: ' + slm.partSizeLabel(kind, id) + '\nSTATUS: ' + (eq[id] ? 'INSTALLED' : 'IN INVENTORY') + '\nDRAG OR RIGHT-CLICK TO TOGGLE').replace(/"/g, '&quot;');
             const body = physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, colors[kind], '');
-            cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
+            cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: ${pos[kind + ':' + id] ? pos[kind + ':' + id][0] + ' / ' : ''}span ${span[0]}; grid-row: ${pos[kind + ':' + id] ? pos[kind + ':' + id][1] + ' / ' : ''}span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
         });
     });
     ui._bayInvPrev = { ship: ui.hangarShipId, set: now };
     const filter = ui._bayInvFilter || 'all', cs = 48;
+    // Grid size: the ship's inventory (start profile + frame level).
+    const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(ui.hangarShipId) : { cols: 4, rows: 2 };
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
     const ico = (key, col) => (ir ? String(ir.imgHtml(key, 24, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
         `</div>` +
-        `<div class="hs-pick-grid">${cells.join('') || '<em>NO PARTS OWNED</em>'}</div></div>`;
+        `<div class="hs-pick-grid" data-inv-cols="${invGrid.cols}" data-inv-rows="${invGrid.rows}" style="grid-template-columns: repeat(${invGrid.cols}, var(--cs)); grid-template-rows: repeat(${invGrid.rows}, var(--cs)); width: calc(${invGrid.cols} * var(--cs) + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * var(--cs) + ${invGrid.rows - 1} * 4px); flex: 0 0 auto; align-self: flex-start">${cells.join('') || '<em>NO PARTS OWNED</em>'}</div></div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');

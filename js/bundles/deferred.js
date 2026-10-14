@@ -12332,6 +12332,31 @@ var ShipLoadoutManager = class ShipLoadoutManager {
         return 0;
     }
 
+    /** Inventory a hull starts with [cols, rows]: the light interceptor 4 x 2 up to the heavy freighter 6 x 3. */
+    inventoryStart(shipId) {
+        return { player_interceptor: [4, 2], player_scrap: [5, 2], player_assault: [4, 3], player_heavy: [6, 3] }[String(shipId || '')] || [4, 2];
+    }
+
+    /** Inventory growth per frame level by hull: fast hulls grow slowly, freighters fast. */
+    inventoryGrowth(shipId) {
+        return { player_interceptor: 0.25, player_scrap: 0.5, player_assault: 0.5, player_heavy: 0.75 }[String(shipId || '')] || 1;
+    }
+
+    /**
+     * Inventory grid of a ship. Start size from the start profile (hull + kit); each growth step adds
+     * a column up to 8, then a row. Steps = frame level x growth (hull + start profile).
+     */
+    getInventoryGrid(shipId) {
+        const p = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const e = p && p.shipUpgrades && p.shipUpgrades[String(shipId || '')];
+        const growth = e && Number(e.invGrowth) > 0 ? Number(e.invGrowth) : this.inventoryGrowth(shipId);
+        const start = e && Array.isArray(e.invStart) ? e.invStart : this.inventoryStart(shipId);
+        const c0 = Math.max(1, Math.min(8, Number(start[0]) || 4)), r0 = Math.max(1, Number(start[1]) || 2);
+        const steps = Math.floor(this.getFrameLevel(shipId) * growth);
+        const cols = Math.min(8, c0 + steps);
+        return { cols, rows: Math.min(6, r0 + Math.max(0, steps - (cols - c0))) };
+    }
+
     /**
      * Slot caps after frame upgrades.
      * Each frame level adds +1 to weapons → defenses → abilities (rotating).
@@ -39485,7 +39510,8 @@ var UiTooltipManager = class UiTooltipManager {
             return;
         }
         // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
-        const invPanel = anchor.closest('.hs-bay-inv');
+        // (Start setup inventory sits in a right sidebar: its tips open left, toward the middle.)
+        const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
             const b = invPanel.getBoundingClientRect();
             let sl = b.right + 20;
@@ -40094,8 +40120,15 @@ var FactionShipStyles = class FactionShipStyles {
                 silhouette: 'modular',
                 // Balanced line fighter: even bands, straight mid wings.
                 anatomy: { front: { x: 1, y: 1 }, center: { x: 1.1, y: 1 }, back: { x: 1.1, y: 1 }, wing: { x: 1, y: 0.9 } },
+                // Balanced all-rounder: steady line ship, armoured rim, gun on the axis.
+                focus: {
+                    role: 'line',
+                    parts: { front: ['POINTED', 'STEPPED'], center: ['SLAB', 'PANELED'], back: ['BLOCK', 'NOTCHED'], wing: ['delta', 'plank', 'ddelta'] },
+                    armor: 1,
+                    hardpoints: 'center'
+                },
                 defaultWeapons: ['laser'],
-                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails'
+                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military line ship, armoured plate rim, straight wings and twin parallel engines'
             },
             kronax: {
                 id: 'kronax',
@@ -40106,8 +40139,15 @@ var FactionShipStyles = class FactionShipStyles {
                 silhouette: 'spikes',
                 // Raider: long ram nose, slim body, wide swept blades.
                 anatomy: { front: { x: 0.8, y: 1.4 }, center: { x: 0.85, y: 1 }, back: { x: 0.9, y: 0.8 }, wing: { x: 1.35, y: 1.05 } },
+                // Close-range brawler: needle body, forward claws, twin claw lances, one big thruster.
+                focus: {
+                    role: 'brawler',
+                    parts: { front: ['NEEDLE', 'ARROWHEAD', 'FORKED'], center: ['SLIM', 'KEEL'], back: ['FLARE', 'FAN'], wing: ['hook', 'razor', 'forward'] },
+                    armor: 0,
+                    hardpoints: 'twinNose'
+                },
                 defaultWeapons: ['claw_beam'],
-                prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating'
+                prompt: 'diagonal claw blades raking forward, needle ram nose with twin claw lances, slim chevron spike hull, one oversized thruster, brutal raider construction and serrated external plating'
             },
             voidborn: {
                 id: 'voidborn',
@@ -40116,12 +40156,19 @@ var FactionShipStyles = class FactionShipStyles {
                 accent: '#f09cff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
-                // Default wings sweep back (tips aft), never forward.
-                wingVariants: ['delta', 'swept', 'razor'],
                 // Ring body: stubby nose, broad core, tall narrow arcs.
                 anatomy: { front: { x: 0.9, y: 0.7 }, center: { x: 1.3, y: 1.2 }, back: { x: 0.8, y: 0.8 }, wing: { x: 0.8, y: 1.3 } },
+                // Evasive trickster: compact pod, crescent wings floating apart
+                // from the hull (they sweep back, never forward).
+                focus: {
+                    role: 'evasive',
+                    parts: { front: ['BULB', 'POINTED'], center: ['HOURGLASS', 'BARREL'], back: ['WAIST', 'TAPER'], wing: ['crescent', 'swept', 'razor'] },
+                    armor: 0,
+                    hardpoints: 'center',
+                    wingGap: true
+                },
                 defaultWeapons: ['wave'],
-                prompt: 'broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor'
+                prompt: 'broken ring arcs, hollow center gap, compact pod hull, crescent wings floating detached from the body, ancient alien geometry, void apertures and floating segmented armor'
             },
             pirate: {
                 id: 'pirate',
@@ -40132,8 +40179,16 @@ var FactionShipStyles = class FactionShipStyles {
                 silhouette: 'scrap',
                 // Salvage hauler: heavy engine block, short stubby wings.
                 anatomy: { front: { x: 1.1, y: 0.85 }, center: { x: 1.1, y: 1 }, back: { x: 1.35, y: 1.2 }, wing: { x: 0.85, y: 1 } },
+                // Opportunist: wide salvage hauler with gun pods welded to the
+                // wing tips for a wide fan of fire.
+                focus: {
+                    role: 'opportunist',
+                    parts: { front: ['SHOVEL', 'BLUNT'], center: ['BARREL', 'RIBBED'], back: ['STUB', 'SKIRT'], wing: ['stub', 'box', 'plank', 'twin'] },
+                    armor: 0,
+                    hardpoints: 'wingTips'
+                },
                 defaultWeapons: ['spread'],
-                prompt: 'asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery'
+                prompt: 'wide salvage hauler, shovel nose, gun pods welded to stubby wing tips, offset junk plates, improvised welded wreckage, mismatched armor and exposed machinery'
             },
             machine: {
                 id: 'machine',
@@ -40144,9 +40199,16 @@ var FactionShipStyles = class FactionShipStyles {
                 silhouette: 'circuit',
                 // Forge drone: blocky, wide at every band.
                 anatomy: { front: { x: 1.2, y: 0.9 }, center: { x: 1.2, y: 1.1 }, back: { x: 1.2, y: 1 }, wing: { x: 1.1, y: 1.1 } },
+                // Sustained-fire grinder: armoured forge block, wings as missile racks.
+                focus: {
+                    role: 'grinder',
+                    parts: { front: ['BLUNT', 'SHOVEL'], center: ['SLAB', 'RIBBED'], back: ['BLOCK', 'NOTCHED'], wing: ['ladder', 'box', 'twin'] },
+                    armor: 2,
+                    hardpoints: 'racks'
+                },
                 // Machine family (see getFactionWeaponAffinity): missile / pierce.
                 defaultWeapons: ['missile'],
-                prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels'
+                prompt: 'armoured forge block, thick double plate rim, wings slotted as missile racks, notched right-angle circuit traces, precise machine fabrication and glowing circuit channels'
             }
         };
     }
@@ -40325,6 +40387,16 @@ var FactionShipStyles = class FactionShipStyles {
             out[part] = { x: amp(base[part].x), y: amp(base[part].y) };
         });
         return out;
+    }
+
+    /**
+     * The faction's combat focus as hull language, shared by player parts
+     * and enemy ships: { role, parts: {front, center, back, wing}, armor,
+     * hardpoints, wingGap }. Part pools are style labels / wing ids.
+     */
+    getFactionFocus(factionId) {
+        const style = this.styles[this.normalizeFaction(factionId)];
+        return (style && style.focus) || null;
     }
 
     /** Global faction-difference factor for the hull builders (see styleStrength). */
@@ -40507,7 +40579,6 @@ var FactionShipStyles = class FactionShipStyles {
     }
 
 }
-
 
 /* --- js/graphics/faction-ship-styles/grid-helpers.js?v=split-2 --- */
 "use strict";
@@ -40784,9 +40855,15 @@ extendClass(FactionShipStyles, {
             .map((v) => v.toString(16).padStart(2, '0')).join('');
     },
 
-    /** Indexed pixel colors for a faction (edge / hull / accent). */
+    /**
+     * Indexed pixel colors for a faction: the hull-part palette once the
+     * part builders are up (edge / hull / accent plus their shade and light
+     * tones, 1–7), else edge / hull / accent only.
+     */
     buildFactionColors(factionId) {
         const style = this.getFactionStyle(factionId);
+        const loader = this.partLoader ? this.partLoader() : null;
+        if (loader && loader.buildHullPartPalette) return loader.buildHullPartPalette(null, 0, style);
         const base = style.hull || '#808080';
         return {
             0: 'transparent',
@@ -40818,7 +40895,6 @@ extendClass(FactionShipStyles, {
     },
 });
 
-
 /* --- js/graphics/faction-ship-styles/build-all-pixel-sprites.js?v=pull-1 --- */
 "use strict";
 
@@ -40835,10 +40911,33 @@ extendClass(FactionShipStyles, {
 
     getPixelSprite(faction, enemyClass) {
         const key = this.spriteKey(faction, enemyClass);
-        if (!this.pixelCache[key]) {
+        const cached = this.pixelCache[key];
+        if (!cached || this.isPixelSpriteStale(cached)) {
             this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass);
+            // Variant bakes / hit masks of the stand-in hull are outdated now.
+            if (cached) this.dropBakedEnemyHulls();
         }
         return this.pixelCache[key];
+    },
+
+    /**
+     * A stand-in hull (built before the part builders loaded) or one built
+     * for the other render style (FLAT ↔ VOXEL detail) is rebuilt.
+     */
+    isPixelSpriteStale(sprite) {
+        const loader = this.partLoader ? this.partLoader() : null;
+        if (!loader) return false;
+        if (sprite._fallback) return true;
+        const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
+        return !!sprite._renderStyle && sprite._renderStyle !== (voxel ? 'voxel' : 'flat');
+    },
+
+    dropBakedEnemyHulls() {
+        const gm = this.partLoader() ? graphicsManager : null;   // partLoader guards graphicsManager's TDZ
+        if (gm && gm._variantCache) gm._variantCache.clear();
+        if (typeof enemyManager !== 'undefined' && enemyManager && enemyManager._hitMaskCache) {
+            enemyManager._hitMaskCache = Object.create(null);
+        }
     },
 
     hasPng(spriteKey) {
@@ -40986,20 +41085,24 @@ extendClass(FactionShipStyles, {
     },
 });
 
-
 /* --- js/graphics/faction-ship-styles/faction-hull-builders.js?v=hull-2 --- */
 "use strict";
 
-// FactionShipStyles methods: one hull builder per faction. The faction sets
-// the construction language (how the ship is built), the class only sets
-// size and how many parts it gets — so a Kronax scout and a Kronax capital
-// read as the same people, and no two factions share an outline.
-//   terran   — orthogonal modules, straight wings, cockpit, parallel engines
-//   kronax   — arrow ram nose, swept serrated blades, one big thruster
-//   voidborn — open crescent rings around a floating core, no wings
-//   pirate   — asymmetric salvage: off-centre hull, odd pods, junk plates
-//   machine  — square nodes on thin struts, a lattice with visible gaps
-// Pixel values: 1 edge, 2 hull, 3 accent. Nose = row 0 (enemies are flipped).
+// FactionShipStyles methods: enemy hulls. Enemies are assembled from the
+// same part builders as the player's ship (nose / core / aft / wings from
+// ShipAssetLoader), so they share its plating, eight-tone palette and accent
+// shading. The faction's combat focus (style.focus, see core.js) picks the
+// parts and adds its marks; the class only sets size and part count — so a
+// Kronax scout and a Kronax capital read as the same people:
+//   terran   — line ship: stepped plates, armoured rim, straight wings
+//   kronax   — brawler: needle nose, twin claw lances, forward claws, big thruster
+//   voidborn — evasive: compact pod, crescent wings floating apart from the hull
+//   pirate   — opportunist: wide salvage hull, gun pods on stubby wing tips
+//   machine  — grinder: armoured forge block, wings slotted as missile racks
+// Before the ship assets are up, the older one-builder-per-faction hulls
+// below stand in (buildLegacyPixelSprite) and are replaced on next use.
+// Pixel values: 1 edge, 2 hull, 3 accent, 4/5 hull shade/light, 6/7 accent
+// shade/light. Nose = row 0 (enemies are flipped).
 extendClass(FactionShipStyles, {
     /** Size set for a class: half width, length in rows, extra part count. */
     hullSizeForClass(enemyClass) {
@@ -41012,6 +41115,292 @@ extendClass(FactionShipStyles, {
     },
 
     buildPixelSprite(faction, enemyClass) {
+        const loader = this.partLoader();
+        if (loader) {
+            try {
+                const grid = this.composeEnemyHull(faction, enemyClass, loader);
+                if (grid) return grid;
+            } catch (e) {
+                if (typeof console !== 'undefined') console.warn('enemy hull compose failed', e);
+            }
+        }
+        const legacy = this.buildLegacyPixelSprite(faction, enemyClass);
+        legacy._fallback = true;   // rebuilt from parts once the loader is up (getPixelSprite)
+        return legacy;
+    },
+
+    /** The ship asset loader that owns the part builders, or null before it exists. */
+    partLoader() {
+        // graphicsManager is a `let` declared later in the bundle: while this
+        // runs during boot it is still in its TDZ, where even typeof throws.
+        let gm = null;
+        try { gm = typeof graphicsManager !== 'undefined' ? graphicsManager : null; } catch (e) { return null; }
+        const loader = gm && gm.shipAssetLoader;
+        return loader && loader.buildNoseGrid && loader.buildWingGrid && loader.focusVariantPool ? loader : null;
+    },
+
+    /** Enemy sprite grid per class (cols × rows): about display size / 2.2, the part voxel density. */
+    enemyGridForClass(enemyClass) {
+        const i = Math.max(0, this.classes.indexOf(this.normalizeClass(enemyClass)));
+        return [{ w: 26, h: 20 }, { w: 32, h: 24 }, { w: 40, h: 30 }, { w: 44, h: 34 }, { w: 52, h: 40 }][i];
+    },
+
+    /**
+     * Class layout: body width share, wing span share (0 = none), and the
+     * extra parts bigger classes carry.
+     */
+    enemyClassLayout(enemyClass) {
+        switch (this.normalizeClass(enemyClass)) {
+            case 'scout': return { body: 0.34, wings: 0 };
+            case 'assault': return { body: 0.28, wings: 0.95 };
+            case 'heavy': return { body: 0.36, wings: 0.7, pods: true };
+            case 'elite': return { body: 0.26, wings: 1, rearWings: 0.62 };
+            case 'capital':
+            default: return { body: 0.26, wings: 0.8, rearWings: 0.6, outriggers: true };
+        }
+    },
+
+    /**
+     * Assemble an enemy hull from the player's part builders. Returns an
+     * indexed grid; engine cells are kept in _hullEngines.
+     */
+    composeEnemyHull(faction, enemyClass, loader) {
+        const f = this.normalizeFaction(faction);
+        const cls = this.normalizeClass(enemyClass);
+        const style = this.getFactionStyle(f);
+        const focus = style.focus || {};
+        const A = this.getFactionAnatomy(f) || {};
+        const ax = (part, axis) => (A[part] && Number.isFinite(A[part][axis]) ? A[part][axis] : 1);
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const layout = this.enemyClassLayout(cls);
+        const { w: W, h: H } = this.enemyGridForClass(cls);
+        const cx = W / 2;
+        // Even widths keep every part centred on the axis (W is even).
+        const even = (v, lo, hi) => {
+            const n = Math.round(clamp(v, lo, hi));
+            return n % 2 ? n + 1 : n;
+        };
+        const pick = (segId, key) => {
+            const pool = loader.focusVariantPool(style, segId);
+            const h = this.hash(f + '|' + cls + '|' + (key || segId));
+            if (pool.length) return pool[h % pool.length];
+            const count = /^wing/.test(segId) ? loader.wingShapeVariants.length : loader.bodyShapeVariantCount(segId);
+            return h % count;
+        };
+        const g = [];
+        for (let r = 0; r < H; r++) g.push(new Array(W).fill(0));
+        const stamp = (part, c0, r0) => {
+            if (!part) return;
+            for (let r = 0; r < part.length; r++) {
+                const rr = r0 + r;
+                if (rr < 0 || rr >= H) continue;
+                for (let c = 0; c < part[r].length; c++) {
+                    const v = part[r][c];
+                    const cc = c0 + c;
+                    if (!v || cc < 0 || cc >= W) continue;
+                    g[rr][cc] = v;
+                }
+            }
+        };
+        const mirror = (part) => part.map((row) => row.slice().reverse());
+
+        // Kronax claw lances run ahead of the nose: the hull starts lower.
+        const top = focus.hardpoints === 'twinNose' ? Math.max(2, Math.round(H * 0.12)) : 0;
+        // Band lengths from the faction anatomy (adjacent bands overlap one row).
+        const span = H - top + 2;
+        const wf = 0.3 * ax('front', 'y');
+        const wc = 0.4 * ax('center', 'y');
+        const wb = 0.3 * ax('back', 'y');
+        const sum = wf + wc + wb;
+        const frontH = Math.max(4, Math.round(span * wf / sum));
+        const backH = Math.max(4, Math.round(span * wb / sum));
+        const centerH = Math.max(4, span - frontH - backH);
+        const rFront = top;
+        const rCenter = rFront + frontH - 1;
+        const rBack = rCenter + centerH - 1;
+        // Band widths from the anatomy, relative to the core.
+        const bodyW = even(W * layout.body * clamp(ax('center', 'x'), 0.6, 1.6), 6, W * 0.6);
+        const frontW = even(bodyW * clamp(ax('front', 'x') / ax('center', 'x'), 0.6, 1.3), 4, W * 0.6);
+        const backW = even(bodyW * clamp(ax('back', 'x') / ax('center', 'x'), 0.6, 1.5), 4, W * 0.7);
+
+        const front = loader.buildNoseGrid(frontW, frontH, style, pick('front'));
+        const center = loader.buildCenterGrid(bodyW, centerH, style, pick('center'));
+        const back = loader.buildAftGrid(backW, backH, style, pick('back'));
+        const backVariant = pick('back');
+
+        // Body mask: where wings / pods attach (core, plus outrigger hulls).
+        const body = [];
+        for (let r = 0; r < H; r++) body.push(new Array(W).fill(0));
+        const mark = (part, c0, r0) => part.forEach((row, r) => row.forEach((v, c) => {
+            if (v && r0 + r >= 0 && r0 + r < H && c0 + c >= 0 && c0 + c < W) body[r0 + r][c0 + c] = 1;
+        }));
+        mark(center, cx - bodyW / 2, rCenter);
+
+        // Capital outrigger hulls: shorter side stacks beside the core.
+        const side = [];
+        if (layout.outriggers) {
+            const ow = even(bodyW * 0.5, 4, W * 0.2);
+            const ofH = Math.max(4, Math.round(frontH * 0.6));
+            const ocH = Math.max(4, Math.round(centerH * 0.85));
+            const obH = Math.max(4, Math.round(backH * 0.8));
+            const r0 = H - (ofH + ocH + obH - 2);
+            const c0 = cx + bodyW / 2 - 1;
+            const parts = {
+                front: loader.buildNoseGrid(ow, ofH, style, pick('front', 'outFront')),
+                center: loader.buildCenterGrid(ow, ocH, style, pick('center', 'outCenter')),
+                back: loader.buildAftGrid(ow, obH, style, pick('back', 'outBack'))
+            };
+            side.push({ parts, c0, r0, ofH, ocH, w: ow, variant: pick('back', 'outBack') });
+            mark(parts.center, c0, r0 + ofH - 1);
+            mark(mirror(parts.center), W - c0 - ow, r0 + ofH - 1);
+        }
+
+        // Outermost body column (right half) across rows r0..r1.
+        const bodyEdge = (r0, r1) => {
+            let edge = Infinity;
+            for (let r = Math.max(0, r0); r <= Math.min(H - 1, r1); r++) {
+                let last = -1;
+                for (let c = W - 1; c >= cx; c--) if (body[r][c]) { last = c; break; }
+                if (last >= 0) edge = Math.min(edge, last);
+            }
+            return Number.isFinite(edge) ? edge : cx + bodyW / 2 - 1;
+        };
+        // Wings attach one voxel under the hull; Voidborn wings float two voxels off it.
+        const wingRoot = (r0, rows) => bodyEdge(r0 + 1, r0 + rows - 2) + (focus.wingGap ? 3 : 0);
+        const buildWing = (share, rows, r0, key) => {
+            const root = wingRoot(r0, rows);
+            const cols = Math.round(clamp((W - 1 - root) * share * clamp(ax('wing', 'x'), 0.6, 1.4), 0, W - root));
+            if (cols < 3 || rows < 4) return null;
+            const grid = loader.buildWingGrid({ id: 'wingRight' }, cols, rows, style, pick('wingLeft', key));
+            // A floating wing's root is exposed: give it the rim the hull joint would hide.
+            if (focus.wingGap) loader.outlineGridEdges(grid);
+            this.liftThinEdges(grid);
+            return { grid, c0: root, r0 };
+        };
+        const wings = [];
+        if (layout.wings) {
+            // Tall frames: swept / crescent planforms are thin bands of the frame.
+            const rows = Math.round(clamp(centerH * 1.6 * clamp(ax('wing', 'y'), 0.6, 1.6), 6, H * 0.8));
+            const r0 = Math.round(clamp(rCenter + (centerH - rows) / 2, 0, H - rows));
+            const w = buildWing(layout.wings, rows, r0, 'wing');
+            if (w) wings.push(w);
+        }
+        if (layout.rearWings) {
+            const rows = Math.round(clamp(backH * 1.6, 5, H * 0.5));
+            const r0 = H - rows;
+            const w = buildWing(layout.rearWings * (wings[0] ? 0.75 : 1), rows, r0, 'rearWing');
+            if (w) wings.push(w);
+        }
+        // Heavy engine pods: small aft blocks on the core's flanks.
+        let pods = null;
+        if (layout.pods) {
+            const pw = even(bodyW * 0.42, 4, W * 0.18);
+            const ph = Math.max(5, Math.round(centerH * 0.85));
+            const r0 = rBack + backH - ph;
+            pods = { grid: loader.buildAftGrid(pw, ph, style, backVariant), c0: bodyEdge(r0, r0 + ph - 1), r0, w: pw, h: ph };
+        }
+
+        // Draw back to front: aft, wings, pods, outriggers, core, nose.
+        stamp(back, cx - backW / 2, rBack);
+        wings.forEach((w) => {
+            stamp(w.grid, w.c0, w.r0);
+            stamp(mirror(w.grid), W - w.c0 - w.grid[0].length, w.r0);
+        });
+        if (pods) {
+            stamp(pods.grid, pods.c0, pods.r0);
+            stamp(mirror(pods.grid), W - pods.c0 - pods.w, pods.r0);
+        }
+        side.forEach((o) => {
+            const rows = [o.r0, o.r0 + o.ofH - 1, o.r0 + o.ofH - 1 + o.ocH - 1];
+            [['back', 2], ['center', 1], ['front', 0]].forEach(([k, i]) => {
+                stamp(o.parts[k], o.c0, rows[i]);
+                stamp(mirror(o.parts[k]), W - o.c0 - o.w, rows[i]);
+            });
+        });
+        stamp(center, cx - bodyW / 2, rCenter);
+        stamp(front, cx - frontW / 2, rFront);
+
+        // Twin claw lances (Kronax): two prongs reaching past the nose tip.
+        if (focus.hardpoints === 'twinNose') {
+            const dx = Math.max(1, Math.round(frontW / 2) - 2);
+            const len = Math.min(top + Math.round(frontH * 0.45), Math.round(H * 0.32));
+            // Glowing inner blade (the claw beam's emitter), dark outer rim.
+            for (let r = 0; r < len; r++) {
+                g[r][cx + dx] = 3;
+                g[r][cx + dx + 1] = 1;
+                g[r][cx - dx - 1] = 3;
+                g[r][cx - dx - 2] = 1;
+            }
+        }
+        // Thrusters: per faction aft layout (buildAftGrid), on every aft block.
+        const engines = [];
+        const addEngines = (c0, w, r0, h, variant) => {
+            this.aftEngineFractions(style.silhouette, variant).forEach((u) => {
+                const at = c0 + u * (w - 1);
+                // A centred engine on an even-width block burns in both middle columns.
+                const cols = at % 1 === 0.5 ? [at - 0.5, at + 0.5] : [Math.round(at)];
+                cols.forEach((c) => {
+                    let last = -1;
+                    for (let r = r0; r < Math.min(H, r0 + h); r++) if (g[r][c]) last = r;
+                    if (last >= 0) engines.push({ x: c, y: Math.min(H - 1, last + 1) });
+                });
+            });
+        };
+        addEngines(cx - backW / 2, backW, rBack, backH, backVariant);
+        if (pods) {
+            addEngines(pods.c0, pods.w, pods.r0, pods.h, backVariant);
+            addEngines(W - pods.c0 - pods.w, pods.w, pods.r0, pods.h, backVariant);
+        }
+        side.forEach((o) => {
+            const r0 = o.r0 + o.ofH + o.ocH - 2;
+            addEngines(o.c0, o.w, r0, H - r0, o.variant);
+            addEngines(W - o.c0 - o.w, o.w, r0, H - r0, o.variant);
+        });
+        if (!this._hullEngines) this._hullEngines = Object.create(null);
+        this._hullEngines[f + '|' + cls] = engines;
+
+        // Accent blocks get the parts' lit top / shaded sides (not in VOXEL).
+        const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
+        const out = voxel ? g : loader.shadeAccentBlocks(g);
+        out._renderStyle = voxel ? 'voxel' : 'flat';
+        return out;
+    },
+
+    /** Engine columns (0..1 across the aft block) per faction aft layout, as in buildAftGrid. */
+    aftEngineFractions(silhouette, variant) {
+        switch (silhouette) {
+            case 'rings': return [0.5];
+            case 'circuit': return [0.16, 0.39, 0.61, 0.84];
+            case 'spikes': return [0.2, 0.5, 0.8];
+            case 'scrap': return [0.25, 0.75];
+            default: return variant === 1 ? [0.5] : [0.29, 0.71];
+        }
+    },
+
+    /**
+     * Blades too thin to have an interior are all outline at enemy scale;
+     * keep them hull-coloured (as the old hulls did) so they don't read as
+     * dark scratches. Rims next to an interior cell stay dark.
+     */
+    liftThinEdges(g) {
+        const H = g.length, W = g[0].length;
+        const inner = (r, c) => r >= 0 && c >= 0 && r < H && c < W && g[r][c] > 1;
+        const lift = [];
+        for (let r = 0; r < H; r++) {
+            for (let c = 0; c < W; c++) {
+                if (g[r][c] !== 1) continue;
+                let near = false;
+                for (let dr = -1; dr <= 1 && !near; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) if ((dr || dc) && inner(r + dr, c + dc)) { near = true; break; }
+                }
+                if (!near) lift.push([r, c]);
+            }
+        }
+        lift.forEach(([r, c]) => { g[r][c] = 2; });
+    },
+
+    /** The original one-builder-per-faction hull: stand-in until the part builders load. */
+    buildLegacyPixelSprite(faction, enemyClass) {
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
         const g = this.blankGrid();
@@ -41266,20 +41655,23 @@ extendClass(FactionShipStyles, {
         const cx = Math.floor(this.spriteW / 2);
         const list = (this._hullEngines && this._hullEngines[f + '|' + cls]) || this.enginePositions(cls, cx);
         const style = this.getFactionStyle(f);
+        // Composed hulls differ in size per class: use the sprite's own grid.
+        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls)];
+        const w = sprite && sprite[0] ? sprite[0].length : this.spriteW * this.spriteScale;
+        const h = sprite ? sprite.length : this.spriteH * this.spriteScale;
         return {
             positions: list.map((p) => ({
-                x: Math.max(0, Math.min(this.spriteW * this.spriteScale - 1, p.x)),
-                y: Math.max(0, Math.min(this.spriteH * this.spriteScale - 1, p.y)),
+                x: Math.max(0, Math.min(w - 1, p.x)),
+                y: Math.max(0, Math.min(h - 1, p.y)),
                 intensity: 0.55 + t * 0.08
             })),
             // Thrusters burn in the faction accent.
             color: style.accent || this.sharedEngine,
-            width: this.spriteW * this.spriteScale,
-            height: this.spriteH * this.spriteScale
+            width: w,
+            height: h
         };
     }
 });
-
 
 /* --- js/graphics/faction-ship-styles.js?v=hull-1 --- */
 "use strict";
@@ -43777,6 +44169,16 @@ extendClass(GraphicsManager, {
 // reused every frame.
 
 var ENEMY_LIVERIES = ['plain', 'spine', 'twin', 'nose', 'tips', 'band', 'chevron', 'split'];
+// Paint jobs each faction's doctrine would wear (first = escort default):
+// Terran unit bands, Kronax war paint, Voidborn bare / faint spine,
+// Pirate mismatched halves and tips, Machine trace lines.
+var FACTION_LIVERIES = {
+    terran: ['plain', 'band', 'twin'],
+    kronax: ['plain', 'chevron', 'nose'],
+    voidborn: ['plain', 'spine'],
+    pirate: ['plain', 'split', 'tips'],
+    machine: ['plain', 'spine', 'twin']
+};
 var ENEMY_VARIANT_CACHE_MAX = 400;
 var ENEMY_AREAS = ['back', 'wings', 'nose', 'center'];
 
@@ -43788,23 +44190,25 @@ extendClass(GraphicsManager, {
         if (seed == null) seed = enemy.variantSeed = (Math.random() * 0xffffffff) >>> 0;
         const r = (n) => ((seed >>> n) & 255) / 255;
         // Champions always carry a paint job; escorts are sometimes plain.
-        const liv = ENEMY_LIVERIES[(seed % (ENEMY_LIVERIES.length - (enemy.champion ? 1 : 0))) + (enemy.champion ? 1 : 0)];
+        const pool = FACTION_LIVERIES[String(enemy.faction || '').toLowerCase()] || ENEMY_LIVERIES;
+        const liv = pool[(seed % (pool.length - (enemy.champion ? 1 : 0))) + (enemy.champion ? 1 : 0)];
         enemy._variant = {
             seed: seed,
             livery: liv,
             // Small hue / brightness / saturation drift keeps the faction readable.
-            hue: Math.round((r(3) - 0.5) * 36),
+            hue: Math.round((r(3) - 0.5) * 16),
             light: 0.86 + r(11) * 0.28,
             sat: 0.8 + r(19) * 0.45,
             paint: r(7) < 0.5 ? 'accent' : (r(7) < 0.8 ? 'light' : 'dark'),
             // Per-area styles (nose / back / wings / center): each hull area
-            // gets its own colour shift so the sections read as separate parts.
+            // gets its own shade so the sections read as separate parts — a
+            // small hue step only, wide shifts turned ships into another faction.
             areas: ENEMY_AREAS.map((a, i) => {
                 const h = Math.imul(seed ^ (0x9e3779b9 * (i + 1)), 0x85ebca6b) >>> 0;
                 const q = (n) => ((h >>> n) & 255) / 255;
                 return {
                     id: a,
-                    hue: Math.round((q(0) - 0.5) * 120),
+                    hue: Math.round((q(0) - 0.5) * 24),
                     light: 0.7 + q(8) * 0.55,
                     sat: 0.7 + q(16) * 0.7
                 };
@@ -44002,7 +44406,6 @@ extendClass(GraphicsManager, {
         ctx.restore();
     },
 });
-
 
 /* --- js/graphics/graphics-manager.js?v=pull-1 --- */
 "use strict";
@@ -78642,7 +79045,15 @@ extendClass(ProfileSelectionManager, {
         // Hulls built without a nose carry their gun in the core: a pair left / right of the axis ('split') or one on the axis ('single').
         const roleCore = { player_heavy: 'split' };
         const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff[ship] || [], coreGun: roleCore[ship] || null, bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
-        return {
+        // Faction doctrine, added on top of every profile of the faction: cargo shape, an extra hull area level and a stash.
+        const DOCTRINE = {
+            terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold
+            kronax: { invCols: -1, invGrowth: -0.15, areas: { center: 1 }, second: { player_assault: 'plasma', player_interceptor: 'spike_burst' } },                       // brutes: armoured core, cramped hold
+            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'nova', player_interceptor: 'ion' } },                                // wanderers: wing level, crystal shards
+            pirate: { invCols: 2, invGrowth: 0.25, res: { scrap: 20 }, second: { player_assault: 'burst', player_interceptor: 'rapid' } },                           // smugglers: wide hold that fills fast
+            machine: { invCols: -1, invRows: 1, invGrowth: 0.25, res: { ore: 20 }, areas: { front: 1 }, second: { player_assault: 'pierce' } }   // drones: tall modular hold, nose module
+        };
+        const defs = {
             terran: [
                 K('standard_issue', 'STANDARD ISSUE', 'Alliance-issue fighter and a small stipend', 'kitStandardIssue', 'player_scrap', { credits: 100 }),
                 K('fleet_charter', 'FLEET CHARTER', 'A navy commission: fast patrol interceptor', 'kitFleetCharter', 'player_interceptor', { credits: 200 }),
@@ -78665,15 +79076,27 @@ extendClass(ProfileSelectionManager, {
                 K('scavenger', 'SCAVENGER', 'Patched-up wreck and a heap of scrap', 'kitScavenger', 'player_scrap', { res: { scrap: 120 } }),
                 K('smuggler', 'SMUGGLER', 'Fast ship and a stash of dirty credits', 'kitSmuggler', 'player_interceptor', { credits: 250 }),
                 K('brigand', 'BRIGAND', 'Stolen assault frame with an extra gun mount', 'kitBrigand', 'player_assault', { slot: 1 }),
-                K('hauler_thief', 'HAULER THIEF', 'Hijacked freighter hull with loaded holds', 'kitHaulerThief', 'player_heavy', { res: { scrap: 80, ore: 60 } })
+                K('hauler_thief', 'HAULER THIEF', 'Hijacked freighter hull with loaded holds', 'kitHaulerThief', 'player_heavy', { res: { scrap: 80, ore: 60 }, invRows: 1, invGrowth: 0.25 })
             ],
             machine: [
                 K('boot_sequence', 'BOOT SEQUENCE', 'Freshly compiled unit with spare parts', 'kitBootSequence', 'player_scrap', { res: { scrap: 60 } }),
-                K('harvester', 'HARVESTER UNIT', 'Resource drone chassis, holds full of ore', 'kitHarvester', 'player_heavy', { res: { ore: 100, scrap: 40 } }),
+                K('harvester', 'HARVESTER UNIT', 'Resource drone chassis, holds full of ore', 'kitHarvester', 'player_heavy', { res: { ore: 100, scrap: 40 }, invRows: 1, invGrowth: 0.25 }),
                 K('scout_unit', 'SCOUT UNIT', 'Fast recon frame with a credit cache', 'kitScoutUnit', 'player_interceptor', { credits: 150 }),
                 K('combat_protocol', 'COMBAT PROTOCOL', 'War routine loaded: assault frame, +1 weapon slot', 'kitCombatProtocol', 'player_assault', { slot: 1 })
             ]
         };
+        Object.keys(defs).forEach((f) => {
+            const d = DOCTRINE[f] || {};
+            defs[f].forEach((kit) => {
+                const b = kit.bonus;
+                // Some hulls also start with a second weapon type, owned in the inventory.
+                if (d.second && d.second[kit.ship]) b.weapon2 = d.second[kit.ship];
+                ['credits', 'invRows', 'invCols', 'invGrowth'].forEach((n) => { if (d[n]) b[n] = (Number(b[n]) || 0) + d[n]; });
+                if (d.res) { b.res = Object.assign({}, b.res); Object.keys(d.res).forEach((r) => { b.res[r] = (b.res[r] || 0) + d.res[r]; }); }
+                if (d.areas) { b.areas = Object.assign({}, b.areas); Object.keys(d.areas).forEach((a) => { const t = (kit.off || []).indexOf(a) < 0 ? a : 'center'; b.areas[t] = (b.areas[t] || 0) + d.areas[a]; }); }   // a hull without that area levels its core instead
+            });
+        });
+        return defs;
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -78722,17 +79145,51 @@ extendClass(ProfileSelectionManager, {
         if (!k) { k = list[0]; o.kit = k.id; o.ship = k.ship; }
         return k;
     },
+    /** Top-down hull pictogram with one area lit up (front / center / back / wing). */
+    areaSvg(id) {
+        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
+        return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' +
+            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg>';
+    },
+    /** Cargo hold pictogram: 3 x 3 cells with a column / row lit up, or a growth arrow (up = fast, down = slow). */
+    cargoSvg(kind, up) {
+        const cell = (x, y, on) => `<rect class="${on ? 'on' : ''}" x="${x}" y="${y}" width="4" height="4"/>`;
+        if (kind === 'growth') {
+            return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' + cell(1, 11, true) + cell(6, 11, true) + cell(11, 11, true) +
+                (up ? '<path class="on" d="M8 1 L13 6 H10 V9 H6 V6 H3Z"/>' : '<path class="on" d="M6 1 H10 V4 H13 L8 9 L3 4 H6Z"/>') + '</svg>';
+        }
+        let cells = '';
+        [1, 6, 11].forEach((y) => [1, 6, 11].forEach((x) => { cells += cell(x, y, kind === 'col' ? x === 11 : y === 11); }));
+        return '<svg viewBox="0 0 16 16" shape-rendering="crispEdges">' + cells + '</svg>';
+    },
+    /** Kit bonuses as items: full text (tooltip / summary), icon html, short value, drawback flag. */
+    kitBonusItems(k) {
+        const b = k.bonus || {};
+        const items = [];
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const rk = (id) => (typeof homeStationUI !== 'undefined' && homeStationUI.resourceIconKey ? homeStationUI.resourceIconKey(id) : null);
+        const resIco = (id) => { const key = rk(id); return ir && key ? ir.imgHtml(key, 24, 'hs-pixel', undefined, false) : ''; };
+        const add = (text, ico, val, minus) => items.push({ text, ico, val, minus: !!minus });
+        if (b.credits) add('+' + b.credits + ' CR', resIco('credits'), '+' + b.credits);
+        Object.keys(b.res || {}).forEach((r) => add('+' + b.res[r] + ' ' + r.toUpperCase(), resIco(r), '+' + b.res[r]));
+        if (b.slot) add('+' + b.slot + ' WEAPON SLOT', ir ? ir.imgHtml('statWeapon', 24, 'hs-pixel', undefined, false) : '', '+' + b.slot);
+        const names = { front: 'NOSE', center: 'CORE', back: 'AFT', wing: 'WINGS' };
+        Object.keys(b.areas || {}).forEach((a) => add('+' + b.areas[a] + ' ' + (names[a] || a.toUpperCase()), this.areaSvg(a), '+' + b.areas[a]));
+        if (b.weapon2) {
+            const w = typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon ? weaponConfigManager.getWeapon(b.weapon2) : null;
+            const ico = ir && ir.weaponImgHtml ? ir.weaponImgHtml(b.weapon2, 24, 'hs-pixel', false) : '';
+            add('+' + String((w && w.name) || b.weapon2).replace(/_/g, ' ').toUpperCase() + ' WEAPON', ico, '+');
+        }
+        const sign = (n) => (n > 0 ? '+' : '-') + Math.abs(n);
+        if (b.invRows) add(sign(b.invRows) + ' CARGO ROW', this.cargoSvg('row'), sign(b.invRows), b.invRows < 0);
+        if (b.invCols) add(sign(b.invCols) + ' CARGO COL', this.cargoSvg('col'), sign(b.invCols), b.invCols < 0);
+        if (b.invGrowth) add(b.invGrowth > 0 ? 'FAST CARGO GROWTH' : 'SLOW CARGO GROWTH', this.cargoSvg('growth', b.invGrowth > 0), sign(Math.round(b.invGrowth * 100)) + '%', b.invGrowth < 0);
+        (k.off || []).forEach((a) => add('NO ' + (names[a] || a.toUpperCase()), this.areaSvg(a), 'OFF', true));
+        return items;
+    },
     /** Short bonus summary, e.g. "+120 SCRAP · +40 ORE". */
     kitBonusText(k) {
-        const b = k.bonus || {};
-        const parts = [];
-        if (b.credits) parts.push('+' + b.credits + ' CR');
-        Object.keys(b.res || {}).forEach((r) => parts.push('+' + b.res[r] + ' ' + r.toUpperCase()));
-        if (b.slot) parts.push('+' + b.slot + ' WEAPON SLOT');
-        const names = { front: 'NOSE', center: 'CORE', back: 'AFT', wing: 'WINGS' };
-        Object.keys(b.areas || {}).forEach((a) => parts.push('+' + b.areas[a] + ' ' + (names[a] || a.toUpperCase())));
-        (k.off || []).forEach((a) => parts.push('NO ' + (names[a] || a.toUpperCase())));
-        return parts.join(' · ') || 'NO BONUS';
+        return this.kitBonusItems(k).map((it) => it.text).join(' · ') || 'NO BONUS';
     },
     /** Starter kits: [id, label, what you get, icon key]. */
     startKits() {
@@ -78860,13 +79317,18 @@ extendClass(ProfileSelectionManager, {
             const sizeTxt = '&#10;SLOT SIZE: ' + size(sLv) + (partSz ? '&#10;PART SIZE: ' + partSz : '');
             const title = (id ? tipOf(kind, id) : 'NO PART INSTALLED') + sizeTxt;
             const raw = !id || !ir ? '' : (kind === 'weapon' && ir.weaponImgHtml ? ir.weaponImgHtml(id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', kindColor[kind], false));
-            const img = id ? (ir ? String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '') : `<span class="hs-slot-glyph" data-slot-kind="${kind}"></span>`;
+            let img = id ? (ir ? String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '') : `<span class="hs-slot-glyph" data-slot-kind="${kind}"></span>`;
+            // Filled slot: the part as its physical item, at its own footprint inside the slot.
+            if (id && typeof physicalItem !== 'undefined') {
+                const box = [40, 56, 72][Math.max(0, Math.min(2, sLv))] - 4;
+                const pLv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
+                const w = pLv === 1 ? Math.round(box / 2) : box;
+                img = `<span class="hs-slotview-part" style="width:${w}px;height:${box}px">${physicalItem.wrap(kind, id, w - 4, box - 4, kindColor[kind], img)}</span>`;
+            }
             return `<span style="--pk-c:${kindColor[kind]}" data-kind="${kind}"${hoverKey ? ` data-wslot="${hoverKey}"` : ''} class="pk-slot${lvl != null ? ' pk-lv' + lvl : ''}${id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${title}" aria-label="${name}">${img}</span>`;
         };
         // Area pictogram: top-down hull with the area lit up (replaces the text label).
-        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
-        const areaIco = (id, label) => `<span class="pl-ico" title="${label}" aria-label="${label}"><svg viewBox="0 0 16 16" shape-rendering="crispEdges">` +
-            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg></span>';
+        const areaIco = (id, label) => `<span class="pl-ico" title="${label}" aria-label="${label}">${this.areaSvg(id)}</span>`;
         const kindIco = (kind, label) => {
             const img = ir ? ir.imgHtml(kindIcon[kind], 32, 'hs-pixel') : '';
             return `<span class="pl-ico" title="${label}" aria-label="${label}">${img}</span>`;
@@ -78904,17 +79366,75 @@ extendClass(ProfileSelectionManager, {
         const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null)).join('') || '<em>–</em>';
         const parts = `<div class="pl-parts">` +
             [['defense', caps.defenses, dl.defenses], ['energy', caps.energy, dl.energy], ['ability', caps.abilities, dl.abilities]].map(([k, n, l]) => `<div class="pl-row">${kindIco(k, k.toUpperCase())}<span class="pl-slots">${many(k, n || 0, l)}</span></div>`).join('') + `</div>`;
-        return `<div class="profile-loadout-title">HULL AREAS</div>
-            <div class="pl-wrap" data-tip-side="left">${rows}${parts}</div>`;
+        const invHtml = this.renderStartInvHtml(kitObj, [['weapon', (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId],
+            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', kitObj.bonus && kitObj.bonus.weapon2, false]], kindColor, tipOf);
+        // Ship stats take the sidebar's top (the inventory below already shows every part).
+        const ir2 = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const stat = (l, v, key, cls) => {
+            const m = ir2 ? /src="([^"]+)"/.exec(ir2.imgHtml(key, 28, 'hs-pixel') || '') : null;
+            // Layout inline: older start-step rules restyle .pk-stat.
+            return `<span class="pk-stat pk-${cls}" style="display:grid;grid-template-columns:32px 1fr;grid-template-areas:'i v' 'i l';column-gap:10px;align-items:center;padding:8px 10px">` +
+                `<i class="pk-ico" style="grid-area:i;display:block;width:32px;height:32px${m ? `;--pk-img:url('${m[1]}')` : ''}"></i>` +
+                `<b style="grid-area:v;font-size:20px;line-height:1.1">${v != null ? v : '–'}</b><small style="grid-area:l;font-size:12px;letter-spacing:2px">${l}</small></span>`;
+        };
+        const stats = stat('SPEED', cfg.speed, 'statSpeed', 'speed') + stat('HULL', cfg.maxHealth, 'statHealth', 'hull') +
+            stat('ARMOR', cfg.armor, 'statArmor', 'armor') + stat('DAMAGE', cfg.weaponDamage || cfg.damage, 'statDamage', 'damage');
+        // Weapon types of the profile: the faction's weapon in focus, plus the hull's start weapon when it differs (1-2 types).
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const facW = (fss && fss.getFactionDefaultWeapons ? fss.getFactionDefaultWeapons(this.pendingFaction) : null)
+            || (wcm && wcm.getFactionWeaponAffinity ? wcm.getFactionWeaponAffinity(this.pendingFaction) : []);
+        const focusId = (facW && facW[0]) || gunId;
+        const second = (kitObj.bonus || {}).weapon2 || (gunId !== focusId ? gunId : null);
+        const fam = second ? [focusId, second] : [focusId];
+        const weapons = fam.map((wid, wi) => {
+            const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
+            const wname = String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
+            const ico = ir && ir.weaponImgHtml ? String(ir.weaponImgHtml(wid, 32, 'hs-pixel', false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+            const facBonus = wcm && wcm.getFactionWeaponMul && wcm.getFactionWeaponMul(this.pendingFaction, wid) > 1;
+            const hullBonus = wcm && wcm.getShipClassWeaponMul && wcm.getShipClassWeaponMul(cls, wid) > 1;
+            const tip = [wi === 0 ? 'FACTION WEAPON' : 'SECOND WEAPON (IN INVENTORY)', facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
+            const col = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(wid) : '#ff6a4a';
+            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}</span>`;
+        }).join('');
+        return `<div class="profile-loadout-title">WEAPONS</div>
+            <div class="profile-side-weapons" data-tip-side="left">${weapons}</div>
+            <div class="profile-loadout-title">STATS</div>
+            <div class="profile-side-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">${stats}</div>
+            <div class="profile-start-inv" data-tip-side="left">${invHtml}</div>`;
     },
-    /** Kit bonus + blurb: its own full-width strip under the ship and the hull sidebar. */
+    /** Start inventory: the kit's grid (hull start size + kit rows) holding the start parts. */
+    renderStartInvHtml(kitObj, parts, kindColor, tipOf) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const ship = this.startShipId();
+        const st = slm && slm.inventoryStart ? slm.inventoryStart(ship) : [4, 2];
+        const cols = Math.max(3, Math.min(8, st[0] + (Number((kitObj.bonus || {}).invCols) || 0)));
+        const rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
+        const cells = parts.filter((p) => p[1]).map(([kind, id, inst = true]) => {
+            const lv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
+            const span = [[1, 1], [1, 2], [2, 2]][lv];
+            const body = typeof physicalItem !== 'undefined' ? physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, kindColor[kind], '') : '';
+            const name = String(id).replace(/_/g, ' ').toUpperCase();
+            // Same data as the shipyard inventory: full part stats, size, status.
+            const tip = (tipOf ? tipOf(kind, id) + '&#10;' : '') + 'SIZE: ' + (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S') + '&#10;STATUS: ' + (inst ? 'INSTALLED' : 'IN INVENTORY');
+            return `<span class="hs-pick-cell${inst ? ' is-equipped' : ''}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColor[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-size">${slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : ''}</span></span>`;
+        }).join('');
+        // Cells as big as the sidebar allows, at most 56px: fitted to the free width AND height (.profile-start-inv is a size
+        // container), so a tall grid scales down instead of scrolling. 50px = title + gap + picker padding / border; 16px = picker padding / border.
+        const cs = `clamp(16px, min((100cqw - 16px - ${(cols - 1) * 4}px) / ${cols}, (100cqh - 50px - ${(rows - 1) * 4}px) / ${rows}), 56px)`;
+        return `<div class="profile-start-inv-title">INVENTORY <b>${cols} × ${rows}</b></div><div class="hs-slot-picker hs-bay-inv" style="--cs:${cs}"><div class="hs-pick-grid" style="grid-template-columns: repeat(${cols}, var(--cs)); grid-template-rows: repeat(${rows}, var(--cs)); width: calc(${cols} * var(--cs) + ${cols - 1} * 4px); height: calc(${rows} * var(--cs) + ${rows - 1} * 4px)">${cells}</div></div>`;
+    },
+    /** Kit bonus + blurb: its own strip above the ship, beside the hull sidebar. */
     renderKitInfoHtml() {
         const kitObj = this.currentKit();
-        const res = this.kitBonusText(kitObj);
         const kitRow = this.startKits().find((k) => k[0] === kitObj.id);
         const kitIcon = kitRow && kitRow[3] && typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml(kitRow[3], 24, 'hs-pixel') : '';
-        return `<div class="profile-loadout-line profile-kit-bonus"><span class="pkb-label">${kitIcon}KIT BONUS</span><b>${res}</b></div>
-            <p class="profile-kit-desc">${kitObj.desc || (kitRow && kitRow[2]) || ''}</p>`;
+        // One chip per bonus: icon + short value, the full text as tooltip; drawbacks (cargo cuts, missing hull areas) greyed.
+        const chips = this.kitBonusItems(kitObj).map((it) => `<span class="pkb-chip${it.minus ? ' is-minus' : ''}" data-ui-tip-instant data-ui-tip="${it.text}" aria-label="${it.text}">` +
+            `<span class="pkb-ico">${it.ico}</span><b>${it.val}</b></span>`).join('');
+        return `<div class="pkb-head"><span class="pkb-label">${kitIcon}KIT BONUS</span><p class="profile-kit-desc">${kitObj.desc || (kitRow && kitRow[2]) || ''}</p></div>
+            <div class="pkb-chips">${chips}</div>`;
     },
     /** Accent colour of the pending faction (portrait glow). */
     pilotAccent() {
@@ -79717,7 +80237,7 @@ extendClass(ProfileSelectionManager, {
         setHtml(`
             ${stepperHtml}
             <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
-                ${pickFaction ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
+                ${pickFaction || startStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
                 ${pickFaction ? '' : swatchesHtml + inputHtml}
                 ${create && !pickFaction ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${pickFaction ? swatchesHtml : ''}
@@ -81312,6 +81832,11 @@ extendClass(ProfileSelectionManager, {
         const bonus = kit.bonus || {};
         if (bonus.credits) p.credits = (Number(p.credits) || 0) + bonus.credits;
         Object.keys(bonus.res || {}).forEach((r) => addRes(r, bonus.res[r]));
+        if (bonus.weapon2) {
+            if (!p.parts || typeof p.parts !== 'object') p.parts = {};
+            if (!p.parts.weapons || typeof p.parts.weapons !== 'object') p.parts.weapons = {};
+            p.parts.weapons[bonus.weapon2] = Math.max(1, Number(p.parts.weapons[bonus.weapon2]) || 0);
+        }
         if (bonus.slot) {
             const ship = p.activeShipId;
             if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
@@ -81357,6 +81882,13 @@ extendClass(ProfileSelectionManager, {
                 L.weaponSlots = ws;
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
+        }
+        // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.
+        if (p.activeShipId && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.inventoryGrowth) {
+            if (!p.shipUpgrades[p.activeShipId]) p.shipUpgrades[p.activeShipId] = { frameLevel: 0 };
+            const st = shipLoadoutManager.inventoryStart(p.activeShipId);
+            p.shipUpgrades[p.activeShipId].invStart = [Math.max(3, Math.min(8, st[0] + (Number(bonus.invCols) || 0))), Math.max(1, st[1] + (Number(bonus.invRows) || 0))];
+            p.shipUpgrades[p.activeShipId].invGrowth = Math.max(0.1, shipLoadoutManager.inventoryGrowth(p.activeShipId) + (Number(bonus.invGrowth) || 0));
         }
         if (o.look) p.portrait = Object.assign({}, o.look);
         p.startKit = kit.id;
@@ -92779,8 +93311,10 @@ extendClass(HomeStationUI, {
             : loader.bodyShapeVariantCount(segmentId);
         const saved = profileManager.getSegmentShapeVariant(shipId, segmentId);
         const fallbackId = segmentId === 'wing' ? 'wingLeft' : segmentId;
+        // Same faction-focus default the hull renders when nothing is picked.
+        const factionStyle = loader.resolveModuleFactionStyle ? loader.resolveModuleFactionStyle(null) : null;
         const active = saved == null
-            ? loader.hullShapeVariantIndex(loader.resolveHullShapeSeed({ id: shipId }), fallbackId, count)
+            ? loader.hullShapeVariantIndex(loader.resolveHullShapeSeed({ id: shipId }), fallbackId, count, factionStyle)
             : saved;
 
         const panel = document.createElement('div');
@@ -93074,7 +93608,6 @@ extendClass(HomeStationUI, {
         }
     },
 });
-
 
 /* --- js/ui/home-station/wing-preview-pixel-zoom.js?v=jshift-1 --- */
 "use strict";
@@ -96644,11 +97177,49 @@ extendClass(HomeStationUI, {
                 moved = true;
                 ghost = document.createElement('div');
                 ghost.className = 'hs-hangar-part-ghost';
-                if (iconEl) ghost.appendChild(iconEl.cloneNode(true));
-                // Start at the cursor; otherwise the transform transition slides it in from the top-left corner.
-                ghost.style.left = `${Math.round(e.clientX)}px`;
-                ghost.style.top = `${Math.round(e.clientY)}px`;
                 document.body.appendChild(ghost);
+                // Map viewport px to the ghost's own layout px (the page may be zoomed or scaled).
+                ghost.style.cssText = 'left:0;top:0;margin:0;';
+                const o = ghost.getBoundingClientRect();
+                ghost.style.left = '100px';
+                const k = (ghost.getBoundingClientRect().left - o.left) / 100 || 1;
+                ghost._place = (x, y) => {
+                    ghost.style.left = `${(x - o.left) / k}px`;
+                    ghost.style.top = `${(y - o.top) / k}px`;
+                };
+                const itemBody = cell && cell.querySelector('.hs-item-body');
+                if (itemBody) {
+                    // Physical inventory item: lift the bare object, held where it was grabbed.
+                    const r = cell.getBoundingClientRect();
+                    const s = r.width / Math.max(1, cell.offsetWidth);
+                    const wrap = document.createElement('div');
+                    wrap.className = 'hs-slot-picker hs-bay-inv';
+                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:0 0;transform:scale(${s / k});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
+                    const clone = cell.cloneNode(true);
+                    clone.classList.remove('is-dragging');
+                    clone.style.width = '100%';
+                    clone.style.height = '100%';
+                    // Only the object itself: no cell frame, background or labels.
+                    clone.className = 'hs-pick-cell';
+                    clone.style.border = '0';
+                    clone.style.background = 'none';
+                    clone.style.boxShadow = 'none';
+                    clone.style.outline = '0';
+                    clone.querySelectorAll('.hs-pick-size, .hs-pick-ico').forEach((n) => n.remove());
+                    wrap.appendChild(clone);
+                    ghost.appendChild(wrap);
+                    ghost.classList.add('is-item');
+                    ghost.style.width = `${r.width / k}px`;
+                    ghost.style.height = `${r.height / k}px`;
+                    ghost._grab = { x: startX - r.left, y: startY - r.top };
+                    ghost._half = { x: r.width / 2, y: r.height / 2 };
+                    cell.classList.add('is-dragging');
+                } else {
+                    if (iconEl) ghost.appendChild(iconEl.cloneNode(true));
+                    ghost.style.margin = '';
+                }
+                // Start at the cursor; otherwise the transform transition slides it in from the top-left corner.
+                ghost._place(e.clientX - (ghost._grab ? ghost._grab.x : 0), e.clientY - (ghost._grab ? ghost._grab.y : 0));
                 document.body.classList.add('hs-part-grabbing');
                 if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
             }
@@ -96670,9 +97241,13 @@ extendClass(HomeStationUI, {
             }
             setTarget(best);
             const p = bestPt || { x: e.clientX, y: e.clientY };
-            ghost.style.left = `${Math.round(p.x)}px`;
-            ghost.style.top = `${Math.round(p.y)}px`;
+            const off = !ghost._grab ? { x: 0, y: 0 } : best ? ghost._half : ghost._grab;
+            ghost._place(p.x - off.x, p.y - off.y);
             ghost.classList.toggle('is-snapped', !!best);
+            if (ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.previewInGrid) {
+                if (best) physicalItem.previewInGrid(null);
+                else physicalItem.previewInGrid(cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y);
+            }
             if (pull) {
                 // Anywhere but another slot the part comes out; its slot stays put.
                 ghost.classList.toggle('is-removing', !best
@@ -96691,6 +97266,8 @@ extendClass(HomeStationUI, {
             window.removeEventListener('pointercancel', cancel, true);
             document.removeEventListener('keydown', esc, true);
             if (ghost) ghost.remove();
+            if (typeof physicalItem !== 'undefined' && physicalItem.previewInGrid) physicalItem.previewInGrid(null);
+            if (cell) cell.classList.remove('is-dragging');
             document.body.classList.remove('hs-part-grabbing');
             if (stage) {
                 stage.classList.remove('is-part-dragging', 'is-part-too-big');
@@ -96707,6 +97284,9 @@ extendClass(HomeStationUI, {
                 if (moved && !back) this.finishHangarSlotPull(pull, slotEl, !slotEl, e);
                 return;
             }
+            // Inventory item dropped back into the grid: move it there.
+            if (moved && !slotEl && ghost && ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.dropInGrid
+                && physicalItem.dropInGrid(this, cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y)) return;
             if (!moved && cell.classList.contains('is-equipped')) {
                 this.toggleHangarPartDetails(cell); // plain click on an assigned part: expand the row
             } else if (!moved) {

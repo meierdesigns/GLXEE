@@ -22,14 +22,34 @@ extendClass(ShipAssetLoader, {
         return String(shipId);
     },
 
-    /** Deterministic 0..count-1 variant index for one hull part, from the ship's shape seed. */
-    hullShapeVariantIndex(shapeSeed, segId, count) {
+    /**
+     * Deterministic 0..count-1 variant index for one hull part, from the
+     * ship's shape seed. With a faction style, the pick comes from that
+     * faction's focus pool (style.focus.parts) so default ships read as
+     * their faction's doctrine; the player's own pick still overrides it.
+     */
+    hullShapeVariantIndex(shapeSeed, segId, count, factionStyle = null) {
         if (typeof factionShipStyles === 'undefined' || !factionShipStyles.hash) return 0;
+        const focusPool = this.focusVariantPool(factionStyle, segId);
+        if (focusPool.length) return focusPool[factionShipStyles.hash(String(shapeSeed) + '|' + segId) % focusPool.length];
         // Seeded picks stay inside the original style pool so adding new
         // (unlockable) styles never changes how existing ships look.
         const legacy = { front: 3, back: 3, center: 2 }[segId] || 8;
         const pool = Math.max(1, Math.min(count, legacy));
         return factionShipStyles.hash(String(shapeSeed) + '|' + segId) % pool;
+    },
+
+    /** Variant indices a faction's focus allows for one part (front / center / back / wing*), or []. */
+    focusVariantPool(factionStyle, segId) {
+        const parts = factionStyle && factionStyle.focus && factionStyle.focus.parts;
+        if (!parts) return [];
+        const isWing = /^wing/.test(String(segId || ''));
+        const ids = parts[isWing ? 'wing' : segId];
+        if (!Array.isArray(ids) || !ids.length) return [];
+        const names = isWing
+            ? this.wingShapeVariants.map((v) => v.id)
+            : this.bodyShapeVariantLabels(segId);
+        return ids.map((id) => names.indexOf(id)).filter((i) => i >= 0);
     },
 
     /**

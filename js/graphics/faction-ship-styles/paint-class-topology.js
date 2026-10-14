@@ -229,9 +229,15 @@ extendClass(FactionShipStyles, {
             .map((v) => v.toString(16).padStart(2, '0')).join('');
     },
 
-    /** Indexed pixel colors for a faction (edge / hull / accent). */
+    /**
+     * Indexed pixel colors for a faction: the hull-part palette once the
+     * part builders are up (edge / hull / accent plus their shade and light
+     * tones, 1–7), else edge / hull / accent only.
+     */
     buildFactionColors(factionId) {
         const style = this.getFactionStyle(factionId);
+        const loader = this.partLoader ? this.partLoader() : null;
+        if (loader && loader.buildHullPartPalette) return loader.buildHullPartPalette(null, 0, style);
         const base = style.hull || '#808080';
         return {
             0: 'transparent',

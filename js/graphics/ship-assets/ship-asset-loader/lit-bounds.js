@@ -238,7 +238,7 @@ extendClass(ShipAssetLoader, {
         const factionStyle = this.resolvePlayerFactionStyle(shipModel);
         const shapeSeed = this.resolveHullShapeSeed(shipModel);
         const override = this.resolveSegmentVariantOverride(shipModel, seg.id);
-        const variant = override != null ? override : this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id));
+        const variant = override != null ? override : this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id), factionStyle);
         const key = [seg.id, seg.x, seg.y, seg.width, seg.height, resW, resH, variant, shapeSeed, factionStyle ? factionStyle.silhouette : ''].join('|');
         if (!this._bodyLitCache) this._bodyLitCache = new Map();
         if (this._bodyLitCache.has(key)) return this._bodyLitCache.get(key);
@@ -341,19 +341,13 @@ extendClass(ShipAssetLoader, {
      * of the wing frame (0 = front, 1 = aft). Return null for no wing there.
      */
     /**
-     * Seeded default wing shape. A faction may restrict the pool
-     * (style.wingVariants, by id) — e.g. Voidborn wings always sweep back.
-     * A shape the player picks in the hangar still overrides this.
+     * Seeded default wing shape, drawn from the faction's focus pool
+     * (style.focus.parts.wing, by id) — e.g. Kronax claws rake forward,
+     * Machine wings are missile racks. A shape the player picks in the
+     * hangar still overrides this.
      */
     defaultWingVariant(shapeSeed, factionStyle) {
-        const variants = this.wingShapeVariants;
-        const allowed = factionStyle && Array.isArray(factionStyle.wingVariants)
-            ? factionStyle.wingVariants.map((id) => variants.findIndex((v) => v.id === id)).filter((i) => i >= 0)
-            : [];
-        if (allowed.length && typeof factionShipStyles !== 'undefined' && factionShipStyles.hash) {
-            return allowed[factionShipStyles.hash(String(shapeSeed) + '|wingLeft') % allowed.length];
-        }
-        return this.hullShapeVariantIndex(shapeSeed, 'wingLeft', variants.length);
+        return this.hullShapeVariantIndex(shapeSeed, 'wingLeft', this.wingShapeVariants.length, factionStyle);
     },
 
     get wingShapeVariants() {

@@ -114,7 +114,7 @@ extendClass(ProfileSelectionManager, {
         setHtml(`
             ${stepperHtml}
             <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
-                ${pickFaction ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
+                ${pickFaction || startStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
                 ${pickFaction ? '' : swatchesHtml + inputHtml}
                 ${create && !pickFaction ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${pickFaction ? swatchesHtml : ''}

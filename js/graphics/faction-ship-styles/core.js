@@ -53,8 +53,15 @@ class FactionShipStyles {
                 silhouette: 'modular',
                 // Balanced line fighter: even bands, straight mid wings.
                 anatomy: { front: { x: 1, y: 1 }, center: { x: 1.1, y: 1 }, back: { x: 1.1, y: 1 }, wing: { x: 1, y: 0.9 } },
+                // Balanced all-rounder: steady line ship, armoured rim, gun on the axis.
+                focus: {
+                    role: 'line',
+                    parts: { front: ['POINTED', 'STEPPED'], center: ['SLAB', 'PANELED'], back: ['BLOCK', 'NOTCHED'], wing: ['delta', 'plank', 'ddelta'] },
+                    armor: 1,
+                    hardpoints: 'center'
+                },
                 defaultWeapons: ['laser'],
-                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails'
+                prompt: 'stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military line ship, armoured plate rim, straight wings and twin parallel engines'
             },
             kronax: {
                 id: 'kronax',
@@ -65,8 +72,15 @@ class FactionShipStyles {
                 silhouette: 'spikes',
                 // Raider: long ram nose, slim body, wide swept blades.
                 anatomy: { front: { x: 0.8, y: 1.4 }, center: { x: 0.85, y: 1 }, back: { x: 0.9, y: 0.8 }, wing: { x: 1.35, y: 1.05 } },
+                // Close-range brawler: needle body, forward claws, twin claw lances, one big thruster.
+                focus: {
+                    role: 'brawler',
+                    parts: { front: ['NEEDLE', 'ARROWHEAD', 'FORKED'], center: ['SLIM', 'KEEL'], back: ['FLARE', 'FAN'], wing: ['hook', 'razor', 'forward'] },
+                    armor: 0,
+                    hardpoints: 'twinNose'
+                },
                 defaultWeapons: ['claw_beam'],
-                prompt: 'diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating'
+                prompt: 'diagonal claw blades raking forward, needle ram nose with twin claw lances, slim chevron spike hull, one oversized thruster, brutal raider construction and serrated external plating'
             },
             voidborn: {
                 id: 'voidborn',
@@ -75,12 +89,19 @@ class FactionShipStyles {
                 accent: '#f09cff',
                 engine: this.sharedEngine,
                 silhouette: 'rings',
-                // Default wings sweep back (tips aft), never forward.
-                wingVariants: ['delta', 'swept', 'razor'],
                 // Ring body: stubby nose, broad core, tall narrow arcs.
                 anatomy: { front: { x: 0.9, y: 0.7 }, center: { x: 1.3, y: 1.2 }, back: { x: 0.8, y: 0.8 }, wing: { x: 0.8, y: 1.3 } },
+                // Evasive trickster: compact pod, crescent wings floating apart
+                // from the hull (they sweep back, never forward).
+                focus: {
+                    role: 'evasive',
+                    parts: { front: ['BULB', 'POINTED'], center: ['HOURGLASS', 'BARREL'], back: ['WAIST', 'TAPER'], wing: ['crescent', 'swept', 'razor'] },
+                    armor: 0,
+                    hardpoints: 'center',
+                    wingGap: true
+                },
                 defaultWeapons: ['wave'],
-                prompt: 'broken ring arcs, hollow center gap, incomplete crescent silhouette, ancient alien geometry, asymmetric void apertures and floating segmented armor'
+                prompt: 'broken ring arcs, hollow center gap, compact pod hull, crescent wings floating detached from the body, ancient alien geometry, void apertures and floating segmented armor'
             },
             pirate: {
                 id: 'pirate',
@@ -91,8 +112,16 @@ class FactionShipStyles {
                 silhouette: 'scrap',
                 // Salvage hauler: heavy engine block, short stubby wings.
                 anatomy: { front: { x: 1.1, y: 0.85 }, center: { x: 1.1, y: 1 }, back: { x: 1.35, y: 1.2 }, wing: { x: 0.85, y: 1 } },
+                // Opportunist: wide salvage hauler with gun pods welded to the
+                // wing tips for a wide fan of fire.
+                focus: {
+                    role: 'opportunist',
+                    parts: { front: ['SHOVEL', 'BLUNT'], center: ['BARREL', 'RIBBED'], back: ['STUB', 'SKIRT'], wing: ['stub', 'box', 'plank', 'twin'] },
+                    armor: 0,
+                    hardpoints: 'wingTips'
+                },
                 defaultWeapons: ['spread'],
-                prompt: 'asymmetric L-block salvage, offset junk plates, uneven scrap silhouette, improvised welded wreckage, mismatched armor and exposed machinery'
+                prompt: 'wide salvage hauler, shovel nose, gun pods welded to stubby wing tips, offset junk plates, improvised welded wreckage, mismatched armor and exposed machinery'
             },
             machine: {
                 id: 'machine',
@@ -103,9 +132,16 @@ class FactionShipStyles {
                 silhouette: 'circuit',
                 // Forge drone: blocky, wide at every band.
                 anatomy: { front: { x: 1.2, y: 0.9 }, center: { x: 1.2, y: 1.1 }, back: { x: 1.2, y: 1 }, wing: { x: 1.1, y: 1.1 } },
+                // Sustained-fire grinder: armoured forge block, wings as missile racks.
+                focus: {
+                    role: 'grinder',
+                    parts: { front: ['BLUNT', 'SHOVEL'], center: ['SLAB', 'RIBBED'], back: ['BLOCK', 'NOTCHED'], wing: ['ladder', 'box', 'twin'] },
+                    armor: 2,
+                    hardpoints: 'racks'
+                },
                 // Machine family (see getFactionWeaponAffinity): missile / pierce.
                 defaultWeapons: ['missile'],
-                prompt: 'orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels'
+                prompt: 'armoured forge block, thick double plate rim, wings slotted as missile racks, notched right-angle circuit traces, precise machine fabrication and glowing circuit channels'
             }
         };
     }
@@ -284,6 +320,16 @@ class FactionShipStyles {
             out[part] = { x: amp(base[part].x), y: amp(base[part].y) };
         });
         return out;
+    }
+
+    /**
+     * The faction's combat focus as hull language, shared by player parts
+     * and enemy ships: { role, parts: {front, center, back, wing}, armor,
+     * hardpoints, wingGap }. Part pools are style labels / wing ids.
+     */
+    getFactionFocus(factionId) {
+        const style = this.styles[this.normalizeFaction(factionId)];
+        return (style && style.focus) || null;
     }
 
     /** Global faction-difference factor for the hull builders (see styleStrength). */

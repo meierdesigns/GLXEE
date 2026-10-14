@@ -23,10 +23,35 @@
         "y": 1.05
       }
     },
+    "focus": {
+      "role": "brawler",
+      "parts": {
+        "front": [
+          "NEEDLE",
+          "ARROWHEAD",
+          "FORKED"
+        ],
+        "center": [
+          "SLIM",
+          "KEEL"
+        ],
+        "back": [
+          "FLARE",
+          "FAN"
+        ],
+        "wing": [
+          "hook",
+          "razor",
+          "forward"
+        ]
+      },
+      "armor": 0,
+      "hardpoints": "twinNose"
+    },
     "defaultWeapons": [
       "claw_beam"
     ],
-    "prompt": "diagonal claw blades, chevron spike hull, aggressive angled silhouette, brutal raider construction, reinforced armor wedges and serrated external plating",
+    "prompt": "diagonal claw blades raking forward, needle ram nose with twin claw lances, slim chevron spike hull, one oversized thruster, brutal raider construction and serrated external plating",
     "styleStrength": 2
   },
   "gui": {

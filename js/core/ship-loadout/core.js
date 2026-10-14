@@ -118,6 +118,31 @@ class ShipLoadoutManager {
         return 0;
     }
 
+    /** Inventory a hull starts with [cols, rows]: the light interceptor 4 x 2 up to the heavy freighter 6 x 3. */
+    inventoryStart(shipId) {
+        return { player_interceptor: [4, 2], player_scrap: [5, 2], player_assault: [4, 3], player_heavy: [6, 3] }[String(shipId || '')] || [4, 2];
+    }
+
+    /** Inventory growth per frame level by hull: fast hulls grow slowly, freighters fast. */
+    inventoryGrowth(shipId) {
+        return { player_interceptor: 0.25, player_scrap: 0.5, player_assault: 0.5, player_heavy: 0.75 }[String(shipId || '')] || 1;
+    }
+
+    /**
+     * Inventory grid of a ship. Start size from the start profile (hull + kit); each growth step adds
+     * a column up to 8, then a row. Steps = frame level x growth (hull + start profile).
+     */
+    getInventoryGrid(shipId) {
+        const p = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const e = p && p.shipUpgrades && p.shipUpgrades[String(shipId || '')];
+        const growth = e && Number(e.invGrowth) > 0 ? Number(e.invGrowth) : this.inventoryGrowth(shipId);
+        const start = e && Array.isArray(e.invStart) ? e.invStart : this.inventoryStart(shipId);
+        const c0 = Math.max(1, Math.min(8, Number(start[0]) || 4)), r0 = Math.max(1, Number(start[1]) || 2);
+        const steps = Math.floor(this.getFrameLevel(shipId) * growth);
+        const cols = Math.min(8, c0 + steps);
+        return { cols, rows: Math.min(6, r0 + Math.max(0, steps - (cols - c0))) };
+    }
+
     /**
      * Slot caps after frame upgrades.
      * Each frame level adds +1 to weapons → defenses → abilities (rotating).

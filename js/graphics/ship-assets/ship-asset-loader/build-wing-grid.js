@@ -62,10 +62,15 @@ extendClass(ShipAssetLoader, {
                 this.gridFillRect(g, left ? cols - 1 - c : c, r0, 1, r1 - r0, 2);
             });
         }
+        const focus = this.factionFocus(factionStyle);
+        // Pirate gun pods: a blunt block welded onto the wing tip.
+        if (focus.hardpoints === 'wingTips') this.addWingTipPod(g, left);
         // The root side joins the hull or its connection: leave it open so
         // no dark seam line runs across the joint (worst on a turned wing).
         this.outlineGridEdges(g, left ? 'right' : 'left');
-        this.applyFactionPlating(g, silhouette, 1, left);
+        this.applyFactionPlating(g, silhouette, 1, left, false, focus.armor, left ? 'right' : 'left');
+        // Machine missile racks: rows of dark launch tubes across the span.
+        if (focus.hardpoints === 'racks') this.addWingMissileRacks(g, left);
         // Flap seam: a darker line a couple of voxels in from the trailing
         // edge over the outer span, where a real wing's control surface is.
         for (let c = 0; c < cols; c++) {
@@ -102,6 +107,53 @@ extendClass(ShipAssetLoader, {
         return g;
     },
 
+    /** The faction's focus ({ armor, hardpoints, wingGap, … }), {} without one. */
+    factionFocus(factionStyle) {
+        return (factionStyle && factionStyle.focus) || {};
+    },
+
+    /** Outermost wing column that holds hull (tip side), or -1. */
+    wingTipColumn(g, left) {
+        const cols = g[0].length;
+        for (let i = 0; i < cols; i++) {
+            const c = left ? i : cols - 1 - i;
+            if (g.some((row) => row[c])) return c;
+        }
+        return -1;
+    },
+
+    /** Gun pod at the wing tip: a solid block taller than the tip itself. */
+    addWingTipPod(g, left) {
+        const rows = g.length;
+        const cols = g[0].length;
+        const tipC = this.wingTipColumn(g, left);
+        if (tipC < 0 || cols < 5 || rows < 5) return;
+        const rs = [];
+        for (let r = 0; r < rows; r++) if (g[r][tipC]) rs.push(r);
+        const mid = rs.length ? Math.round((rs[0] + rs[rs.length - 1]) / 2) : Math.round(rows / 2);
+        const podW = Math.max(2, Math.round(cols * 0.18));
+        const podH = Math.max(4, Math.round(rows * 0.6));
+        const c0 = left ? tipC : tipC - podW + 1;
+        const r0 = Math.max(0, Math.min(rows - podH, mid - Math.round(podH * 0.6)));
+        this.gridFillRect(g, c0, r0, podW, podH, 2);
+    },
+
+    /** Missile racks: a lattice of dark launch tubes inside the wing plate. */
+    addWingMissileRacks(g, left) {
+        const rows = g.length;
+        const cols = g[0].length;
+        if (cols < 6 || rows < 6) return;
+        const hull = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && g[r][c] !== 0 && g[r][c] !== 1;
+        for (let c = 0; c < cols; c++) {
+            const span = left ? cols - 1 - c : c;   // 0 at the root
+            if (span < 2 || span % 3 !== 1) continue;
+            for (let r = 0; r < rows; r++) {
+                if (r % 3 !== 1) continue;
+                if (hull(r, c) && hull(r - 1, c) && hull(r + 1, c) && hull(r, c - 1) && hull(r, c + 1)) g[r][c] = 1;
+            }
+        }
+    },
+
     /** Number of shape variants available for a given body-band segment id. */
     bodyShapeVariantCount(segId) {
         return this.bodyShapeVariantLabels(segId).length;
@@ -132,7 +184,7 @@ extendClass(ShipAssetLoader, {
         if (variantOverride != null) {
             shapeVariant = variantOverride;
         } else {
-            shapeVariant = this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id));
+            shapeVariant = this.hullShapeVariantIndex(shapeSeed, seg.id, this.bodyShapeVariantCount(seg.id), factionStyle);
         }
         const colors = this.buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle);
         let grid;
@@ -176,7 +228,7 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 0, false, true);
+        this.applyFactionPlating(g, silhouette, 0, false, true, this.factionFocus(factionStyle).armor);
         // Hull footprint: accent stamps below may only land on the hull.
         const hullMask = g.map((row) => row.map((v) => v !== 0));
         const capW = Math.max(1, Math.round(cols * 0.2));
@@ -254,7 +306,7 @@ extendClass(ShipAssetLoader, {
             this.gridFillRect(g, c0, r, width, 1, 2);
         }
         this.outlineGridEdges(g);
-        this.applyFactionPlating(g, silhouette, 3, false, true);
+        this.applyFactionPlating(g, silhouette, 3, false, true, this.factionFocus(factionStyle).armor);
         // Hull footprint: accent stamps below may only land on the hull.
         const hullMask = g.map((row) => row.map((v) => v !== 0));
         // Engine block layout is a faction trait — the shape variant only

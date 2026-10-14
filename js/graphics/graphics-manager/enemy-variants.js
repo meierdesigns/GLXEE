@@ -8,6 +8,16 @@
 // reused every frame.
 
 const ENEMY_LIVERIES = ['plain', 'spine', 'twin', 'nose', 'tips', 'band', 'chevron', 'split'];
+// Paint jobs each faction's doctrine would wear (first = escort default):
+// Terran unit bands, Kronax war paint, Voidborn bare / faint spine,
+// Pirate mismatched halves and tips, Machine trace lines.
+const FACTION_LIVERIES = {
+    terran: ['plain', 'band', 'twin'],
+    kronax: ['plain', 'chevron', 'nose'],
+    voidborn: ['plain', 'spine'],
+    pirate: ['plain', 'split', 'tips'],
+    machine: ['plain', 'spine', 'twin']
+};
 const ENEMY_VARIANT_CACHE_MAX = 400;
 const ENEMY_AREAS = ['back', 'wings', 'nose', 'center'];
 
@@ -19,23 +29,25 @@ extendClass(GraphicsManager, {
         if (seed == null) seed = enemy.variantSeed = (Math.random() * 0xffffffff) >>> 0;
         const r = (n) => ((seed >>> n) & 255) / 255;
         // Champions always carry a paint job; escorts are sometimes plain.
-        const liv = ENEMY_LIVERIES[(seed % (ENEMY_LIVERIES.length - (enemy.champion ? 1 : 0))) + (enemy.champion ? 1 : 0)];
+        const pool = FACTION_LIVERIES[String(enemy.faction || '').toLowerCase()] || ENEMY_LIVERIES;
+        const liv = pool[(seed % (pool.length - (enemy.champion ? 1 : 0))) + (enemy.champion ? 1 : 0)];
         enemy._variant = {
             seed: seed,
             livery: liv,
             // Small hue / brightness / saturation drift keeps the faction readable.
-            hue: Math.round((r(3) - 0.5) * 36),
+            hue: Math.round((r(3) - 0.5) * 16),
             light: 0.86 + r(11) * 0.28,
             sat: 0.8 + r(19) * 0.45,
             paint: r(7) < 0.5 ? 'accent' : (r(7) < 0.8 ? 'light' : 'dark'),
             // Per-area styles (nose / back / wings / center): each hull area
-            // gets its own colour shift so the sections read as separate parts.
+            // gets its own shade so the sections read as separate parts — a
+            // small hue step only, wide shifts turned ships into another faction.
             areas: ENEMY_AREAS.map((a, i) => {
                 const h = Math.imul(seed ^ (0x9e3779b9 * (i + 1)), 0x85ebca6b) >>> 0;
                 const q = (n) => ((h >>> n) & 255) / 255;
                 return {
                     id: a,
-                    hue: Math.round((q(0) - 0.5) * 120),
+                    hue: Math.round((q(0) - 0.5) * 24),
                     light: 0.7 + q(8) * 0.55,
                     sat: 0.7 + q(16) * 0.7
                 };

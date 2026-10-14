@@ -243,11 +243,49 @@ extendClass(HomeStationUI, {
                 moved = true;
                 ghost = document.createElement('div');
                 ghost.className = 'hs-hangar-part-ghost';
-                if (iconEl) ghost.appendChild(iconEl.cloneNode(true));
-                // Start at the cursor; otherwise the transform transition slides it in from the top-left corner.
-                ghost.style.left = `${Math.round(e.clientX)}px`;
-                ghost.style.top = `${Math.round(e.clientY)}px`;
                 document.body.appendChild(ghost);
+                // Map viewport px to the ghost's own layout px (the page may be zoomed or scaled).
+                ghost.style.cssText = 'left:0;top:0;margin:0;';
+                const o = ghost.getBoundingClientRect();
+                ghost.style.left = '100px';
+                const k = (ghost.getBoundingClientRect().left - o.left) / 100 || 1;
+                ghost._place = (x, y) => {
+                    ghost.style.left = `${(x - o.left) / k}px`;
+                    ghost.style.top = `${(y - o.top) / k}px`;
+                };
+                const itemBody = cell && cell.querySelector('.hs-item-body');
+                if (itemBody) {
+                    // Physical inventory item: lift the bare object, held where it was grabbed.
+                    const r = cell.getBoundingClientRect();
+                    const s = r.width / Math.max(1, cell.offsetWidth);
+                    const wrap = document.createElement('div');
+                    wrap.className = 'hs-slot-picker hs-bay-inv';
+                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:0 0;transform:scale(${s / k});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
+                    const clone = cell.cloneNode(true);
+                    clone.classList.remove('is-dragging');
+                    clone.style.width = '100%';
+                    clone.style.height = '100%';
+                    // Only the object itself: no cell frame, background or labels.
+                    clone.className = 'hs-pick-cell';
+                    clone.style.border = '0';
+                    clone.style.background = 'none';
+                    clone.style.boxShadow = 'none';
+                    clone.style.outline = '0';
+                    clone.querySelectorAll('.hs-pick-size, .hs-pick-ico').forEach((n) => n.remove());
+                    wrap.appendChild(clone);
+                    ghost.appendChild(wrap);
+                    ghost.classList.add('is-item');
+                    ghost.style.width = `${r.width / k}px`;
+                    ghost.style.height = `${r.height / k}px`;
+                    ghost._grab = { x: startX - r.left, y: startY - r.top };
+                    ghost._half = { x: r.width / 2, y: r.height / 2 };
+                    cell.classList.add('is-dragging');
+                } else {
+                    if (iconEl) ghost.appendChild(iconEl.cloneNode(true));
+                    ghost.style.margin = '';
+                }
+                // Start at the cursor; otherwise the transform transition slides it in from the top-left corner.
+                ghost._place(e.clientX - (ghost._grab ? ghost._grab.x : 0), e.clientY - (ghost._grab ? ghost._grab.y : 0));
                 document.body.classList.add('hs-part-grabbing');
                 if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
             }
@@ -269,9 +307,13 @@ extendClass(HomeStationUI, {
             }
             setTarget(best);
             const p = bestPt || { x: e.clientX, y: e.clientY };
-            ghost.style.left = `${Math.round(p.x)}px`;
-            ghost.style.top = `${Math.round(p.y)}px`;
+            const off = !ghost._grab ? { x: 0, y: 0 } : best ? ghost._half : ghost._grab;
+            ghost._place(p.x - off.x, p.y - off.y);
             ghost.classList.toggle('is-snapped', !!best);
+            if (ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.previewInGrid) {
+                if (best) physicalItem.previewInGrid(null);
+                else physicalItem.previewInGrid(cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y);
+            }
             if (pull) {
                 // Anywhere but another slot the part comes out; its slot stays put.
                 ghost.classList.toggle('is-removing', !best
@@ -290,6 +332,8 @@ extendClass(HomeStationUI, {
             window.removeEventListener('pointercancel', cancel, true);
             document.removeEventListener('keydown', esc, true);
             if (ghost) ghost.remove();
+            if (typeof physicalItem !== 'undefined' && physicalItem.previewInGrid) physicalItem.previewInGrid(null);
+            if (cell) cell.classList.remove('is-dragging');
             document.body.classList.remove('hs-part-grabbing');
             if (stage) {
                 stage.classList.remove('is-part-dragging', 'is-part-too-big');
@@ -306,6 +350,9 @@ extendClass(HomeStationUI, {
                 if (moved && !back) this.finishHangarSlotPull(pull, slotEl, !slotEl, e);
                 return;
             }
+            // Inventory item dropped back into the grid: move it there.
+            if (moved && !slotEl && ghost && ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.dropInGrid
+                && physicalItem.dropInGrid(this, cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y)) return;
             if (!moved && cell.classList.contains('is-equipped')) {
                 this.toggleHangarPartDetails(cell); // plain click on an assigned part: expand the row
             } else if (!moved) {

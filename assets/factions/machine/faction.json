@@ -23,10 +23,34 @@
         "y": 1.1
       }
     },
+    "focus": {
+      "role": "grinder",
+      "parts": {
+        "front": [
+          "BLUNT",
+          "SHOVEL"
+        ],
+        "center": [
+          "SLAB",
+          "RIBBED"
+        ],
+        "back": [
+          "BLOCK",
+          "NOTCHED"
+        ],
+        "wing": [
+          "ladder",
+          "box",
+          "twin"
+        ]
+      },
+      "armor": 2,
+      "hardpoints": "racks"
+    },
     "defaultWeapons": [
       "missile"
     ],
-    "prompt": "orthogonal circuit grid, notched right-angle traces, forge-node silhouette, precise machine fabrication, modular panels and glowing circuit channels",
+    "prompt": "armoured forge block, thick double plate rim, wings slotted as missile racks, notched right-angle circuit traces, precise machine fabrication and glowing circuit channels",
     "styleStrength": 2
   },
   "gui": {

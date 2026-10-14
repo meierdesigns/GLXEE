@@ -637,26 +637,6 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 .galaxy-map-embedded .gm-map-stage .galaxy-map-panel-ship {
     width: 100%;
 }
-@media (max-width: 900px) {
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar {
-        flex-wrap: wrap;
-    }
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet {
-        flex: 1 1 100%;
-        min-width: 0;
-        border-right: 0;
-        border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
-    }
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack {
-        flex: 1 1 55%;
-        max-width: none;
-        border-right: 0;
-    }
-    .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-actions {
-        flex: 1 1 40%;
-        max-width: none;
-    }
-}
 
 /* Nebula layers: slow breathing + a few map units of drift, per layer offset. */
 /* No nebula animation: inside the SVG it repainted the whole map every frame. */

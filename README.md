@@ -736,6 +736,7 @@ be reviewed or reverted independently.
 | 63H | Viewport-fit split | `viewport-fit` parts under 500 lines |
 | 63I | Viewport-fit scope | Parts share `window.vfFitScope` instead of globals |
 | 63J | Runtime performance | Cached terrain rows and layers, pixel-written layers, cheaper hangar preview |
+| 64C | Faction and hangar integration | Faction hull topology, ship variants, profile kits, hangar physical items, tooltips, and loadout presentation |
 | 64A | Hangar and selection polish | Remove the redundant hangar area bar; stabilize faction-styled planet selection indicators and zoom rendering |
 | 64B | Hangar inventory | Inventory panel, physical items, kind filters, equip / hover animations, compact tooltips |
 | 64C | Ship hulls | Faction hull builders, paint topology, voxel grids, lit bounds, shield hull |

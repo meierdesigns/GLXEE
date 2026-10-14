@@ -253,7 +253,8 @@ class UiTooltipManager {
             return;
         }
         // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
-        const invPanel = anchor.closest('.hs-bay-inv');
+        // (Start setup inventory sits in a right sidebar: its tips open left, toward the middle.)
+        const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
             const b = invPanel.getBoundingClientRect();
             let sl = b.right + 20;

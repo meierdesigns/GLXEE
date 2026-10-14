@@ -23,10 +23,34 @@
         "y": 0.9
       }
     },
+    "focus": {
+      "role": "line",
+      "parts": {
+        "front": [
+          "POINTED",
+          "STEPPED"
+        ],
+        "center": [
+          "SLAB",
+          "PANELED"
+        ],
+        "back": [
+          "BLOCK",
+          "NOTCHED"
+        ],
+        "wing": [
+          "delta",
+          "plank",
+          "ddelta"
+        ]
+      },
+      "armor": 1,
+      "hardpoints": "center"
+    },
     "defaultWeapons": [
       "laser"
     ],
-    "prompt": "stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military construction, exposed service panels and clean docking rails",
+    "prompt": "stepped rectangular modular plates, brick segment hull, orthogonal block silhouette, disciplined military line ship, armoured plate rim, straight wings and twin parallel engines",
     "styleStrength": 2
   },
   "gui": {

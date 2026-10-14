@@ -138,9 +138,10 @@ npm run icons:preview   # render icon previews
 
 Run the server from the repository root.
 
-`GLXEE-itch-runtime.zip` is the trimmed itch.io runtime package: it contains
-only files reachable from `index.html`, CSS, JavaScript dependencies, and game
-assets (395 archive entries).
+The repository itself is the itch.io runtime package: the GitHub download
+contains only the game entry point, runtime code, CSS, and game assets
+(982 tracked files). README media and development-only archive/package sources
+are excluded from the runtime tree.
 README screenshots, documentation graphics, development tools, and package
 sources stay in the repository but are excluded from the upload.
 

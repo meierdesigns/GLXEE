@@ -13917,8 +13917,17 @@ extendClass(ShipLoadoutManager, {
         const deg = Math.max(-180, Math.min(180, Number(degrees) || 0));
         if (!seg || Math.abs(deg) < 0.001) return { x: x, y: y };
         const isLeft = seg.id === 'wingLeft';
-        const px = isLeft ? seg.x + seg.width : seg.x;
-        const py = seg.y + seg.height / 2;
+        let px = isLeft ? seg.x + seg.width : seg.x;
+        let py = seg.y + seg.height / 2;
+        // The art turns about the root of its lit pixels (see renderProceduralWing), not the frame edge.
+        try {
+            const ldr = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+            const mdl = typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastModel : null;
+            if (ldr && ldr.wingAttachPoint && mdl && mdl.layout) {
+                const ap = ldr.wingAttachPoint(seg, mdl, (ldr._voxelRef && ldr._voxelRef.scale) || homeStationUI._hangarLastScale || 1);
+                if (ap && isFinite(ap.x) && isFinite(ap.y)) { px = ap.x; py = ap.y; }
+            }
+        } catch (e) { /* keep the frame pivot */ }
         const a = deg * Math.PI / 180 * (isLeft ? -1 : 1);
         const dx = x - px;
         const dy = y - py;
@@ -15037,7 +15046,7 @@ extendClass(ShipLoadoutManager, {
      * type (returns it unchanged when already inside one, or when the layout
      * has none of those areas). Returns { nx, ny, area }.
      */
-    clampToSlotArea(kind, nx, ny, layout) {
+    clampToSlotArea(kind, nx, ny, layout, rectOnly) {
         const lw = Math.max(1, layout.width || 1);
         const lh = Math.max(1, layout.height || 1);
         const allowed = this.getSlotAreas(kind);
@@ -15051,25 +15060,28 @@ extendClass(ShipLoadoutManager, {
         const model = typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastModel : null;
         const rot = (layout.loadout && layout.loadout.wingRotation) || 0;
         segs.forEach((s) => {
-            if ((s.id === 'wingLeft' || s.id === 'wingRight') && loader && loader.wingLitCells && model && model.layout) {
-                const lit = loader.wingLitCells(s, model, typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastScale || 1 : 1);
+            const isWing = s.id === 'wingLeft' || s.id === 'wingRight';
+            if (!rectOnly && loader && model && model.layout && (isWing ? loader.wingLitCells : loader.bodyLitCells)) {
+                // The art is voxelised at the fit scale (draw-hangar-bay), so the lit pixels must be read at that scale too.
+                const sc = (loader._voxelRef && loader._voxelRef.scale) || (typeof homeStationUI !== 'undefined' ? homeStationUI._hangarLastScale || 1 : 1);
+                const lit = isWing ? loader.wingLitCells(s, model, sc) : loader.bodyLitCells(s, model, sc);
                 if (lit && lit.pts.length) {
-                    const q = this.rotateOnWing(s, -rot, nx * lw, ny * lh);
+                    const q = isWing ? this.rotateOnWing(s, -rot, nx * lw, ny * lh) : { x: nx * lw, y: ny * lh };
                     let bp = null, bd = Infinity;
                     lit.pts.forEach((p) => { const d = Math.hypot(p[0] - q.x, p[1] - q.y); if (d < bd) { bd = d; bp = p; } });
                     // Inside a lit cell: keep the exact point.
                     const at = bd <= lit.cell * 0.75 ? q : { x: bp[0], y: bp[1] };
-                    const g = this.rotateOnWing(s, rot, at.x, at.y);
+                    const g = isWing ? this.rotateOnWing(s, rot, at.x, at.y) : at;
                     const d = Math.hypot(g.x / lw - nx, g.y / lh - ny);
                     if (d < bestD) { bestD = d; best = { nx: g.x / lw, ny: g.y / lh, area: s.id }; }
                     return;
                 }
             }
-            // Keep a little inside the edge so the marker sits on the part.
-            const x0 = (s.x + Math.min(1, s.width * 0.2)) / lw;
-            const x1 = (s.x + s.width - Math.min(1, s.width * 0.2)) / lw;
-            const y0 = (s.y + Math.min(1, s.height * 0.2)) / lh;
-            const y1 = (s.y + s.height - Math.min(1, s.height * 0.2)) / lh;
+            // The whole area is placeable, edge pixels included.
+            const x0 = s.x / lw;
+            const x1 = (s.x + s.width) / lw;
+            const y0 = s.y / lh;
+            const y1 = (s.y + s.height) / lh;
             const cx = Math.max(x0, Math.min(x1, nx));
             const cy = Math.max(y0, Math.min(y1, ny));
             const d = Math.hypot(cx - nx, cy - ny);
@@ -15949,8 +15961,8 @@ extendClass(ShipLoadoutManager, {
     const proto = ShipLoadoutManager.prototype;
     // Offset from the centreline (share of the area's width) below which a
     // socket snaps onto the centreline and becomes a single mount.
-    // Generous on purpose: a fifth of the area's width either side.
-    const SNAP_OFF = 0.2;
+    // Small: only the centreline itself snaps; every other pixel of the area takes a mirrored pair.
+    const SNAP_OFF = 0.06;
 
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // Default wing spot: about a third out from the hull root.
@@ -15967,7 +15979,7 @@ extendClass(ShipLoadoutManager, {
             out[String(Math.max(0, Math.round(Number(k) || 0)))] = {
                 area: area,
                 split: area === 'wing' ? true : !!m.split,
-                off: clamp(Number(m.off) || 0, 0, 0.45),
+                off: clamp(Number(m.off) || 0, 0, 0.5),
                 ny: clamp(m.ny == null ? 0.5 : Number(m.ny) || 0, 0, 1),
                 // Wing mounts: spot along the left wing from its tip (0) to
                 // the hull root (1); the right wing mirrors it.
@@ -16042,7 +16054,8 @@ extendClass(ShipLoadoutManager, {
         if (!layout) return null;
         const lw = Math.max(1, layout.width || 1);
         const lh = Math.max(1, layout.height || 1);
-        const c = this.clampToSlotArea('weapon', nx, ny, layout);
+        // Already snapped onto lit pixels by the drag; this layout is rebuilt, so only keep it inside the area.
+        const c = this.clampToSlotArea('weapon', nx, ny, layout, true);
         if (!c || !c.area) return null;
         if (c.area === 'wingLeft' || c.area === 'wingRight') {
             // Into the left wing's own (unrotated) frame; the right wing is
@@ -16062,12 +16075,16 @@ extendClass(ShipLoadoutManager, {
         if (c.area !== 'front' && c.area !== 'center') return null;
         const seg = (layout.segments || []).find((s) => s.id === c.area);
         if (!seg) return null;
-        const off = Math.abs(c.nx * lw - (seg.x + seg.width / 2)) / Math.max(1, seg.width);
+        // Measured from the hull axis, the same one weaponBodySpot places the gun on.
+        let lo = Infinity, hi = -Infinity;
+        (layout.segments || []).forEach((sg) => { lo = Math.min(lo, sg.x); hi = Math.max(hi, sg.x + sg.width); });
+        const mid = isFinite(lo) && hi > lo ? (lo + hi) / 2 : seg.x + seg.width / 2;
+        const off = Math.abs(c.nx * lw - mid) / Math.max(1, seg.width);
         const split = off > SNAP_OFF;
         return {
             area: c.area,
             split: split,
-            off: split ? clamp(off, 0.25, 0.45) : 0,
+            off: split ? clamp(off, SNAP_OFF, 0.5) : 0,
             ny: clamp((c.ny * lh - seg.y) / Math.max(1, seg.height), 0, 1)
         };
     };
@@ -16145,7 +16162,7 @@ extendClass(ShipLoadoutManager, {
 
     // Dropping an empty weapon socket also sets that slot's mount.
     const baseAnchor = proto.setEmptySlotAnchor;
-    proto.setEmptySlotAnchor = function (shipId, kind, index, nx, ny) {
+    proto.setEmptySlotAnchor = function (shipId, kind, index, nx, ny, screenLayout) {
         const before = this.getLoadout(shipId).slotAnchors;
         const prev = before && before[kind] && before[kind][String(Math.max(0, Math.round(Number(index) || 0)))];
         const res = baseAnchor.call(this, shipId, kind, index, nx, ny);
@@ -16159,7 +16176,8 @@ extendClass(ShipLoadoutManager, {
         const cls = this.resolveModelClass(shipId);
         const core = this.getCoreSize(cls, null);
         const caps = this.getSlotCaps(shipId, cls);
-        const layout = this.buildLayout(core.width, core.height, Object.assign({}, L,
+        // The anchor is normalized to the layout on screen, so read it back against that same layout.
+        const layout = screenLayout || this.buildLayout(core.width, core.height, Object.assign({}, L,
             { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const mount = this.weaponMountAt(layout, nx, ny);
         if (!mount) return res;
@@ -39376,11 +39394,20 @@ var UiTooltipManager = class UiTooltipManager {
         // as a small table; plain tips stay a single text block.
         const head = anchor && anchor.getAttribute && anchor.getAttribute('data-ui-tip-head');
         tip.classList.toggle('ui-tooltip-rich', !!head);
+        tip.classList.toggle('ui-tooltip-compact', !!(anchor && anchor.hasAttribute && anchor.hasAttribute('data-ui-tip-compact')));
         if (head) {
             tip.textContent = '';
             const h = document.createElement('div');
             h.className = 'ui-tooltip-head';
-            h.textContent = head;
+            // Item cells show their part icon in the tooltip only (the cell itself shows just the object).
+            const ico = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
+            if (ico && ico.src) {
+                const im = document.createElement('img');
+                im.src = ico.src; im.alt = ''; im.draggable = false;
+                im.style.cssText = 'width:20px;height:20px;image-rendering:pixelated;vertical-align:middle;margin-right:8px';
+                h.appendChild(im);
+            }
+            h.appendChild(document.createTextNode(head));
             tip.appendChild(h);
             String(text).split('\n').forEach((line) => {
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
@@ -39395,7 +39422,21 @@ var UiTooltipManager = class UiTooltipManager {
                     v.textContent = m[2];
                     row.append(k, v);
                 } else {
-                    row.textContent = line;
+                    // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" -> the same stat icons as the hangar rows.
+                    const sm = line.match(/^DMG (\S+) · SPD (\S+) · (\S+)$/);
+                    const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+                    if (sm && ir) {
+                        row.className = 'ui-tooltip-stats';
+                        row.style.cssText = 'display:flex;gap:14px;align-items:center';
+                        [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], ['shotRapid', sm[3], '#ffa04a']].forEach(([key, val, col]) => {
+                            const s = document.createElement('span');
+                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
+                            row.appendChild(s);
+                        });
+                    } else {
+                        row.textContent = line;
+                    }
                 }
                 tip.appendChild(row);
             });
@@ -39440,6 +39481,18 @@ var UiTooltipManager = class UiTooltipManager {
             const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
             tip.classList.add('side-right');
             tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
+            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            return;
+        }
+        // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
+        const invPanel = anchor.closest('.hs-bay-inv');
+        if (invPanel) {
+            const b = invPanel.getBoundingClientRect();
+            let sl = b.right + 20;
+            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, b.left - tw - 20);
+            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
+            tip.classList.add('side-right');
+            tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
             tip.style.top = Math.round(toCss(st, 'y')) + 'px';
             return;
         }
@@ -40645,19 +40698,9 @@ extendClass(FactionShipStyles, {
                 break;
             }
             case 'scrap': {
-                // Asymmetric L-blocks — chop one side, pad the other
-                const leftHeavy = (seed & 1) === 0;
-                if (leftHeavy) {
-                    this.fillRect(g, cx - 6, 6, 2, 2, 1);
-                    this.fillRect(g, cx - 5, 7, 3, 1, 2);
-                    this.clearPx(g, cx + 4, 4);
-                    this.clearPx(g, cx + 5, 5);
-                } else {
-                    this.fillRect(g, cx + 4, 6, 2, 2, 1);
-                    this.fillRect(g, cx + 2, 7, 3, 1, 2);
-                    this.clearPx(g, cx - 5, 4);
-                    this.clearPx(g, cx - 6, 5);
-                }
+                // Salvage L-blocks, mirrored so the hull stays symmetric
+                this.fillRect(g, cx - 6, 6, 2, 2, 1);
+                this.fillRect(g, cx - 5, 7, 3, 1, 2);
                 break;
             }
             case 'circuit': {
@@ -41153,28 +41196,24 @@ extendClass(FactionShipStyles, {
 
     buildPirateHull(d, s, seed) {
         const L = s.len;
-        // Mirror the whole layout per ship so pirates lean either way.
-        const side = (seed & 1) ? 1 : -1;
-        const sx = (c) => (side > 0 ? c : -c - 1);
-        const rect = (c0, c1, r0, r1, v) => {
-            const a = sx(c0), b = sx(c1);
-            d.sRect(Math.min(a, b), Math.max(a, b), r0, r1, v);
-        };
-        // Off-centre main hull, blunt nose.
-        rect(-2, 1, 1, L - 2, 2);
-        rect(-1, 0, 0, 0, 2);
-        rect(-1, -1, 2, 3, 3);                               // cockpit, off-centre
-        // Big bolted-on engine pod on one side.
-        rect(-s.hw, -3, L - 5, L - 1, 2);
-        rect(-s.hw + 1, -4, L - 4, L - 4, 3);                // hazard stripe
-        // Thin strut + gun on the other side.
+        // Salvage look from big bolted-on blocks, but every part is mirrored
+        // on the centre line so the hull stays horizontally symmetric.
+        const rect = (c0, c1, r0, r1, v) => d.mRect(Math.min(c0, c1), Math.max(c0, c1), r0, r1, v);
+        // Blunt-nosed main hull, cockpit on the axis.
+        rect(0, 1, 1, L - 2, 2);
+        rect(0, 0, 0, 0, 2);
+        rect(0, 0, 2, 3, 3);
+        // Twin bolted-on engine pods.
+        rect(s.hw - 3, s.hw - 1, L - 5, L - 1, 2);
+        rect(s.hw - 4, s.hw - 2, L - 4, L - 4, 3);           // hazard stripe
+        // Thin struts + guns.
         if (s.i >= 1) {
             const wr = Math.floor(L * 0.5);
             rect(2, s.hw - 1, wr, wr, 2);
             rect(s.hw - 1, s.hw - 1, wr - 3, wr + 1, 2);
             rect(s.hw - 1, s.hw - 1, wr - 3, wr - 3, 3);     // muzzle
         }
-        // Junk plates from the seed.
+        // Junk plates from the seed (mirrored pairs).
         const n = s.i + 1;
         for (let k = 0; k < n; k++) {
             const h = (seed >>> (k * 5)) & 31;
@@ -41182,7 +41221,7 @@ extendClass(FactionShipStyles, {
             const r = 1 + ((h >> 2) % Math.max(1, L - 4));
             rect(c, c + (h & 1), r, r + 1, 2);
         }
-        return [{ dx: sx(-s.hw + 1), y: L }, { dx: sx(-1), y: L - 1 }];
+        return [{ dx: s.hw - 2, y: L }, { dx: 0, y: L - 1 }];
     },
 
     buildMachineHull(d, s) {
@@ -43381,7 +43420,8 @@ extendClass(GraphicsManager, {
         const sharedCell = (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.cell)
             ? window.combatVoxels.cell()
             : null;
-        const MAX_CELL = sharedCell || 8;
+        // Whole px only: detectShieldVoxelGrid sizes an array with it (a fractional or NaN cell threw RangeError).
+        const MAX_CELL = sharedCell > 0 && isFinite(sharedCell) ? Math.max(1, Math.ceil(sharedCell)) : 8;
         const gapCells = 1;  // freiraum between hull and shield rim
         const thickCells = Math.max(1, Math.round(((opts && opts.thick) || 2) / 2));
         const pulse = (opts && opts.pulse != null) ? opts.pulse : 1;
@@ -55817,7 +55857,18 @@ var parallaxManager = new ParallaxManager();
      * Read cascade BG without toggling vf-bg-parallax-ready
      * (toggling ready paints ::before = hard snap).
      */
+    var bgReadCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
     function readHostBackground(host) {
+        // Each read inserts a probe and forces a style recalc; one faction switch asks the same host several times in a row.
+        var R = document.documentElement, bz = document.getElementById('vf-bezel');
+        var sig = [host.className, host.dataset && host.dataset.hsTab, R.getAttribute('data-pf'), R.getAttribute('data-vf-faction'), R.getAttribute('data-faction'), bz && bz.getAttribute('data-faction')].join('|');
+        var now = performance.now(), hit = bgReadCache && bgReadCache.get(host);
+        if (hit && hit.sig === sig && now - hit.t < 250) return { img: hit.v.img, bgColor: hit.v.bgColor };
+        var v = readHostBackgroundNow(host);
+        if (bgReadCache) bgReadCache.set(host, { sig: sig, t: now, v: v });
+        return v;
+    }
+    function readHostBackgroundNow(host) {
         var probe = document.createElement('div');
         var cls = String(host.className || '')
             .replace(/\bvf-bg-parallax-host\b/g, '')
@@ -80129,6 +80180,38 @@ extendClass(ProfileSelectionManager, {
         return `<div class="pfx-tile"><span class="pfx-tile-ico">${iconHtml || ''}</span><span class="pfx-tile-label">${label}</span><b class="pfx-tile-val">${value}</b></div>`;
     },
     pfxGalaxyMap(gid, color) {
+        // Deterministic per galaxy: building it (planet generation + 70 stars + lanes) on every faction pick cost ~15 ms.
+        const key = gid + '|' + color;
+        const cache = this._pfxMapCache || (this._pfxMapCache = {});
+        if (cache[key]) return cache[key];
+        const out = this.buildPfxGalaxyMap(gid, color);
+        if (out.nodes) cache[key] = out;                                  // an uncharted galaxy may still be generating: retry next time
+        return out;
+    },
+    /** Builds the other factions' galaxy maps while the browser is idle, so picking them later costs nothing. */
+    prewarmPfxMaps() {
+        if (this._pfxWarmQueued) return;
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        if (!pcm || !pcm.getFactionMeta) return;
+        const todo = this.getFactionIds().filter((f) => {
+            const m = pcm.getFactionMeta(f), g = m && pcm.getGalaxy ? pcm.getGalaxy(m.homeGalaxy || 'milky_way') : null;
+            return m && !(this._pfxMapCache || {})[(m.homeGalaxy || 'milky_way') + '|' + ((g && g.baseColor) || this.getFactionColor(f))];
+        });
+        const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 120));
+        const next = () => {
+            this._pfxWarmQueued = false;
+            const f = todo.shift();
+            if (!f || !this.overlay) return;
+            try {
+                const m = pcm.getFactionMeta(f), gid = m.homeGalaxy || 'milky_way', g = pcm.getGalaxy ? pcm.getGalaxy(gid) : null;
+                this.pfxGalaxyMap(gid, (g && g.baseColor) || this.getFactionColor(f));
+            } catch (e) { /* warm-up only */ }
+            if (todo.length) { this._pfxWarmQueued = true; idle(next); }
+        };
+        this._pfxWarmQueued = true;
+        idle(next);
+    },
+    buildPfxGalaxyMap(gid, color) {
         const pcm = planetConfigManager;
         let map = (pcm.getGalaxyMap && pcm.getGalaxyMap(gid)) || {};
         if (!(map.nodes && map.nodes.length) && pcm.ensureGalaxyArrivalContent) {
@@ -80189,6 +80272,8 @@ extendClass(ProfileSelectionManager, {
             <div class="pfx-tiles">${this.pfxTile(ir ? ir.imgHtml('menuGalaxies', 22, '', acc, false) : '', 'PLANETS', gm.nodes || (g && g.planetIds ? g.planetIds.length : '?'))}
                 ${this.pfxTile(ir ? ir.imgHtml('menuFactions', 22, '', acc, false) : '', 'START', String(startPlanet || 'ARRIVAL SECTOR').toUpperCase())}
                 ${this.pfxTile(ir ? ir.imgHtml('statShield', 22, '', acc, false) : '', 'CONTROL', 'HELD')}</div></div>`;
+
+        this.prewarmPfxMaps();
 
         // PLAYSTYLE: description, five rating bars, a difficulty line.
         const R = this.FACTION_RATINGS[id] || this.FACTION_RATINGS.terran;
@@ -90623,7 +90708,7 @@ extendClass(HomeStationUI, {
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
                         <div class="hs-hangar-bay hs-panel">
-                            <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
+                            <div class="hs-hangar-bay-stage${this._bayInv ? ' is-inventory' : ''}" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-bay-zoom" role="group" aria-label="Zoom">
                                     <input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">
@@ -90636,6 +90721,8 @@ extendClass(HomeStationUI, {
                                         <path d="M4 0h1v1h1v1H3V1h1zM4 2h1v5H4zM0 4h7v1H0zM1 3h1v3H1zM7 3h1v3H7zM8 4h1v1H8zM3 7h3v1H5v1H4V8H3zM2 4h5v1H2z"/>
                                     </svg>
                                 </button>
+                                <button type="button" class="hs-bay-invtoggle" data-bay-inv aria-pressed="${!!this._bayInv}" title="Switch between the ship and the part inventory">${this._bayInv ? 'HIDE INVENTORY' : 'INVENTORY'}</button>
+                                ${this._bayInv && typeof physicalItem !== 'undefined' ? physicalItem.bayInventoryHtml(this) : ''}
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
                                     <svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>
                                     ${slotHtml}
@@ -91985,7 +92072,10 @@ extendClass(HomeStationUI, {
         // The fit scale is sticky per ship and bay size: editing a part
         // grows or shrinks the bounding box, and re-fitting on every change
         // popped the whole ship to a new size.
-        const fitKey = shipId + '|' + w + '|' + h;
+        // Inventory open on the left: the ship is fitted and centred in the part of the bay that stays visible.
+        const invPx = this._bayInv ? Math.min(428, Math.floor(w * 0.6)) : 0;
+        const wv = w - invPx, cxView = invPx + wv / 2;
+        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx;
         // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
         // hangar UI (clicking an area, releasing a drag) lays the canvas out at slightly different sizes first, and
         // re-fitting on each of those threw the user's zoom and pan away.
@@ -92002,11 +92092,11 @@ extendClass(HomeStationUI, {
             if (vis) {
                 const padTop = Math.max(110, Math.floor(h * 0.22));
                 const padBottom = Math.max(40, Math.floor(h * 0.15));
-                const padSide = Math.max(80, Math.floor(w * 0.24));
+                const padSide = Math.max(40, Math.floor(wv * 0.24));
                 const bw = vis.w / fitScale;
                 const bh = vis.h / fitScale;
                 const s = Math.max(2, Math.min(
-                    Math.floor((w - padSide * 2) / bw),
+                    Math.floor((wv - padSide * 2) / bw),
                     Math.floor((h - padTop - padBottom) / bh),
                     10
                 ));
@@ -92017,7 +92107,7 @@ extendClass(HomeStationUI, {
                 const cy = (vis.y + vis.h / 2) / fitScale * s;
                 this._hangarBayZoom = 1;
                 this._hangarZoomTarget = 1;
-                this._hangarBayPanX = Math.round(w / 2 - (ox0 + cx));
+                this._hangarBayPanX = Math.round(cxView - (ox0 + cx));
                 this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (oy0 + cy));
             }
         }
@@ -92033,7 +92123,7 @@ extendClass(HomeStationUI, {
                 const s = baseScale * z;
                 const cx = (vis.x + vis.w / 2) / baseScale * s;
                 const cy = (vis.y + vis.h / 2) / baseScale * s;
-                this._hangarBayPanX = Math.round(w / 2 - (Math.floor((w - mw * s) / 2) + cx));
+                this._hangarBayPanX = Math.round(cxView - (Math.floor((w - mw * s) / 2) + cx));
                 this._hangarBayPanY = Math.round(padTop + (h - padTop - padBottom) / 2 - (Math.floor((h - mh * s) / 2) + cy));
                 this._hangarLastOx = null;
             }
@@ -95254,10 +95344,7 @@ extendClass(HomeStationUI, {
             ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED')
             : 'SLOT CLEARED';
         if (sourceEl) this.playButtonResult(sourceEl, true, label);
-        else {
-            if (this.showStatusToast) this.showStatusToast(label);
-            this.createUI();
-        }
+        else this.createUI(); // no success toast: the slot / inventory animation already shows it
     },
 });
 
@@ -95708,7 +95795,7 @@ extendClass(HomeStationUI, {
             // The installed part sits inside its slot at its own footprint (never bigger than the slot).
             const partLv = sl.id && slm.getPartSizeLevel ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
             const inner = sl.id
-                ? `<span class="hs-slotview-part" style="width:${dims[partLv][0]}px;height:${dims[partLv][1]}px">${img}</span>`
+                ? `<span class="hs-slotview-part" style="width:${dims[partLv][0]}px;height:${dims[partLv][1]}px">${typeof physicalItem !== 'undefined' ? physicalItem.wrap(sl.kind, sl.id, dims[partLv][0] - 4, dims[partLv][1] - 4, color[sl.kind], img) : img}</span>`
                 : img;
             return `<span class="hs-slotview-cell${sl.id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${tip}" style="--pk-c:${color[sl.kind]};--svw:${dims[lvl][0]}px;--svh:${dims[lvl][1]}px" role="button" tabindex="0" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" aria-label="${name}">${inner}<span class="hs-slotview-size">${'SML'[partLv]}</span></span>`;
         };
@@ -95821,7 +95908,7 @@ extendClass(HomeStationUI, {
                 const span = [[1, 1], [1, 2], [2, 2]][lv];
                 const here = it.kind === kind;
                 return `<button type="button" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${here && equipped[id] && id !== current ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
-                    `<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
+                    `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
                     `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
             }).join('');
         };
@@ -96479,7 +96566,7 @@ extendClass(HomeStationUI, {
     startHangarPartDrag(cell, downEvent, pull) {
         const stage = this.overlay && this.overlay.querySelector('#hsHangarBayStage');
         const kind = pull ? pull.kind : cell.getAttribute('data-part-kind');
-        const iconEl = pull ? pull.iconEl : cell.querySelector('.hs-hangar-part-icon img');
+        const iconEl = pull ? pull.iconEl : cell.querySelector('.hs-hangar-part-icon img, .hs-pick-ico img');
         const SNAP_PX = 64;
         const startX = downEvent.clientX;
         const startY = downEvent.clientY;
@@ -97110,7 +97197,8 @@ extendClass(HomeStationUI, {
                         drag.kind,
                         drag.index,
                         snappedNx,
-                        ny
+                        ny,
+                        lastModel && lastModel.layout
                     );
                     // Say why the slot does not follow into a full area.
                     const reason = res && res.ok === false ? res.reason : null;
@@ -102745,7 +102833,13 @@ extendClass(StartScreenManager, {
 // StartScreenManager methods, split from start-screen.js.
 extendClass(StartScreenManager, {
     createMainMenuUI(content) {
-        content.classList.add('start-screen-retro');
+        content.classList.add('start-screen-retro', 'start-screen-main');
+        // Home station of the active (else most recent) pilot as the backdrop.
+        const pmBase = typeof profileManager !== 'undefined' ? profileManager : null;
+        const basePilot = pmBase && pmBase.getRecentProfiles
+            ? ((pmBase.hasActiveProfile() && pmBase.getActiveProfile()) || pmBase.getRecentProfiles(1)[0] || null)
+            : null;
+        this.mountStationBackdrop(content, basePilot);
         this.rebuildVisibleMenu();
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
@@ -102925,6 +103019,12 @@ extendClass(StartScreenManager, {
                     location.reload();
                 }
             };
+            const pilot = pm.getRecentProfiles(5).find((x) => x.id === row.getAttribute('data-profile-id'));
+            const bd = () => this._stationBackdrop;
+            row.addEventListener('mouseenter', () => { if (bd()) bd().hover(pilot); });
+            row.addEventListener('focus', () => { if (bd()) bd().hover(pilot); });
+            row.addEventListener('mouseleave', () => { if (bd()) bd().hover(null); });
+            row.addEventListener('blur', () => { if (bd()) bd().hover(null); });
             row.addEventListener('click', pick);
             row.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -109052,3 +109152,267 @@ var planetSVGManager = new PlanetSVGManager();
 
 
 
+
+/* --- js/ui/start-screen/station-backdrop.js?v=1 --- */
+"use strict";
+
+// Start screen background: the pilot's home station as pixel art.
+// Look follows the profile's faction; size/detail follows its station upgrade
+// levels. Hovering a pilot on the scoreboard previews that pilot's station.
+class StartStationBackdrop {
+    constructor() {
+        this.W = 320;
+        this.H = 180;
+        this.palettes = {
+            terran: { hull: '#3A6EA5', edge: '#1a3048', accent: '#7ec8ff' },
+            kronax: { hull: '#C44B2F', edge: '#4a1810', accent: '#ff7a4a' },
+            machine: { hull: '#2F8F6B', edge: '#0e3028', accent: '#50e0a8' },
+            pirate: { hull: '#8B6914', edge: '#3a2e08', accent: '#d4a84a' },
+            voidborn: { hull: '#7B2E86', edge: '#3a1238', accent: '#f09cff' }
+        };
+        this.el = document.createElement('div');
+        this.el.className = 'start-station-backdrop';
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = this.W;
+        this.canvas.height = this.H;
+        this.canvas.className = 'start-station-canvas';
+        this.caption = document.createElement('div');
+        this.caption.className = 'start-station-caption';
+        this.el.appendChild(this.canvas);
+        this.el.appendChild(this.caption);
+        this.ctx = this.canvas.getContext('2d');
+        this.baseProfile = null;
+        this.shownKey = null;
+        this.fadeTimer = 0;
+    }
+
+    /** Sum of all station upgrade levels -> 0..5 build stage. */
+    static tierOf(profile) {
+        const ups = (profile && profile.homeStation && profile.homeStation.upgrades) || {};
+        let sum = 0;
+        Object.keys(ups).forEach((k) => { sum += Math.max(0, Number(ups[k]) || 0); });
+        const tier = sum >= 30 ? 5 : sum >= 18 ? 4 : sum >= 9 ? 3 : sum >= 4 ? 2 : sum >= 1 ? 1 : 0;
+        return { sum, tier };
+    }
+
+    /** The station shown when nothing is hovered. */
+    setBase(profile) {
+        this.baseProfile = profile || null;
+        this.show(this.baseProfile);
+    }
+
+    hover(profile) {
+        this.show(profile || this.baseProfile);
+    }
+
+    show(profile) {
+        const faction = String((profile && profile.faction) || 'pirate');
+        const { sum, tier } = StartStationBackdrop.tierOf(profile);
+        const key = `${profile ? profile.id : '-'}|${faction}|${tier}`;
+        if (key === this.shownKey) return;
+        this.shownKey = key;
+        this.caption.textContent = profile
+            ? `${profile.name || 'PILOT'} · ${faction.toUpperCase()} STATION · LV ${sum}`
+            : 'NO PILOT · BASIC OUTPOST';
+        // Quick fade-swap so the change reads as a different station
+        this.canvas.classList.add('is-swapping');
+        clearTimeout(this.fadeTimer);
+        this.fadeTimer = setTimeout(() => {
+            this.draw(faction, tier, profile ? String(profile.id || profile.name) : 'none');
+            this.canvas.classList.remove('is-swapping');
+        }, 110);
+    }
+
+    rngFor(seed) {
+        let h = 2166136261;
+        for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+        return () => {
+            h += 0x6D2B79F5;
+            let t = Math.imul(h ^ (h >>> 15), 1 | h);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    draw(faction, tier, seed) {
+        const pal = this.palettes[faction] || this.palettes.pirate;
+        const c = this.ctx;
+        const rnd = this.rngFor(seed);
+        c.clearRect(0, 0, this.W, this.H);
+        const cx = this.W >> 1;
+        const cy = (this.H >> 1) - 4;
+
+        // deep space: stars (fixed layout) and a planet limb below the station
+        const srnd = this.rngFor('stars');
+        c.fillStyle = '#02040a';
+        c.fillRect(0, 0, this.W, this.H);
+        for (let i = 0; i < 140; i++) {
+            const big = srnd() < 0.12;
+            c.fillStyle = big ? pal.accent : (srnd() < 0.5 ? '#9aa6c8' : '#4a5578');
+            c.fillRect(Math.floor(srnd() * this.W), Math.floor(srnd() * this.H), big ? 2 : 1, big ? 2 : 1);
+        }
+        const pg = c.createRadialGradient(cx, this.H + 150, 150, cx, this.H + 150, 215);
+        pg.addColorStop(0, pal.edge);
+        pg.addColorStop(0.9, pal.hull + '88');
+        pg.addColorStop(1, pal.accent + '00');
+        c.fillStyle = pg;
+        c.fillRect(0, this.H - 70, this.W, 70);
+        // soft faction-colored halo behind the station
+        const g = c.createRadialGradient(cx, cy, 4, cx, cy, 110);
+        g.addColorStop(0, pal.accent + '38');
+        g.addColorStop(1, pal.accent + '00');
+        c.fillStyle = g;
+        c.fillRect(0, 0, this.W, this.H);
+        // the station itself is drawn larger; fewer details need more zoom
+        c.save();
+        c.translate(cx, cy);
+        const zoom = 1.05 - tier * 0.09;
+        c.scale(zoom, zoom);
+        c.translate(-cx, -cy);
+
+        const r = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), w, h); };
+        // block with dark outline, lit top edge and a row of lit windows
+        const block = (x, y, w, h, col) => {
+            r(x - 1, y - 1, w + 2, h + 2, '#05060a');
+            r(x, y, w, h, col || pal.hull);
+            r(x, y, w, 1, pal.accent + '99');
+            r(x, y + h - 1, w, 1, pal.edge);
+            for (let wx = x + 2; wx < x + w - 2; wx += 4) {
+                if (h > 6 && rnd() < 0.7) r(wx, y + (h >> 1), 2, 1, pal.accent);
+            }
+        };
+        const line = (x0, y0, x1, y1, col, th) => {
+            const n = Math.max(1, Math.abs(x1 - x0), Math.abs(y1 - y0));
+            for (let i = 0; i <= n; i++) r(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, th, th, col);
+        };
+        const ring = (rad, th, col, gapEvery) => {
+            for (let a = 0; a < 360; a += 1.5) {
+                if (gapEvery && Math.floor(a / 15) % gapEvery === 0) continue;
+                const rad2 = a * Math.PI / 180;
+                r(cx + Math.cos(rad2) * rad, cy + Math.sin(rad2) * rad * 0.82, th, th, col);
+            }
+        };
+        const lights = (n, spread) => {
+            for (let i = 0; i < n; i++) {
+                r(cx + (rnd() - 0.5) * spread, cy + (rnd() - 0.5) * spread * 0.7, 2, 2, rnd() < 0.5 ? pal.accent : '#fff');
+            }
+        };
+        const dockedShip = () => {
+            const sx = cx + 70 + tier * 4, sy = cy + 34;
+            r(sx - 1, sy - 1, 14, 7, '#05060a');
+            r(sx, sy, 12, 5, pal.hull);
+            r(sx + 8, sy + 1, 5, 3, pal.accent);
+            r(sx - 3, sy + 2, 3, 1, '#ffd25a');
+        };
+
+        if (faction === 'terran') {
+            // vertical spine + horizontal truss with habitat blocks
+            const span = 34 + tier * 12;
+            block(cx - 8, cy - 22, 16, 44, pal.hull);
+            block(cx - span, cy - 3, span * 2, 6, pal.edge);
+            for (let i = 0; i <= tier + 1; i++) {
+                const ox = 14 + i * 14;
+                if (ox > span) break;
+                block(cx - ox - 10, cy - 12 - (i & 1) * 6, 10, 12 + (i & 1) * 6, pal.hull);
+                block(cx + ox, cy - 12 - (i & 1) * 6, 10, 12 + (i & 1) * 6, pal.hull);
+            }
+            if (tier >= 2) {
+                [-1, 1].forEach((s) => {
+                    for (let k = 0; k < 2 + (tier >> 1); k++) {
+                        block(cx + s * (span - 8) - 6, cy + 8 + k * 9, 12, 7, '#1d4e86');
+                        r(cx + s * (span - 8) - 6, cy + 8 + k * 9 + 3, 12, 1, pal.accent + '66');
+                    }
+                });
+            }
+            if (tier >= 3) {
+                line(cx, cy - 22, cx, cy - 36 - tier * 2, pal.accent, 1);
+                r(cx - 1, cy - 38 - tier * 2, 3, 3, '#ff4a4a');
+            }
+        } else if (faction === 'kronax') {
+            // armored core with radiating spikes
+            const spikes = 4 + tier * 2;
+            const len = 22 + tier * 9;
+            for (let i = 0; i < spikes; i++) {
+                const a = (i / spikes) * Math.PI * 2 + 0.3;
+                const x1 = cx + Math.cos(a) * len, y1 = cy + Math.sin(a) * len * 0.82;
+                line(cx, cy, x1, y1, '#05060a', 5);
+                line(cx, cy, x1, y1, pal.hull, 3);
+                line(cx + Math.cos(a) * len * 0.5, cy + Math.sin(a) * len * 0.41, x1, y1, pal.accent, 1);
+            }
+            block(cx - 10, cy - 8, 20, 16, pal.hull);
+            r(cx - 4, cy - 3, 8, 6, pal.accent);
+            r(cx - 2, cy - 1, 4, 2, '#fff');
+            if (tier >= 3) ring(len * 0.55, 2, pal.edge, 3);
+        } else if (faction === 'machine') {
+            // circuit grid of nodes joined by traces
+            const nodes = [[0, 0]];
+            const rings = 1 + (tier >> 1) + (tier > 0 ? 1 : 0);
+            for (let rr = 1; rr <= rings; rr++) {
+                const d = rr * 24;
+                [[d, 0], [-d, 0], [0, d * 0.8], [0, -d * 0.8], [d, d * 0.8], [-d, -d * 0.8]].forEach((n) => {
+                    if (rnd() < 0.5 + tier * 0.1) nodes.push(n);
+                });
+            }
+            nodes.forEach((n) => {
+                if (n[0] || n[1]) {
+                    line(cx, cy, cx + n[0], cy + n[1], '#05060a', 3);
+                    line(cx, cy, cx + n[0], cy + n[1], pal.edge, 1);
+                }
+            });
+            nodes.forEach((n, i) => {
+                const s = i === 0 ? 20 : 12;
+                block(cx + n[0] - s / 2, cy + n[1] - s / 2, s, s, i === 0 ? pal.hull : pal.edge);
+                r(cx + n[0] - 1, cy + n[1] - 1, 3, 3, pal.accent);
+            });
+        } else if (faction === 'voidborn') {
+            // concentric rings around a glowing core
+            const radii = [14, 26, 38, 50].slice(0, 1 + Math.min(3, (tier + 1) >> 1));
+            radii.forEach((rad, i) => {
+                ring(rad, 4, '#05060a', 0);
+                ring(rad, 2, i % 2 ? pal.accent : pal.hull, 6 + i);
+            });
+            r(cx - 6, cy - 6, 12, 12, '#05060a');
+            r(cx - 4, cy - 4, 8, 8, pal.accent);
+            r(cx - 2, cy - 2, 4, 4, '#fff');
+            for (let k = 0; k < 3 + tier * 2; k++) {
+                const a = rnd() * Math.PI * 2, d = 20 + rnd() * (30 + tier * 6);
+                r(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.82, 3, 3, pal.hull);
+            }
+        } else {
+            // pirate: scrap pile of mismatched hull plates
+            const n = 7 + tier * 5;
+            block(cx - 12, cy - 8, 24, 16, pal.hull);
+            for (let i = 0; i < n; i++) {
+                const w = 8 + Math.floor(rnd() * 14), h = 5 + Math.floor(rnd() * 9);
+                const x = cx + (rnd() - 0.5) * (50 + tier * 22) - w / 2;
+                const y = cy + (rnd() - 0.5) * (30 + tier * 11) - h / 2;
+                block(x, y, w, h, rnd() < 0.5 ? pal.hull : pal.edge);
+            }
+            for (let i = 0; i < 2 + (tier >> 1); i++) {
+                const ax = cx + (rnd() - 0.5) * 40;
+                line(ax, cy - 14, ax + (rnd() - 0.5) * 20, cy - 34 - tier * 2, '#05060a', 2);
+            }
+            r(cx - 2, cy - 2, 4, 4, '#ff4a4a');
+        }
+
+        lights(6 + tier * 4, 70 + tier * 14);
+        if (tier >= 3) dockedShip();
+        c.restore();
+    }
+}
+
+extendClass(StartScreenManager, {
+    /** Mounts the station backdrop behind the main menu content. */
+    mountStationBackdrop(content, base) {
+        if (!this._stationBackdrop) this._stationBackdrop = new StartStationBackdrop();
+        const bd = this._stationBackdrop;
+        // Insert once the content is attached to the start-screen host.
+        queueMicrotask(() => {
+            if (!content.parentNode) return;
+            content.parentNode.insertBefore(bd.el, content);
+        });
+        bd.shownKey = null;
+        bd.setBase(base);
+        return bd;
+    }
+});

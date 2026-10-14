@@ -246,9 +246,11 @@
 
     let builtAccent = null;
     const buildKey = () => readAccent() + '|' + readFaction();
+    const valuesByKey = new Map();                                   // finished cursor sets per accent|faction: switching back needs no re-render
     const buildValues = () => {
         const accent = readAccent();
         builtAccent = buildKey();
+        if (valuesByKey.has(builtAccent)) { values = valuesByKey.get(builtAccent); return; }
         const cache = new Map();
         values = {};
         Object.keys(KEYWORDS).forEach((kw) => {
@@ -256,6 +258,7 @@
             if (!cache.has(sprite)) cache.set(sprite, renderSprite(sprite, accent));
             values[kw] = `url(${cache.get(sprite)}) ${sprite.hot[0] * SCALE} ${sprite.hot[1] * SCALE}, ${kw}`;
         });
+        valuesByKey.set(builtAccent, values);
     };
 
     /** Themed cursor value for a keyword, or the input unchanged. */
@@ -330,7 +333,11 @@
         if (force !== true && builtAccent !== null && buildKey() === builtAccent) return;
         buildValues();
         writeBase();
-        patchAllSheets();
+        // Theme change: re-point only the rules already known (a full scan of every stylesheet rule cost ~10 ms per faction switch).
+        // New sheets are picked up by the <head> observer below.
+        if (force !== true && patchedRules.size) {
+            patchedRules.forEach((meta, rule) => { if (values[meta.kw]) rule.style.setProperty('cursor', values[meta.kw], meta.prio); });
+        } else patchAllSheets();
     };
 
     const init = () => {

@@ -49,7 +49,18 @@
      * Read cascade BG without toggling vf-bg-parallax-ready
      * (toggling ready paints ::before = hard snap).
      */
+    var bgReadCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
     function readHostBackground(host) {
+        // Each read inserts a probe and forces a style recalc; one faction switch asks the same host several times in a row.
+        var R = document.documentElement, bz = document.getElementById('vf-bezel');
+        var sig = [host.className, host.dataset && host.dataset.hsTab, R.getAttribute('data-pf'), R.getAttribute('data-vf-faction'), R.getAttribute('data-faction'), bz && bz.getAttribute('data-faction')].join('|');
+        var now = performance.now(), hit = bgReadCache && bgReadCache.get(host);
+        if (hit && hit.sig === sig && now - hit.t < 250) return { img: hit.v.img, bgColor: hit.v.bgColor };
+        var v = readHostBackgroundNow(host);
+        if (bgReadCache) bgReadCache.set(host, { sig: sig, t: now, v: v });
+        return v;
+    }
+    function readHostBackgroundNow(host) {
         var probe = document.createElement('div');
         var cls = String(host.className || '')
             .replace(/\bvf-bg-parallax-host\b/g, '')

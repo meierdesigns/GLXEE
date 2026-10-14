@@ -26,6 +26,38 @@ extendClass(ProfileSelectionManager, {
         return `<div class="pfx-tile"><span class="pfx-tile-ico">${iconHtml || ''}</span><span class="pfx-tile-label">${label}</span><b class="pfx-tile-val">${value}</b></div>`;
     },
     pfxGalaxyMap(gid, color) {
+        // Deterministic per galaxy: building it (planet generation + 70 stars + lanes) on every faction pick cost ~15 ms.
+        const key = gid + '|' + color;
+        const cache = this._pfxMapCache || (this._pfxMapCache = {});
+        if (cache[key]) return cache[key];
+        const out = this.buildPfxGalaxyMap(gid, color);
+        if (out.nodes) cache[key] = out;                                  // an uncharted galaxy may still be generating: retry next time
+        return out;
+    },
+    /** Builds the other factions' galaxy maps while the browser is idle, so picking them later costs nothing. */
+    prewarmPfxMaps() {
+        if (this._pfxWarmQueued) return;
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        if (!pcm || !pcm.getFactionMeta) return;
+        const todo = this.getFactionIds().filter((f) => {
+            const m = pcm.getFactionMeta(f), g = m && pcm.getGalaxy ? pcm.getGalaxy(m.homeGalaxy || 'milky_way') : null;
+            return m && !(this._pfxMapCache || {})[(m.homeGalaxy || 'milky_way') + '|' + ((g && g.baseColor) || this.getFactionColor(f))];
+        });
+        const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 120));
+        const next = () => {
+            this._pfxWarmQueued = false;
+            const f = todo.shift();
+            if (!f || !this.overlay) return;
+            try {
+                const m = pcm.getFactionMeta(f), gid = m.homeGalaxy || 'milky_way', g = pcm.getGalaxy ? pcm.getGalaxy(gid) : null;
+                this.pfxGalaxyMap(gid, (g && g.baseColor) || this.getFactionColor(f));
+            } catch (e) { /* warm-up only */ }
+            if (todo.length) { this._pfxWarmQueued = true; idle(next); }
+        };
+        this._pfxWarmQueued = true;
+        idle(next);
+    },
+    buildPfxGalaxyMap(gid, color) {
         const pcm = planetConfigManager;
         let map = (pcm.getGalaxyMap && pcm.getGalaxyMap(gid)) || {};
         if (!(map.nodes && map.nodes.length) && pcm.ensureGalaxyArrivalContent) {
@@ -86,6 +118,8 @@ extendClass(ProfileSelectionManager, {
             <div class="pfx-tiles">${this.pfxTile(ir ? ir.imgHtml('menuGalaxies', 22, '', acc, false) : '', 'PLANETS', gm.nodes || (g && g.planetIds ? g.planetIds.length : '?'))}
                 ${this.pfxTile(ir ? ir.imgHtml('menuFactions', 22, '', acc, false) : '', 'START', String(startPlanet || 'ARRIVAL SECTOR').toUpperCase())}
                 ${this.pfxTile(ir ? ir.imgHtml('statShield', 22, '', acc, false) : '', 'CONTROL', 'HELD')}</div></div>`;
+
+        this.prewarmPfxMaps();
 
         // PLAYSTYLE: description, five rating bars, a difficulty line.
         const R = this.FACTION_RATINGS[id] || this.FACTION_RATINGS.terran;

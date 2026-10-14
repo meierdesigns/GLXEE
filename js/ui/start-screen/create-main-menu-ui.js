@@ -3,7 +3,13 @@
 // StartScreenManager methods, split from start-screen.js.
 extendClass(StartScreenManager, {
     createMainMenuUI(content) {
-        content.classList.add('start-screen-retro');
+        content.classList.add('start-screen-retro', 'start-screen-main');
+        // Home station of the active (else most recent) pilot as the backdrop.
+        const pmBase = typeof profileManager !== 'undefined' ? profileManager : null;
+        const basePilot = pmBase && pmBase.getRecentProfiles
+            ? ((pmBase.hasActiveProfile() && pmBase.getActiveProfile()) || pmBase.getRecentProfiles(1)[0] || null)
+            : null;
+        this.mountStationBackdrop(content, basePilot);
         this.rebuildVisibleMenu();
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
@@ -183,6 +189,12 @@ extendClass(StartScreenManager, {
                     location.reload();
                 }
             };
+            const pilot = pm.getRecentProfiles(5).find((x) => x.id === row.getAttribute('data-profile-id'));
+            const bd = () => this._stationBackdrop;
+            row.addEventListener('mouseenter', () => { if (bd()) bd().hover(pilot); });
+            row.addEventListener('focus', () => { if (bd()) bd().hover(pilot); });
+            row.addEventListener('mouseleave', () => { if (bd()) bd().hover(null); });
+            row.addEventListener('blur', () => { if (bd()) bd().hover(null); });
             row.addEventListener('click', pick);
             row.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;

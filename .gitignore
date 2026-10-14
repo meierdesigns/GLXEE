@@ -40,3 +40,4 @@ tools/asset-gen/bridge.pid
 # Local scratch
 tmp/
 tools/.dev-server-pages.log
+packages/cursed-bridge/implementation/

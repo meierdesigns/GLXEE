@@ -744,7 +744,7 @@ be reviewed or reverted independently.
 | 64E | Repo footprint | Tracked files under 800; local bridge packages and unused sprite dumps ignored |
 | 65A | Faction terrain doctrine | Organic/mechanical floor patterns, faction wall silhouettes, planet+holder blend |
 | 65B | README media restore | Restore `assets/ui/readme-*` banners, shots, strips, and live icon plates for GitHub |
-| 65C | README screenshot refresh | Recapture station, upgrade, galaxy, factions, and Mars combat; cache-bust `-65c` filenames |
+| 65C | README screenshot refresh | Live `-65c` shots; drop unused hero/live plates and stale header media |
 
 The wave commit convention is:
 

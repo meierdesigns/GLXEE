@@ -420,11 +420,11 @@ with a JUMP TO button.
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
 
-<img src="assets/ui/readme-strip-ships-65c.png" alt="Live faction assault hulls from the combat renderer" width="960" />
+<img src="assets/ui/readme-strip-ships-65d.png" alt="Live faction assault hulls from the combat renderer" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-ship-classes-65c.png" alt="Live Terran class ladder — scout assault heavy elite capital" width="960" />
+<img src="assets/ui/readme-strip-ship-classes-65d.png" alt="Live Terran class ladder — scout assault heavy elite capital" width="960" />
 
 </div>
 
@@ -524,7 +524,7 @@ Live captures from the current build (station shell, factions, travel, combat).
 
 <br/>
 
-<img src="assets/ui/readme-strip-ships-65c.png" alt="Live faction hull lineup" width="960" />
+<img src="assets/ui/readme-strip-ships-65d.png" alt="Live faction hull lineup" width="960" />
 
 <br/>
 
@@ -745,6 +745,7 @@ be reviewed or reverted independently.
 | 65A | Faction terrain doctrine | Organic/mechanical floor patterns, faction wall silhouettes, planet+holder blend |
 | 65B | README media restore | Restore `assets/ui/readme-*` banners, shots, strips, and live icon plates for GitHub |
 | 65C | README screenshot refresh | Live `-65c` shots; drop unused hero/live plates and stale header media |
+| 65D | README ship strips | Rebuild faction assault and Terran class strips from live `factionShipStyles` |
 
 The wave commit convention is:
 

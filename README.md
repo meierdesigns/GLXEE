@@ -742,6 +742,7 @@ be reviewed or reverted independently.
 | 64C | Ship hulls | Faction hull builders, paint topology, voxel grids, lit bounds, shield hull |
 | 64D | Start screen | Station backdrop menu, darker backgrounds, raised menu buttons |
 | 64E | Repo footprint | Tracked files under 800; local bridge packages and unused sprite dumps ignored |
+| 65A | Faction terrain doctrine | Organic/mechanical floor patterns, faction wall silhouettes, planet+holder blend |
 
 The wave commit convention is:
 

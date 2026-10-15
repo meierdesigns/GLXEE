@@ -35,7 +35,7 @@ language.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-combat.png" alt="GLXEE combat on Mars — live game screenshot" width="960" />
+<img src="assets/ui/readme-shot-combat-65c.png" alt="GLXEE combat on Mars — live game screenshot" width="960" />
 
 <br/>
 
@@ -43,7 +43,7 @@ language.
 
 <br/>
 
-<img src="assets/ui/readme-shot-factions.png" alt="GLXEE Factions relations screen — live screenshot" width="960" />
+<img src="assets/ui/readme-shot-factions-65c.png" alt="GLXEE Factions relations screen — live screenshot" width="960" />
 
 <br/>
 
@@ -205,7 +205,7 @@ change whether a faction trades and which prices it offers.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-emblems.png" alt="Hi-res faction emblems in the Relations screen" width="960" />
+<img src="assets/ui/readme-shot-emblems-65c.png" alt="Hi-res faction emblems in the Relations screen" width="960" />
 
 <br/>
 
@@ -213,11 +213,11 @@ change whether a faction trades and which prices it offers.
 
 <br/>
 
-<img src="assets/ui/readme-strip-emblems.png" alt="Hand-shaded 32×32 faction emblems at @4x" width="960" />
+<img src="assets/ui/readme-strip-emblems-65c.png" alt="Hand-shaded 32×32 faction emblems at @4x" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-planets.png" alt="Live procedural planets — Mars Jupiter Saturn Neptune Pluto" width="960" />
+<img src="assets/ui/readme-strip-planets-65c.png" alt="Live procedural planets — Mars Jupiter Saturn Neptune Pluto" width="960" />
 
 <br/>
 
@@ -420,11 +420,11 @@ with a JUMP TO button.
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
 
-<img src="assets/ui/readme-strip-ships.png" alt="Live faction assault hulls from the combat renderer" width="960" />
+<img src="assets/ui/readme-strip-ships-65c.png" alt="Live faction assault hulls from the combat renderer" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-ship-classes.png" alt="Live Terran class ladder — scout assault heavy elite capital" width="960" />
+<img src="assets/ui/readme-strip-ship-classes-65c.png" alt="Live Terran class ladder — scout assault heavy elite capital" width="960" />
 
 </div>
 
@@ -432,7 +432,7 @@ with a JUMP TO button.
 
 <div align="center">
 
-<img src="assets/ui/readme-strip-weapons.png" alt="Live weapon icons from iconRenderer" width="960" />
+<img src="assets/ui/readme-strip-weapons-65c.png" alt="Live weapon icons from iconRenderer" width="960" />
 
 <br/>
 
@@ -512,23 +512,23 @@ Live captures from the current build (station shell, factions, travel, combat).
 
 | Home Station | Galaxy travel |
 |:---:|:---:|
-| <img src="assets/ui/readme-shot-station.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy.png" alt="Galaxy travel map" width="460" /> |
+| <img src="assets/ui/readme-shot-station-65c.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy-65c.png" alt="Galaxy travel map" width="460" /> |
 | Upgrade tree | Combat focus |
-| <img src="assets/ui/readme-shot-upgrade.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus.png" alt="Mars combat focus crop" width="460" /> |
+| <img src="assets/ui/readme-shot-upgrade-65c.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus-65c.png" alt="Mars combat focus crop" width="460" /> |
 | Factions (hi-res emblems) | Emblem strip |
-| <img src="assets/ui/readme-shot-factions.png" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
+| <img src="assets/ui/readme-shot-factions-65c.png" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems-65c.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
 
 <br/>
 
-<img src="assets/ui/readme-shot-emblems.png" alt="Relations row — live hi-res emblems" width="960" />
+<img src="assets/ui/readme-shot-emblems-65c.png" alt="Relations row — live hi-res emblems" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-ships.png" alt="Live faction hull lineup" width="960" />
+<img src="assets/ui/readme-strip-ships-65c.png" alt="Live faction hull lineup" width="960" />
 
 <br/>
 
-<img src="assets/ui/readme-strip-planets.png" alt="Live procedural planet lineup" width="960" />
+<img src="assets/ui/readme-strip-planets-65c.png" alt="Live procedural planet lineup" width="960" />
 
 <br/>
 
@@ -744,7 +744,7 @@ be reviewed or reverted independently.
 | 64E | Repo footprint | Tracked files under 800; local bridge packages and unused sprite dumps ignored |
 | 65A | Faction terrain doctrine | Organic/mechanical floor patterns, faction wall silhouettes, planet+holder blend |
 | 65B | README media restore | Restore `assets/ui/readme-*` banners, shots, strips, and live icon plates for GitHub |
-| 65C | README screenshot refresh | Recapture station, upgrade, galaxy, factions, and Mars combat from the live shell |
+| 65C | README screenshot refresh | Recapture station, upgrade, galaxy, factions, and Mars combat; cache-bust `-65c` filenames |
 
 The wave commit convention is:
 

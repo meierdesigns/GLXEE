@@ -39,7 +39,9 @@ extendClass(PlanetConfigManager, {
         const cfg = this.getConfig(planetId);
         if (!cfg || !Array.isArray(cfg.factions)) return [];
         const list = cfg.factions.map(String).filter(Boolean);
-        if (raw || !cfg.galaxyId || !this.getGalaxyControl) return list;
+        // Pirate ambushes and other transient encounters keep their authored
+        // factions — galaxy ownership must not remap them to the local ruler.
+        if (raw || cfg.encounter || !cfg.galaxyId || !this.getGalaxyControl) return list;
         const control = this.getGalaxyControl(cfg.galaxyId);
         const allowed = control.factions.map((f) => f.id);
         if (!allowed.length) return list;
@@ -87,6 +89,7 @@ extendClass(PlanetConfigManager, {
      */
     getHostileFactions(planetId) {
         const all = this.getPlanetFactions(planetId);
+        if (this.isEncounterPlanet && this.isEncounterPlanet(planetId)) return all;
         const own = this.getPlayerFaction();
         if (!own) return all;
         const hostile = all.filter((f) => !this.isFriendlyFaction(f));

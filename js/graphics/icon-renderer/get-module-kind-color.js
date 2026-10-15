@@ -182,7 +182,10 @@ extendClass(IconRenderer, {
     imgHtml(key, size, className, tint, tipLabel) {
         const resTint = this.resourceIconColor(key);
         if (resTint) tint = resTint;
-        const themed = tint === undefined && !resTint;
+        let jsonTint = null;
+        try { if (tint === undefined && typeof IconColors !== 'undefined' && IconColors) jsonTint = IconColors[key] || null; } catch (e) { /* ignore */ }
+        if (jsonTint) tint = jsonTint;
+        const themed = tint === undefined && !resTint && !jsonTint;
         const resolvedTint = tint === undefined ? this.getThemeTint() : tint;
         // HTML UI icons: nearest-neighbor only — no contrast/brightness/saturation remapping
         const packed = this.toDataUrl(key, size || 16, resolvedTint || null, false, false, false);

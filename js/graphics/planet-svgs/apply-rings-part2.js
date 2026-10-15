@@ -153,8 +153,14 @@ extendClass(PlanetSVGManager, {
             if (this.planetsDetailed) this.planetsDetailed = {};
         }
         if (this.planets[id]) return this.planets[id];
+        // Mid-flight ambushes are ship encounters, not planets — never mint a
+        // grey globe for ambush_* (victory used to show that instead of the wreck).
+        if (id.indexOf('ambush_') === 0) return '';
         if (typeof planetConfigManager !== 'undefined') {
-            const cfg = planetConfigManager.getConfig(id);
+            const cfg = planetConfigManager.configs
+                ? planetConfigManager.configs[id]
+                : (planetConfigManager.getConfig && planetConfigManager.getConfig(id));
+            if (cfg && cfg.encounter) return '';
             if (cfg) return this.registerFromConfig(cfg) || '';
         }
         const style = this.namedStyles[id] || 'banded';

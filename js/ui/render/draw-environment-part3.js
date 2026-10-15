@@ -2,6 +2,43 @@
 
 // RenderManager members, continued from draw-environment.js (kept under ~500 lines per file).
 extendClass(RenderManager, {
+    /**
+     * Sparse faction doctrine marks on top of the planet floor: growth pores,
+     * rivets, claw scores or scrap welds — never a full replacement pattern.
+     */
+    terrainFactionTint(env, pal, cx, wr, col, n) {
+        const style = (env && env.style) || 'asteroid';
+        const g = pal.ground;
+        switch (style) {
+            case 'organic': { // Voidborn: glowing pores and soft tissue blotches
+                const h = this.envHash(cx * 3 + 11, wr * 3 + 7);
+                if (h < 0.04) return pal.accent;
+                if (h < 0.09 && n > 0.55) return g[0];
+                return col;
+            }
+            case 'tech': { // Machine: rivet rows and cable ticks
+                const gx = ((cx % 12) + 12) % 12, gy = ((wr % 10) + 10) % 10;
+                if (gx === 0 && gy === 0) return pal.accent;
+                if ((gy === 5 && (gx & 1) === 0) || (gx === 6 && gy > 2 && gy < 8)) return g[1];
+                return col;
+            }
+            case 'spike': { // Kronax: diagonal claw scores
+                if ((((cx + wr * 2) % 11) + 11) % 11 === 0) return pal.craterPit;
+                if (this.envHash(cx, wr + 41) < 0.03) return g[0];
+                return col;
+            }
+            case 'scrap': { // Pirate: irregular weld patches
+                const h = this.envHash(cx >> 1, wr >> 1);
+                if (h < 0.05) return pal.accent;
+                if (h > 0.93) return g[3];
+                return col;
+            }
+            default: { // Terran / rock: sparse survey stakes
+                if ((((cx % 14) + 14) % 14) === 0 && (((wr % 14) + 14) % 14) === 0) return pal.accent;
+                return col;
+            }
+        }
+    },
     drawAnimatedFog(ctx, o) {
         const W = this._fieldW || 240;
         const shared = (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell)

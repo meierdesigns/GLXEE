@@ -24,27 +24,27 @@ extendClass(RenderManager, {
         // Later stages look harsher: darker floor, walls drift towards red,
         // more glowing veins (stageDanger 0..1, kept subtle).
         const danger = obstacleManager.stageDanger ? obstacleManager.stageDanger() : 0;
-        const key = env.base + env.accent + env.surface + (env.planetStyle || '') + '|' + danger.toFixed(2);
+        const key = env.base + env.accent + env.surface + (env.planetStyle || '') + '|'
+            + (env.style || '') + '|' + (env.faction || '') + '|' + danger.toFixed(2);
         if (!this._terrainPal || this._terrainKey !== key) {
             this._terrainKey = key;
             const rock = this.mixColor(env.base, '#7a7f88', 0.25);
-            // Ground: dark, desaturated and cool so it sits far below the
-            // walls; walls: bright, full planet colour — clearly solid.
-            // Planets with a known graphic style keep much more of their colour.
+            // Ground: dark enough to sit under ships, but wide tone steps so
+            // planet / faction floor patterns (plates, biomass, conduits…) read.
             const looked = !!env.planetStyle;
-            const soil = this.mixColor(this.hueShift(rock, 0, looked ? 1.1 : 0.45), '#1a2230', looked ? 0.15 : 0.35);
-            const gt = (looked ? [-0.45, -0.55, -0.65, -0.76] : [-0.62, -0.7, -0.77, -0.84])
-                .map((t) => Math.max(-0.92, t - 0.08 * danger));
+            const soil = this.mixColor(this.hueShift(rock, 0, looked ? 1.15 : 0.55), '#1a2230', looked ? 0.1 : 0.28);
+            const gt = (looked ? [-0.32, -0.48, -0.64, -0.78] : [-0.5, -0.62, -0.74, -0.86])
+                .map((t) => Math.max(-0.92, t - 0.06 * danger));
             const wallBase = this.mixColor(env.base, '#b0402a', 0.14 * danger);
             this._terrainPal = {
                 ground: gt.map((t) => this.shadeColor(soil, t)),
-                craterLit: this.shadeColor(soil, -0.5),
-                craterPit: this.shadeColor(soil, -0.92),
+                craterLit: this.shadeColor(soil, -0.42),
+                craterPit: this.shadeColor(soil, -0.9),
                 wall: [0.55, 0.3, 0.05, -0.2].map((t) => this.shadeColor(this.hueShift(wallBase, 0, 1.2), t)),
-                accent: this.shadeColor(env.accent, 0.3),
+                accent: this.shadeColor(env.accent, 0.35),
                 special: { lava: '#c9501c', ice: '#9fc4d6', void: '#7a3fb8', toxic: '#5f9e24' }[env.surface]
                     || (danger > 0.4 ? this.shadeColor('#c9501c', -0.25) : null),
-                veinMul: 1 + 1.2 * danger
+                veinMul: 1.15 + 1.35 * danger
             };
         }
         const pal = this._terrainPal;
@@ -76,9 +76,11 @@ extendClass(RenderManager, {
         // stage changes); in between they are re-blitted at the new sub-cell phase without being rebuilt.
         const gOffC = offset * GROUND_PARALLAX;
         const lc = this._terrainLayerKey;
+        const dmgEpoch = obstacleManager._terrainDamageEpoch || 0;
         const sameLayers = !!lc && lc.baseRow === baseRow && lc.gBase === Math.floor(gOffC / cell) && lc.cols === cols
             && lc.rowsN === rowsN && lc.cell === cell && lc.W === W && lc.key === this._terrainKey
-            && lc.prof === obstacleManager._terrainProfile && lc.pal === pal && !!this._terrainWallBuf;
+            && lc.prof === obstacleManager._terrainProfile && lc.pal === pal && lc.dmg === dmgEpoch
+            && !!this._terrainWallBuf;
         let groundLayer, overlayLayer, wallLayer;
         if (sameLayers) {
             groundLayer = { canvas: this._terrainBuf, y: (gOffC % cell) - cell };
@@ -148,7 +150,7 @@ extendClass(RenderManager, {
                 for (let cx = 0; cx < cols; cx++) {
                     const n = rc.n[cx];
                     let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
-                    if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.04 : 0.018) * pal.veinMul) col = pal.special;
+                    if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.055 : 0.022) * pal.veinMul) col = pal.special;
                     if (floor === 'craters') {
                         let c = rc.hits[cx];
                         if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
@@ -156,6 +158,8 @@ extendClass(RenderManager, {
                     } else {
                         col = this.terrainFloorCell(floor, pal, cx, wr, n) || col;
                     }
+                    // Faction doctrine speckles the planet crust (organic / mechanical).
+                    col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
                     rowCols[cx] = col;
                 }
                 flushRow(rowCols, y);
@@ -163,10 +167,10 @@ extendClass(RenderManager, {
             // Canyon slope
             batch = overlayBatch;
             curPhase = phase;
-            // Calm the floor: a dark veil keeps its patterns well below the ships' brightness.
+            // Light veil: keep ships readable without washing out floor doctrine.
             curPhase = gPhase;
             for (let r = -1; r * cell + gPhase < H; r++) {
-                pushRun('rgba(2,6,8,0.5)', 0, r * cell + gPhase, cols * cell, cell);
+                pushRun('rgba(2,6,8,0.28)', 0, r * cell + gPhase, cols * cell, cell);
             }
             curPhase = phase;
             const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
@@ -233,7 +237,15 @@ extendClass(RenderManager, {
                                 : ((((cx + wr) % 4) + 4) % 4) < 2 ? pal.accent : '#1a1c22';
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
-                        else if (edge < width - base) col = (env.style === 'tech' && ((wr & 3) < 2)) || env.style === 'organic' ? pal.accent : pal.wall[1];
+                        else if (edge < width - base) {
+                            // Structure band: faction silhouette colour, not plain wall fill.
+                            const st = env.style || 'asteroid';
+                            if (st === 'tech') col = ((wr & 3) < 2) ? pal.accent : mp.lit[1];
+                            else if (st === 'organic') col = ((cx + wr) & 3) ? pal.accent : mp.lit[0];
+                            else if (st === 'spike') col = (edge & 1) ? pal.wall[0] : pal.accent;
+                            else if (st === 'scrap') col = (((wr + edge) % 5) < 2) ? mp.crack || pal.accent : pal.wall[1];
+                            else col = pal.wall[1];
+                        }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
                         const px = cx * cell;
                         if (col === runCol && px === runX + runW) {
@@ -280,7 +292,7 @@ extendClass(RenderManager, {
             overlayLayer = layer('_terrainOverlayBuf', overlayBatch, phase, false);
             wallLayer = layer('_terrainWallBuf', wallBatch, phase, false, true);
             this._terrainLayerKey = { baseRow, gBase: Math.floor(gOffC / cell), cols, rowsN, cell, W, key: this._terrainKey,
-                prof: obstacleManager._terrainProfile, pal };
+                prof: obstacleManager._terrainProfile, pal, dmg: dmgEpoch };
         }
         ctx.save();
         ctx.imageSmoothingEnabled = false;
@@ -415,6 +427,54 @@ extendClass(RenderManager, {
                 if (v < 0.06) return pal.special || pal.accent;
                 if (v < 0.16) return g[1];
                 return g[3];
+            }
+            case 'biomass': { // lumpy organic pods / tissue islands
+                const h = this.envHash(cx >> 1, wr >> 1);
+                const blob = this.envNoise(cx * 0.55, wr * 0.55);
+                if (h < 0.1 && blob > 0.55) return pal.accent;
+                if (blob > 0.72) return g[0];
+                if (blob > 0.55) return g[1];
+                if (blob < 0.28) return pal.craterPit;
+                return g[2];
+            }
+            case 'tendrils': { // branching organic roots across the crust
+                const a = Math.sin(cx * 0.28 + Math.sin(wr * 0.17) * 2.2);
+                const b = Math.cos(wr * 0.22 + Math.sin(cx * 0.11) * 1.8);
+                const v = Math.abs(a * 0.7 + b * 0.55);
+                if (v < 0.08) return pal.special || pal.accent;
+                if (v < 0.18) return g[1];
+                return n > 0.55 ? g[2] : g[3];
+            }
+            case 'spines': { // bone / claw ridge lines (Kronax)
+                const row = ((wr % 7) + 7) % 7;
+                const jag = Math.floor(Math.sin(wr * 0.09) * 2);
+                const v = ((cx + jag) % 5 + 5) % 5;
+                if (row === 0 || row === 1) return v === 0 ? g[0] : pal.craterPit;
+                if (v === 0) return g[1];
+                return n > 0.5 ? g[2] : g[3];
+            }
+            case 'conduits': { // buried pipe runs with joint nodes (Machine / Terran)
+                const gx = ((cx % 10) + 10) % 10, gy = ((wr % 8) + 8) % 8;
+                if ((gy === 2 || gy === 3) && gx > 0 && gx < 9) return gx === 5 ? pal.accent : g[1];
+                if ((gx === 2 || gx === 7) && gy > 0) return g[0];
+                if (gx === 0 || gy === 0) return g[3];
+                return n > 0.55 ? g[2] : g[3];
+            }
+            case 'plating': { // armored deck plates with rivet corners
+                const px = ((cx % 6) + 6) % 6, py = ((wr % 5) + 5) % 5;
+                const off = (Math.floor(wr / 5) & 1) ? 3 : 0;
+                if (py === 0 || ((cx + off) % 6 + 6) % 6 === 0) return g[3];
+                if (px === 1 && py === 1) return pal.accent;
+                return px + py < 3 ? g[0] : n > 0.5 ? g[1] : g[2];
+            }
+            case 'scrapyard': { // welded scrap patches and dark weld seams
+                const h = this.envHash(cx >> 1, (wr >> 1) + 19);
+                const seam = (((cx + wr) % 9) + 9) % 9 === 0;
+                if (seam) return pal.craterPit;
+                if (h < 0.12) return g[0];
+                if (h < 0.22) return pal.accent;
+                if (h < 0.32) return g[3];
+                return n > 0.5 ? g[1] : g[2];
             }
             default:
                 return null;

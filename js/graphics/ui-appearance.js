@@ -110,6 +110,10 @@ class UIAppearanceManager {
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };
+        // Must match the base widths in faction-ship-styles/core.js displaySizeForClass() —
+        // that function is what actually draws enemies, so the slider's px readout has to
+        // agree with the same base table or the two diverge (slider shows a different size
+        // than what's on screen).
         this.enemyBaseWidths = { scout: 36, assault: 48, heavy: 58, elite: 70, capital: 84 };
         this.shotRefWidth = 4;
         this.playerRefWidth = 18;

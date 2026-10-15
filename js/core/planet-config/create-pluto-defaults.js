@@ -198,7 +198,11 @@ extendClass(PlanetConfigManager, {
             resources: this.normalizeResources(data.resources, data.id),
             levelWidth: this.normalizeLevelWidth(data.levelWidth),
             levelHeight: this.normalizeLevelHeight(data.levelHeight),
-            viewZoom: this.normalizeViewZoom(data.viewZoom)
+            viewZoom: this.normalizeViewZoom(data.viewZoom),
+            // Transient mid-flight fights (pirate ambush). Must survive makePlanet
+            // remakes — otherwise getConfig invents a grey stub globe for the id.
+            encounter: !!data.encounter,
+            ambushVariant: data.ambushVariant ? String(data.ambushVariant) : null
         };
     },
 

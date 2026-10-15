@@ -296,8 +296,10 @@ extendClass(ObstacleManager, {
         this.scrollFlowDir = -(this.scrollFlowDir || -1);
         const dir = this.scrollFlowDir; // +1 = left→right, -1 = right→left
         const hSpeed = dir * (0.45 + Math.random() * 0.25 + intensity * 0.15);
-        const vSpeed = this.scrollSpeed() * 0.5;
-        const baseY = H * (0.02 + Math.random() * 0.14);
+        // Most rows fly straight across; spread their entry height over the
+        // whole field instead of a thin top band so obstacles show up
+        // through the middle of the playfield too.
+        const baseY = H * (0.05 + Math.random() * 0.85);
 
         // Walk along the train: group, hole, group, hole ...
         const trainLen = W * (1.0 + Math.random() * 0.4);
@@ -306,6 +308,10 @@ extendClass(ObstacleManager, {
         let spawned = 0;
         while (cursor < trainLen && alive + spawned < OBSTACLE_MAX_ALIVE) {
             const groupSize = 1 + Math.floor(Math.random() * (1.6 + intensity * 1.2));
+            // A minority of groups also drift down/up slightly while flying across.
+            const vSpeed = Math.random() < 0.25
+                ? this.scrollSpeed() * (0.25 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1)
+                : 0;
             const rowY = baseY + (Math.random() - 0.5) * 18;
             let groupEnd = cursor;
             for (let g = 0; g < groupSize; g++) {
@@ -396,7 +402,8 @@ extendClass(ObstacleManager, {
         const prefer = (list, k, i, fallback) => (list && list.length) ? list[(i + off) % list.length] : fallback;
         TERRAIN_ZONES.forEach((z, i) => { zoneMats[z] = prefer(env.materials, 120, i, mats[i % mats.length]); });
         // Floor pattern per area type.
-        const floorIds = ['craters', 'plates', 'dunes', 'cracks', 'grid', 'ridges', 'hex', 'rubble', 'veins'];
+        const floorIds = ['craters', 'plates', 'dunes', 'cracks', 'grid', 'ridges', 'hex', 'rubble', 'veins',
+            'biomass', 'tendrils', 'spines', 'conduits', 'plating', 'scrapyard'];
         const zoneFloors = {};
         const floors = shuffle(floorIds, 90);
         TERRAIN_ZONES.forEach((z, i) => { zoneFloors[z] = prefer(env.floors, 160, i, floors[i % floors.length]); });

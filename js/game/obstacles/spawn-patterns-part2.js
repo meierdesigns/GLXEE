@@ -178,17 +178,18 @@ extendClass(ObstacleManager, {
             return Math.max(2, Math.round(d));
         };
         const structure = (side) => {
-            const slot = Math.floor(wr / 48);
-            if ((slot + side) % 2) return 0;
-            const t = (wr - slot * 48 - 16) / 12;
+            // Faction silhouettes more often / larger so walls read as occupied, not bare rock.
+            const slot = Math.floor(wr / 36);
+            if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
+            const t = (wr - slot * 36 - 10) / 14;
             if (t < 0 || t > 1) return 0;
             let v;
             switch (style) {
-                case 'tech': v = 0.045; break;
-                case 'organic': v = 0.055 * Math.sin(t * Math.PI); break;
-                case 'spike': v = 0.09 * (1 - Math.abs(t - 0.5) * 2); break;
-                case 'scrap': v = t < 0.25 || t > 0.75 ? 0.065 : 0.02; break;
-                default: v = 0.03 * Math.sin(t * Math.PI);
+                case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;           // squared gantries
+                case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break; // pulsing growth
+                case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;             // claw spurs
+                case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;             // welded wreck shelves
+                default: v = 0.045 * Math.sin(t * Math.PI);
             }
             return Math.round((W * v) / cell);
         };
@@ -206,7 +207,7 @@ extendClass(ObstacleManager, {
             sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
         }
         const fullOf = [0, 1].map((side) => {
-            const mat = this.terrainMaterial(wr, side);
+            const mat = this.terrainMaterial(wr, side) || { id: 'rock', hp: 4 };
             const base = depth(side, mat);
             return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
         });
@@ -284,7 +285,7 @@ extendClass(ObstacleManager, {
         let broken = 0;
         for (let d = -pr.radius; d <= pr.radius; d++) {
             const row = wr + d;
-            const mat = this.terrainMaterial(row, side);
+            const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 4 };
             // Full power at the hit row, falling off towards the crater rim,
             // with a little randomness so the edge looks torn.
             const fall = 1 - Math.abs(d) / (pr.radius + 1);
@@ -294,7 +295,13 @@ extendClass(ObstacleManager, {
             const k = side + ':' + row;
             const before = this.terrainDamage.get(k) || 0;
             this.terrainDamage.set(k, before + pts);
-            broken += Math.floor((before + pts) / mat.hp) - Math.floor(before / mat.hp);
+            const hp = Math.max(1, mat.hp || 4);
+            broken += Math.floor((before + pts) / hp) - Math.floor(before / hp);
+        }
+        // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
+        this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
+        if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
+            renderManager._terrainLayerKey = null;
         }
         if (this.terrainDamage.size > 4000) {
             // Forget rows that scrolled far past the bottom.
@@ -307,8 +314,10 @@ extendClass(ObstacleManager, {
     terrainWallsAtY(y, W) {
         if (!this.hasTerrain()) return null;
         const cell = this.terrainCell();
-        const c = this.terrainWallCells(this.terrainRowAtY(y), W);
-        return { left: c.left * cell, right: W - c.right * cell };
+        const width = Math.max(1, Number(W) || ((typeof game !== 'undefined' && game && game.internalWidth) || 240));
+        const c = this.terrainWallCells(this.terrainRowAtY(y), width);
+        if (!c) return null;
+        return { left: (c.left || 0) * cell, right: width - (c.right || 0) * cell };
     },
     /** Innermost wall edges over the vertical span [y0, y1]. */
     terrainWallsOver(y0, y1, W) {

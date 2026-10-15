@@ -143,8 +143,8 @@ class ObstacleManager {
             : 1;
         const baseW = ov.width != null ? ov.width : (d.width || 10);
         const baseH = ov.height != null ? ov.height : (d.height || 10);
-        const width = Math.max(4, Math.min(32, Math.round(baseW * contentScale)));
-        const height = Math.max(4, Math.min(32, Math.round(baseH * contentScale)));
+        const width = Math.max(4, Math.min(48, Math.round(baseW * contentScale)));
+        const height = Math.max(4, Math.min(48, Math.round(baseH * contentScale)));
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
         const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' ? 'prism' : 'none'));

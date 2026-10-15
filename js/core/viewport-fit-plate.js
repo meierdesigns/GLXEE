@@ -28,10 +28,19 @@
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="0" max="' + max + '" step="1" value="' + i +
             '" data-ix="' + id + '" data-opts="' + options.join('|') + '" style="--look-fill:' + (i / max * 100) + '%"><output>' + options[i] + '</output></label>';
     }
-    function fxSlider(label, key, min, max, step, value, unit) {
+    function fxSlider(label, key, min, max, step, value, unit, displayValue) {
+        const shown = displayValue == null ? value : displayValue;
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
             '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
-            (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : value + (unit || '')) + '</output></label>';
+            (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : shown + (unit || '')) + '</output></label>';
+    }
+    // The slider edits the raw, un-scaled px stored in uiAppearanceManager; what actually
+    // reaches the screen/collision box is that raw value times the level's playfield zoom
+    // (game.contentScale, see resolve-enemy-hit-profile.js). Show that effective size so the
+    // panel's numbers match what the player sees, instead of the un-scaled stored value.
+    function effectivePx(rawPx) {
+        const scale = (typeof game !== 'undefined' && game && game.contentScale) ? game.contentScale : 1;
+        return Math.round(rawPx * scale);
     }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
@@ -204,13 +213,13 @@
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
                 fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
-            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px');
+            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px', effectivePx(ui.getSizePx('player')));
             ['scout', 'assault', 'heavy', 'elite', 'capital'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px');
+                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px', effectivePx(ui.getSizePx('enemy', c)));
             });
             h += '<div class="vf-fx-title">SHOTS (PX)</div>';
             ['player', 'enemy', 'boss'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px');
+                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px', effectivePx(ui.getSizePx('shot', c)));
             });
         }
         h += '</div>';

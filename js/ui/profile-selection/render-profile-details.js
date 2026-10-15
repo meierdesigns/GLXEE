@@ -75,13 +75,21 @@ extendClass(ProfileSelectionManager, {
             }, true);
         }
 
+        const btnIco = (kind) => (typeof ProfileSelectionManager !== 'undefined' && ProfileSelectionManager.btnIconHtml
+            ? ProfileSelectionManager.btnIconHtml(kind) : '');
         return `
             <div class="pd-hero">
-                ${profile.portrait && typeof heroPortrait !== 'undefined' ? `<span class="pd-hero-portrait">${heroPortrait.html(profile.portrait, null)}</span>` : ''}
-                <span class="pd-hero-emblem">${this.getFactionEmblemHtml(profile.faction || 'pirate', 64)}</span>
+                <span class="pd-hero-face${profile.portrait && typeof heroPortrait !== 'undefined' ? ' has-portrait' : ''}">
+                    ${profile.portrait && typeof heroPortrait !== 'undefined' ? `<span class="pd-hero-portrait">${heroPortrait.html(profile.portrait, null)}</span>` : ''}
+                    <span class="pd-hero-emblem">${this.getFactionEmblemHtml(profile.faction || 'pirate', 28)}</span>
+                </span>
                 <span class="pd-hero-text">
                     <b class="pd-hero-name">${profile.name}</b>
                     <i class="pd-hero-faction">${this.getFactionLabel(profile.faction || 'pirate')}</i>
+                </span>
+                <span class="pd-hero-actions">
+                    <button type="button" class="pd-hero-btn" id="psRename" data-pd-act="rename" title="Rename">${btnIco('rename')}<span>RENAME</span></button>
+                    <button type="button" class="pd-hero-btn is-danger" id="psDelete" data-pd-act="delete" title="Delete">${btnIco('delete')}<span>DELETE</span></button>
                 </span>
             </div>
             <div class="pd-scroll">
@@ -139,6 +147,10 @@ extendClass(ProfileSelectionManager, {
         // The dialog takes the selected profile's faction look and shape.
         const box = this.overlay.querySelector('.profile-selection-content');
         if (box && selected && this.applyFactionVars) this.applyFactionVars(box, selected.faction || 'pirate');
+        ['psRename', 'psDelete'].forEach((id) => {
+            const btn = pane.querySelector('#' + id);
+            if (btn) btn.disabled = !!this._noVisibleProfile;
+        });
     },
 
     /** Apply the faction filter (none selected = show everything) and the empty states. */
@@ -159,11 +171,9 @@ extendClass(ProfileSelectionManager, {
         }
         this._noVisibleProfile = items.length > 0 && !visible.length;
         items.forEach((el, i) => el.classList.toggle('selected', !this._noVisibleProfile && i === this.selectedIndex));
-        ['psSelect', 'psRename', 'psDelete'].forEach((id) => {
-            const btn = this.overlay.querySelector('#' + id);
-            if (btn) btn.disabled = this._noVisibleProfile;
-        });
         this.refreshDetails();
+        const selBtn = this.overlay.querySelector('#psSelect');
+        if (selBtn) selBtn.disabled = this._noVisibleProfile;
     },
 
     bindListEvents() {
@@ -201,12 +211,22 @@ extendClass(ProfileSelectionManager, {
             this.pendingFaction = this.getFactionIds()[0];
             this.createUI();
         });
-        bind('psRename', () => {
-            if (!this.getProfiles().length) return;
-            this.mode = 'rename';
-            this.createUI();
-        });
-        bind('psDelete', () => this.deleteSelected());
+        // Rename / Delete live in the details hero (rebuilt on refresh); one delegated handler per overlay.
+        if (this._pdActOverlay !== this.overlay) {
+            this._pdActOverlay = this.overlay;
+            this.overlay.addEventListener('click', (e) => {
+                const btn = e.target.closest && e.target.closest('[data-pd-act]');
+                if (!btn || !this.overlay || !this.overlay.contains(btn) || btn.disabled) return;
+                const act = btn.getAttribute('data-pd-act');
+                if (act === 'rename') {
+                    if (!this.getProfiles().length) return;
+                    this.mode = 'rename';
+                    this.createUI();
+                } else if (act === 'delete') {
+                    this.deleteSelected();
+                }
+            });
+        }
         bind('psBack', () => this.close());
 
         this.actionFocusIndex = 0;
@@ -258,7 +278,7 @@ extendClass(ProfileSelectionManager, {
     getActionButtons() {
         if (!this.overlay) return [];
         return Array.prototype.slice.call(
-            this.overlay.querySelectorAll('.profile-selection-actions .action-button:not([disabled])')
+            this.overlay.querySelectorAll('.profile-selection-actions .action-button:not([disabled]), .pd-hero-actions .pd-hero-btn:not([disabled])')
         );
     },
 
@@ -318,11 +338,13 @@ extendClass(ProfileSelectionManager, {
                 if (profileManager.ensureGalaxyProgress) profileManager.ensureGalaxyProgress(p, gid);
                 if (profileManager.unlockPlanet) profileManager.unlockPlanet(startId);
             }
+            // Own-faction galaxy: a few nearby planets are already travelable.
+            if (profileManager.unlockOwnFactionStartCluster) profileManager.unlockOwnFactionStartCluster(p, gid);
             if (profileManager.discoverGalaxy) profileManager.discoverGalaxy(gid);
-            // Home galaxy start: it is under attack (invasion-scenario.js).
+            // Home galaxy: UNDER ATTACK waits until the first stage is cleared.
             const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(p.faction) : null;
-            if (meta && meta.homeGalaxy === gid && profileManager.startInvasionScenario) {
-                profileManager.startInvasionScenario(p, gid);
+            if (meta && meta.homeGalaxy === gid && profileManager.scheduleHomeInvasion) {
+                profileManager.scheduleHomeInvasion(p, gid);
             }
             const start = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
             if (start && profileManager.setShipLocation) {
@@ -422,7 +444,7 @@ extendClass(ProfileSelectionManager, {
             this.hide();
             if (typeof homeStationUI !== 'undefined') {
                 homeStationUI.show({
-                    tab: 'hangar',
+                    tab: 'play',
                     onClose: this.onClose
                 });
             } else if (typeof this.onClose === 'function') {

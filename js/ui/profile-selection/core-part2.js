@@ -59,6 +59,43 @@ extendClass(ProfileSelectionManager, {
             menuStateManager.save({ pstart: this._startOpts || null, pname: this._pilotName || '' });
         }
     },
+    /**
+     * Size the 6+6+4 picker as the largest square tiles that fit the controls pane.
+     * Uses measured px (not cqw/cqh) so Chrome / Firefox / Safari / Edge all match.
+     */
+    fitPilotPicks() {
+        const ov = this.overlay;
+        if (!ov || !ov.querySelector('.is-pilot-step')) return;
+        const host = ov.querySelector('.profile-pilot-controls');
+        const picks = ov.querySelector('.pp-picks');
+        if (!host || !picks) return;
+        const gap = 4;
+        const cols = 6;
+        const rows = 3;
+        const tw = (host.clientWidth - gap * (cols - 1)) / cols;
+        const th = (host.clientHeight - gap * (rows - 1)) / rows;
+        if (!(tw > 0) || !(th > 0)) return;
+        const tile = Math.max(28, Math.floor(Math.min(tw, th)));
+        picks.style.setProperty('--pp-tile', tile + 'px');
+        picks.style.setProperty('--pp-gap', gap + 'px');
+    },
+    /** Keep picker tiles fitted on first paint and when the dialog resizes. */
+    ensurePilotPicksFit() {
+        this.fitPilotPicks();
+        requestAnimationFrame(() => this.fitPilotPicks());
+        if (!this._ppFitResize) {
+            this._ppFitResize = () => this.fitPilotPicks();
+            window.addEventListener('resize', this._ppFitResize);
+            if (typeof ResizeObserver !== 'undefined') {
+                this._ppFitRo = new ResizeObserver(this._ppFitResize);
+            }
+        }
+        const host = this.overlay && this.overlay.querySelector('.profile-pilot-controls');
+        if (host && this._ppFitRo) {
+            this._ppFitRo.disconnect();
+            this._ppFitRo.observe(host);
+        }
+    },
     /** Re-render the portrait and feature values after a change. */
     refreshPilotRow() {
         this.savePilotState();
@@ -79,6 +116,7 @@ extendClass(ProfileSelectionManager, {
             const sl = el.querySelector('.pp-slider');
             if (sl && Number(sl.value) !== o.look[k]) sl.value = o.look[k];
         });
+        this.fitPilotPicks();
     },
     stepPilotLook(key, d) {
         const o = this._startOpts;

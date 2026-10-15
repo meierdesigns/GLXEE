@@ -137,8 +137,6 @@ extendClass(ProfileSelectionManager, {
                 </div>
                 <div class="profile-selection-actions">
                     <button class="action-button secondary" id="psBack">${ProfileSelectionManager.btnIconHtml('back')}BACK</button>
-                    ${profiles.length ? `<button class="action-button secondary" id="psDelete">${ProfileSelectionManager.btnIconHtml('delete')}DELETE</button>
-                    <button class="action-button secondary" id="psRename">${ProfileSelectionManager.btnIconHtml('rename')}RENAME</button>` : ''}
                     <button class="action-button" id="psCreate">${ProfileSelectionManager.btnIconHtml('create')}CREATE</button>
                     ${profiles.length ? `<button class="action-button" id="psSelect">${ProfileSelectionManager.btnIconHtml('next')}SELECT</button>` : ''}
                 </div>

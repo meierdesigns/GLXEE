@@ -101,7 +101,8 @@ extendClass(MissionStartManager, {
         }
 
         if (!this.active) return;
-        this.phase = 'flyIn';
+        if (this.setPhase) this.setPhase('flyIn');
+        else this.phase = 'flyIn';
         this.flyInElapsed = 0;
     },
 

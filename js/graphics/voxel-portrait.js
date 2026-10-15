@@ -81,10 +81,15 @@ const voxelPortrait = (() => {
     const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((list) => list.forEach((r) => { if (r.target.__vx) r.target.__vx.vis = r.isIntersecting; })) : null;
     function register(canvas) {
         if (canvas.__vx || !canvas.getContext) return;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) return;   // no Canvas2D (ancient / locked-down browsers)
         let look = null;
         try { look = JSON.parse(canvas.dataset.look); } catch (err) { look = null; }
         look = lookOf(look);
-        const e = { canvas, ctx: canvas.getContext('2d'), preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        ctx.imageSmoothingEnabled = false;
+        if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
+        if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
+        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
@@ -108,7 +113,11 @@ const voxelPortrait = (() => {
             for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches('canvas.vx-portrait')) register(n); else if (n.querySelectorAll) scan(n); } });
         }).observe(document.documentElement, { childList: true, subtree: true });
         const st = document.createElement('style');
-        st.textContent = 'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:pixelated;object-fit:cover;object-position:50% 0}';
+        st.textContent = [
+            'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:pixelated;-ms-interpolation-mode:nearest-neighbor;object-fit:cover;object-position:50% 0}',
+            '.pp-pick canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:contain!important;object-position:50% 50%!important}',
+            '.profile-pilot-portrait canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 0!important}'
+        ].join('');
         document.head.appendChild(st);
         scan(document);
     }

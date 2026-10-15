@@ -9,6 +9,9 @@ extendClass(StartScreenManager, {
         const basePilot = pmBase && pmBase.getRecentProfiles
             ? ((pmBase.hasActiveProfile() && pmBase.getActiveProfile()) || pmBase.getRecentProfiles(1)[0] || null)
             : null;
+        // Full-bleed backdrop behind the whole screen (not boxed into a padded column,
+        // so it actually reaches the screen edges); composed toward the left so it
+        // reads as sitting left of the menu rather than directly behind it.
         this.mountStationBackdrop(content, basePilot);
         this.rebuildVisibleMenu();
         if (this.selectedIndex >= this.menuItems.length) {
@@ -118,9 +121,15 @@ extendClass(StartScreenManager, {
 
         content.appendChild(title);
         content.appendChild(subtitle);
-        // Menu on the left, recent-pilots scoreboard on the right.
+        // Menu centered (via an empty left spacer matching the scoreboard's width),
+        // recent-pilots scoreboard on the right. The station itself is the full-bleed
+        // backdrop mounted above, not a row child.
         const menuRow = document.createElement('div');
         menuRow.className = 'start-menu-row';
+        const menuSpacer = document.createElement('div');
+        menuSpacer.className = 'start-menu-row-spacer';
+        menuSpacer.setAttribute('aria-hidden', 'true');
+        menuRow.appendChild(menuSpacer);
         menuRow.appendChild(menu);
         const board = this.buildRecentPilotsBoard();
         if (board) menuRow.appendChild(board);
@@ -387,9 +396,8 @@ extendClass(StartScreenManager, {
                 const icoDelete = '<svg class="hs-menu-profile-act-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 7v4M9 7v4"/></svg>';
                 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 row.innerHTML =
-                    `<span class="hs-menu-profile-emblem">${emblem}</span>` +
+                    `<span class="hs-menu-profile-emblem" title="${esc(faction.toUpperCase())}">${emblem}</span>` +
                     `<span class="hs-menu-profile-name">${esc(p.name)}</span>` +
-                    `<span class="hs-menu-profile-faction">${esc(faction.toUpperCase())}</span>` +
                     // Badge cell always present (empty when inactive) so the actions keep their column.
                     (p.id === activeId ? '<span class="hs-menu-profile-badge">ACTIVE</span>' : '<span class="hs-menu-profile-badge-slot"></span>') +
                     `<span class="hs-menu-profile-actions">` +
@@ -439,6 +447,46 @@ extendClass(StartScreenManager, {
                 if (profile && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
                     const st = factionShipStyles.getFactionStyle(profile.faction || 'pirate');
                     if (st && st.accent) stats.style.setProperty('--row-accent', st.accent);
+                }
+                const ren = stats.querySelector('[data-pd-act="rename"]');
+                const del = stats.querySelector('[data-pd-act="delete"]');
+                if (ren) {
+                    ren.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (!profile) return;
+                        const idx = profiles.findIndex((x) => x.id === profile.id);
+                        if (idx < 0) return;
+                        profileSelectionManager.show({
+                            onClose: () => {
+                                if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.createUI();
+                                else this.createStartScreenUI();
+                            }
+                        });
+                        profileSelectionManager.selectedIndex = idx;
+                        profileSelectionManager.mode = 'rename';
+                        profileSelectionManager.createUI();
+                    });
+                }
+                if (del) {
+                    del.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (!profile) return;
+                        // Same two-step confirm as the list-row delete.
+                        if (!del.classList.contains('is-armed')) {
+                            del.classList.add('is-armed');
+                            const lab = del.querySelector('span:last-child');
+                            if (lab) lab.textContent = 'CONFIRM?';
+                            clearTimeout(del._disarm);
+                            del._disarm = setTimeout(() => {
+                                del.classList.remove('is-armed');
+                                if (lab) lab.textContent = 'DELETE';
+                            }, 3000);
+                            return;
+                        }
+                        clearTimeout(del._disarm);
+                        profileManager.delete(profile.id);
+                        rerender();
+                    });
                 }
             };
             // No pilot active yet: preview the first one instead of an empty panel.

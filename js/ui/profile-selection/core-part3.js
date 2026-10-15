@@ -129,6 +129,7 @@ extendClass(ProfileSelectionManager, {
         if (!reuse) (this.host || document.body).appendChild(this.overlay);
         this.fitWizardBars();
         requestAnimationFrame(() => this.fitWizardBars());
+        if (pilotStep) this.ensurePilotPicksFit();
         if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
             VFBgMouseParallax.refresh();
         }

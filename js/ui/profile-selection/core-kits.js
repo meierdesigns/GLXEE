@@ -377,6 +377,7 @@ extendClass(ProfileSelectionManager, {
         const st = slm && slm.inventoryStart ? slm.inventoryStart(ship) : [4, 2];
         const cols = Math.max(3, Math.min(8, st[0] + (Number((kitObj.bonus || {}).invCols) || 0)));
         const rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         const cells = parts.filter((p) => p[1]).map(([kind, id, inst = true]) => {
             const lv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
             const span = [[1, 1], [1, 2], [2, 2]][lv];
@@ -384,7 +385,13 @@ extendClass(ProfileSelectionManager, {
             const name = String(id).replace(/_/g, ' ').toUpperCase();
             // Same data as the shipyard inventory: full part stats, size, status.
             const tip = (tipOf ? tipOf(kind, id) + '&#10;' : '') + 'SIZE: ' + (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S') + '&#10;STATUS: ' + (inst ? 'INSTALLED' : 'IN INVENTORY');
-            return `<span class="hs-pick-cell${inst ? ' is-equipped' : ''}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColor[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-size">${slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : ''}</span></span>`;
+            // Part icon lives only in the tooltip (hidden on the cell); hangar bay cells do the same.
+            let key = kind === 'weapon' ? null : (slm && slm.resolveModuleIcon ? slm.resolveModuleIcon({ kind, id }) : null);
+            const raw = !ir ? '' : (kind === 'weapon' && ir.weaponImgHtml
+                ? ir.weaponImgHtml(id, 32, 'hs-pixel', false)
+                : ir.imgHtml(key || 'statArmor', 32, 'hs-pixel', kindColor[kind], false));
+            const ico = String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '');
+            return `<span class="hs-pick-cell${inst ? ' is-equipped' : ''}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColor[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ico}</span><span class="hs-pick-size">${slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : ''}</span></span>`;
         }).join('');
         // Cells as big as the sidebar allows, at most 56px: fitted to the free width AND height (.profile-start-inv is a size
         // container), so a tall grid scales down instead of scrolling. 50px = title + gap + picker padding / border; 16px = picker padding / border.

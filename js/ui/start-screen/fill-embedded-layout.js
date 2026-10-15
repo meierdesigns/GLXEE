@@ -39,6 +39,7 @@ extendClass(StartScreenManager, {
         };
         // Icons: current (player choice or default) per tab / 'area:<id>'.
         const defaultIcon = (key) => {
+            if (key === 'area:profiles') return 'menuProfiles';
             if (key.indexOf('area:') === 0) {
                 const base = (typeof MENU_AREAS_DEFAULTS !== 'undefined' ? MENU_AREAS_DEFAULTS : MENU_AREAS)
                     .find((a) => 'area:' + a.id === key);
@@ -60,6 +61,7 @@ extendClass(StartScreenManager, {
         const iconBtn = (key) => `<button type="button" class="hs-layout-btn hs-layout-icon" data-act="icon" data-icon-key="${esc(key)}" title="Change icon" data-nav-item>${iconImg(iconOf(key))}</button>`;
         // Names: default per key, and the shown one (player rename or default).
         const defaultLabel = (key) => {
+            if (key === 'area:profiles') return 'PROFILES';
             if (key.indexOf('area:') === 0) {
                 const a = MENU_AREAS.find((x) => 'area:' + x.id === key);
                 return a ? a.label : key;
@@ -102,6 +104,11 @@ extendClass(StartScreenManager, {
                 `</header><ul class="hs-layout-tabs">${rows}</ul></section>`;
         }).join('');
 
+        const profilesHtml = `<section class="hs-layout-area" data-area="profiles">` +
+            `<header class="hs-layout-area-head">` + iconBtn('area:profiles') +
+            `<span class="hs-layout-area-name">${esc(labelOf('area:profiles'))}</span>` + renameBtn('area:profiles') +
+            `</header></section>`;
+
         const menuRows = menuIds().map((id) => {
             const fixed = STATION_TABS.indexOf(id) === -1;
             return `<li class="hs-layout-tab${fixed ? ' is-fixed' : ''}" data-area="${MENU}" data-tab="${esc(id)}">` +
@@ -115,7 +122,7 @@ extendClass(StartScreenManager, {
         panel.innerHTML =
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
             '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
-            `<div class="hs-layout-areas">${areasHtml}${menuHtml}</div>` +
+            `<div class="hs-layout-areas">${areasHtml}${profilesHtml}${menuHtml}</div>` +
             '<div class="hs-menu-panel-actions"><button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
         // ---- Drag & drop: tabs between / inside areas, areas left-right.

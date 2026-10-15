@@ -40,9 +40,9 @@ extendClass(ProfileSelectionManager, {
             const sel = gid === selected;
             return `<li role="option" aria-selected="${sel}" class="${sel ? 'selected' : ''}" data-galaxy-id="${gid}"` +
                 ` title="${String(ruler || '').toUpperCase()}${rivals.length ? ' · CONTESTED' : ''}">` +
-                `<span class="ruler">${emblem(ruler, 20)}</span>` +
+                `<span class="ruler">${emblem(ruler, 40)}</span>` +
                 `<span class="name">${String((g && g.name) || gid).toUpperCase()}</span>` +
-                (rivals.length ? `<span class="rivals">${rivals.map((f) => emblem(f, 12)).join('')}</span>` : '') + tag +
+                (rivals.length ? `<span class="rivals">${rivals.map((f) => emblem(f, 22)).join('')}</span>` : '') + tag +
                 `</li>`;
         }).join('');
         return `<ul class="profile-start-galaxy-side" role="listbox" aria-label="Start galaxies">${items}</ul>`;

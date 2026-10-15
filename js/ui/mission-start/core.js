@@ -2,6 +2,7 @@
 
 /**
  * Mission start sequence: FIRE TO START → countdown → ships fly in → combat.
+ * Overlay chrome follows html[data-faction] / resolveActiveFaction().
  */
 class MissionStartManager {
     constructor() {
@@ -14,6 +15,7 @@ class MissionStartManager {
         this.flyInDuration = 1400;
         this.overlay = null;
         this.textEl = null;
+        this.subEl = null;
         this.playerFrom = null;
         this.playerTo = null;
         this.enemyFrom = null;
@@ -38,7 +40,7 @@ class MissionStartManager {
     arm() {
         this._armed = true;
         this.active = true;
-        this.phase = 'awaitFire';
+        this.setPhase('awaitFire');
         this.countdownValue = 3;
         this.countdownTimer = 0;
         this.goTimer = 0;
@@ -69,7 +71,7 @@ class MissionStartManager {
     begin() {
         if (!this._armed) this.arm();
         this.active = true;
-        this.phase = 'awaitFire';
+        this.setPhase('awaitFire');
 
         if (typeof playerManager !== 'undefined') {
             if (playerManager.reset) playerManager.reset();
@@ -88,6 +90,7 @@ class MissionStartManager {
         }
 
         this.ensureOverlay();
+        this.syncFactionChrome();
         this.setText('FIRE TO START', true);
         this.showOverlay();
 
@@ -114,23 +117,78 @@ class MissionStartManager {
         return 300;
     }
 
+    /** Active pilot faction id for overlay chrome. */
+    resolveFactionId() {
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.resolveActiveFaction) {
+            return factionShipStyles.resolveActiveFaction();
+        }
+        return 'terran';
+    }
+
+    syncFactionChrome() {
+        this.ensureOverlay();
+        if (!this.overlay) return;
+        const id = this.resolveFactionId();
+        this.overlay.dataset.faction = id;
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const style = factionShipStyles.getFactionStyle(id);
+            if (style) {
+                this.overlay.style.setProperty('--ms-accent', style.accent || '');
+                this.overlay.style.setProperty('--ms-hull', style.hull || '');
+                this.overlay.style.setProperty('--ms-edge', style.edge || '');
+            }
+        }
+    }
+
+    setPhase(phase) {
+        this.phase = phase;
+        if (this.overlay) this.overlay.dataset.phase = phase || '';
+    }
+
+    overlayMarkup() {
+        return '<div class="mission-start-vignette" aria-hidden="true"></div>' +
+            '<div class="mission-start-aura" aria-hidden="true"></div>' +
+            '<div class="mission-start-frame" aria-hidden="true">' +
+                '<span class="ms-corner ms-tl"></span>' +
+                '<span class="ms-corner ms-tr"></span>' +
+                '<span class="ms-corner ms-bl"></span>' +
+                '<span class="ms-corner ms-br"></span>' +
+                '<span class="ms-slash ms-slash-a"></span>' +
+                '<span class="ms-slash ms-slash-b"></span>' +
+            '</div>' +
+            '<div class="mission-start-stack">' +
+                '<div class="mission-start-text" id="missionStartText">FIRE TO START</div>' +
+                '<div class="mission-start-sub" id="missionStartSub">PRESS FIRE</div>' +
+            '</div>';
+    }
+
     ensureOverlay() {
-        if (this.overlay && this.overlay.isConnected) return;
+        if (this.overlay && this.overlay.isConnected && this.overlay.querySelector('.mission-start-stack')) {
+            this.textEl = this.overlay.querySelector('#missionStartText') || this.textEl;
+            this.subEl = this.overlay.querySelector('#missionStartSub') || this.subEl;
+            return;
+        }
         let el = document.getElementById('missionStartOverlay');
         if (!el) {
             el = document.createElement('div');
             el.id = 'missionStartOverlay';
             el.className = 'mission-start-overlay hidden';
-            el.innerHTML = '<div class="mission-start-text" id="missionStartText">FIRE TO START</div>';
             const stage = document.querySelector('.game-stage') || document.querySelector('.game-canvas-container') || document.body;
             stage.appendChild(el);
         }
+        if (!el.querySelector('.mission-start-stack')) {
+            el.className = 'mission-start-overlay hidden';
+            el.innerHTML = this.overlayMarkup();
+        }
         this.overlay = el;
         this.textEl = el.querySelector('#missionStartText') || el.querySelector('.mission-start-text');
+        this.subEl = el.querySelector('#missionStartSub');
+        this.pixelCanvas = null;
     }
 
     showOverlay() {
         this.ensureOverlay();
+        this.syncFactionChrome();
         if (this.overlay) this.overlay.classList.remove('hidden');
     }
 
@@ -140,26 +198,49 @@ class MissionStartManager {
 
     setText(msg, pulse) {
         this.ensureOverlay();
+        const raw = String(msg);
+        const isCount = !pulse && /^\d+$/.test(raw);
+        const isGo = !pulse && raw === 'GO!';
         if (this.textEl) {
             this.textEl.classList.toggle('mission-start-pulse', !!pulse);
-            this.textEl.classList.toggle('mission-start-count', !pulse && /^\d+$/.test(String(msg)));
-            this.textEl.classList.toggle('mission-start-go', String(msg) === 'GO!');
-            if (!pulse && /^\d+$/.test(String(msg))) {
-                if (!this.pixelCanvas) {
+            this.textEl.classList.toggle('mission-start-count', isCount);
+            this.textEl.classList.toggle('mission-start-go', isGo);
+            this.textEl.classList.toggle('mission-start-fire', !!pulse);
+            if (isCount || isGo) {
+                if (!this.pixelCanvas || !this.pixelCanvas.isConnected) {
                     this.pixelCanvas = document.createElement('canvas');
                     this.pixelCanvas.className = 'mission-start-pixel-canvas';
                     this.textEl.textContent = '';
                     this.textEl.appendChild(this.pixelCanvas);
                 }
-                this.drawPixelText(String(msg));
+                this.drawPixelText(isGo ? 'GO' : raw);
             } else {
                 this.pixelCanvas = null;
-                this.textEl.textContent = msg;
+                this.textEl.textContent = raw;
             }
+        }
+        if (this.subEl) {
+            if (pulse) {
+                this.subEl.textContent = 'PRESS FIRE';
+                this.subEl.hidden = false;
+            } else if (isCount) {
+                this.subEl.textContent = 'GET READY';
+                this.subEl.hidden = false;
+            } else if (isGo) {
+                this.subEl.textContent = 'ENGAGE';
+                this.subEl.hidden = false;
+            } else {
+                this.subEl.hidden = true;
+            }
+        }
+        if (this.overlay) {
+            this.overlay.classList.toggle('is-fire', !!pulse);
+            this.overlay.classList.toggle('is-count', isCount);
+            this.overlay.classList.toggle('is-go', isGo);
         }
     }
 
-    /** Crisp 5×7 bitmap digits scaled with nearest-neighbour — no blurry font. */
+    /** Crisp 5×7 bitmap glyphs scaled with nearest-neighbour — no blurry font. */
     drawPixelText(msg) {
         if (!this.pixelCanvas) return;
         const GLYPHS = {
@@ -172,12 +253,14 @@ class MissionStartManager {
             '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
             '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
             '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-            '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100']
+            '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
+            'G': ['01110', '10001', '10000', '10111', '10001', '10001', '01110'],
+            'O': ['01110', '10001', '10001', '10001', '10001', '10001', '01110']
         };
         const canvas = this.pixelCanvas;
-        const chars = String(msg).split('').filter((c) => GLYPHS[c]);
+        const chars = String(msg).toUpperCase().split('').filter((c) => GLYPHS[c]);
         // 1px margin + 1px drop shadow; 1px gap between digits.
-        canvas.width = chars.length * 6 + 2;
+        canvas.width = Math.max(1, chars.length * 6 + 2);
         canvas.height = 10;
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
@@ -206,10 +289,11 @@ class MissionStartManager {
 
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
-        this.phase = 'countdown';
+        this.setPhase('countdown');
         this._lastTick = 0;
         this.countdownValue = 3;
         this.countdownTimer = 0;
+        this.syncFactionChrome();
         this.setText('3', false);
         if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
             try { soundManager.playShoot(); } catch (e) { /* ignore */ }
@@ -236,7 +320,7 @@ class MissionStartManager {
                         try { soundManager.playShoot(); } catch (e) { /* ignore */ }
                     }
                 } else {
-                    this.phase = 'go';
+                    this.setPhase('go');
                     this.goTimer = 0;
                     this.setText('GO!', false);
                     if (typeof soundManager !== 'undefined' && soundManager.playExplosion) {
@@ -249,7 +333,8 @@ class MissionStartManager {
 
         if (this.phase === 'go') {
             this.goTimer += Math.max(deltaTime, real);
-            if (this.goTimer >= 450) {
+            // Slightly longer GO beat so the burst reads before fly-in.
+            if (this.goTimer >= 620) {
                 this.startFlyIn();
             }
             return;
@@ -271,7 +356,7 @@ class MissionStartManager {
     }
 
     startFlyIn() {
-        this.phase = 'preparingFlyIn';
+        this.setPhase('preparingFlyIn');
         this.hideOverlay();
         this.prepareFlyIn().catch((err) => {
             console.error('Mission fly-in failed:', err);

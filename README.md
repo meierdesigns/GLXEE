@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/ui/readme-banner.svg" alt="GLXEE — UGDF Archive · Intergalactic Combat Simulator" width="960" />
+<img src="assets/ui/readme-banner.png" alt="GLXEE — UGDF Archive · Intergalactic Combat Simulator" width="960" />
 
 # GLXEE
 

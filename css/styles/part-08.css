@@ -1017,11 +1017,6 @@ button.hs-shop-cat.active.nav-focused {
     overflow: hidden;
     clip-path: none;
 }
-.hs-hangar-root > .hs-panel-title {
-    margin-bottom: 0;
-    padding-bottom: 4px;
-    flex: 0 0 auto;
-}
 .hs-hangar-bay.hs-panel {
     overflow: visible;
     clip-path: none;

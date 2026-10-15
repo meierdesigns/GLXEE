@@ -228,18 +228,17 @@ html body .hs-missions-root .hs-mission .hs-mission-icons-l { transform: transla
 .hs-travel-here .hs-galaxy-ico img { filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 10px var(--faction-accent, var(--color-primary))); }
 
 /* Galaxy travel rows: icon | name + factions | stat icons with values | action. */
-.hs-travel-row { display: grid !important; grid-template-columns: 112px minmax(260px, 1fr) 260px 230px; align-items: center; gap: 18px; padding: 12px 18px !important; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); }
+.hs-travel-row { display: grid !important; grid-template-columns: 72px minmax(200px, 1fr) 260px 230px; align-items: center; gap: 14px; padding: 8px 16px !important; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); }
 .hs-travel-row.locked { opacity: 0.8; }
 .hs-travel-row.hs-travel-here { border-color: var(--faction-accent, var(--color-primary)); }
-.hs-travel-row .hs-galaxy-ico { width: 96px; height: 96px; justify-self: center; }
-.hs-travel-row .hs-galaxy-ico img { width: 96px; height: 96px; }
-.hs-travel-row .hs-line-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.hs-travel-row .hs-line-text strong { font-size: 28px; letter-spacing: 3px; color: var(--color-text, #fff); }
+.hs-travel-row .hs-galaxy-ico { width: 56px; height: 56px; justify-self: center; }
+.hs-travel-row .hs-galaxy-ico img { width: 56px; height: 56px; }
+.hs-travel-row .hs-line-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hs-travel-row .hs-line-text strong { font-size: 20px; letter-spacing: 2px; color: var(--color-text, #fff); }
 .hs-travel-tag { font-style: normal; font-size: var(--font-text); letter-spacing: 2px; margin-left: 12px; padding: 2px 8px; color: #05060a; background: var(--faction-accent, var(--color-primary)); vertical-align: middle; }
-.hs-travel-facs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.hs-travel-fac { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 4px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); background: rgba(5, 6, 10, 0.7); }
-.hs-travel-fac b { font-size: var(--font-text); letter-spacing: 1px; color: var(--color-text, #fff); }
-.hs-travel-fac img { width: 24px; height: 24px; }
+.hs-travel-facs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.hs-travel-fac { display: inline-flex; align-items: center; padding: 3px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); background: rgba(5, 6, 10, 0.7); }
+.hs-travel-fac img { width: 20px; height: 20px; }
 .hs-travel-vs { font-style: normal; font-size: var(--font-text); letter-spacing: 2px; opacity: 0.7; }
 .hs-travel-stats { display: flex; justify-content: flex-start; gap: 14px; width: auto; }
 .hs-travel-stats .hs-mi-col { width: 80px; }
@@ -252,7 +251,7 @@ html body .hs-missions-root .hs-mission .hs-mission-icons-l { transform: transla
 /* Galaxy travel stats: three icon+value blocks side by side, filling the column. */
 .hs-travel-row .hs-travel-stats { display: grid !important; grid-template-columns: repeat(3, 1fr); flex-direction: row; gap: 10px; width: 100%; align-items: start; padding: 0 0 0 18px; }
 .hs-travel-row .hs-travel-stats .hs-mi-col { width: auto; }
-.hs-travel-row { grid-template-columns: 112px minmax(260px, 1fr) minmax(300px, 380px) 230px; }
+.hs-travel-row { grid-template-columns: 72px minmax(220px, 1fr) minmax(300px, 1fr) 210px; }
 .hs-travel-stats .hs-mi-val { color: var(--stat, var(--color-text, #fff)); text-shadow: 0 0 6px color-mix(in srgb, var(--stat, #fff) 50%, transparent); }
 
 /* Ship tables: coarser, taller rows with larger text, thumbs and buttons. */
@@ -364,7 +363,7 @@ html body .hs-menu-profile-row.is-active {
     box-shadow: 0 0 calc(var(--vf-glow, 0) * 8px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
 }
 :where(html[data-vf-glow]:not([data-vf-glow="off"])) .home-station-overlay :where(img.hs-pixel, .hs-galaxy-ico img, .hs-faction-crest img) {
-    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 calc(var(--vf-glow, 0) * 5px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent));
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 min(calc(var(--vf-glow, 0) * 1.5px), 2px) color-mix(in srgb, var(--faction-accent, var(--color-primary)) 85%, transparent));
 }
 
 /* Explorations cluster labels (ARCHIVE / ARSENAL): larger. */
@@ -516,11 +515,19 @@ html body .victory-screen :is(.victory-subtitle, .victory-stage, .outcome-planet
 html body .victory-screen .victory-header { margin-bottom: 0; }
 html body .victory-screen .victory-title { margin-bottom: 4px; }
 html body .victory-screen .victory-stage { margin-top: 4px; }
-html body .victory-screen .outcome-progress { margin: 0 auto; gap: 8px; width: 100%; }
-html body .victory-screen .outcome-planet { width: 100%; height: 96px; }
-html body .victory-screen .outcome-planet-icon { position: absolute; inset: 0; width: 100%; height: 100%; align-items: center; justify-content: center; }
-html body .victory-screen .outcome-planet-icon > * { transform: scale(3.6); }
-html body .victory-screen .outcome-planet-text { gap: 4px; }
+html body .victory-screen .victory-stage { display: none !important; }
+html body .victory-screen .outcome-progress {
+    margin: 0 auto; gap: 22px; width: 100%; min-height: 360px; padding-top: 188px;
+}
+html body .victory-screen .outcome-planet { width: 100%; height: auto; }
+html body .victory-screen .outcome-progress > .outcome-planet-icon {
+    position: absolute; inset: auto; left: 50%; top: 0;
+    width: 320px; height: 320px;
+    transform: translateX(-50%);
+    align-items: center; justify-content: center;
+}
+html body .victory-screen .outcome-progress > .outcome-planet-icon > * { transform: none; opacity: 1; width: 100%; height: 100%; }
+html body .victory-screen .outcome-planet-text { gap: 4px; position: relative; left: auto; top: auto; transform: none; }
 html body .victory-screen .outcome-step { width: 64px; }
 
 /* Faction archive: illustration plate + lore + customs. */
@@ -593,7 +600,7 @@ html body .pp-ctl.active { border-color: var(--faction-accent, var(--color-prima
 html body .pp-step { background: rgba(0, 0, 0, 0.6); border: 1px solid var(--faction-accent, var(--color-primary)); color: #fff; cursor: pointer; padding: 2px 0; font-size: var(--font-text) !important; line-height: 1; }
 html body .profile-pilot-controls #psRandomPilot { align-self: stretch; }
 @media (max-width: 760px) { html body .profile-pilot-card { flex-direction: column; } html body .pp-grid { grid-template-columns: 1fr; } }
-.pd-hero-portrait { display: inline-block; width: 56px; margin-right: 10px; border: 1px solid var(--color-border, #444); }
+.pd-hero-portrait { display: inline-block; width: 64px; border: 1px solid var(--color-border, #444); box-sizing: border-box; }
 .pd-hero-portrait .hero-portrait { display: block; width: 100%; height: auto; }
 html body .profile-selection-name-mode .profile-faction-preview .profile-faction-preview-emblem img { width: 48px; height: 48px; display: block; }
 

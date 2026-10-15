@@ -65,9 +65,9 @@
         }
 
     </style>
-    <link rel="stylesheet" href="css/styles/part-01.css?v=split-3">
-    <link rel="stylesheet" href="css/styles/part-02.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-03.css?v=split-2">
+    <link rel="stylesheet" href="css/styles/part-01.css?v=split-4">
+    <link rel="stylesheet" href="css/styles/part-02.css?v=split-3">
+    <link rel="stylesheet" href="css/styles/part-03.css?v=split-3">
     <link rel="stylesheet" href="css/styles/part-04.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-05.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-06.css?v=split-2">
@@ -81,12 +81,12 @@
     <link rel="stylesheet" href="css/styles/part-14.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-15.css?v=split-4">
     <link rel="stylesheet" href="css/styles/part-16.css?v=split-3">
-    <link rel="stylesheet" href="css/styles/part-17.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-18.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-19.css?v=split-2">
+    <link rel="stylesheet" href="css/styles/part-17.css?v=split-3">
+    <link rel="stylesheet" href="css/styles/part-18.css?v=split-4">
+    <link rel="stylesheet" href="css/styles/part-19.css?v=split-3">
     <link rel="stylesheet" href="css/styles/part-20.css?v=split-3">
-    <link rel="stylesheet" href="css/styles/part-21.css?v=split-2l">
-    <link rel="stylesheet" href="css/styles/part-22.css?v=split-52">
+    <link rel="stylesheet" href="css/styles/part-21.css?v=split-2m">
+    <link rel="stylesheet" href="css/styles/part-22.css?v=split-66">
     <link rel="stylesheet" href="assets/factions/terran/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/kronax/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/voidborn/gui.css?v=split-2">
@@ -211,17 +211,6 @@
             <aside class="enemy-vitals-side" id="enemyHealthBars" aria-label="Enemy health and faction"></aside>
             <div id="giMissionSide" class="gi-mission-side" aria-label="Mission"></div>
         </div>
-        <div id="gameOver" class="game-over hidden">
-            <div class="game-over-content">
-                <h2>GAME OVER</h2>
-                <p>Mission Failed</p>
-                <div class="game-over-epitaph"></div>
-                <div class="game-over-buttons">
-                    <button onclick="game.restartGame()" class="game-over-button" data-index="0">PLAY AGAIN</button>
-                    <button onclick="game.showLevelSelection()" class="game-over-button" data-index="1">PLANET SELECT</button>
-                </div>
-            </div>
-        </div>
         <div id="pauseOverlay" class="pause-overlay hidden">
             <h2>PAUSED</h2>
             <div class="pause-menu">
@@ -302,6 +291,18 @@
         </div>
     </div>
 
+    <div id="gameOver" class="game-over hidden">
+        <div class="game-over-content">
+            <h2>GAME OVER</h2>
+            <p>Mission Failed</p>
+            <div class="game-over-epitaph"></div>
+            <div class="game-over-buttons">
+                <button onclick="game.restartGame()" class="game-over-button" data-index="0">PLAY AGAIN</button>
+                <button onclick="game.showLevelSelection()" class="game-over-button" data-index="1">PLANET SELECT</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Color Overlay for HTML Elements -->
     <div id="colorOverlay" class="color-overlay"></div>
 
@@ -370,7 +371,6 @@
             }
         });
     </script>
-<script defer src="js/ui/home-station/physical-item.js?v=pi-19"></script>
-<script defer src="js/bundles/deferred.js?v=sym-37"></script>
+<script defer src="js/bundles/deferred.js"></script>
 </body>
 </html>

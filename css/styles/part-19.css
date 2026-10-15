@@ -108,8 +108,12 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     height: calc(var(--vh, calc(100 * var(--sv-h))) - 2 * var(--hs-frame-gap)) !important;
 }
 .home-station-overlay .home-station-content {
-    top: calc((var(--stage-y) + var(--fr-open-top)) / var(--hs-z)) !important;
-    left: calc((var(--stage-x) + var(--fr-open-side)) / var(--hs-z)) !important;
+    /* Position is the unscaled anchor point for transform-origin: 0 0, so it
+       must NOT be divided by --hs-z (only width/height are, in part-15.css) -
+       dividing here pushed the panel past the bezel's safe opening at any
+       zoom below 1, growing worse the more the GUI was scaled down. */
+    top: calc(var(--stage-y) + var(--fr-open-top)) !important;
+    left: calc(var(--stage-x) + var(--fr-open-side)) !important;
 }
 
 /* vw/vh replacements: 1% of the 4:3 stage. Not zoomed contexts: real stage px.
@@ -811,7 +815,7 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
     flex: 0 0 auto;
 }
 .hs-hangar-head-title .hs-hangar-bay-tools.is-topbar > .action-button { min-height: 0; padding: 6px 14px; font-size: var(--font-text); white-space: nowrap; }
-.hs-hangar-stats.is-row { flex-wrap: wrap; overflow: visible; row-gap: 8px; }
+.hs-hangar-stats.is-row { display: flex; flex-wrap: nowrap; overflow-x: auto; }
 .hs-hangar-stats.is-row .hs-hangar-areas { flex: 1 1 auto; min-width: max-content; justify-content: center; margin: 0; }
 
 /* Slot bar: key label sits to the left of its socket. */
@@ -941,6 +945,7 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
 }
 .hs-bay-zoom-btn.is-fit { font-size: var(--font-text); letter-spacing: 1px; }
 .hs-bay-zoom-btn:hover { background: var(--faction-accent, var(--color-primary)); color: #05060a; }
+.hs-bay-info-btn { min-width: 0; width: 30px; padding: 0; text-align: center; border-radius: 50%; }
 
 /* Hangar ships sidebar: one type scale, one icon size, fewer lines */
 html body .home-station-overlay :is(.hs-hangar-ship-tree, .hs-component-tree-container) {

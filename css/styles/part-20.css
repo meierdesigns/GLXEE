@@ -563,16 +563,15 @@ html[data-vf-frame-px="on"] #vf-bezel { --fr-bv: max(var(--fr-px, 5px), var(--fr
     --font-base: var(--font-md);
     font-size: var(--font-md);
 }
-/* LG — titles */
-html body .game-container :is(.gi-head-text h3, .game-info-header h3, .mission-start-text:not(.mission-start-count)) {
+/* LG — titles (mission-start sizes live in part-02; do not clamp them here) */
+html body .game-container :is(.gi-head-text h3, .game-info-header h3) {
     font-size: var(--font-lg) !important;
 }
 /* MD — values & names */
 html body .game-container :is(
     .gi-metric-value, .gi-row-value, .gi-loot-count, .gi-chip-count, .gi-stage,
     #currentWeapon, .weapon-display, .weapon-display span, .weapon-selection,
-    .enemy-faction, .enemy-name, .enemy-hp-text, .enemy-shield-text,
-    .mission-start-text.mission-start-go
+    .enemy-faction, .enemy-name, .enemy-hp-text, .enemy-shield-text
 ) {
     font-size: var(--font-md) !important;
 }
@@ -894,10 +893,21 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-action
 .profile-list-item .profile-list-emblem { margin-right: 22px !important; }
 .profile-list-item .profile-list-name { padding-left: 8px; }
 
-/* Victory / defeat: the planet is shown large, like on the map. */
-.outcome-planet { gap: 20px; }
-.outcome-planet-icon { width: 112px; height: 112px; }
-.outcome-planet-text { gap: 8px; }
+/* Victory / defeat: planet behind; name on lower half; stepper further below. */
+.outcome-progress {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+    min-height: 360px; padding-top: 188px; gap: 22px; overflow: visible;
+    justify-content: flex-start;
+}
+.outcome-planet { gap: 6px; flex-direction: column; justify-content: center; position: relative; z-index: 1; }
+.outcome-progress > .outcome-planet-icon {
+    position: absolute; left: 50%; top: 0; z-index: 0; pointer-events: none;
+    width: 320px; height: 320px; margin: 0;
+    transform: translateX(-50%);
+}
+.outcome-planet-text { gap: 4px; }
+.outcome-progress > .outcome-stepper,
+.outcome-progress > .outcome-status { margin-top: 8px; }
 
 /* Planet / galaxy names: hard black outline so they stay readable over the planet art. */
 .outcome-planet-text :is(strong, span) {
@@ -960,8 +970,9 @@ html body .pause-overlay {
     overflow: hidden;
 }
 
-/* Victory screen: only inside the bezel's screen opening (same geometry as the other menu surfaces). */
-html body .victory-screen {
+/* Victory / game-over: only inside the bezel's screen opening (same geometry as the other menu surfaces). */
+html body .victory-screen,
+html body .game-over {
     --_z: 1;
     zoom: var(--_z);
     inset: auto !important;
@@ -982,19 +993,44 @@ html body .victory-screen .victory-content {
     zoom: 1;
 }
 
-/* Outcome planet: enlarged as a dimmed backdrop behind the header block (stays centred on the small icon's spot). */
-.outcome-planet { position: relative; justify-content: center; }
-.outcome-planet-icon { position: relative; z-index: 0; pointer-events: none; }
-.outcome-planet-icon > * { transform: scale(4.5); transform-origin: center; opacity: 0.45; image-rendering: pixelated; }
+/* Outcome planet: globe behind; name on lower half; stepper below. */
+.outcome-planet { align-items: center; overflow: visible; }
+.outcome-planet-icon {
+    display: flex; align-items: center; justify-content: center;
+    overflow: visible; flex: none;
+}
+.outcome-planet-icon > * {
+    width: 100%; height: 100%;
+    transform: none; opacity: 1;
+    image-rendering: pixelated;
+}
+/* Ambush victory/defeat: destroyed lead ship instead of a planet globe. */
+.outcome-planet-icon.is-ambush-wreck {
+    filter: brightness(0.72) saturate(0.75) contrast(1.08);
+}
+.outcome-planet-icon.is-ambush-wreck .outcome-ambush-ship {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    transform: rotate(-12deg);
+}
+.outcome-progress.is-ambush {
+    padding-top: 160px;
+}
+html body .victory-screen .victory-button[hidden] {
+    display: none !important;
+}
 .outcome-planet-text, .outcome-stepper, .outcome-status { position: relative; z-index: 1; }
 .outcome-planet-text {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     align-items: center; text-align: center; white-space: nowrap;
-    text-shadow: 0 0 4px #000, 0 0 8px #000;
 }
 .outcome-planet-text strong, .outcome-planet-text span { text-align: center; }
-.outcome-planet-text strong { font-size: calc(var(--font-h2) * 1.6); line-height: 1.3; }
-.outcome-planet-text span { font-size: calc(var(--font-small) * 1.6); line-height: 1.3; }
+.outcome-planet-text strong { font-size: calc(var(--font-h2) * 1.35); line-height: 1.3; }
+.outcome-planet-text span { font-size: calc(var(--font-small) * 1.35); line-height: 1.3; }
+.outcome-status {
+    text-shadow:
+        -2px -2px 0 #05060a, 2px -2px 0 #05060a, -2px 2px 0 #05060a, 2px 2px 0 #05060a,
+        0 -2px 0 #05060a, 0 2px 0 #05060a, -2px 0 0 #05060a, 2px 0 0 #05060a;
+}
 
 /* Station upgrade page: legible chips + hint (the stacked glow made the values blurry). */
 html body .hs-upgrade-root .hs-upg-stats .hs-chip { padding: 8px 14px; gap: 10px; }

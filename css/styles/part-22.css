@@ -107,9 +107,18 @@ html body .settings-panel-master .settings-nav-item { min-height: 36px; padding:
     max-height: calc(66 * var(--sv-h));
     overflow-y: auto;
 }
-.hs-menu-profile-stats .pd-hero { gap: 10px; padding-bottom: 8px; }
-.hs-menu-profile-stats :is(.pd-hero-emblem, .pd-hero-emblem *) { width: 44px !important; height: 44px !important; flex: none; }
-.hs-menu-profile-stats .pd-hero-portrait, .hs-menu-profile-stats .pd-hero-portrait > * { width: 44px !important; height: 49px !important; flex: none; }
+.hs-menu-profile-stats .pd-hero { gap: 12px; padding-bottom: 8px; }
+.hs-menu-profile-stats .pd-hero-actions { gap: 6px; }
+.hs-menu-profile-stats .pd-hero-btn { padding: 6px 10px; font-size: var(--font-small); }
+.hs-menu-profile-stats .pd-hero-face { flex: none; }
+.hs-menu-profile-stats .pd-hero-portrait,
+.hs-menu-profile-stats .pd-hero-portrait > * { width: 56px !important; height: auto !important; min-height: 56px; flex: none; }
+.hs-menu-profile-stats .pd-hero-face.has-portrait :is(.pd-hero-emblem, .pd-hero-emblem *) {
+    width: 22px !important; height: 22px !important; flex: none;
+}
+.hs-menu-profile-stats .pd-hero-face:not(.has-portrait) :is(.pd-hero-emblem, .pd-hero-emblem *) {
+    width: 48px !important; height: 48px !important; flex: none;
+}
 .hs-menu-profile-stats .pd-hero-name { font-size: 18px; letter-spacing: 2px; }
 .hs-menu-profile-stats .pd-tile { padding: 6px 8px; gap: 8px; }
 .hs-menu-profile-stats :is(.pd-tile-icon, .pd-tile-icon *) { width: 26px !important; height: 26px !important; flex: none; }
@@ -141,7 +150,7 @@ button.profile-stepper-btn:hover { color: var(--faction-accent, #fff); opacity: 
 .profile-stepper-icon { display: block; width: 40px; height: 40px; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a); }
 
 /* Wizard bottom bar: sits on the overlay (not in the dialog) so it fills the screen width, like the stepper on top. */
-html body .profile-selection-overlay:has(> .profile-selection-bar) { padding-bottom: 112px; box-sizing: border-box; }
+html body .profile-selection-overlay:has(> .profile-selection-bar) { padding-bottom: 140px; box-sizing: border-box; }
 html body .profile-selection-overlay > .profile-selection-bar {
     position: absolute; left: calc(-1 * var(--ps-bleed-l, 0px)); right: calc(-1 * var(--ps-bleed-r, 0px)); bottom: 0; z-index: 2; box-sizing: border-box; width: auto; margin: 0 !important; padding: 14px 32px;
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 24px;
@@ -456,6 +465,24 @@ html body .profile-galaxy-modal .gm-sum-list dd { font-size: calc(var(--font-h2)
 html body .profile-galaxy-modal .gm-sum-list dt { font-size: var(--font-text) !important; }
 html body .profile-galaxy-modal .gm-sum-list { row-gap: 12px; }
 html body .profile-galaxy-modal .gm-sum-state { font-size: var(--font-text) !important; }
+
+/* NEW GALAXY: bigger dialog overall, and every label/button/value readable at that size
+   (the shared --font-h2/--font-small wizard tokens are too small once the box this wide). */
+html body .profile-galaxy-modal .profile-galaxy-modal-box { width: min(1480px, 98%); padding-top: 28px; padding-bottom: 28px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-title { font-size: 32px; line-height: 32px; margin-bottom: 18px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form.profile-galaxy-modal-form { gap: 20px; }
+html body .profile-galaxy-modal .profile-galaxy-modal-form .profile-start-row { grid-template-columns: 150px minmax(0, 1fr); }
+html body .profile-galaxy-modal .profile-start-label,
+html body .profile-galaxy-modal .profile-start-chip,
+html body .profile-galaxy-modal .profile-galaxy-modal-input { font-size: 18px; line-height: 20px; }
+html body .profile-galaxy-modal .profile-start-chip { padding-top: 10px; padding-bottom: 10px; }
+html body .profile-galaxy-modal .profile-gm-tick { font-size: 15px; }
+html body .profile-galaxy-modal .profile-gm-tick.selected { font-size: 16px; }
+html body .profile-galaxy-modal .gm-sum-name { font-size: 26px !important; }
+html body .profile-galaxy-modal .gm-sum-list dt { font-size: 15px !important; }
+html body .profile-galaxy-modal .gm-sum-list dd { font-size: 18px !important; }
+html body .profile-galaxy-modal .gm-sum-state { font-size: 15px !important; }
+html body .profile-galaxy-modal .profile-galaxy-modal-buttons .profile-start-chip { padding: 12px 24px; }
 html body .profile-galaxy-modal .gm-sum-name { font-size: calc(var(--font-h2) * 1.5) !important; }
 /* Galaxy step: the bar only holds NEW GALAXY now (PREV / NEXT removed; arrows and the list switch galaxies). */
 html body .profile-selection-name-mode .profile-start-galaxy-navrow { justify-content: flex-start; }
@@ -478,7 +505,7 @@ html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile
     box-shadow: 0 0 0 2px #05060a, 0 6px 18px rgba(0, 0, 0, .55);
     backdrop-filter: blur(2px);
 }
-html body .profile-selection-name-mode .profile-start-galaxy.has-side { grid-template-columns: minmax(200px, 0.62fr) minmax(0, 3fr) !important; }
+html body .profile-selection-name-mode .profile-start-galaxy.has-side { grid-template-columns: minmax(300px, 1fr) minmax(0, 2.2fr) !important; }
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info { max-width: min(340px, 48%); }
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info :is(.profile-start-galaxy-name, .profile-start-galaxy-pick) { white-space: normal !important; overflow-wrap: anywhere; font-size: calc(var(--font-h2) * 1.1) !important; }
 
@@ -490,6 +517,37 @@ html body .profile-selection-name-mode .profile-start-galaxy.has-side {
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-navrow { grid-area: nav; padding-top: 8px; }
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-navrow > .profile-start-galaxy-new { width: 100%; }
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-map { grid-row: 1 / -1; }
+
+/* Galaxy list: fill the side column; bigger crest, name, rival icons. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-side {
+    display: flex; flex-direction: column; align-self: stretch; width: 100%; height: 100%; min-height: 0;
+    box-sizing: border-box; padding: 6px; gap: 4px; overflow-y: auto;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side li {
+    flex: 1 1 0; min-height: 72px; align-content: center; padding: 14px 16px; gap: 12px 14px;
+    font-size: calc(var(--font-h2) * 1.25); line-height: 1.15; letter-spacing: 2px;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .ruler {
+    width: 44px; height: 44px; display: inline-grid; place-items: center;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .ruler :is(img, canvas, svg),
+html body .profile-selection-name-mode .profile-start-galaxy-side .ruler > * {
+    width: 100% !important; height: 100% !important; image-rendering: pixelated;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .name {
+    flex: 1 1 auto; min-width: 0; white-space: normal; overflow: visible; text-overflow: unset;
+    font-size: inherit; line-height: inherit;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .rivals {
+    margin-left: 58px; gap: 4px; align-items: center;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .rivals :is(img, canvas, svg),
+html body .profile-selection-name-mode .profile-start-galaxy-side .rivals > * {
+    width: 22px !important; height: 22px !important; image-rendering: pixelated;
+}
+html body .profile-selection-name-mode .profile-start-galaxy-side .tag {
+    font-size: calc(var(--font-text) * 1.1); line-height: 1.2; padding: 5px 7px; letter-spacing: 1px;
+}
 /* Zoomed out: the whole chart is visible (meet) with a free strip on the right for the info card. */
 html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-map { background: #000; }
 .profile-start-galaxy-map .start-house { fill: var(--faction-accent, #fff); stroke: #05060a; stroke-width: 2; paint-order: stroke fill; stroke-linejoin: miter; }
@@ -652,6 +710,8 @@ html body .hs-slot-picker .hs-pick-cell { position: relative; display: grid; pla
 html body .hs-slot-picker .hs-pick-cell:hover:not(:disabled), html body .hs-slot-picker .hs-pick-cell:focus-visible { border-color: var(--pk-c, var(--color-primary)); box-shadow: inset 0 0 10px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent); }
 html body .hs-slot-picker .hs-pick-cell.is-current { border-color: var(--pk-c, var(--color-primary)); background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); }
 html body .hs-slot-picker .hs-pick-cell.is-used { opacity: 1; }
+html body .hs-slot-picker .hs-pick-assigned { position: absolute; left: 2px; top: 2px; z-index: 3; width: 16px; height: 16px; display: grid; place-items: center; background: #05060a; border: 1px solid var(--pk-c, var(--color-primary)); color: var(--pk-c, var(--color-primary)); }
+html body .hs-slot-picker .hs-pick-assigned svg { width: 10px; height: 10px; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked { opacity: .5; cursor: not-allowed; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-pick-ico { opacity: .45; }
 html body .hs-slot-picker .hs-pick-ico { display: grid; place-items: center; width: 48px; height: 48px; font-size: 28px; }
@@ -711,19 +771,57 @@ html body .start-screen-retro .start-menu-row .menu-item.selected {
 }
 html body .start-screen-retro .start-menu-row .menu-item:is(.disabled, [aria-disabled="true"]) { opacity: .55; }
 
-/* ── Start screen main menu: full-screen layout with the pilot's station as backdrop ── */
-.start-station-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: #02040a; }
+/* ── Start screen main menu: station is a true full-bleed backdrop (not boxed into
+   a padded column, so it actually reaches the screen edges); menu/scoreboard sit
+   on top in a centred row — see .start-menu-row below. ── */
+.start-station-backdrop {
+  /* Mounted as a direct child of .start-screen, which is itself already
+     positioned flush against the bezel's safe "glass" opening (part-18.css) —
+     so inset:0 here is enough to fill that glass; re-applying the --fr-open-*
+     safe-area insets on top of that (as before) double-subtracted them,
+     leaving a dark unfilled gap between the bezel and the backdrop content. */
+  position: absolute;
+  inset: 0;
+  z-index: 0; pointer-events: none; overflow: hidden; background: #02040a;
+}
 .start-station-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated;
   opacity: 1; transition: opacity .12s steps(3);
+  /* The backdrop itself is pointer-events:none (decorative, must not block the menu/
+     scoreboard behind/around it), but the canvas opts back in so dev-mode drag/wheel
+     editing works — harmless outside dev mode since the station-backdrop.js handlers
+     no-op unless startScreenManager.devMode is on. */
+  pointer-events: auto;
 }
 .start-station-canvas.is-swapping { opacity: 0; }
 .start-station-caption {
-  position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
   font-family: 'Silkscreen', var(--ui-font-family); font-size: var(--font-text); letter-spacing: .2em;
   color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px color-mix(in srgb, var(--color-primary) 60%, transparent);
   background: rgba(3, 5, 11, .65); padding: 4px 12px; border: 2px solid color-mix(in srgb, var(--color-primary) 60%, #000); white-space: nowrap;
+  max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis;
 }
+/* Dev-mode layout editor for the station/ship/planet (drag on canvas to move, wheel to
+   scale) — this small panel just surfaces the resolution slider and current values. */
+.start-station-dev-panel {
+  position: absolute; top: 10px; left: 10px; z-index: 5; pointer-events: auto;
+  background: rgba(3, 5, 11, .82); border: 2px solid color-mix(in srgb, var(--color-primary) 55%, #000);
+  padding: 8px 10px; font-family: var(--ui-font-family); font-size: var(--font-text);
+  color: #fff; letter-spacing: .05em; max-width: 220px;
+}
+.start-station-dev-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.start-station-dev-row label { display: flex; align-items: center; gap: 6px; }
+.start-station-dev-vals { font-size: calc(var(--font-text) - 1px); opacity: .85; margin-bottom: 6px; line-height: 1.5; }
+.start-station-dev-val.is-selected {
+  opacity: 1; color: var(--color-primary, #7ec8ff); font-weight: bold;
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+.start-station-dev-row button {
+  font: inherit; font-size: calc(var(--font-text) - 1px); color: #fff; letter-spacing: .05em;
+  background: color-mix(in srgb, var(--color-primary) 25%, #05060a); border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  padding: 3px 8px; cursor: pointer;
+}
+.start-station-dev-row button:hover { background: color-mix(in srgb, var(--color-primary) 45%, #05060a); }
 
 /* The menu content fills the screen (no terminal bezel, transparent) so the station shows through the middle */
 html body .start-screen-content.start-screen-retro.start-screen-main {
@@ -731,19 +829,51 @@ html body .start-screen-content.start-screen-retro.start-screen-main {
   width: 100% !important; max-width: none !important; height: 100% !important; max-height: none !important;
   padding: clamp(14px, 3vh, 36px) clamp(24px, 5vw, 80px) clamp(14px, 3vh, 30px);
   background: transparent !important; box-shadow: none !important; overflow: visible !important;
+  /* This wrapper is transparent but still covers the WHOLE screen at a higher z-index
+     than the station backdrop (z-index 0) behind it — without pointer-events:none here,
+     its own (invisible) box swallows every click/wheel over empty areas (including the
+     dev panel and the station/ship/planet dev editor), even where nothing visible is
+     drawn. Each genuinely interactive piece below opts back in with pointer-events:auto. */
+  pointer-events: none;
 }
 html body .start-screen-content.start-screen-retro.start-screen-main::before,
 html body .start-screen-content.start-screen-retro.start-screen-main::after { display: none; }
-html body .start-screen-main .start-menu-row {
-  flex: 1 1 auto; align-self: stretch; width: 100% !important; max-width: none !important; justify-content: space-between !important; align-items: center; min-height: 0;
+html body .start-screen-content.start-screen-retro.start-screen-main > .start-screen-instructions,
+html body .start-screen-content.start-screen-retro.start-screen-main > .ui-menu-util-row,
+html body .start-screen-content.start-screen-retro.start-screen-main > .start-screen-footer {
+  pointer-events: auto;
 }
-html body .start-screen-main .start-menu-row > .start-screen-menu-clustered { align-self: center; min-width: clamp(260px, 24vw, 360px); }
-/* Menu and scoreboard always side by side; on narrow screens the scoreboard shrinks instead of moving under the menu. */
+/* Grid with two equal-width side tracks (an empty spacer left, the scoreboard right)
+   so the menu in the middle track lands exactly centred on screen, matching the
+   scoreboard's width rather than drifting off-centre. */
+html body .start-screen-main .start-menu-row {
+  display: grid !important; grid-template-columns: 1fr auto 1fr; align-items: center;
+  flex: 1 1 auto; align-self: stretch; width: 100% !important; max-width: none !important; min-height: 0; gap: 16px;
+  /* The row itself spans the full width (including over the station backdrop on the
+     left), so it must not swallow clicks either — only its actually-interactive
+     children (menu, scoreboard) opt back in below. */
+  pointer-events: none;
+}
+html body .start-screen-main .start-menu-row > .start-screen-menu-clustered,
+html body .start-screen-main .start-scoreboard { pointer-events: auto; }
+/* Same width formula as the scoreboard, so both side tracks size equally and the
+   menu column between them lands exactly centred rather than drifting with
+   whatever intrinsic size each side happens to have. */
+/* Invisible, but it still sat in the stacking order above the station backdrop
+   (.start-screen-content is z-index:1, the backdrop z-index:0) — without pointer-events:
+   none it silently absorbed every click/wheel meant for the station/ship/planet dev
+   editor underneath it. */
+html body .start-screen-main .start-menu-row-spacer { grid-column: 1; width: clamp(340px, 30vw, 480px); pointer-events: none; }
+html body .start-screen-main .start-menu-row > .start-screen-menu-clustered {
+  grid-column: 2; justify-self: center; align-self: center; min-width: clamp(260px, 24vw, 360px);
+}
+/* Menu and scoreboard always side by side; on narrow screens the scoreboard shrinks instead of moving under the menu.
+   Centred in its track (not flush against the screen edge) and a bit bigger/more readable. */
 html body .start-screen-main .start-scoreboard {
-  flex: 0 1 clamp(320px, 28vw, 440px); width: clamp(320px, 28vw, 440px); min-width: 0; align-self: center; margin-top: 0;
+  grid-column: 3; justify-self: center; width: clamp(340px, 30vw, 480px); min-width: 0; align-self: center; margin-top: 0;
+  font-size: calc(var(--font-text) + 1px);
   background: rgba(3, 5, 11, .82);
 }
-html body .start-screen-main .start-menu-row { flex-direction: row !important; gap: 16px; }
 
 /* Physical item casing behind the part icon (generated by physical-item.js). */
 .hs-item-body { position: absolute; inset: 2px; background-size: 100% 100%; background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none; }
@@ -761,11 +891,9 @@ html body .hs-slot-picker .hs-pick-cell { background: radial-gradient(circle at 
 /* Emblem sits top-left and only shows on hover; items are never dimmed. */
 html body .hs-slot-picker .hs-pick-ico { left: 4px; top: 4px; bottom: auto; opacity: 0; transition: opacity .12s; filter: drop-shadow(0 1px 0 #05060a); }
 html body .hs-slot-picker .hs-pick-cell:hover .hs-pick-ico, html body .hs-slot-picker .hs-pick-cell:focus-visible .hs-pick-ico { opacity: 1; }
-html body .hs-slot-picker .hs-pick-cell.is-blocked { opacity: 1; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-pick-ico { opacity: 0; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked:hover .hs-pick-ico { opacity: 1; }
 html body .hs-slot-picker .hs-pick-cell:disabled { color: inherit; }
-html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-item-body { filter: none; }
 .hs-slotview-part:has(.hs-item-body) img { left: 3px; top: 3px; bottom: auto; opacity: 0; transition: opacity .12s; }
 .hs-slotview-cell:hover .hs-slotview-part img { opacity: 1; }
 /* Emblem: same size on every item, 8x8 px. */
@@ -783,7 +911,7 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
 .hs-bay-inv-zoom input { flex: 1; }
-html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { grid-template-columns: repeat(auto-fill, var(--cs)); grid-auto-rows: var(--cs); width: auto; max-height: none; min-height: 0; overflow: visible; background: #03030a; }
+html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { max-height: none; min-height: 0; overflow: visible; background: #03030a; }
 .hs-bay-inv[data-filter="weapon"] .hs-pick-cell:not([data-part-kind="weapon"]), .hs-bay-inv[data-filter="defense"] .hs-pick-cell:not([data-part-kind="defense"]), .hs-bay-inv[data-filter="ability"] .hs-pick-cell:not([data-part-kind="ability"]), .hs-bay-inv[data-filter="energy"] .hs-pick-cell:not([data-part-kind="energy"]) { opacity: .22; filter: grayscale(.7); }
 html body .hs-bay-inv .hs-pick-cell { cursor: grab; }
 html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: 0 0 0 2px #05060a, 0 0 0 4px var(--pk-c); }
@@ -830,14 +958,19 @@ html body .hs-bay-inv .hs-pick-cell.is-equipped:hover:not(.is-anim-equip):not(.i
 @media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-equipped:hover, html body .hs-bay-inv .hs-pick-cell.is-equipped:hover::after { animation: none; } }
 
 /* Compact tooltip (inventory items): roomier, larger type, description first, key/value facts below. */
-html body .ui-tooltip.ui-tooltip-rich.ui-tooltip-compact { min-width: 280px; max-width: 380px; gap: 8px; padding: 16px 20px; font-size: calc(var(--font-text) + 2px); line-height: 1.4; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head { display: flex; align-items: center; font-size: calc(var(--font-text) + 5px); padding-bottom: 8px; margin-bottom: 4px; }
+html body .ui-tooltip.ui-tooltip-rich.ui-tooltip-compact { min-width: 280px; max-width: 380px; gap: 8px; padding: 16px 20px; font-size: calc(var(--font-text) + 2px); line-height: 1.4; overflow: visible; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-item { display: block; flex-shrink: 0; overflow: visible; image-rendering: pixelated; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head { display: flex; align-items: center; gap: 14px; font-size: calc(var(--font-text) + 5px); padding-bottom: 8px; margin-bottom: 4px; overflow: visible; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head.has-item { align-items: center; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-title { min-width: 0; flex: 1 1 auto; line-height: 1.2; }
 html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note { font-size: .95em; opacity: .85; margin-top: 0; }
 html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-row { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent); }
 html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note:last-child { opacity: .55; font-size: .8em; letter-spacing: 1px; padding-top: 4px; }
 
-/* Bay zoom: bottom right. */
-html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: auto; right: 10px; }
+/* Bay zoom: bottom right. Extra clearance (--hs-frame-gap, scales with the
+   device-frame bezel size) keeps the "?" info button clear of the frame's
+   pixel-art corner notch at any window size (see part-19.css --hs-frame-gap). */
+html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: calc(10px + var(--hs-frame-gap, 0px)); left: auto; right: calc(10px + var(--hs-frame-gap, 0px)); }
 
 /* Start step: the start inventory sits in the hull sidebar, under the hull areas. */
 html body .profile-start-inv { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent); }
@@ -918,4 +1051,177 @@ html body .profile-selection-name-mode.is-name-step .profile-start-main .profile
 /* Start step: the content takes nearly the full width (slim side margins instead of 70 units per side). */
 html body .profile-selection-content.profile-selection-floating.profile-selection-name-mode.is-name-step:has(> .profile-start-main) {
     width: calc(100% - 32 * var(--bz-u)) !important; padding-left: 12px !important; padding-right: 12px !important;
+}
+
+/* Pilot step: keep portrait + picker fully visible above the bottom bar (no bottom clip).
+   Portrait size is capped by remaining height (stepper + bar + name/title chrome), not raw 50vh. */
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step {
+    justify-content: flex-start !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-selection-title,
+html body .profile-selection-name-mode.is-pilot-step .profile-faction-picker,
+html body .profile-selection-name-mode.is-pilot-step .profile-name-row {
+    flex: 0 0 auto;
+}
+/* Name row: smaller type so the Pilot card gets the height. */
+html body .profile-selection-name-mode.is-pilot-step .profile-name-row {
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-name-input {
+    font-size: 18px !important;
+    letter-spacing: 2px !important;
+    padding: 6px 12px !important;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-name-gen {
+    font-size: 14px !important;
+    letter-spacing: 1px !important;
+    padding: 6px 14px !important;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-name-crest {
+    width: calc(32 * var(--bz-u));
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-start-options {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow: hidden;
+    justify-content: stretch !important;
+    padding-bottom: 0 !important;
+    container-type: size;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-start-row[data-start-row="pilot"] {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+/* Portrait uses native 48×54; both panes share the free height and never spill past it. */
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-card {
+    --pp-gap: 4px;
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    gap: 10px;
+    padding: 4px;
+    align-items: stretch !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-side {
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+    width: auto;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .profile-pilot-portrait {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0 !important;
+    height: 100% !important;
+    width: auto !important;
+    max-width: min(42vw, 480px);
+    max-height: 100%;
+    aspect-ratio: 48 / 54;
+    box-sizing: border-box !important;
+    --pk: 3px !important;
+    border-width: 3px !important;
+    box-shadow: inset 0 0 0 2px #05060a, inset 2px 2px 0 2px color-mix(in srgb, var(--pk-c) 80%, #fff);
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-portrait .hero-portrait {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;
+    object-position: 50% 0;
+    image-rendering: pixelated;
+}
+html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls {
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+    overflow: hidden;
+    align-self: stretch !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-grid {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    max-width: 100%;
+    width: auto;
+    overflow: visible !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+/* 6+6+4 square tiles. --pp-tile is set in px by fitPilotPicks() (no cqw/cqh — works in all browsers). */
+html body .profile-selection-name-mode.is-pilot-step .pp-picks {
+    --pp-gap: 4px;
+    --pp-tile: 72px;
+    flex: none;
+    width: calc(6 * var(--pp-tile) + 5 * var(--pp-gap)) !important;
+    height: calc(3 * var(--pp-tile) + 2 * var(--pp-gap)) !important;
+    max-width: 100% !important;
+    max-height: 100%;
+    min-height: 0;
+    margin: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, var(--pp-tile)) !important;
+    grid-template-rows: repeat(3, var(--pp-tile));
+    gap: var(--pp-gap) !important;
+    row-gap: var(--pp-gap) !important;
+    align-content: start !important;
+    justify-content: start !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick {
+    flex: unset !important;
+    flex-basis: auto !important;
+    width: var(--pp-tile) !important;
+    height: var(--pp-tile) !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box !important;
+    overflow: hidden;
+    --pk: 2px !important;
+    border-width: 3px !important;
+    box-shadow: inset 0 0 0 2px #05060a, inset 2px 2px 0 2px color-mix(in srgb, var(--pk-c) 80%, #fff);
+}
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick canvas,
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick canvas.hero-portrait.vx-portrait {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain !important;
+    object-position: 50% 50% !important;
+    image-rendering: pixelated;
+}
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-pick.selected {
+    box-shadow: inset 0 0 0 2px #fff, inset 2px 2px 0 2px #fff;
 }

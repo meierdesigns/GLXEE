@@ -602,7 +602,29 @@ html body .profile-selection-overlay.is-inline .profile-selection-content { filt
 /* ==== Profile details: coarse tile layout, big type, icons ==== */
 .profile-details { padding: 16px !important; gap: 16px; text-align: left; }
 .pd-hero { display: flex; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: var(--ui-border-width, 2px) solid var(--color-border); }
-.pd-hero-emblem, .pd-hero-emblem img { width: 64px; height: 64px; flex: none; }
+.pd-hero-actions { margin-left: auto; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.pd-hero-btn {
+    appearance: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font: inherit; font-size: var(--font-text); letter-spacing: 1px; padding: 8px 12px;
+    color: var(--faction-accent, var(--color-primary)); background: transparent;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+}
+.pd-hero-btn:hover, .pd-hero-btn:focus-visible {
+    color: #05060a; background: var(--faction-accent, var(--color-primary)); outline: none;
+}
+.pd-hero-btn.is-danger { color: var(--status-error, #ff5a3c); border-color: var(--status-error, #ff5a3c); }
+.pd-hero-btn.is-danger:hover, .pd-hero-btn.is-danger:focus-visible, .pd-hero-btn.is-danger.is-armed { color: #05060a; background: var(--status-error, #ff5a3c); }
+.pd-hero-btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+.pd-hero-btn .ps-btn-icon { width: 16px; height: 16px; flex: none; }
+.pd-hero-face { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; }
+.pd-hero-face.has-portrait .pd-hero-emblem {
+    position: absolute; right: -3px; bottom: -3px; z-index: 1;
+    width: 28px; height: 28px;
+    filter: drop-shadow(0 0 0 #05060a) drop-shadow(1px 1px 0 #05060a);
+}
+.pd-hero-emblem, .pd-hero-emblem img { width: 28px; height: 28px; flex: none; display: block; }
+.pd-hero-face:not(.has-portrait) .pd-hero-emblem,
+.pd-hero-face:not(.has-portrait) .pd-hero-emblem img { width: 56px; height: 56px; }
 .pd-hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pd-hero-name { font-size: 26px; letter-spacing: 3px; color: var(--color-text); overflow-wrap: anywhere; }
 .pd-hero-faction { font-style: normal; font-size: var(--font-h2); letter-spacing: 3px; color: var(--faction-accent, var(--color-primary)); }
@@ -1219,28 +1241,49 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation:is(:hover, :f
     background: rgba(0, 0, 0, 0.62);
 }
 .gm-mm-dialog {
-    width: min(560px, 80%);
+    width: min(760px, 90%);
+    max-height: 85vh;
+    overflow-y: auto;
     box-sizing: border-box;
-    padding: 22px 26px;
+    padding: 28px 32px;
     background: #05060a;
     border: var(--ui-border-width, 2px) solid var(--color-primary);
     box-shadow: inset 0 0 0 2px #05060a, 0 0 0 2px #000, 0 0 28px color-mix(in srgb, var(--color-primary) 40%, transparent);
     color: var(--color-text);
 }
-.gm-mm-title { margin: 0 0 14px; letter-spacing: 0.14em; color: var(--color-primary);}
-.gm-mm-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.gm-mm-title { margin: 0 0 18px; font-size: 26px; letter-spacing: 0.14em; color: var(--color-primary);}
+.gm-mm-body { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .gm-mm-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 16px;
-    padding: 6px 10px;
+    padding: 10px 14px;
     background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
     border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 28%, transparent);
     font-size: var(--font-h2);
     letter-spacing: 0.06em;
 }
 .gm-mm-row span { color: var(--color-text-secondary); font-size: var(--font-text); align-self: center; }
-.gm-mm-goal { margin: 0 0 18px; font-size: var(--font-h2); line-height: 1.5; opacity: 0.9; }
+.gm-mm-facs, .gm-mm-planets { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.gm-mm-fac-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; background: rgba(0, 0, 0, 0.35); border: var(--ui-border-width-thin, 1px) solid color-mix(in srgb, var(--color-primary) 30%, transparent); }
+.gm-mm-fac-chip img { width: 24px; height: 24px; display: block; }
+.gm-mm-fac-chip b { font-size: var(--font-text); letter-spacing: 0.06em; color: var(--color-text); }
+.gm-mm-row-planets { align-items: flex-start; }
+.gm-mm-planet-chip {
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 0.06em;
+    color: var(--color-text);
+    padding: 6px 12px;
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
+    border: var(--ui-border-width-thin, 1px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    cursor: pointer;
+}
+.gm-mm-planet-chip:hover, .gm-mm-planet-chip:focus-visible { background: color-mix(in srgb, var(--color-primary) 28%, #05060a); }
+.gm-mm-planet-chip:disabled { opacity: 0.45; cursor: not-allowed; border-style: dashed; }
+.gm-mm-planet-chip:disabled:hover { background: color-mix(in srgb, var(--color-primary) 14%, #05060a); }
+.gm-mm-goal { margin: 0 0 22px; font-size: var(--font-h2); line-height: 1.6; opacity: 0.9; }
 .gm-mm-actions { display: flex; justify-content: space-between; gap: 12px; }
 html body .galaxy-map-embedded .gm-map-stage .galaxy-map-situation { pointer-events: auto; }
 
@@ -1392,7 +1435,7 @@ html body .hs-body .hs-panel .hs-line-name strong { font-size: 21px; letter-spac
 html body .hs-body .hs-panel .hs-mission-meta { font-size: var(--font-h2); line-height: 1.35; }
 html body .hs-body .hs-panel .hs-mission-reward * { font-size: var(--font-h2) !important; }
 html body .hs-body .hs-panel .hs-mission-reward img { width: 32px !important; height: 32px !important; }
-html body .hs-body .hs-panel .hs-line-action { font-size: var(--font-h2); padding: 10px 18px; min-width: 200px; }
+html body .hs-body .hs-panel .hs-line-action:not(.hs-shop-root .hs-line-action, .hs-upgrade-root .hs-line-action) { font-size: var(--font-h2); padding: 10px 18px; min-width: 200px; }
 html body .hs-body .hs-panel .hs-explore-cluster-title { font-size: var(--font-h2); letter-spacing: 0.14em; }
 html body .hs-body .hs-station-cover-kicker { font-size: var(--font-h2); }
 html body .hs-body .hs-mission { padding-block: 10px; }

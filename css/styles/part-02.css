@@ -549,7 +549,11 @@ html body .game-container .game-stage #gameCanvas {
     flex-shrink: 0;
 }
 
+/* —— Mission start: FIRE TO START → countdown → GO (faction-flavoured) —— */
 .mission-start-overlay {
+    --ms-accent: var(--faction-accent, var(--color-primary, #7ec8ff));
+    --ms-hull: var(--faction-hull, #3A6EA5);
+    --ms-edge: var(--faction-edge, #1a3048);
     position: absolute;
     inset: 0;
     z-index: 40;
@@ -557,12 +561,93 @@ html body .game-container .game-stage #gameCanvas {
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    /* Flat dim only — old 12%/88% primary hairlines looked like ghost frame contours. */
-    background: rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    background: transparent;
 }
 
 .mission-start-overlay.hidden {
     display: none;
+}
+
+.mission-start-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 55% 48% at 50% 48%,
+            transparent 0%,
+            rgba(0, 0, 0, 0.28) 55%,
+            rgba(0, 0, 0, 0.72) 100%);
+    transition: opacity 0.2s steps(2, end);
+}
+.mission-start-overlay.is-count .mission-start-vignette {
+    background:
+        radial-gradient(ellipse 50% 42% at 50% 48%,
+            color-mix(in srgb, var(--ms-accent) 10%, transparent) 0%,
+            rgba(0, 0, 0, 0.45) 60%,
+            rgba(0, 0, 0, 0.82) 100%);
+}
+.mission-start-overlay.is-go .mission-start-vignette {
+    background:
+        radial-gradient(ellipse 70% 60% at 50% 48%,
+            color-mix(in srgb, var(--ms-accent) 28%, transparent) 0%,
+            rgba(0, 0, 0, 0.35) 55%,
+            rgba(0, 0, 0, 0.7) 100%);
+    animation: mission-start-flash 0.35s steps(4, end);
+}
+
+.mission-start-aura {
+    position: absolute;
+    width: min(78%, 420px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--ms-accent) 35%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ms-edge) 80%, transparent),
+        0 0 40px color-mix(in srgb, var(--ms-accent) 25%, transparent);
+    opacity: 0.55;
+    animation: mission-start-aura-pulse 1.4s ease-in-out infinite alternate;
+}
+.mission-start-overlay.is-count .mission-start-aura {
+    width: min(70%, 360px);
+    opacity: 0.85;
+    animation: mission-start-aura-spin 2.4s linear infinite;
+}
+.mission-start-overlay.is-go .mission-start-aura {
+    width: min(92%, 520px);
+    opacity: 1;
+    border-color: var(--ms-accent);
+    animation: mission-start-aura-burst 0.55s steps(5, end) forwards;
+}
+
+.mission-start-frame {
+    position: absolute;
+    width: min(88%, 560px);
+    height: min(52%, 280px);
+    pointer-events: none;
+}
+.mission-start-frame .ms-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: var(--ms-accent);
+    border-style: solid;
+    border-width: 0;
+    opacity: 0.9;
+}
+.mission-start-frame .ms-tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; }
+.mission-start-frame .ms-tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; }
+.mission-start-frame .ms-bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; }
+.mission-start-frame .ms-br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; }
+.mission-start-frame .ms-slash { display: none; }
+
+.mission-start-stack {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(10px, calc(1.6 * var(--sv-w)), 18px);
+    max-width: 94%;
 }
 
 .mission-start-text {
@@ -570,52 +655,80 @@ html body .game-container .game-stage #gameCanvas {
     display: grid;
     place-items: center;
     font-family: var(--ui-font-family, monospace);
-    font-size: var(--font-lg);
+    font-size: clamp(28px, calc(4.8 * var(--sv-w)), 56px) !important;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--color-primary, #e8e8e8);
+    color: var(--ms-accent, var(--color-primary, #e8e8e8));
     text-align: center;
-    min-width: min(78%, 300px);
-    min-height: 64px;
-    padding: 16px 22px;
-    border: var(--ui-border-width, 2px) solid var(--color-primary, #b0b0b0);
-    background: color-mix(in srgb, var(--color-background) 88%, transparent);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 22%, transparent);
-    text-shadow: 0 1px 0 #050508, 0 0 6px #050508;
+    min-width: min(92%, 520px);
+    min-height: clamp(72px, calc(12 * var(--sv-w)), 110px);
+    padding: clamp(18px, calc(2.8 * var(--sv-w)), 28px) clamp(22px, calc(3.5 * var(--sv-w)), 40px);
+    border: var(--ui-border-width-thick, 3px) solid var(--ms-accent, var(--color-primary, #b0b0b0));
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--ms-accent) 14%, #05060a) 0%,
+            color-mix(in srgb, var(--ms-edge) 55%, #05060a) 100%);
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--ms-accent) 28%, transparent),
+        0 0 28px color-mix(in srgb, var(--ms-accent) 35%, transparent),
+        0 4px 0 #000;
+    text-shadow:
+        0 2px 0 #050508,
+        0 0 12px color-mix(in srgb, var(--ms-accent) 55%, transparent);
     -webkit-font-smoothing: none;
     -moz-osx-font-smoothing: unset;
 }
 
+.mission-start-sub {
+    font-family: var(--ui-font-family, monospace);
+    font-size: clamp(12px, calc(1.6 * var(--sv-w)), 18px);
+    font-weight: 700;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--ms-accent) 75%, #fff);
+    text-shadow: 0 1px 0 #050508;
+    opacity: 0.85;
+}
+.mission-start-sub[hidden] { display: none !important; }
+
 .mission-start-text.mission-start-count {
     position: relative;
-    width: clamp(96px, calc(20 * var(--sv-w)), 136px);
+    width: clamp(168px, calc(34 * var(--sv-w)), 260px);
     min-width: 0;
-    height: clamp(112px, calc(24 * var(--sv-w)), 156px);
+    height: clamp(196px, calc(40 * var(--sv-w)), 300px);
     min-height: 0;
     padding: 0;
-    border: var(--ui-border-width-thick, 3px) solid var(--color-primary, #b0b0b0);
+    letter-spacing: 0;
+    border: 4px solid var(--ms-accent, var(--color-primary, #b0b0b0));
     background:
-        repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-primary) 6%, transparent) 3px 4px),
-        color-mix(in srgb, var(--color-background) 92%, transparent);
-    box-shadow: inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 25%, transparent);
+        repeating-linear-gradient(0deg, transparent 0 4px, color-mix(in srgb, var(--ms-accent) 8%, transparent) 4px 5px),
+        color-mix(in srgb, var(--ms-edge) 40%, #05060a);
+    box-shadow:
+        inset 0 0 0 3px #05060a,
+        inset 0 0 0 6px color-mix(in srgb, var(--ms-accent) 40%, transparent),
+        0 0 36px color-mix(in srgb, var(--ms-accent) 45%, transparent);
     text-shadow: none;
     image-rendering: pixelated;
 }
 
 .mission-start-pixel-canvas {
     position: absolute;
-    left: 12%;
-    right: 12%;
-    top: 10%;
-    bottom: 20%;
-    width: 76%;
-    height: 70%;
+    left: 10%;
+    right: 10%;
+    top: 8%;
+    bottom: 18%;
+    width: 80%;
+    height: 74%;
     object-fit: contain;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     pointer-events: none;
-    filter: drop-shadow(2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, transparent) 55%, transparent));
+    filter:
+        drop-shadow(3px 0 0 color-mix(in srgb, var(--ms-accent) 45%, transparent))
+        drop-shadow(-3px 0 0 color-mix(in srgb, var(--ms-accent) 45%, transparent))
+        drop-shadow(0 3px 0 color-mix(in srgb, var(--ms-accent) 45%, transparent))
+        drop-shadow(0 -3px 0 color-mix(in srgb, var(--ms-accent) 45%, transparent));
 }
 
 /* Stepped progress bar: drains once per countdown second. */
@@ -624,17 +737,21 @@ html body .game-container .game-stage #gameCanvas {
     position: absolute;
     left: 12%;
     right: 12%;
-    bottom: 9%;
-    height: 6px;
-    background: var(--color-primary);
+    bottom: 8%;
+    height: 8px;
+    background: var(--ms-accent, var(--color-primary));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--ms-accent) 60%, transparent);
     transform-origin: left center;
     pointer-events: none;
 }
 .mission-start-text.mission-start-count.mission-start-tick {
-    animation: mission-start-count-in 0.18s steps(3, end);
+    animation: mission-start-count-in 0.22s steps(4, end);
 }
 .mission-start-text.mission-start-count.mission-start-tick::after {
     animation: mission-start-drain 0.9s steps(12, end) forwards;
+}
+.mission-start-text.mission-start-go.mission-start-tick {
+    animation: mission-start-go-in 0.28s steps(4, end);
 }
 
 @keyframes mission-start-drain {
@@ -643,25 +760,52 @@ html body .game-container .game-stage #gameCanvas {
 }
 
 .mission-start-text.mission-start-go {
-    min-width: min(78%, 240px);
-    font-size: var(--font-lg);
-    color: var(--color-primary, #c8f0c8);
-    border-color: var(--color-primary, #c8f0c8);
+    width: clamp(220px, calc(48 * var(--sv-w)), 380px);
+    min-width: 0;
+    height: clamp(140px, calc(28 * var(--sv-w)), 220px);
+    min-height: 0;
+    padding: 0;
+    font-size: clamp(64px, calc(11 * var(--sv-w)), 120px) !important;
+    letter-spacing: 0.22em;
+    color: var(--ms-accent, #c8f0c8);
+    border-color: var(--ms-accent, #c8f0c8);
+    border-width: 4px;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--ms-accent) 32%, #05060a) 0%,
+            color-mix(in srgb, var(--ms-hull) 45%, #05060a) 100%);
+    box-shadow:
+        inset 0 0 0 3px #05060a,
+        0 0 0 2px var(--ms-accent),
+        0 0 48px color-mix(in srgb, var(--ms-accent) 70%, transparent);
 }
 
-.mission-start-text.mission-start-pulse {
-    animation: mission-start-pulse 0.85s ease-in-out infinite alternate;
+.mission-start-text.mission-start-pulse,
+.mission-start-text.mission-start-fire {
+    animation: mission-start-pulse 0.75s ease-in-out infinite alternate;
 }
 
 @keyframes mission-start-pulse {
-    from { opacity: 0.68; }
-    to { opacity: 1; }
+    from {
+        opacity: 0.72;
+        box-shadow:
+            inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--ms-accent) 22%, transparent),
+            0 0 18px color-mix(in srgb, var(--ms-accent) 25%, transparent),
+            0 4px 0 #000;
+    }
+    to {
+        opacity: 1;
+        box-shadow:
+            inset 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--ms-accent) 40%, transparent),
+            0 0 36px color-mix(in srgb, var(--ms-accent) 55%, transparent),
+            0 4px 0 #000;
+    }
 }
 
 @keyframes mission-start-count-in {
     from {
         opacity: 0;
-        transform: scale(1.12);
+        transform: scale(1.28);
     }
     to {
         opacity: 1;
@@ -669,8 +813,216 @@ html body .game-container .game-stage #gameCanvas {
     }
 }
 
+@keyframes mission-start-go-in {
+    from {
+        opacity: 0;
+        transform: scale(1.55);
+        filter: brightness(1.6);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes mission-start-flash {
+    0%, 100% { opacity: 1; }
+    40% { opacity: 0.55; }
+    70% { opacity: 1; }
+}
+
+@keyframes mission-start-aura-pulse {
+    from { transform: scale(0.92); opacity: 0.35; }
+    to { transform: scale(1.06); opacity: 0.7; }
+}
+
+@keyframes mission-start-aura-spin {
+    to { transform: rotate(360deg) scale(1.05); }
+}
+
+@keyframes mission-start-aura-burst {
+    from { transform: scale(0.7); opacity: 1; }
+    to { transform: scale(1.35); opacity: 0; }
+}
+
 @keyframes mission-start-radar {
     to { transform: rotate(360deg); }
+}
+
+/* —— Per-faction mission-start identity —— */
+/* Terran: clean military double-frame, cyan scanlines */
+html[data-faction="terran"] .mission-start-overlay,
+.mission-start-overlay[data-faction="terran"] {
+    --ms-accent: var(--faction-accent, #7ec8ff);
+}
+html[data-faction="terran"] .mission-start-text,
+.mission-start-overlay[data-faction="terran"] .mission-start-text {
+    border-radius: 0;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 5px color-mix(in srgb, var(--ms-accent) 55%, transparent),
+        0 0 28px color-mix(in srgb, var(--ms-accent) 35%, transparent),
+        0 4px 0 #000;
+}
+html[data-faction="terran"] .mission-start-text.mission-start-count,
+.mission-start-overlay[data-faction="terran"] .mission-start-text.mission-start-count {
+    background:
+        repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--ms-accent) 10%, transparent) 3px 4px),
+        color-mix(in srgb, var(--ms-edge) 50%, #05060a);
+}
+
+/* Kronax: aggressive skew, claw slashes, hot orange */
+html[data-faction="kronax"] .mission-start-overlay,
+.mission-start-overlay[data-faction="kronax"] {
+    --ms-accent: var(--faction-accent, #ff7a4a);
+}
+html[data-faction="kronax"] .mission-start-stack,
+.mission-start-overlay[data-faction="kronax"] .mission-start-stack {
+    transform: skewX(-4deg);
+}
+html[data-faction="kronax"] .mission-start-text,
+.mission-start-overlay[data-faction="kronax"] .mission-start-text {
+    border-width: 4px;
+    clip-path: polygon(0 8%, 8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%);
+}
+html[data-faction="kronax"] .mission-start-frame .ms-slash,
+.mission-start-overlay[data-faction="kronax"] .mission-start-frame .ms-slash {
+    display: block;
+    position: absolute;
+    height: 3px;
+    width: 42%;
+    background: var(--ms-accent);
+    box-shadow: 0 0 10px var(--ms-accent);
+    opacity: 0.85;
+}
+html[data-faction="kronax"] .mission-start-frame .ms-slash-a,
+.mission-start-overlay[data-faction="kronax"] .mission-start-frame .ms-slash-a {
+    top: 18%; left: -4%; transform: rotate(-18deg);
+}
+html[data-faction="kronax"] .mission-start-frame .ms-slash-b,
+.mission-start-overlay[data-faction="kronax"] .mission-start-frame .ms-slash-b {
+    bottom: 18%; right: -4%; transform: rotate(-18deg);
+}
+html[data-faction="kronax"] .mission-start-text.mission-start-count.mission-start-tick,
+.mission-start-overlay[data-faction="kronax"] .mission-start-text.mission-start-count.mission-start-tick {
+    animation: mission-start-count-in 0.18s steps(3, end), mission-start-kronax-shake 0.18s steps(3, end);
+}
+@keyframes mission-start-kronax-shake {
+    0% { transform: scale(1.28) translateX(-4px); }
+    50% { transform: scale(1.1) translateX(3px); }
+    100% { transform: scale(1) translateX(0); }
+}
+
+/* Voidborn: soft rings, circular countdown, magenta bloom */
+html[data-faction="voidborn"] .mission-start-overlay,
+.mission-start-overlay[data-faction="voidborn"] {
+    --ms-accent: var(--faction-accent, #f09cff);
+}
+html[data-faction="voidborn"] .mission-start-text,
+.mission-start-overlay[data-faction="voidborn"] .mission-start-text {
+    border-radius: 8px;
+    box-shadow:
+        inset 0 0 24px color-mix(in srgb, var(--ms-accent) 22%, transparent),
+        0 0 40px color-mix(in srgb, var(--ms-accent) 45%, transparent);
+}
+html[data-faction="voidborn"] .mission-start-text.mission-start-count,
+.mission-start-overlay[data-faction="voidborn"] .mission-start-text.mission-start-count {
+    border-radius: 50%;
+    width: clamp(180px, calc(36 * var(--sv-w)), 280px);
+    height: clamp(180px, calc(36 * var(--sv-w)), 280px);
+    background:
+        radial-gradient(circle at 50% 42%,
+            color-mix(in srgb, var(--ms-accent) 22%, #120818) 0%,
+            #05060a 72%);
+}
+html[data-faction="voidborn"] .mission-start-aura,
+.mission-start-overlay[data-faction="voidborn"] .mission-start-aura {
+    border-style: dashed;
+    border-width: 3px;
+}
+
+/* Pirate: scrap gold, uneven frame, weathered bars */
+html[data-faction="pirate"] .mission-start-overlay,
+.mission-start-overlay[data-faction="pirate"] {
+    --ms-accent: var(--faction-accent, #d4a84a);
+}
+html[data-faction="pirate"] .mission-start-text,
+.mission-start-overlay[data-faction="pirate"] .mission-start-text {
+    border-style: solid;
+    border-width: 3px 5px 4px 3px;
+    box-shadow:
+        3px 3px 0 #000,
+        -2px 0 0 color-mix(in srgb, var(--ms-accent) 40%, transparent),
+        0 0 22px color-mix(in srgb, var(--ms-accent) 30%, transparent);
+    background:
+        repeating-linear-gradient(90deg, transparent 0 11px, color-mix(in srgb, var(--ms-accent) 8%, transparent) 11px 12px),
+        linear-gradient(165deg, color-mix(in srgb, var(--ms-hull) 35%, #05060a), #05060a 70%);
+}
+html[data-faction="pirate"] .mission-start-frame .ms-corner,
+.mission-start-overlay[data-faction="pirate"] .mission-start-frame .ms-corner {
+    width: 20px;
+    height: 20px;
+    border-width: 0;
+}
+html[data-faction="pirate"] .mission-start-frame .ms-tl,
+.mission-start-overlay[data-faction="pirate"] .mission-start-frame .ms-tl { border-top-width: 4px; border-left-width: 2px; }
+html[data-faction="pirate"] .mission-start-frame .ms-tr,
+.mission-start-overlay[data-faction="pirate"] .mission-start-frame .ms-tr { border-top-width: 2px; border-right-width: 5px; }
+html[data-faction="pirate"] .mission-start-frame .ms-bl,
+.mission-start-overlay[data-faction="pirate"] .mission-start-frame .ms-bl { border-bottom-width: 5px; border-left-width: 3px; }
+html[data-faction="pirate"] .mission-start-frame .ms-br,
+.mission-start-overlay[data-faction="pirate"] .mission-start-frame .ms-br { border-bottom-width: 2px; border-right-width: 4px; }
+
+/* Machine: circuit grid, mint green, precise brackets */
+html[data-faction="machine"] .mission-start-overlay,
+.mission-start-overlay[data-faction="machine"] {
+    --ms-accent: var(--faction-accent, #50e0a8);
+}
+html[data-faction="machine"] .mission-start-text,
+.mission-start-overlay[data-faction="machine"] .mission-start-text {
+    border-radius: 0;
+    background:
+        linear-gradient(color-mix(in srgb, var(--ms-accent) 12%, transparent) 1px, transparent 1px) 0 0 / 12px 12px,
+        linear-gradient(90deg, color-mix(in srgb, var(--ms-accent) 12%, transparent) 1px, transparent 1px) 0 0 / 12px 12px,
+        #05060a;
+    box-shadow:
+        inset 0 0 0 2px #05060a,
+        inset 0 0 0 4px var(--ms-accent),
+        0 0 0 1px color-mix(in srgb, var(--ms-accent) 50%, transparent),
+        0 0 30px color-mix(in srgb, var(--ms-accent) 40%, transparent);
+}
+html[data-faction="machine"] .mission-start-text.mission-start-count::after,
+.mission-start-overlay[data-faction="machine"] .mission-start-text.mission-start-count::after {
+    height: 4px;
+    box-shadow: none;
+    background: repeating-linear-gradient(90deg, var(--ms-accent) 0 6px, transparent 6px 10px);
+}
+html[data-faction="machine"] .mission-start-frame .ms-corner,
+.mission-start-overlay[data-faction="machine"] .mission-start-frame .ms-corner {
+    width: 32px;
+    height: 8px;
+    border-width: 0 !important;
+    background: var(--ms-accent);
+    box-shadow: 0 0 8px var(--ms-accent);
+}
+html[data-faction="machine"] .mission-start-frame .ms-tl,
+.mission-start-overlay[data-faction="machine"] .mission-start-frame .ms-tl { top: 0; left: 0; }
+html[data-faction="machine"] .mission-start-frame .ms-tr,
+.mission-start-overlay[data-faction="machine"] .mission-start-frame .ms-tr { top: 0; right: 0; }
+html[data-faction="machine"] .mission-start-frame .ms-bl,
+.mission-start-overlay[data-faction="machine"] .mission-start-frame .ms-bl { bottom: 0; left: 0; }
+html[data-faction="machine"] .mission-start-frame .ms-br,
+.mission-start-overlay[data-faction="machine"] .mission-start-frame .ms-br { bottom: 0; right: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .mission-start-aura,
+    .mission-start-text.mission-start-pulse,
+    .mission-start-text.mission-start-fire,
+    .mission-start-text.mission-start-count.mission-start-tick,
+    .mission-start-overlay.is-go .mission-start-vignette {
+        animation: none !important;
+    }
 }
 
 .player-vitals-side {

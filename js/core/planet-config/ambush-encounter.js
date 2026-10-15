@@ -83,15 +83,20 @@ extendClass(PlanetConfigManager, {
             ],
             theme: null,
             baseColor: theme.baseColor || null,
-            graphics: { enemyShip: lead.type, obstacleStyle: 'asteroid', iconStyle: theme.iconStyle || 'banded', faction: 'pirate' },
+            graphics: {
+                enemyShip: (lead && lead.type) || 'enemyBasic',
+                obstacleStyle: 'asteroid',
+                iconStyle: theme.iconStyle || 'banded',
+                faction: 'pirate'
+            },
             // Raider loot: scrap-heavy salvage.
             resources: [
                 { id: 'scrap', weight: 4, min: 8 + tier * 4, max: 16 + tier * 6 },
                 { id: 'ore', weight: 2, min: 4 + tier * 2, max: 8 + tier * 3 }
-            ]
+            ],
+            encounter: true,
+            ambushVariant: variant
         });
-        cfg.encounter = true;
-        cfg.ambushVariant = variant;
         this.configs[id] = cfg;
         return cfg;
     },

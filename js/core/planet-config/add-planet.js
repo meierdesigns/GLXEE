@@ -74,6 +74,21 @@ extendClass(PlanetConfigManager, {
 
     getConfig(planetId) {
         const id = String(planetId || 'mars').toLowerCase();
+        // Ambush sectors are built by createAmbushEncounter and never persisted.
+        // A missing / stub entry must not become a grey fake planet (victory used
+        // to show that globe instead of the defeated pirate ship).
+        if (id.indexOf('ambush_') === 0) {
+            const existing = this.configs[id];
+            if (existing && existing.encounter) return existing;
+            const gid = (existing && existing.galaxyId)
+                || id.slice('ambush_'.length)
+                || (this.getGalaxyIds && this.getGalaxyIds()[0])
+                || 'milky_way';
+            if (typeof this.createAmbushEncounter === 'function' && gid) {
+                return this.createAmbushEncounter(gid, null, Date.now());
+            }
+            return existing || null;
+        }
         if (!this.configs[id]) {
             this.configs[id] = this.makePlanet({ id: id, name: id.toUpperCase() });
         }

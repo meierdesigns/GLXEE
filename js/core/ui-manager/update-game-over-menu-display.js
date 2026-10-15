@@ -38,7 +38,7 @@ extendClass(UIManager, {
 
     handleVictoryInput(event) {
         event.preventDefault();
-
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
 
         switch (event.key) {
             case 'ArrowUp':
@@ -55,6 +55,9 @@ extendClass(UIManager, {
                 break;
             case 'Enter':
             case ' ':
+                // Key-repeat while holding Enter must not open planet select
+                // after BOSS ROOM already started the next fight.
+                if (event.repeat) break;
                 this.selectVictoryOption();
                 break;
             case 'Escape':
@@ -66,16 +69,18 @@ extendClass(UIManager, {
     },
 
     getVictoryButtons() {
-        return document.querySelectorAll('#victoryOverlay .victory-button');
+        return Array.from(document.querySelectorAll('#victoryOverlay .victory-button'))
+            .filter((button) => !button.hidden && button.getAttribute('aria-hidden') !== 'true');
     },
 
     updateVictoryMenuDisplay() {
         const buttons = this.getVictoryButtons();
+        const count = buttons.length || this.victoryMenuItems.length || 1;
 
         // Ensure index is within valid range
         if (this.victoryMenuIndex < 0) {
-            this.victoryMenuIndex = this.victoryMenuItems.length - 1;
-        } else if (this.victoryMenuIndex >= this.victoryMenuItems.length) {
+            this.victoryMenuIndex = count - 1;
+        } else if (this.victoryMenuIndex >= count) {
             this.victoryMenuIndex = 0;
         }
 
@@ -88,10 +93,8 @@ extendClass(UIManager, {
         });
     },
 
-    selectVictoryOption() {
-        const selectedOption = this.victoryMenuItems[this.victoryMenuIndex];
-
-        switch (selectedOption) {
+    runVictoryAction(action) {
+        switch (action) {
             case 'nextLevel':
                 if (typeof game !== 'undefined') {
                     game.nextLevel();
@@ -109,6 +112,14 @@ extendClass(UIManager, {
                 break;
             default:
         }
+    },
+
+    selectVictoryOption() {
+        const buttons = this.getVictoryButtons();
+        const button = buttons[this.victoryMenuIndex];
+        const action = (button && button.dataset.action)
+            || this.victoryMenuItems[this.victoryMenuIndex];
+        this.runVictoryAction(action);
     },
 
     updatePauseMenuDisplay() {

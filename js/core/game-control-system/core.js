@@ -251,20 +251,31 @@ class GameControlSystem {
             return true;
         }
 
-        const currentId = currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
-            ? `${currentLevel.planetId}-${currentLevel.isBoss ? 'boss' : currentLevel.stageIndex}`
-            : (currentLevel.id
-                || currentLevel.levelId
-                || currentLevel.stageId
-                || currentLevel.planetId
-                || currentLevel.background
-                || currentLevel.name);
-        const nextLevelId = this.coreLevelManager.getNextLevel(currentId);
+        // Same id the victory "BOSS ROOM" / "NEXT STAGE" label uses — never fall
+        // back to level.name (e.g. "MARS — STAGE 2/3"), which fails parseLevelId
+        // and wrongly opens planet select instead of the boss.
+        const currentId = (typeof this.getVictoryCurrentLevelId === 'function'
+            ? this.getVictoryCurrentLevelId()
+            : null)
+            || (currentLevel.planetId && Number.isFinite(Number(currentLevel.stageIndex))
+                ? `${currentLevel.planetId}-${currentLevel.isBoss ? 'boss' : currentLevel.stageIndex}`
+                : (currentLevel.id
+                    || currentLevel.levelId
+                    || currentLevel.stageId
+                    || currentLevel.planetId
+                    || currentLevel.background));
+        const meta = currentId && typeof this.coreLevelManager.getNextLevelMeta === 'function'
+            ? this.coreLevelManager.getNextLevelMeta(currentId)
+            : null;
+        const nextLevelId = (meta && meta.id)
+            || (currentId && this.coreLevelManager.getNextLevel(currentId))
+            || null;
         if (!nextLevelId) {
             this.showLevelSelection();
             return false;
         }
 
+        this.stopGame();
         this.hideVictoryOverlay();
         return this.startGame(nextLevelId);
     }

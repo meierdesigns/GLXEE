@@ -21,7 +21,21 @@ extendClass(GameControlSystem, {
 
         // Create / refresh victory overlay layout
         let victoryOverlay = document.getElementById('victoryOverlay');
-        const needsBuild = !victoryOverlay || !document.getElementById('victoryLootList');
+        // Template always has next + leave; ambush hides leave after paint.
+        if (typeof uiManager !== 'undefined') {
+            uiManager.victoryMenuItems = ['nextLevel', 'levelSelection'];
+        }
+        const existingBtns = victoryOverlay
+            ? victoryOverlay.querySelectorAll('.victory-button').length
+            : 0;
+        // Rebuild when missing, or when stale HTML still has PLAY AGAIN / a
+        // third button while the menu only has next + leave (index mismatch
+        // made "BOSS ROOM" fire planet select).
+        const needsBuild = !victoryOverlay
+            || !document.getElementById('victoryLootList')
+            || existingBtns < 2
+            || existingBtns > 2
+            || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]');
         if (!victoryOverlay) {
             victoryOverlay = document.createElement('div');
             victoryOverlay.id = 'victoryOverlay';
@@ -34,7 +48,6 @@ extendClass(GameControlSystem, {
                     <div class="victory-header">
                         <h1 class="victory-title">VICTORY!</h1>
                         <p class="victory-subtitle">Mission Accomplished</p>
-                        <p class="victory-stage" id="victoryStage"></p>
                     </div>
 
                     <div class="victory-stats">
@@ -59,17 +72,13 @@ extendClass(GameControlSystem, {
                         </div>
 
                         <div class="victory-buttons">
-                            <button class="victory-button" data-index="0" id="victoryNextButton">
+                            <button type="button" class="victory-button" data-index="0" data-action="nextLevel" id="victoryNextButton" tabindex="-1">
                                 <span class="button-icon" data-icon="menuStart"></span>
                                 <span class="button-text">NEXT STAGE</span>
                             </button>
-                            <button class="victory-button" data-index="1">
-                                <span class="button-icon" data-icon="menuRetry"></span>
-                                <span class="button-text">PLAY AGAIN</span>
-                            </button>
-                            <button class="victory-button" data-index="2">
+                            <button type="button" class="victory-button" data-index="1" data-action="levelSelection" tabindex="-1">
                                 <span class="button-icon" data-icon="menuPlanets"></span>
-                                <span class="button-text">PLANET SELECT</span>
+                                <span class="button-text">Leave Planet</span>
                             </button>
                         </div>
                     </div>
@@ -170,8 +179,7 @@ extendClass(GameControlSystem, {
         if (!victoryOverlay) return;
         const defaults = {
             '0': 'menuStart',
-            '1': 'menuRetry',
-            '2': 'menuPlanets'
+            '1': 'menuPlanets'
         };
         victoryOverlay.querySelectorAll('.victory-button').forEach((button) => {
             let iconEl = button.querySelector('.button-icon');
@@ -212,13 +220,13 @@ extendClass(GameControlSystem, {
             : null;
         const cleared = !!(currentLevel && currentLevel.isBoss) || !meta || meta.kind === 'planet';
         if (!cleared) return;
-        const label = overlay.querySelector('.victory-button[data-index="2"] .button-text');
+        const label = overlay.querySelector('.victory-button[data-index="1"] .button-text');
         let left = 4;
         const tick = () => {
-            if (label) label.textContent = `PLANET SELECT (${left})`;
+            if (label) label.textContent = `Leave Planet (${left})`;
             if (left <= 0) {
                 this.cancelVictoryAutoReturn();
-                if (label) label.textContent = 'PLANET SELECT';
+                if (label) label.textContent = 'Leave Planet';
                 if (typeof game !== 'undefined' && game.showLevelSelection) game.showLevelSelection();
                 return;
             }
@@ -226,7 +234,7 @@ extendClass(GameControlSystem, {
             this._victoryAutoReturn = setTimeout(tick, 1000);
         };
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuIndex = 2;
+            uiManager.victoryMenuIndex = 1;
             uiManager.updateVictoryMenuDisplay();
         }
         tick();
@@ -237,8 +245,8 @@ extendClass(GameControlSystem, {
             clearTimeout(this._victoryAutoReturn);
             this._victoryAutoReturn = null;
         }
-        const label = document.querySelector('#victoryOverlay .victory-button[data-index="2"] .button-text');
-        if (label) label.textContent = 'PLANET SELECT';
+        const label = document.querySelector('#victoryOverlay .victory-button[data-index="1"] .button-text');
+        if (label) label.textContent = 'Leave Planet';
     },
 
     updateVictoryNextButton() {
@@ -261,17 +269,44 @@ extendClass(GameControlSystem, {
 
         const button = document.querySelector('#victoryOverlay .victory-button[data-index="0"] .button-text')
             || document.querySelector('#victoryNextButton .button-text');
-        if (button) {
-            const bossVictory = !ambushVictory && !!(currentLevel && currentLevel.isBoss);
-            button.textContent = ambushVictory ? 'CONTINUE TRAVEL'
-                : (bossVictory ? 'MAP SELECT' : (meta ? meta.label : 'CAMPAIGN COMPLETE'));
-        }
+        const bossVictory = !ambushVictory && !!(currentLevel && currentLevel.isBoss);
+        const nextLabel = ambushVictory ? 'CONTINUE TRAVEL'
+            : (bossVictory ? 'MAP SELECT' : (meta ? meta.label : 'CAMPAIGN COMPLETE'));
+        if (button) button.textContent = nextLabel;
 
         const nextBtn = document.querySelector('#victoryOverlay .victory-button[data-index="0"]');
         if (nextBtn) {
             const canAdvance = !!meta || ambushVictory || !!(currentLevel && currentLevel.isBoss);
             nextBtn.disabled = !canAdvance;
             nextBtn.classList.toggle('disabled', !canAdvance);
+            const isBossRoom = !ambushVictory && !bossVictory
+                && !!(meta && (meta.kind === 'boss' || String(meta.label || '').toUpperCase() === 'BOSS ROOM'));
+            const iconKey = isBossRoom ? 'navSkull' : 'menuStart';
+            let iconEl = nextBtn.querySelector('.button-icon');
+            if (!iconEl) {
+                iconEl = document.createElement('span');
+                iconEl.className = 'button-icon';
+                nextBtn.insertBefore(iconEl, nextBtn.firstChild);
+            }
+            iconEl.dataset.icon = iconKey;
+            if (typeof iconRenderer !== 'undefined') {
+                iconEl.innerHTML = iconRenderer.imgHtml(iconKey, 20, 'victory-pixel-icon');
+            }
+        }
+
+        // Ambush is mid-flight combat — no planet to leave; only continue travel.
+        const leaveBtn = document.querySelector('#victoryOverlay .victory-button[data-action="levelSelection"]');
+        if (leaveBtn) {
+            leaveBtn.hidden = !!ambushVictory;
+            leaveBtn.setAttribute('aria-hidden', ambushVictory ? 'true' : 'false');
+        }
+        if (typeof uiManager !== 'undefined') {
+            uiManager.victoryMenuItems = ambushVictory
+                ? ['nextLevel']
+                : ['nextLevel', 'levelSelection'];
+            if (ambushVictory && uiManager.victoryMenuIndex > 0) {
+                uiManager.victoryMenuIndex = 0;
+            }
         }
     },
 
@@ -287,10 +322,17 @@ extendClass(GameControlSystem, {
             });
             button.addEventListener('click', (event) => {
                 event.preventDefault();
+                event.stopPropagation();
+                const action = button.dataset.action;
                 const index = parseInt(button.dataset.index, 10);
-                if (typeof uiManager !== 'undefined' && !Number.isNaN(index)) {
+                if (typeof uiManager === 'undefined') return;
+                if (!Number.isNaN(index)) {
                     uiManager.victoryMenuIndex = index;
                     uiManager.updateVictoryMenuDisplay();
+                }
+                if (action && uiManager.runVictoryAction) {
+                    uiManager.runVictoryAction(action);
+                } else {
                     uiManager.selectVictoryOption();
                 }
             });

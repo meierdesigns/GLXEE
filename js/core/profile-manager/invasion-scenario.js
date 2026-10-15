@@ -1,14 +1,16 @@
 "use strict";
 
-// Invasion scenarios. A pilot who starts in their faction's HOME galaxy finds
-// it under attack: a hostile faction invades a planet next to the start
-// planet. Galaxies ruled by an ALLY of the pilot's faction are attacked too —
-// by a common enemy — and the pilot comes to defend them:
+// Invasion scenarios. A pilot who starts in their faction's HOME galaxy gets a
+// few nearby planets unlocked for travel; UNDER ATTACK begins only after they
+// clear their first stage there (profile.invasionPending until then). Galaxies
+// ruled by an ALLY are attacked when first reached — by a common enemy — and
+// the pilot comes to defend them:
 //
-//   profile.invasion       = { galaxyId, planetId, attacker, defender, resolved }
-//   profile.allyInvasions  = { [galaxyId]: same shape, ally: true }
+//   profile.invasionPending = { galaxyId }   // home invasion armed, not yet live
+//   profile.invasion        = { galaxyId, planetId, attacker, defender, resolved }
+//   profile.allyInvasions   = { [galaxyId]: same shape, ally: true }
 //
-// The planet is unlocked so it can be reached right away, it is marked on the
+// The invaded planet is unlocked when the attack starts, it is marked on the
 // galaxy map, everyone fighting there is the attacker, and winning a stage on
 // it repels the invasion (bounty paid once).
 
@@ -28,25 +30,52 @@ extendClass(ProfileManager, {
         return out;
     },
 
+    /** True once any stage (or boss) has been cleared in this galaxy. */
+    hasClearedAnyStageInGalaxy(profile, galaxyId) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !this.ensureGalaxyProgress) return false;
+        const gp = this.ensureGalaxyProgress(p, galaxyId);
+        if (!gp || !gp.stages) return false;
+        return Object.keys(gp.stages).some((pid) => {
+            const st = gp.stages[pid];
+            return !!(st && ((Number(st.highestStage) || 0) > 0 || st.bossCleared));
+        }) || ((gp.clearedPlanetIds || []).length > 0);
+    },
+
+    /** True once any stage (or boss) has been cleared in any galaxy. */
+    hasClearedAnyStage(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !p.progress || !p.progress.galaxies) return false;
+        return Object.keys(p.progress.galaxies).some((gid) => this.hasClearedAnyStageInGalaxy(p, gid));
+    },
+
     /**
      * Active (unresolved) invasion. With a galaxy id: the one in that galaxy;
      * without: the home invasion (opening scenario).
+     * Home UNDER ATTACK stays hidden until the pilot has cleared a stage there.
      */
     getActiveInvasion(profile, galaxyId) {
         const p = profile || this.getActiveProfile();
         if (!p) return null;
-        if (galaxyId == null) {
-            const inv = p.invasion;
-            return inv && !inv.resolved ? inv : null;
-        }
+        const ready = (inv) => {
+            if (!inv || inv.resolved) return null;
+            // Ally defenses show on arrival; home invasion waits for a stage win.
+            if (!inv.ally && !this.hasClearedAnyStageInGalaxy(p, inv.galaxyId)) return null;
+            return inv;
+        };
+        if (galaxyId == null) return ready(p.invasion);
         const gid = String(galaxyId).toLowerCase();
-        return this.getAllInvasions(p).find((inv) => !inv.resolved && inv.galaxyId === gid) || null;
+        return ready(this.getAllInvasions(p).find((inv) => !inv.resolved && inv.galaxyId === gid) || null);
     },
 
-    /** Active invasion on a planet, or null. */
+    /** Active invasion on a planet, or null (same stage gate as getActiveInvasion). */
     getInvasionForPlanet(planetId, profile) {
+        const p = profile || this.getActiveProfile();
         const pid = String(planetId || '').toLowerCase();
-        return this.getAllInvasions(profile).find((inv) => !inv.resolved && inv.planetId === pid) || null;
+        const inv = this.getAllInvasions(p).find((i) => !i.resolved && i.planetId === pid) || null;
+        if (!inv) return null;
+        if (!inv.ally && !this.hasClearedAnyStageInGalaxy(p, inv.galaxyId)) return null;
+        return inv;
     },
 
     /** Planet id under attack in a galaxy (active invasion only), or null. */
@@ -89,6 +118,55 @@ extendClass(ProfileManager, {
         };
     },
 
+    /** True when the galaxy is the faction home or ruled by the pilot's faction. */
+    isOwnFactionGalaxy(profile, galaxyId) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof planetConfigManager === 'undefined') return false;
+        const gid = String(galaxyId || '').toLowerCase();
+        const own = String(p.faction || '').toLowerCase();
+        if (!gid || !own) return false;
+        const pcm = planetConfigManager;
+        const meta = pcm.getFactionMeta ? pcm.getFactionMeta(own) : null;
+        if (meta && String(meta.homeGalaxy || '').toLowerCase() === gid) return true;
+        const ruler = pcm.getGalaxyFaction ? String(pcm.getGalaxyFaction(gid) || '').toLowerCase() : '';
+        return !!(ruler && ruler === own);
+    },
+
+    /**
+     * Own-faction start: unlock the start planet and a few neighbours so the
+     * pilot can travel before anything is cleared.
+     */
+    unlockOwnFactionStartCluster(profile, galaxyId) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof planetConfigManager === 'undefined' || !this.isOwnFactionGalaxy(p, galaxyId)) return [];
+        const pcm = planetConfigManager;
+        const gid = String(galaxyId || '').toLowerCase();
+        const map = pcm.getGalaxyMap(gid) || {};
+        const start = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+        if (!start) return [];
+        const want = 4;
+        const out = [];
+        const seen = Object.create(null);
+        const queue = [String(start).toLowerCase()];
+        while (queue.length && out.length < want) {
+            const id = queue.shift();
+            if (!id || seen[id]) continue;
+            seen[id] = true;
+            out.push(id);
+            (pcm.getGalaxyNeighbors ? pcm.getGalaxyNeighbors(gid, id) : []).forEach((n) => {
+                const nid = String(n || '').toLowerCase();
+                if (nid && !seen[nid]) queue.push(nid);
+            });
+        }
+        const gp = this.ensureGalaxyProgress ? this.ensureGalaxyProgress(p, gid) : null;
+        out.forEach((pid) => {
+            if (gp && gp.unlockedPlanetIds.indexOf(pid) === -1) gp.unlockedPlanetIds.push(pid);
+            if (this.discover) this.discover('planets', pid);
+        });
+        this.save();
+        return out;
+    },
+
     /** Unlock, discover and save a freshly picked invasion. */
     openInvasion(p, inv) {
         if (this.ensureGalaxyProgress) this.ensureGalaxyProgress(p, inv.galaxyId);
@@ -98,12 +176,51 @@ extendClass(ProfileManager, {
         return inv;
     },
 
-    /** Start the home-galaxy invasion for a new profile. */
+    /** Arm the home-galaxy invasion; it goes live after the first stage clear. */
+    scheduleHomeInvasion(profile, galaxyId) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return false;
+        const gid = String(galaxyId || '').toLowerCase();
+        if (!gid) return false;
+        // Strip a premature live invasion (older creates) so the map stays clear.
+        if (p.invasion && !p.invasion.resolved && String(p.invasion.galaxyId || '').toLowerCase() === gid
+            && !this.hasClearedAnyStageInGalaxy(p, gid)) {
+            delete p.invasion;
+        }
+        if (p.invasion && !p.invasion.resolved) return false;
+        p.invasionPending = { galaxyId: gid };
+        this.save();
+        return true;
+    },
+
+    /** After a stage clear in the pending home galaxy: start UNDER ATTACK. */
+    tryStartPendingInvasion(planetId) {
+        const p = this.getActiveProfile();
+        if (!p || !p.invasionPending || (p.invasion && !p.invasion.resolved)) return null;
+        const gid = String(p.invasionPending.galaxyId || '').toLowerCase();
+        if (!gid) { delete p.invasionPending; return null; }
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetGalaxyId) {
+            const planetGid = String(planetConfigManager.getPlanetGalaxyId(planetId) || '').toLowerCase();
+            if (planetGid && planetGid !== gid) return null;
+        }
+        delete p.invasionPending;
+        const inv = this.startInvasionScenario(p, gid);
+        if (inv && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            const where = String(inv.planetId || '').replace(/_/g, ' ').toUpperCase();
+            levelInfoManager.showLootNotice(String(inv.attacker).toUpperCase() + ' INVADES ' + where + ' — UNDER ATTACK');
+        }
+        return inv;
+    },
+
+    /** Start the home-galaxy invasion for a profile (live UNDER ATTACK). */
     startInvasionScenario(profile, galaxyId) {
         const p = profile || this.getActiveProfile();
         if (!p || typeof planetConfigManager === 'undefined') return null;
         const gid = String(galaxyId || '').toLowerCase();
         const own = String(p.faction || '').toLowerCase();
+        if (p.invasionPending && String(p.invasionPending.galaxyId || '').toLowerCase() === gid) {
+            delete p.invasionPending;
+        }
         const inv = this.pickInvasion(p, gid, own, 'invasion');
         if (!inv) return null;
         p.invasion = inv;
@@ -161,11 +278,13 @@ extendClass(ProfileManager, {
 (function wrapInvasionHooks() {
     const pm = ProfileManager.prototype;
 
-    // Winning a stage on an invaded planet repels the attack.
+    // First stage in the home galaxy can arm UNDER ATTACK; a win on the
+    // invaded planet then repels it.
     const baseMark = pm.markStageCleared;
     pm.markStageCleared = function (planetId, stageKey) {
         const res = baseMark.apply(this, arguments);
         try {
+            if (this.tryStartPendingInvasion) this.tryStartPendingInvasion(planetId);
             const news = this.resolveInvasion(planetId);
             if (news && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
                 levelInfoManager.showLootNotice(news);

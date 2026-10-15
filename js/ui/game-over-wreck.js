@@ -113,24 +113,14 @@ const VFGameOverWreck = {
         if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
         const ctx = cv.getContext('2d');
         ctx.clearRect(0, 0, W, H);
-        // The hull lives in the free strip left of the modal, so it never
-        // covers the dialog or the backdrop behind it.
-        const content = cv.parentElement && cv.parentElement.querySelector('.game-over-content');
-        const cvRect = cv.getBoundingClientRect();
-        let laneL = 0;
-        let laneR = W;
-        if (content) {
-            const r = content.getBoundingClientRect();
-            laneR = Math.max(0, (r.left - cvRect.left) / PX - 4);
-        }
-        const laneW = Math.max(laneR - laneL, W * 0.2);
-        const scale = Math.max(1, Math.floor(Math.min(laneW / (s.w * 1.25), H / (s.h * 2.6))));
-        // Fly in from off-screen left, easing into the lane centre.
+        // Large wreck centered behind the modal (canvas is z-index under content).
+        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.15), H / (s.h * 1.35))));
+        // Fly in from off-screen left, easing into screen centre.
         if (s.t0 == null) s.t0 = t;
         const k0 = Math.min(1, (t - s.t0) / 2.4);
         const ease = 1 - Math.pow(1 - k0, 3);
-        const laneCx = laneL + laneW / 2;
-        const cx = -s.w * scale + (laneCx + s.w * scale - 0) * ease;
+        const laneCx = W * 0.5;
+        const cx = -s.w * scale + (laneCx + s.w * scale) * ease;
         const ox = Math.floor(cx - (s.w * scale) / 2);
         const oy = Math.floor(H * 0.5 - (s.h * scale) / 2);
         const drift = Math.sin(t * 0.4) * scale * 0.6;

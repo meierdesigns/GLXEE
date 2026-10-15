@@ -178,18 +178,6 @@ extendClass(GameControlSystem, {
     },
 
     updateVictoryStats() {
-        const stageElement = document.getElementById('victoryStage');
-        if (stageElement) {
-            const currentLevel = this.coreLevelManager.getCurrentLevel();
-            const isAmbush = currentLevel
-                && String(currentLevel.id || '').toLowerCase().indexOf('ambush_') === 0;
-            stageElement.textContent = currentLevel
-                ? (isAmbush
-                    ? `${currentLevel.planetName || currentLevel.name || 'PIRATE AMBUSH'} — STAGE 1/1`
-                    : (currentLevel.name || `${currentLevel.planetName || ''} ${currentLevel.stageLabel || ''}`.trim() || currentLevel.id || ''))
-                : '';
-        }
-
         const stats = this.syncVictoryStatsFromLiveSources();
 
         const scoreElement = document.getElementById('victoryScore');

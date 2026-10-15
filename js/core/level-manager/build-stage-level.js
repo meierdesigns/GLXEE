@@ -160,6 +160,15 @@ extendClass(CoreLevelManager, {
                 isBoss: level.isBoss,
                 planetId: planetId
             });
+            // setEnemySchedule rebuilds sideEnemyPool from `enemies` (usually
+            // just the champion), clobbering the per-planet side-enemy pool
+            // applyToRuntime just set above — reapply it after.
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getConfig && enemyManager.setSideEnemyPool) {
+                const cfg = planetConfigManager.getConfig(planetId);
+                if (cfg && cfg.sideEnemies && cfg.sideEnemies.length) {
+                    enemyManager.setSideEnemyPool(cfg.sideEnemies);
+                }
+            }
         }
 
         if (typeof objectiveManager !== 'undefined') {

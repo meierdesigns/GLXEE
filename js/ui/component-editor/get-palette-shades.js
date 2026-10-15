@@ -3,7 +3,7 @@
 // ComponentEditorUI methods, split from component-editor.js.
 extendClass(ComponentEditorUI, {
     getPaletteShades() {
-        const n = Math.max(2, Math.min(this._maxShades, this.colorCount | 0 || 15));
+        const n = Math.max(2, Math.min(this._maxShades, this.colorCount | 0 || 4));
         if (n >= this._maxShades) {
             const all = [];
             for (let s = 1; s <= this._maxShades; s++) all.push(s);
@@ -24,7 +24,7 @@ extendClass(ComponentEditorUI, {
     },
 
     setColorCount(val, live) {
-        const n = Math.max(2, Math.min(this._maxShades, parseInt(val, 10) || 15));
+        const n = Math.max(2, Math.min(this._maxShades, parseInt(val, 10) || 4));
         this.colorCount = n;
         if (!live) this.persistPixelColorSettings();
         else {
@@ -84,7 +84,8 @@ extendClass(ComponentEditorUI, {
             btn.dataset.ceShade = String(s);
             const gray = this.shadeToGray(s);
             btn.style.backgroundColor = "rgb(" + gray + "," + gray + "," + gray + ")";
-            btn.title = "Color " + (i + 1) + "/" + shades.length + " · shade " + s + " (" + gray + ")";
+            const shadeNames = ["Dunkler", "Dunkel", "Hell", "Heller"];
+            btn.title = (shadeNames[i] || ("Color " + (i + 1))) + " (" + gray + ")";
             btn.addEventListener("click", () => {
                 this.setPaintShade(s);
                 this.setPaintTool("draw");

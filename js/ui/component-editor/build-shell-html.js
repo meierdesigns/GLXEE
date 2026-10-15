@@ -5,33 +5,49 @@ extendClass(ComponentEditorUI, {
     buildShellHtml() {
         return `
 <div class="hs-comp-layout${this.leftCollapsed ? " left-collapsed" : ""}${this.rightCollapsed ? " right-collapsed" : ""}">
+  <div class="hs-comp-topbar">
+    <button type="button" class="pe-btn hs-comp-toggle-btn" id="ceCollapseLeft" title="Collapse sidebar">◀</button>
+    <div class="hs-comp-type-chips" id="ceTypeChips"></div>
+    <button type="button" class="pe-btn hs-comp-toggle-btn" id="ceCollapseRight" title="Collapse sidebar">▶</button>
+  </div>
   <aside class="hs-comp-sidebar hs-comp-list-col${this.leftCollapsed ? " is-collapsed" : ""}" id="ceLeftCol">
     <div class="hs-comp-collapsed-strip" id="ceExpandLeft" title="Expand Types & Components">
       <button type="button" class="pe-btn hs-comp-toggle-btn" tabindex="-1">▶</button>
       <span class="hs-comp-vertical-label">COMPONENTS</span>
     </div>
     <div class="hs-comp-sidebar-content">
-      <div class="hs-comp-sidebar-header">
-        <div class="hs-comp-section-title">TYPES</div>
-        <button type="button" class="pe-btn hs-comp-toggle-btn" id="ceCollapseLeft" title="Collapse sidebar">◀</button>
-      </div>
-      <div class="hs-comp-type-chips" id="ceTypeChips"></div>
       <div class="hs-comp-section-title">COMPONENTS</div>
       <div class="hs-comp-list" id="ceList"></div>
     </div>
   </aside>
   <div class="hs-comp-center">
-    <div class="hs-comp-section-title">COMPONENT</div>
+    <div class="hs-comp-section-title hs-comp-section-title-row">
+      <span>COMPONENT</span>
+      <span class="hs-comp-icon-actions">
+        <button type="button" class="hs-comp-icon-btn" id="ceDeleteEntry" title="Delete this icon">
+          <svg viewBox="0 0 10 10" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M3 1h4v1H3zM2 3h6v1H3v5H2zm2 1h1v4H4zm2 0h1v4H6zm1-1h1v6H7z"/></svg>
+          <span>DELETE</span>
+        </button>
+        <button type="button" class="hs-comp-icon-btn" id="ceRenameEntry" title="Rename this icon">
+          <svg viewBox="0 0 10 10" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M7 1l2 2-5 5H2V6zM1 8h1v1H1z"/></svg>
+          <span>RENAME</span>
+        </button>
+      </span>
+    </div>
     <div class="hs-comp-canvas-wrap" id="ceCanvasWrap">
       <canvas id="ceCanvas" width="256" height="256"></canvas>
     </div>
-    <div class="hs-comp-palette-row">
-      <span class="hs-comp-field-label">PALETTE</span>
-      <div class="hs-comp-palette" id="cePalette"></div>
-    </div>
     <div class="hs-comp-paint-bar" id="cePaintBar">
-      <button type="button" class="pe-btn pe-primary" id="ceToolDraw" data-ce-tool="draw">DRAW</button>
-      <button type="button" class="pe-btn" id="ceToolErase" data-ce-tool="erase">ERASE</button>
+      <div class="hs-comp-palette-row">
+        <span class="hs-comp-field-label">PALETTE</span>
+        <div class="hs-comp-palette" id="cePalette"></div>
+      </div>
+      <span class="hs-comp-paint-sep"></span>
+      <div class="hs-comp-paint-group">
+        <button type="button" class="pe-btn pe-primary" id="ceToolDraw" data-ce-tool="draw">DRAW</button>
+        <button type="button" class="pe-btn" id="ceToolErase" data-ce-tool="erase">ERASE</button>
+      </div>
+      <span class="hs-comp-paint-sep"></span>
       <div class="hs-comp-brush-group" id="ceBrushGroup">
         <span class="hs-comp-field-label">SIZE</span>
         <button type="button" class="pe-btn hs-comp-size-btn pe-primary" data-ce-size="1">1</button>
@@ -39,15 +55,25 @@ extendClass(ComponentEditorUI, {
         <button type="button" class="pe-btn hs-comp-size-btn" data-ce-size="3">3</button>
         <button type="button" class="pe-btn hs-comp-size-btn" data-ce-size="4">4</button>
       </div>
+      <span class="hs-comp-paint-sep"></span>
       <label class="hs-comp-shade-label">SHADE
-        <input type="range" id="ceShade" min="1" max="15" step="1" value="12">
-        <span id="ceShadeLabel">12</span>
+        <input type="range" id="ceShade" min="1" max="4" step="1" value="3">
+        <span id="ceShadeLabel">3</span>
       </label>
-      <label class="hs-comp-check"><input type="checkbox" id="ceSymmetry" checked> SYMMETRY</label>
-      <label class="hs-comp-check" title="Show the generator key colour behind the pixels"><input type="checkbox" id="ceShowBg"> BG</label>
-      <button type="button" class="pe-btn" id="ceApplySym">MIRROR</button>
-      <button type="button" class="pe-btn" id="ceClearPx">CLEAR</button>
-      <button type="button" class="pe-btn pe-primary" id="ceSavePixels">SAVE PIXELS</button>
+      <span class="hs-comp-paint-sep"></span>
+      <div class="hs-comp-paint-group">
+        <label class="hs-comp-check"><input type="checkbox" id="ceSymmetry" checked> SYMMETRY</label>
+        <label class="hs-comp-check" title="Show the generator key colour behind the pixels"><input type="checkbox" id="ceShowBg"> BG</label>
+      </div>
+      <label class="hs-comp-shade-label" id="ceIconColorRow" title="Default tint for this icon (data/icons-data.json)" style="display: none;">MAIN COLOR
+        <input type="color" id="ceIconColor" value="#ffffff">
+        <button type="button" class="pe-btn" id="ceIconColorClear" title="Use theme colour instead">RESET</button>
+      </label>
+      <div class="hs-comp-paint-actions">
+        <button type="button" class="pe-btn" id="ceApplySym">MIRROR</button>
+        <button type="button" class="pe-btn" id="ceClearPx">CLEAR</button>
+        <button type="button" class="pe-btn pe-primary" id="ceSavePixels">SAVE PIXELS</button>
+      </div>
     </div>
     <div class="hs-comp-label" id="ceSelectedLabel">—</div>
   </div>
@@ -57,10 +83,7 @@ extendClass(ComponentEditorUI, {
       <span class="hs-comp-vertical-label">PREVIEW</span>
     </div>
     <div class="hs-comp-sidebar-content">
-      <div class="hs-comp-sidebar-header">
-        <div class="hs-comp-section-title">PREVIEW</div>
-        <button type="button" class="pe-btn hs-comp-toggle-btn" id="ceCollapseRight" title="Collapse sidebar">▶</button>
-      </div>
+      <div class="hs-comp-section-title">PREVIEW</div>
       <div class="hs-comp-ship-preview" id="ceShipPreview">
         <canvas id="ceShipCanvas" width="160" height="200"></canvas>
       </div>
@@ -89,9 +112,6 @@ extendClass(ComponentEditorUI, {
             <option value="768">768</option>
             <option value="1024">1024</option>
           </select>
-        </label>
-        <label>COLORS
-          <input type="number" id="ceColors" min="2" max="15" step="1" value="15" title="Base gray shades (excl. BG)">
         </label>
         <label>BG
           <input type="color" id="ceBg" value="#FF00FF" title="Background / chroma key (separate from base colors)">

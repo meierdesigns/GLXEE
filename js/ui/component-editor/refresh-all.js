@@ -73,7 +73,11 @@ extendClass(ComponentEditorUI, {
     loadEntryFields() {
         const entry = this.currentEntry();
         const r = this.root;
-        if (!r || !entry) return;
+        if (!r) return;
+        if (!entry) {
+            this.updateIconActionButtons();
+            return;
+        }
         const key = entry.spriteKey || entry.id;
         const metaOut = (typeof spriteMeta !== "undefined")
             ? spriteMeta.getOutSize(key, entry.size || 64)
@@ -122,14 +126,13 @@ extendClass(ComponentEditorUI, {
         if (lenLab) lenLab.textContent = Math.round(this.lengthScale * 100) + "%";
         const symEl = r.querySelector("#ceSymmetry");
         if (symEl) symEl.checked = !!this.symmetric;
-        const colorsEl = r.querySelector("#ceColors");
-        if (colorsEl) colorsEl.value = String(this.colorCount);
         const bgEl = r.querySelector("#ceBg");
         if (bgEl) bgEl.value = this.normalizeHex(this.bgColor);
         const selLab = r.querySelector("#ceSelectedLabel");
         if (selLab) selLab.textContent = entry.label + " · " + entry.type;
         this.renderPalette();
         this.reloadEditBuffer(false);
+        this.updateIconActionButtons();
     },
 
     readGenFields() {

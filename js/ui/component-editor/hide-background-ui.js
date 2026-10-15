@@ -114,6 +114,11 @@ extendClass(ComponentEditorUI, {
         r.querySelector("#ceSaveMeta").onclick = () => this.onSaveMeta();
         r.querySelector("#ceOpenAg").onclick = () => this.openAssetGen();
 
+        const delEntryBtn = r.querySelector("#ceDeleteEntry");
+        const renEntryBtn = r.querySelector("#ceRenameEntry");
+        if (delEntryBtn) delEntryBtn.onclick = () => this.onDeleteIcon();
+        if (renEntryBtn) renEntryBtn.onclick = () => this.onRenameIcon();
+
         const scale = r.querySelector("#ceScale");
         if (scale) {
             scale.oninput = () => {
@@ -143,12 +148,6 @@ extendClass(ComponentEditorUI, {
                 if (id === "ceOutSize") this.reloadEditBuffer(true);
             };
         });
-        const colorsEl = r.querySelector("#ceColors");
-        if (colorsEl) {
-            colorsEl.value = String(this.colorCount);
-            colorsEl.onchange = () => this.setColorCount(colorsEl.value);
-            colorsEl.oninput = () => this.setColorCount(colorsEl.value, true);
-        }
         const bgEl = r.querySelector("#ceBg");
         if (bgEl) {
             bgEl.value = this.normalizeHex(this.bgColor);
@@ -229,6 +228,38 @@ extendClass(ComponentEditorUI, {
         if (clearPx) clearPx.onclick = () => this.clearPixels();
         const savePx = r.querySelector("#ceSavePixels");
         if (savePx) savePx.onclick = () => this.onSavePixels();
+
+        const iconColorRow = r.querySelector("#ceIconColorRow");
+        const iconColor = r.querySelector("#ceIconColor");
+        const iconColorClear = r.querySelector("#ceIconColorClear");
+        if (iconColorRow) iconColorRow.style.display = this.typeId === "icon" ? "" : "none";
+        if (iconColor) {
+            const entry = this.currentEntry();
+            const stored = entry && typeof iconJsonStore !== "undefined" ? iconJsonStore.get(entry.spriteKey || entry.id) : null;
+            this._iconColor = (stored && stored.color) || null;
+            iconColor.value = this._iconColor || "#ffffff";
+            iconColor.oninput = () => {
+                this._iconColor = iconColor.value;
+                const e2 = this.currentEntry();
+                if (e2 && typeof iconJsonStore !== "undefined") {
+                    iconJsonStore.set(e2.spriteKey || e2.id, { color: this._iconColor });
+                    this.drawCenter();
+                    this.drawCurrentThumb();
+                }
+            };
+        }
+        if (iconColorClear) {
+            iconColorClear.onclick = () => {
+                this._iconColor = null;
+                if (iconColor) iconColor.value = "#ffffff";
+                const e2 = this.currentEntry();
+                if (e2 && typeof iconJsonStore !== "undefined") {
+                    iconJsonStore.set(e2.spriteKey || e2.id, { color: null });
+                    this.drawCenter();
+                    this.drawCurrentThumb();
+                }
+            };
+        }
 
         const wrap = r.querySelector("#ceCanvasWrap");
         const canvas = r.querySelector("#ceCanvas");

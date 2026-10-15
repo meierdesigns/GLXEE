@@ -221,6 +221,9 @@ extendClass(ComponentEditorUI, {
         if (typeof ModuleSprites !== "undefined" && ModuleSprites) {
             keys.forEach((k) => { ModuleSprites[k] = matrix; });
         }
+        if (typeof IconSprites !== "undefined" && IconSprites) {
+            keys.forEach((k) => { if (IconSprites[k] !== undefined) IconSprites[k] = matrix; });
+        }
         // Live ship preview: canvas is a valid drawImage source (overrides PNG until reload)
         if (typeof spriteLoader !== "undefined" && spriteLoader.sprites) {
             keys.forEach((k) => { spriteLoader.sprites.set(k, this._editCanvas); });
@@ -228,6 +231,7 @@ extendClass(ComponentEditorUI, {
         if (typeof iconRenderer !== "undefined" && iconRenderer.clearCache) {
             iconRenderer.clearCache();
         }
+        return matrix;
     },
 
     async onSavePixels() {
@@ -239,8 +243,28 @@ extendClass(ComponentEditorUI, {
         try {
             const key = entry.spriteKey || entry.id;
             const dataUrl = this._editCanvas.toDataURL("image/png");
-            this.syncModuleSpritesFromEdit(key);
+            const matrix = this.syncModuleSpritesFromEdit(key);
             this.persistMetaFields();
+            if (entry.type === "icon") {
+                if (typeof iconJsonStore !== "undefined") {
+                    const grid = iconJsonStore.encodeGrid(matrix);
+                    iconJsonStore.set(key, { grid, color: this._iconColor || null });
+                    const result = await iconJsonStore.saveToDisk();
+                    this._pixelDirty = false;
+                    this.setStatus(result && result.ok !== false
+                        ? "Icon saved · " + key
+                        : "Icon in memory · start bridge to write assets/meta/icons-data.json");
+                    window.dispatchEvent(new CustomEvent("vf-asset-accepted", { detail: { entry: entry, key: key } }));
+                } else {
+                    this._pixelDirty = false;
+                    this.setStatus("Icon in memory · iconJsonStore missing");
+                }
+                this.drawCurrentThumb();
+                this.drawCenter();
+                this.renderList();
+                this.drawShipPreview();
+                return;
+            }
             if (typeof assetGenClient !== "undefined" && assetGenClient.writePng && entry.targetPath) {
                 const result = await assetGenClient.writePng(entry.targetPath, dataUrl);
                 if (typeof spriteLoader !== "undefined" && spriteLoader.reloadSprite) {

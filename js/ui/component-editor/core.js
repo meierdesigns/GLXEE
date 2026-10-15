@@ -10,10 +10,14 @@ class ComponentEditorUI {
             { id: "mount", label: "MOUNTS" },
             { id: "weapon", label: "WEAPONS" },
             { id: "ship", label: "SHIPS" },
+            { id: "shipSegment", label: "SHIP SEGMENTS" },
             { id: "enemy", label: "ENEMIES" },
             { id: "factionShip", label: "FACTION SHIPS" },
+            { id: "faction", label: "FACTIONS" },
             { id: "obstacle", label: "OBSTACLES" },
-            { id: "ability", label: "ABILITIES" }
+            { id: "ability", label: "ABILITIES" },
+            { id: "planet", label: "PLANETS" },
+            { id: "icon", label: "ICONS" }
         ];
         this.visible = false;
         this.embedded = false;
@@ -47,12 +51,12 @@ class ComponentEditorUI {
         this._editSize = 0;
         this._pixelDirty = false;
         this._paintTool = "draw";
-        this._paintShade = 12;
-        this._maxShades = 15;
-        let savedColors = 15;
+        this._paintShade = 3;
+        this._maxShades = 4;
+        let savedColors = 4;
         let savedBg = "#FF00FF";
         try {
-            savedColors = parseInt(localStorage.getItem("vf_pixel_colors"), 10) || 15;
+            savedColors = parseInt(localStorage.getItem("vf_pixel_colors"), 10) || 4;
             const bg = localStorage.getItem("vf_pixel_bg");
             if (bg && /^#[0-9A-Fa-f]{6}$/.test(bg)) savedBg = bg;
         } catch (e) {}

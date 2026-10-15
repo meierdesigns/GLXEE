@@ -68,15 +68,16 @@ extendClass(GalaxyMapManager, {
             else reason = check.reason || '';
         }
         const exploreLabel = `EXPLORES ${used}/${budget}`;
-        const progress = `<div class="gm-explore-progress" title="Explore budget in this galaxy">` +
+        const exploreTip = `EXPLORE BUDGET · ${used}/${budget} sectors charted in this galaxy. Each EXPLORE NEW SECTOR reveals a new planet — upgrade the NAV COMPUTER to raise the budget.`;
+        const progress = `<div class="gm-explore-progress" data-ui-tip="${exploreTip}">` +
             `${this.progressPlanetIconHtml()}<span class="gm-progress-text">${exploreLabel}</span></div>`;
-        const meta = reason ? `<span class="gm-explore-meta">${reason}</span>` : '';
         this._exploreMetaHtml = '';
+        const btnTip = `EXPLORE NEW SECTOR · Spend resources to chart a new planet in this galaxy.` + (costLabel ? ` COST · ${costLabel}` : '') + (reason ? ` — ${reason}` : '');
         return `<div class="galaxy-map-explore">` +
             progress +
-            `<button class="action-button gm-explore-btn" id="gmExplore" ${disabled}${costLabel ? ` data-ui-tip="COST · ${costLabel}"` : ''}>EXPLORE NEW SECTOR` +
+            `<button class="action-button gm-explore-btn" id="gmExplore" ${disabled} data-ui-tip="${btnTip}">EXPLORE NEW SECTOR` +
             (costIcons ? `<span class="gm-explore-costs">${costIcons}</span>` : (costLabel ? ` (${costLabel})` : '')) +
-            `</button>` + (meta ? meta : '') + `</div>`;
+            `</button>` + (reason ? `<span class="gm-explore-meta" data-ui-tip="${btnTip}">${reason}</span>` : '') + `</div>`;
     },
     /** Planet-to-planet lines (lit, dim, or fading towards a locked planet). */
     edgeLinesSvg() {

@@ -9,7 +9,7 @@ class UIManager {
         this.gameOverMenuIndex = 0;
         this.gameOverMenuItems = ['restart', 'mainMenu'];
         this.victoryMenuIndex = 0;
-        this.victoryMenuItems = ['nextLevel', 'restartGame', 'levelSelection'];
+        this.victoryMenuItems = ['nextLevel', 'levelSelection'];
         this._enemyBarKeys = '';
         this._playerShipIconKey = '';
         this._playerStatIconKey = '';

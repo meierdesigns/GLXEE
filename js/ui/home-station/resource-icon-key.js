@@ -36,8 +36,6 @@ extendClass(HomeStationUI, {
     renderAreaTabs() {
         const mainTabs = this._tabs.filter((id) => this._menuOnlyTabs.indexOf(id) === -1);
         const activeArea = this.getTabArea(this.tab);
-        if (!this._areaLastTab) this._areaLastTab = {};
-        if (activeArea) this._areaLastTab[activeArea.id] = this.tab;
         // The header is rebuilt on every switch, so CSS transitions can't run:
         // mark what just changed and let keyframes animate it (read again by
         // renderAreaSubnav, which renders right after this).
@@ -75,14 +73,11 @@ extendClass(HomeStationUI, {
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
             const active = activeArea === area;
-            // Last used sub-tab of the area — except PLAY (the map is never
-            // entered just by switching areas) — else the area's default.
-            const last = this._areaLastTab[area.id];
-            // PLAY is the map, never an area's landing tab.
+            // A click on the area always lands on its ★ default tab — except
+            // PLAY (the map is never entered just by switching areas).
             const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
-            const fallback = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
-            const target = tabs.indexOf(last) !== -1 && !modal(last) ? last : fallback;
+            const target = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
             return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
@@ -173,7 +168,18 @@ extendClass(HomeStationUI, {
         return !!on && !was;
     },
 
+    /**
+     * LAUNCH stays hidden until the pilot clears a first stage. Before that,
+     * new games already open on the map; if they leave for hangar, show LAUNCH
+     * so they can still return.
+     */
+    isPlayLaunchUnlocked() {
+        if (typeof profileManager === 'undefined' || !profileManager.hasClearedAnyStage) return true;
+        return !!profileManager.hasClearedAnyStage();
+    },
+
     renderPlayLaunch() {
+        if (!this.isPlayLaunchUnlocked() && this.tab === 'play') return '';
         const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
         const planets = ids.map((id, i) => {
             const svg = planetSVGManager.getPlanetSVG(id);
@@ -285,6 +291,19 @@ extendClass(HomeStationUI, {
         };
         document.addEventListener('mousemove', this._mouseMoveHandler);
         const opts = options || {};
+        // No stage cleared yet on the start planet: always land on PLAY, ignore any persisted tab.
+        if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
+            const tutorialProfile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+            if (tutorialProfile) {
+                const tutorialGalaxyId = profileManager.getCurrentGalaxyId(tutorialProfile);
+                const tutorialMap = tutorialGalaxyId && planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(tutorialGalaxyId) || {}) : {};
+                const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
+                if (tutorialPlanetId) {
+                    const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
+                    if (!(st && st.highestStage >= 1)) opts.tab = 'play';
+                }
+            }
+        }
         const savedTab = opts.tab || (typeof menuStateManager !== 'undefined' && menuStateManager.get().tab);
         const savedState = (typeof menuStateManager !== 'undefined') ? menuStateManager.get() : {};
         const savedShopCat = opts.shopCategory || savedState.shopCategory;

@@ -171,17 +171,22 @@ extendClass(GalaxyMapManager, {
         }
         if (c.control === 'contested' && c.rivals && c.rivals.length) {
             const map = planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(this.galaxyId) || {}) : {};
-            const front = (map.nodes || []).filter((n) => {
+            const frontNodes = (map.nodes || []).filter((n) => {
                 const f = planetConfigManager.getPlanetFactions ? planetConfigManager.getPlanetFactions(n.planetId) : [];
                 // Frontline = a planet held by an invading rival.
                 return f && f.length && c.rivals.indexOf(f[0]) !== -1;
-            }).length;
+            });
+            const front = frontNodes.length;
+            const frontPlanets = frontNodes.map((n) => {
+                const cfg = planetConfigManager.getConfig ? planetConfigManager.getConfig(n.planetId) : null;
+                return { id: n.planetId, name: String((cfg && cfg.name) || n.planetId || '').toUpperCase() };
+            });
             const rivalStyle = styleOf(c.rivals[0]);
             const accent = (rivalStyle && rivalStyle.accent) || 'var(--color-primary)';
             this._situationAccent = accent;
             const emblems = c.rivals.map((f) => `<span class="galaxy-map-situation-emblem" title="${esc(String(f).toUpperCase())}">${emblemOf(f, 32)}</span>`).join('');
-            this._situation = { kind: 'CONFLICT', planetId: null, rivals: c.rivals.slice(), front: front,
-                objective: front ? front + ' frontline planet' + (front === 1 ? '' : 's') + ' held by the invaders. Take them back.' : 'Raids on the border. Clear planets to push the invaders back.' };
+            this._situation = { kind: 'CONFLICT', planetId: frontPlanets.length ? frontPlanets[0].id : null, rivals: c.rivals.slice(), front: front, frontPlanets: frontPlanets,
+                objective: front ? front + ' frontline planet' + (front === 1 ? '' : 's') + ' held by the invaders — ' + frontPlanets.map((p) => p.name).join(', ') + '. Take them back.' : 'Raids on the border. Clear planets to push the invaders back.' };
             const conflictSub = front ? front + ' FRONTLINE PLANET' + (front === 1 ? '' : 'S') : 'RAIDS ON THE BORDER';
             return `<div class="galaxy-map-ruler-seg galaxy-map-situation is-conflict" role="button" tabindex="0" data-ui-tip="${conflictSub}" style="--ruler-accent:${accent}">` +
                 `<span class="galaxy-map-situation-kind">CONFLICT</span>` +
@@ -203,18 +208,32 @@ extendClass(GalaxyMapManager, {
         const host = document.querySelector('.home-station-content') || document.body;
         if (!sit || !host || host.querySelector('.gm-mission-modal')) return;
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const emblemOf = (f, size) => (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+            ? profileSelectionManager.getFactionEmblemHtml(f, size) : '');
         const row = (k, v) => v ? `<div class="gm-mm-row"><span>${k}</span><b>${esc(v)}</b></div>` : '';
-        const rivals = sit.rivals && sit.rivals.length ? sit.rivals.map((f) => String(f).toUpperCase()).join(' · ') : '';
+        const facRow = (k, factions) => (factions && factions.length)
+            ? `<div class="gm-mm-row gm-mm-row-fac"><span>${k}</span><span class="gm-mm-facs">` +
+                factions.map((f) => `<span class="gm-mm-fac-chip">${emblemOf(f, 24)}<b>${esc(String(f).toUpperCase())}</b></span>`).join('') +
+                `</span></div>` : '';
         const body = row('SITUATION', sit.kind) + row('PLANET', sit.planet) + row('MISSION', sit.mission) +
-            row('ATTACKER', sit.attacker ? String(sit.attacker).toUpperCase() : '') + row('DEFENDER', sit.defender ? String(sit.defender).toUpperCase() : '') +
-            row('INVADERS', rivals) + row('REWARD', sit.reward);
+            facRow('ATTACKER', sit.attacker ? [sit.attacker] : null) + facRow('DEFENDER', sit.defender ? [sit.defender] : null) +
+            facRow('INVADERS', sit.rivals) + row('REWARD', sit.reward);
+        const frontList = sit.frontPlanets && sit.frontPlanets.length
+            ? `<div class="gm-mm-row gm-mm-row-planets"><span>FRONTLINE PLANETS</span><span class="gm-mm-planets">` +
+                sit.frontPlanets.map((p) => {
+                    const found = !!(this.nodeById && this.nodeById[p.id]);
+                    return found
+                        ? `<button type="button" class="gm-mm-planet-chip" data-planet="${esc(p.id)}">${esc(p.name)}</button>`
+                        : `<button type="button" class="gm-mm-planet-chip" disabled data-ui-tip="NOT YET CHARTED — EXPLORE THIS GALAXY TO FIND IT">${esc(p.name)}</button>`;
+                }).join('') +
+                `</span></div>` : '';
         const goBtn = sit.planetId && this.nodeById && this.nodeById[sit.planetId]
             ? `<button type="button" class="action-button" id="gmMmGo">${this.btnIconHtml ? this.btnIconHtml('hsTravel') : ''}SHOW PLANET</button>` : '';
         const modal = document.createElement('div');
         modal.className = 'gm-mission-modal';
         modal.innerHTML = `<div class="gm-mm-dialog" role="dialog" aria-label="Mission">` +
             `<h3 class="gm-mm-title">${esc(sit.kind)}</h3>` +
-            `<div class="gm-mm-body">${body}</div>` +
+            `<div class="gm-mm-body">${body}${frontList}</div>` +
             `<p class="gm-mm-goal">${esc(sit.objective)}</p>` +
             `<div class="gm-mm-actions"><button type="button" class="action-button secondary" id="gmMmClose">${this.btnIconHtml ? this.btnIconHtml('back') : ''}CLOSE</button>${goBtn}</div></div>`;
         host.appendChild(modal);
@@ -233,6 +252,14 @@ extendClass(GalaxyMapManager, {
             close();
             this.selectPlanet(sit.planetId);
             if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        });
+        modal.querySelectorAll('.gm-mm-planet-chip').forEach((chip) => {
+            chip.addEventListener('click', () => {
+                const pid = chip.getAttribute('data-planet');
+                close();
+                this.selectPlanet(pid);
+                if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+            });
         });
         (go || modal.querySelector('#gmMmClose')).focus();
     },

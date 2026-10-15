@@ -3,7 +3,7 @@
 /**
  * Shared in-game modal dialogs — replaces window.confirm / alert / prompt so
  * every modal wears the app + faction styling and speaks the same keyboard
- * language (←/→/↑/↓ move, ENTER confirm, ESC cancel).
+ * language (←/→/↑/↓ move, ENTER/SPACE confirm selection, ESC cancel).
  *
  *   uiDialog.confirm('Delete?').then((ok) => { ... });
  *   uiDialog.alert('Saved.');
@@ -116,10 +116,12 @@ class UIDialog {
                 const onInput = input && document.activeElement === input;
                 if (e.key === 'Escape') {
                     finish(cancelValue);
-                } else if (e.key === 'Enter') {
+                } else if (e.key === 'Enter' || ((e.key === ' ' || e.key === 'Spacebar') && !onInput)) {
+                    // Space confirms the focused button (same as menus); in a text field it types a space.
                     const el = focusables[focusIdx];
-                    if (onInput || !el || el === input) buttons[0].click();
-                    else el.click();
+                    if (e.key === 'Enter' && (onInput || !el || el === input)) buttons[0].click();
+                    else if (el && el !== input) el.click();
+                    else if (buttons.length) buttons[buttons.length - 1].click();
                 } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                     if (input) focusAt(e.key === 'ArrowUp' ? 0 : Math.max(1, focusIdx));
                     else focusAt(focusIdx + (e.key === 'ArrowUp' ? -1 : 1));

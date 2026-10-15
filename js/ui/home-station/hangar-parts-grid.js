@@ -187,8 +187,13 @@ extendClass(HomeStationUI, {
                 const lv = Math.max(0, Math.min(2, sizeOf(it)));
                 const span = [[1, 1], [1, 2], [2, 2]][lv];
                 const here = it.kind === kind;
-                return `<button type="button" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${here && equipped[id] && id !== current ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
+                const usedElsewhere = here && equipped[id] && id !== current;
+                const assignedBadge = usedElsewhere
+                    ? `<span class="hs-pick-assigned" data-ui-tip="ALREADY ASSIGNED TO ANOTHER SLOT"><svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5l2 2 5-5-1-1-4 4-1-1z"/></svg></span>`
+                    : '';
+                return `<button type="button" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
                     `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
+                    assignedBadge +
                     `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
             }).join('');
         };

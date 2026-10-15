@@ -102,7 +102,10 @@ extendClass(GalaxyMapManager, {
      */
     updateSelectionFrames() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
-        if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal) {
+            this.syncLocateShipButton();
+            return;
+        }
         // Screen scale from the cached element size + viewBox (meet): reading
         // getScreenCTM right after a viewBox change forced a full layout of
         // the map on every zoom frame.
@@ -122,7 +125,10 @@ extendClass(GalaxyMapManager, {
         }
         const vb = svg.viewBox.baseVal;
         const s = vb.width && vb.height ? Math.min(this._svgSize.w / vb.width, this._svgSize.h / vb.height) : 0;
-        if (!s) return;
+        if (!s) {
+            this.syncLocateShipButton();
+            return;
+        }
         const px = (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
         const key = s.toFixed(4);
         // Only visible frames (selected / hovered) are rebuilt per zoom frame;
@@ -138,6 +144,7 @@ extendClass(GalaxyMapManager, {
             const f = r + px(gap);
             slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick), ry == null ? null : ry + px(gap));
         });
+        this.syncLocateShipButton();
     },
     selectionFrameSvg(f, L, t, fy) {
         const faction = this.getCursorFaction();
@@ -393,6 +400,37 @@ extendClass(GalaxyMapManager, {
         };
         requestAnimationFrame(step);
     },
+    /** True when the player ship marker lies in the visible map viewport. */
+    isShipOnScreen() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal || !this.locationPoint) return true;
+        if (typeof profileManager === 'undefined' || !profileManager.getShipLocation) return true;
+        const loc = profileManager.getShipLocation(this.galaxyId);
+        const p = loc ? this.locationPoint(loc) : null;
+        if (!p) return true;
+        const vb = svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        if (!vb.width || !vb.height || !r.width || !r.height) return true;
+        // preserveAspectRatio meet: only the centred visible slice of the viewBox.
+        const s = Math.min(r.width / vb.width, r.height / vb.height);
+        const visW = r.width / s;
+        const visH = r.height / s;
+        const left = vb.x + (vb.width - visW) / 2;
+        const top = vb.y + (vb.height - visH) / 2;
+        const pad = 16;
+        return p.x >= left - pad && p.x <= left + visW + pad
+            && p.y >= top - pad && p.y <= top + visH + pad;
+    },
+
+    /** FIND SHIP only when the ship has left the screen. */
+    syncLocateShipButton() {
+        const btn = this.overlay && this.overlay.querySelector('#gmLocateShip');
+        if (!btn) return;
+        const show = !this.isShipOnScreen();
+        btn.hidden = !show;
+        btn.setAttribute('aria-hidden', show ? 'false' : 'true');
+    },
+
     /** Glide the camera (current zoom) back to centre on the player ship. */
     returnCameraToShip() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
@@ -403,7 +441,10 @@ extendClass(GalaxyMapManager, {
         const cur = svg.viewBox.baseVal;
         const from = [cur.x, cur.y, cur.width, cur.height];
         const to = [p.x - cur.width / 2, p.y - cur.height / 2, cur.width, cur.height];
-        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 2) return;
+        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 2) {
+            this.syncLocateShipButton();
+            return;
+        }
         this._panAnchor = { x: p.x, y: p.y };
         this.mapPan = { x: 0, y: 0 };
         const start = performance.now();
@@ -419,6 +460,7 @@ extendClass(GalaxyMapManager, {
             svg.setAttribute('viewBox', from.map((v, i) => (v + (to[i] - v) * k).toFixed(2)).join(' '));
             this.updateSelectionFrames();
             if (t < 1) requestAnimationFrame(step);
+            else this.syncLocateShipButton();
         };
         requestAnimationFrame(step);
     },

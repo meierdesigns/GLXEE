@@ -177,21 +177,47 @@ extendClass(HomeStationUI, {
             this._hangarBayResizeObs.observe(stage);
         }
 
-        // Redraw bay after layout settles (stage may start at 0 height)
+        // Redraw bay after layout settles (stage may start at 0 height).
+        // The very first drawHangarBay() call ran before layout had settled, so it
+        // cached a fit/pan computed off a stale size; drawHangarBay's own "sameView"
+        // dead-band (+/-12%) then treats the now-correct size as unchanged and never
+        // recomputes the pan, leaving the ship off-centre until something (e.g. the
+        // inventory toggle) clears _hangarFit. Clear it here once layout is stable so
+        // this frame does a real refit instead of being absorbed by the dead-band.
         requestAnimationFrame(() => {
             this.drawHangarBay();
-            requestAnimationFrame(() => this.drawHangarBay());
+            requestAnimationFrame(() => {
+                this._hangarFit = null;
+                this.drawHangarBay();
+            });
         });
         // Ship art (faction sprites) can still be arriving on the first frames: redraw a few times so the
-        // ship appears on its own instead of waiting for a hover.
-        const redraw = () => { if (this.isVisible && this.tab === 'hangar') this.drawHangarBay(); };
+        // ship appears on its own instead of waiting for a hover. Only the first settle pass (below) forces
+        // a real refit; later redraws keep drawHangarBay's sameView dead-band so a manual zoom/pan the
+        // player made in the meantime isn't wiped, and the ship doesn't visibly jump on each late redraw.
+        let bayFitSettled = false;
+        const redraw = () => {
+            if (!this.isVisible || this.tab !== 'hangar') return;
+            if (!bayFitSettled) this._hangarFit = null;
+            this.drawHangarBay();
+        };
         // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
         const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
         // Only on a fresh open of the hangar; a re-render while working (clicking an area) must not blank the bay.
-        const fresh = performance.now() - (this._hangarBayStamp || 0) > 1500;
+        // NOTE: create-ui.js calls drawHangarBay() (which stamps _hangarBayStamp = now) immediately
+        // before bindHangarSlotEvents() runs, so comparing against _hangarBayStamp here always measured
+        // ~0ms and "fresh" was always false — the canvas was never actually hidden on a real fresh open,
+        // so the unsettled first paint was visible and the 200ms settle pass then visibly snapped/jumped
+        // to the correct pan/zoom. Track "already settled once" on the overlay itself instead: it starts
+        // unset on every freshly built overlay (page load / hangar first opened) and is set once the first
+        // settle pass has revealed the canvas, so later re-renders on the same overlay never hide it again.
+        const fresh = !!this.overlay && !this.overlay._hangarBaySettled;
         if (bayCanvas && fresh) bayCanvas.style.visibility = 'hidden';
-        const reveal = () => { if (bayCanvas) bayCanvas.style.visibility = ''; };
-        setTimeout(() => { redraw(); reveal(); }, 200);
+        const reveal = () => {
+            if (bayCanvas) bayCanvas.style.visibility = '';
+            if (this.overlay) this.overlay._hangarBaySettled = true;
+        };
+        setTimeout(() => { redraw(); bayFitSettled = true; reveal(); }, 200);
         setTimeout(reveal, 700);   // safety: never stay hidden
         [600, 1500].forEach((ms) => setTimeout(redraw, ms));
         // Click (or Enter) on a slot in the SLOTS list opens the part picker.

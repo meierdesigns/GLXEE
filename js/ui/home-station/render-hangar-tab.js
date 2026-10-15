@@ -112,23 +112,18 @@ extendClass(HomeStationUI, {
 
         return `
             <div class="hs-section hs-panel hs-hangar-root">
-                <h3 class="hs-panel-title">
-                    <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                    <span class="hs-panel-label">HANGAR — OPEN BAY</span>
-                    <span class="hs-panel-scan" aria-hidden="true"></span>
-                    <label class="hs-hangar-voxel is-in-title" title="Voxel size of the whole ship">
-                        <span>VOXEL SIZE</span>
-                        <input type="range" data-voxel-scale data-hangar-voxel min="0.2" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
-                        <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
-                    </label>
-                </h3>
                 <div class="hs-hangar-detail-head hs-panel">
                     <div class="hs-hangar-head-title">
                         <span class="hs-chip-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
                         <strong class="hs-hangar-head-name">${this.shipName(shipId)}</strong>
                         ${shipId === profile.activeShipId
-                            ? '<span class="hs-hangar-active-tag">★ ACTIVE</span>'
+                            ? ''
                             : `<button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>`}
+                        ${typeof startScreenManager !== 'undefined' && startScreenManager.devMode ? `<label class="hs-hangar-voxel is-in-title" title="Voxel size of the whole ship">
+                            <span>VOXEL SIZE</span>
+                            <input type="range" data-voxel-scale data-hangar-voxel min="0.2" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
+                            <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
+                        </label>` : ''}
                     </div>
                     <div class="hs-hangar-stats is-row">
                         <div class="hs-stat-group is-slots" role="group" aria-label="Slots">
@@ -189,6 +184,7 @@ extendClass(HomeStationUI, {
                                     <input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">
                                     <output id="hsBayZoomOut" class="hs-bay-zoom-out">100%</output>
                                     <button type="button" class="hs-bay-zoom-btn is-fit" data-bay-zoom="fit" title="Fit ship" aria-label="Fit ship">FIT</button>
+                                    <button type="button" class="hs-bay-zoom-btn hs-bay-info-btn" data-ui-tip="Drag modules within their component. Click a slot to equip." aria-label="Help">?</button>
                                 </div>
                                 <button type="button" class="hs-slot-move-handle" id="hsSlotMoveHandle" hidden
                                     aria-label="Move slot" title="Drag to move this slot (keeps the weapon)">
@@ -210,11 +206,10 @@ extendClass(HomeStationUI, {
                                     title="Module scale" aria-label="Module scale">
                                 <span class="pe-zoom-label" id="hsHangarModuleScaleLabel">100%</span>
                             </div>
-                            <div class="hs-hangar-bay-tools">
+                            ${typeof startScreenManager !== 'undefined' && startScreenManager.devMode ? `<div class="hs-hangar-bay-tools">
                                 <button type="button" class="action-button hs-mod" id="hsResetAnatomy">RESET ANATOMY</button>
                                 <button type="button" class="action-button hs-mod" id="hsSaveAnatomyDefault" title="Save this ship as the RESET ANATOMY default for your faction">SET AS DEFAULT</button>
-                            </div>
-                            <p class="hs-muted hs-hangar-bay-hint">DRAG MODULES WITHIN THEIR COMPONENT · CLICK A SLOT TO EQUIP</p>
+                            </div>` : ''}
                         </div>
                     </div>
                     <div class="pe-resize-handle" data-resize="right" title="Resize preview"></div>

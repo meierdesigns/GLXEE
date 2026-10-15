@@ -240,8 +240,8 @@ extendClass(HomeStationUI, {
         this.createUI();
     },
     /**
-     * Temporary toast at the bottom centre, in the station UI style. Lives on
-     * <body> so overlay re-renders don't cut it short; fades out on its own.
+     * Temporary toast top-right, under the logout button, in the station UI style.
+     * Lives on <body> so overlay re-renders don't cut it short; fades out on its own.
      */
     showStatusToast(msg) {
         const text = String(msg || '').trim();
@@ -257,6 +257,15 @@ extendClass(HomeStationUI, {
         }
         el.textContent = text;
         el.classList.remove('is-visible', 'hs-status-ok', 'hs-status-fail');
+        // Header height varies by skin/responsive breakpoint — anchor under the
+        // logout button itself instead of a fixed CSS offset (see part-13.css .hs-toast).
+        try {
+            const logout = document.getElementById('hsLogout');
+            if (logout) {
+                const rect = logout.getBoundingClientRect();
+                if (rect.bottom > 0) el.style.top = Math.round(rect.bottom + 8) + 'px';
+            }
+        } catch (e) { /* ignore */ }
         void el.offsetWidth;
         el.classList.add('is-visible');
         if (this._toastTimer) clearTimeout(this._toastTimer);

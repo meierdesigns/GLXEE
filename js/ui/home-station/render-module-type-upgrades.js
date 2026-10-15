@@ -92,7 +92,12 @@ extendClass(HomeStationUI, {
         const ids = (typeof planetConfigManager !== 'undefined')
             ? planetConfigManager.getGalaxyIds()
             : ['milky_way', 'andromeda'];
-        const cards = ids.map((gid) => {
+        const cards = ids.filter((gid) => {
+            if (gid === current) return true;
+            return (typeof profileManager !== 'undefined')
+                ? profileManager.canTravelToGalaxy(gid, profile).ok
+                : gid === 'milky_way';
+        }).map((gid) => {
             const g = (typeof planetConfigManager !== 'undefined')
                 ? planetConfigManager.getGalaxy(gid)
                 : { id: gid, name: gid.toUpperCase() };
@@ -122,7 +127,7 @@ extendClass(HomeStationUI, {
             }
             const ctl = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl) ? planetConfigManager.getGalaxyControl(gid) : null;
             const held = !ctl || ctl.control !== 'contested';
-            const chip = (fid) => `<span class="hs-travel-fac">${this.factionEmblemHtml({ faction: fid }, 24)}<b>${this.factionLabel(fid)}</b></span>`;
+            const chip = (fid) => `<span class="hs-travel-fac" title="${this.factionLabel(fid)}">${this.factionEmblemHtml({ faction: fid }, 24)}</span>`;
             const facs = ctl ? [chip(ctl.main)].concat(ctl.rivals.length ? ['<i class="hs-travel-vs">VS</i>'].concat(ctl.rivals.map(chip)) : []).join('') : '';
             const stat = (icon, val, tip, col) => {
                 const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;

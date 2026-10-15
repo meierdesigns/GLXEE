@@ -1,5 +1,8 @@
 "use strict";
 
+// TEMP DEBUG: tracing why side/escort enemies aren't spawning. Remove once fixed.
+if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS == null) window.DEBUG_SIDE_SPAWNS = true;
+
 // Enemy management
 class EnemyManager {
     constructor() {
@@ -78,21 +81,34 @@ class EnemyManager {
             this.levelMods = Object.assign({}, this.levelMods, levelMods);
         }
         const planetId = this.levelMods.planetId || null;
-        const galaxyId = (typeof planetConfigManager !== 'undefined' && planetId)
-            ? planetConfigManager.getPlanetGalaxyId(planetId)
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        const isEncounter = !!(pcm && pcm.isEncounterPlanet && pcm.isEncounterPlanet(planetId));
+        const galaxyId = (pcm && planetId)
+            ? pcm.getPlanetGalaxyId(planetId)
             : null;
         const raw = Array.isArray(entries) ? entries : [];
+        // Hostile list for this planet (seeded rival when the player's side holds it).
+        // Remapping below paints every hull with that faction — do NOT also strip
+        // schedule entries whose catalog default faction differs (that emptied
+        // Neptune escorts / side pools on terran-held milky_way and killed events).
+        const levelFactions = pcm && pcm.getHostileFactions
+            ? (pcm.getHostileFactions(planetId) || [])
+            : (pcm && pcm.getPlanetFactions ? (pcm.getPlanetFactions(planetId) || []) : []);
         const allowedRaw = raw.filter((e) => {
             // Champions are the hunt target — never drop them for faction/location filters
             // (planet enemyType can disagree with assigned factions, e.g. Jupiter+cruiser).
             if (e && e.champion) return true;
+            // Ambush encounters author hull types + pirate faction; type catalogs
+            // must not strip escorts that default to other factions.
+            if (isEncounter) return true;
             const type = e.type || 'enemyBasic';
             if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.canAppearOn) {
                 if (!enemyConfigManager.canAppearOn(type, planetId, galaxyId)) return false;
             }
-            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.enemyMatchesPlanetFactions) {
-                const planetFactions = planetConfigManager.getHostileFactions ? planetConfigManager.getHostileFactions(planetId) : planetConfigManager.getPlanetFactions(planetId);
-                if (planetFactions.length && !planetConfigManager.enemyMatchesPlanetFactions(type, planetFactions)) {
+            // Only gate on catalog factions when we have no hostile to remap onto.
+            if (!levelFactions.length && pcm && pcm.enemyMatchesPlanetFactions) {
+                const planetFactions = pcm.getPlanetFactions ? pcm.getPlanetFactions(planetId) : [];
+                if (planetFactions.length && !pcm.enemyMatchesPlanetFactions(type, planetFactions)) {
                     return false;
                 }
             }
@@ -110,30 +126,33 @@ class EnemyManager {
         // belong to the level, not to their ship type's default (mostly
         // pirate) — otherwise pirates leaked into every level.
         // Hostile only: the player's own faction and its allies never attack.
-        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
-        const levelFactions = pcm && pcm.getHostileFactions
-            ? (pcm.getHostileFactions(planetId) || [])
-            : (pcm && pcm.getPlanetFactions ? (pcm.getPlanetFactions(planetId) || []) : []);
         const friendly = (f) => !!(pcm && pcm.isFriendlyFaction && pcm.isFriendlyFaction(f));
         this.levelFactions = levelFactions.slice();
         this.schedule = allowed.map((e, i) => {
             const type = e.type || 'enemyBasic';
             let tax = { faction: 'pirate', enemyClass: 'assault' };
-            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.taxonomyForType) {
-                tax = planetConfigManager.taxonomyForType(type) || tax;
+            if (pcm && pcm.taxonomyForType) {
+                tax = pcm.taxonomyForType(type) || tax;
             } else if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getDefaultFaction) {
                 tax.faction = enemyConfigManager.getDefaultFaction(type);
             }
             const typeFaction = tax.faction || 'pirate';
-            // Only the level's (= galaxy's) factions fight here: a foreign
-            // explicit or type faction becomes the level's main faction.
-            const wanted = e.faction || typeFaction;
-            let faction = levelFactions.length && levelFactions.indexOf(wanted) === -1 ? levelFactions[0] : wanted;
-            // Invaded planet (invasion-scenario.js): everyone here is the attacker.
-            const invader = (typeof profileManager !== 'undefined' && profileManager.getInvasionForPlanet)
-                ? profileManager.getInvasionForPlanet(planetId) : null;
-            if (invader) faction = invader.attacker;
-            if (friendly(faction) && levelFactions.length) faction = levelFactions[0];
+            let faction;
+            if (isEncounter) {
+                // Pirate ambushes (and other encounters) keep authored factions;
+                // never remap to the destination galaxy's ruler via hull taxonomy.
+                faction = e.faction || levelFactions[0] || 'pirate';
+            } else {
+                // Only the level's (= galaxy's) factions fight here: a foreign
+                // explicit or type faction becomes the level's main faction.
+                const wanted = e.faction || typeFaction;
+                faction = levelFactions.length && levelFactions.indexOf(wanted) === -1 ? levelFactions[0] : wanted;
+                // Invaded planet (invasion-scenario.js): everyone here is the attacker.
+                const invader = (typeof profileManager !== 'undefined' && profileManager.getInvasionForPlanet)
+                    ? profileManager.getInvasionForPlanet(planetId) : null;
+                if (invader) faction = invader.attacker;
+                if (friendly(faction) && levelFactions.length) faction = levelFactions[0];
+            }
             const enemyClass = e.enemyClass || tax.enemyClass || 'assault';
             const tier = e.tier != null
                 ? Math.max(1, Math.round(Number(e.tier)))
@@ -158,12 +177,13 @@ class EnemyManager {
         // Active faction contract on this planet decides who shows up
         // (renegade / gang target, attackers of a defended planet) —
         // faction-relations.js applyContractToSchedule.
-        if (typeof profileManager !== 'undefined' && profileManager.applyContractToSchedule) {
+        if (!isEncounter && typeof profileManager !== 'undefined' && profileManager.applyContractToSchedule) {
             profileManager.applyContractToSchedule(planetId, this.schedule);
         }
         // Faction holdings: stations add ruler defenders; the ruler's base
         // planet adds its garrison and tougher hulls (faction-holdings.js).
-        const hold = (typeof profileManager !== 'undefined' && profileManager.getPlanetHoldingInfo && planetId)
+        const hold = (!isEncounter && typeof profileManager !== 'undefined'
+            && profileManager.getPlanetHoldingInfo && planetId)
             ? profileManager.getPlanetHoldingInfo(planetId) : null;
         if (hold && hold.defenders > 0 && !friendly(hold.ruler)) {
             const template = this.schedule.find((e) => !e.champion);
@@ -202,7 +222,9 @@ class EnemyManager {
         if (typeof difficultyConfigManager !== 'undefined') {
             const profile = difficultyConfigManager.getProfile();
             const sideMul = profile.sideCountMul != null ? profile.sideCountMul : 1;
-            this.sideEnemyCap = Math.max(1, Math.min(6,
+            // Floor at 3 so combat events / director waves can actually land —
+            // enemyMaxActive:1 × sideCountMul left room < 2 forever and froze events.
+            this.sideEnemyCap = Math.max(3, Math.min(6,
                 Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
             if (profile.enemyCountMul < 1 || sideMul < 1) {
                 const mul = Math.min(profile.enemyCountMul || 1, sideMul);

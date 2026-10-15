@@ -56,12 +56,11 @@ extendClass(HomeStationUI, {
         const id = this._factionDetail;
         const tabs = ids.map((fid) => {
             const rel = fm.getRelation(fid);
-            return `<button type="button" class="hs-tab hs-subnav-tab hs-faction-card is-${rel.tone}${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-faction="${fid}" style="${this.factionCardStyle(fid)}" data-nav-item title="${this.factionLabel(fid)}">` +
+            return `<button type="button" class="hs-tab hs-subnav-tab hs-faction-card is-${rel.tone}${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-faction="${fid}" style="${this.factionCardStyle(fid)}" data-nav-item>` +
                 `<div class="hs-faction-top">` +
-                    `<span class="hs-faction-crest">${this.factionEmblemHtml({ faction: fid }, 64)}</span>` +
+                    `<span class="hs-faction-crest" title="${this.factionLabel(fid)}">${this.factionEmblemHtml({ faction: fid }, 64)}</span>` +
                     `<div class="hs-faction-main">` +
                         `<div class="hs-faction-head">` +
-                            `<span class="hs-faction-name">${this.factionLabel(fid)}</span>` +
                             `${this.factionScoreIconHtml(rel.score)}` +
                         `</div>` +
                         this.factionMeterHtml(rel) +
@@ -321,9 +320,8 @@ extendClass(HomeStationUI, {
         const swatch = (label, color) => color
             ? `<span class="hs-fd-swatch"><i style="background:${color}"></i>${label}<em>${String(color).toUpperCase()}</em></span>` : '';
         const picker = ids.map((fid) =>
-            `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
-            `<span class="hs-tab-icon">${this.factionEmblemHtml({ faction: fid }, 32)}</span>` +
-            `<span class="hs-tab-label">${this.factionLabel(fid)}</span></button>`).join('');
+            `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-open="${fid}" data-nav-item>` +
+            `<span class="hs-tab-icon" title="${this.factionLabel(fid)}">${this.factionEmblemHtml({ faction: fid }, 32)}</span></button>`).join('');
         return `<div class="hs-factions hs-fd hs-faction-fleets">` +
             `<nav class="hs-fd-tabs hs-fleet-faction-picker" aria-label="Factions">${picker}</nav>` +
             `<section class="hs-panel hs-fd-block"><h4>${this.factionLabel(id)} FLEET · ${up(style.silhouette || '')} HULLS</h4>` +
@@ -387,9 +385,8 @@ extendClass(HomeStationUI, {
         const terms = fm.getTradeTerms(id);
         const res = profile.resources || {};
         const picker = allies.map((fid) =>
-            `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-trade="${fid}" data-nav-item title="${this.factionLabel(fid)}">` +
-            `<span class="hs-tab-icon">${this.factionEmblemHtml({ faction: fid }, 32)}</span>` +
-            `<span class="hs-tab-label">${this.factionLabel(fid)}</span></button>`
+            `<button type="button" class="hs-tab hs-subnav-tab${fid === id ? ' active' : ''}" data-faction-trade="${fid}" data-nav-item>` +
+            `<span class="hs-tab-icon" title="${this.factionLabel(fid)}">${this.factionEmblemHtml({ faction: fid }, 32)}</span></button>`
         ).join('');
         const rows = terms.materials.map((mat) => {
             const q = fm.getTradeQuote(id, mat);

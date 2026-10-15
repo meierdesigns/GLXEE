@@ -8,11 +8,13 @@ extendClass(CollisionManager, {
 
         const sprite = info.sprite;
         const rows = sprite.length;
-        const cols = sprite[0].length;
+        const first = sprite[0];
+        const cols = first && first.length;
         if (!cols || !rows) return true;
 
         const drawW = info.drawW != null ? info.drawW : obj.width;
         const drawH = info.drawH != null ? info.drawH : obj.height;
+        if (!(drawW > 0) || !(drawH > 0)) return true;
         const ox = obj.x + (obj.width - drawW) / 2;
         const oy = obj.y + (obj.height - drawH) / 2;
         const lx = worldX - ox;
@@ -22,7 +24,9 @@ extendClass(CollisionManager, {
         const col = Math.floor(lx * cols / drawW);
         const row = Math.floor(ly * rows / drawH);
         if (row < 0 || col < 0 || row >= rows || col >= cols) return false;
-        return !!sprite[row][col];
+        const line = sprite[row];
+        if (!line) return false;
+        return !!line[col];
     },
 
     isPixelSolid(obj, x, y) {

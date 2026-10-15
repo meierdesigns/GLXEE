@@ -166,7 +166,7 @@ extendClass(EnemyManager, {
         const cap = this.sideEnemyCap;
         this.sideEnemyCap = Math.max(cap, this.sideEnemies.length + escorts);
         for (let i = 0; i < escorts; i++) this.spawnSideEnemy(gameState || (typeof game !== 'undefined' ? game : null));
-        this.sideEnemyCap = Math.max(cap, 3);
+        this.sideEnemyCap = Math.max(cap, 3, this.sideEnemies.length);
     },
 
     /** Fan of bullets straight down, wider each phase — faction fan weapon. */

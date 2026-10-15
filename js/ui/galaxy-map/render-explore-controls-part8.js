@@ -355,6 +355,7 @@ extendClass(GalaxyMapManager, {
             locateShipBtn.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
             });
+            this.syncLocateShipButton();
         }
 
         // Situation card: a click opens the mission modal.
@@ -368,7 +369,7 @@ extendClass(GalaxyMapManager, {
 
         // Ship bar: a click opens the hangar to configure the ship.
         const shipBar = this.overlay.querySelector('.galaxy-map-header .gm-ship-bar');
-        if (shipBar) {
+        if (shipBar && this._canTeleport) {
             shipBar.setAttribute('role', 'button');
             shipBar.setAttribute('tabindex', '0');
             shipBar.title = 'OPEN HANGAR · configure your ship';

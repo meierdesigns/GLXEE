@@ -34,32 +34,32 @@ extendClass(HomeStationUI, {
     syncNavHint() {
         this.syncNavZone();
         if (!this.overlay || this.tab === 'menu') return;
-        const hint = this.overlay.querySelector('.hs-footer .profile-selection-instructions p');
+        const hint = this.overlay.querySelector('.hs-footer .hs-footer-info-btn');
         if (!hint) return;
         const level = this.getNavLevel();
         if (this.tab === 'play') {
             if (this.isPlayMapActive()) {
-                hint.textContent = '[MAP] ARROWS Planets | ENTER Start Mission | ESC/BACKSPACE Back to Tabs';
+                hint.setAttribute('data-ui-tip', '[MAP] ARROWS Planets | ENTER Start Mission | ESC/BACKSPACE Back to Tabs');
             } else {
-                hint.textContent = '[TABS] ←→ Switch | ENTER Enter Map | ESC/BACKSPACE Menu';
+                hint.setAttribute('data-ui-tip', '[TABS] ←→ Switch | ENTER Enter Map | ESC/BACKSPACE Menu');
             }
             return;
         }
         if (level === 'sub') {
-            hint.textContent = '[SECTION] ←→ Switch | ENTER Enter Content | ESC/BACKSPACE Back to Tabs';
+            hint.setAttribute('data-ui-tip', '[SECTION] ←→ Switch | ENTER Enter Content | ESC/BACKSPACE Back to Tabs');
             return;
         }
         if (level === 'content') {
             const back = this.hasSubTabs() ? 'ESC/BACKSPACE Back to Section' : 'ESC/BACKSPACE Back to Tabs';
             if (this.tab === 'components') {
-                hint.textContent = `[CONTENT] ↑↓←→ Navigate | GENERATE / ACCEPT | ${back}`;
+                hint.setAttribute('data-ui-tip', `[CONTENT] ↑↓←→ Navigate | GENERATE / ACCEPT | ${back}`);
             } else {
-                hint.textContent = `[CONTENT] ↑↓←→ Navigate | ENTER Select | ${back}`;
+                hint.setAttribute('data-ui-tip', `[CONTENT] ↑↓←→ Navigate | ENTER Select | ${back}`);
             }
             return;
         }
         const enterLabel = this.hasSubTabs() ? 'ENTER Sections | SHIFT+ENTER Content' : 'ENTER Enter Tab';
-        hint.textContent = `[TABS] ←→ Switch | ${enterLabel} | ESC/BACKSPACE Menu`;
+        hint.setAttribute('data-ui-tip', `[TABS] ←→ Switch | ${enterLabel} | ESC/BACKSPACE Menu`);
     },
 
     syncNavZone() {

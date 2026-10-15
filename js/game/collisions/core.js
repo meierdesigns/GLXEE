@@ -7,14 +7,23 @@ class CollisionManager {
     }
 
     checkCollisions(gameState) {
-        this.checkBulletEnemyCollisions(gameState);
-        this.checkBulletSideEnemyCollisions(gameState);
-        this.checkEnemyBulletPlayerCollisions(gameState);
-        this.checkPlayerBulletEnemyBulletCollisions(gameState);
-        this.checkObstaclePlayerCollisions(gameState);
-        this.checkObstacleEnemyCollisions(gameState);
-        this.checkBulletObstacleCollisions(gameState);
-        this.checkTerrainCollisions(gameState);
+        // Each pair runs in its own try so one bad sprite/mask cannot abort
+        // terrain wall hits (or the rest of the frame's collisions).
+        const run = (fn) => {
+            try { fn.call(this, gameState); } catch (e) {
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('collision check failed', e);
+                }
+            }
+        };
+        run(this.checkBulletEnemyCollisions);
+        run(this.checkBulletSideEnemyCollisions);
+        run(this.checkEnemyBulletPlayerCollisions);
+        run(this.checkPlayerBulletEnemyBulletCollisions);
+        run(this.checkObstaclePlayerCollisions);
+        run(this.checkObstacleEnemyCollisions);
+        run(this.checkBulletObstacleCollisions);
+        run(this.checkTerrainCollisions);
     }
 
     /**
@@ -24,7 +33,11 @@ class CollisionManager {
      */
     checkTerrainCollisions(gameState) {
         if (typeof obstacleManager === 'undefined' || !obstacleManager.terrainWallsOver) return;
-        const W = (gameState && gameState.width) || 240;
+        // Same logical width the renderer uses for canyon art (not the
+        // supersampled canvas bitmap).
+        const W = (typeof game !== 'undefined' && game && game.internalWidth)
+            || (gameState && gameState.width)
+            || 240;
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const player = playerManager.getPosition();
         if (player) {

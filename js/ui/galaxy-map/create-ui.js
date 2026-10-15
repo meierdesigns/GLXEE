@@ -27,6 +27,15 @@ extendClass(GalaxyMapManager, {
         const emptyHint = (!(this.map.nodes || []).length)
             ? '<p class="galaxy-map-empty-hint">No planets charted yet — travel here from HOME STATION to seed faction sectors, or use EXPLORE.</p>'
             : '';
+        let canTeleport = false;
+        if (typeof profileManager !== 'undefined' && profileManager.getReachableGalaxyIds) {
+            const current = profileManager.getCurrentGalaxyId ? profileManager.getCurrentGalaxyId() : null;
+            const reachable = profileManager.getReachableGalaxyIds() || [];
+            // Milky Way is always free to reach (home), so it doesn't count as
+            // "further" travel — only other, actually unlocked galaxies do.
+            canTeleport = reachable.some((gid) => gid !== current && gid !== 'milky_way');
+        }
+        this._canTeleport = canTeleport;
         const embedded = !!mountEl;
         const backBtn = embedded
             ? ''
@@ -48,7 +57,7 @@ extendClass(GalaxyMapManager, {
                     <div class="gm-progress-col">
                     ${exploreUi}
                     </div>
-                    ${typeof homeStationUI !== 'undefined' ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="TELEPORT · Travel to another galaxy" aria-label="Teleport to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('gmWormhole', 32, 'gm-teleport-icon', '#ffb347', false) : ''}<span class="gm-teleport-label">TELEPORT</span></button>` : ''}
+                    ${(typeof homeStationUI !== 'undefined' && canTeleport) ? `<button type="button" class="action-button secondary gm-teleport-btn" id="gmTeleport" title="TELEPORT · Travel to another galaxy" aria-label="Teleport to another galaxy">${typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer.imgHtml('gmWormhole', 32, 'gm-teleport-icon', '#ffb347', false) : ''}<span class="gm-teleport-label">TELEPORT</span></button>` : ''}
                 </div>
                 </div>
                 ${emptyHint}
@@ -139,7 +148,8 @@ extendClass(GalaxyMapManager, {
     },
 
     shipLocatorButtonHtml() {
-        return `<button type="button" class="gm-locate-ship" id="gmLocateShip" title="FIND SHIP · center map on your ship" aria-label="Find ship on map" data-nav-item>` +
+        // Starts hidden; syncLocateShipButton shows it only when the ship is off-screen.
+        return `<button type="button" class="gm-locate-ship" id="gmLocateShip" title="FIND SHIP · center map on your ship" aria-label="Find ship on map" data-nav-item hidden>` +
             this.shipLocatorIconSvg() +
             `</button>`;
     },

@@ -126,8 +126,14 @@ extendClass(EnemyManager, {
             ? obstacleManager.getObstacles().filter((o) => !o.isFog).length : 0;
         const room = this.sideEnemyCap - this.sideEnemies.length;
 
+        if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
+            console.log('[sideDebug] cap=%d sides=%d room=%d pool=%d schedule=%d champAlive=%s fleeing=%s eventRunning=%s obstacles=%d playerHp=%s',
+                this.sideEnemyCap, this.sideEnemies.length, room, this.sideEnemyPool.length, this.schedule.length,
+                champAlive, this.sideFleeing, eventRunning, obstacles, playerHp.toFixed(2));
+        }
+
         // --- Hold back when the player is struggling or the screen is busy ---
-        if (!champAlive || this.sideFleeing || eventRunning || room < 2) return;
+        if (!champAlive || this.sideFleeing || eventRunning || room < 1) return;
         if (playerHp < 0.3 || d.recentDamage > 0.25 || obstacles > 30) return;
         if (d.sinceWaveMs < DIRECTOR_MIN_GAP_MS) return;
 

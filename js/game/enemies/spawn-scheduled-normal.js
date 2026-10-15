@@ -24,6 +24,14 @@ extendClass(EnemyManager, {
         }
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 4;
         const openEnough = (sideCells) => sideCells <= 1;
+        // Track the widest corridor seen as a fallback: some canyon layouts
+        // never have a strictly-open (<=1 cell) rim anywhere in the scanned
+        // band, which used to leave gaps empty and permanently block every
+        // side-craft entry for the whole stage. Picking just the thinnest
+        // wall isn't enough either — the corridor there can still be too
+        // narrow to fly in, leaving craft jittering in place. Pick the
+        // widest corridor instead, so there's actually room to move.
+        let widest = null;
         for (let y = yMin; y <= yMax; y += cell) {
             let leftOpen = true;
             let rightOpen = true;
@@ -36,6 +44,19 @@ extendClass(EnemyManager, {
             }
             if (leftOpen) gaps.push({ side: 0, y: y });
             if (rightOpen) gaps.push({ side: 1, y: y });
+            if (obstacleManager.terrainWallsAtY) {
+                const walls = obstacleManager.terrainWallsAtY(y + h * 0.5, W);
+                if (walls) {
+                    const corridor = walls.right - walls.left;
+                    if (!widest || corridor > widest.corridor) widest = { y: y, corridor: corridor };
+                }
+            }
+        }
+        if (!gaps.length && widest) {
+            // No strictly-open rim: fall back to the widest corridor found
+            // so side craft can still enter and actually have room to fly.
+            gaps.push({ side: 0, y: widest.y });
+            gaps.push({ side: 1, y: widest.y });
         }
         return gaps;
     },
@@ -78,7 +99,12 @@ extendClass(EnemyManager, {
 
     spawnScheduledNormal(entry, gameState) {
         if (!entry || !gameState) return null;
-        if (this.sideEnemies.length >= this.sideEnemyCap) return null;
+        if (this.sideEnemies.length >= this.sideEnemyCap) {
+            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
+                console.log('[sideDebug] spawnScheduledNormal blocked by cap', entry.id, this.sideEnemies.length, this.sideEnemyCap);
+            }
+            return null;
+        }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
@@ -197,7 +223,13 @@ extendClass(EnemyManager, {
         });
         // Only enter through empty rim openings — never through solid rock.
         if (!this.placeSideEntryFromGap(side, canvasWidth, canvasHeight)) {
+            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
+                console.log('[sideDebug] spawnScheduledNormal blocked: no rim gap', entry.id);
+            }
             return null; // no open edge this frame; try again later
+        }
+        if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
+            console.log('[sideDebug] spawned side', entry.id, side.type, side.x, side.y);
         }
         if (isEscort && this.enemy && form) {
             // After the rim entry, settle toward the formation slot.
@@ -337,9 +369,14 @@ extendClass(EnemyManager, {
             entry.spawned = true;
             if (entry.champion) {
                 this.spawnChampionFromEntry(entry);
-            } else if (!this.spawnScheduledNormal(entry, gameState)) {
-                // Side slots full: keep it queued instead of dropping it.
-                entry.spawned = false;
+            } else {
+                if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
+                    console.log('[sideDebug] updateSchedule attempting', entry.id, 'at', elapsedSec.toFixed(1) + 's');
+                }
+                if (!this.spawnScheduledNormal(entry, gameState)) {
+                    // Side slots full: keep it queued instead of dropping it.
+                    entry.spawned = false;
+                }
             }
         }
     },

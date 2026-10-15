@@ -3,6 +3,17 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
+        // Restore the hangar inventory-panel toggle before the first render/draw, not on
+        // DOMContentLoaded (too late: it raced createUI()'s own first call on refresh, so
+        // drawHangarBay() fit the ship as if the panel were closed even though it reopened).
+        if (!this._bayInvRestored) {
+            this._bayInvRestored = true;
+            try {
+                if (localStorage.getItem('vf_hs_bay_inv') === '1') this._bayInv = true;
+                const fl = localStorage.getItem('vf_hs_bay_inv_filter');
+                if (fl) this._bayInvFilter = fl;
+            } catch (err) { /* ignore */ }
+        }
         // The TRAVEL tab is a page listing the galaxies; the planet map still opens its own travel modal.
         if (this._travelKey) {
             document.removeEventListener('keydown', this._travelKey, true);
@@ -158,6 +169,16 @@ extendClass(HomeStationUI, {
                 </div>`;
         }
 
+        let hideTabsForTutorial = false;
+        if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
+            const tutorialGalaxyId = profileManager.getCurrentGalaxyId(profile);
+            const tutorialMap = tutorialGalaxyId && planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(tutorialGalaxyId) || {}) : {};
+            const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
+            if (tutorialPlanetId) {
+                const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
+                hideTabsForTutorial = !(st && st.highestStage >= 1);
+            }
+        }
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const bodyClass = isPlay
@@ -192,8 +213,8 @@ extendClass(HomeStationUI, {
                     ${this.renderPlayLaunch()}
                     <div class="hs-header-main">
                         <div class="hs-topbar">
-                            <div class="hs-tabs">
-                                ${this.renderTabs()}
+                            <div class="hs-tabs${hideTabsForTutorial ? ' hs-tabs-hidden' : ''}">
+                                ${hideTabsForTutorial ? '' : this.renderTabs()}
                             </div>
                         </div>
                     </div>
@@ -211,11 +232,6 @@ extendClass(HomeStationUI, {
                 <!-- Sub-nav opens the content area, under the active index-card tab. -->
                 ${this.renderAreaSubnav()}
                 <div class="${bodyClass}">${body}</div>
-                <div class="hs-footer ui-controls-hint">
-                    <div class="profile-selection-instructions"><p>${footerHint}</p></div>
-                    <button type="button" class="ui-controls-hide-btn" id="hsHideControls" title="Hide controls (Shift+H)" aria-label="Hide controls">HIDE</button>
-                </div>
-                <button type="button" class="ui-controls-show-btn" id="hsShowControls" title="Show controls (Shift+H)" aria-label="Show controls">?</button>
                 ${this.renderResourceBuyModal(profile)}
               </div>
             </div>

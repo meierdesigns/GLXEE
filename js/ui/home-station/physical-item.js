@@ -270,7 +270,6 @@ document.addEventListener('click', (e) => {
     panel.querySelectorAll('[data-inv-filter]').forEach((x) => x.classList.toggle('is-active', x === b));
 }, true);
 
-// The inventory switch and its filter are remembered across reloads.
-document.addEventListener('DOMContentLoaded', () => {
-    try { if (typeof homeStationUI === 'undefined') return; if (localStorage.getItem('vf_hs_bay_inv') === '1') homeStationUI._bayInv = true; const fl = localStorage.getItem('vf_hs_bay_inv_filter'); if (fl) homeStationUI._bayInvFilter = fl; } catch (err) { /* ignore */ }
-});
+// The inventory switch and its filter are remembered across reloads; restored synchronously
+// in HomeStationUI.createUI() (create-ui.js) before the first render/draw, since this
+// DOMContentLoaded listener fired too late and raced the hangar tab's own first paint.

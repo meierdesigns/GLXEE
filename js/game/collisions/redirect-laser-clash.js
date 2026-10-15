@@ -159,6 +159,11 @@ extendClass(CollisionManager, {
         }
     },
 
+    /** Bullets set _sweepDx/_sweepDy every frame; ships/obstacles do not. */
+    isShotEntity(obj) {
+        return !!(obj && (obj._sweepDx != null || obj._sweepDy != null));
+    },
+
     isColliding(obj1, obj2) {
         const b1 = this.getCollisionBounds(obj1);
         const b2 = this.getCollisionBounds(obj2);
@@ -179,6 +184,14 @@ extendClass(CollisionManager, {
         if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
             if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, b1)) return false;
             if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, b2)) return false;
+        }
+
+        // Shots vs hull: AABB is authoritative. Boss / capital pixel masks are
+        // sparse after VOXEL bake and were letting clear overlaps register as misses
+        // (and an exception in the mask path aborted the whole collision pass,
+        // which also killed terrain wall hits in the same frame).
+        if (this.isShotEntity(obj1) || this.isShotEntity(obj2)) {
+            return true;
         }
 
         const s1 = this.getCollisionSprite(obj1);

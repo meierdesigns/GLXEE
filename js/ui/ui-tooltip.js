@@ -167,15 +167,37 @@ class UiTooltipManager {
             tip.textContent = '';
             const h = document.createElement('div');
             h.className = 'ui-tooltip-head';
-            // Item cells show their part icon in the tooltip only (the cell itself shows just the object).
-            const ico = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
-            if (ico && ico.src) {
-                const im = document.createElement('img');
-                im.src = ico.src; im.alt = ''; im.draggable = false;
-                im.style.cssText = 'width:20px;height:20px;image-rendering:pixelated;vertical-align:middle;margin-right:8px';
-                h.appendChild(im);
+            // Inventory cells: physical item left, name to its right (full footprint, not cropped).
+            const itemBody = anchor.querySelector && anchor.querySelector('.hs-item-body');
+            const itemBg = itemBody && (itemBody.style.backgroundImage || (getComputedStyle(itemBody).backgroundImage || ''));
+            if (itemBg && itemBg !== 'none') {
+                const srcW = Math.max(1, itemBody.offsetWidth || itemBody.clientWidth || 48);
+                const srcH = Math.max(1, itemBody.offsetHeight || itemBody.clientHeight || 48);
+                const max = 88;
+                const scale = Math.min(max / srcW, max / srcH);
+                const pw = Math.max(48, Math.round(srcW * scale));
+                const ph = Math.max(48, Math.round(srcH * scale));
+                const preview = document.createElement('span');
+                preview.className = 'ui-tooltip-item';
+                preview.setAttribute('aria-hidden', 'true');
+                preview.style.cssText = 'display:block;width:' + pw + 'px;height:' + ph + 'px;flex-shrink:0;'
+                    + 'background-image:' + itemBg + ';background-size:contain;background-position:center;background-repeat:no-repeat;image-rendering:pixelated';
+                h.appendChild(preview);
+                h.classList.add('has-item');
+            } else {
+                const ico = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
+                if (ico && ico.src) {
+                    const im = document.createElement('img');
+                    im.src = ico.src; im.alt = ''; im.draggable = false;
+                    im.className = 'ui-tooltip-item-ico';
+                    im.style.cssText = 'width:28px;height:28px;image-rendering:pixelated;vertical-align:middle;margin-right:8px;flex-shrink:0';
+                    h.appendChild(im);
+                }
             }
-            h.appendChild(document.createTextNode(head));
+            const title = document.createElement('span');
+            title.className = 'ui-tooltip-title';
+            title.textContent = head;
+            h.appendChild(title);
             tip.appendChild(h);
             String(text).split('\n').forEach((line) => {
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
@@ -281,7 +303,12 @@ class UiTooltipManager {
         }
         let left = r.left + (r.width / 2) - (tw / 2);
         let top = r.top - th - 10;
-        if (top < 8) {
+        // Not enough room above (near the top edge / header bar): flip below.
+        // Flip whenever below has strictly more room, not only when above is negative,
+        // so a tall tooltip never gets squeezed against the screen edge.
+        const spaceAbove = r.top - 10;
+        const spaceBelow = window.innerHeight - r.bottom - 10;
+        if (spaceAbove < th && spaceBelow > spaceAbove) {
             top = r.bottom + 10;
             tip.classList.add('below');
         }

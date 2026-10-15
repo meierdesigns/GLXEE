@@ -4,7 +4,7 @@
 extendClass(BulletManager, {
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
-        let maxBullets = 6; // Increased for multi-weapon systems
+        let maxBullets = 18; // Shared cap across all weapon mounts on the ship
         if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
             maxBullets = 999;
         }

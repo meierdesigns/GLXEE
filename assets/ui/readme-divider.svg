@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="40" viewBox="0 0 960 40">
+  <rect width="960" height="40" fill="#000000"/>
+  <rect x="0" y="0" width="960" height="1" fill="#404040"/>
+  <rect x="0" y="39" width="960" height="1" fill="#404040"/>
+  <rect x="24" y="18" width="120" height="2" fill="#505050"/>
+  <text x="480" y="25" text-anchor="middle" fill="#888888" font-family="Courier New, Courier, monospace" font-size="12" letter-spacing="4">◆  VOLTEX CLEAR  ◆</text>
+  <rect x="816" y="18" width="120" height="2" fill="#505050"/>
+</svg>

@@ -28481,7 +28481,7 @@ window.bulletManager = bulletManager;
 "use strict";
 
 // TEMP DEBUG: tracing why side/escort enemies aren't spawning. Remove once fixed.
-if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS == null) window.DEBUG_SIDE_SPAWNS = true;
+if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS == null) window.DEBUG_SIDE_SPAWNS = false; // opt in from the console: window.DEBUG_SIDE_SPAWNS = true
 
 // Enemy management
 var EnemyManager = class EnemyManager {

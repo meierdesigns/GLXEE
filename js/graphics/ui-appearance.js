@@ -106,7 +106,8 @@ class UIAppearanceManager {
         this.playerSize = 'L';
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
-        this.sizePx = {};
+        // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
+        this.sizePx = { player: 17, 'enemy:scout': 49, 'enemy:assault': 46, 'enemy:heavy': 49, 'enemy:elite': 50, 'enemy:capital': 49 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };
@@ -162,6 +163,8 @@ class UIAppearanceManager {
         this.guiVoxelCell = 'AUTO';
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
+        // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
+        this.pixelSize = 'OFF';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -289,6 +292,7 @@ class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
+        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '6', '8'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -302,7 +306,12 @@ class UIAppearanceManager {
     /** Fx keys that are choice rows (cycle options) rather than 0–100 sliders. */
     isEnumFx(fxKey) {
         return fxKey === 'arcade' || fxKey === 'guiVoxel' || fxKey === 'fxArea'
-            || fxKey === 'gvCell' || fxKey === 'framePx' || fxKey === 'frameRound' || !!this.gvPartKey(fxKey);
+            || fxKey === 'gvCell' || fxKey === 'framePx' || fxKey === 'pixelSize' || fxKey === 'frameRound' || !!this.gvPartKey(fxKey);
+    }
+    /** Global pixel size in CSS px (0 = off): every art pixel/voxel app-wide renders at this size. */
+    getGlobalPixelPx() {
+        const n = Number(this.pixelSize);
+        return Number.isFinite(n) && n > 0 ? n : 0;
     }
     getGuiVoxelCell() {
         // The GUI lattice stays on whole pixels even when the ship voxels go finer than 1.
@@ -311,6 +320,7 @@ class UIAppearanceManager {
     getFxValue(fxKey) {
         if (fxKey === 'gvCell') return this.guiVoxelCell;
         if (fxKey === 'framePx') return this.framePx;
+        if (fxKey === 'pixelSize') return this.pixelSize;
         if (fxKey === 'frameRound') return this.frameRound;
         if (this.gvPartKey(fxKey)) return this.guiVoxelParts[this.gvPartKey(fxKey)];
         return this[fxKey] || 'OFF';
@@ -437,6 +447,9 @@ class UIAppearanceManager {
             }
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
+            }
+            if (data.pixelSize === 'OFF' || /^(1|2|3|4|6|8)$/.test(String(data.pixelSize))) {
+                this.pixelSize = String(data.pixelSize);
             }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
             if (data.guiVoxel === 'ON' || data.guiVoxel === 'OFF') {

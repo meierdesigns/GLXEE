@@ -47001,7 +47001,8 @@ var UIAppearanceManager = class UIAppearanceManager {
         this.playerSize = 'L';
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
-        this.sizePx = {};
+        // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
+        this.sizePx = { player: 17, 'enemy:scout': 49, 'enemy:assault': 46, 'enemy:heavy': 49, 'enemy:elite': 50, 'enemy:capital': 49 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };

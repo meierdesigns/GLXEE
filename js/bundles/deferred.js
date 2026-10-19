@@ -92158,12 +92158,14 @@ var voxelPortrait = (() => {
     function draw(e, blink) {
         if (e.painted) return;
         const k = blink ? 1 : 0;
+        if (e.nobg && e.lastK === k) return;   // backdrop-free portrait: nothing animates except the blink, repaint only on change
+        e.lastK = k;
         if (!e.head) e.head = [null, null];
         if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true);
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
         const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
-        const bg = VXP.background(e.preset.faction, t, e.accent, e.preset.bgv), head = e.head[k], dst = e.img.data;
-        if (e.nobg) bg.fill(0);
+        const head = e.head[k], dst = e.img.data;
+        const bg = e.nobg ? new Uint8ClampedArray(VXP.W * VXP.H * 4) : VXP.background(e.preset.faction, t, e.accent, e.preset.bgv);
         // In the portrait picker the selected tile shows the full, brighter backdrop and the others a subdued one
         // (the pilots themselves stay equally bright).
         const pick = e.canvas.closest && e.canvas.closest('.pp-pick');

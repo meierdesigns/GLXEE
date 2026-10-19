@@ -123,7 +123,7 @@ extendClass(StartScreenManager, {
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
             '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
             `<div class="hs-layout-areas">${areasHtml}${profilesHtml}${menuHtml}</div>` +
-            '<div class="hs-menu-panel-actions"><button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
+            '<div class="hs-menu-panel-actions">' + (this.devMode ? '<button type="button" class="action-button hs-menu-panel-action" data-act="enemy-card" data-nav-item>ENEMY CARD LAYOUT</button>' : '') + '<button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
         // ---- Drag & drop: tabs between / inside areas, areas left-right.
         let drag = null; // { kind: 'tab'|'area', area, tab }
@@ -287,6 +287,7 @@ extendClass(StartScreenManager, {
             if (on) on.focus();
         };
 
+
         // ---- Inline rename: the pencil swaps the name for a text field.
         // ENTER / blur saves, ESC cancels, an empty name restores the default.
         const startRename = (btn) => {
@@ -335,6 +336,7 @@ extendClass(StartScreenManager, {
             const btn = e.target.closest('button[data-act]');
             if (!btn || btn.disabled) return;
             const act = btn.getAttribute('data-act');
+            if (act === 'enemy-card') { if (typeof enemyCardLayout !== 'undefined') enemyCardLayout.openModal(); return; }
             if (act === 'reset') {
                 if (typeof resetMenuAreas === 'function') resetMenuAreas();
                 if (typeof resetMenuIcons === 'function') resetMenuIcons();

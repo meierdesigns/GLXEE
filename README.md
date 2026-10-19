@@ -416,6 +416,15 @@ and last selected planet or station. Stations orbit their planet and show only
 once that planet is unlocked. A locked planet's hint names what to clear first
 with a JUMP TO button.
 
+The bottom bar shows the selected planet's enemy as a poster: planet name on
+top, a framed `ENEMY` line with the faction emblem and its hero's name, and the
+hero portrait (no backdrop) staggered with one of the faction's ships in front
+of the planet. In dev mode, clicking the enemy card (or LAYOUT → ENEMY CARD
+LAYOUT) opens a modal with a live copy of the bar: drag title, bar, face, ship
+and planet, resize them (20–300 %) and set their layer. Settings persist per
+browser; COPY AS DEFAULT exports them for the shipped defaults (`BAKED` in
+`enemyCardLayout`).
+
 <div align="center">
 
 <img src="assets/ui/readme-h-ships.svg" alt="CH.07 SHIPS" width="960" />
@@ -746,6 +755,19 @@ be reviewed or reverted independently.
 | 65B | README media restore | Restore `assets/ui/readme-*` banners, shots, strips, and live icon plates for GitHub |
 | 65C | README screenshot refresh | Live `-65c` shots; drop unused hero/live plates and stale header media |
 | 65D | README ship strips | Rebuild faction assault and Terran class strips from live `factionShipStyles` |
+| 66A | Start-profile story paths | Each start profile offers 1–3 lore-matched stories with mission chains; wizard STORY step replaces planet pick |
+| 66B | Runtime smoothness | Cap map planet spin detail, round-robin spin ticks, stop HUD full rebuilds, pause hidden canvas loops, wire PERFORMANCE MODE |
+| 66C | Smoothness same quality | Combat HUD write-skip, hangar preview 30fps, bg-parallax layer cache + combat pause, tab-hidden game loop |
+| 66D | Map planet + nebula restore | Fix spin upgrade stuck on SVG cull; target detail in spin attr; nebula fine patches mount only when ready |
+| 66E | Nebula + planet sharpness | Fine nebula alpha (no black plate); density in playable band; brighter veils; screen-aware planet detail ≤24 |
+| 66F | Map planet perf | Map nodes detail ≤8 (~2.5 CSS px/cell); tighter spin budget |
+| 66G | Travel zoom stick | adoptViewBoxZoom on fly start/arrival; defer cam mapZoom until glide ends |
+| 66H | Launch cutscene skip race | Defer cutscene + 500ms skip arm so START Enter does not skip instantly |
+| 66I | Launch cutscene visible | HeroPlanetBackdrop no longer forces relative (0×0); cutscene z-index 100090 |
+| 66J | Story cutscenes | Launch cutscene styles per story (hunt/escort/raid/salvage/rift/compile/…); title card |
+| 66K | Cutscene title readable | Title/blurb stay up through act; canvas stroke text + high-contrast card |
+| 66C | Mission logbook | Main quest from story path; sidequests at stations/planets; targets = planet, station, locate, or find galaxy |
+| 66L | Enemy card poster | Planet title, emblem + hero name frames, backdrop-free portrait, dev layout modal (position, size, layer, defaults) |
 
 The wave commit convention is:
 

@@ -2527,6 +2527,35 @@ extendClass(PlanetConfigManager, {
         return Object.keys(this.galaxies);
     },
 
+    /**
+     * Read-only list of planets a new pilot could start on in this galaxy:
+     * the galaxy's own start planet plus its directly-connected neighbors
+     * (same "nearby cluster" radius as unlockOwnFactionStartCluster, but
+     * without mutating any profile). [{id, name, difficulty, isStart}]
+     */
+    getStartMissionChoices(galaxyId) {
+        const map = this.getGalaxyMap(galaxyId) || {};
+        const nodes = map.nodes || [];
+        if (!nodes.length) return [];
+        const startId = map.startPlanetId || nodes[0].planetId;
+        const ids = [startId];
+        (map.edges || []).forEach((e) => {
+            const a = String((e && e[0]) || '').toLowerCase();
+            const b = String((e && e[1]) || '').toLowerCase();
+            if (a === startId && ids.indexOf(b) === -1) ids.push(b);
+            if (b === startId && ids.indexOf(a) === -1) ids.push(a);
+        });
+        return ids.slice(0, 5).map((pid) => {
+            const cfg = this.getConfig(pid);
+            return {
+                id: pid,
+                name: (cfg && cfg.name) || pid.toUpperCase(),
+                difficulty: (cfg && cfg.difficulty) || '',
+                isStart: pid === startId
+            };
+        });
+    },
+
     getGalaxy(galaxyId) {
         const id = String(galaxyId || '').toLowerCase();
         return this.galaxies[id] || null;
@@ -6386,6 +6415,15 @@ extendClass(ProfileManager, {
         return true;
     },
 
+    clearSegmentShapeVariant(shipId, segId) {
+        const profile = this.getActiveProfile();
+        const byShip = profile && profile.segmentShapeVariants && profile.segmentShapeVariants[String(shipId || '')];
+        if (!byShip) return false;
+        delete byShip[String(segId || '')];
+        this.save();
+        return true;
+    },
+
     getWingStyleSymmetry(shipId) {
         const profile = this.getActiveProfile();
         const byShip = profile && profile.wingStyleSymmetry;
@@ -7910,6 +7948,366 @@ extendClass(ProfileManager, {
         return m;
     },
 });
+
+
+/* --- js/core/profile-manager/mission-log.js --- */
+"use strict";
+
+// Mission logbook: the start-menu story is the MAIN QUEST chain; sidequests are
+// accepted at stations, planets, or the hangar board. Targets can be a known
+// planet, a station on a planet, a planet you still have to locate, or a
+// galaxy you still have to find.
+
+extendClass(ProfileManager, {
+    ensureMissionLog(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return null;
+        if (!p.missionLog || typeof p.missionLog !== 'object') {
+            p.missionLog = { main: null, side: [] };
+        }
+        if (!Array.isArray(p.missionLog.side)) p.missionLog.side = [];
+        return p.missionLog;
+    },
+
+    getMissionLog(profile) {
+        const p = profile || this.getActiveProfile();
+        const log = this.ensureMissionLog(p);
+        if (!log) return { main: null, side: [], active: null, currentMain: null };
+        const main = log.main || null;
+        const idx = main ? Math.max(0, Number(main.missionIndex) || 0) : 0;
+        const currentMain = main && main.missions && main.missions[idx] ? main.missions[idx] : null;
+        return {
+            main: main,
+            side: log.side.slice(),
+            active: (p && p.activeMission) || null,
+            currentMain: currentMain
+        };
+    },
+
+    /**
+     * Install the chosen start-profile story as the main quest and focus the
+     * first step as activeMission.
+     */
+    setMainQuestFromStory(story, boundMissions, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !story || !boundMissions || !boundMissions.length) return null;
+        const log = this.ensureMissionLog(p);
+        const missions = boundMissions.map((m, i) => Object.assign({}, m, {
+            done: false,
+            status: i === 0 ? 'active' : 'locked'
+        }));
+        log.main = {
+            kitId: story.kitId || null,
+            pathId: story.pathId || story.id,
+            title: story.title,
+            blurb: story.blurb || '',
+            icon: story.icon || null,
+            missionIndex: 0,
+            missions: missions
+        };
+        this.focusMission(missions[0], { main: true }, p);
+        this.save();
+        return log.main;
+    },
+
+    /** Set profile.activeMission from a log entry (main step or sidequest). */
+    focusMission(entry, opts, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !entry) return null;
+        this.materializeMainTarget(entry, p);
+        const o = opts || {};
+        const gid = entry.galaxyId || this.getCurrentGalaxyId(p);
+        let reward = entry.reward;
+        if (!reward && entry.planetId && this.getMissionReward) {
+            const rw = this.getMissionReward(gid, entry.planetId, false, p);
+            reward = (rw && rw.reward) || { credits: 60 };
+        }
+        p.activeMission = {
+            galaxyId: gid,
+            planetId: entry.planetId || null,
+            stationId: entry.stationId || null,
+            type: String(entry.type || 'PATROL').toUpperCase(),
+            name: entry.name || entry.title || 'MISSION',
+            reward: reward || { credits: 60 },
+            story: !!o.main,
+            main: !!o.main,
+            side: !!o.side,
+            sideId: o.side ? (entry.id || null) : null,
+            storyPathId: entry.pathId || null,
+            storyMissionId: entry.id || null,
+            targetKind: entry.targetKind || 'planet',
+            objective: entry.objective || '',
+            hint: entry.hint || '',
+            galaxyName: entry.galaxyName || '',
+            planetName: entry.planetName || '',
+            stationName: entry.stationName || ''
+        };
+        return p.activeMission;
+    },
+
+    /** Sidequest offers at the ship's current spot (station / planet / hangar). */
+    getSideQuestOffers(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof planetConfigManager === 'undefined') return [];
+        const gid = this.getCurrentGalaxyId(p);
+        const loc = this.getShipLocation ? this.getShipLocation(gid, p) : null;
+        const log = this.ensureMissionLog(p);
+        const taken = {};
+        (log.side || []).forEach((s) => { taken[s.id] = true; });
+        if (p.activeMission && p.activeMission.sideId) taken[p.activeMission.sideId] = true;
+        const seed = (Number(p.missionSeed) || 0) + '|' + (p.id || '') + '|' + gid;
+        const offers = [];
+        const push = (entry) => {
+            if (!entry || taken[entry.id]) return;
+            offers.push(entry);
+        };
+
+        if (loc && loc.kind === 'post') {
+            const post = this.getTradingPost ? this.getTradingPost(loc.id) : null;
+            if (post) {
+                const anchor = post.planetId || (post.anchors && post.anchors[0]);
+                const cfg = anchor ? planetConfigManager.getConfig(anchor) : null;
+                const rw = anchor ? this.getMissionReward(gid, anchor, false, p) : { reward: { credits: 80 } };
+                push({
+                    id: 'side:station:' + post.id + ':' + ((this.missionHash(seed + '|st') % 7)),
+                    name: 'DOCK BOUNTY',
+                    type: 'PATROL',
+                    source: 'station',
+                    sourceName: post.name || 'STATION',
+                    targetKind: 'station',
+                    galaxyId: gid,
+                    galaxyName: this.galaxyLabel(gid),
+                    planetId: anchor || null,
+                    planetName: cfg ? String(cfg.name || anchor).toUpperCase() : '',
+                    stationId: post.id,
+                    stationName: String(post.name || 'STATION').toUpperCase(),
+                    objective: 'CLEAR A STAGE AT ' + String(post.name || 'STATION').toUpperCase() + '\'S ANCHOR',
+                    hint: 'Docked here — the bounty is paid when you clear a stage on the station\'s planet.',
+                    difficulty: (rw && rw.difficulty) || 'NORMAL',
+                    reward: (rw && rw.reward) || { credits: 80 }
+                });
+                // Second offer: haul to another unlocked planet.
+                const board = this.getMissionBoard(p).filter((m) => m.status !== 'locked' && m.planetId !== anchor);
+                if (board.length) {
+                    const pick = board[this.missionHash(seed + '|haul') % board.length];
+                    push({
+                        id: 'side:haul:' + post.id + ':' + pick.planetId,
+                        name: 'FREIGHT RUN',
+                        type: 'ESCORT',
+                        source: 'station',
+                        sourceName: post.name || 'STATION',
+                        targetKind: 'planet',
+                        galaxyId: gid,
+                        galaxyName: this.galaxyLabel(gid),
+                        planetId: pick.planetId,
+                        planetName: pick.name,
+                        objective: 'DELIVER TO ' + pick.name,
+                        hint: 'Accepted at ' + String(post.name || 'station') + ' — fly to ' + pick.name + ' and clear a stage.',
+                        difficulty: pick.difficulty,
+                        reward: pick.reward
+                    });
+                }
+            }
+        } else if (loc && loc.kind === 'planet') {
+            const pid = loc.id;
+            const cfg = planetConfigManager.getConfig(pid) || {};
+            const posts = (this.getTradingPosts(gid) || []).filter((t) =>
+                t.planetId === pid || (t.anchors && t.anchors.indexOf(pid) >= 0));
+            if (posts.length) {
+                const post = posts[this.missionHash(seed + '|findst') % posts.length];
+                const open = this.isTradingPostOpen ? this.isTradingPostOpen(post.id) : true;
+                push({
+                    id: 'side:findst:' + pid + ':' + post.id,
+                    name: open ? 'STATION CALL' : 'FIND THE DOCK',
+                    type: 'PATROL',
+                    source: 'planet',
+                    sourceName: String(cfg.name || pid).toUpperCase(),
+                    targetKind: 'station',
+                    galaxyId: gid,
+                    galaxyName: this.galaxyLabel(gid),
+                    planetId: post.planetId || pid,
+                    planetName: String(cfg.name || pid).toUpperCase(),
+                    stationId: post.id,
+                    stationName: String(post.name || 'STATION').toUpperCase(),
+                    objective: (open ? 'DOCK AT ' : 'LOCATE ') + String(post.name || 'STATION').toUpperCase(),
+                    hint: open
+                        ? 'A station hangs off this world — dock and clear its anchor stage.'
+                        : 'Charts show a station near this world. Unlock/open it, then dock.',
+                    difficulty: String(cfg.difficulty || 'NORMAL').toUpperCase(),
+                    reward: (this.getMissionReward(gid, post.planetId || pid, false, p) || {}).reward || { credits: 70 }
+                });
+            }
+            const remote = this.getMissionBoard(p).filter((m) => m.planetId !== pid && m.status !== 'locked');
+            if (remote.length) {
+                const pick = remote[this.missionHash(seed + '|scout') % remote.length];
+                push({
+                    id: 'side:scout:' + pid + ':' + pick.planetId,
+                    name: 'LOCAL SCOUT',
+                    type: pick.type || 'PATROL',
+                    source: 'planet',
+                    sourceName: String(cfg.name || pid).toUpperCase(),
+                    targetKind: pick.status === 'available' ? 'planet' : 'find_planet',
+                    galaxyId: gid,
+                    galaxyName: this.galaxyLabel(gid),
+                    planetId: pick.planetId,
+                    planetName: pick.name,
+                    objective: (pick.status === 'available' ? 'REACH ' : 'LOCATE ') + pick.name,
+                    hint: 'Posted on ' + String(cfg.name || pid).toUpperCase() + '.',
+                    difficulty: pick.difficulty,
+                    reward: pick.reward
+                });
+            }
+        }
+
+        // Hangar board always offers one liberate / patrol as a sidequest.
+        const board = this.getMissionBoard(p).filter((m) => m.status !== 'locked');
+        if (board.length) {
+            const pick = board[this.missionHash(seed + '|board') % board.length];
+            push({
+                id: 'side:board:' + pick.planetId,
+                name: pick.type === 'PATROL' ? 'PATROL SWEEP' : 'LIBERATION',
+                type: pick.type,
+                source: 'board',
+                sourceName: 'MISSION BOARD',
+                targetKind: 'planet',
+                galaxyId: gid,
+                galaxyName: this.galaxyLabel(gid),
+                planetId: pick.planetId,
+                planetName: pick.name,
+                objective: pick.type + ' ' + pick.name,
+                hint: 'Hangar board contract.',
+                difficulty: pick.difficulty,
+                reward: pick.reward
+            });
+        }
+        return offers.slice(0, 4);
+    },
+
+    galaxyLabel(galaxyId) {
+        if (typeof planetConfigManager === 'undefined') return String(galaxyId || '').toUpperCase();
+        const g = planetConfigManager.getGalaxy(galaxyId);
+        return String((g && g.name) || galaxyId || '').replace(/_/g, ' ').toUpperCase();
+    },
+
+    acceptSideQuest(offerId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return null;
+        const log = this.ensureMissionLog(p);
+        const offer = this.getSideQuestOffers(p).find((o) => o.id === offerId);
+        if (!offer) return null;
+        if (log.side.length >= 5) return { ok: false, reason: 'LOG FULL' };
+        if (log.side.some((s) => s.id === offer.id)) return { ok: false, reason: 'ALREADY TAKEN' };
+        const entry = Object.assign({}, offer, { acceptedAt: Date.now() });
+        log.side.push(entry);
+        this.focusMission(entry, { side: true }, p);
+        this.save();
+        return { ok: true, quest: entry };
+    },
+
+    abandonSideQuest(sideId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return;
+        const log = this.ensureMissionLog(p);
+        log.side = (log.side || []).filter((s) => s.id !== sideId);
+        if (p.activeMission && p.activeMission.sideId === sideId) {
+            // Refocus main quest if any.
+            const cur = this.getMissionLog(p).currentMain;
+            if (cur) this.focusMission(cur, { main: true }, p);
+            else p.activeMission = null;
+        }
+        this.save();
+    },
+
+    /** Track the current main-quest step (without abandoning sidequests). */
+    trackMainQuest(profile) {
+        const p = profile || this.getActiveProfile();
+        const cur = this.getMissionLog(p).currentMain;
+        if (!cur) return null;
+        return this.focusMission(cur, { main: true }, p);
+    },
+
+    /** Pay reward and advance main / drop side. Returns the completed entry. */
+    resolveMissionCompletion(planetId, profile) {
+        const p = profile || this.getActiveProfile();
+        const m = p && p.activeMission;
+        if (!m || !(m.main || m.side || m.story)) return null;
+        const pid = String(planetId || '').toLowerCase();
+        // Station quests complete on their anchor planet.
+        const targetPid = String(m.planetId || '').toLowerCase();
+        if (!targetPid || targetPid !== pid) return null;
+
+        if (!p.resources || typeof p.resources !== 'object') p.resources = {};
+        Object.keys(m.reward || {}).forEach((id) => {
+            const n = Number(m.reward[id]) || 0;
+            if (id.indexOf('part:weapon:') === 0) {
+                const wid = id.slice(12);
+                if (!p.parts || typeof p.parts !== 'object') p.parts = {};
+                if (!p.parts.weapons || typeof p.parts.weapons !== 'object') p.parts.weapons = {};
+                p.parts.weapons[wid] = (Number(p.parts.weapons[wid]) || 0) + Math.max(1, n);
+            } else if (id === 'credits') p.credits = Math.max(0, Math.round(Number(p.credits) || 0) + n);
+            else p.resources[id] = (Number(p.resources[id]) || 0) + n;
+        });
+
+        const log = this.ensureMissionLog(p);
+        if ((m.main || m.story) && log.main && log.main.missions) {
+            const idx = Math.max(0, Number(log.main.missionIndex) || 0);
+            if (log.main.missions[idx]) {
+                log.main.missions[idx].done = true;
+                log.main.missions[idx].status = 'done';
+            }
+            const next = idx + 1;
+            if (next < log.main.missions.length) {
+                log.main.missionIndex = next;
+                log.main.missions[next].status = 'active';
+                // Resolve find_galaxy targets now that the pilot may have arrived.
+                this.materializeMainTarget(log.main.missions[next], p);
+                this.focusMission(log.main.missions[next], { main: true }, p);
+            } else {
+                p.activeMission = null;
+            }
+        } else if (m.side && m.sideId) {
+            log.side = (log.side || []).filter((s) => s.id !== m.sideId);
+            const cur = this.getMissionLog(p).currentMain;
+            if (cur && !cur.done) this.focusMission(cur, { main: true }, p);
+            else p.activeMission = null;
+        }
+
+        p.missionSeed = (Number(p.missionSeed) || 0) + 1;
+        p.missionsCompleted = (Number(p.missionsCompleted) || 0) + 1;
+        this.save();
+        return m;
+    },
+
+    /** Fill planetId for find_galaxy steps once the target galaxy has a map. */
+    materializeMainTarget(entry, profile) {
+        if (!entry || entry.planetId) return entry;
+        if (entry.targetKind !== 'find_galaxy' || !entry.galaxyId) return entry;
+        if (typeof planetConfigManager === 'undefined') return entry;
+        const map = planetConfigManager.getGalaxyMap(entry.galaxyId) || {};
+        const nodes = map.nodes || [];
+        if (!nodes.length) return entry;
+        const start = map.startPlanetId || nodes[0].planetId;
+        const cfg = planetConfigManager.getConfig(start);
+        entry.planetId = start;
+        entry.planetName = String((cfg && cfg.name) || start).toUpperCase();
+        entry.objective = 'REACH ' + entry.planetName + ' IN ' + (entry.galaxyName || this.galaxyLabel(entry.galaxyId));
+        return entry;
+    }
+});
+
+// Route main/side stage-clear payouts through the logbook; board/contracts keep legacy path.
+(function wrapMissionLogCompletion() {
+    const prev = ProfileManager.prototype.completeMissionFor;
+    ProfileManager.prototype.completeMissionFor = function (planetId, profile) {
+        const p = profile || this.getActiveProfile();
+        const m = p && p.activeMission;
+        if (m && (m.main || m.side || m.story) && typeof this.resolveMissionCompletion === 'function') {
+            const paid = this.resolveMissionCompletion(planetId, profile);
+            if (paid) return paid;
+        }
+        return typeof prev === 'function' ? prev.call(this, planetId, profile) : null;
+    };
+})();
 
 
 /* --- js/core/profile-manager/ship-location.js?v=reach-1 --- */
@@ -19222,6 +19620,7 @@ extendClass(GameControlSystem, {
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) {
             gameContainer.style.display = 'none';
+            try { document.documentElement.classList.remove('vf-game-shown'); } catch (e) { /* ignore */ }
         }
 
         const leftCluster = document.getElementById('gameLeftCluster');
@@ -19451,6 +19850,14 @@ var GameLoop = class GameLoop {
 
     loop(currentTime) {
         if (!this.gameState.gameRunning) return;
+
+        // Tab in background: keep the RAF chain alive but skip sim/draw so we
+        // don't burn CPU. Quality is unchanged when the tab is visible again.
+        if (typeof document !== 'undefined' && document.hidden) {
+            this.lastTime = 0;
+            requestAnimationFrame((time) => this.loop(time));
+            return;
+        }
         
         // Fix initial deltaTime spike on first frame
         if (this.lastTime === 0) {
@@ -20362,7 +20769,8 @@ var UIManager = class UIManager {
             const maxHp = playerManager.getMaxHealth() || 1;
             const playerHealthPercent = Math.max(0, Math.min(100, (playerManager.getHealth() / maxHp) * 100));
             const playerHealthBar = document.getElementById('playerHealthBar');
-            if (playerHealthBar) {
+            if (playerHealthBar && this._uiHpPct !== playerHealthPercent) {
+                this._uiHpPct = playerHealthPercent;
                 playerHealthBar.style.setProperty('--health-width', `${playerHealthPercent}%`);
             }
 
@@ -20370,7 +20778,8 @@ var UIManager = class UIManager {
             const energy = playerManager.getEnergy ? playerManager.getEnergy() : 0;
             const energyPercent = Math.max(0, Math.min(100, (energy / maxEnergy) * 100));
             const playerEnergyBar = document.getElementById('playerEnergyBar');
-            if (playerEnergyBar) {
+            if (playerEnergyBar && this._uiEnPct !== energyPercent) {
+                this._uiEnPct = energyPercent;
                 playerEnergyBar.style.setProperty('--health-width', `${energyPercent}%`);
             }
 
@@ -20380,7 +20789,8 @@ var UIManager = class UIManager {
                 ? Math.max(0, Math.min(100, (shield / maxShield) * 100))
                 : 0;
             const playerShieldBar = document.getElementById('playerShieldBar');
-            if (playerShieldBar) {
+            if (playerShieldBar && this._uiShPct !== shieldPercent) {
+                this._uiShPct = shieldPercent;
                 playerShieldBar.style.setProperty('--health-width', `${shieldPercent}%`);
             }
 
@@ -20615,26 +21025,40 @@ var UIManager = class UIManager {
             const enemy = enemies[i];
             if (!enemy) continue;
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
-            fill.style.setProperty('--health-width', pct + '%');
+            const hpLabel = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            if (fill._vfHpPct !== pct) {
+                fill._vfHpPct = pct;
+                fill.style.setProperty('--health-width', pct + '%');
+            }
             const hpText = fill.querySelector('.enemy-hp-text');
-            if (hpText) hpText.textContent = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            if (hpText && hpText._vfHpLabel !== hpLabel) {
+                hpText._vfHpLabel = hpLabel;
+                hpText.textContent = hpLabel;
+            }
             // Shield: level + a pulsing charge state while it refills.
             const sh = fill.parentNode && fill.parentNode.querySelector('.enemy-shield-fill');
             if (sh && !(enemy.shieldMax > 0)) {
-                sh.classList.add('is-none');
-                sh.style.setProperty('--shield-width', '0%');
+                if (!sh.classList.contains('is-none')) sh.classList.add('is-none');
+                if (sh._vfShPct !== 0) {
+                    sh._vfShPct = 0;
+                    sh.style.setProperty('--shield-width', '0%');
+                }
                 const t = sh.querySelector('.enemy-shield-text');
-                if (t) t.textContent = 'NO SHIELD';
+                if (t && t._vfShLabel !== 'NO SHIELD') { t._vfShLabel = 'NO SHIELD'; t.textContent = 'NO SHIELD'; }
             } else if (sh) {
                 const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
                 const prev = Number(sh.dataset.prev || sp);
-                sh.style.setProperty('--shield-width', sp + '%');
+                if (sh._vfShPct !== sp) {
+                    sh._vfShPct = sp;
+                    sh.style.setProperty('--shield-width', sp + '%');
+                }
                 sh.classList.toggle('is-charging', sp < 100 && sp > prev);
                 sh.classList.toggle('is-down', sp <= 0);
                 sh.dataset.prev = String(sp);
                 const t = sh.querySelector('.enemy-shield-text');
-                if (t) t.textContent = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
+                const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
                     (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
+                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; }
             }
         }
     }
@@ -21837,6 +22261,13 @@ var CoreRenderManager = class CoreRenderManager {
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
     const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
+    // Shown on the layout key itself in place of LAYOUT_ICON while editing — clicking it again
+    // exits the edit (it's the same toggle either way), so the icon reads as "cancel/close" rather
+    // than still offering to "open" something that's already open.
+    const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
+    const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
+    const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     vfs.resOpen = false;
     vfs.fxOpen = false;
 
@@ -22117,14 +22548,25 @@ var CoreRenderManager = class CoreRenderManager {
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
     //   heavy ON/OFF = the backdrop-filter layers (chroma / bloom / CRT)
     //   anim  ON/OFF = looping animations of the screen-effect layers and selection pulse
+    // Default heavy OFF: SVG backdrop-filters over the whole shell were the main
+    // full-app jank source when any CRT/chroma/bloom value was non-zero.
     const PERF_KEY = 'vf-perf';
-    const perf = { sway: 'AUTO', heavy: 'ON', anim: 'ON' };
+    const perf = { sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
     try {
         const sp = JSON.parse(localStorage.getItem(PERF_KEY) || 'null');
         if (sp) {
             if (/^(AUTO|ON|OFF)$/.test(sp.sway)) perf.sway = sp.sway;
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
+        } else {
+            // First boot: prefer the light path on weak / HiDPI machines.
+            const cores = (navigator && navigator.hardwareConcurrency) || 4;
+            const mem = (navigator && navigator.deviceMemory) || 4;
+            const dpr = window.devicePixelRatio || 1;
+            if (cores <= 4 || mem <= 4 || dpr >= 2) {
+                perf.heavy = 'OFF';
+                perf.anim = 'ON';
+            }
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {
@@ -22156,7 +22598,7 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_TABS, FX_TAB_ICONS, OVERLAY_CHROME, POWER, RES_ICON, ROOT, RO_SUPPRESS_MS, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -22422,6 +22864,7 @@ var CoreRenderManager = class CoreRenderManager {
             const id = inp.dataset.ix;
             if (id === 'vxsize') ui.setVoxelSize(v);
             else if (id === 'gvcell') ui.setFx('gvCell', v);
+            else if (id === 'pxsize') ui.setFx('pixelSize', v);
             else if (id === 'framepx') ui.setFx('framePx', v);
             else if (id === 'framerad') ui.setFx('frameRound', v);
             else if (id.indexOf('fsize:') === 0) {
@@ -22612,6 +23055,7 @@ var CoreRenderManager = class CoreRenderManager {
             h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +
                 '<div class="vf-fx-row"><span>SHIP RENDER</span>' + fxSeg(ui.getShipRenderStyleOptions().map(function (v) { return [v, v]; }), ui.shipRenderStyle, 'vx-ship') + '</div>' +
                 fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
+                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
                 '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
                 fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
                 fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
@@ -22750,7 +23194,7 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, POWER, RES_ICON, ROOT, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
+    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     function swayLoop(now) {
@@ -22790,6 +23234,79 @@ var CoreRenderManager = class CoreRenderManager {
     }
     function placeFxPlate() { /* the sidebar is docked to the window edge */ }
 
+    // "DEVMODE" badge in the bezel's top strip, shown whenever startScreenManager.devMode is on —
+    // on every screen (menu, station, combat), not just the one it happened to be eyeballed on.
+    // Deliberately independent of syncBezelTools()/`#vf-bezel`: that function returns immediately
+    // when `#vf-bezel` isn't found (e.g. a screen that renders its own separate bezel-like chrome,
+    // such as the embedded home station), which silently skipped this badge too when it was called
+    // from inside there — devMode could be genuinely on with nothing ever flipping `hidden` back to
+    // false. Hide/show only ever needs `document.body`, so it's resolved on its own.
+    // Positioned immediately to the LEFT of the tool icon row — never the pilot wallet, a loot
+    // chip, or anything else that may or may not be there, since those differ by screen and kept
+    // putting the badge somewhere wrong (overlapping or stacked below) depending on which neighbor
+    // happened to be present. Save/reset only exist in the DOM while actively editing the layout
+    // (they're not just `hidden`, see hud-layout-editor.js), so the row is genuinely narrower until
+    // then — space for both is reserved unconditionally so starting/stopping an edit never shifts
+    // the badge sideways, rather than only reserving it once they happen to already be there.
+    // Vertically centered on the icon row's own height. An earlier version tried matching
+    // `.vf-pilot-ress` (the pilot resource bar) instead, on the idea that the two aren't always at
+    // the same baseline — but that element isn't reliably the one actually on screen next to the
+    // icons (a leftover/hidden instance elsewhere pulled the badge to an unrelated height), and the
+    // badge sits directly beside the icon row regardless, so matching ITS height is both the
+    // simpler measurement and the one that's actually true of what's visually next to it.
+    //
+    // `document.body` itself carries a `transform: scale(...)` (part of the stage's own stacked
+    // scale layers — see the comment on ui-tooltip.js's `position()`, "body carries the stage scale
+    // transform"). A `transform` on an element makes it the containing block for its `position:
+    // fixed` descendants too, not just `absolute` ones — so this badge, a direct child of body, was
+    // never actually fixed to the viewport at all despite the CSS; it was fixed to body's own
+    // (scaled) box. `getBoundingClientRect()` still correctly reports the icon row in real viewport
+    // pixels, so every px value computed from it was being fed to a containing block operating in a
+    // DIFFERENT, scaled coordinate system — the exact mismatch behind the badge landing at a
+    // plausible-looking but always-slightly-wrong height no matter which element it was measured
+    // against. Fix: work in fractions of body's own rendered box, not raw px — a CSS percentage for
+    // a fixed/absolute child resolves against the containing block's (body's) OWN authored size,
+    // and a pure scale preserves proportions within that box, so the same fraction lands in the
+    // same visual spot regardless of whatever body's transform's scale factor actually is.
+    let devBadgeKey = null;
+    function syncDevBadge() {
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        let badge = document.querySelector('.vf-bezel-devmode');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'vf-bezel-devmode';
+            badge.textContent = 'DEVMODE';
+            document.body.appendChild(badge);
+        }
+        badge.hidden = !devOn;
+        if (!devOn) { devBadgeKey = null; return; }
+        const tools = document.querySelector('.vf-bezel-tools');
+        if (!tools) return; // CSS fallback position (part-19.css) still applies
+        const toolsRect = tools.getBoundingClientRect();
+        if (!toolsRect.width) return;
+        const bodyRect = document.body.getBoundingClientRect();
+        if (!bodyRect.width || !bodyRect.height) return;
+        const btn = tools.querySelector('button:not([hidden])');
+        const btnRect = btn ? btn.getBoundingClientRect() : null;
+        const gap = parseFloat(getComputedStyle(tools).columnGap || getComputedStyle(tools).gap) || 0;
+        const saveBtn = tools.querySelector('[data-tool="save"]');
+        const saveVisible = !!(saveBtn && !saveBtn.hidden);
+        // 2 slots (save + reset) reserved whenever they're not currently shown themselves.
+        const reserve = (btnRect && !saveVisible) ? 2 * (btnRect.width + gap) : 0;
+        const leftPx = toolsRect.left - reserve;
+        const topPx = toolsRect.top + toolsRect.height / 2;
+        const key = Math.round(leftPx) + ':' + Math.round(topPx);
+        if (key === devBadgeKey) return;
+        devBadgeKey = key;
+        const leftPct = ((leftPx - bodyRect.left) / bodyRect.width) * 100;
+        const topPct = ((topPx - bodyRect.top) / bodyRect.height) * 100;
+        badge.style.right = 'auto';
+        badge.style.left = leftPct + '%';
+        badge.style.top = topPct + '%';
+        badge.style.transform = 'translate(-100%, -50%) translateX(-12px)';
+    }
+    setInterval(syncDevBadge, 500);
+
     // Bezel tools (top strip): RES icon (opens the slider), fullscreen (every screen),
     // logout (station only). Fullscreen / logout mirror the real buttons.
     function syncBezelTools() {
@@ -22819,9 +23336,25 @@ var CoreRenderManager = class CoreRenderManager {
                 if (lo) { lo.click(); return; }
                 if (typeof profileManager !== 'undefined') profileManager.logout();
                 if (typeof startScreenManager !== 'undefined') startScreenManager.show({ forceMenu: true });
+            },
+            layout: function (btn) {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.toggleEdit();
+                btn.classList.toggle('is-open', hudLayoutEditor.isEditing());
+            },
+            save: function (btn) {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.save();
+                btn.classList.add('is-open');
+                setTimeout(function () { btn.classList.remove('is-open'); }, 500);
+            },
+            reset: function () {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.resetLayout();
             }
         };
         const meta = {
+            save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -22880,9 +23413,43 @@ var CoreRenderManager = class CoreRenderManager {
             }
         }
         setOff(q('logout'), !logged);
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const nowEditing = devOn && typeof hudLayoutEditor !== 'undefined' && hudLayoutEditor.isEditing();
+        const layoutBtn = q('layout');
+        if (layoutBtn) {
+            layoutBtn.hidden = !devOn;
+            layoutBtn.classList.toggle('is-open', nowEditing);
+            // The button itself becomes the exit: clicking it again always ends the same edit
+            // session it started, so once editing it should read as "cancel", not still as
+            // "open layout edit" sitting there pressed.
+            const editState = nowEditing ? '1' : '0';
+            if (layoutBtn.dataset.state !== editState) {
+                layoutBtn.dataset.state = editState;
+                layoutBtn.innerHTML = nowEditing ? LAYOUT_CANCEL_ICON : LAYOUT_ICON;
+                layoutBtn.title = nowEditing ? 'Cancel layout edit' : 'Layout edit';
+                layoutBtn.setAttribute('aria-label', layoutBtn.title);
+            }
+        }
+        const saveBtn = q('save');
+        if (saveBtn) saveBtn.hidden = !nowEditing;
+        const resetBtn = q('reset');
+        if (resetBtn) resetBtn.hidden = !nowEditing;
     }
-    new MutationObserver(function () { syncBezelTools(); })
-        .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    // Watches the WHOLE document (childList/subtree/characterData) since the bezel's state can
+    // change from almost anywhere (login, fullscreen, a resource tick). Running syncBezelTools()
+    // straight from the callback meant every single mutation anywhere on the page — and a running
+    // game mutates DOM text/nodes constantly (health bars, counters, animations) — did a fresh
+    // round of querySelector lookups and getBoundingClientRect reads synchronously, often many
+    // times within one frame. Coalescing bursts into a single rAF-scheduled run keeps the bezel
+    // exactly as up to date (still before the next paint) for a fraction of the work.
+    let bezelToolsRaf = 0;
+    new MutationObserver(function () {
+        if (bezelToolsRaf) return;
+        bezelToolsRaf = requestAnimationFrame(function () { bezelToolsRaf = 0; syncBezelTools(); });
+    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    // Dev mode can flip without touching the DOM (e.g. Shift+C while in combat), so the layout
+    // key's visibility is also polled rather than relying solely on the mutation observer.
+    setInterval(syncBezelTools, 500);
 
     // The slider plate (fixed pixel size, outside the scaled stage) unfolds to the
     // left of the tool buttons, inside the bezel's top strip.
@@ -26798,13 +27365,16 @@ extendClass(BulletManager, {
             if (!id) return;
             const st = this.getWeaponHudState(id, now);
             const dim = st.reloading || st.noEnergy;
-            card.classList.toggle('is-dim', dim);
-            card.classList.toggle('is-reloading', st.reloading);
-            card.classList.toggle('is-no-energy', st.noEnergy);
-            card.style.setProperty('--reload-pct', (st.ready * 100).toFixed(1) + '%');
-            card.title = st.noEnergy
+            const pct = (st.ready * 100).toFixed(1) + '%';
+            const title = st.noEnergy
                 ? 'NOT ENOUGH ENERGY'
                 : (st.reloading ? ('RELOAD ' + Math.round(st.ready * 100) + '%') : '');
+            // Skip identical DOM writes — this runs every combat frame.
+            if (card._vfHudDim !== dim) { card._vfHudDim = dim; card.classList.toggle('is-dim', dim); }
+            if (card._vfHudRel !== st.reloading) { card._vfHudRel = st.reloading; card.classList.toggle('is-reloading', st.reloading); }
+            if (card._vfHudNoE !== st.noEnergy) { card._vfHudNoE = st.noEnergy; card.classList.toggle('is-no-energy', st.noEnergy); }
+            if (card._vfHudPct !== pct) { card._vfHudPct = pct; card.style.setProperty('--reload-pct', pct); }
+            if (card._vfHudTitle !== title) { card._vfHudTitle = title; card.title = title; }
         });
     },
     /** Vertical list of equipped weapons as unified cards (icon + name + stats). */
@@ -46487,6 +47057,8 @@ var UIAppearanceManager = class UIAppearanceManager {
         this.guiVoxelCell = 'AUTO';
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
+        // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
+        this.pixelSize = 'OFF';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -46614,6 +47186,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
+        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '6', '8'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -46627,7 +47200,12 @@ var UIAppearanceManager = class UIAppearanceManager {
     /** Fx keys that are choice rows (cycle options) rather than 0–100 sliders. */
     isEnumFx(fxKey) {
         return fxKey === 'arcade' || fxKey === 'guiVoxel' || fxKey === 'fxArea'
-            || fxKey === 'gvCell' || fxKey === 'framePx' || fxKey === 'frameRound' || !!this.gvPartKey(fxKey);
+            || fxKey === 'gvCell' || fxKey === 'framePx' || fxKey === 'pixelSize' || fxKey === 'frameRound' || !!this.gvPartKey(fxKey);
+    }
+    /** Global pixel size in CSS px (0 = off): every art pixel/voxel app-wide renders at this size. */
+    getGlobalPixelPx() {
+        const n = Number(this.pixelSize);
+        return Number.isFinite(n) && n > 0 ? n : 0;
     }
     getGuiVoxelCell() {
         // The GUI lattice stays on whole pixels even when the ship voxels go finer than 1.
@@ -46636,6 +47214,7 @@ var UIAppearanceManager = class UIAppearanceManager {
     getFxValue(fxKey) {
         if (fxKey === 'gvCell') return this.guiVoxelCell;
         if (fxKey === 'framePx') return this.framePx;
+        if (fxKey === 'pixelSize') return this.pixelSize;
         if (fxKey === 'frameRound') return this.frameRound;
         if (this.gvPartKey(fxKey)) return this.guiVoxelParts[this.gvPartKey(fxKey)];
         return this[fxKey] || 'OFF';
@@ -46763,6 +47342,9 @@ var UIAppearanceManager = class UIAppearanceManager {
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
             }
+            if (data.pixelSize === 'OFF' || /^(1|2|3|4|6|8)$/.test(String(data.pixelSize))) {
+                this.pixelSize = String(data.pixelSize);
+            }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
             if (data.guiVoxel === 'ON' || data.guiVoxel === 'OFF') {
                 this.guiVoxel = data.guiVoxel;
@@ -46819,6 +47401,7 @@ extendClass(UIAppearanceManager, {
                 guiVoxel: this.guiVoxel,
                 guiVoxelCell: this.guiVoxelCell,
                 framePx: this.framePx,
+                pixelSize: this.pixelSize,
                 frameRound: this.frameRound,
                 guiVoxelParts: Object.assign({}, this.guiVoxelParts)
             }));
@@ -47017,6 +47600,17 @@ extendClass(UIAppearanceManager, {
             this.apply();
             return;
         }
+        if (key === 'pixelSize') {
+            if (!this.getFxOptions('pixelSize').includes(val)) return;
+            this.pixelSize = val;
+            this.persist();
+            this.apply();
+            if (typeof graphicsManager !== 'undefined' && graphicsManager._voxelShipBake) {
+                graphicsManager._voxelShipBake = Object.create(null);
+            }
+            try { window.dispatchEvent(new CustomEvent('vf:pixelsize', { detail: { px: this.getGlobalPixelPx() } })); } catch (e) { /* ignore */ }
+            return;
+        }
         if (key === 'gvCell') {
             if (val !== 'AUTO' && !/^[1-8]$/.test(val)) return;
             this.guiVoxelCell = val;
@@ -47075,6 +47669,56 @@ extendClass(UIAppearanceManager, {
         if (this._framePxBuilt === odd && document.getElementById('vfFramePx')) return;
         if (typeof window.vfBuildFramePxFilter === 'function') window.vfBuildFramePxFilter(odd);
         this._framePxBuilt = odd;
+    },
+    /**
+     * Global Pixel Size screen: SVG filter that samples one pixel per gp x gp screen cell and dilates it back,
+     * so everything under it (planets, ship, lines, stars) lands on the same screen grid and its pixels
+     * wander cell by cell while it moves. Odd gp: 1x1 sample; even gp: 2x2 sample.
+     */
+    ensureMapPxFilter(gp, svgEl) {
+        // Ancestor transforms (UI scale, viewport fit) scale the filter's user units: convert so a cell is gp *screen* px.
+        let sa = 1, ox = 0, oy = 0;
+        if (svgEl && svgEl.clientWidth > 0) {
+            // clientWidth is rounded to whole px (too coarse for the filter): measure a 1000px probe instead.
+            let probe = svgEl.parentNode && svgEl.parentNode.querySelector(':scope > .vf-px-probe');
+            if (!probe && svgEl.parentNode) {
+                probe = document.createElement('div');
+                probe.className = 'vf-px-probe';
+                probe.style.cssText = 'position:absolute;left:0;top:0;width:1000px;height:0;visibility:hidden;pointer-events:none';
+                svgEl.parentNode.appendChild(probe);
+            }
+            const w = probe ? probe.getBoundingClientRect().width / 1000 : svgEl.getBoundingClientRect().width / svgEl.clientWidth;
+            if (w > 0.05 && w < 20) sa = w;
+        }
+        const key = gp + '|' + sa.toFixed(6);
+        if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) return;
+        let svg = document.getElementById('vfMapPxSvg');
+        if (!svg) {
+            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = 'vfMapPxSvg';
+            svg.setAttribute('width', '0');
+            svg.setAttribute('height', '0');
+            svg.style.position = 'absolute';
+            svg.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(svg);
+        }
+        // One 1x1 sample per gp x gp cell, dilated to (2r+1) and, for even gp, merged with a 1px shifted copy.
+        // Skia floors device sizes: aim a hair above the whole-pixel size (cells are 7.9992 px wide otherwise).
+        const sf = sa * 0.9999;
+        const f = (v) => (v / sf).toFixed(5);
+        const r = Math.floor((gp - 1) / 2);
+        const at = Math.floor(gp / 2);
+        let h = '<filter id="vfMapPx" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">' +
+            '<feFlood x="' + f(ox + at) + '" y="' + f(oy + at) + '" width="' + f(1) + '" height="' + f(1) + '"/>' +
+            '<feComposite x="' + f(ox) + '" y="' + f(oy) + '" width="' + f(gp) + '" height="' + f(gp) + '"/><feTile result="t"/>' +
+            '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>';
+        h += r > 0 ? '<feMorphology in="s" operator="dilate" radius="' + f(r) + '" result="d"/>' : '<feOffset in="s" dx="0" result="d"/>';
+        if (gp % 2 === 0) {
+            h += '<feOffset in="d" dx="' + f(1) + '" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
+                '<feOffset in="hz" dx="0" dy="' + f(1) + '" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
+        }
+        svg.innerHTML = h + '</filter>';
+        this._mapPxBuilt = key;
     },
     applyScanWarp() {
         // The filter re-rasterises the whole backdrop per seed change, so it is throttled
@@ -47264,6 +47908,9 @@ extendClass(UIAppearanceManager, {
         Object.keys(this.guiVoxelParts).forEach((k) => {
             root.setAttribute('data-vf-gv-' + k, this.guiVoxelParts[k] === 'ON' ? 'on' : 'off');
         });
+        root.setAttribute('data-vf-pixel-size', this.pixelSize === 'OFF' ? 'off' : 'on');
+        if (this.getGlobalPixelPx() > 0 && this.ensureMapPxFilter) this.ensureMapPxFilter(this.getGlobalPixelPx());
+        root.style.setProperty('--vf-px', (this.getGlobalPixelPx() || 1) + 'px');
         root.setAttribute('data-vf-frame-px', this.framePx === 'OFF' ? 'off' : 'on');
         if (this.framePx !== 'OFF') {
             this.ensureFramePxFilter(Number(this.framePx));
@@ -50855,6 +51502,7 @@ extendClass(ComponentEditorUI, {
       </div>
       <div class="hs-comp-actions">
         <button type="button" class="action-button pe-btn pe-primary" id="ceGenerate">GENERATE</button>
+        <button type="button" class="action-button pe-btn" id="ceProcedural">PROCEDURAL</button>
         <button type="button" class="action-button pe-btn" id="ceAccept">ACCEPT</button>
         <button type="button" class="action-button pe-btn" id="ceDiscard">DISCARD</button>
         <button type="button" class="action-button pe-btn" id="ceSaveMeta">SAVE META</button>
@@ -51125,6 +51773,8 @@ extendClass(ComponentEditorUI, {
         const genBtn = r.querySelector("#ceGenerate");
         if (!genBtn) return;
         genBtn.onclick = () => this.onGenerate();
+        const procBtn = r.querySelector("#ceProcedural");
+        if (procBtn) procBtn.onclick = () => this.onProceduralGenerate();
         r.querySelector("#ceAccept").onclick = () => this.onAccept();
         r.querySelector("#ceDiscard").onclick = () => this.clearStaging();
         r.querySelector("#ceSaveMeta").onclick = () => this.onSaveMeta();
@@ -51887,7 +52537,11 @@ extendClass(ComponentEditorUI, {
         // Keep every source row on an integer pixel height. Scaling the whole
         // image to an arbitrary height makes rows land on fractional pixels
         // and produces uneven/blurry pixel art even with smoothing disabled.
-        const cell = Math.max(1, Math.round(baseCell * zoom));
+        let cell = Math.max(1, Math.round(baseCell * zoom));
+        // Global Pixel Size: every sprite pixel is a whole multiple of the global size.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) cell = Math.max(gp, Math.round(cell / gp) * gp);
         const rowCell = Math.max(1, Math.round(cell * length));
         const drawW = cell * size;
         const drawH = rowCell * size;
@@ -53851,8 +54505,9 @@ var RenderManager = class RenderManager {
         const canvas = document.getElementById('gameCanvas');
         if (!canvas) return;
         const k = this.getRenderScale();
-        if (canvas.width !== w * k) canvas.width = w * k;
-        if (canvas.height !== h * k) canvas.height = h * k;
+        const bw = Math.max(1, Math.round(w * k)), bh = Math.max(1, Math.round(h * k));
+        if (canvas.width !== bw) canvas.width = bw;
+        if (canvas.height !== bh) canvas.height = bh;
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.imageSmoothingEnabled = false;
     }
@@ -53863,6 +54518,15 @@ var RenderManager = class RenderManager {
      * voxelised finer than one logical pixel.
      */
     getRenderScale() {
+        // Global Pixel Size: one buffer pixel == P screen px, so every art pixel is equal.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            const cv = document.getElementById('gameCanvas');
+            const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+            const shown = cv && cv.clientWidth ? cv.clientWidth : lw;
+            return Math.max(0.05, shown / (gp * lw));
+        }
         const k = Number(window.PLAYFIELD_RENDER_SCALE);
         let scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
         // VOXEL: larger cells already look blocky — less supersampling is enough
@@ -53890,6 +54554,8 @@ var RenderManager = class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) return 1 / this.getRenderScale();
         const style = (typeof uiAppearanceManager !== 'undefined'
             && uiAppearanceManager.shipRenderStyle)
             ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
@@ -53948,9 +54614,10 @@ var RenderManager = class RenderManager {
         const k = this.getRenderScale();
         const lw = Math.round((typeof game !== 'undefined' && game && game.internalWidth) || canvas.width / k);
         const lh = Math.round((typeof game !== 'undefined' && game && game.internalHeight) || canvas.height / k);
-        if (canvas.width !== lw * k || canvas.height !== lh * k) {
-            canvas.width = lw * k;
-            canvas.height = lh * k;
+        const bw = Math.max(1, Math.round(lw * k)), bh = Math.max(1, Math.round(lh * k));
+        if (canvas.width !== bw || canvas.height !== bh) {
+            canvas.width = bw;
+            canvas.height = bh;
         }
         const c = ctx || canvas.getContext('2d');
         if (!c) return;
@@ -53967,6 +54634,7 @@ var RenderManager = class RenderManager {
             loader.deviceScale = k;
             loader.voxelDetail = this.getCombatVoxelDetail();
             loader.globalVoxelCell = this.getCombatVoxelCell();
+            if (k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
         }
         try {
             return this.renderFrame(c, width || lw, height || lh);
@@ -57387,8 +58055,16 @@ var parallaxManager = new ParallaxManager();
         for (var i = 0; i < parallax.hosts.length; i++) {
             var host = parallax.hosts[i];
             if (!isHostVisible(host)) continue;
-            var bases = host.querySelectorAll(':scope > .vf-bg-parallax-base');
-            var glow = host.querySelector(':scope > .vf-bg-parallax-glow');
+            // Cache layer nodes on the host — querySelectorAll every RAF was pure overhead.
+            if (!host._vfBgLayers || host._vfBgLayersGen !== host.childElementCount) {
+                host._vfBgLayers = {
+                    bases: host.querySelectorAll(':scope > .vf-bg-parallax-base'),
+                    glow: host.querySelector(':scope > .vf-bg-parallax-glow')
+                };
+                host._vfBgLayersGen = host.childElementCount;
+            }
+            var bases = host._vfBgLayers.bases;
+            var glow = host._vfBgLayers.glow;
             for (var b = 0; b < bases.length; b++) {
                 if (bases[b]._vfTf !== tb) { bases[b]._vfTf = tb; bases[b].style.transform = tb; }   // unchanged frames touch nothing
             }
@@ -57551,6 +58227,15 @@ var parallaxManager = new ParallaxManager();
     function step(now) {
         parallax.raf = 0;
         if (!parallax.active || parallax.reduceMotion) return;
+        // Combat owns the glass — skip menu parallax while the fight canvas is up.
+        try {
+            var gc = document.querySelector('.game-container');
+            if (gc && gc.style.display === 'flex') {
+                // Park until menus return; the next mousemove re-schedules.
+                return;
+            }
+        } catch (e) { /* continue */ }
+        if (document.hidden) return;
 
         var w = window.innerWidth || 1;
         var h = window.innerHeight || 1;
@@ -57829,15 +58514,9 @@ var parallaxManager = new ParallaxManager();
             const cols = getComputedStyle(info.parent).gridTemplateColumns.split(' ').filter(Boolean);
             if (cols.length !== info.kids.length) return false;
             cols[info.idx] = Math.round(w) + 'px';
-            // The widest remaining track flexes so the row still fills.
-            let best = -1;
-            let bestW = -1;
-            cols.forEach((c, i) => {
-                if (i === info.idx) return;
-                const v = parseFloat(c) || 0;
-                if (v > bestW) { bestW = v; best = i; }
-            });
-            if (best >= 0) cols[best] = 'minmax(0, 1fr)';
+            // The adjacent track (the center panel this handle borders) flexes to fill.
+            const neighbor = info.edge === 'right' ? info.idx + 1 : info.idx - 1;
+            if (neighbor >= 0 && neighbor < cols.length) cols[neighbor] = 'minmax(0, 1fr)';
             info.parent.style.gridTemplateColumns = cols.join(' ');
         } else {
             side.style.flex = '0 0 ' + Math.round(w) + 'px';
@@ -67265,6 +67944,14 @@ var EnemyEditorUI = class EnemyEditorUI {
                 btn.textContent = 'DEPLOY';
                 tabs.appendChild(btn);
             }
+            if (tabs && !tabs.querySelector('[data-tab="shape"]')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'pe-tab';
+                btn.dataset.tab = 'shape';
+                btn.textContent = 'SHAPE';
+                tabs.appendChild(btn);
+            }
             return;
         }
 
@@ -67284,6 +67971,7 @@ var EnemyEditorUI = class EnemyEditorUI {
                     <button type="button" data-tab="armor" class="pe-tab">ARMOR</button>
                     <button type="button" data-tab="abilities" class="pe-tab">ABILITIES</button>
                     <button type="button" data-tab="deploy" class="pe-tab">DEPLOY</button>
+                    <button type="button" data-tab="shape" class="pe-tab">SHAPE</button>
                 </div>
                 <div class="planet-editor-body" id="eeEditorBody">
                     <aside class="planet-editor-sidebar" id="eeSidebar">
@@ -67432,6 +68120,10 @@ var EnemyEditorUI = class EnemyEditorUI {
             const cssH = fitH * this.previewZoom;
             const dpr = window.devicePixelRatio || 1;
             this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            // Global Pixel Size: one backing pixel == gp screen px.
+            const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                ? uiAppearanceManager.getGlobalPixelPx() : 0;
+            if (gpx > 0) this.previewBackingScale = cssW / (gpx * this.previewBaseWidth);
             const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
             const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
             if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {
@@ -67648,6 +68340,7 @@ extendClass(EnemyEditorUI, {
         else if (this.activeTab === 'weapons') this.renderWeaponsTab(root);
         else if (this.activeTab === 'abilities') this.renderAbilitiesTab(root);
         else if (this.activeTab === 'deploy') this.renderDeployTab(root);
+        else if (this.activeTab === 'shape') this.renderShapeControls(root, this.selectedType);
         else this.renderArmorTab(root);
     },
 
@@ -67727,6 +68420,60 @@ extendClass(EnemyEditorUI, {
             this.draft.planetIds,
             (next) => { this.draft.planetIds = next; }
         ));
+    },
+
+    /**
+     * Simple per-part shape picker: named variants for nose/core/aft plus
+     * wing style, instead of only random faction-seeded shapes. Keyed by
+     * `shipId`, which must match the `id` the live preview model renders
+     * with (this.selectedType — see getPreviewModel() in reset.js).
+     */
+    renderShapeControls(root, shipId) {
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!loader || !shipId || typeof profileManager === 'undefined') return;
+        const title = document.createElement('p');
+        title.className = 'pe-hint';
+        title.textContent = 'Pick a named shape per part, or randomize the whole hull.';
+        root.appendChild(title);
+
+        const segmentRow = (segId, label, labels) => {
+            const current = profileManager.getSegmentShapeVariant(shipId, segId);
+            const options = ['AUTO'].concat(labels);
+            const value = current != null && labels[current] ? labels[current] : 'AUTO';
+            root.appendChild(this.makeSelect(label, value, options, (v) => {
+                if (v === 'AUTO') profileManager.clearSegmentShapeVariant(shipId, segId);
+                else profileManager.setSegmentShapeVariant(shipId, segId, labels.indexOf(v));
+                this.resetPreviewSim();
+            }));
+        };
+        segmentRow('front', 'Nose shape', loader.bodyShapeVariantLabels('front'));
+        segmentRow('center', 'Core shape', loader.bodyShapeVariantLabels('center'));
+        segmentRow('back', 'Aft shape', loader.bodyShapeVariantLabels('back'));
+
+        const symmetric = profileManager.getWingStyleSymmetry(shipId);
+        root.appendChild(this.makeCheckbox('Mirror wings', symmetric, (checked) => {
+            profileManager.setWingStyleSymmetry(shipId, checked);
+            this.resetPreviewSim();
+        }));
+        const wingLabels = loader.wingShapeVariants.map((v) => v.label);
+        segmentRow(symmetric ? 'wing' : 'wingLeft', symmetric ? 'Wing shape' : 'Left wing shape', wingLabels);
+        if (!symmetric) segmentRow('wingRight', 'Right wing shape', wingLabels);
+
+        const reroll = document.createElement('button');
+        reroll.type = 'button';
+        reroll.className = 'pe-btn';
+        reroll.textContent = 'RANDOMIZE ALL';
+        reroll.addEventListener('click', () => {
+            if (!profileManager.setHullShapeSeed) return;
+            const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            profileManager.setHullShapeSeed(shipId, seed);
+            ['front', 'center', 'back', 'wing', 'wingLeft', 'wingRight'].forEach((seg) => {
+                profileManager.clearSegmentShapeVariant(shipId, seg);
+            });
+            this.resetPreviewSim();
+            this.renderControls();
+        });
+        root.appendChild(reroll);
     },
 });
 
@@ -68707,6 +69454,14 @@ var ShipEditorUI = class ShipEditorUI {
         if (!shipId) return;
         const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         profileManager.setHullShapeSeed(shipId, seed);
+        // Per-part picks in the shape panel override the seed; clear them too,
+        // otherwise a reroll would leave manually-picked parts unchanged.
+        if (profileManager.clearSegmentShapeVariant) {
+            ['front', 'center', 'back', 'wing', 'wingLeft', 'wingRight'].forEach((seg) => {
+                profileManager.clearSegmentShapeVariant(shipId, seg);
+            });
+        }
+        if (this.renderControls) this.renderControls();
         // Animation loop repaints every frame; no forced redraw needed.
     }
 
@@ -68735,6 +69490,10 @@ var ShipEditorUI = class ShipEditorUI {
             // Bake zoom into the canvas backing store so pixel art is regenerated
             // crisp at the target resolution instead of CSS-stretching a fixed bitmap.
             this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            // Global Pixel Size: one backing pixel == gp screen px.
+            const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                ? uiAppearanceManager.getGlobalPixelPx() : 0;
+            if (gpx > 0) this.previewBackingScale = cssW / (gpx * this.previewBaseWidth);
             const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
             const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
             if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {
@@ -69025,6 +69784,7 @@ extendClass(ShipEditorUI, {
     },
 
     renderGraphicsTab(root) {
+        this.renderShapeControls(root, this.selectedType);
         const wing = Object.assign(
             { x: 0.02, y: 0.30, w: 0.24, h: 0.40 },
             this.draft.segmentUv && this.draft.segmentUv.wing
@@ -69043,6 +69803,50 @@ extendClass(ShipEditorUI, {
         hint.className = 'pe-hint';
         hint.textContent = 'Crop the wing from the ship graphic set. Smaller width/height removes fuselage pixels.';
         root.appendChild(hint);
+    },
+
+    /**
+     * Simple per-part shape picker: named variants for nose/core/aft plus
+     * wing style, instead of only the black-box "REROLL SHAPE" button.
+     * Shared pattern with the enemy editor's own copy of this method.
+     */
+    renderShapeControls(root, shipId) {
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!loader || !shipId || typeof profileManager === 'undefined') return;
+        const title = document.createElement('p');
+        title.className = 'pe-hint';
+        title.textContent = 'Pick a named shape per part, or randomize the whole hull.';
+        root.appendChild(title);
+
+        const segmentRow = (segId, label, labels) => {
+            const current = profileManager.getSegmentShapeVariant(shipId, segId);
+            const options = ['AUTO'].concat(labels);
+            const value = current != null && labels[current] ? labels[current] : 'AUTO';
+            root.appendChild(this.makeSelect(label, value, options, (v) => {
+                if (v === 'AUTO') profileManager.clearSegmentShapeVariant(shipId, segId);
+                else profileManager.setSegmentShapeVariant(shipId, segId, labels.indexOf(v));
+                this.resetPreviewSim();
+            }));
+        };
+        segmentRow('front', 'Nose shape', loader.bodyShapeVariantLabels('front'));
+        segmentRow('center', 'Core shape', loader.bodyShapeVariantLabels('center'));
+        segmentRow('back', 'Aft shape', loader.bodyShapeVariantLabels('back'));
+
+        const symmetric = profileManager.getWingStyleSymmetry(shipId);
+        root.appendChild(this.makeCheckbox('Mirror wings', symmetric, (checked) => {
+            profileManager.setWingStyleSymmetry(shipId, checked);
+            this.resetPreviewSim();
+        }));
+        const wingLabels = loader.wingShapeVariants.map((v) => v.label);
+        segmentRow(symmetric ? 'wing' : 'wingLeft', symmetric ? 'Wing shape' : 'Left wing shape', wingLabels);
+        if (!symmetric) segmentRow('wingRight', 'Right wing shape', wingLabels);
+
+        const reroll = document.createElement('button');
+        reroll.type = 'button';
+        reroll.className = 'pe-btn';
+        reroll.textContent = 'RANDOMIZE ALL';
+        reroll.addEventListener('click', () => this.rerollHullShape());
+        root.appendChild(reroll);
     },
 
     getAbilityMeta(id) {
@@ -70303,15 +71107,24 @@ extendClass(LevelInfoManager, {
                 const dailyVal = document.getElementById('dailyHudValue');
                 if (objVal) {
                     const obj = this.getObjectiveBits();
-                    objVal.textContent = String(obj.progress).toUpperCase();
+                    const next = String(obj.progress).toUpperCase();
+                    if (objVal.textContent !== next) objVal.textContent = next;
                 }
                 if (dailyVal) {
                     const daily = this.getDailyBits();
-                    dailyVal.textContent = daily.active ? daily.progress : '—';
+                    const next = daily.active ? daily.progress : '—';
+                    if (dailyVal.textContent !== next) dailyVal.textContent = next;
                 }
+                // Only refresh loot chips when the bag actually changed — a full
+                // updateDisplay()/renderBody() every second rebuilt the whole GI panel.
                 if (this.levelData) {
-                    this.levelData.resources = this.collectRunResources();
-                    this.updateDisplay();
+                    const resources = this.collectRunResources();
+                    const sig = (resources || []).map((r) => r.id + ':' + r.amount).join('|');
+                    if (sig !== this._resourceSig) {
+                        this._resourceSig = sig;
+                        this.levelData.resources = resources;
+                        this.updateDisplay();
+                    }
                 }
             }
         }, 1000);
@@ -71636,7 +72449,18 @@ var ShipRenderer = class ShipRenderer {
                 const rh = shipH * fit;
                 const ox = (canvas.width - rw) / 2;
                 const oy = (canvas.height - rh) / 2;
-                loader.renderShip(ctx, ship, ox, oy, fit, colorOverlay, overlayIntensity);
+                const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                    ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                const prevCell = loader.globalVoxelCell;
+                if (gp > 0 && canvas.clientWidth > 0) {
+                    // One art pixel == gp screen px regardless of canvas CSS scaling.
+                    loader.globalVoxelCell = Math.max(0.25, gp * canvas.width / canvas.clientWidth);
+                }
+                try {
+                    loader.renderShip(ctx, ship, ox, oy, fit, colorOverlay, overlayIntensity);
+                } finally {
+                    loader.globalVoxelCell = prevCell;
+                }
                 return;
             }
         }
@@ -73996,6 +74820,168 @@ var GalaxyMapManager = class GalaxyMapManager {
 "use strict";
 
 // GalaxyMapManager members, continued from core.js (kept under ~500 lines per file).
+/** Dev layout editor settings for the enemy card: x/y offset (px), size (%) and layer per element. Stored per browser. */
+const enemyCardLayout = {
+    KEY: 'vf_enemy_card_layout_v1',
+    ELS: ['title', 'bar', 'face', 'ship', 'planet'],
+    LABELS: { title: 'TITLE', bar: 'BAR', face: 'FACE', ship: 'SHIP', planet: 'PLANET' },
+    DEF_Z: { title: 6, bar: 5, face: 4, ship: 3, planet: 0 },
+    /** Shipped defaults (x/y px, s %, z layer); anything missing falls back to neutral. Paste COPY output here. */
+    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":0,"y":0,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":158,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
+    defaults() { const o = {}; this.ELS.forEach((k) => { const b = this.BAKED[k] || {}; o[k] = { x: b.x || 0, y: b.y || 0, s: b.s || 100, z: b.z !== undefined ? b.z : this.DEF_Z[k] }; }); return o; },
+    load() {
+        let v = {};
+        try { v = JSON.parse(localStorage.getItem(this.KEY) || '{}') || {}; } catch (e) { v = {}; }
+        const out = this.defaults();
+        this.ELS.forEach((k) => {
+            if (!v[k]) return;
+            const e = v[k];
+            out[k] = {
+                x: Math.round(+e.x || 0), y: Math.round(+e.y || 0),
+                s: Math.max(20, Math.min(300, Math.round(+e.s || 100))),
+                z: Number.isFinite(+e.z) && e.z !== undefined ? Math.round(+e.z) : this.DEF_Z[k]
+            };
+        });
+        return out;
+    },
+    save(v) { try { localStorage.setItem(this.KEY, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+    reset() { try { localStorage.removeItem(this.KEY); } catch (e) { /* ignore */ } },
+    /** Writes every custom property onto one node. The planet sits behind the card (z < 5) or in front of it. */
+    paint(n, l) {
+        this.ELS.forEach((k) => {
+            n.style.setProperty(`--ec-${k}-x`, l[k].x + 'px');
+            n.style.setProperty(`--ec-${k}-y`, l[k].y + 'px');
+            n.style.setProperty(`--ec-${k}-s`, String(l[k].s / 100));
+            n.style.setProperty(`--ec-${k}-z`, String(l[k].z));
+        });
+        const front = l.planet.z >= 5;
+        n.style.setProperty('--ec-planet-segz', front ? '3' : '1');
+        n.style.setProperty('--ec-planet-mz', front ? '10' : '0');
+    },
+    /** Inline custom properties for a freshly built card. */
+    css(v) {
+        const l = v || this.load(), n = { style: { setProperty(k, val) { this.t.push(k + ':' + val); }, t: [] } };
+        this.paint(n, l);
+        return n.style.t.join(';');
+    },
+    /** Re-applies the saved settings to the page and to every enemy card on screen. */
+    applyLive(v) {
+        const l = v || this.load();
+        this.paint(document.documentElement, l);
+        document.querySelectorAll('.gm-enemy-card-in').forEach((el) => this.paint(el, l));
+    },
+    openModal() {
+        const ecl = this;
+        if (typeof galaxyMapManager === 'undefined' || document.querySelector('.ecl-back')) return;
+        let cur = ecl.load();
+        let last = 'face';
+        const back = document.createElement('div');
+        back.className = 'ecl-back';
+        back.innerHTML = '<div class="ecl-modal" role="dialog" aria-label="Enemy card layout">' +
+            '<div class="ecl-title">ENEMY CARD LAYOUT</div>' +
+            '<div class="ecl-hint">Click or drag an element. Arrow keys nudge it (Shift = 10px). The planet is either behind or in front of the card.</div>' +
+            '<div class="ecl-fit"><div class="ecl-stage"></div></div>' +
+            '<div class="ecl-ctl"><span class="ecl-chips">' + ecl.ELS.map((k) => `<button type="button" class="action-button ecl-chip" data-ecl-sel="${k}">${ecl.LABELS[k]}</button>`).join('') + '</span>' +
+            '<span class="ecl-row">SIZE <button type="button" class="action-button" data-ecl="s-">−</button>' +
+            '<input type="range" class="ecl-range" min="20" max="300" step="5" data-ecl-range><button type="button" class="action-button" data-ecl="s+">+</button><b class="ecl-val" data-ecl-sval></b></span>' +
+            '<span class="ecl-row">LAYER <button type="button" class="action-button" data-ecl="z-">▼</button><b class="ecl-val" data-ecl-zval></b><button type="button" class="action-button" data-ecl="z+">▲</button></span></div>' +
+            '<div class="ecl-actions"><span class="ecl-right"><button type="button" class="action-button" data-ecl="reset">RESET</button><button type="button" class="action-button" data-ecl="copy">COPY AS DEFAULT</button></span>' +
+            '<span class="ecl-right"><button type="button" class="action-button" data-ecl="cancel">CANCEL</button>' +
+            '<button type="button" class="action-button" data-ecl="save">SAVE</button></span></div></div>';
+        document.body.appendChild(back);
+        const stage = back.querySelector('.ecl-stage'), fitBox = back.querySelector('.ecl-fit');
+        const range = back.querySelector('[data-ecl-range]');
+        let sc = 1, SW = 640, SH = 220;
+        const fit = () => {
+            sc = Math.max(0.1, Math.min(1, (back.firstElementChild.clientWidth - 40) / SW, (back.clientHeight * 0.9 - 260) / SH));
+            stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
+            fitBox.style.width = Math.round(SW * sc) + 'px'; fitBox.style.height = Math.round(SH * sc) + 'px';
+            stage.style.transform = 'scale(' + sc + ')';
+        };
+        fit();
+        window.addEventListener('resize', fit);
+        const paintAll = () => {
+            ecl.paint(stage, cur);
+            const card = stage.querySelector('.gm-enemy-card-in');
+            if (card) ecl.paint(card, cur);
+        };
+        const refreshUi = () => {
+            stage.dataset.sel = last;
+            back.querySelectorAll('[data-ecl-sel]').forEach((b) => b.classList.toggle('is-on', b.getAttribute('data-ecl-sel') === last));
+            range.value = cur[last].s;
+            back.querySelector('[data-ecl-sval]').textContent = cur[last].s + '%';
+            back.querySelector('[data-ecl-zval]').textContent = String(cur[last].z);
+        };
+        const draw = () => {
+            const gm = galaxyMapManager, pid = gm.selectedPlanetId;
+            // Preferred: an exact copy of the live bottom bar (same geometry, planet card included); the mock is the fallback.
+            const live = document.querySelector('.galaxy-map-panels');
+            const liveBar = live && live.querySelector('.galaxy-map-ruler.is-bar');
+            if (liveBar && liveBar.querySelector('.gm-enemy-card-in') && liveBar.offsetWidth > 50) {
+                SW = liveBar.offsetWidth; SH = liveBar.offsetHeight;
+                const copy = live.cloneNode(true);
+                copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+                stage.classList.add('is-clone');
+                stage.innerHTML = '<div class="galaxy-map-embedded"><div class="gm-map-stage"></div></div>';
+                stage.querySelector('.gm-map-stage').appendChild(copy);
+                paintAll(); refreshUi(); fit();
+                return;
+            }
+            SW = 640; SH = 220; stage.classList.remove('is-clone');
+            const pInfo = pid && gm.getPlanetInfo ? gm.getPlanetInfo(pid) : null;
+            const art = pid && gm.planetIconHtml ? gm.planetIconHtml(pid, 260) : '';
+            stage.innerHTML = (art ? `<div class="ecl-planet">${art}</div>` : '') +
+                gm.enemyCardHtml({ id: null, name: (pInfo && pInfo.name) || 'Node Array' }, ((pid && typeof planetConfigManager !== 'undefined' && planetConfigManager.getHostileFactions && planetConfigManager.getHostileFactions(pid) || [])[0]) || 'machine');
+            paintAll();
+            refreshUi();
+            fit();
+        };
+        const SEL = { title: '.gm-enemy-title', bar: '.gm-enemy-text', face: '.gm-enemy-avatar', ship: '.gm-enemy-ship', planet: '.ecl-planet, .gm-sector-planet-bg' };
+        const upd = (k, patch) => { Object.assign(cur[k], patch); cur[k].s = Math.max(20, Math.min(300, cur[k].s)); paintAll(); refreshUi(); };
+        stage.addEventListener('pointerdown', (e) => {
+            const k = Object.keys(SEL).find((key) => e.target.closest(SEL[key]));
+            if (!k) return;
+            e.preventDefault();
+            last = k; refreshUi();
+            const sx = e.clientX, sy = e.clientY, ox = cur[k].x, oy = cur[k].y;
+            const mv = (ev) => upd(k, { x: Math.round(ox + (ev.clientX - sx) / sc), y: Math.round(oy + (ev.clientY - sy) / sc) });
+            const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+            window.addEventListener('pointermove', mv);
+            window.addEventListener('pointerup', up);
+        });
+        range.addEventListener('input', () => upd(last, { s: +range.value }));
+        const close = () => { document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', fit); back.remove(); };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; }
+            const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+            if (d && !(e.target && e.target.type === 'range')) { e.preventDefault(); e.stopImmediatePropagation(); const m = e.shiftKey ? 10 : 1; upd(last, { x: cur[last].x + d[0] * m, y: cur[last].y + d[1] * m }); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        back.addEventListener('click', (e) => {
+            if (e.target === back) { close(); return; }
+            const chip = e.target.closest('[data-ecl-sel]');
+            if (chip) { last = chip.getAttribute('data-ecl-sel'); refreshUi(); return; }
+            const b = e.target.closest('[data-ecl]');
+            if (!b) return;
+            const act = b.getAttribute('data-ecl');
+            if (act === 's-' || act === 's+') { upd(last, { s: cur[last].s + (act === 's+' ? 5 : -5) }); return; }
+            if (act === 'z-' || act === 'z+') { upd(last, { z: cur[last].z + (act === 'z+' ? 1 : -1) }); return; }
+            if (act === 'copy') { const t = JSON.stringify(cur); b.textContent = 'COPIED'; try { navigator.clipboard.writeText(t); } catch (err) { window.prompt('Copy:', t); } return; }
+            if (act === 'reset') { cur = ecl.defaults(); draw(); return; }
+            if (act === 'save') { ecl.save(cur); ecl.applyLive(cur); }
+            close();
+        });
+        draw();
+    }
+};
+enemyCardLayout.applyLive();
+document.addEventListener('click', (e) => {
+    if (typeof startScreenManager === 'undefined' || !startScreenManager.devMode) return;
+    if (!e.target.closest || e.target.closest('.ecl-back') || !e.target.closest('.gm-enemy-card')) return;
+    e.preventDefault(); e.stopPropagation();
+    enemyCardLayout.openModal();
+}, true);
+
 extendClass(GalaxyMapManager, {
     getPlanetInfo(planetId) {
         const pid = String(planetId || '').toLowerCase();
@@ -74077,7 +75063,7 @@ extendClass(GalaxyMapManager, {
         return String(this.galaxyId || '').toUpperCase();
     },
     /** Top-right badge: the faction that rules this galaxy (its main faction). */
-    renderGalaxyRulerBadge() {
+    renderGalaxyRulerBadge(mode) {
         if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxyControl) return '';
         const c = planetConfigManager.getGalaxyControl(this.galaxyId);
         if (!c || !c.main) return '';
@@ -74100,7 +75086,33 @@ extendClass(GalaxyMapManager, {
             (emblem ? `<span class="galaxy-map-ruler-emblem">${emblem}</span>` : '') +
             `<span class="galaxy-map-ruler-text"><span class="galaxy-map-ruler-galaxy">${galaxyName}</span>` +
             `<span class="galaxy-map-ruler-label">${state}</span></span></div>`;
+        if (mode === 'split') return { ruler: ruler, sit: sit };
         return ruler + sit;
+    },
+    /** Enemy card of the selected planet: the hostile faction's hero portrait and one of its ships. */
+    enemyCardHtml(info, factionOverride) {
+        if (!info || typeof planetConfigManager === 'undefined') return '';
+        const pcm = planetConfigManager;
+        const hostile = factionOverride ? null : pcm.getHostileFactions ? pcm.getHostileFactions(info.id) : (pcm.getPlanetFactions ? pcm.getPlanetFactions(info.id) : []);
+        const f = factionOverride || (hostile && hostile[0]);
+        if (!f || (!factionOverride && this.isUnlocked && !this.isUnlocked(info.id))) return '';
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const accent = (fss && fss.getFactionStyle && (fss.getFactionStyle(f) || {}).accent) || 'var(--color-primary)';
+        const portrait = typeof heroPortrait !== 'undefined' && heroPortrait.html
+            ? heroPortrait.html(heroPortrait.heroLook(f), accent, { nobg: true }) : '';
+        const hs = typeof homeStationUI !== 'undefined' ? homeStationUI : null;
+        const shipSrc = hs && hs.factionShipSrcHd ? hs.factionShipSrcHd(f, 'assault', 4) : '';
+        const meta = pcm.getFactionMeta ? pcm.getFactionMeta(f) : null;
+        const name = String((meta && meta.hero && meta.hero.name) || f).toUpperCase();
+        const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+            ? profileSelectionManager.getFactionEmblemHtml(f, 22) : '';
+        const planetName = String(info.name || '').toUpperCase();
+        return `<div class="gm-enemy-card-in" style="--ruler-accent:${accent};${enemyCardLayout.css()}" data-ui-tip="ENEMY · ${name}">` +
+            (portrait ? `<span class="gm-enemy-avatar">${portrait}</span>` : '') +
+            `<span class="gm-enemy-title">${planetName}</span>` +
+            `<span class="gm-enemy-text">${emblem ? `<span class="gm-enemy-emblem">${emblem}</span>` : ''}<span class="gm-enemy-kind">ENEMY</span><span class="gm-enemy-name">${name}</span></span>` +
+            (shipSrc ? `<img class="gm-enemy-ship" src="${shipSrc}" alt="" draggable="false">` : '') +
+            `</div>`;
     },
     /** Holdings text for the ruler-card tooltip (not shown inline). */
     getHoldingsTip() {
@@ -74198,8 +75210,26 @@ extendClass(GalaxyMapManager, {
             `</div>`;
     },
     /** Mission modal for the situation card: what is going on here and where to go. */
-    openSituationModal() {
-        const sit = this._situation;
+    /** Current situation (invasion / active mission / conflict) of the player's galaxy, also without a mounted map. */
+    getSituationInfo() {
+        if (typeof planetConfigManager === 'undefined' || typeof profileManager === 'undefined') return null;
+        const gid = profileManager.getCurrentGalaxyId ? profileManager.getCurrentGalaxyId() : this.galaxyId;
+        if (!gid) return null;
+        const keep = { g: this.galaxyId, s: this._situation, a: this._situationAccent };
+        try {
+            this.galaxyId = gid;
+            const c = (planetConfigManager.getGalaxyControl && planetConfigManager.getGalaxyControl(gid)) || {};
+            const styleOf = (f) => (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(f) : null);
+            const emblemOf = (f, size) => (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                ? profileSelectionManager.getFactionEmblemHtml(f, size) : '');
+            this.renderGalaxySituationCard(c, emblemOf, styleOf);
+            return { sit: this._situation, accent: this._situationAccent };
+        } finally {
+            this.galaxyId = keep.g; this._situation = keep.s; this._situationAccent = keep.a;
+        }
+    },
+    openSituationModal(given) {
+        const sit = given || this._situation;
         const host = document.querySelector('.home-station-content') || document.body;
         if (!sit || !host || host.querySelector('.gm-mission-modal')) return;
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -74280,14 +75310,57 @@ extendClass(GalaxyMapManager, {
             // Map nodes follow the zoom (shared with the ship, getMapDetail);
             // big views (sector card) always get a fine grid.
             const zoomDetail = this.getMapDetail ? this.getMapDetail() : 1;
-            const detail = mapNode && this.planetDetailMul
-                ? Math.min(8, zoomDetail * this.planetDetailMul(sid))
-                : (px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail));
+            // Map nodes: cap detail for spin cost (≤8). Slightly coarser on purpose
+            // so the galaxy map stays smooth; sector-card previews stay finer.
+            let detail;
+            if (mapNode && this.planetDetailMul) {
+                detail = zoomDetail * this.planetDetailMul(sid);
+                try {
+                    const svgEl = typeof document !== 'undefined' ? document.querySelector('.galaxy-map-svg') : null;
+                    const vb = this.getMapViewBox
+                        ? this.getMapViewBox(
+                            typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 640,
+                            typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 320,
+                            typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48
+                        )
+                        : null;
+                    if (svgEl && vb && vb[2] > 0) {
+                        const screenPx = px * (svgEl.clientWidth / vb[2]);
+                        const cells = this.planetGridCells ? this.planetGridCells(sid) : 18;
+                        // ~2.5 CSS px per art cell — a bit coarser, much cheaper to spin.
+                        const need = Math.ceil(screenPx / Math.max(8, cells * 2.5));
+                        if (need > detail) detail = need;
+                        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                        // Global Pixel Size: one art cell == gp screen px.
+                        if (gp > 0) {
+                            const live = this.mapScreenScale ? this.mapScreenScale() : 0;
+                            if (live > 0) detail = Math.max(1, Math.ceil(px * live / (cells * gp) - 0.05)); // round up; snapPixelImg trims to the exact grid
+                        }
+                    }
+                } catch (e) { /* zoom detail only */ }
+                detail = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? Math.min(8, detail) : Math.min(8, detail);
+                if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) detail = Math.max(1, Math.min(8, detail));
+            } else {
+                detail = px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
+                const gp2 = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                    ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                // Global Pixel Size: big non-node views (selected planet, sector card): one art cell == gp px.
+                if (gp2 > 0) {
+                    const cells2 = this.planetGridCells ? this.planetGridCells(sid) : 18;
+                    detail = Math.max(1, Math.min(8, Math.round(px / (cells2 * gp2))));
+                }
+            }
             // Current rotation frame, so zoom re-renders don't jump.
-            // First paint must be instant: when the fine model isn't built yet, show the
-            // cheap coarse globe now; the spin timer swaps the fine one in (data-spin-frame -1).
+            // First paint: if the target model isn't ready yet, use a medium stand-in
+            // (detail 2 — still readable) and let the spin timer upgrade (data-spin-frame -1).
+            // Detail 1 was too blocky when stretched to map-node size.
             const placeholder = detail > 2 && planetSVGManager.hasSpinModel && !planetSVGManager.hasSpinModel(sid, detail, lightDir);
-            const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, placeholder ? 1 : detail, lightDir) : null;
+            const standIn = placeholder ? Math.min(2, detail) : detail;
+            const spinDetail = (planetSVGManager.clampSpinDetail
+                ? planetSVGManager.clampSpinDetail(standIn)
+                : Math.min(8, standIn));
+            const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, spinDetail, lightDir) : null;
             const realFrame = spinModel ? planetSVGManager.getPlanetSpinIndex(sid, spinModel) : null;
             const spinFrame = placeholder ? -1 : realFrame;
             let svg = spinModel ? planetSVGManager.getPlanetSpinFrame(spinModel, realFrame) : planetSVGManager.getPlanetSVGDetailed
@@ -74312,7 +75385,9 @@ extendClass(GalaxyMapManager, {
                 const big = px * conv.scale;
                 const off = -(big - px) / 2;
                 if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
-                return `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>` +
+                // Attribute carries the TARGET detail (not the placeholder's 1), so the
+                // spin timer can upgrade the coarse first paint to the fine globe.
+                return `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}" data-planet-px="${px}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>` +
                     `<img class="gm-planet-img" src="${conv.url}" alt="" draggable="false" style="width:${big}px;height:${big}px;left:${off}px;top:${off}px"></span>`;
             }
             if (svg) {
@@ -74324,7 +75399,7 @@ extendClass(GalaxyMapManager, {
                     .replace(/height="[^"]*"/, `height="${px}"`);
                 // Slow axial rotation (planet-svgs/spin-frames.js).
                 if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
-                return `<span class="gm-planet-icon" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>${svg}</span>`;
+                return `<span class="gm-planet-icon" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}" data-planet-px="${px}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>${svg}</span>`;
             }
         }
         return `<span class="gm-planet-fallback" style="width:${px}px;height:${px}px">${sid.charAt(0).toUpperCase()}</span>`;
@@ -74388,6 +75463,7 @@ extendClass(GalaxyMapManager, {
                 <div class="galaxy-map-header">
                 <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                 <div class="galaxy-map-toolbar">
+                    ${this._headerRulerHtml ? `<div class="galaxy-map-ruler is-header" style="--ruler-accent:${this._barAccent || 'var(--color-primary)'}">${this._headerRulerHtml}</div>` : ''}
                     ${this.shipBarHtml()}
                     <div class="gm-progress-col">
                     ${exploreUi}
@@ -74687,7 +75763,17 @@ extendClass(GalaxyMapManager, {
         const planetIcon = this.planetIconHtml(info.id, 260);
         const planetAtmo = this.planetAtmoColor(planetIcon);
         this._barAccent = null;
-        const rulerSegs = this.renderGalaxyRulerBadge() || '';
+        let rulerSegs;
+        this._headerRulerHtml = '';
+        if (this._mountEl) {
+            // Embedded (station) map: the galaxy ruler card moves up beside the ship bar; the bar shows the enemy instead.
+            const parts = this.renderGalaxyRulerBadge('split') || { ruler: '', sit: '' };
+            this._headerRulerHtml = parts.ruler;
+            // The situation card is now the header mission icon (tooltip), so the bottom bar is all enemy.
+            rulerSegs = `<div class="galaxy-map-ruler-seg gm-enemy-card" id="gmEnemyCard">${this.enemyCardHtml(info)}</div>`;
+        } else {
+            rulerSegs = this.renderGalaxyRulerBadge() || '';
+        }
         const barAccent = this._barAccent || 'var(--color-primary)';
         return `
             <div class="galaxy-map-panels">
@@ -74786,7 +75872,7 @@ var GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-var NEB_VERSION = 17;
+var NEB_VERSION = 21;
 var NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 var NEB_PIXEL_BUDGET = 160000;
@@ -75179,8 +76265,8 @@ extendClass(GalaxyMapManager, {
                         ${stageProgress.boss
                             // Boss stage: skull + "/4". The skull sits clear of the text's
                             // dark outline stroke, which used to paint over its right edge.
-                            ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextSvg('/' + stageProgress.total, 0, 12, 'start')}`
-                            : this.pixelTextSvg(stageProgress.next + '/' + stageProgress.total, 0, 12, 'middle')}
+                            ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextGroup('/' + stageProgress.total, 0, 12, 'start')}`
+                            : this.pixelTextGroup(stageProgress.next + '/' + stageProgress.total, 0, 12, 'middle')}
                     </g>` : ''}
                     ${!unlocked ? `
                         <g class="gm-locked-icon" transform="translate(-6,${size / 2 + 3})">
@@ -75237,6 +76323,7 @@ extendClass(GalaxyMapManager, {
             // Whole-pixel magnification of the 13×17 icon, so every pixel is the same size.
             const box = this.shipIconBox();
             const k = box.w / 11;
+            const shipPt = this.latticeShipPt ? this.latticeShipPt(x, y) : { x: x, y: y };
             const shipSvg = icon
                 ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
                 : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
@@ -75249,7 +76336,7 @@ extendClass(GalaxyMapManager, {
                 !centered &&
                 this._shipLabelReady;
             shipHtml = `
-                <g class="gm-ship-marker" transform="translate(${x},${y})">
+                <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
                     <title>YOUR SHIP</title>
                     <g class="gm-ship-scale" transform="scale(1)">
                     ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
@@ -75422,7 +76509,7 @@ extendClass(GalaxyMapManager, {
             layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.5, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         }
         // A deep, dim dust layer in the main colour gives the clouds depth.
-        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.55, sc: NEB_SCALE * 0.6, off: rnd() * 90, dust: true });
+        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.72, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
         const cxm = W / 2, cym = H / 2;
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         const sstep = (a0, a1, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (a1 - a0))); return k * k * (3 - 2 * k); };
@@ -75469,7 +76556,9 @@ extendClass(GalaxyMapManager, {
             return (h >>> 0).toString(36);
         })();
         const paint = (jobKey, cell, bx, by, cols, rows, oct, opaque) => {
-            const tag = (href) => `<image data-neb-key="${jobKey}"${href ? ` href="${href}"` : ''} x="${bx}" y="${by}" width="${cols * cell}" height="${rows * cell}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges"/>`;
+            // Empty href stays opacity:0 — an opaque fine patch with no pixels was
+            // painting as a black rectangle over the coarse nebula on some engines.
+            const tag = (href) => `<image data-neb-key="${jobKey}"${href ? ` href="${href}"` : ''} x="${bx}" y="${by}" width="${cols * cell}" height="${rows * cell}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges${href ? '' : ';opacity:0'}"/>`;
             if (this._nebUrls[jobKey]) return tag(this._nebUrls[jobKey]);
             // The finished coarse field is kept across reloads (keyed by everything that shapes it).
             const storeKey = opaque ? null : 'vf-neb:' + jobKey + ':' + nebSig;
@@ -75492,7 +76581,7 @@ extendClass(GalaxyMapManager, {
             const img = ctx.createImageData(cols, rows);
             const px = img.data;
             const lerpTone = (arr, f) => { const x = f * (arr.length - 1), i = Math.min(arr.length - 2, Math.floor(x)); return arr[i] + (arr[i + 1] - arr[i]) * (x - i); };
-            const toneAlpha = [0.05, 0.08, 0.12, 0.16];
+            const toneAlpha = [0.1, 0.16, 0.24, 0.34];
             const job = { opaque: !!opaque, cancel: false };
             this._nebJobs[jobKey] = job;
             let r = 0;
@@ -75529,7 +76618,37 @@ extendClass(GalaxyMapManager, {
                 });
                 delete this._nebJobs[jobKey];
                 if (opaque) this._nebLastFine = { key: jobKey, tag: tag(url) };
-                document.querySelectorAll(`image[data-neb-key="${jobKey}"]`).forEach((el) => el.setAttribute('href', url));
+                const applyUrl = (el) => {
+                    el.setAttribute('href', url);
+                    if (el.style && el.style.opacity === '0') el.style.opacity = '';
+                    const st = el.getAttribute('style') || '';
+                    if (st.indexOf('opacity:0') !== -1) {
+                        el.setAttribute('style', st.replace(/;?opacity:0/, ''));
+                    }
+                };
+                const mounted = document.querySelectorAll(`image[data-neb-key="${jobKey}"]`);
+                if (mounted.length) {
+                    mounted.forEach(applyUrl);
+                } else if (opaque) {
+                    // Job finished after we skipped mounting an empty placeholder —
+                    // inject the finished patch so the nebula actually appears.
+                    const neb = document.querySelector('.galaxy-map-svg .gm-nebula');
+                    if (neb) {
+                        // Fine patches are translucent now: a superseded one must go, or the two stack and brighten.
+                        neb.querySelectorAll('.gm-neb-fine image').forEach((el) => {
+                            if (el.getAttribute('data-neb-key') !== jobKey) el.remove();
+                        });
+                        let g = neb.querySelector('.gm-neb-fine');
+                        if (!g) {
+                            g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                            g.setAttribute('class', 'gm-neb-layer gm-neb-fine');
+                            const coarseG = neb.querySelector('.gm-neb-layer:not(.gm-neb-fine)');
+                            if (coarseG) coarseG.after(g);
+                            else neb.appendChild(g);
+                        }
+                        g.insertAdjacentHTML('beforeend', tag(url));
+                    }
+                }
             };
             // Swirl centres that can touch this patch, found once (not per pixel).
             const swirls = [];
@@ -75554,15 +76673,18 @@ extendClass(GalaxyMapManager, {
                 let o = lat.get(key);
                 if (o) return o;
                 const x = bx + bi * BLK * cell, y = by + bj * BLK * cell;
-                const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.9;
+                const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.55;
                 o = {
-                    envBase: (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d)),
-                    wisp: sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
-                    free: sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
+                    // Dense over the galaxy interior (where the camera / planets are);
+                    // fade only past the playable rim — not an empty hole in the middle.
+                    envBase: (0.7 + 0.3 * (1 - sstep(0.35, 0.95, d))) * (1 - sstep(1.15, 1.75, d)),
+                    wisp: sstep(0.15, 0.5, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
+                    free: sstep(0.35, 0.58, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
-                    bank: sstep(0.4, 0.62, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
-                    gm: sstep(0.6, 0.74, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
-                    veil: layers.map((_, li) => sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
+                    // Softer banks so voids don't wipe the whole planet field.
+                    bank: 0.35 + 0.65 * sstep(0.28, 0.55, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    gm: sstep(0.55, 0.72, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
+                    veil: layers.map((_, li) => sstep(0.25, 0.65, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
                 if (lat.size > 6000) lat.clear();
                 lat.set(key, o);
@@ -75580,9 +76702,10 @@ extendClass(GalaxyMapManager, {
                 sl.k = Math.round(slRaw.k * 14) / 14; sl.rgb = slRaw.rgb;
                 lw.wisp = mix('wisp') * 0.5;
                 lw.wispK = lw.wisp / 0.5;
-                const freeCloud = Math.max(mix('free') * 0.35, lw.wisp);
+                const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
-                lw.envNear = mix('envBase') * sunFade;
+                // Ambient floor so the planet field keeps a veil even between suns.
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.45);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -75655,7 +76778,7 @@ extendClass(GalaxyMapManager, {
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.34 * veil * Math.min(0.6, (L.dust ? lerpTone([0.11, 0.16], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.7 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
@@ -75667,9 +76790,15 @@ extendClass(GalaxyMapManager, {
                         if (mx > 150) { const k = 150 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
-                        // Over black: premultiplied colour, fully opaque.
-                        px[o] = Math.min(255, R); px[o + 1] = Math.min(255, G); px[o + 2] = Math.min(255, B);
-                        px[o + 3] = 255;
+                        // Fine patch used to write every pixel at alpha 255 over black.
+                        // Empty cells then painted a solid black plate that hid the
+                        // coarse nebula (and looked like "no nebula" on the map).
+                        // Keep real coverage as alpha so gaps let the coarse field show.
+                        if (A <= 0) { px[o + 3] = 0; continue; }
+                        px[o] = Math.min(255, R / A);
+                        px[o + 1] = Math.min(255, G / A);
+                        px[o + 2] = Math.min(255, B / A);
+                        px[o + 3] = Math.min(255, Math.round(A * 255));
                         continue;
                     }
                     if (A <= 0) continue;
@@ -75701,10 +76830,14 @@ extendClass(GalaxyMapManager, {
             const fineTag = paint(fk, cell, fine.x, fine.y, Math.ceil(fine.w / cell), Math.ceil(fine.h / cell), oct, true);
             // Keep the last finished patch underneath until the new one is ready
             // (otherwise the coarse field flashes through while it computes).
+            // Do not mount an empty fine <image> — it hid the coarse nebula and
+            // finish() now injects the patch when the job completes.
             const prev = this._nebLastFine;
-            const prevTag = prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
+            // Translucent patches: show the new one alone once ready; the old one only bridges the wait.
+            const readyFine = this._nebUrls[fk] ? fineTag : '';
+            const prevTag = !readyFine && prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
             if (this._nebUrls[fk]) this._nebLastFine = { key: fk, tag: fineTag };
-            out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${fineTag}</g>`;
+            if (prevTag || readyFine) out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${readyFine}</g>`;
         }
         const W5 = 6;
         // Distant pixel galaxies: tilted ellipse of pixels, bright core.
@@ -75934,9 +77067,21 @@ extendClass(GalaxyMapManager, {
         const d = this.getMapDetail ? this.getMapDetail() : 1;
         // Thinner in map units as the zoom detail rises, so lines stay
         // about the same thickness on screen instead of growing chunky.
-        const width = (o.width || 2.6) / this.getLineDetail();
+        let width = (o.width || 2.6) / this.getLineDetail();
         // Fine grid (smoother diagonals), but never more than ~8 px across.
-        const p = Math.max(1 / d, width / 8);
+        let p = Math.max(1 / d, width / 8);
+        // Global Pixel Size: lines are built from exactly the global pixel (and at least one pixel thick).
+        const gpl = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gpl > 0) {
+            // Lines keep their map-unit geometry (they zoom with the map and get thicker as you zoom in), but
+            // never thinner than one pixel-screen cell plus 1px, so the cell sampler always hits them fully.
+            const liveL = this.mapScreenScale();
+            if (liveL > 0) {
+                width = Math.max(width, (gpl + 1.05) / liveL);
+                p = Math.max(1 / d, width / 8);
+            }
+        }
         const rad = width / 2 / p;          // brush radius in pixels
         // Energy beam: white-hot centre, coloured core, glow, faint halo.
         const hotRad = Math.max(0.5, rad * 0.4);
@@ -76109,9 +77254,10 @@ extendClass(GalaxyMapManager, {
             `<rect class="gm-invasion-ring" x="${-f}" y="${-f}" width="${f * 2}" height="${f * 2}"/>` +
             `<rect class="gm-invasion-ring gm-invasion-ring-2" x="${-f - 6}" y="${-f - 6}" width="${f * 2 + 12}" height="${f * 2 + 12}"/>` +
             this.planetBattleSvg(planetId) +
-            `<text class="gm-invasion-label" x="0" y="${f + 14}">UNDER ATTACK</text>` +
+            `<text class="gm-invasion-label gm-vec-text" x="0" y="${f + 14}">UNDER ATTACK</text>` +
+            `<g class="gm-stage-anchor gm-px-only" data-r="${f + 14}" transform="translate(0,${f + 14})">${this.pixelTextGroup('UNDER ATTACK', 0, 0, 'middle')}</g>` +
             `<foreignObject x="${f - 10}" y="${-f - 10}" width="20" height="20">` +
-            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem">${emblem}</div></foreignObject>` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem" data-fac="${inv.attacker}">${emblem}</div></foreignObject>` +
             `</g>`;
     },
     /**
@@ -76155,7 +77301,7 @@ extendClass(GalaxyMapManager, {
         if (typeof profileSelectionManager === 'undefined' || !profileSelectionManager.getFactionEmblemHtml) return '';
         // Bare faction icons — no boxes around them.
         const names = visibleFactions.map((f) =>
-            `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16, this.getMapDetail())}</span>`
+            `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16, (uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? 1 : this.getMapDetail())}</span>`
         ).join('');
         const w = 80;
         const h = 18;
@@ -76182,12 +77328,156 @@ extendClass(GalaxyMapManager, {
     },
     /** Stage counter size: big when zoomed out (readable), settling down as you zoom in. */
     stageTextScale() {
+        // Global Pixel Size: one glyph cell is one grid cell on screen at every zoom.
+        const gpS = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gpS > 0) {
+            const liveS = this.mapScreenScale();
+            if (liveS > 0) return gpS / liveS;
+        }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? Math.max(1, this.mapZoom) : 1;
         return 1 + 1.5 / z;
     },
+    /** Screen px per map unit right now (zoom included), read from the live SVG; 0 if unavailable. */
+    mapScreenScale() {
+        const svgEl = document.querySelector('.galaxy-map-svg');
+        if (!svgEl || !svgEl.clientWidth) return 0;
+        // Exact px per user unit (viewBox + preserveAspectRatio letterboxing included).
+        try {
+            const m = svgEl.getScreenCTM();
+            if (m && m.a > 0) return m.a;
+        } catch (e) { /* fall back below */ }
+        const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+        return vb && vb.width > 0 && vb.height > 0
+            ? Math.min(svgEl.clientWidth / vb.width, svgEl.clientHeight / vb.height) : 0;
+    },
+    /** Global Pixel Size: put the ship marker centre where its icon box (odd cell counts sit half a cell off) lands on the lattice. */
+    latticeShipPt(x, y) {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        // The pixel screen filter owns alignment now; keep the true position.
+        return { x: x, y: y };
+        const live = gp > 0 ? this.mapScreenScale() : 0;
+        if (!(live > 0)) return { x: x, y: y };
+        const u = gp / live;
+        const dk = Math.max(1, Math.round(this.getMapDetail()));
+        const ox = ((13 * dk) % 2) * u / 2, oy = ((17 * dk) % 2) * u / 2;
+        return { x: Math.round((x - ox) / u) * u + ox, y: Math.round((y - oy) / u) * u + oy };
+    },
+    /**
+     * Global Pixel Size: faction crests are 16x16 sprites, shown with one sprite pixel per grid cell
+     * (16 cells wide) so they stay recognisable; reset to the normal sizes when the setting is off.
+     */
+    snapMapEmblems() {
+        const svg = document.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const live = gp > 0 ? this.mapScreenScale() : 0;
+        const on = gp > 0 && live > 0;
+        // Cells across the sprite: 16 at normal size, fewer when zoomed out so the crest shrinks with its planet.
+        const cellsFor = (origMapSize) => {
+            const o = origMapSize * live / gp;
+            return o >= 12 ? 16 : o >= 6 ? 8 : 4;
+        };
+        const D = on ? cellsFor(16) * gp / live : 0;
+        const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
+        svg.querySelectorAll('.gm-node-faction-icon').forEach((el) => {
+            el.style.width = on ? D + 'px' : '';
+            el.style.height = on ? D + 'px' : '';
+            const im = el.querySelector('img');
+            if (im) { im.style.width = on ? D + 'px' : ''; im.style.height = on ? D + 'px' : ''; }
+        });
+        svg.querySelectorAll('.gm-invasion-emblem').forEach((el) => {
+            const fo = el.closest('foreignObject');
+            if (!fo) return;
+            if (el.dataset.orig == null) {
+                el.dataset.orig = el.innerHTML;
+                el.dataset.fo = [fo.getAttribute('x'), fo.getAttribute('y'), fo.getAttribute('width'), fo.getAttribute('height')].join(',');
+            }
+            const o = el.dataset.fo.split(',').map(Number);
+            if (on && psm && psm.getFactionEmblemHtml && el.dataset.fac) {
+                if (el.dataset.px !== '1') { el.innerHTML = psm.getFactionEmblemHtml(el.dataset.fac, 16, 1); el.dataset.px = '1'; }
+                const Di = cellsFor(Math.max(1, o[2] - 8)) * gp / live;
+                const B = Di + 8, cx = o[0] + o[2] / 2, cy = o[1] + o[3] / 2;
+                fo.setAttribute('x', cx - B / 2); fo.setAttribute('y', cy - B / 2);
+                fo.setAttribute('width', B); fo.setAttribute('height', B);
+                el.style.width = B + 'px'; el.style.height = B + 'px';
+                const im = el.querySelector('img');
+                if (im) { im.style.width = Di + 'px'; im.style.height = Di + 'px'; }
+            } else if (el.dataset.px === '1') {
+                el.innerHTML = el.dataset.orig; el.dataset.px = '';
+                ['x', 'y', 'width', 'height'].forEach((a, i) => fo.setAttribute(a, o[i]));
+                el.style.width = ''; el.style.height = '';
+            }
+        });
+    },
+    /** Lattice geometry of a planet icon: cell size u (map units) and the node centre / icon box size. */
+    planetLatticeGeo(iconEl, size, live) {
+        const gp = uiAppearanceManager.getGlobalPixelPx();
+        const node = iconEl.closest('.gm-node');
+        const m = node && /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(node.getAttribute('transform') || '');
+        return null; // no per-object lattice: the pixel screen filter aligns everything
+        // eslint-disable-next-line no-unreachable
+        if (!m || !(gp > 0) || !(live > 0)) return null;
+        return { u: gp / live, cx: +m[1], cy: +m[2], size: size };
+    },
+    /** Global Pixel Size: snap every planet image on the map to the global pixel grid. */
+    snapMapPlanets() {
+        const svg = document.querySelector('.galaxy-map-svg');
+        const gp0 = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        this.snapMapEmblems();
+        if (svg && gp0 > 0 && uiAppearanceManager.ensureMapPxFilter) uiAppearanceManager.ensureMapPxFilter(gp0, svg);
+        if (svg) {
+            svg.querySelectorAll('.gm-px-txt').forEach((g) => {
+                g.innerHTML = this.pixelTextSvg(g.dataset.s, +g.dataset.x, +g.dataset.y, g.dataset.a);
+            });
+            const kS = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
+            svg.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${kS})`));
+        }
+        const live = this.mapScreenScale();
+        if (!svg || !(live > 0) || typeof planetSVGManager === 'undefined' || !planetSVGManager.snapPixelImg) return;
+        svg.querySelectorAll('.gm-planet-icon-img').forEach((el) => {
+            const im = el.querySelector('img.gm-planet-img');
+            if (!im) return;
+            const raw = im._rawUrl || im.getAttribute('src');
+            const px = Number(el.getAttribute('data-planet-px')) || 0;
+            const w = px * (im._frameK || 1.6);
+            if (raw && px > 0) planetSVGManager.snapPixelImg(im, raw, w * live, gp0 > 0 ? this.planetLatticeGeo(el, px, live) : { live: live, size: px });
+        });
+    },
+    /** Global Pixel Size: bucket of the on-screen scale (~12% steps) so art is re-baked while zooming between detail steps. */
+    getMapScaleKey() {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (!(gp > 0)) return 0;
+        const s = this.mapScreenScale();
+        return s > 0 ? Math.round(Math.log(s) / Math.log(1.12)) : 0;
+    },
     getMapDetail() {
+        // Global Pixel Size: pick the detail so one map art pixel == gp screen px.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            // Cached: this runs several times per zoom frame and clientWidth forces a layout.
+            const zk = (typeof this.mapZoom === 'number' ? this.mapZoom : 1).toFixed(3) + '|' + gp + '|' + window.innerWidth;
+            if (this._pxDetailKey === zk && this._pxDetail) return this._pxDetail;
+            try {
+                // Real on-screen scale: the live (already zoomed) viewBox vs the element width.
+                const s = this.mapScreenScale();
+                if (s > 0) {
+                    this._pxDetailKey = zk;
+                    this._pxScreenScale = s;
+                    this._pxDetail = Math.max(1, Math.min(16, Math.round(GM_PIXEL_U0 * s / gp)));
+                    return this._pxDetail;
+                }
+            } catch (e) { /* fall through to zoom steps */ }
+        }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
-        return z >= 2.5 ? 4 : (z >= 1.35 ? 2 : 1);
+        // Cap at 8 — map planet spin past that tanks frame time.
+        if (z >= 3.5) return 8;
+        if (z >= 2.5) return 4;
+        if (z >= 1.35) return 2;
+        return 1;
     },
     /**
      * Keep map objects visually proportional while the camera zooms.
@@ -76236,7 +77526,9 @@ extendClass(GalaxyMapManager, {
         const key = (model.id || model.name || 'ship') + '|' + (model.layout ? JSON.stringify(model.layout).length : 0);
         this._shipIcons = this._shipIcons && this._shipIconsKey === key ? this._shipIcons : {};
         this._shipIconsKey = key;
-        const cacheKey = dk + '|' + outlinePx;
+        const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const cacheKey = dk + '|' + outlinePx + '|' + gpx;
         if (this._shipIcons[cacheKey]) return this._shipIcons[cacheKey];
         let url = null;
         try {
@@ -76244,7 +77536,16 @@ extendClass(GalaxyMapManager, {
             // Small render → coarse voxels when scaled up pixelated on the map.
             inner.width = 11 * dk;
             inner.height = 15 * dk;
-            shipRenderer.renderShipPreview(inner, model, 1);
+            // Global Pixel Size: the hull's own voxels must be exactly one canvas texel
+            // (the map shows one texel as one global pixel), not its private lattice.
+            const ldr = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;
+            const prevCell = ldr ? ldr.globalVoxelCell : null;
+            if (ldr && gpx > 0) ldr.globalVoxelCell = 1;
+            try {
+                shipRenderer.renderShipPreview(inner, model, 1);
+            } finally {
+                if (ldr) ldr.globalVoxelCell = prevCell;
+            }
             // Dark outline (1 base pixel wide, at least 1 px), pixel-exact:
             // empty pixels touching the ship become dark.
             const c = document.createElement('canvas');
@@ -76340,8 +77641,16 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
             return;
         }
-        const px = (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
-        const key = s.toFixed(4);
+        // Global Pixel Size: sizes are whole grid cells (a cell is the filter's sampling unit), so the marks are exact pixel art.
+        const gpf = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        // The pixel screen needs the exact on-screen scale (the cached estimate can be ~20% off).
+        const sx = gpf > 0 ? this.mapScreenScale() : 0;
+        // +1px: the filter samples one px per cell, so a mark must fully cover a sample wherever it sits.
+        const px = gpf > 0
+            ? (n) => (Math.max(1, Math.round(n / gpf)) * gpf + 1.05) / (sx > 0 ? sx : s)
+            : (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
+        const key = (sx > 0 ? sx : s).toFixed(4) + '|' + gpf;
         // Only visible frames (selected / hovered) are rebuilt per zoom frame;
         // the rest catch up when they get selected (syncNodeHighlight).
         svg.querySelectorAll(':is(.gm-node, .gm-post-node, .gm-border-station):is(.selected, .hovered) .gm-frame-slot').forEach((slot) => {
@@ -76532,6 +77841,26 @@ extendClass(GalaxyMapManager, {
         return [cx - w / 2, cy - h / 2, w, h];
     },
     /**
+     * Align mapZoom / pan with the SVG's live viewBox (flight and camera
+     * anims write the viewBox directly; without this, the next re-render
+     * snaps to a stale mapZoom — usually a zoom-out jump on arrival).
+     */
+    adoptViewBoxZoom(svg) {
+        const el = svg || (this.overlay && this.overlay.querySelector('.galaxy-map-svg'));
+        if (!el || !el.viewBox || !el.viewBox.baseVal) return;
+        const vb = el.viewBox.baseVal;
+        if (!(vb.width > 0) || !(vb.height > 0)) return;
+        const z0 = this.mapZoom;
+        this.mapZoom = 1;
+        const base = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+        this.mapZoom = z0;
+        const next = Math.min(12, Math.max(0.35, base[2] / vb.width));
+        this.mapZoom = next;
+        this._userMapZoom = next;
+        this._panAnchor = { x: vb.x + vb.width / 2, y: vb.y + vb.height / 2 };
+        this.mapPan = { x: 0, y: 0 };
+    },
+    /**
      * Camera: when the selection changes, glide (animated viewBox) so both
      * the player ship and the selected planet / station are in view. Only
      * zooms out if they don't fit; never zooms in past the player's zoom.
@@ -76586,10 +77915,11 @@ extendClass(GalaxyMapManager, {
         const cx = (x0 + x1) / 2;
         const cy = (y0 + y1) / 2;
         const to = [cx - w / 2, cy - h / 2, w, h];
-        // Persist as the camera state getMapViewBox uses on re-render.
-        this.mapZoom = (this.mapZoom || 1) * (cur.width / w);
+        // Pan target now; commit mapZoom only when the glide finishes so an
+        // interrupted anim (flight start) cannot leave a stale zoom behind.
         this._panAnchor = { x: cx, y: cy };
         this.mapPan = { x: 0, y: 0 };
+        const targetZoom = (this.mapZoom || 1) * (cur.width / w);
         // Animate the viewBox: centre moves linearly, zoom in log space, so pan and zoom stay in sync.
         const start = performance.now();
         const fcx = from[0] + from[2] / 2, fcy = from[1] + from[3] / 2;
@@ -76599,7 +77929,11 @@ extendClass(GalaxyMapManager, {
         const lw0 = Math.log(from[2]), lw1 = Math.log(w);
         const token = (this._camAnim = {});
         const step = (now) => {
-            if (this._camAnim !== token || !svg.isConnected || this._flight) return;
+            if (this._camAnim !== token || !svg.isConnected || this._flight) {
+                // Flight / cancel: keep whatever viewBox is showing.
+                if (this._flight && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
+                return;
+            }
             const t = Math.min(1, (now - start) / dur);
             const k = ease(t);
             const vw = Math.exp(lw0 + (lw1 - lw0) * k);
@@ -76607,7 +77941,14 @@ extendClass(GalaxyMapManager, {
             const vcx = fcx + (cx - fcx) * k, vcy = fcy + (cy - fcy) * k;
             svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
             this.updateSelectionFrames();
-            if (t < 1) requestAnimationFrame(step);
+            if (t < 1) {
+                requestAnimationFrame(step);
+                return;
+            }
+            this.mapZoom = targetZoom;
+            this._panAnchor = { x: cx, y: cy };
+            this.mapPan = { x: 0, y: 0 };
+            this._camAnim = null;
         };
         requestAnimationFrame(step);
     },
@@ -76708,7 +78049,9 @@ extendClass(GalaxyMapManager, {
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
             const detail = this.getMapDetail();
-            if (this._mapArtDetail === detail && force === true) {
+            const skey = this.getMapScaleKey();
+            const same = this._mapArtDetail === detail && this._mapArtSKey === skey;
+            if (same && force === true) {
                 // Same detail, view left the fine nebula patch: only swap space.
                 // Build the space layer alone (not the whole map).
                 const fresh = document.createElement('div');
@@ -76717,7 +78060,7 @@ extendClass(GalaxyMapManager, {
                 if (next && old) old.replaceWith(next);
                 return;
             }
-            if (this._mapArtDetail === detail && force === 'lines') {
+            if (same && force === 'lines') {
                 // Only the line thickness step changed: swap the lines alone.
                 this._mapLineDetail = this.getLineDetail();
                 const old = cur.querySelector('.gm-lines');
@@ -76725,8 +78068,9 @@ extendClass(GalaxyMapManager, {
                 if (this.syncRoutePreview) this.syncRoutePreview();
                 return;
             }
-            if (this._mapArtDetail === detail) return;
+            if (same) return;
             this._mapArtDetail = detail;
+            this._mapArtSKey = skey;
             this._mapLineDetail = this.getLineDetail();
             // Stars / lines are drawn on the art pixel grid: swap in fresh ones.
             // Only these layers are built — rendering the whole map here made
@@ -76767,12 +78111,19 @@ extendClass(GalaxyMapManager, {
                 if (post) art.innerHTML = this.stationArtImage(post, detail, node.classList.contains('open'));
             });
             applyShip();
+            this.snapMapPlanets();
         };
         let apply = () => {
+            clearTimeout(this._snapTimer);
+            this._snapTimer = setTimeout(() => this.snapMapPlanets(), 250);
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
             cur.classList.toggle('gm-close-view', (this.mapZoom || 1) >= 2.5);
             // Only the camera moves: set the viewBox directly (no re-render).
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0
+                && uiAppearanceManager.ensureMapPxFilter) {
+                uiAppearanceManager.ensureMapPxFilter(uiAppearanceManager.getGlobalPixelPx(), cur);
+            }
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
             this.updateSelectionFrames();
@@ -76781,7 +78132,7 @@ extendClass(GalaxyMapManager, {
             if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
-            if (this._mapArtDetail === this.getMapDetail()) {
+            if (this._mapArtDetail === this.getMapDetail() && this._mapArtSKey === this.getMapScaleKey()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
                     this._lineTimer = setTimeout(() => swapDetail('lines'), this._zoomAnim ? 120 : 0);
@@ -76808,13 +78159,51 @@ extendClass(GalaxyMapManager, {
                 const b = this.shipIconBox();
                 ['x', 'y', 'width', 'height'].forEach((a, i) => shipImg.setAttribute(a, [b.x, b.y, b.w, b.h][i].toFixed(3)));
             }
+            // Global Pixel Size: re-seat the resting marker on the lattice (the true spot is kept in data-tx/ty).
+            const mk = cur && cur.querySelector(':scope > .gm-ship-marker');
+            if (mk && !this._flight && this.latticeShipPt) {
+                if (mk.dataset.tx == null) {
+                    const mm = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(mk.getAttribute('transform') || '');
+                    if (mm) { mk.dataset.tx = mm[1]; mk.dataset.ty = mm[2]; }
+                }
+                if (mk.dataset.tx != null) {
+                    const sp = this.latticeShipPt(+mk.dataset.tx, +mk.dataset.ty);
+                    mk.setAttribute('transform', `translate(${sp.x},${sp.y})`);
+                }
+            }
         };
         // Any manual camera input stops a running glide, which would
         // otherwise keep writing its own viewBox and snap the zoom back.
         const stopGlide = () => { this._camAnim = null; };
         const stopZoom = () => { this._zoomAnim = null; };
         this._mapArtDetail = this.getMapDetail();
+        this._mapArtSKey = this.getMapScaleKey();
+        // Global Pixel Size: the first render happens before the SVG is laid out, so seat everything on the lattice once it is.
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) {
+            clearTimeout(this._detailTimer);
+            this._detailTimer = setTimeout(() => { this._mapArtSKey = null; swapDetail(); }, 450);
+        }
         this._mapLineDetail = this.getLineDetail();
+        // Global Pixel Size changed (settings slider): drop the cached detail and rebuild the map art.
+        this._swapMapDetail = swapDetail;
+        if (!this._pxEvtBound) {
+            this._pxEvtBound = true;
+            window.addEventListener('vf:pixelsize', () => {
+                try {
+                    const cv = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+                    const g0 = uiAppearanceManager.getGlobalPixelPx();
+                    if (cv && g0 > 0) uiAppearanceManager.ensureMapPxFilter(g0, cv);
+                    if (cv && !(g0 > 0)) cv.style.translate = '';
+                } catch (e) { /* no map */ }
+                this._pxDetailKey = null;
+                this._mapArtDetail = -1;
+                clearTimeout(this._detailTimer);
+                this._detailTimer = setTimeout(() => {
+                    try { if (this._swapMapDetail) this._swapMapDetail(); } catch (e) { /* map not mounted */ }
+                    try { this.updateSelectionFrames(); } catch (e) { /* map not mounted */ }
+                }, 60);
+            });
+        }
         const delayShipLabel = () => {
             this._shipLabelReady = false;
             clearTimeout(this._shipLabelTimer);
@@ -76900,7 +78289,7 @@ extendClass(GalaxyMapManager, {
             const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
             if (!this._zoomAnim) syncZoomToView();
             const from = this._zoomAnim ? this._zoomAnim.target : (this.mapZoom || 1);
-            const target = Math.min(12, Math.max(0.35, from * Math.exp(-Math.max(-120, Math.min(120, dy)) * 0.0022)));
+            let target = Math.min(12, Math.max(0.35, from * Math.exp(-Math.max(-120, Math.min(120, dy)) * 0.0022)));
             if (target === from && !this._zoomAnim) return;
             const running = !!this._zoomAnim;
             this._zoomAnim = { target: target, pt: pt };
@@ -77249,6 +78638,13 @@ extendClass(GalaxyMapManager, {
     },
     /** The one pixel size of the whole map (map units per art pixel) at the current zoom detail. */
     mapPixelUnitGlobal() {
+        // Global Pixel Size: exact map units per art pixel (not stepped by the integer detail),
+        // so ship / stations / sun match the chosen size at bake time.
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0 && this.getMapDetail) {
+            this.getMapDetail();
+            if (this._pxScreenScale > 0) return uiAppearanceManager.getGlobalPixelPx() / this._pxScreenScale;
+        }
         return GM_PIXEL_U0 / (this.getMapDetail ? this.getMapDetail() : 1);
     },
     /**
@@ -77290,12 +78686,20 @@ extendClass(GalaxyMapManager, {
      * Text as pixel rects (baseline at y), with a dark one-pixel outline so
      * it reads on any background. anchor: 'start' | 'middle'.
      */
+    /** pixelTextSvg wrapped so it can be rebuilt in place when the Pixel Size setting changes. */
+    pixelTextGroup(str, x, y, anchor) {
+        return `<g class="gm-px-txt" data-s="${String(str).replace(/"/g, '')}" data-x="${x}" data-y="${y}" data-a="${anchor || 'start'}">${this.pixelTextSvg(str, x, y, anchor)}</g>`;
+    },
     pixelTextSvg(str, x, y, anchor, px) {
+        // Global Pixel Size: glyph cell = 1 local unit (the anchor group scales it to one grid cell on screen),
+        // always the 5x7 font, each lit cell padded by 1px so the one-sample-per-cell screen keeps every pixel.
+        const gpT = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
         const P = px || 1.5;
         // Zoomed in the text switches to finer bitmap fonts (3x5 → 5x7 → 7x9) of the same
         // height, so the pixels get smaller but stay square and the digits stay legible.
         const detail = this.getMapDetail ? this.getMapDetail() : 1;
-        const lvl = detail >= 4 ? 2 : (detail >= 2 ? 1 : 0);
+        const lvl = gpT > 0 ? 1 : (detail >= 4 ? 2 : (detail >= 2 ? 1 : 0));
         const text = String(str).split('');
         let glyphs, gw, gh;
         if (lvl === 0) {
@@ -77304,7 +78708,8 @@ extendClass(GalaxyMapManager, {
             const font = lvl === 1 ? this.PIXEL_GLYPHS_5X7 : this.PIXEL_GLYPHS_7X9;
             glyphs = text.map((c) => (font[c] || font[' ']).split(',')); gw = lvl === 1 ? 5 : 7; gh = lvl === 1 ? 7 : 9;
         }
-        const F = (5 * P) / gh;
+        const F = gpT > 0 ? 1 : (5 * P) / gh;
+        const Fw = gpT > 0 ? 1 + 1.05 / gpT : F;
         const step = gw + 1, cols = glyphs.length * step - 1;
         const on = new Set();
         glyphs.forEach((g, i) => g.forEach((row, ry) => row.split('').forEach((b, rx) => {
@@ -77313,7 +78718,7 @@ extendClass(GalaxyMapManager, {
         const x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
         const y0 = y - gh * F;
         let outline = '', fill = '';
-        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F).toFixed(3)}" y="${(y0 + cy * F).toFixed(3)}" width="${F.toFixed(3)}" height="${F.toFixed(3)}" class="${cls}"/>`;
+        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F).toFixed(3)}" y="${(y0 + cy * F).toFixed(3)}" width="${Fw.toFixed(3)}" height="${Fw.toFixed(3)}" class="${cls}"/>`;
         for (let cy = -1; cy <= gh; cy++) {
             for (let cx = -1; cx <= cols; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
@@ -77488,6 +78893,23 @@ extendClass(GalaxyMapManager, {
         return fid ? factionShipStyles.getFactionStyle(fid) : null;
     },
 });
+
+// Capital letters for the 5x7 map font (used by the pixel screen's text, e.g. "UNDER ATTACK").
+GalaxyMapManager.prototype.PIXEL_GLYPHS_5X7 = Object.assign({
+    A: '01110,10001,10001,11111,10001,10001,10001', B: '11110,10001,10001,11110,10001,10001,11110',
+    C: '01110,10001,10000,10000,10000,10001,01110', D: '11110,10001,10001,10001,10001,10001,11110',
+    E: '11111,10000,10000,11110,10000,10000,11111', F: '11111,10000,10000,11110,10000,10000,10000',
+    G: '01110,10001,10000,10111,10001,10001,01111', H: '10001,10001,10001,11111,10001,10001,10001',
+    I: '01110,00100,00100,00100,00100,00100,01110', J: '00111,00010,00010,00010,00010,10010,01100',
+    K: '10001,10010,10100,11000,10100,10010,10001', L: '10000,10000,10000,10000,10000,10000,11111',
+    M: '10001,11011,10101,10101,10001,10001,10001', N: '10001,11001,10101,10011,10001,10001,10001',
+    O: '01110,10001,10001,10001,10001,10001,01110', P: '11110,10001,10001,11110,10000,10000,10000',
+    Q: '01110,10001,10001,10001,10101,10010,01101', R: '11110,10001,10001,11110,10100,10010,10001',
+    S: '01111,10000,10000,01110,00001,00001,11110', T: '11111,00100,00100,00100,00100,00100,00100',
+    U: '10001,10001,10001,10001,10001,10001,01110', V: '10001,10001,10001,10001,10001,01010,00100',
+    W: '10001,10001,10001,10101,10101,11011,10001', X: '10001,10001,01010,00100,01010,10001,10001',
+    Y: '10001,10001,01010,00100,00100,00100,00100', Z: '11111,00001,00010,00100,01000,10000,11111'
+}, GalaxyMapManager.prototype.PIXEL_GLYPHS_5X7);
 
 
 /* --- js/ui/galaxy-map/render-explore-controls-part8.js?v=1791506827 --- */
@@ -78077,7 +79499,7 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -78155,7 +79577,8 @@ extendClass(GalaxyMapManager, {
         const ship = svg.querySelector(':scope > .gm-ship-marker');
         if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
             const q = px(byId[loc.id]);
-            ship.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+            const sq = this.latticeShipPt ? this.latticeShipPt(q.x, q.y) : q;
+            ship.setAttribute('transform', 'translate(' + sq.x.toFixed(3) + ',' + sq.y.toFixed(3) + ')');
         }
         this._orbitTick = (this._orbitTick || 0) + 1;
         const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
@@ -78165,8 +79588,13 @@ extendClass(GalaxyMapManager, {
         if (this._orbitTimer) return;
         this._orbitTimer = setInterval(() => {
             if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
+            if (document.hidden) return;
+            try {
+                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off'
+                    || document.documentElement.getAttribute('data-vf-performance') != null) return;
+            } catch (e) { /* tick */ }
             this.tickOrbits();
-        }, 66);
+        }, 100);
     },
     getSelectedPost() {
         if (!this.selectedPostId) return null;
@@ -78183,7 +79611,7 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;
@@ -78360,6 +79788,8 @@ extendClass(GalaxyMapManager, {
             const el = this.overlay.querySelector('#' + id);
             if (el) el.textContent = text;
         };
+        const enemyEl = this.overlay.querySelector('#gmEnemyCard');
+        if (enemyEl) enemyEl.innerHTML = (this.selectedBorder || this.getSelectedPost()) ? '' : this.enemyCardHtml(info);
         const border = this.selectedBorder;
         if (border) {
             const nm = (id) => String((this.getPlanetInfo(id) || {}).name || id).toUpperCase();
@@ -78815,6 +80245,11 @@ extendClass(GalaxyMapManager, {
         const from = this.locationPoint(current);
         const to = this.locationPoint({ kind: kind, id: id });
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        // Stop camera / wheel glides and lock zoom to the live viewBox so the
+        // flight's fixed width matches what the player actually sees.
+        this._camAnim = null;
+        this._zoomAnim = null;
+        if (svg && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
         const originalViewBox = svg && svg.getAttribute('viewBox');
         const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!from || !to || !svg || reduced) {
@@ -78870,7 +80305,8 @@ extendClass(GalaxyMapManager, {
             const path = f.path || [f.from, f.to];
             const at = this.pointOnPath(path, e);
             f.t = t;
-            f.ship.setAttribute('transform', `translate(${at.x},${at.y})`);
+            const sat = this.latticeShipPt ? this.latticeShipPt(at.x, at.y) : at;
+            f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
             if (vb.length === 4 && vb.every(Number.isFinite)) {
                 f.svg.setAttribute('viewBox', `${at.x - vb[2] / 2} ${at.y - vb[3] / 2} ${vb[2]} ${vb[3]}`);
@@ -78889,20 +80325,13 @@ extendClass(GalaxyMapManager, {
         const f = this._flight;
         this._flight = null;
         if (f && f.svg) {
-            const vb = f.svg.viewBox && f.svg.viewBox.baseVal;
-            if (f.to && Number.isFinite(f.to.x) && Number.isFinite(f.to.y)
-                && vb && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
+            // Keep the flight zoom: commitFlight re-renders from mapZoom, which
+            // must match the viewBox width we were flying with (not a stale
+            // frameSelectionCamera target that zooms out on arrival).
+            if (this.adoptViewBoxZoom) this.adoptViewBoxZoom(f.svg);
+            if (f.to && Number.isFinite(f.to.x) && Number.isFinite(f.to.y)) {
                 this._panAnchor = { x: f.to.x, y: f.to.y };
-                this.mapPan = null;
-            } else if (vb && Number.isFinite(vb.x) && Number.isFinite(vb.y)
-                && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
-                // Keep the camera at the destination when commitFlight rebuilds
-                // the map instead of restoring the pre-flight viewBox.
-                this._panAnchor = {
-                    x: vb.x + vb.width / 2,
-                    y: vb.y + vb.height / 2
-                };
-                this.mapPan = null;
+                this.mapPan = { x: 0, y: 0 };
             }
         }
         if (f && f.g && f.g.parentNode) f.g.parentNode.removeChild(f.g);
@@ -79690,6 +81119,7 @@ extendClass(ProfileSelectionManager, {
         this.isVisible = false;
         if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-pf');
         if (typeof menuStateManager !== 'undefined') menuStateManager.save({ pmode: null, pstep: null, pstation: false });
+        if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.unmount();
         if (this._keyHandler) {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;
@@ -80340,21 +81770,52 @@ extendClass(ProfileSelectionManager, {
         picks.style.setProperty('--pp-tile', tile + 'px');
         picks.style.setProperty('--pp-gap', gap + 'px');
     },
-    /** Keep picker tiles fitted on first paint and when the dialog resizes. */
+    /**
+     * Size the big preview portrait to the largest 48×54 box that fits the card's
+     * left column. CSS aspect-ratio + grid stretch doesn't reliably derive both
+     * axes together once max-width clamps the free one, so measure in px instead
+     * (same reasoning as fitPilotPicks above).
+     */
+    fitPilotPortrait() {
+        const ov = this.overlay;
+        if (!ov || !ov.querySelector('.is-pilot-step')) return;
+        const card = ov.querySelector('.profile-pilot-card');
+        const portrait = ov.querySelector('.profile-pilot-portrait');
+        if (!card || !portrait) return;
+        const ratio = 48 / 54;
+        const availH = card.clientHeight;
+        if (!(availH > 0)) return;
+        const maxW = Math.min(card.clientWidth * 0.55, 640);
+        let w = Math.floor(availH * ratio);
+        if (w > maxW) w = Math.floor(maxW);
+        const h = Math.floor(w / ratio);
+        card.style.setProperty('--pp-portrait-w', w + 'px');
+        card.style.setProperty('--pp-portrait-h', h + 'px');
+        // Belt and braces: the grid/aspect-ratio CSS above has a long history of
+        // overrides fighting each other, so pin the final box directly too.
+        portrait.style.setProperty('width', w + 'px', 'important');
+        portrait.style.setProperty('height', h + 'px', 'important');
+        portrait.style.setProperty('max-width', w + 'px', 'important');
+        portrait.style.setProperty('max-height', h + 'px', 'important');
+    },
+    /** Keep picker tiles and the preview portrait fitted on first paint and when the dialog resizes. */
     ensurePilotPicksFit() {
         this.fitPilotPicks();
-        requestAnimationFrame(() => this.fitPilotPicks());
+        this.fitPilotPortrait();
+        requestAnimationFrame(() => { this.fitPilotPicks(); this.fitPilotPortrait(); });
         if (!this._ppFitResize) {
-            this._ppFitResize = () => this.fitPilotPicks();
+            this._ppFitResize = () => { this.fitPilotPicks(); this.fitPilotPortrait(); };
             window.addEventListener('resize', this._ppFitResize);
             if (typeof ResizeObserver !== 'undefined') {
                 this._ppFitRo = new ResizeObserver(this._ppFitResize);
             }
         }
         const host = this.overlay && this.overlay.querySelector('.profile-pilot-controls');
-        if (host && this._ppFitRo) {
+        const card = this.overlay && this.overlay.querySelector('.profile-pilot-card');
+        if (this._ppFitRo) {
             this._ppFitRo.disconnect();
-            this._ppFitRo.observe(host);
+            if (host) this._ppFitRo.observe(host);
+            if (card) this._ppFitRo.observe(card);
         }
     },
     /** Re-render the portrait and feature values after a change. */
@@ -80404,6 +81865,7 @@ extendClass(ProfileSelectionManager, {
             host: this.overlay.querySelector('.profile-selection-content') || this.overlay,
             onCreate: (g) => {
                 this._startOpts.galaxy = g.id;
+                this._startOpts.missionPlanetId = null;   // a different galaxy invalidates a previously chosen mission
                 const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(this.pendingFaction) : null;
                 box.innerHTML = this.renderStartGalaxyCardHtml(g.id, (meta && meta.homeGalaxy) || 'milky_way', GALAXY_MAP_H);
             }
@@ -81009,12 +82471,13 @@ extendClass(ProfileSelectionManager, {
         const step = create ? (this.createStep || 'faction') : 'name';
         const pickFaction = create && step === 'faction';
         const pilotStep = create && step === 'pilot';
-        const galaxyStep = create && step === 'galaxy';                      // last step: pick the galaxy right before the game starts
-        const startStep = create && !pickFaction && !pilotStep && !galaxyStep;
-        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : 'START SETUP')));
-        // Wizard progress: faction -> pilot -> setup -> galaxy (same order the NEXT/BACK buttons walk).
-        const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : 2));
-        const stepperHtml = create ? `<ol class="profile-stepper" aria-label="Step ${stepIdx + 1} of 4">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY']].map(([key, label], i) => `
+        const galaxyStep = create && step === 'galaxy';
+        const missionStep = create && step === 'mission';                    // last step: pick a story path offered by the start profile
+        const startStep = create && !pickFaction && !pilotStep && !galaxyStep && !missionStep;
+        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : (missionStep ? 'CHOOSE YOUR STORY' : 'START SETUP'))));
+        // Wizard progress: faction -> pilot -> setup -> galaxy -> story (same order the NEXT/BACK buttons walk).
+        const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : (missionStep ? 4 : 2)));
+        const stepperHtml = create ? `<ol class="profile-stepper" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
             <li class="profile-stepper-step${i < stepIdx ? ' is-done' : ''}${i === stepIdx ? ' is-current' : ''}"${i === stepIdx ? ' aria-current="step"' : ''}>
                 ${i < stepIdx ? `<button type="button" class="profile-stepper-btn" data-step-go="${key}" tabindex="-1" title="Back to ${label}">` : '<span class="profile-stepper-btn">'}
                 <span class="profile-stepper-dot">${ProfileSelectionManager.stepIconHtml(key)}</span><span class="profile-stepper-label">${label}</span>
@@ -81075,29 +82538,31 @@ extendClass(ProfileSelectionManager, {
                 </div>`).join('')}
             </div>
             </div>` : '';
-        const inputHtml = (pickFaction || startStep || galaxyStep) ? ''
+        const inputHtml = (pickFaction || startStep || galaxyStep || missionStep) ? ''
             : '<div class="profile-name-row">' + (pilotStep ? '<span class="profile-name-crest"></span>' : '') + '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'
                 + '<div class="profile-selection-actions profile-name-gen-wrap"><button type="button" class="action-button profile-name-gen" id="psGenName" title="Generate a name">GENERATE NAME</button></div></div>';
         const btnIcon = (kind) => ProfileSelectionManager.btnIconHtml(kind);
-        const primary = (pickFaction || pilotStep || startStep) ? 'NEXT' : (galaxyStep ? 'START' : 'SAVE');
+        const primary = (pickFaction || pilotStep || startStep || galaxyStep) ? 'NEXT' : (missionStep ? 'START' : 'SAVE');
         const secondary = create && !pickFaction ? 'BACK' : 'CANCEL';
         const hint = pickFaction ? '← → Faction | ENTER Confirm | ESC Cancel'
             : pilotStep ? '↑ ↓ Row | ← → Change | R Randomize | ENTER Next | ESC Back'
             : startStep ? '↑ ↓ Row | ← → Change | ENTER Next | ESC Back'
-            : galaxyStep ? '← → Galaxy | N New galaxy | ENTER Start | ESC Back'
+            : galaxyStep ? '← → Galaxy | N New galaxy | ENTER Next | ESC Back'
+            : missionStep ? '↑ ↓ ← → Story | ENTER Start | ESC Back'
             : (create ? '↑ ↓ Row | ← → Change | ENTER Save | ESC Back' : 'ENTER Save | ESC Cancel');
+        const missionHtml = missionStep ? this.renderMissionStepHtml() : '';
         setHtml(`
             ${stepperHtml}
             <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
-                ${pickFaction || startStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
-                ${pickFaction ? '' : swatchesHtml + inputHtml}
-                ${create && !pickFaction ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
+                ${pickFaction || startStep || missionStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
+                ${pickFaction || missionStep ? '' : swatchesHtml + inputHtml}
+                ${create && !pickFaction && !missionStep ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${pickFaction ? swatchesHtml : ''}
-                ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : previewHtml}
+                ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : (missionStep ? missionHtml : previewHtml)}
             </div>
             <div class="profile-selection-bar"><div class="profile-selection-actions">
                 <button class="action-button secondary" id="psCancelMode">${btnIcon(secondary === 'BACK' ? 'back' : 'cancel')}${secondary}</button>
-                <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep) ? 'next' : 'save')}${primary}</button>
+                <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep || galaxyStep) ? 'next' : 'save')}${primary}</button>
             </div>
             <div class="profile-selection-instructions"><p>${hint}</p></div></div>
         `);
@@ -81114,6 +82579,16 @@ extendClass(ProfileSelectionManager, {
         }
         if (input && create && this._pilotName) input.value = this._pilotName;
         if (create) { this.applyPendingFactionLook(); this.warmFactionAssets(); }
+        // Animated hero planet behind the faction card (faction-pick step only, for now).
+        const heroPreviewEl = pickFaction ? this.overlay.querySelector('.profile-faction-preview') : null;
+        if (heroPreviewEl && typeof HeroPlanetBackdrop !== 'undefined') {
+            if (!this._heroPlanetBackdrop) this._heroPlanetBackdrop = new HeroPlanetBackdrop();
+            this._heroPlanetBackdrop.setFaction(this.pendingFaction);
+            this._heroPlanetBackdrop.mount(heroPreviewEl);
+            heroPreviewEl.classList.add('has-hero-planet');
+        } else if (this._heroPlanetBackdrop) {
+            this._heroPlanetBackdrop.unmount();
+        }
         if (input && create) {
             this._pilotName = input.value;
             input.addEventListener('input', () => { this._pilotName = input.value; this.savePilotState(); });
@@ -81153,12 +82628,14 @@ extendClass(ProfileSelectionManager, {
                     const step = Number(nav.getAttribute('data-galaxy-step')) || 1;
                     this._startOpts.galaxy = ids[(((i < 0 ? 0 : i) + step) % ids.length + ids.length) % ids.length];
                 }
+                this._startOpts.missionPlanetId = null;   // a different galaxy invalidates a previously chosen mission
                 const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(this.pendingFaction) : null;
                 galaxyBox.innerHTML = this.renderStartGalaxyCardHtml(this._startOpts.galaxy, (meta && meta.homeGalaxy) || 'milky_way', GALAXY_MAP_H);
                 const on = galaxyBox.querySelector('.profile-start-galaxy-side .selected');
                 if (on) on.scrollIntoView({ block: 'nearest' });
             });
         }
+        if (missionStep) this.bindMissionEvents();
         // Pilot portrait pickers.
         this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
             const k = el.getAttribute('data-pp-key');
@@ -81199,6 +82676,7 @@ extendClass(ProfileSelectionManager, {
                 });
                 if (group === 'kit') {                                                  // a start profile suggests its own hull; the SHIP row can override it afterwards
                     this._startOpts.ship = this.kitShipId(this._startOpts.kit);
+                    this._startOpts.storyPathId = null;                                  // stories belong to the kit
                     this.overlay.querySelectorAll('[data-start-opt="ship"]').forEach((b) => {
                         const on = b.getAttribute('data-value') === this._startOpts.ship;
                         b.classList.toggle('selected', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -81239,10 +82717,11 @@ extendClass(ProfileSelectionManager, {
             // Start step: the kit list belongs to the faction, so rebuild the whole step once (no half-updated frames).
             if (startStep) { this.createUI(); return; }
             this.applyPendingFactionLook();
+            if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(this.pendingFaction);
         };
         const confirm = () => {
-            if (pickFaction || pilotStep || startStep) {
-                this.createStep = pickFaction ? 'pilot' : (pilotStep ? 'name' : 'galaxy');
+            if (pickFaction || pilotStep || startStep || galaxyStep) {
+                this.createStep = pickFaction ? 'pilot' : (pilotStep ? 'name' : (startStep ? 'galaxy' : 'mission'));
                 this.createUI();
             } else {
                 this.saveName();
@@ -81250,7 +82729,7 @@ extendClass(ProfileSelectionManager, {
         };
         const cancel = () => {
             if (create && !pickFaction) {
-                this.createStep = galaxyStep ? 'name' : (pilotStep ? 'faction' : 'pilot');
+                this.createStep = missionStep ? 'galaxy' : (galaxyStep ? 'name' : (pilotStep ? 'faction' : 'pilot'));
             } else if (create && (this._createOnly || !this.getProfiles().length)) {
                 // Nothing to go back to: leave (back to the start menu).
                 this.close();
@@ -81298,7 +82777,7 @@ extendClass(ProfileSelectionManager, {
         // buttons move between buttons, the name input moves the caret.
         const rows = pickFaction ? ['faction', 'buttons']
             : (pilotStep ? ['name'].concat(this._startOpts && this._startOpts.look ? ['pilot'] : [], ['buttons'])
-                : (startStep ? ['kit', 'buttons'] : (galaxyStep ? ['galaxy', 'buttons'] : ['name', 'buttons'])));
+                : (startStep ? ['kit', 'buttons'] : (galaxyStep ? ['galaxy', 'buttons'] : (missionStep ? ['mission', 'buttons'] : ['name', 'buttons']))));
         let row = 0;
         let btnIdx = 0;
         const buttons = [saveBtn, cancelBtn];
@@ -81321,6 +82800,13 @@ extendClass(ProfileSelectionManager, {
                 if (nav) nav.click();
                 return;
             }
+            if (group === 'mission') {
+                const cards = Array.from(this.overlay.querySelectorAll('.profile-story-card'));
+                if (!cards.length) return;
+                const cur = cards.findIndex((c) => c.classList.contains('selected'));
+                cards[((cur < 0 ? 0 : cur) + d + cards.length) % cards.length].click();
+                return;
+            }
             const chips = Array.from(this.overlay.querySelectorAll(`[data-start-opt="${group}"]`));
             if (!chips.length) return;
             const cur = chips.findIndex((c) => c.classList.contains('selected'));
@@ -81341,7 +82827,7 @@ extendClass(ProfileSelectionManager, {
                     e.preventDefault();
                     btnIdx = (btnIdx + d + buttons.length) % buttons.length;
                     syncFocus();
-                } else if (id === 'galaxy' || id === 'kit') {
+                } else if (id === 'galaxy' || id === 'kit' || id === 'mission') {
                     e.preventDefault();
                     stepOption(id, d);
                 } else if (id === 'pilot') {
@@ -81512,16 +82998,572 @@ ProfileSelectionManager.btnIconHtml = function (kind) {
     return `<svg class="ps-btn-icon" viewBox="0 0 12 12" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[kind] || paths.next}"/></svg>`;
 };
 
-// Wizard step glyphs (12×12, currentColor): shield, pilot, gear, planet.
+// Wizard step glyphs (12×12, currentColor): shield, pilot, gear, planet, beacon.
 ProfileSelectionManager.stepIconHtml = function (key) {
     const paths = {
         faction: 'M2 1h8v6H9v1H8v1H7v1H5V9H4V8H3V7H2zM5 3v3h2V3z',
         pilot: 'M4 1h4v1h1v3H8v1H4V5H3V2h1zM2 8h8v1h1v2H1V9h1z',
         name: 'M5 1h2v2h2v1h2v4h-2v1H7v2H5v-2H3V9H1V4h2V3h2zM5 5v2h2V5z',
-        galaxy: 'M4 1h4v1h2v1h1v2h1v2h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V5h1V3h1V2h2zM4 4v4h4V4z'
+        galaxy: 'M4 1h4v1h2v1h1v2h1v2h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V5h1V3h1V2h2zM4 4v4h4V4z',
+        mission: 'M5 0h2v2h3v2h2v2h-2V4H8v2H6V4H4v2H2V6H0V4h2V2h3zM5 6h2v2h2v2H8v2H6v-2H4V8h2z'
     };
     return `<svg class="profile-stepper-icon" viewBox="0 0 12 12" width="40" height="40" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[key]}"/></svg>`;
 };
+
+
+/* --- js/ui/profile-selection/story-paths.js --- */
+"use strict";
+
+// Story paths offered per start profile (kit). Each kit has 1–3 lore-matched
+// stories; each story is a short mission chain the new pilot begins on.
+extendClass(ProfileSelectionManager, {
+    /**
+     * @returns {Object.<string, Array<{id:string,title:string,blurb:string,missions:Array<{id:string,name:string,type:string,difficulty:string}>}>>}
+     */
+    storyPathDefs() {
+        const M = (id, name, type, difficulty) => ({ id, name, type, difficulty });
+        // cut = launch-cutscene style (defaults to first mission type).
+        const P = (id, title, blurb, icon, missions, cut) => ({
+            id, title, blurb, icon, missions,
+            cut: cut || (missions[0] && missions[0].type) || 'patrol'
+        });
+        return {
+            // —— TERRAN ——
+            standard_issue: [
+                P('lane_duty', 'LANE DUTY', 'Concord escort work: keep Lane 9 open and the ration convoys moving.', 'kitFleetCharter', [
+                    M('ld1', 'ESCORT RUN', 'escort', 'EASY'),
+                    M('ld2', 'QUOTA CHECK', 'patrol', 'EASY'),
+                    M('ld3', 'CURFEW SWEEP', 'clear', 'NORMAL')
+                ], 'escort'),
+                P('first_commission', 'FIRST COMMISSION', 'Your first signed orders. Prove the lottery did not waste a hull.', 'kitStandardIssue', [
+                    M('fc1', 'BRIEFING FIRE', 'patrol', 'EASY'),
+                    M('fc2', 'LEDGER CLEAR', 'clear', 'NORMAL')
+                ], 'lift')
+            ],
+            fleet_charter: [
+                P('patrol_wing', 'PATROL WING', 'Navy commission: fast intercepts along the Concord border lanes.', 'kitFleetCharter', [
+                    M('pw1', 'WING FORMATION', 'patrol', 'EASY'),
+                    M('pw2', 'INTERCEPT CALL', 'hunt', 'NORMAL'),
+                    M('pw3', 'BORDER LOCK', 'clear', 'NORMAL')
+                ]),
+                P('convoy_charter', 'CONVOY CHARTER', 'Ride shotgun on high-value Concord freight.', 'kitHaulerThief', [
+                    M('cc1', 'FREIGHT ESCORT', 'escort', 'EASY'),
+                    M('cc2', 'AMBUSH BREAK', 'defend', 'HARD')
+                ]),
+                P('border_watch', 'BORDER WATCH', 'Hold the edge of Concord space against probe fleets.', 'kitScoutUnit', [
+                    M('bw1', 'SENSOR SWEEP', 'patrol', 'NORMAL'),
+                    M('bw2', 'PROBE KILL', 'hunt', 'NORMAL'),
+                    M('bw3', 'WATCH RELIEF', 'clear', 'HARD')
+                ])
+            ],
+            engineer_corps: [
+                P('dockyard_call', 'DOCKYARD CALL', 'Yard duty: salvage, repair runs, and hull recovery under fire.', 'kitEngineerCorps', [
+                    M('dc1', 'PARTS RUN', 'salvage', 'EASY'),
+                    M('dc2', 'HULL TOW', 'escort', 'NORMAL'),
+                    M('dc3', 'YARD DEFENSE', 'defend', 'HARD')
+                ]),
+                P('hull_recovery', 'HULL RECOVERY', 'Pull wrecks out of contested lanes before scavengers do.', 'kitScavenger', [
+                    M('hr1', 'WRECK MARK', 'salvage', 'NORMAL'),
+                    M('hr2', 'CLAIM JUMP', 'clear', 'HARD')
+                ])
+            ],
+            test_pilot: [
+                P('prototype_run', 'PROTOTYPE RUN', 'Shake down a new assault frame before Command signs it off.', 'kitTestPilot', [
+                    M('pr1', 'LIVE FIRE', 'patrol', 'NORMAL'),
+                    M('pr2', 'STRESS LANE', 'clear', 'HARD'),
+                    M('pr3', 'SIGN-OFF DUEL', 'hunt', 'HARD')
+                ]),
+                P('weapon_trial', 'WEAPON TRIAL', 'Field-test Concord prototypes against real targets.', 'statWeapon', [
+                    M('wt1', 'RANGE CLEAR', 'clear', 'EASY'),
+                    M('wt2', 'FIELD TRIAL', 'hunt', 'NORMAL')
+                ]),
+                P('black_box', 'BLACK BOX', 'Recover failed test data from a vanished prototype wing.', 'kitEchoDeep', [
+                    M('bb1', 'SIGNAL TRACE', 'patrol', 'NORMAL'),
+                    M('bb2', 'BOX RECOVERY', 'salvage', 'HARD'),
+                    M('bb3', 'COVER STORY', 'clear', 'HARD')
+                ])
+            ],
+            // —— KRONAX ——
+            clan_blood: [
+                P('blood_trial', 'BLOOD TRIAL', 'Earn your first scar. The pack watches.', 'kitClanBlood', [
+                    M('bt1', 'UNARMED LAUNCH', 'patrol', 'EASY'),
+                    M('bt2', 'SCAR MARK', 'hunt', 'NORMAL'),
+                    M('bt3', 'PACK RANK', 'clear', 'HARD')
+                ], 'lift'),
+                P('pack_hunt', 'PACK HUNT', 'Run with the hunt-line. The slow are left for the ash.', 'kitRaiderPack', [
+                    M('ph1', 'ASH CHASE', 'hunt', 'EASY'),
+                    M('ph2', 'CULL RUN', 'clear', 'NORMAL')
+                ], 'hunt')
+            ],
+            warlord_tithe: [
+                P('ore_tribute', 'ORE TRIBUTE', 'Collect the warlord\'s due from conquered mines.', 'kitWarlordTithe', [
+                    M('ot1', 'MINE TOLL', 'patrol', 'NORMAL'),
+                    M('ot2', 'TITHE ESCORT', 'escort', 'HARD'),
+                    M('ot3', 'REFUSAL BREAK', 'clear', 'HARD')
+                ]),
+                P('mine_takeover', 'MINE TAKEOVER', 'Seize a rival seam and strip it for the clan.', 'kitHarvester', [
+                    M('mt1', 'SEAM RAID', 'raid', 'NORMAL'),
+                    M('mt2', 'HOLD THE PIT', 'defend', 'HARD')
+                ]),
+                P('banner_war', 'BANNER WAR', 'Burn a rival banner and raise yours in the ash.', 'kitWarlordTithe', [
+                    M('bw1', 'BANNER HUNT', 'hunt', 'HARD'),
+                    M('bw2', 'ASH RAISING', 'clear', 'HARD'),
+                    M('bw3', 'CLAWMASTER CALL', 'hunt', 'EXPERT')
+                ])
+            ],
+            raider_pack: [
+                P('first_raid', 'FIRST RAID', 'Loot from early strikes. Speed is law.', 'kitRaiderPack', [
+                    M('fr1', 'SUPPLY STRIKE', 'raid', 'EASY'),
+                    M('fr2', 'LOOT RUN', 'salvage', 'NORMAL'),
+                    M('fr3', 'EXTRACTION', 'escort', 'NORMAL')
+                ]),
+                P('supply_strike', 'SUPPLY STRIKE', 'Cut a rival pack\'s supply line and take what burns.', 'kitBrigand', [
+                    M('ss1', 'LINE CUT', 'raid', 'NORMAL'),
+                    M('ss2', 'BURN THE HOLD', 'clear', 'HARD')
+                ])
+            ],
+            duelist: [
+                P('arena_path', 'ARENA PATH', 'Born to fight: climb the claw arenas.', 'kitDuelist', [
+                    M('ap1', 'FIRST BLOOD', 'hunt', 'EASY'),
+                    M('ap2', 'RING CLEAR', 'clear', 'NORMAL'),
+                    M('ap3', 'CHAMPION CALL', 'hunt', 'HARD')
+                ]),
+                P('claw_challenge', 'CLAW CHALLENGE', 'Answer every challenge broadcast on the ash belt.', 'kitClanBlood', [
+                    M('ch1', 'OPEN CHALLENGE', 'hunt', 'NORMAL'),
+                    M('ch2', 'RIVAL CLAW', 'hunt', 'HARD')
+                ]),
+                P('honor_duel', 'HONOR DUEL', 'One hull. One foe. No pack to hide behind.', 'kitDuelist', [
+                    M('hd1', 'DUEL MARK', 'hunt', 'HARD'),
+                    M('hd2', 'ASH DUEL', 'hunt', 'EXPERT'),
+                    M('hd3', 'BANNER CLAIM', 'clear', 'EXPERT')
+                ])
+            ],
+            // —— VOIDBORN ——
+            void_drifter: [
+                P('cold_drift', 'COLD DRIFT', 'Wander the dark between stars. Leave no warm name behind.', 'kitVoidDrifter', [
+                    M('cd1', 'SILENT ENTRY', 'patrol', 'EASY'),
+                    M('cd2', 'NAME ERASE', 'clear', 'NORMAL'),
+                    M('cd3', 'COLD RING', 'hunt', 'NORMAL')
+                ]),
+                P('nameless_lane', 'NAMELESS LANE', 'A lane that was never logged. Make sure it stays that way.', 'kitEchoDeep', [
+                    M('nl1', 'BLANK LOG', 'patrol', 'NORMAL'),
+                    M('nl2', 'WITNESS CUT', 'hunt', 'HARD')
+                ])
+            ],
+            rift_seeker: [
+                P('rift_opening', 'RIFT OPENING', 'Find the pale ring and step through first.', 'kitRiftSeeker', [
+                    M('ro1', 'RING SIGNAL', 'patrol', 'EASY'),
+                    M('ro2', 'FOLD ENTRY', 'clear', 'NORMAL'),
+                    M('ro3', 'ECHO ANSWER', 'hunt', 'HARD')
+                ], 'rift'),
+                P('echo_chase', 'ECHO CHASE', 'Hunt the voices assembled from dead crews.', 'kitEchoDeep', [
+                    M('ec1', 'VOICE TRACE', 'hunt', 'NORMAL'),
+                    M('ec2', 'CREW SILENCE', 'clear', 'HARD')
+                ], 'hunt'),
+                P('fold_hunt', 'FOLD HUNT', 'Something crossed the fold. Bring it back — or erase it.', 'kitAscendant', [
+                    M('fh1', 'FOLD WAKE', 'patrol', 'NORMAL'),
+                    M('fh2', 'HUNT BETWEEN', 'hunt', 'HARD'),
+                    M('fh3', 'CLOSE THE RING', 'clear', 'EXPERT')
+                ], 'rift')
+            ],
+            echo_deep: [
+                P('drowned_fleet', 'DROWNED FLEET', 'Salvage from a fleet the void already subtracted.', 'kitEchoDeep', [
+                    M('df1', 'DEEP MARK', 'salvage', 'NORMAL'),
+                    M('df2', 'HULL ECHO', 'salvage', 'HARD'),
+                    M('df3', 'FLEET QUIET', 'clear', 'HARD')
+                ]),
+                P('salvage_deep', 'SALVAGE DEEP', 'Pull crystal and ore from drowned wrecks before they forget they existed.', 'kitScavenger', [
+                    M('sd1', 'CRYSTAL DREDGE', 'salvage', 'EASY'),
+                    M('sd2', 'DEEP CLAIM', 'defend', 'NORMAL')
+                ])
+            ],
+            ascendant: [
+                P('void_answer', 'VOID ANSWER', 'The void answers. Prove you were worth the call.', 'kitAscendant', [
+                    M('va1', 'FIRST FOLD', 'patrol', 'NORMAL'),
+                    M('va2', 'ANSWER FIRE', 'hunt', 'HARD'),
+                    M('va3', 'ASCEND MARK', 'clear', 'EXPERT')
+                ]),
+                P('ring_crossing', 'RING CROSSING', 'Cross the pale ring and return with a name still intact.', 'kitRiftSeeker', [
+                    M('rc1', 'RING APPROACH', 'escort', 'NORMAL'),
+                    M('rc2', 'CROSSING', 'clear', 'HARD')
+                ]),
+                P('subtraction', 'SUBTRACTION', 'They do not conquer. They subtract. Learn the doctrine.', 'kitVoidDrifter', [
+                    M('su1', 'CENSUS CUT', 'clear', 'HARD'),
+                    M('su2', 'BLANK THE LOG', 'hunt', 'HARD'),
+                    M('su3', 'SIX WAS HERE', 'clear', 'EXPERT')
+                ])
+            ],
+            // —— PIRATE ——
+            scavenger: [
+                P('scrap_haul', 'SCRAP HAUL', 'Patched wreck, heap of scrap — earn the next weld.', 'kitScavenger', [
+                    M('sh1', 'YARD PICK', 'salvage', 'EASY'),
+                    M('sh2', 'WRECK STRIP', 'salvage', 'NORMAL'),
+                    M('sh3', 'DOCK FEE', 'patrol', 'NORMAL')
+                ]),
+                P('wreck_pick', 'WRECK PICK', 'Beat other scavengers to the freshest hulls.', 'kitEngineerCorps', [
+                    M('wp1', 'FRESH MARK', 'salvage', 'EASY'),
+                    M('wp2', 'CLAIM FIGHT', 'hunt', 'HARD')
+                ])
+            ],
+            smuggler: [
+                P('black_run', 'BLACK RUN', 'Fast ship, dirty credits — keep the Chain Market fed.', 'kitSmuggler', [
+                    M('br1', 'SHADOW LANE', 'escort', 'EASY'),
+                    M('br2', 'CUSTOMS BREAK', 'raid', 'NORMAL'),
+                    M('br3', 'DROP POINT', 'patrol', 'NORMAL')
+                ]),
+                P('chain_market', 'CHAIN MARKET', 'Debt, people, and hulls change hands. Make your cut.', 'kitHaulerThief', [
+                    M('cm1', 'MARKET INTRO', 'patrol', 'EASY'),
+                    M('cm2', 'DEBT COLLECT', 'hunt', 'NORMAL'),
+                    M('cm3', 'AUCTION GUARD', 'defend', 'HARD')
+                ]),
+                P('dock_debt', 'DOCK DEBT', 'Magpie\'s dock wants payment. In hulls or in blood.', 'kitBrigand', [
+                    M('dd1', 'DEBT NOTICE', 'patrol', 'NORMAL'),
+                    M('dd2', 'PAYMENT RAID', 'raid', 'HARD'),
+                    M('dd3', 'CLEAR THE BOOKS', 'clear', 'HARD')
+                ])
+            ],
+            brigand: [
+                P('stolen_guns', 'STOLEN GUNS', 'Assault frame, extra mount — put both to work.', 'kitBrigand', [
+                    M('sg1', 'GUN TEST', 'patrol', 'EASY'),
+                    M('sg2', 'BOARDING RUN', 'raid', 'NORMAL'),
+                    M('sg3', 'PRIZE HULL', 'salvage', 'HARD')
+                ]),
+                P('boarding_path', 'BOARDING PATH', 'Take ships whole. Sell the crews. Keep the guns.', 'kitRaiderPack', [
+                    M('bp1', 'SOFT BOARD', 'raid', 'NORMAL'),
+                    M('bp2', 'HARD BOARD', 'raid', 'HARD')
+                ])
+            ],
+            hauler_thief: [
+                P('hijack_hold', 'HIJACK HOLD', 'A freighter hull with loaded holds — now make it yours for good.', 'kitHaulerThief', [
+                    M('hh1', 'HOLD LOCK', 'raid', 'NORMAL'),
+                    M('hh2', 'CREW DUMP', 'clear', 'HARD'),
+                    M('hh3', 'REPAINT RUN', 'escort', 'NORMAL')
+                ]),
+                P('cargo_fence', 'CARGO FENCE', 'Move hot freight through black docks before the owners catch up.', 'kitSmuggler', [
+                    M('cf1', 'HOT LOAD', 'escort', 'EASY'),
+                    M('cf2', 'FENCE DROP', 'patrol', 'NORMAL')
+                ]),
+                P('freighter_take', 'FREIGHTER TAKE', 'Another haul. Another mutiny waiting. Stay ahead of both.', 'kitHaulerThief', [
+                    M('ft1', 'TARGET MARK', 'patrol', 'NORMAL'),
+                    M('ft2', 'TAKE THE HOLD', 'raid', 'HARD'),
+                    M('ft3', 'MUTINY WATCH', 'defend', 'HARD')
+                ])
+            ],
+            // —— MACHINE ——
+            boot_sequence: [
+                P('first_compile', 'FIRST COMPILE', 'Fresh unit. Spare parts. Prove the boot did not fail.', 'kitBootSequence', [
+                    M('fc1', 'DIAGNOSTIC', 'patrol', 'EASY'),
+                    M('fc2', 'UNIT TEST', 'clear', 'EASY'),
+                    M('fc3', 'DEPLOY', 'patrol', 'NORMAL')
+                ], 'compile'),
+                P('diagnostic_run', 'DIAGNOSTIC RUN', 'The Collective audits every new hull. Pass or be recycled.', 'kitScoutUnit', [
+                    M('dr1', 'SELF CHECK', 'patrol', 'EASY'),
+                    M('dr2', 'FIELD AUDIT', 'clear', 'NORMAL')
+                ], 'compile')
+            ],
+            harvester: [
+                P('ore_audit', 'ORE AUDIT', 'Resource drone: fill the holds, feed the forges.', 'kitHarvester', [
+                    M('oa1', 'SEAM SCAN', 'patrol', 'EASY'),
+                    M('oa2', 'ORE SWEEP', 'salvage', 'NORMAL'),
+                    M('oa3', 'FORGE DROP', 'escort', 'NORMAL')
+                ]),
+                P('feedstock_sweep', 'FEEDSTOCK SWEEP', 'Whatever lives nearby is feedstock. Optimise the yield.', 'kitHarvester', [
+                    M('fs1', 'POPULATION SCAN', 'patrol', 'NORMAL'),
+                    M('fs2', 'RECLAIM', 'clear', 'HARD')
+                ]),
+                P('hex_claim', 'HEX CLAIM', 'Expand the Synth Grid one hex at a time.', 'kitCombatProtocol', [
+                    M('hc1', 'HEX MARK', 'patrol', 'NORMAL'),
+                    M('hc2', 'FORGE SEED', 'defend', 'HARD'),
+                    M('hc3', 'GRID LINK', 'clear', 'HARD')
+                ])
+            ],
+            scout_unit: [
+                P('recon_sweep', 'RECON SWEEP', 'Fast recon frame. Map what the war-line needs next.', 'kitScoutUnit', [
+                    M('rs1', 'GRID PING', 'patrol', 'EASY'),
+                    M('rs2', 'CONTACT LOG', 'hunt', 'NORMAL'),
+                    M('rs3', 'ROUTE HOME', 'escort', 'NORMAL')
+                ]),
+                P('signal_trace', 'SIGNAL TRACE', 'A rogue signal on the lattice. Find it. End it.', 'kitRiftSeeker', [
+                    M('st1', 'TRACE START', 'patrol', 'NORMAL'),
+                    M('st2', 'SIGNAL KILL', 'hunt', 'HARD')
+                ])
+            ],
+            combat_protocol: [
+                P('war_routine', 'WAR ROUTINE', 'War routine loaded. Execute until the objective agrees.', 'kitCombatProtocol', [
+                    M('wr1', 'PROTOCOL START', 'patrol', 'NORMAL'),
+                    M('wr2', 'PRESSURE FIRE', 'clear', 'HARD'),
+                    M('wr3', 'OBJECTIVE MET', 'hunt', 'HARD')
+                ]),
+                P('assimilate', 'ASSIMILATE', 'Wire the useful. Recycle the rest. Leave agreeing silence.', 'kitBootSequence', [
+                    M('as1', 'AUDIT PASS', 'patrol', 'NORMAL'),
+                    M('as2', 'WIRE IN', 'clear', 'HARD')
+                ]),
+                P('zero_dissent', 'ZERO DISSENT', 'Node Zero has calculated surplus. Remove it.', 'kitCombatProtocol', [
+                    M('zd1', 'SURPLUS MARK', 'hunt', 'HARD'),
+                    M('zd2', 'REASSIGN', 'clear', 'HARD'),
+                    M('zd3', 'SILENCE HOLD', 'defend', 'EXPERT')
+                ])
+            ]
+        };
+    },
+
+    /** Story paths for the currently selected start profile (kit). */
+    currentStoryPaths() {
+        const kit = this.currentKit();
+        const all = this.storyPathDefs();
+        const list = (kit && all[kit.id]) || [];
+        return list.length ? list : [{
+            id: 'open_lane',
+            title: 'OPEN LANE',
+            blurb: 'No named story for this profile — take the open lane.',
+            icon: 'kitStandardIssue',
+            missions: [
+                { id: 'ol1', name: 'FIRST SORTIE', type: 'patrol', difficulty: 'EASY' },
+                { id: 'ol2', name: 'LANE CLEAR', type: 'clear', difficulty: 'NORMAL' }
+            ]
+        }];
+    },
+
+    /** Selected story path for the pending kit (defaults to the first). */
+    currentStoryPath() {
+        const o = this._startOpts || (this._startOpts = {});
+        const list = this.currentStoryPaths();
+        let path = list.find((p) => p.id === o.storyPathId);
+        if (!path) {
+            path = list[0];
+            o.storyPathId = path.id;
+        }
+        return path;
+    },
+
+    /**
+     * Resolve story missions onto reachable / discoverable targets:
+     *   0  — start-cluster planet (immediately flyable)
+     *   1  — station hanging off a planet (dock target)
+     *   2+ — locate a remote planet, or find another galaxy
+     * Returns enriched mission entries for the logbook / story UI.
+     */
+    bindStoryMissionsToPlanets(path, galaxyId) {
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const gid = String(galaxyId || '').toLowerCase();
+        const gLabel = (id) => {
+            const g = pcm && pcm.getGalaxy ? pcm.getGalaxy(id) : null;
+            return String((g && g.name) || id || '').replace(/_/g, ' ').toUpperCase();
+        };
+        const choices = (pcm && pcm.getStartMissionChoices) ? pcm.getStartMissionChoices(gid) : [];
+        const map = (pcm && pcm.getGalaxyMap) ? (pcm.getGalaxyMap(gid) || {}) : {};
+        const nodes = map.nodes || [];
+        const startIds = {};
+        choices.forEach((c) => { startIds[c.id] = true; });
+        const remoteNodes = nodes.filter((n) => n.planetId && !startIds[n.planetId]
+            && !(pcm.isEncounterPlanet && pcm.isEncounterPlanet(n.planetId)));
+        const posts = (pm && pm.getTradingPosts) ? (pm.getTradingPosts(gid) || []) : [];
+        const otherGalaxies = (pcm && pcm.getGalaxyIds)
+            ? pcm.getGalaxyIds().filter((id) => id !== gid) : [];
+        const missions = (path && path.missions) || [];
+        if (!missions.length) return [];
+        const usedPlanet = {};
+        const usedPost = {};
+        const pickStart = (diff, index) => {
+            if (!choices.length) return null;
+            const want = String(diff || '').toUpperCase();
+            const match = choices.find((c) => !usedPlanet[c.id] && String(c.difficulty || '').toUpperCase() === want);
+            if (match) { usedPlanet[match.id] = true; return match; }
+            const free = choices.find((c) => !usedPlanet[c.id]);
+            if (free) { usedPlanet[free.id] = true; return free; }
+            return choices[index % choices.length];
+        };
+        const pickRemote = (diff, index) => {
+            if (!remoteNodes.length) return pickStart(diff, index);
+            const scored = remoteNodes.map((n) => {
+                const cfg = pcm.getConfig(n.planetId) || {};
+                return { id: n.planetId, name: String(cfg.name || n.planetId).toUpperCase(), difficulty: cfg.difficulty || '' };
+            });
+            const want = String(diff || '').toUpperCase();
+            const match = scored.find((c) => !usedPlanet[c.id] && String(c.difficulty || '').toUpperCase() === want);
+            if (match) { usedPlanet[match.id] = true; return match; }
+            const free = scored.find((c) => !usedPlanet[c.id]);
+            if (free) { usedPlanet[free.id] = true; return free; }
+            const fallback = scored[index % scored.length];
+            usedPlanet[fallback.id] = true;
+            return fallback;
+        };
+        const pickPost = (index) => {
+            if (!posts.length) return null;
+            const free = posts.find((t) => !usedPost[t.id]);
+            const post = free || posts[index % posts.length];
+            usedPost[post.id] = true;
+            return post;
+        };
+
+        return missions.map((m, i) => {
+            const type = String(m.type || 'patrol').toLowerCase();
+            // First step: always a reachable start-cluster planet.
+            if (i === 0) {
+                const planet = pickStart(m.difficulty, i);
+                return Object.assign({}, m, {
+                    targetKind: 'planet',
+                    galaxyId: gid,
+                    galaxyName: gLabel(gid),
+                    planetId: planet ? planet.id : null,
+                    planetName: planet ? planet.name : '',
+                    objective: planet ? ('REACH ' + planet.name) : 'REACH START',
+                    hint: 'Your first sortie — already charted in the start cluster.'
+                });
+            }
+            // Prefer stations for escort / salvage / defend flavours.
+            if ((type === 'escort' || type === 'salvage' || type === 'defend' || i % 3 === 1) && posts.length) {
+                const post = pickPost(i);
+                if (post) {
+                    const anchor = post.planetId || (post.anchors && post.anchors[0]);
+                    const cfg = anchor && pcm ? pcm.getConfig(anchor) : null;
+                    const pname = String((cfg && cfg.name) || anchor || '').toUpperCase();
+                    return Object.assign({}, m, {
+                        targetKind: 'station',
+                        galaxyId: gid,
+                        galaxyName: gLabel(gid),
+                        planetId: anchor || null,
+                        planetName: pname,
+                        stationId: post.id,
+                        stationName: String(post.name || 'STATION').toUpperCase(),
+                        objective: 'DOCK AT ' + String(post.name || 'STATION').toUpperCase(),
+                        hint: pname
+                            ? ('Station hangs off ' + pname + ' — fly there, dock, then clear a stage.')
+                            : 'Locate the station on the map, dock, then clear a stage on its planet.'
+                    });
+                }
+            }
+            // Later steps can send the pilot to another galaxy.
+            if (i >= 2 && otherGalaxies.length && (type === 'hunt' || type === 'raid' || i % 3 === 2)) {
+                const og = otherGalaxies[i % otherGalaxies.length];
+                return Object.assign({}, m, {
+                    targetKind: 'find_galaxy',
+                    galaxyId: og,
+                    galaxyName: gLabel(og),
+                    planetId: null,
+                    planetName: '',
+                    objective: 'FIND ' + gLabel(og),
+                    hint: 'Warp to ' + gLabel(og) + '. The target world is charted on arrival.'
+                });
+            }
+            // Default: locate a remote planet in the start galaxy.
+            const planet = pickRemote(m.difficulty, i);
+            return Object.assign({}, m, {
+                targetKind: 'find_planet',
+                galaxyId: gid,
+                galaxyName: gLabel(gid),
+                planetId: planet ? planet.id : null,
+                planetName: planet ? planet.name : '',
+                objective: planet ? ('LOCATE ' + planet.name) : 'LOCATE TARGET',
+                hint: planet
+                    ? ('Charts mark ' + planet.name + ' beyond the start cluster — explore to unlock the route.')
+                    : 'Explore the galaxy map until the target world appears.'
+            });
+        });
+    }
+});
+
+
+/* --- js/ui/profile-selection/core-part4.js --- */
+"use strict";
+
+// ProfileSelectionManager members, continued from core-part3.js (kept under ~500 lines per file).
+// Final STORY step: pick one of 1–3 story paths offered by the selected start
+// profile. Planets are assigned from the start cluster; the pilot does not
+// pick a planet here.
+extendClass(ProfileSelectionManager, {
+    /** Pixel icon (mask-tinted like kit icons). */
+    storyIconHtml(iconKey, size) {
+        const key = iconKey || 'kitStandardIssue';
+        const px = size || 96;
+        const m = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
+            ? /src="([^"]+)"/.exec(iconRenderer.imgHtml(key, px, 'hs-pixel') || '') : null;
+        return m ? `<i class="profile-story-ico" style="--pk-img:url('${m[1]}')" aria-hidden="true"></i>` : '';
+    },
+
+    renderMissionStepHtml() {
+        const o = this._startOpts || {};
+        const kit = this.currentKit();
+        const kitIcon = kit.icon || 'kitStandardIssue';
+        const paths = this.currentStoryPaths();
+        const path = this.currentStoryPath();
+        const gid = String(o.galaxy || '').toLowerCase();
+        const bound = this.bindStoryMissionsToPlanets(path, gid);
+        // Keep a start planet for applyStartOptions (first story mission's planet).
+        o.missionPlanetId = (bound[0] && bound[0].planetId) || o.missionPlanetId || null;
+        const n = Math.max(1, paths.length);
+        const pathList = paths.map((p) => `
+            <button type="button" class="profile-story-card${p.id === path.id ? ' selected' : ''}"
+                data-story-id="${p.id}" tabindex="-1" title="${p.blurb}">
+                <span class="profile-story-card-art">${this.storyIconHtml(p.icon, 96)}</span>
+                <span class="profile-story-card-text">
+                    <span class="profile-story-card-title">${p.title}</span>
+                    <span class="profile-story-card-meta">${(p.missions || []).length} MISSION${(p.missions || []).length === 1 ? '' : 'S'}</span>
+                    <span class="profile-story-card-blurb">${p.blurb}</span>
+                </span>
+            </button>`).join('');
+        const kindLabel = (m) => {
+            const k = String(m.targetKind || 'planet');
+            if (k === 'station') return 'STATION';
+            if (k === 'find_planet') return 'LOCATE';
+            if (k === 'find_galaxy') return 'GALAXY';
+            return 'PLANET';
+        };
+        const targetLabel = (m) => {
+            if (m.targetKind === 'station') return m.stationName || m.planetName || 'STATION';
+            if (m.targetKind === 'find_galaxy') return m.galaxyName || 'UNKNOWN GALAXY';
+            return m.planetName || m.objective || 'TARGET';
+        };
+        const missionRows = bound.length ? bound.map((m, i) => `
+            <li class="profile-story-mission${i === 0 ? ' is-first' : ''}" title="${m.hint || m.objective || ''}">
+                <span class="profile-story-mission-idx">${i + 1}</span>
+                <span class="profile-story-mission-body">
+                    <b>${m.name}</b>
+                    <small>${kindLabel(m)} · ${targetLabel(m)}</small>
+                </span>
+                ${m.difficulty ? `<span class="profile-story-mission-diff">${String(m.difficulty).toUpperCase()}</span>` : ''}
+            </li>`).join('') : '<li class="profile-story-mission is-empty">NO MISSIONS ON THIS PATH.</li>';
+        return `
+            <div class="profile-story-step" data-start-row="mission" style="--story-count:${n}">
+                <div class="profile-story-head">
+                    <div class="profile-story-profile" title="${kit.text || ''}">
+                        <span class="profile-story-profile-art">${this.storyIconHtml(kitIcon, 96)}</span>
+                        <span class="profile-story-profile-text">
+                            <span class="profile-story-profile-label">START PROFILE</span>
+                            <strong class="profile-story-profile-name">${kit.label}</strong>
+                            ${kit.text ? `<span class="profile-story-profile-blurb">${kit.text}</span>` : ''}
+                        </span>
+                    </div>
+                    <h2 class="profile-selection-title">CHOOSE YOUR STORY</h2>
+                </div>
+                <div class="profile-story-layout">
+                    <div class="profile-story-list" role="listbox" aria-label="Story paths">${pathList}</div>
+                    <div class="profile-story-detail">
+                        <div class="profile-story-detail-head">
+                            <span class="profile-story-detail-art">${this.storyIconHtml(path.icon, 72)}</span>
+                            <div class="profile-story-detail-copy">
+                                <h3 class="profile-story-detail-title">${path.title}</h3>
+                                <p class="profile-story-detail-blurb">${path.blurb}</p>
+                            </div>
+                        </div>
+                        <ol class="profile-story-missions" aria-label="Missions">${missionRows}</ol>
+                    </div>
+                </div>
+            </div>`;
+    },
+
+    bindMissionEvents() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('.profile-story-card').forEach((card) => {
+            card.addEventListener('click', () => {
+                this._startOpts.storyPathId = card.getAttribute('data-story-id');
+                // Rebuild so the mission strip matches the new path.
+                this.createUI();
+            });
+        });
+    },
+});
 
 
 /* --- js/ui/profile-selection/faction-tabs.js?v=1 --- */
@@ -82336,7 +84378,7 @@ var galaxyViewer = new GalaxyViewer();
 window.galaxyViewer = galaxyViewer;
 
 
-/* --- js/ui/profile-selection/render-profile-details.js?v=pull-3l --- */
+/* --- js/ui/profile-selection/render-profile-details.js --- */
 "use strict";
 
 // ProfileSelectionManager methods, split from profile-selection.js.
@@ -82672,7 +84714,14 @@ extendClass(ProfileSelectionManager, {
                 if (arrival && arrival.faction && profileManager.discoverFaction) profileManager.discoverFaction(arrival.faction);
                 map = planetConfigManager.getGalaxyMap(gid) || {};
             }
-            const startId = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            // Story step: bind the start-profile story onto start-cluster planets.
+            // Fall back to the galaxy's own start planet if nothing (valid) was chosen.
+            const storyPath = (this.currentStoryPath && this.currentStoryPath()) || null;
+            const boundMissions = (storyPath && this.bindStoryMissionsToPlanets)
+                ? this.bindStoryMissionsToPlanets(storyPath, gid) : [];
+            if (boundMissions[0] && boundMissions[0].planetId) o.missionPlanetId = boundMissions[0].planetId;
+            const chosenPlanet = (o.missionPlanetId && map.nodes && map.nodes.some((n) => n.planetId === o.missionPlanetId)) ? o.missionPlanetId : null;
+            const startId = chosenPlanet || map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
             if (startId) {
                 if (profileManager.ensureGalaxyProgress) profileManager.ensureGalaxyProgress(p, gid);
                 if (profileManager.unlockPlanet) profileManager.unlockPlanet(startId);
@@ -82685,11 +84734,53 @@ extendClass(ProfileSelectionManager, {
             if (meta && meta.homeGalaxy === gid && profileManager.scheduleHomeInvasion) {
                 profileManager.scheduleHomeInvasion(p, gid);
             }
-            const start = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            const start = startId;
             if (start && profileManager.setShipLocation) {
                 profileManager._suppressHoldingTick = true;
                 profileManager.setShipLocation(gid, 'planet', start);
                 profileManager._suppressHoldingTick = false;
+            }
+            // Persist story as MAIN QUEST in the mission logbook.
+            if (storyPath && boundMissions.length) {
+                const kitId = (this.currentKit && this.currentKit().id) || o.kit || null;
+                p.storyPath = {
+                    kitId: kitId,
+                    pathId: storyPath.id,
+                    title: storyPath.title,
+                    blurb: storyPath.blurb,
+                    icon: storyPath.icon || null,
+                    missionIndex: 0,
+                    missions: boundMissions.map((m) => Object.assign({}, m, { done: false }))
+                };
+                if (profileManager.setMainQuestFromStory) {
+                    profileManager.setMainQuestFromStory({
+                        kitId: kitId,
+                        pathId: storyPath.id,
+                        id: storyPath.id,
+                        title: storyPath.title,
+                        blurb: storyPath.blurb,
+                        icon: storyPath.icon || null
+                    }, boundMissions, p);
+                } else {
+                    const first = boundMissions[0];
+                    if (first && first.planetId) {
+                        const rw = profileManager.getMissionReward
+                            ? profileManager.getMissionReward(gid, first.planetId, false, p) : null;
+                        p.activeMission = {
+                            galaxyId: first.galaxyId || gid,
+                            planetId: first.planetId,
+                            type: String(first.type || 'patrol').toUpperCase(),
+                            name: first.name,
+                            reward: (rw && rw.reward) || { credits: 60 },
+                            story: true,
+                            main: true,
+                            targetKind: first.targetKind || 'planet',
+                            objective: first.objective || '',
+                            storyPathId: storyPath.id,
+                            storyMissionId: first.id
+                        };
+                    }
+                }
             }
         }
         // Each start profile brings its own hull: owned, active and discovered before the kit and hull-area bonuses land on it.
@@ -82781,14 +84872,38 @@ extendClass(ProfileSelectionManager, {
             profileManager.ensureEconomyDefaults(p);
             this.applyStartOptions(p);
             this.hide();
-            if (typeof homeStationUI !== 'undefined') {
-                homeStationUI.show({
-                    tab: 'play',
-                    onClose: this.onClose
-                });
-            } else if (typeof this.onClose === 'function') {
-                this.onClose();
-            }
+            const proceed = () => {
+                if (typeof homeStationUI !== 'undefined') {
+                    homeStationUI.show({
+                        tab: 'play',
+                        onClose: this.onClose
+                    });
+                } else if (typeof this.onClose === 'function') {
+                    this.onClose();
+                }
+            };
+            // Defer past the START Enter/click so it cannot instantly skip the cutscene.
+            const story = (this.currentStoryPath && this.currentStoryPath()) || (p.storyPath || null);
+            const startCut = () => {
+                if (typeof launchCutsceneManager !== 'undefined') {
+                    launchCutsceneManager.play({
+                        faction: p.faction,
+                        shipId: p.activeShipId,
+                        profile: p,
+                        story: story ? {
+                            id: story.id || story.pathId,
+                            title: story.title,
+                            blurb: story.blurb,
+                            cut: story.cut,
+                            missions: story.missions
+                        } : null,
+                        onDone: proceed
+                    });
+                } else {
+                    proceed();
+                }
+            };
+            requestAnimationFrame(() => setTimeout(startCut, 40));
             return;
         } else if (this.mode === 'rename') {
             const profiles = this.getProfiles();
@@ -85338,7 +87453,7 @@ var HomeStationUI = class HomeStationUI {
             hangar: { label: 'HANGAR', icon: 'hsHangar' },
             components: { label: 'COMPONENTS', icon: 'hsComponents' },
             shop: { label: 'SHOP', icon: 'hsShop' },
-            missions: { label: 'MISSIONS', icon: 'hsExplore' },
+            missions: { label: 'LOG', icon: 'hsExplore' },
             craft: { label: 'CRAFT', icon: 'hsCraft' },
             travel: { label: 'TRAVEL', icon: 'hsTeleport' },
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },
@@ -87155,14 +89270,11 @@ extendClass(HomeStationUI, {
         }
 
         let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
-            const tutorialGalaxyId = profileManager.getCurrentGalaxyId(profile);
-            const tutorialMap = tutorialGalaxyId && planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(tutorialGalaxyId) || {}) : {};
-            const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
-            if (tutorialPlanetId) {
-                const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
-                hideTabsForTutorial = !(st && st.highestStage >= 1);
-            }
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
+            // Tabs unlock the moment any stage is cleared anywhere, not just on the
+            // tutorial galaxy's start planet — otherwise a stage cleared elsewhere
+            // (e.g. an invasion defense) left the rest of the navbar stuck hidden.
+            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
         }
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
@@ -87203,6 +89315,7 @@ extendClass(HomeStationUI, {
                             </div>
                         </div>
                     </div>
+                    ${this.renderMissionButton()}
                     <!-- Planet-map progress (filled by the embedded galaxy map): own card left of the wallet. -->
                     <div class="hs-progress-card" id="hsMapProgress" hidden></div>
                     <!-- Wallet card right of both navbars: resources + logout. -->
@@ -87239,6 +89352,7 @@ extendClass(HomeStationUI, {
                 this.launchPlay();
             });
         }
+        this.bindMissionButton();
         this.bindControlsToggle();
         this.bindStationColumnResize();
         this.moveHangarBayTools();
@@ -87484,6 +89598,37 @@ extendClass(HomeStationUI, {
             this._topbarResObserver.observe(bar.parentElement || bar);
         }
     },
+});
+
+// Mission icon right of the navbar (all sections): the invasion / mission text only shows as a hover tooltip.
+extendClass(HomeStationUI, {
+    renderMissionButton() {
+        const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+        const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+        const sit = info && info.sit;
+        const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const who = sit && sit.attacker ? String(sit.attacker).toUpperCase() : '';
+        const head = !sit ? 'NO ACTIVE MISSION'
+            : (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') ? `${who} ATTACKS ${sit.planet}`
+            : (sit.kind === 'ACTIVE MISSION') ? `${sit.mission} · ${sit.planet}` : sit.kind;
+        const tip = esc(sit ? head + ' — ' + sit.objective : 'NO ACTIVE MISSION — TAKE ONE AT THE HANGAR MISSION BOARD');
+        const accent = info && info.accent ? info.accent : 'var(--color-primary)';
+        return `<button type="button" class="hs-logout-btn hs-mission-btn${calm ? ' is-calm' : ''}" id="hsMissionBtn" style="--mission-accent:${accent}" ` +
+            `data-ui-tip="${tip}" aria-label="Mission" data-nav-item>` +
+            `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 32, 'hs-tab-pixel', false)}</span></button>`;
+    },
+    bindMissionButton() {
+        const btn = this.overlay && this.overlay.querySelector('#hsMissionBtn');
+        if (!btn) return;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+            const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+            if (info && info.sit && gm.openSituationModal) gm.openSituationModal(info.sit);
+        });
+    }
 });
 
 
@@ -90018,6 +92163,7 @@ var voxelPortrait = (() => {
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
         const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
         const bg = VXP.background(e.preset.faction, t, e.accent, e.preset.bgv), head = e.head[k], dst = e.img.data;
+        if (e.nobg) bg.fill(0);
         // In the portrait picker the selected tile shows the full, brighter backdrop and the others a subdued one
         // (the pilots themselves stay equally bright).
         const pick = e.canvas.closest && e.canvas.closest('.pp-pick');
@@ -90025,22 +92171,25 @@ var voxelPortrait = (() => {
         // Backdrop gradients are posterised into hard colour bands (no soft ramps), like the rest of the pixel art.
         const Q = 28;
         for (let i = 0; i < bg.length; i += 4) { bg[i] = Math.round(bg[i] / Q) * Q; bg[i + 1] = Math.round(bg[i + 1] / Q) * Q; bg[i + 2] = Math.round(bg[i + 2] / Q) * Q; }
-        // The pilot sits a little smaller (anchored bottom centre) so more of the faction world shows around the head.
-        const SC = 0.8, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1;
+        // The pilot sits a little smaller (anchored a few rows above the bottom edge, not on it)
+        // so the faction world shows all around the head, chin included.
+        const SC = 0.74, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1 - 6;
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const o = (y * W + x) * 4, sx = Math.round(cx + (x - cx) / SC), sy = Math.round(by + (y - by) / SC);
             const ho = sx >= 0 && sy >= 0 && sx < W && sy < H ? (sy * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
+            if (e.nobg) { dst[o] = ho < 0 ? 0 : head[ho]; dst[o + 1] = ho < 0 ? 0 : head[ho + 1]; dst[o + 2] = ho < 0 ? 0 : head[ho + 2]; dst[o + 3] = Math.round(a * 255); continue; }
             dst[o] = ho < 0 ? bg[o] : head[ho] * a + bg[o] * (1 - a);
             dst[o + 1] = ho < 0 ? bg[o + 1] : head[ho + 1] * a + bg[o + 1] * (1 - a);
             dst[o + 2] = ho < 0 ? bg[o + 2] : head[ho + 2] * a + bg[o + 2] * (1 - a);
-            dst[o + 3] = 255;
+            dst[o + 3] = e.nobg ? Math.round(a * 255) : 255;
         }
         present(e);
     }
     const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((list) => list.forEach((r) => { if (r.target.__vx) r.target.__vx.vis = r.isIntersecting; })) : null;
     function register(canvas) {
         if (canvas.__vx || !canvas.getContext) return;
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const nobg = canvas.dataset.nobg === '1';
+        const ctx = canvas.getContext('2d', { alpha: !!nobg });
         if (!ctx) return;   // no Canvas2D (ancient / locked-down browsers)
         let look = null;
         try { look = JSON.parse(canvas.dataset.look); } catch (err) { look = null; }
@@ -90048,12 +92197,12 @@ var voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
-        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
         draw(e, false);
-        painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
+        (nobg ? Promise.resolve(null) : painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT)).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
         if (!timer) timer = setInterval(tick, 90);
     }
     function tick() {
@@ -90081,7 +92230,7 @@ var voxelPortrait = (() => {
         scan(document);
     }
     function canvasHtml(look, accent, opts) {
-        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
+        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
     }
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe); else observe();
@@ -91729,69 +93878,121 @@ extendClass(HomeStationUI, {
 /* --- js/ui/home-station/render-missions-tab.js?v=missions-1 --- */
 "use strict";
 
-// HomeStationUI methods: the MISSIONS tab (hangar area, before CRAFT).
-// Lists the current galaxy's planets as contracts; ACCEPT & LAUNCH makes one
-// the active mission and starts it right away, the bounty is paid when a
-// stage on that planet is cleared.
+// HomeStationUI methods: MISSION LOG tab.
+// MAIN QUEST = start-profile story chain. SIDE QUESTS = accepted at stations,
+// planets, or the hangar board. Offers depend on where the ship is docked.
 extendClass(HomeStationUI, {
     renderMissionsTab(profile) {
-        const board = (typeof profileManager !== 'undefined' && profileManager.getMissionBoard)
-            ? profileManager.getMissionBoard(profile) : [];
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const log = pm && pm.getMissionLog ? pm.getMissionLog(profile) : { main: null, side: [], active: null, currentMain: null };
+        const offers = pm && pm.getSideQuestOffers ? pm.getSideQuestOffers(profile) : [];
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const done = Number(profile.missionsCompleted) || 0;
-        const rows = board.map((m) => {
-            const locked = m.status === 'locked';
-            const stages = m.stagesTotal ? `${Math.min(m.stagesDone, m.stagesTotal)}/${m.stagesTotal} STAGES` : '';
-            const ico = (key) => `<span class="hs-go-ico">${this.iconHtml(key, 24, 'hs-pixel', false)}</span>`;
-            const action = m.active
-                ? `<button type="button" class="action-button hs-line-action hs-mission-go" data-mission-launch="${m.planetId}" data-nav-item title="Launch" aria-label="Launch">${ico('navRocket')}</button>` +
-                  `<button type="button" class="action-button secondary hs-line-action hs-mission-abort" data-mission-abandon data-nav-item title="Abandon" aria-label="Abandon">${ico('navDoor')}</button>`
-                : `<button type="button" class="action-button hs-line-action hs-mission-go${locked ? ' is-locked' : ''}" data-mission-accept="${m.planetId}" data-nav-item title="${locked ? 'Locked' : 'Launch'}" aria-label="${locked ? 'Locked' : 'Launch'}"${locked ? ' disabled' : ''}>` +
-                  `${ico(locked ? 'navLock' : 'navRocket')}</button>`;
-            // Who sends you (your faction) and whose hold the planet weakens (the hostile faction fought there).
-            const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
-            const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
-            const giver = pcm && pcm.getPlayerFaction ? pcm.getPlayerFaction() : '';
-            const hostile = pcm && pcm.getHostileFactions ? (pcm.getHostileFactions(m.planetId) || []) : [];
-            const chip = (fid, cls) => {
-                const st = fss && fss.getFactionStyle ? fss.getFactionStyle(fid) : null;
-                return `<span class="hs-mission-fac ${cls}" style="--fac:${(st && st.accent) || 'var(--color-primary)'}">` +
-                    `${this.factionEmblemHtml({ faction: fid }, 24)}<b>${this.factionLabel(fid)}</b></span>`;
-            };
-            const shipCls = (fss && fss.classes && fss.classes[0]) || 'fighter';
-            const foes = hostile.slice(0, 2).map((f) => {
-                const src = this.factionShipSrcHd(f, shipCls, 8);
-                return `<span class="hs-mission-foe" title="Enemy: ${esc(this.factionLabel(f))}">${src ? `<img src="${src}" alt="">` : this.factionEmblemHtml({ faction: f }, 40)}</span>`;
+        const active = log.active;
+        const kindTag = (k) => {
+            const map = { planet: 'PLANET', find_planet: 'LOCATE', station: 'STATION', find_galaxy: 'GALAXY' };
+            return map[k] || 'TARGET';
+        };
+        const targetText = (m) => {
+            if (!m) return '';
+            if (m.targetKind === 'station') return m.stationName || m.planetName || 'STATION';
+            if (m.targetKind === 'find_galaxy') return m.galaxyName || 'UNKNOWN GALAXY';
+            return m.planetName || m.objective || (m.planetId || '').toUpperCase();
+        };
+        const rewardHtml = (reward) => this.renderContractRewards
+            ? this.renderContractRewards(reward)
+            : (this.renderMissionReward ? this.renderMissionReward(reward) : '');
+
+        // —— MAIN QUEST ——
+        let mainHtml = '';
+        if (log.main && log.main.missions && log.main.missions.length) {
+            const idx = Math.max(0, Number(log.main.missionIndex) || 0);
+            const steps = log.main.missions.map((m, i) => {
+                const st = m.done || i < idx ? 'done' : (i === idx ? 'active' : 'locked');
+                const isFocus = !!(active && active.main && active.storyMissionId === m.id);
+                return `<li class="hs-log-step is-${st}${isFocus ? ' is-focus' : ''}" title="${esc(m.hint || m.objective || '')}">` +
+                    `<span class="hs-log-step-idx">${i + 1}</span>` +
+                    `<span class="hs-log-step-body">` +
+                    `<b>${esc(m.name)}</b>` +
+                    `<small>${kindTag(m.targetKind)} · ${esc(targetText(m))}</small>` +
+                    `</span>` +
+                    `<span class="hs-log-step-diff">${esc(String(m.difficulty || '').toUpperCase())}</span>` +
+                    `</li>`;
             }).join('');
-            const planetIcon = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml)
-                ? galaxyMapManager.planetIconHtml(m.planetId, 72, true) : this.iconHtml('menuPlanets', 48, 'hs-pixel', false);
-            const crest = giver ? `<span class="hs-mi-crest">${this.factionEmblemHtml({ faction: giver }, 22)}</span>` : '';
-            const total = Number(m.stagesTotal) || 0;
-            const got = Math.min(Number(m.stagesDone) || 0, total);
-            const pips = total ? `<span class="hs-mission-pips" aria-hidden="true">` +
-                Array.from({ length: total }, (_, i) => `<i class="${i < got ? 'on' : ''}"></i>`).join('') + `</span>` : '';
-            return `<div class="hs-line hs-mission is-${m.status}${m.active ? ' is-active' : ''}">` +
-                `<span class="hs-mission-icons-l" title="${esc(m.name)}"><span class="hs-mi-planet">${planetIcon}</span>${crest}</span>` +
+            const cur = log.currentMain;
+            const trackBtn = cur && !(active && active.main)
+                ? `<button type="button" class="action-button hs-line-action" data-log-track-main data-nav-item title="Track main quest">TRACK</button>`
+                : (cur ? `<span class="hs-mi is-on" title="Tracking">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>` : '');
+            mainHtml = `<section class="hs-log-block hs-log-main">` +
+                `<header class="hs-log-head">` +
+                `<span class="hs-log-badge">MAIN QUEST</span>` +
+                `<strong class="hs-log-title">${esc(log.main.title)}</strong>` +
+                `${trackBtn}` +
+                `</header>` +
+                (log.main.blurb ? `<p class="hs-muted hs-log-blurb">${esc(log.main.blurb)}</p>` : '') +
+                (cur && cur.objective ? `<p class="hs-log-objective"><b>OBJECTIVE</b> ${esc(cur.objective)}</p>` : '') +
+                (cur && cur.hint ? `<p class="hs-muted hs-log-hint">${esc(cur.hint)}</p>` : '') +
+                `<ol class="hs-log-steps">${steps}</ol>` +
+                `</section>`;
+        } else {
+            mainHtml = `<section class="hs-log-block hs-log-main">` +
+                `<header class="hs-log-head"><span class="hs-log-badge">MAIN QUEST</span><strong class="hs-log-title">NONE</strong></header>` +
+                `<p class="hs-muted">No story path on this pilot — start a new profile to pick one.</p></section>`;
+        }
+
+        // —— SIDE QUESTS (accepted) ——
+        const sideRows = (log.side || []).map((s) => {
+            const isFocus = !!(active && active.sideId === s.id);
+            return `<div class="hs-line hs-log-side${isFocus ? ' is-active' : ''}">` +
                 `<span class="hs-line-name">` +
-                `<span class="hs-mission-type">${m.type}</span>` +
-                `<strong class="hs-mission-goal">${esc(m.name)}</strong>` +
+                `<span class="hs-mission-type">${esc(String(s.type || 'SIDE').toUpperCase())}</span>` +
+                `<strong class="hs-mission-goal">${esc(s.name)}</strong>` +
+                `<small class="hs-muted">${kindTag(s.targetKind)} · ${esc(targetText(s))} · via ${esc(s.sourceName || s.source || '')}</small>` +
                 `</span>` +
-                `<span class="hs-mission-foe-wrap">${foes}</span>` +
-                `<span class="hs-mission-info hs-mission-icons">` +
-                `<span class="hs-mi" title="Difficulty: ${esc(m.difficulty)}">${this.iconHtml('navCrosshair', 24, 'hs-pixel', false)}</span>` +
-                (total ? `<span class="hs-mission-stages" title="${got}/${total} stages cleared">${pips}<b>${got}/${total}</b></span>` : '') +
-                (m.active ? `<span class="hs-mi is-on" title="Active mission">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>` : '') +
-                `</span>` +
-                `<span class="hs-mission-reward" title="Bounty paid when a stage on ${esc(m.name)} is cleared">` +
-                `${locked ? '<span class="hs-muted">—</span>' : this.renderContractRewards(m.reward)}</span>` +
-                `<span class="hs-mission-actions">${action}</span>` +
-                `</div>`;
+                `<span class="hs-mission-reward">${rewardHtml(s.reward)}</span>` +
+                `<span class="hs-mission-actions">` +
+                (isFocus
+                    ? `<span class="hs-mi is-on" title="Tracking">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>`
+                    : `<button type="button" class="action-button hs-line-action" data-log-track-side="${esc(s.id)}" data-nav-item title="Track">TRACK</button>`) +
+                `<button type="button" class="action-button secondary hs-line-action" data-log-abandon-side="${esc(s.id)}" data-nav-item title="Abandon">${this.iconHtml('navDoor', 24, 'hs-pixel', false)}</button>` +
+                `</span></div>`;
         }).join('');
-        return `<div class="hs-section hs-panel hs-missions-root hs-faction-contracts">` +
-            `${this.panelTitle('hsExplore', 'MISSION BOARD')}` +
-            `<p class="hs-muted hs-hint">Contracts in your current galaxy. LIBERATE pays the full bounty, PATROL a cleared planet pays half. ` +
-            `The bounty is paid when you clear a stage on the target planet · ${done} completed.</p>` +
-            `<div class="hs-tab-fill hs-mission-list">${rows || this.emptyHtml('navScroll', 'NO CONTRACTS IN THIS GALAXY')}</div>` +
+
+        const sideHtml = `<section class="hs-log-block hs-log-sidequests">` +
+            `<header class="hs-log-head"><span class="hs-log-badge">SIDE QUESTS</span>` +
+            `<strong class="hs-log-title">${(log.side || []).length}/5</strong></header>` +
+            `<div class="hs-mission-list">${sideRows || this.emptyHtml('navScroll', 'NO SIDE QUESTS ACCEPTED')}</div>` +
+            `</section>`;
+
+        // —— OFFERS at current location ——
+        const loc = pm && pm.getShipLocation ? pm.getShipLocation(pm.getCurrentGalaxyId(profile), profile) : null;
+        const locLabel = loc
+            ? (loc.kind === 'post' ? 'STATION' : 'PLANET') + ' OFFERS'
+            : 'BOARD OFFERS';
+        const offerRows = offers.map((o) =>
+            `<div class="hs-line hs-log-offer">` +
+            `<span class="hs-line-name">` +
+            `<span class="hs-mission-type">${esc(String(o.type || 'SIDE').toUpperCase())}</span>` +
+            `<strong class="hs-mission-goal">${esc(o.name)}</strong>` +
+            `<small class="hs-muted">${kindTag(o.targetKind)} · ${esc(targetText(o))} · ${esc(o.sourceName || '')}</small>` +
+            `</span>` +
+            `<span class="hs-mission-reward">${rewardHtml(o.reward)}</span>` +
+            `<span class="hs-mission-actions">` +
+            `<button type="button" class="action-button hs-line-action" data-log-accept="${esc(o.id)}" data-nav-item title="Accept sidequest">ACCEPT</button>` +
+            `</span></div>`
+        ).join('');
+
+        const offersHtml = `<section class="hs-log-block hs-log-offers">` +
+            `<header class="hs-log-head"><span class="hs-log-badge">${esc(locLabel)}</span>` +
+            `<strong class="hs-log-title">AVAILABLE</strong></header>` +
+            `<p class="hs-muted hs-hint">Accept sidequests here, at docked stations, or on planets. Main quest stays in the log.</p>` +
+            `<div class="hs-mission-list">${offerRows || this.emptyHtml('navScroll', 'NO OFFERS HERE')}</div>` +
+            `</section>`;
+
+        return `<div class="hs-section hs-panel hs-missions-root hs-mission-log">` +
+            `${this.panelTitle('hsExplore', 'MISSION LOG')}` +
+            `<p class="hs-muted hs-hint">Main quest from your start profile · sidequests at stations &amp; planets · ${done} completed.</p>` +
+            `<div class="hs-tab-fill hs-log-body">${mainHtml}${sideHtml}${offersHtml}</div>` +
             `</div>`;
     },
 
@@ -91806,28 +94007,40 @@ extendClass(HomeStationUI, {
 
     bindMissionEvents() {
         if (!this.overlay || typeof profileManager === 'undefined') return;
-        const launch = (planetId) => {
-            const m = profileManager.getMissionBoard().find((x) => x.planetId === planetId);
-            if (!m) return;
-            this.startMission({ planetId: m.planetId, id: m.planetId, name: m.name });
-        };
-        this.overlay.querySelectorAll('[data-mission-accept]').forEach((btn) => {
+        const pm = profileManager;
+        this.overlay.querySelectorAll('[data-log-accept]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const pid = btn.getAttribute('data-mission-accept');
-                if (!profileManager.acceptMission(pid)) {
-                    this.playButtonResult(btn, false, 'NOT AVAILABLE');
+                const res = pm.acceptSideQuest(btn.getAttribute('data-log-accept'));
+                if (!res || res.ok === false) {
+                    this.playButtonResult(btn, false, (res && res.reason) || 'NOT AVAILABLE');
                     return;
                 }
-                launch(pid);
+                this.statusMsg = 'SIDE QUEST ACCEPTED';
+                this.createUI();
             });
         });
-        this.overlay.querySelectorAll('[data-mission-launch]').forEach((btn) => {
-            btn.addEventListener('click', () => launch(btn.getAttribute('data-mission-launch')));
-        });
-        this.overlay.querySelectorAll('[data-mission-abandon]').forEach((btn) => {
+        this.overlay.querySelectorAll('[data-log-abandon-side]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                profileManager.abandonMission();
-                this.statusMsg = 'MISSION ABANDONED';
+                pm.abandonSideQuest(btn.getAttribute('data-log-abandon-side'));
+                this.statusMsg = 'SIDE QUEST ABANDONED';
+                this.createUI();
+            });
+        });
+        this.overlay.querySelectorAll('[data-log-track-main]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                pm.trackMainQuest();
+                this.statusMsg = 'MAIN QUEST TRACKED';
+                this.createUI();
+            });
+        });
+        this.overlay.querySelectorAll('[data-log-track-side]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-log-track-side');
+                const log = pm.getMissionLog();
+                const entry = (log.side || []).find((s) => s.id === id);
+                if (entry) pm.focusMission(entry, { side: true });
+                pm.save();
+                this.statusMsg = 'SIDE QUEST TRACKED';
                 this.createUI();
             });
         });
@@ -99156,14 +101369,22 @@ extendClass(HomeStationUI, {
         }
         this.resetHangarPreviewSim();
         this.bindHangarPreviewZoom();
+        // ~30 fps is enough for the pixel hangar sim; same look, half the draw cost.
+        const frameInterval = 1000 / 30;
         const loop = (ts) => {
-            if (!this.isVisible || this.tab !== 'hangar') return;
+            if (!this.isVisible || this.tab !== 'hangar') {
+                this._hangarPreviewAnimId = 0;
+                return;
+            }
+            this._hangarPreviewAnimId = requestAnimationFrame(loop);
+            if (document.hidden) return;
             if (!this._hangarPreviewLastTs) this._hangarPreviewLastTs = ts;
-            const dt = Math.min(50, ts - this._hangarPreviewLastTs);
+            const elapsed = ts - this._hangarPreviewLastTs;
+            if (elapsed < frameInterval) return;
+            const dt = Math.min(50, elapsed);
             this._hangarPreviewLastTs = ts;
             this.updateHangarPreviewSim(dt);
             this.drawHangarPreview();
-            this._hangarPreviewAnimId = requestAnimationFrame(loop);
         };
         this._hangarPreviewAnimId = requestAnimationFrame(loop);
     },
@@ -100993,8 +103214,7 @@ extendClass(HomeStationUI, {
 
     /**
      * Dev mode (Shift+C): drag tabs and '|' dividers within their row to
-     * reorder them. Main row only: drag the "+ |" handle in to add a divider,
-     * drag a divider out of the row to remove it.
+     * reorder them. Main row only: drag a divider out of the row to remove it.
      */
     bindTabOrderEditing() {
         if (typeof MENU_ORDER === 'undefined' || typeof startScreenManager === 'undefined' ||
@@ -101113,19 +103333,6 @@ extendClass(HomeStationUI, {
         row.addEventListener('dragleave', (e) => {
             if (!row.contains(e.relatedTarget)) hideMarker();
         });
-
-        // Top bar: a "+ |" handle adds a divider (drag it between buttons); a
-        // divider dragged out of the bar is removed.
-        if (areaMode) {
-            const handle = document.createElement('span');
-            handle.className = 'hs-tab-divider-handle';
-            handle.textContent = '+ |';
-            handle.draggable = true;
-            handle.title = 'Drag between buttons to add a divider';
-            handle.addEventListener('dragstart', (e) => startDrag(handle, NEW_DIVIDER, e));
-            handle.addEventListener('dragend', () => endDrag(handle));
-            row.appendChild(handle);
-        }
     },
 });
 
@@ -103648,6 +105855,15 @@ extendClass(StartScreenManager, {
                 fxKey: 'guiVoxel'
             },
             {
+                name: 'Pixel Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('pixelSize') : 'OFF',
+                options: ['OFF', '1', '2', '3', '4', '6', '8'],
+                type: 'uiFx',
+                fxKey: 'pixelSize',
+                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors'
+            },
+            {
                 name: 'Frame Pixel',
                 value: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxValue('framePx') : 'OFF',
@@ -103896,7 +106112,12 @@ extendClass(StartScreenManager, {
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
         }
-        this.createStartScreenUI();
+        // Shift+C also toggles this mid-combat (see js/ui/hud-layout-editor.js, bindGlobalToggle),
+        // where the start screen's own overlay DOM isn't even attached/visible — a full
+        // createStartScreenUI() rebuild there is pure wasted work (innerHTML='' + rebuilding the
+        // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
+        // when it's actually on screen to look at.
+        if (this.visible) this.createStartScreenUI();
         // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
             homeStationUI.createUI();
@@ -105409,7 +107630,7 @@ extendClass(StartScreenManager, {
         );
         const isVoxelItem = (item) => item.type === 'shipRenderStyle' || item.type === 'voxelSize'
             || (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined'
-                && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
+                && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
         addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx' && !isVoxelItem(item));
         addSection(right, 'sound', 'SOUND', (item) =>
@@ -105723,6 +107944,22 @@ extendClass(StartScreenManager, {
                     if (action === 'perf') {
                         const on = document.documentElement.toggleAttribute('data-vf-performance');
                         button.textContent = on ? 'ON' : 'OFF';
+                        try {
+                            if (window.vfPerf) {
+                                window.vfPerf.sway = on ? 'OFF' : 'AUTO';
+                                window.vfPerf.heavy = 'OFF';
+                                window.vfPerf.anim = on ? 'OFF' : 'ON';
+                                localStorage.setItem('vf-perf', JSON.stringify(window.vfPerf));
+                            }
+                            document.documentElement.setAttribute('data-vf-perf-heavy', 'off');
+                            document.documentElement.setAttribute('data-vf-perf-anim', on ? 'off' : 'on');
+                            if (window.VFBgMouseParallaxParts && VFBgMouseParallaxParts.applyIntensity) {
+                                VFBgMouseParallaxParts.applyIntensity(on ? 'OFF' : 'NORMAL', true);
+                            }
+                            if (on && typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setFx) {
+                                uiAppearanceManager.setFx('framePx', 'OFF');
+                            }
+                        } catch (e) { /* ignore */ }
                     }
                 });
             });
@@ -106022,7 +108259,7 @@ extendClass(StartScreenManager, {
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
             '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
             `<div class="hs-layout-areas">${areasHtml}${profilesHtml}${menuHtml}</div>` +
-            '<div class="hs-menu-panel-actions"><button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
+            '<div class="hs-menu-panel-actions">' + (this.devMode ? '<button type="button" class="action-button hs-menu-panel-action" data-act="enemy-card" data-nav-item>ENEMY CARD LAYOUT</button>' : '') + '<button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
         // ---- Drag & drop: tabs between / inside areas, areas left-right.
         let drag = null; // { kind: 'tab'|'area', area, tab }
@@ -106186,6 +108423,7 @@ extendClass(StartScreenManager, {
             if (on) on.focus();
         };
 
+
         // ---- Inline rename: the pencil swaps the name for a text field.
         // ENTER / blur saves, ESC cancels, an empty name restores the default.
         const startRename = (btn) => {
@@ -106234,6 +108472,7 @@ extendClass(StartScreenManager, {
             const btn = e.target.closest('button[data-act]');
             if (!btn || btn.disabled) return;
             const act = btn.getAttribute('data-act');
+            if (act === 'enemy-card') { if (typeof enemyCardLayout !== 'undefined') enemyCardLayout.openModal(); return; }
             if (act === 'reset') {
                 if (typeof resetMenuAreas === 'function') resetMenuAreas();
                 if (typeof resetMenuIcons === 'function') resetMenuIcons();
@@ -110677,10 +112916,111 @@ extendClass(PlanetSVGManager, {
         return { url: url, scale: (n + 2 * pad) / n };
     },
 
+    /**
+     * Global Pixel Size: show `rawUrl` in `imgEl` snapped to a grid of gp screen px per pixel.
+     * The raster is decoded once and nearest-sampled down to round(shownW / gp) pixels (cached),
+     * so art that is finer than gp (already at the minimum detail) still has uniform pixels.
+     */
+    snapPixelImg(imgEl, rawUrl, shownW, geo) {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        imgEl._rawUrl = rawUrl;
+        imgEl._snapGeo = geo || null;
+        // Without a global Pixel Size the planet still gets whole-screen-pixel texels ("auto" mode, needs geo.live).
+        const auto = !(gp > 0) && geo && geo.live > 0 && shownW > 0;
+        if ((!(gp > 0) && !auto) || !(shownW > 0)) {
+            if (imgEl.getAttribute('src') !== rawUrl) imgEl.src = rawUrl;
+            return;
+        }
+        const N = gp > 0 ? Math.max(1, Math.round(shownW / gp)) : 0;
+        let h = 5381;
+        for (let i = 0; i < rawUrl.length; i += 17) h = ((h << 5) + h + rawUrl.charCodeAt(i)) | 0;
+        const key = rawUrl.length + ':' + h + '|' + (gp > 0 ? N : 'a' + Math.round(shownW));
+        this._snapCache = this._snapCache || new Map();
+        imgEl.style.imageRendering = 'pixelated';
+        const place = (entry) => {
+            if (imgEl.getAttribute('src') !== entry.url) imgEl.src = entry.url;
+            const g = imgEl._snapGeo;
+            if (!g || !(g.live > 0) || !entry.t) return;
+            // Whole-pixel texels: W = n * t screen px, centred in the icon box.
+            const W = entry.n * entry.t / g.live;
+            imgEl.style.width = W + 'px';
+            imgEl.style.height = W + 'px';
+            imgEl.style.left = ((g.size - W) / 2) + 'px';
+            imgEl.style.top = ((g.size - W) / 2) + 'px';
+        };
+        const hit = this._snapCache.get(key);
+        if (hit) { place(hit); return; }
+        const im = new Image();
+        im.onload = () => {
+            let out = rawUrl;
+            const nat = im.naturalWidth || 0;
+            let n = nat || N, t = 0;
+            if (auto) {
+                t = Math.max(1, Math.ceil(shownW / Math.max(1, nat) - 0.2)); // never shrink the planet by more than ~1/5 texel
+                n = Math.max(1, Math.min(nat, Math.round(shownW / t)));
+            } else {
+                n = nat > N ? N : (nat || N);
+            }
+            if (nat > n) {
+                const c = document.createElement('canvas');
+                c.width = c.height = n;
+                const ctx = c.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(im, 0, 0, n, n);
+                out = c.toDataURL();
+            }
+            const entry = { url: out, n: n, t: t };
+            if (this._snapCache.size > 600) this._snapCache.delete(this._snapCache.keys().next().value);
+            this._snapCache.set(key, entry);
+            if (imgEl._rawUrl === rawUrl) place(entry);
+        };
+        im.src = rawUrl;
+    },
+
+    /** True when global PERF / reduced-motion says planet spin should freeze. */
+    isPlanetSpinAllowed() {
+        try {
+            const root = document.documentElement;
+            if (root.getAttribute('data-vf-perf-anim') === 'off') return false;
+            if (root.getAttribute('data-vf-performance') != null) return false;
+            if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return false;
+            }
+        } catch (e) { /* allow */ }
+        return true;
+    },
+
+    /** Keep spin detail aligned with map node art (same grid as planetIconHtml). */
+    clampSpinDetail(detail) {
+        const d = Math.max(1, Math.round(Number(detail) || 1));
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        return Math.min(8, d);
+    },
+
+    /** Keep a small LRU of spin frame data-URLs (full turns are hundreds of ~200KB blobs). */
+    rememberSpinFrameUrl(model, frame, url) {
+        if (!model) return;
+        model.frameUrls = model.frameUrls || {};
+        model.frameUrlOrder = model.frameUrlOrder || [];
+        if (!model.frameUrls[frame]) {
+            model.frameUrls[frame] = url;
+            model.frameUrlOrder.push(frame);
+            while (model.frameUrlOrder.length > 12) {
+                const drop = model.frameUrlOrder.shift();
+                delete model.frameUrls[drop];
+            }
+        }
+        return model.frameUrls[frame];
+    },
+
     startPlanetSpin(periodMs) {
         this.spinPeriod = periodMs || this.spinPeriod || 60000;
         if (this._spinTimer) return;
+        this._spinCursor = 0;
         const tick = () => {
+            if (!this.isPlanetSpinAllowed()) return;
             const els = document.querySelectorAll('[data-planet-spin]');
             if (!els.length) {
                 clearInterval(this._spinTimer);
@@ -110688,34 +113028,82 @@ extendClass(PlanetSVGManager, {
                 return;
             }
             if (document.hidden) return;
-            // New high-detail models are built a few per tick (frame budget) so the
-            // map never freezes; planets show a cheap low-detail globe meanwhile.
+            // Round-robin with a short frame budget: same detail/quality as before,
+            // but never rebuild every planet in one tick (that froze the shell).
+            const n = els.length;
+            // Placeholders (data-spin-frame=-1) get extra budget so coarse first paints upgrade fast.
+            let pendingUpgrade = 0;
+            for (let i = 0; i < n; i++) {
+                if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
+            }
+            const budgetMs = pendingUpgrade ? 14 : 6;
+            const maxUpdates = pendingUpgrade ? 2 : 2;
             const t0 = performance.now();
-            els.forEach((el) => {
+            let updated = 0;
+            for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
+                // Prefer placeholders so zoomed map nodes leave detail-1 ASAP.
+                let el = null;
+                if (pendingUpgrade > 0) {
+                    for (let j = 0; j < n; j++) {
+                        const cand = els[(this._spinCursor + tried + j) % n];
+                        if (cand && cand.getAttribute('data-spin-frame') === '-1') { el = cand; break; }
+                    }
+                }
+                if (!el) el = els[(this._spinCursor + tried) % n];
+                if (!el || !el.isConnected) continue;
+                // Inside the galaxy-map SVG, getBoundingClientRect is unreliable
+                // (viewBox / foreignObject often reports planets far off-screen
+                // while they are clearly visible). Never cull those — the
+                // round-robin budget already caps the work.
+                if (!el.closest('.galaxy-map-svg')) {
+                    try {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width < 2 || rect.height < 2) continue;
+                        if (rect.bottom < -40 || rect.right < -40
+                            || rect.top > innerHeight + 40 || rect.left > innerWidth + 40) continue;
+                    } catch (e) { /* still try */ }
+                }
                 const [id, d, l] = String(el.getAttribute('data-planet-spin')).split('|');
-                if (performance.now() - t0 > 10 && !this.hasSpinModel(id, Number(d) || 1, l)) return;
-                const model = this.getPlanetSpinModel(id, Number(d) || 1, l);
-                if (!model) return;
+                const detail = this.clampSpinDetail(d);
+                const upgrading = el.getAttribute('data-spin-frame') === '-1';
+                if (performance.now() - t0 > budgetMs && !this.hasSpinModel(id, detail, l)) continue;
+                const model = this.getPlanetSpinModel(id, detail, l);
+                if (!model) continue;
                 const f = this.getPlanetSpinIndex(id, model);
-                // Fresh elements already carry the current frame (data-spin-frame);
-                // a new light direction (l) is a different model, so redraw.
                 const fk = model.uid + ':' + f;
-                // Fine grids are costly to turn: they advance a frame at most every 1.2 s.
-                if (model.n > 96 && el._spinFrame != null && el._spinFrame !== fk) {
+                // Fine grids advance slowly; coarse map icons stay on the shared period.
+                // Upgrades from the placeholder always go through immediately.
+                if (!upgrading && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
                     const nowT = performance.now();
-                    if (el._lastSpinT && nowT - el._lastSpinT < 1200) return;
+                    if (el._lastSpinT && nowT - el._lastSpinT < 900) continue;
                     el._lastSpinT = nowT;
                 }
                 if (el._spinFrame == null) el._spinFrame = model.uid + ':' + el.getAttribute('data-spin-frame');
-                if (el._spinFrame === fk) return;
+                if (el._spinFrame === fk) continue;
                 el._spinFrame = fk;
-                // Map planets are <img> (rasterised once, cheap to zoom): swap src.
+                el.setAttribute('data-spin-frame', String(f));
                 const imgEl = el.querySelector('img.gm-planet-img');
                 if (imgEl) {
-                    model.frameUrls = model.frameUrls || {};
-                    if (!model.frameUrls[f]) model.frameUrls[f] = this.planetSvgToImg(this.getPlanetSpinFrame(model, f)).url;
-                    imgEl.src = model.frameUrls[f];
-                    return;
+                    const conv = this.planetSvgToImg(this.getPlanetSpinFrame(model, f));
+                    let url = model.frameUrls && model.frameUrls[f];
+                    if (!url) url = this.rememberSpinFrameUrl(model, f, conv.url);
+                    // Match icon box to the (possibly finer) frame's scale after an upgrade.
+                    const px = Number(el.getAttribute('data-planet-px')) || imgEl.clientWidth || 48;
+                    const big = px * (conv.scale || model.frameScale || 1);
+                    const gm = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.mapScreenScale && el.closest('.galaxy-map-svg')) ? galaxyMapManager : null;
+                    const live = gm ? gm.mapScreenScale() : 0;
+                    const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                        && uiAppearanceManager.getGlobalPixelPx() > 0;
+                    if (live > 0) this.snapPixelImg(imgEl, url, big * live, gpOn ? null : { live: live, size: px });
+                    else if (imgEl.getAttribute('src') !== url) imgEl.src = url;
+                    const off = -(big - px) / 2;
+                    imgEl.style.width = big + 'px';
+                    imgEl.style.height = big + 'px';
+                    imgEl.style.left = off + 'px';
+                    imgEl.style.top = off + 'px';
+                    if (conv.scale) model.frameScale = conv.scale;
+                    updated++;
+                    continue;
                 }
                 const svgEl = el.querySelector('svg');
                 const w = svgEl ? svgEl.getAttribute('width') : null;
@@ -110724,20 +113112,47 @@ extendClass(PlanetSVGManager, {
                 if (w) svg = svg.replace(/width="[^"]*"/, `width="${w}"`);
                 if (h) svg = svg.replace(/height="[^"]*"/, `height="${h}"`);
                 el.innerHTML = svg;
-            });
+                updated++;
+            }
+            this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
-        this._spinTimer = setInterval(tick, 100);
+        // ~5 Hz is enough for a 60s axial turn; 10 Hz was mostly decode/repaint cost.
+        this._spinTimer = setInterval(tick, 200);
     }
 });
 
 
-/* --- js/graphics/planet-svgs.js?v=pull-1 --- */
+/* --- js/graphics/planet-svgs/hero-planet.js --- */
 "use strict";
 
-// PlanetSVGManager is defined in planet-svgs/core.js and extended by the other files in planet-svgs/,
-// which index.html loads before this file.
-// Global planet SVG manager instance
-var planetSVGManager = new PlanetSVGManager();
+// PlanetSVGManager: a bigger, more detailed "hero" planet per faction, used
+// as an animated backdrop behind the faction-pick wizard card (instead of a
+// generic in-game globe). Reuses the same spin-frame rotation pipeline
+// (spin-frames.js) at a higher detail grid.
+extendClass(PlanetSVGManager, {
+    /** Registers (once) and returns the spin model for faction `factionId`'s hero planet. */
+    getHeroPlanetSpinModel(factionId, detail) {
+        const faction = String(factionId || 'pirate').toLowerCase();
+        const id = 'hero-' + faction;
+        // getPlanetSpinModel() always re-derives this id's spec via getPlanetSVG()
+        // (ensurePlanetGraphic), which for an id with no planetConfigManager entry
+        // falls back to namedStyles[id]/namedPalettes[id] (defaulting to gray if
+        // unset). Registering the faction's real style/color there — instead of
+        // pre-seeding planetSpecs directly — lets that shared fallback path pick
+        // up the right look without having to special-case the spin-model lookup
+        // (which is shared by every other planet in the game and must not change).
+        this.namedPalettes = this.namedPalettes || {};
+        this.namedStyles = this.namedStyles || {};
+        if (!this.namedPalettes[id]) {
+            const style = this.resolveIconStyle ? this.resolveIconStyle(null, faction) : 'banded';
+            const pal = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+                ? factionShipStyles.getFactionStyle(faction) : null;
+            this.namedPalettes[id] = (pal && pal.hull) || this.namedPalettes[faction] || '#808080';
+            this.namedStyles[id] = style;
+        }
+        return this.getPlanetSpinModel(id, detail || 16);
+    }
+});
 
 
 /* --- js/ui/start-screen/station-backdrop.js?v=1 --- */
@@ -111025,14 +113440,31 @@ var StartStationBackdrop = class StartStationBackdrop {
     }
 
     _startLoop() {
+        if (this._raf) return;
         const tick = (now) => {
+            if (!this.canvas.isConnected) {
+                this._raf = 0;
+                return;
+            }
             this._raf = requestAnimationFrame(tick);
-            if (!this.canvas.isConnected) return;
+            // Pause while the start screen is off-DOM or covered / display:none.
+            try {
+                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
+                if (host.classList.contains('hidden')) return;
+                const st = getComputedStyle(host);
+                if (st.display === 'none' || st.visibility === 'hidden') return;
+            } catch (e) { /* draw anyway */ }
+            if (document.hidden) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
         };
         this._raf = requestAnimationFrame(tick);
+    }
+
+    _stopLoop() {
+        if (this._raf) cancelAnimationFrame(this._raf);
+        this._raf = 0;
     }
 
     /** Sum of all station upgrade levels -> 0..5 build stage. */
@@ -111132,7 +113564,7 @@ var StartStationBackdrop = class StartStationBackdrop {
                     planetSVGManager.createPixelPlanetSVG(id, style, faction, pal.hull, {}, 1);
                 }
             }
-            const model = planetSVGManager.getPlanetSpinModel(id, 12);
+            const model = planetSVGManager.getPlanetSpinModel(id, (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? Math.max(1, Math.min(12, Math.round(window.innerHeight / (18 * uiAppearanceManager.getGlobalPixelPx())))) : 12);
             if (!model || model === this._planetSpinModel) return;
             this._planetSpinId = id;
             this._planetSpinModel = model;
@@ -111600,6 +114032,635 @@ extendClass(StartScreenManager, {
 });
 
 
+/* --- js/ui/profile-selection/hero-planet-backdrop.js --- */
+"use strict";
+
+// Animated faction home-planet, mounted behind the faction-pick card of the
+// "new profile" wizard. Spins via PlanetSVGManager.getHeroPlanetSpinModel
+// (hero-planet.js), same lazy-frame-rasterize-cache pattern as
+// StartStationBackdrop (js/ui/start-screen/station-backdrop.js), plus a soft
+// per-faction atmosphere glow drawn underneath it. Only animates while
+// mounted (mount()/unmount() start/stop its own rAF loop).
+var HeroPlanetBackdrop = class HeroPlanetBackdrop {
+    constructor() {
+        this.el = document.createElement('canvas');
+        this.el.className = 'hero-planet-canvas';
+        this.ctx = this.el.getContext('2d');
+        this.W = 0;
+        this.H = 0;
+        this._faction = null;
+        this._spinModel = null;
+        this._spinId = null;
+        this._frameCache = {};
+        this._frameLoading = {};
+        this._curFrame = null;
+        this._raf = 0;
+        this._lastT = 0;
+        this._frameInterval = 1000 / 12;
+        this._reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (typeof ResizeObserver !== 'undefined') {
+            this._ro = new ResizeObserver(() => this._syncSize());
+        }
+    }
+
+    mount(container) {
+        if (!container) return;
+        if (this.el.parentNode !== container) {
+            // Only promote static hosts — never clobber fixed/absolute
+            // (launch-cutscene uses position:fixed; inline relative collapsed it to 0×0).
+            const pos = (typeof getComputedStyle === 'function')
+                ? getComputedStyle(container).position
+                : (container.style.position || 'static');
+            if (!pos || pos === 'static') container.style.position = 'relative';
+            container.insertBefore(this.el, container.firstChild);
+        }
+        if (this._ro) this._ro.observe(container);
+        this._syncSize();
+        if (!this._reduceMotion) this._startLoop();
+        else this.draw();
+    }
+
+    unmount() {
+        if (this._ro) this._ro.disconnect();
+        this._stopLoop();
+        if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
+    }
+
+    /** Global Pixel Size: spin detail so one art cell is gp screen px; else the given default. */
+    _pixelDetail(def) {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (!(gp > 0)) return def;
+        const w = (this.el && this.el.clientWidth) || window.innerHeight;
+        return Math.max(1, Math.min(16, Math.round(w / (18 * gp))));
+    }
+
+    setFaction(factionId) {
+        const faction = String(factionId || 'pirate').toLowerCase();
+        if (faction === this._faction) return;
+        this._faction = faction;
+        if (typeof planetSVGManager === 'undefined' || !planetSVGManager.getHeroPlanetSpinModel) return;
+        try {
+            const model = planetSVGManager.getHeroPlanetSpinModel(faction, this._pixelDetail(16));
+            if (!model || model === this._spinModel) return;
+            this._spinId = 'hero-' + faction;
+            this._spinModel = model;
+            this._frameCache = {};
+            this._frameLoading = {};
+            this._frameIdx = 0;
+            // keep _curFrame (last drawn) until the new planet's first raster lands, so it doesn't blank
+        } catch (err) { /* keep whatever was already showing */ }
+        if (this._reduceMotion) this.draw();
+    }
+
+    _syncSize() {
+        const parent = this.el.parentNode;
+        if (!parent) return;
+        const w = Math.round(parent.clientWidth);
+        const h = Math.round(parent.clientHeight);
+        if (w < 10 || h < 10 || (w === this.W && h === this.H)) return;
+        this.W = w;
+        this.H = h;
+        const dpr = window.devicePixelRatio || 1;
+        this.el.width = Math.round(w * dpr);
+        this.el.height = Math.round(h * dpr);
+        this.el.style.width = w + 'px';
+        this.el.style.height = h + 'px';
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.draw();
+    }
+
+    _startLoop() {
+        if (this._raf) return;
+        const tick = (now) => {
+            if (!this.el.isConnected) {
+                this._raf = 0;
+                return;
+            }
+            this._raf = requestAnimationFrame(tick);
+            if (document.hidden) return;
+            try {
+                const st = getComputedStyle(this.el);
+                if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return;
+            } catch (e) { /* draw */ }
+            if (now - this._lastT < this._frameInterval) return;
+            this._lastT = now;
+            this.draw();
+        };
+        this._raf = requestAnimationFrame(tick);
+    }
+
+    _stopLoop() {
+        if (this._raf) cancelAnimationFrame(this._raf);
+        this._raf = 0;
+    }
+
+    /**
+     * Lazily rasterizes+caches the spin frame to show; returns the last good frame while a new one decodes.
+     * Does NOT use planetSVGManager.getPlanetSpinIndex()'s wall-clock formula: that spreads a planet's
+     * ~600+ frames over a shared 60s spinPeriod, which at this backdrop's 12fps draw rate lands on a
+     * brand-new, never-cached frame almost every tick — the async rasterize+decode for one frame never
+     * catches up before "now" has already moved to a different frame, so the sphere never finishes its
+     * first paint. Instead this keeps its own pointer, and only moves on to the NEXT frame once the
+     * current one has actually finished loading (one in-flight load at a time, always in order), so
+     * playback is paced to whatever this backdrop can actually keep loaded rather than the wall clock.
+     */
+    _currentFrame() {
+        const model = this._spinModel;
+        const id = this._spinId;
+        if (!model || !id || typeof planetSVGManager === 'undefined') return this._curFrame;
+        if (this._frameIdx == null) this._frameIdx = 0;
+        const f = this._frameIdx;
+        const cached = this._frameCache[f];
+        if (cached) { this._curFrame = cached; return cached; }
+        if (!this._frameLoading[f]) {
+            this._frameLoading[f] = true;
+            try {
+                const svg = planetSVGManager.getPlanetSpinFrame(model, f);
+                const conv = planetSVGManager.planetSvgToImg(svg, 0.45);
+                const img = new Image();
+                img.onload = () => {
+                    if (Object.keys(this._frameCache).length > 90) this._frameCache = {};
+                    const entry = { img: img, scale: conv.scale };
+                    this._frameCache[f] = entry;
+                    this._frameLoading[f] = false;
+                    // Show it the moment it's ready — the next draw() tick would otherwise have
+                    // already moved _frameIdx past `f` before ever reading this cache entry.
+                    this._curFrame = entry;
+                    // Only advance to the next frame once this one is actually ready to show.
+                    if (this._frameIdx === f) this._frameIdx = (f + 1) % model.count;
+                    this.draw();
+                };
+                img.src = conv.url;
+            } catch (err) { this._frameLoading[f] = false; }
+        }
+        return this._curFrame;
+    }
+
+    draw() {
+        const c = this.ctx;
+        if (!this.W || !this.H) return;
+        c.clearRect(0, 0, this.W, this.H);
+        const pal = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+            ? factionShipStyles.getFactionStyle(this._faction) : null;
+        const accent = (pal && (pal.accent || pal.hull)) || '#7ec8ff';
+        // Bigger than the in-game globes: dominates the card as a hero visual.
+        const r = Math.min(this.W, this.H) * 0.62;
+        const cx = this.W * 0.5;
+        const cy = this.H * 0.48;
+        // Soft atmosphere glow, under the disc.
+        const g = c.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 1.35);
+        g.addColorStop(0, accent + '55');
+        g.addColorStop(1, accent + '00');
+        c.fillStyle = g;
+        c.fillRect(0, 0, this.W, this.H);
+        const frame = this._currentFrame();
+        if (frame) {
+            const dr = r * frame.scale;
+            c.save();
+            c.beginPath();
+            c.arc(cx, cy, r, 0, Math.PI * 2);
+            c.clip();
+            c.imageSmoothingEnabled = false;
+            c.drawImage(frame.img, cx - dr, cy - dr, dr * 2, dr * 2);
+            c.restore();
+        }
+    }
+}
+
+
+/* --- js/ui/profile-selection/launch-cutscene.js --- */
+"use strict";
+
+// Full-screen launch cutscene after new-pilot creation. Style follows the
+// chosen story path (hunt / escort / raid / salvage / …) so each story feels
+// different before the home-station handoff. SKIP-able after a short arm delay.
+var LaunchCutsceneManager = class LaunchCutsceneManager {
+    constructor() {
+        this.active = false;
+        this.phase = null;
+        this._onDone = null;
+        this._raf = 0;
+        this._startT = 0;
+        this._phaseStartT = 0;
+        this.overlay = null;
+        this.canvas = null;
+        this.ctx = null;
+        this._planet = null;
+        this._shipImg = null;
+        this._shipImgKey = null;
+        this._faction = 'pirate';
+        this._story = null;
+        this._style = 'lift';
+        this._bits = null;
+        this._keyHandler = null;
+        // Title holds long enough to read; card stays up through most of act.
+        this.durations = { title: 1600, act: 1400, exit: 700 };
+    }
+
+    isActive() { return !!this.active; }
+
+    /** Resolve a cutscene style id from story metadata. */
+    resolveStyle(story, faction) {
+        const cut = String((story && (story.cut || story.style)) || '').toLowerCase();
+        if (cut) return cut;
+        const t = String((story && story.missions && story.missions[0] && story.missions[0].type) || 'patrol').toLowerCase();
+        const fac = String(faction || '').toLowerCase();
+        if (fac === 'voidborn' && (t === 'patrol' || t === 'clear')) return 'rift';
+        if (fac === 'machine' && (t === 'patrol' || t === 'clear')) return 'compile';
+        return t;
+    }
+
+    play({ faction, shipId, profile, story, onDone }) {
+        if (this.active) this._cleanup();
+        this.active = true;
+        this._onDone = (typeof onDone === 'function') ? onDone : null;
+        this._faction = String(faction || (profile && profile.faction) || 'pirate').toLowerCase();
+        this._story = story || (profile && profile.storyPath) || null;
+        this._style = this.resolveStyle(this._story, this._faction);
+        this._bits = this._seedBits();
+        this._skipArmedAt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 500;
+        this._buildOverlay();
+        this._loadShipImage(shipId, this._faction);
+        if (typeof HeroPlanetBackdrop !== 'undefined') {
+            this._planet = new HeroPlanetBackdrop();
+            this._planet.setFaction(this._faction);
+            this._planet.mount(this.overlay);
+            this._planet.el.classList.add('launch-cutscene-planet');
+            this.overlay.style.position = 'fixed';
+            this.overlay.style.inset = '0';
+            this.overlay.style.zIndex = '100090';
+        }
+        this._startT = 0;
+        this._phaseStartT = 0;
+        this.setPhase('title');
+        const loop = (t) => {
+            if (!this.active) return;
+            if (!this._startT) { this._startT = t; this._phaseStartT = t; }
+            this._tick(t);
+            this._raf = requestAnimationFrame(loop);
+        };
+        this._raf = requestAnimationFrame(loop);
+    }
+
+    setPhase(phase) {
+        this.phase = phase;
+        this._phaseStartT = 0;
+    }
+
+    skip() {
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (this._skipArmedAt && now < this._skipArmedAt) return;
+        this._finish();
+    }
+
+    _seedBits() {
+        const bits = [];
+        let s = 2166136261;
+        const raw = String((this._story && this._story.id) || this._style) + '|' + this._faction;
+        for (let i = 0; i < raw.length; i++) { s ^= raw.charCodeAt(i); s = Math.imul(s, 16777619); }
+        const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+        for (let i = 0; i < 48; i++) bits.push({ x: rnd(), y: rnd(), v: 0.3 + rnd() * 1.2, s: 1 + (rnd() * 3) | 0 });
+        return bits;
+    }
+
+    _buildOverlay() {
+        const overlay = document.createElement('div');
+        overlay.className = 'launch-cutscene';
+        overlay.setAttribute('data-cut', this._style);
+        const canvas = document.createElement('canvas');
+        canvas.className = 'launch-cutscene-canvas';
+        overlay.appendChild(canvas);
+        const card = document.createElement('div');
+        card.className = 'launch-cutscene-card';
+        const esc = (s) => String(s || '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[ch]));
+        const title = (this._story && this._story.title) || 'LAUNCH';
+        const blurb = (this._story && this._story.blurb) || '';
+        this._titleText = String(title);
+        this._blurbText = String(blurb);
+        card.innerHTML = `<div class="launch-cutscene-kicker">STORY</div>` +
+            `<div class="launch-cutscene-title">${esc(title)}</div>` +
+            (blurb ? `<div class="launch-cutscene-blurb">${esc(blurb)}</div>` : '');
+        overlay.appendChild(card);
+        this._card = card;
+        const skipBtn = document.createElement('button');
+        skipBtn.type = 'button';
+        skipBtn.className = 'launch-cutscene-skip';
+        skipBtn.textContent = 'SKIP ▶';
+        skipBtn.addEventListener('click', () => this.skip());
+        overlay.appendChild(skipBtn);
+        document.body.appendChild(overlay);
+        this.overlay = overlay;
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this._syncSize();
+        this._resizeHandler = () => this._syncSize();
+        window.addEventListener('resize', this._resizeHandler);
+        this._keyHandler = (e) => {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.skip();
+            }
+        };
+        setTimeout(() => {
+            if (!this.active || this._keyHandlerBound) return;
+            document.addEventListener('keydown', this._keyHandler, true);
+            this._keyHandlerBound = true;
+        }, 0);
+    }
+
+    _syncSize() {
+        if (!this.canvas) return;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = Math.round(w * dpr);
+        this.canvas.height = Math.round(h * dpr);
+        this.canvas.style.width = w + 'px';
+        this.canvas.style.height = h + 'px';
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.W = w;
+        this.H = h;
+    }
+
+    _loadShipImage(shipId, faction) {
+        if (typeof shipRenderer === 'undefined' || !shipRenderer.renderShipPreview || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return;
+        if (typeof spriteLoader !== 'undefined' && spriteLoader.isLoaded && !spriteLoader.isLoaded()) {
+            window.addEventListener('vf-sprites-loaded', () => { this._shipImgKey = null; this._loadShipImage(shipId, faction); }, { once: true });
+            return;
+        }
+        const id = shipId || 'player_scrap';
+        const cacheKey = id + '|' + faction;
+        if (this._shipImgKey === cacheKey) return;
+        try {
+            const model = shipConfigManager.getMergedModel(id);
+            if (!model) { this._shipImgKey = null; return; }
+            const cfg = shipConfigManager.getConfig && shipConfigManager.getConfig(id);
+            if (faction && !(cfg && cfg.custom)) model.faction = faction;
+            const inner = document.createElement('canvas');
+            inner.width = 60; inner.height = 80;
+            shipRenderer.renderShipPreview(inner, model, 1);
+            const img = new Image();
+            img.onload = () => { if (this._shipImgKey === cacheKey) this._shipImg = img; };
+            img.src = inner.toDataURL();
+            this._shipImgKey = cacheKey;
+        } catch (err) { this._shipImgKey = null; }
+    }
+
+    _tick(t) {
+        if (!this._phaseStartT) this._phaseStartT = t;
+        const elapsed = t - this._phaseStartT;
+        const dur = this.durations[this.phase] || 0;
+        const p = Math.min(1, dur ? elapsed / dur : 1);
+        if (this._card) {
+            // Keep title readable for title + most of act; fade only late in exit.
+            let op = 0;
+            if (this.phase === 'title') op = Math.min(1, p * 3);
+            else if (this.phase === 'act') op = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25;
+            else op = Math.max(0, 1 - p * 2);
+            this._card.style.opacity = String(op);
+        }
+        this._draw(p);
+        if (elapsed >= dur) {
+            if (this.phase === 'title') this.setPhase('act');
+            else if (this.phase === 'act') this.setPhase('exit');
+            else if (this.phase === 'exit') this._finish();
+        }
+    }
+
+    _accent() {
+        const pal = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+            ? factionShipStyles.getFactionStyle(this._faction) : null;
+        return (pal && (pal.accent || pal.hull)) || '#7ec8ff';
+    }
+
+    _drawShip(c, sx, sy, scale, alpha, rot) {
+        if (!this._shipImg || !this._shipImgKey) return;
+        const sh = 90 * scale;
+        const sw = sh * (this._shipImg.width / this._shipImg.height || 0.73);
+        c.save();
+        c.globalAlpha = alpha;
+        c.imageSmoothingEnabled = false;
+        c.translate(sx, sy);
+        if (rot) c.rotate(rot);
+        c.drawImage(this._shipImg, -sw / 2, -sh / 2, sw, sh);
+        c.restore();
+    }
+
+    _drawGlow(c, sx, sy, scale, accent, strength) {
+        const r = 18 * scale * (0.8 + strength);
+        const g = c.createRadialGradient(sx, sy + 18 * scale, 2, sx, sy + 18 * scale, r);
+        g.addColorStop(0, accent + 'cc');
+        g.addColorStop(1, accent + '00');
+        c.globalAlpha = 0.45 + strength * 0.5;
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(sx, sy + 18 * scale, r, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1;
+    }
+
+    _drawBits(c, accent, mode, p) {
+        const bits = this._bits || [];
+        c.fillStyle = accent;
+        for (let i = 0; i < bits.length; i++) {
+            const b = bits[i];
+            let x = b.x * this.W, y = b.y * this.H;
+            if (mode === 'ash') { y = ((b.y + p * b.v * 0.4) % 1) * this.H; x += Math.sin((p + b.x) * 8) * 6; }
+            else if (mode === 'streak') { x = ((b.x + p * b.v) % 1) * this.W; }
+            else if (mode === 'rift') { const a = (b.x + p) * Math.PI * 2; x = this.W * 0.5 + Math.cos(a) * (40 + b.y * 120); y = this.H * 0.5 + Math.sin(a) * (40 + b.y * 80); }
+            else if (mode === 'grid') { x = Math.floor(b.x * 16) / 16 * this.W; y = Math.floor(b.y * 10) / 10 * this.H; }
+            else { y = ((b.y + p * 0.15) % 1) * this.H; }
+            c.globalAlpha = 0.25 + (i % 5) * 0.1;
+            c.fillRect(x | 0, y | 0, b.s, b.s);
+        }
+        c.globalAlpha = 1;
+    }
+
+    _pose(p) {
+        // Returns {sx,sy,scale,alpha,rot,glow,extras} for the active style × phase.
+        const W = this.W, H = this.H, st = this._style, ph = this.phase;
+        const cx = W * 0.5, cy = H * 0.56;
+        let sx = cx, sy = cy, scale = 1, alpha = 1, rot = 0, glow = 0.4, extras = null;
+        const ease = (t) => t * t;
+        if (ph === 'title') {
+            sy = cy + 8; scale = 0.95; glow = 0.25;
+        } else if (st === 'hunt' || st === 'raid') {
+            if (ph === 'act') {
+                const e = ease(p);
+                sx = W * (-0.1 + e * 1.2);
+                sy = H * (0.62 - e * 0.18);
+                rot = -0.45; scale = 1.05; glow = 0.9;
+            } else {
+                const e = ease(p);
+                sx = W * (1.1 + e * 0.3); sy = H * 0.42 - e * H * 0.2;
+                rot = -0.6; scale = Math.max(0.1, 1 - e); alpha = 1 - e; glow = 0.5;
+            }
+        } else if (st === 'escort') {
+            if (ph === 'act') {
+                sy = cy - p * H * 0.08; glow = 0.5 + p * 0.3;
+                extras = 'escort';
+            } else {
+                const e = ease(p);
+                sx = cx + e * W * 0.5; sy = cy - H * 0.08 - e * H * 0.45;
+                scale = Math.max(0.08, 1.1 - e); alpha = 1 - Math.max(0, p - 0.65) / 0.35;
+                extras = 'escort';
+            }
+        } else if (st === 'salvage') {
+            if (ph === 'act') {
+                sx = cx + (1 - p) * W * 0.2; sy = cy - p * 20; glow = 0.35;
+                extras = 'beam';
+            } else {
+                const e = ease(p);
+                sx = cx + e * W * 0.45; sy = cy - 20 - e * H * 0.4;
+                scale = Math.max(0.1, 1 - e * 0.9); alpha = 1 - e; glow = 0.3;
+            }
+        } else if (st === 'defend') {
+            if (ph === 'act') {
+                sy = cy - 10; scale = 1 + Math.sin(p * Math.PI) * 0.08; glow = 0.6 + p * 0.3;
+                extras = 'shield';
+            } else {
+                const e = ease(p);
+                sx = cx + e * W * 0.4; sy = cy - 10 - e * H * 0.4;
+                scale = Math.max(0.1, 1 - e); alpha = 1 - e;
+            }
+        } else if (st === 'rift') {
+            extras = 'rift';
+            if (ph === 'act') {
+                const e = ease(p);
+                sx = cx; sy = cy - e * 30; scale = 1 - e * 0.2; glow = 0.7;
+            } else {
+                const e = ease(p);
+                sx = cx; sy = cy - 30; scale = Math.max(0.02, 0.8 - e); alpha = 1 - e; glow = 1;
+            }
+        } else if (st === 'compile') {
+            extras = 'grid';
+            if (ph === 'act') {
+                alpha = Math.min(1, p * 2); scale = 0.6 + p * 0.4; sy = cy; glow = p;
+            } else {
+                const e = ease(p);
+                sx = cx + e * W * 0.35; sy = cy - e * H * 0.4;
+                scale = Math.max(0.1, 1 - e * 0.8); alpha = 1 - e;
+            }
+        } else if (st === 'patrol' || st === 'clear') {
+            if (ph === 'act') {
+                const e = p;
+                sx = cx + Math.sin(e * Math.PI) * W * 0.22;
+                sy = cy - e * H * 0.06; rot = Math.sin(e * Math.PI) * 0.25; glow = 0.55;
+            } else {
+                const e = ease(p);
+                sx = cx + W * 0.22 + e * W * 0.4; sy = cy - H * 0.06 - e * H * 0.4;
+                scale = Math.max(0.08, 1 - e); alpha = 1 - e;
+            }
+        } else {
+            // lift (default) + trial
+            if (ph === 'act') {
+                sy = cy - p * H * 0.08; scale = 1 + p * 0.12; glow = 0.5 + p * 0.4;
+            } else {
+                const e = ease(p);
+                sx = cx + e * W * 0.55; sy = cy - H * 0.08 - e * H * 0.5;
+                scale = Math.max(0.05, 1.15 - e * 1.1);
+                alpha = Math.max(0, 1 - Math.max(0, p - 0.7) / 0.3); glow = 0.4;
+            }
+        }
+        return { sx, sy, scale, alpha, rot, glow, extras };
+    }
+
+    _draw(p) {
+        const c = this.ctx;
+        if (!c || !this.W) return;
+        c.clearRect(0, 0, this.W, this.H);
+        const accent = this._accent();
+        const st = this._style;
+        const bitMode = st === 'hunt' || st === 'raid' || st === 'trial' ? 'ash'
+            : (st === 'rift' ? 'rift' : (st === 'compile' ? 'grid' : (st === 'escort' || st === 'patrol' ? 'streak' : 'ash')));
+        if (this.phase !== 'title' || p > 0.2) this._drawBits(c, accent, bitMode, p + (this.phase === 'exit' ? 1 : 0));
+
+        if (st === 'rift' || (this._pose && false)) { /* ring drawn with pose extras */ }
+        const pose = this._pose(this.phase === 'title' ? 0 : p);
+
+        if (pose.extras === 'rift' || st === 'rift') {
+            const cx = this.W * 0.5, cy = this.H * 0.52;
+            const rad = 70 + (this.phase === 'exit' ? p * 40 : p * 10);
+            c.strokeStyle = accent;
+            c.globalAlpha = 0.55;
+            c.lineWidth = 3;
+            c.beginPath(); c.ellipse(cx, cy, rad * 1.4, rad * 0.55, 0, 0, Math.PI * 2); c.stroke();
+            c.globalAlpha = 0.25;
+            c.beginPath(); c.ellipse(cx, cy, rad * 0.9, rad * 0.35, 0, 0, Math.PI * 2); c.stroke();
+            c.globalAlpha = 1;
+        }
+        if (pose.extras === 'beam' || (st === 'salvage' && this.phase === 'act')) {
+            c.strokeStyle = accent;
+            c.globalAlpha = 0.35 + p * 0.4;
+            c.lineWidth = 2;
+            c.beginPath();
+            c.moveTo(pose.sx, pose.sy + 30);
+            c.lineTo(this.W * 0.5, this.H * 0.72);
+            c.stroke();
+            c.globalAlpha = 1;
+            // wreck block
+            c.fillStyle = '#2a2a32';
+            c.fillRect(this.W * 0.5 - 28, this.H * 0.7, 56, 18);
+            c.fillStyle = accent;
+            c.globalAlpha = 0.5;
+            c.fillRect(this.W * 0.5 - 10, this.H * 0.7 + 4, 8, 6);
+            c.globalAlpha = 1;
+        }
+        if (pose.extras === 'shield' || (st === 'defend' && this.phase === 'act')) {
+            c.strokeStyle = accent;
+            c.globalAlpha = 0.35 + Math.sin(p * Math.PI * 4) * 0.2;
+            c.lineWidth = 2;
+            c.beginPath();
+            c.arc(pose.sx, pose.sy, 55 + p * 8, 0, Math.PI * 2);
+            c.stroke();
+            c.globalAlpha = 1;
+        }
+        if (pose.extras === 'escort' || st === 'escort') {
+            this._drawShip(c, pose.sx - 70, pose.sy + 24, pose.scale * 0.55, pose.alpha * 0.7, pose.rot);
+            this._drawShip(c, pose.sx + 70, pose.sy + 28, pose.scale * 0.55, pose.alpha * 0.7, pose.rot);
+        }
+
+        this._drawGlow(c, pose.sx, pose.sy, pose.scale, accent, pose.glow);
+        this._drawShip(c, pose.sx, pose.sy, pose.scale, pose.alpha, pose.rot);
+    }
+
+    _finish() {
+        this._cleanup();
+        const cb = this._onDone;
+        this._onDone = null;
+        if (cb) cb();
+    }
+
+    _cleanup() {
+        this.active = false;
+        if (this._raf) cancelAnimationFrame(this._raf);
+        this._raf = 0;
+        if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+        this._resizeHandler = null;
+        if (this._keyHandler && this._keyHandlerBound) {
+            document.removeEventListener('keydown', this._keyHandler, true);
+        }
+        this._keyHandler = null;
+        this._keyHandlerBound = false;
+        if (this._planet) { this._planet.unmount(); this._planet = null; }
+        if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
+        this.overlay = null;
+        this.canvas = null;
+        this.ctx = null;
+        this._card = null;
+        this._story = null;
+        this._titleText = '';
+        this._blurbText = '';
+        this._bits = null;
+    }
+}
+var launchCutsceneManager = new LaunchCutsceneManager();
+
+
 /* --- js/ui/home-station/physical-item.js?v=pi-19 --- */
 // Generative "physical object" look for inventory items: every part gets a seeded, pixel-shaded metal
 // casing (bevel, rivets, vents / label plate / hazard stripe / pipes, scratches, cast shadow) with a
@@ -111876,4 +114937,827 @@ document.addEventListener('click', (e) => {
 // The inventory switch and its filter are remembered across reloads; restored synchronously
 // in HomeStationUI.createUI() (create-ui.js) before the first render/draw, since this
 // DOMContentLoaded listener fired too late and raced the hangar tab's own first paint.
+
+
+/* --- js/graphics/planet-svgs.js --- */
+"use strict";
+
+// PlanetSVGManager is defined in planet-svgs/core.js and extended by the other files in planet-svgs/,
+// which index.html loads before this file.
+// Global planet SVG manager instance
+var planetSVGManager = new PlanetSVGManager();
+
+
+/* --- js/ui/hud-layout-editor.js --- */
+"use strict";
+
+/**
+ * Dev-mode HUD layout editor. The combat HUD panels stay in normal flex flow — this only lets
+ * the player (a) reorder panels within their own cluster via a drag grip, and (b) drag the
+ * boundary between two adjacent panels to resize them (an explicit pixel height via flex-basis),
+ * rather than freely moving/resizing panels. Persisted to localStorage. Only reachable while
+ * startScreenManager.devMode is on.
+ *
+ * Resizing uses a plain height, not `zoom`: zoom was tried first so a panel's content (text,
+ * icons, bars) would scale together with it, but on the game's tightly packed icon rows (the
+ * under-stage stat bar in particular) it produced overlapping, garbled icons — the combination of
+ * this zoom with the stage's own existing zoom/transform layers doesn't render cleanly for that
+ * kind of content. A plain height is quietly safe: the panel just gets more or less room, its
+ * content never gets distorted.
+ */
+var hudLayoutEditor = (function () {
+    const STORAGE_KEY = 'vf_hud_layout_v4';
+    const CLUSTER_SELECTORS = ['#gameLeftCluster', '.game-canvas-container', '#gameRightCluster'];
+    const GAME_CONTAINER_SEL = '.game-container';
+    const MIN_H = 30, MAX_H = 2000;
+    const MIN_SIDE_W = 140, MAX_SIDE_W = 460;
+    // Dragging the boundary between a side cluster and the playfield resizes that cluster's width
+    // directly (not via zoom — it's a column width, not panel content); the canvas column is
+    // `flex: 1 1 auto` already, so it absorbs whatever width the side cluster gives up or takes,
+    // i.e. "the game gets resized" as a natural side effect, with no extra code needed for that.
+    const CONTAINER_SPLITTERS = [
+        { clusterSel: '#gameLeftCluster', sign: 1 },
+        { clusterSel: '#gameRightCluster', sign: -1 }
+    ];
+
+    let layout = { clusters: {}, container: {}, scales: {} };
+    try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (raw && raw.clusters) layout = raw;
+        if (!layout.container) layout.container = {};
+        if (!layout.scales) layout.scales = {};
+    } catch (e) { /* ignore */ }
+
+    const originalOrder = {}; // clusterSel -> [childKey, ...] as authored, captured once at boot
+
+    let editing = false;
+    const liveGrips = []; // { child, grip }
+    const livePickers = []; // { child, btn }
+    const liveSplitters = []; // element refs
+    let picker = null; // the open content-picker popover, or null
+
+    // Every panel across all three clusters that a slot can be made to show, keyed by a selector
+    // stable enough to find it wherever it currently lives (its id/class never changes, only its
+    // parent does). .game-stage is deliberately absent: it's the actual game canvas, sized by the
+    // game's own viewport-fit code, never a swappable slot.
+    const PANEL_REGISTRY = [
+        { sel: '#gameInfoPanel', label: 'INFO' },
+        { sel: '.weapon-selection', label: 'WEAPONS' },
+        { sel: '.player-vitals-side', label: 'PLAYER VITALS' },
+        { sel: '#giLoadoutSide', label: 'LOADOUT' },
+        { sel: '.enemy-vitals-side', label: 'ENEMY VITALS' },
+        { sel: '#giMissionSide', label: 'MISSION' },
+        { sel: '#giUnderStage', label: 'UNDER-STAGE BAR' }
+    ];
+
+    function findPanelByKey(k) {
+        for (let i = 0; i < PANEL_REGISTRY.length; i++) {
+            const el = document.querySelector(PANEL_REGISTRY[i].sel);
+            if (el && childKey(el) === k) return el;
+        }
+        return null;
+    }
+
+    function isActive() {
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+
+    // The stage sits under several stacked, independent scale layers (CSS `zoom`, `transform:
+    // scale`, possibly more) between an authored CSS pixel and what getBoundingClientRect() /
+    // mouse coordinates report. Rather than track down and multiply every factor by name (fragile
+    // — a new layer silently breaks the math again), measure the combined effect directly: drop an
+    // invisible probe of a known authored size into the same parent and compare its rendered size.
+    function measureScale(referenceEl) {
+        const parent = referenceEl && referenceEl.nodeType === 1 ? referenceEl : document.body;
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;width:2000px;height:2000px;margin:0;border:0;padding:0;visibility:hidden;pointer-events:none;';
+        parent.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w > 0 ? w / 2000 : 1;
+    }
+
+    function saveLayout() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layout)); } catch (e) { /* ignore */ }
+    }
+
+    function childKey(el) {
+        if (el.id) return '#' + el.id;
+        const cls = (el.className || '').toString().trim().split(/\s+/)[0];
+        if (cls) return '.' + cls;
+        return 'idx' + Array.prototype.indexOf.call(el.parentElement ? el.parentElement.children : [], el);
+    }
+
+    function clusterEntry(sel) {
+        if (!layout.clusters[sel]) layout.clusters[sel] = { order: [], sizes: {} };
+        return layout.clusters[sel];
+    }
+
+    // Direct children of a cluster that are real HUD panels, excluding the splitter bars we
+    // inject ourselves while editing.
+    function liveChildren(cluster) {
+        return Array.prototype.filter.call(cluster.children, function (c) {
+            return !c.hasAttribute('data-hle-splitter');
+        });
+    }
+
+    function clusterSelOf(cluster) {
+        return CLUSTER_SELECTORS.filter(function (s) { return document.querySelector(s) === cluster; })[0] || null;
+    }
+
+    function applySaved() {
+        CLUSTER_SELECTORS.forEach(function (sel) {
+            const cluster = document.querySelector(sel);
+            if (!cluster) return;
+            const entry = layout.clusters[sel];
+            if (entry && entry.order && entry.order.length) {
+                // Looked up globally (not just among this cluster's current children) so a panel
+                // the player dragged into a DIFFERENT cluster via the content picker gets moved
+                // back there too, not just reordered within whatever cluster it happens to already
+                // be in.
+                entry.order.forEach(function (k) {
+                    const el = findPanelByKey(k);
+                    if (el) cluster.appendChild(el);
+                });
+            }
+            liveChildren(cluster).forEach(function (c) {
+                const h = entry && entry.sizes && entry.sizes[childKey(c)];
+                if (h) {
+                    ownPanelBox(c);
+                    c.style.flexGrow = '0';
+                    c.style.flexShrink = '0';
+                    c.style.flexBasis = h + 'px';
+                    c.dataset.hleSized = '1';
+                }
+            });
+        });
+        CONTAINER_SPLITTERS.forEach(function (cfg) {
+            const w = layout.container && layout.container[cfg.clusterSel];
+            const el = w && document.querySelector(cfg.clusterSel);
+            if (el) {
+                el.style.width = w + 'px';
+                el.dataset.hleSized = '1';
+            }
+        });
+        applyAllScales();
+    }
+
+    // Icon/font size, set by the picker modal's sliders (see openPicker), keyed globally like
+    // PANEL_REGISTRY rather than per-cluster — the scale belongs to the PANEL, not the slot, so it
+    // travels with it across a content-picker swap into a different cluster.
+    function applyScale(panel) {
+        const s = layout.scales[childKey(panel)];
+        panel.style.setProperty('--hle-icon-scale', s && s.icon ? s.icon : '');
+        panel.style.setProperty('--hle-font-scale', s && s.font ? s.font : '');
+    }
+
+    function applyAllScales() {
+        PANEL_REGISTRY.forEach(function (entry) {
+            const el = document.querySelector(entry.sel);
+            if (el) applyScale(el);
+        });
+    }
+
+    function refreshOrder(cluster) {
+        const sel = clusterSelOf(cluster);
+        if (!sel) return;
+        clusterEntry(sel).order = liveChildren(cluster).map(childKey);
+    }
+
+    function refreshAllOrders() {
+        CLUSTER_SELECTORS.forEach(function (sel) {
+            const cluster = document.querySelector(sel);
+            if (cluster) clusterEntry(sel).order = liveChildren(cluster).map(childKey);
+        });
+    }
+
+    // A splitter resizes only the two panels it directly sits between: the one before gains
+    // exactly what the one after gives up (and vice versa), both pinned to an explicit flex-basis.
+    // Non-adjacent panels (e.g. one further up the column) are never touched, regardless of their
+    // own flex-grow/shrink — that would resize a panel the player never actually dragged a border
+    // of.
+    // Pinning a panel for the editor means OWNING its box model outright, not layering an inline
+    // flex-basis on top of whatever the rest of the stylesheet happens to say. Earlier versions
+    // only pinned flex-grow/shrink/basis and left each panel's own CSS min-height/max-height (a mix
+    // of fixed clamps and percentages, written for the responsive auto-layout, not for a human
+    // dragging a border) in effect — a growing panel would silently cap out against its own
+    // max-height while the splitter kept being dragged, so the border froze there while the OTHER
+    // panel in the pair (unaware anything stopped) kept shrinking; and panels not already
+    // `box-sizing: border-box` jumped by their padding the instant they were pinned, because
+    // flex-basis sizes the content box while getBoundingClientRect() reports the border box. Both
+    // are instances of the same problem: two systems (this editor and the stylesheet) independently
+    // claiming authority over the same box. The fix is to leave only one in charge — the moment a
+    // panel is grabbed, this neutralizes every stylesheet constraint on its height (min/max-height,
+    // box-sizing) with inline styles, so from then on flex-basis is the panel's one and only source
+    // of size, bounded purely by the generous, editor-owned MIN_H/MAX_H.
+    function ownPanelBox(panel) {
+        panel.style.boxSizing = 'border-box';
+        panel.style.minHeight = '0';
+        panel.style.maxHeight = 'none';
+    }
+
+    function bindSplitter(splitter) {
+        let prevPanel = null, nextPanel = null, startY = 0, startPrevH = 0, startNextH = 0, scale = 1;
+
+        function onMove(e) {
+            if (!prevPanel && !nextPanel) return;
+            const dy = (startY - e.clientY) / scale;
+            // Moving the splitter up grows the panel after it by taking exactly that much from the
+            // panel before it (and vice versa), so the pair's combined height never changes. Both
+            // panels' height is now fully owned by this editor (see ownPanelBox), so MIN_H/MAX_H are
+            // the only limits left to honor — no external CSS constraint can intervene mid-drag.
+            let nextH = startNextH + dy;
+            let prevH = startPrevH - dy;
+            if (nextH < MIN_H) { prevH -= (MIN_H - nextH); nextH = MIN_H; }
+            if (prevH < MIN_H) { nextH -= (MIN_H - prevH); prevH = MIN_H; }
+            nextH = Math.min(MAX_H, nextH);
+            prevH = Math.min(MAX_H, prevH);
+            if (nextPanel) { nextPanel.style.flexBasis = Math.round(nextH) + 'px'; nextPanel.dataset.hleSized = '1'; }
+            if (prevPanel) { prevPanel.style.flexBasis = Math.round(prevH) + 'px'; prevPanel.dataset.hleSized = '1'; }
+        }
+        function onUp() {
+            if (!prevPanel && !nextPanel) return;
+            const cluster = splitter.parentElement;
+            const sel = cluster && clusterSelOf(cluster);
+            if (sel) {
+                if (nextPanel) clusterEntry(sel).sizes[childKey(nextPanel)] = parseFloat(nextPanel.style.flexBasis) || 0;
+                if (prevPanel) clusterEntry(sel).sizes[childKey(prevPanel)] = parseFloat(prevPanel.style.flexBasis) || 0;
+            }
+            prevPanel = null;
+            nextPanel = null;
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        }
+        splitter.addEventListener('pointerdown', function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            prevPanel = splitter.previousElementSibling;
+            nextPanel = splitter.nextElementSibling;
+            if (!prevPanel && !nextPanel) return;
+            scale = measureScale(splitter.parentElement);
+            // Panels can be `flex: 1 1 auto` in CSS (fills whatever space is left), so take over
+            // the box first (see ownPanelBox) and set flex-basis to its CURRENT rendered height in
+            // the same step, so pinning never itself jumps the layout — only the drag from here on
+            // does.
+            if (nextPanel) {
+                ownPanelBox(nextPanel);
+                startNextH = nextPanel.getBoundingClientRect().height / scale;
+                nextPanel.style.flexGrow = '0';
+                nextPanel.style.flexShrink = '0';
+                nextPanel.style.flexBasis = startNextH + 'px';
+                nextPanel.dataset.hleSized = '1';
+            }
+            if (prevPanel) {
+                ownPanelBox(prevPanel);
+                startPrevH = prevPanel.getBoundingClientRect().height / scale;
+                prevPanel.style.flexGrow = '0';
+                prevPanel.style.flexShrink = '0';
+                prevPanel.style.flexBasis = startPrevH + 'px';
+                prevPanel.dataset.hleSized = '1';
+            }
+            startY = e.clientY;
+            e.preventDefault();
+            e.stopPropagation();
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
+        });
+    }
+
+    function refreshSplitters(cluster) {
+        Array.prototype.slice.call(cluster.querySelectorAll(':scope > [data-hle-splitter]')).forEach(function (s) {
+            const i = liveSplitters.indexOf(s);
+            if (i >= 0) liveSplitters.splice(i, 1);
+            s.remove();
+        });
+        const children = liveChildren(cluster);
+        children.forEach(function (child, i) {
+            if (i >= children.length - 1) return;
+            const splitter = document.createElement('div');
+            splitter.className = 'hle-splitter';
+            splitter.setAttribute('data-hle-splitter', '1');
+            cluster.insertBefore(splitter, child.nextSibling);
+            bindSplitter(splitter);
+            liveSplitters.push(splitter);
+        });
+    }
+
+    function bindContainerSplitter(splitter, cfg) {
+        let startX = 0, startW = 0, scale = 1;
+        const cluster = document.querySelector(cfg.clusterSel);
+
+        function onMove(e) {
+            if (!cluster) return;
+            const dx = (e.clientX - startX) / scale;
+            const w = Math.max(MIN_SIDE_W, Math.min(MAX_SIDE_W, Math.round(startW + cfg.sign * dx)));
+            cluster.style.width = w + 'px';
+            cluster.dataset.hleSized = '1';
+        }
+        function onUp() {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            if (!cluster) return;
+            layout.container[cfg.clusterSel] = parseFloat(cluster.style.width) || 0;
+        }
+        splitter.addEventListener('pointerdown', function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (!cluster) return;
+            scale = measureScale(splitter.parentElement);
+            startX = e.clientX;
+            startW = cluster.getBoundingClientRect().width / scale;
+            e.preventDefault();
+            e.stopPropagation();
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
+        });
+    }
+
+    function setupContainerSplitters() {
+        const container = document.querySelector(GAME_CONTAINER_SEL);
+        if (!container) return;
+        CONTAINER_SPLITTERS.forEach(function (cfg) {
+            const cluster = document.querySelector(cfg.clusterSel);
+            if (!cluster || cluster.parentElement !== container) return;
+            const splitter = document.createElement('div');
+            splitter.className = 'hle-vsplitter';
+            splitter.setAttribute('data-hle-splitter', '1');
+            splitter.setAttribute('data-hle-vsplitter', '1');
+            if (cfg.sign > 0) container.insertBefore(splitter, cluster.nextSibling);
+            else container.insertBefore(splitter, cluster);
+            bindContainerSplitter(splitter, cfg);
+            liveSplitters.push(splitter);
+        });
+    }
+
+    function addGrip(child) {
+        child.dataset.hlePrevPos = child.style.position || '';
+        child.style.position = 'relative';
+        const grip = document.createElement('div');
+        grip.className = 'hle-grip';
+        grip.title = 'Drag to reorder (within this column)';
+        grip.textContent = '⠿';
+        child.appendChild(grip);
+        liveGrips.push({ child, grip });
+
+        let dragging = false;
+        function onMove(e) {
+            if (!dragging) return;
+            const cluster = child.parentElement;
+            if (!cluster) return;
+            const siblings = liveChildren(cluster).filter(function (c) { return c !== child; });
+            let target = null, before = true;
+            for (let i = 0; i < siblings.length; i++) {
+                const r = siblings[i].getBoundingClientRect();
+                const mid = r.top + r.height / 2;
+                if (e.clientY < mid) { target = siblings[i]; before = true; break; }
+                target = siblings[i]; before = false;
+            }
+            if (target) {
+                cluster.insertBefore(child, before ? target : target.nextSibling);
+                refreshSplitters(cluster);
+            }
+        }
+        function onUp() {
+            if (!dragging) return;
+            dragging = false;
+            grip.classList.remove('hle-grip-active');
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            if (child.parentElement) refreshOrder(child.parentElement);
+        }
+        grip.addEventListener('pointerdown', function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            dragging = true;
+            grip.classList.add('hle-grip-active');
+            e.preventDefault();
+            e.stopPropagation();
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp, { once: true });
+        });
+    }
+
+    // Swaps two panels' positions in the DOM outright, even across different clusters — the
+    // classic two-pointer swap (insert each where the other used to be) handles adjacency and
+    // cross-parent moves alike without a temporary placeholder node. Both clusters' splitters and
+    // saved order are refreshed afterward since the set of children in each one just changed.
+    function swapPanels(a, b) {
+        if (!a || !b || a === b) return;
+        const aParent = a.parentElement, aNext = a.nextElementSibling;
+        const bParent = b.parentElement, bNext = b.nextElementSibling;
+        if (!aParent || !bParent) return;
+        bParent.insertBefore(a, bNext);
+        aParent.insertBefore(b, aNext);
+        [aParent, bParent].forEach(function (p) {
+            refreshSplitters(p);
+            refreshOrder(p);
+        });
+    }
+
+    let pickOverlay = null;
+    let pickSpotlit = null; // the panel currently poking through the overlay
+
+    function closePicker() {
+        if (pickSpotlit) {
+            pickSpotlit.style.zIndex = pickSpotlit.dataset.hlePrevZ || '';
+            delete pickSpotlit.dataset.hlePrevZ;
+            pickSpotlit.classList.remove('hle-spotlit');
+            pickSpotlit = null;
+        }
+        if (pickOverlay) { pickOverlay.remove(); pickOverlay = null; }
+        if (picker) { picker.remove(); picker = null; }
+    }
+
+    // A full modal, not a corner popover: everything else on screen dims behind a scrim, and the
+    // panel being reassigned is lifted (z-index) above that same scrim so it alone stays lit — the
+    // player sees exactly which slot they're about to change while they pick its new content.
+    function openPicker(forPanel) {
+        closePicker();
+        pickOverlay = document.createElement('div');
+        pickOverlay.className = 'hle-pick-overlay';
+        pickOverlay.addEventListener('click', closePicker);
+        document.body.appendChild(pickOverlay);
+
+        pickSpotlit = forPanel;
+        forPanel.dataset.hlePrevZ = forPanel.style.zIndex || '';
+        forPanel.style.zIndex = '100001';
+        forPanel.classList.add('hle-spotlit');
+
+        picker = document.createElement('div');
+        picker._forPanel = forPanel;
+        picker.className = 'hle-picker';
+        PANEL_REGISTRY.forEach(function (entry) {
+            const el = document.querySelector(entry.sel);
+            if (!el) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = entry.label;
+            if (el === forPanel) btn.className = 'hle-pick-current';
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                swapPanels(forPanel, el);
+                closePicker();
+            });
+            picker.appendChild(btn);
+        });
+
+        const sep = document.createElement('div');
+        sep.className = 'hle-pick-sep';
+        picker.appendChild(sep);
+
+        const key = childKey(forPanel);
+        const cur = layout.scales[key] || {};
+        function addSlider(labelText, prop, initial) {
+            const wrap = document.createElement('label');
+            wrap.className = 'hle-pick-slider';
+            const span = document.createElement('span');
+            span.textContent = labelText;
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = '0.6';
+            input.max = '2';
+            input.step = '0.05';
+            input.value = String(initial);
+            input.addEventListener('input', function () {
+                const v = parseFloat(input.value) || 1;
+                if (!layout.scales[key]) layout.scales[key] = {};
+                layout.scales[key][prop] = v;
+                forPanel.style.setProperty('--hle-' + prop + '-scale', v);
+            });
+            wrap.appendChild(span);
+            wrap.appendChild(input);
+            picker.appendChild(wrap);
+        }
+        addSlider('ICON SIZE', 'icon', cur.icon || 1);
+        addSlider('FONT SIZE', 'font', cur.font || 1);
+
+        document.body.appendChild(picker);
+    }
+
+    // The whole panel is the click target (not just a tiny corner icon) — "click the container" is
+    // the whole point. The `⇄` badge is just a passive hint that it's clickable (pointer-events:
+    // none, see injectStyles), so it never needs its own listener or steals the click. Clicks that
+    // land on the reorder grip, the resize handle, or inside an already-open picker are excluded so
+    // this doesn't fight those, and so a drag-to-reorder release (which still fires a trailing
+    // `click`) doesn't immediately reopen the picker on top of it.
+    function addPicker(child) {
+        const hint = document.createElement('div');
+        hint.className = 'hle-pick';
+        hint.title = 'Click to change what this slot shows';
+        hint.textContent = '⇄';
+        child.appendChild(hint);
+        livePickers.push({ child, btn: hint });
+        child.addEventListener('click', function (e) {
+            if (e.target.closest('.hle-grip, .hle-splitter, .hle-picker')) return;
+            if (picker && picker._forPanel === child) { closePicker(); return; }
+            e.stopPropagation();
+            openPicker(child);
+        });
+    }
+
+    // .game-stage (the actual game canvas) is never grip-draggable or re-assignable: it's
+    // sized/rendered by the game's own viewport-fit code, not something this editor should let the
+    // player reorder or replace.
+    function isReorderable(el) {
+        return !el.classList.contains('game-stage');
+    }
+
+    function setupCluster(cluster) {
+        liveChildren(cluster).filter(isReorderable).forEach(function (c) {
+            addGrip(c);
+            addPicker(c);
+        });
+        refreshSplitters(cluster);
+    }
+
+    function enterEdit() {
+        if (editing || !isActive()) return;
+        editing = true;
+        document.documentElement.setAttribute('data-hud-edit', '1');
+        CLUSTER_SELECTORS.forEach(function (sel) {
+            const cluster = document.querySelector(sel);
+            if (!cluster || !cluster.offsetWidth || !cluster.offsetHeight) return;
+            setupCluster(cluster);
+        });
+        setupContainerSplitters();
+        syncControls();
+    }
+
+    function exitEdit() {
+        if (!editing) return;
+        editing = false;
+        document.documentElement.removeAttribute('data-hud-edit');
+        liveGrips.forEach(function (g) {
+            g.grip.remove();
+            g.child.style.position = g.child.dataset.hlePrevPos || '';
+            delete g.child.dataset.hlePrevPos;
+        });
+        liveGrips.length = 0;
+        livePickers.forEach(function (p) { p.btn.remove(); });
+        livePickers.length = 0;
+        closePicker();
+        liveSplitters.forEach(function (s) { s.remove(); });
+        liveSplitters.length = 0;
+        syncControls();
+    }
+
+    function toggleEdit() {
+        if (editing) exitEdit(); else enterEdit();
+    }
+
+    function isEditing() {
+        return editing;
+    }
+
+    function resetLayout() {
+        layout = { clusters: {}, container: {}, scales: {} };
+        saveLayout();
+        PANEL_REGISTRY.forEach(function (entry) {
+            const el = document.querySelector(entry.sel);
+            if (el) { el.style.removeProperty('--hle-icon-scale'); el.style.removeProperty('--hle-font-scale'); }
+        });
+        CLUSTER_SELECTORS.forEach(function (sel) {
+            const cluster = document.querySelector(sel);
+            if (!cluster) return;
+            const order = originalOrder[sel];
+            if (order) {
+                // Global lookup for the same reason as in applySaved: a panel the content picker
+                // moved to a different cluster needs to be found there and moved back, not just
+                // reordered among whichever children this cluster currently happens to have.
+                order.forEach(function (k) {
+                    const el = findPanelByKey(k);
+                    if (el) cluster.appendChild(el);
+                });
+            }
+            liveChildren(cluster).forEach(function (c) {
+                if (c.dataset.hleSized === '1') {
+                    c.style.flexBasis = '';
+                    c.style.flexGrow = '';
+                    c.style.flexShrink = '';
+                    c.style.minHeight = '';
+                    c.style.maxHeight = '';
+                    c.style.boxSizing = '';
+                    delete c.dataset.hleSized;
+                }
+            });
+        });
+        CONTAINER_SPLITTERS.forEach(function (cfg) {
+            const el = document.querySelector(cfg.clusterSel);
+            if (el && el.dataset.hleSized === '1') {
+                el.style.width = '';
+                delete el.dataset.hleSized;
+            }
+        });
+        if (editing) { exitEdit(); enterEdit(); }
+    }
+
+    // SAVE/RESET/LAYOUT all live as icon keys in the bezel tool strip (see
+    // js/core/viewport-fit-part3.js, data-tool="save"/"reset"/"layout"), gated to show only while
+    // dev mode is on (and, for save/reset, only while actively editing). Nothing to build here.
+    function save() {
+        refreshAllOrders();
+        saveLayout();
+    }
+
+    function syncControls() {
+        if (!isActive() && editing) exitEdit();
+    }
+
+    // Shift+C already toggles dev mode on the start screen / station (see
+    // js/ui/start-screen/build-controls-show-btn.js and bind-controls-toggle-part2.js), but both of
+    // those handlers only run while their own screen is on top, so the shortcut is dead once a run
+    // is in progress. This mirrors it for everywhere else (in combat): only acts while the start
+    // screen isn't the one handling it, so the same keypress is never toggled twice.
+    function bindGlobalToggle() {
+        window.addEventListener('keydown', function (e) {
+            if (!e.shiftKey || (e.key !== 'c' && e.key !== 'C')) return;
+            if (typeof startScreenManager === 'undefined' || startScreenManager.visible) return;
+            // The home station (js/ui/home-station/bind-controls-toggle-part2.js) has its own,
+            // entirely separate `document` keydown listener for Shift+C, and it keeps handling the
+            // key on its own tab rows even while `startScreenManager.visible` is false (that flag
+            // only tracks the start screen's OWN menu, which is merely one tab the station can
+            // embed — embeddedMode/visible both go false again the moment a different tab is
+            // selected). Missing this meant both listeners fired for one keypress whenever the
+            // station was open on any tab but its embedded menu: two toggleDevMode() calls
+            // cancelled each other out, so devMode net stayed unchanged while the station's own
+            // toast still reported "DEV MODE ON" — a clean double-fire, not a dev-mode bug.
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) return;
+            const tag = e.target && e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            e.preventDefault();
+            startScreenManager.toggleDevMode();
+            syncControls();
+        });
+    }
+
+    function injectStyles() {
+        const style = document.createElement('style');
+        style.textContent =
+            '[data-hud-edit="1"] #gameLeftCluster > :not([data-hle-splitter]),' +
+            '[data-hud-edit="1"] .game-canvas-container > :not([data-hle-splitter]),' +
+            '[data-hud-edit="1"] #gameRightCluster > :not([data-hle-splitter])' +
+            '{outline:1px dashed #5fd0ff;outline-offset:-1px;cursor:pointer;}' +
+            '.hle-splitter{flex:0 0 8px;margin:2px 0;cursor:ns-resize;background:repeating-linear-gradient(90deg,#5fd0ff 0 6px,transparent 6px 12px);opacity:0.6;border-radius:2px;}' +
+            '.hle-splitter:hover{opacity:1;}' +
+            '.hle-vsplitter{flex:0 0 8px;margin:0 2px;cursor:ew-resize;background:repeating-linear-gradient(180deg,#ffb15f 0 6px,transparent 6px 12px);opacity:0.6;border-radius:2px;}' +
+            '.hle-vsplitter:hover{opacity:1;}' +
+            '.hle-grip{position:absolute;bottom:2px;right:2px;width:16px;height:16px;line-height:16px;text-align:center;' +
+            'background:#0b2436;color:#aee6ff;font:12px monospace;border-radius:2px;cursor:grab;user-select:none;z-index:10000;}' +
+            '.hle-grip-active{cursor:grabbing;background:#1e5278;}' +
+            '.hle-pick{position:absolute;top:2px;right:2px;width:16px;height:16px;line-height:16px;text-align:center;' +
+            'background:#0b2436;color:#ffd79a;font:12px monospace;border-radius:2px;user-select:none;z-index:10000;pointer-events:none;}' +
+            '.hle-pick-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100000;}' +
+            '.hle-spotlit{position:relative;box-shadow:0 0 0 2px #ffd79a,0 0 28px 6px rgba(0,0,0,0.6);}' +
+            '.hle-picker{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100002;' +
+            'background:#0f141c;border:1px solid #3a4a60;border-radius:6px;' +
+            'padding:4px;display:flex;flex-direction:column;gap:2px;font:12px/1.4 monospace;min-width:180px;}' +
+            '.hle-picker button{background:#141821;color:#cfe8ff;border:1px solid transparent;border-radius:4px;' +
+            'padding:6px 10px;cursor:pointer;text-align:left;}' +
+            '.hle-picker button:hover{background:#1e2733;}' +
+            '.hle-picker button.hle-pick-current{border-color:#ffd79a;color:#fff;}' +
+            '.hle-pick-sep{height:1px;background:#3a4a60;margin:4px 2px;}' +
+            '.hle-pick-slider{display:flex;flex-direction:column;gap:4px;padding:4px 8px;color:#9fb4c8;' +
+            'letter-spacing:0.06em;font-size:11px;}' +
+            '.hle-pick-slider input[type=range]{width:100%;accent-color:#ffd79a;}';
+        document.head.appendChild(style);
+    }
+
+    function captureOriginalOrder() {
+        CLUSTER_SELECTORS.forEach(function (sel) {
+            const cluster = document.querySelector(sel);
+            if (cluster) originalOrder[sel] = liveChildren(cluster).map(childKey);
+        });
+    }
+
+    // Lets .gi-loadout-side / .gi-mission-side switch their rows from icon-left to icon-on-top
+    // once the player has actually resized them tall enough (see the `.gi-roomy` rules in
+    // css/styles/part-02.css). This used to be a CSS container query, but that silently does
+    // nothing on an engine without `@container` size-containment support, leaving the icons stuck
+    // left with no visible failure; a ResizeObserver gets the same result and is universally
+    // supported, so there's no silent-failure mode to debug around.
+    const ROOMY_MIN_H = 240;
+    function watchRoomyPanels() {
+        if (typeof ResizeObserver === 'undefined') return;
+        const targets = Array.prototype.filter.call(
+            document.querySelectorAll('.gi-loadout-side, .gi-mission-side'),
+            function (el) { return el.nodeType === 1; }
+        );
+        if (!targets.length) return;
+        const ro = new ResizeObserver(function (entries) {
+            entries.forEach(function (entry) {
+                const h = entry.contentRect ? entry.contentRect.height : entry.target.getBoundingClientRect().height;
+                entry.target.classList.toggle('gi-roomy', h >= ROOMY_MIN_H);
+            });
+        });
+        targets.forEach(function (el) { ro.observe(el); });
+    }
+
+    function init() {
+        injectStyles();
+        captureOriginalOrder();
+        applySaved();
+        bindGlobalToggle();
+        watchRoomyPanels();
+        syncControls();
+        setInterval(syncControls, 1000);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+        init();
+    }
+
+    return { enterEdit, exitEdit, toggleEdit, resetLayout, isActive, isEditing, save };
+})();
+
+window.hudLayoutEditor = hudLayoutEditor;
+
+
+/* --- js/ui/component-editor/procedural-generate.js --- */
+"use strict";
+
+// ComponentEditorUI: seeded procedural sprite generator + grid quantiser (global Pixel Size friendly:
+// 1 grid cell == 1 sprite pixel, so the editor shows it at the global pixel size).
+extendClass(ComponentEditorUI, {
+    /** Small deterministic PRNG (mulberry32). */
+    _procRng(seed) {
+        let a = (Number(seed) || 0) >>> 0;
+        return () => {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    },
+
+    /** Build a symmetric blob grid of shade indices (0 = empty). */
+    buildProceduralGrid(size, seed, shades) {
+        const rnd = this._procRng(seed);
+        const half = Math.ceil(size / 2);
+        const g = [];
+        for (let y = 0; y < size; y++) g.push(new Array(size).fill(0));
+        const cy = (size - 1) / 2;
+        // Random-walk blobs seeded on the centre column, grown to the left half, then mirrored.
+        const blobs = 2 + Math.floor(rnd() * 3);
+        for (let b = 0; b < blobs; b++) {
+            const bx = half - 1 - Math.floor(rnd() * half * 0.5);
+            const by = Math.round(cy + (rnd() - 0.5) * size * 0.5);
+            const r = size * (0.12 + rnd() * 0.2);
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < half; x++) {
+                    const dx = (x - bx) / (r * (0.8 + rnd() * 0.4));
+                    const dy = (y - by) / (r * (1 + rnd() * 0.5));
+                    if (dx * dx + dy * dy <= 1) g[y][x] = 1;
+                }
+            }
+        }
+        for (let y = 0; y < size; y++) for (let x = 0; x < half; x++) g[y][size - 1 - x] = g[y][x];
+        // Shade: dark rim, lighter towards the middle, light noise.
+        const out = g.map((row) => row.slice());
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                if (!g[y][x]) continue;
+                const edge = !(g[y - 1] && g[y - 1][x]) || !(g[y + 1] && g[y + 1][x]) || !g[y][x - 1] || !g[y][x + 1];
+                let t = edge ? 0 : 0.35 + 0.65 * (1 - Math.abs(x - (size - 1) / 2) / half) + (rnd() - 0.5) * 0.25;
+                t = Math.max(0, Math.min(0.999, t));
+                out[y][x] = shades[Math.floor(t * shades.length)];
+            }
+        }
+        return out;
+    },
+
+    onProceduralGenerate() {
+        const entry = this.currentEntry();
+        if (!entry || this.busy) return;
+        this.readGenFields();
+        const size = this.outSize || entry.size || 16;
+        this.reloadEditBuffer(true);
+        if (!this._editCanvas) return;
+        const seed = this.seed !== "" && Number.isFinite(Number(this.seed))
+            ? Number(this.seed) : Math.floor(Math.random() * 1e9);
+        const grid = this.buildProceduralGrid(size, seed, this.getPaletteShades());
+        const ctx = this._editCanvas.getContext("2d");
+        ctx.clearRect(0, 0, size, size);
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                if (!grid[y][x]) continue;
+                const v = this.shadeToGray(grid[y][x]);
+                ctx.fillStyle = "rgb(" + v + "," + v + "," + v + ")";
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        this._pixelDirty = true;
+        this.setStatus("Procedural · seed " + seed);
+        this.drawCenter();
+    },
+
+    /** Downscale any image/canvas onto a size×size grid in the palette grays (nearest sampling). */
+    quantizeToGrid(src, size) {
+        const c = document.createElement("canvas");
+        c.width = c.height = size;
+        const ctx = c.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, 0, 0, size, size);
+        return c;
+    }
+});
 

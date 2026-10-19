@@ -94,10 +94,10 @@ html body .profile-start-main .profile-kit-bonus b { color: var(--faction-accent
 
 /* Settings sidebar: smaller labels (tabs, group heads, add button). */
 html body .settings-panel-master .settings-nav :is(.settings-nav-item, .settings-nav-item span, .settings-nav-add, .settings-cluster-head, .settings-group-head) {
-    font-size: clamp(12px, 1.05vw, 16px);
+    font-size: clamp(15px, 1.4vw, 20px);
     letter-spacing: 0.5px;
 }
-html body .settings-panel-master .settings-nav-item { min-height: 36px; padding: 8px 10px; }
+html body .settings-panel-master .settings-nav-item { min-height: 40px; padding: 8px 10px; }
 
 /* Station PROFILES tab: pilot list left, detail view right. Wider detail column, compact detail blocks, no clipping. */
 .hs-menu-profile-split { grid-template-columns: minmax(0, 1fr) minmax(340px, 42%); gap: 10px; }
@@ -524,7 +524,7 @@ html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile
     box-sizing: border-box; padding: 6px; gap: 4px; overflow-y: auto;
 }
 html body .profile-selection-name-mode .profile-start-galaxy-side li {
-    flex: 1 1 0; min-height: 72px; align-content: center; padding: 14px 16px; gap: 12px 14px;
+    flex: 0 0 auto; min-height: 72px; align-content: center; padding: 14px 16px; gap: 12px 14px;
     font-size: calc(var(--font-h2) * 1.25); line-height: 1.15; letter-spacing: 2px;
 }
 html body .profile-selection-name-mode .profile-start-galaxy-side .ruler {
@@ -1110,7 +1110,7 @@ html body .profile-selection-name-mode.is-pilot-step .profile-pilot-card {
     gap: 10px;
     padding: 4px;
     align-items: stretch !important;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: var(--pp-portrait-w, min(55vw, 640px)) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
 }
@@ -1127,13 +1127,14 @@ html body .profile-selection-name-mode.is-pilot-step .profile-pilot-side {
     box-sizing: border-box;
 }
 html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .profile-pilot-portrait {
-    flex: 1 1 0;
+    flex: 1 1 auto;
+    align-self: center !important;
     min-width: 0;
     min-height: 0 !important;
-    height: 100% !important;
-    width: auto !important;
-    max-width: min(42vw, 480px);
-    max-height: 100%;
+    height: var(--pp-portrait-h, auto) !important;
+    width: var(--pp-portrait-w, auto) !important;
+    max-width: min(55vw, 640px) !important;
+    max-height: 100% !important;
     aspect-ratio: 48 / 54;
     box-sizing: border-box !important;
     --pk: 3px !important;
@@ -1166,7 +1167,7 @@ html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls {
 html body .profile-selection-name-mode.is-pilot-step .pp-grid {
     flex: 0 1 auto;
     min-height: 0;
-    max-height: 100%;
+    max-height: 100% !important;
     max-width: 100%;
     width: auto;
     overflow: visible !important;
@@ -1184,7 +1185,7 @@ html body .profile-selection-name-mode.is-pilot-step .pp-picks {
     width: calc(6 * var(--pp-tile) + 5 * var(--pp-gap)) !important;
     height: calc(3 * var(--pp-tile) + 2 * var(--pp-gap)) !important;
     max-width: 100% !important;
-    max-height: 100%;
+    max-height: 100% !important;
     min-height: 0;
     margin: 0 !important;
     display: grid !important;
@@ -1225,3 +1226,133 @@ html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .
 html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-pick.selected {
     box-shadow: inset 0 0 0 2px #fff, inset 2px 2px 0 2px #fff;
 }
+
+/* Global Pixel Size: crisp upscaling for every pixel-art surface */
+html[data-vf-pixel-size="on"] #gameCanvas,
+html[data-vf-pixel-size="on"] .galaxy-map-svg image,
+html[data-vf-pixel-size="on"] #ceCanvas {
+    image-rendering: pixelated !important;
+}
+/* Global Pixel Size: a CSS filter on the planet wrapper makes Chromium resample the HTML layer softly. */
+html[data-vf-pixel-size="on"] .gm-node .gm-node-icon-wrap:not(.dimmed) { filter: none; }
+html[data-vf-pixel-size="on"] .gm-planet-icon-img .gm-planet-img { image-rendering: pixelated !important; }
+
+/* Global Pixel Size screen: the whole galaxy-map SVG is sampled on one screen grid. */
+html[data-vf-pixel-size="on"] .galaxy-map-svg { filter: url(#vfMapPx); }
+
+/* Map texts: vector text off, cell-built pixel text on while the pixel screen is active. */
+html[data-vf-pixel-size="on"] .galaxy-map-svg .gm-vec-text { display: none; }
+html:not([data-vf-pixel-size="on"]) .galaxy-map-svg .gm-px-only { display: none; }
+
+/* Pixel screen: crests keep their size (no hover shrink/fade) so they stay readable. */
+html[data-vf-pixel-size="on"] .gm-node .gm-node-factions { transform: none; opacity: 1; transition: none; }
+
+/* Station map: galaxy ruler card beside the ship bar, enemy avatar + ship in the bottom bar. */
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-ruler.is-header { display: flex; align-items: stretch; flex: 0 0 auto; }
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-ruler.is-header .galaxy-map-ruler-card {
+    flex-direction: row; gap: 12px; padding: 6px 14px; height: 100%; box-sizing: border-box;
+    border-right: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 45%, transparent);
+}
+.galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-ruler.is-header .galaxy-map-ruler-text { align-items: flex-start; text-align: left; }
+/* Enemy card: avatar and ship are big and cut off by the frame (banner style). */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack .gm-enemy-card {
+    position: relative; overflow: visible; padding: 0; flex: 1 1 0; min-height: 120px;
+}
+.gm-enemy-card-in { position: absolute; inset: 0; display: block; }
+.gm-enemy-planet { position: absolute; right: -6%; top: 22px; bottom: -30%; width: 62%; overflow: hidden; opacity: .55; z-index: 0; pointer-events: none; }
+.gm-enemy-planet > * { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: contain; image-rendering: pixelated; }
+/* Poster layout: planet behind, face and ship staggered in front of it, title bar on top. */
+.gm-enemy-avatar {
+    translate: var(--ec-face-x, 0) var(--ec-face-y, 0);
+    position: absolute; left: 12px; top: 76px; bottom: 6px; width: 38%; max-width: 190px; overflow: hidden;
+    border: 0; background: none; box-shadow: none; z-index: 4; overflow: visible;
+}
+.gm-enemy-avatar > * {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%; max-width: none;
+    object-fit: contain; object-position: 50% 100%; transform: none;
+    image-rendering: pixelated;
+}
+.gm-enemy-text { translate: var(--ec-bar-x, 0) var(--ec-bar-y, 0); position: absolute; left: 0; right: 0; top: 40px; height: 30px; box-sizing: border-box; padding: 0 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; z-index: 3; text-align: left; white-space: nowrap; overflow: hidden; background: color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 10%, transparent); border-bottom: 2px solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 55%, transparent); }
+.gm-enemy-kind { font-size: var(--font-small); letter-spacing: 2px; color: var(--ruler-accent, var(--color-primary)); }
+.gm-enemy-name { font-size: var(--font-h2); color: #fff; text-shadow: 0 0 6px #000, 2px 2px 0 #000; }
+.gm-enemy-place { margin-left: auto; font-size: var(--font-small); letter-spacing: 2px; color: var(--color-text-secondary); }
+.gm-enemy-ship { translate: var(--ec-ship-x, 0) var(--ec-ship-y, 0); position: absolute; left: calc(12px + min(38%, 190px) - 18px); top: auto; bottom: 6px; width: 34%; height: 56%; transform: none; max-width: none; object-fit: contain; object-position: center; image-rendering: pixelated; filter: drop-shadow(3px 4px 0 #000) drop-shadow(0 0 8px #000); border: 0; outline: 0; box-shadow: none; background: none; z-index: 3 }
+
+/* Mission icon right of the navbar. */
+.hs-mission-btn { color: var(--mission-accent, var(--color-primary)); border-color: var(--mission-accent, var(--color-primary)); }
+.hs-mission-btn.is-calm { opacity: 0.45; }
+.hs-mission-btn:hover { opacity: 1; }
+
+/* No frame line on the enemy side of the bottom bar (the card is the last block before the planet). */
+.galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack:has(.gm-enemy-card) { border-right: 0; }
+
+/* Poster: the planet card's planet is bigger and sits behind the enemy face and ship (covered, not cropped). */
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack { position: relative; z-index: 2; overflow: visible; border-right: 0 !important; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet { position: relative; z-index: 1; overflow: visible; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg { left: -190px; bottom: -20px; width: 280px; height: 280px; }
+
+.gm-enemy-title { text-align: left; translate: var(--ec-title-x, 0) var(--ec-title-y, 0); position: absolute; left: 12px; right: 8px; top: 6px; z-index: 3; font-size: 26px; letter-spacing: 3px; color: #fff; text-shadow: 0 0 6px #000, 2px 2px 0 #000; white-space: nowrap; overflow: hidden; }
+.gm-enemy-emblem { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.gm-enemy-emblem > * { width: 22px; height: 22px; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar:has(.gm-enemy-card-in) .is-planet .gm-sector-heading { display: none; }
+
+/* Dev: enemy card layout modal (drag title / bar / face / ship). */
+.ecl-back { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.72); }
+.ecl-modal { box-sizing: border-box; max-height: 96vh; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #05060a; border: 2px solid var(--color-primary); box-shadow: 4px 4px 0 #000; max-width: 96vw; }
+.ecl-title { font-size: var(--font-h2); letter-spacing: 2px; color: var(--color-primary); }
+.ecl-hint { font-size: var(--font-small); color: var(--color-text-secondary); }
+.ecl-stage { position: relative; flex: 0 0 auto; width: 640px; transform-origin: 0 0; height: 220px; overflow: hidden; background: #0b0d14; border: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent); }
+.ecl-stage .gm-enemy-title, .ecl-stage .gm-enemy-text, .ecl-stage .gm-enemy-avatar, .ecl-stage .gm-enemy-ship { cursor: grab; pointer-events: auto; outline: 1px dashed color-mix(in srgb, var(--color-primary) 70%, transparent); touch-action: none; }
+.ecl-stage .gm-enemy-avatar > * { pointer-events: none; }
+.ecl-actions { display: flex; justify-content: space-between; gap: 8px; }
+.ecl-actions .ecl-right { display: flex; gap: 8px; }
+body.dev-mode .gm-enemy-card, .gm-enemy-card[data-dev] { cursor: pointer; }
+.ecl-planet { translate: var(--ec-planet-x, 0) var(--ec-planet-y, 0); cursor: grab; touch-action: none; outline: 1px dashed color-mix(in srgb, var(--color-primary) 70%, transparent); position: absolute; right: -4%; top: -10px; width: 280px; height: 280px; z-index: 0; pointer-events: auto; }
+.ecl-planet > * { width: 100%; height: 100%; }
+.ecl-stage .gm-enemy-card-in { z-index: 1; }
+.ecl-actions { flex-wrap: wrap; }
+.ecl-fit { flex: 0 0 auto; position: relative; overflow: hidden; }
+.ecl-stage .gm-enemy-card-in { pointer-events: none; }
+.ecl-planet > * { pointer-events: none; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg { translate: var(--ec-planet-x, 0) var(--ec-planet-y, 0); }
+
+/* Face: always whole and in front of the ship; its flat bottom edge fades out instead of ending in a hard cut. */
+.gm-enemy-avatar > * { -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent 100%); mask-image: linear-gradient(to bottom, #000 82%, transparent 100%); }
+
+/* Enemy card layout: size (scale) and layer per element, set by the dev layout modal. */
+.gm-enemy-title { z-index: var(--ec-title-z, 6); scale: var(--ec-title-s, 1); transform-origin: 0 50%; }
+.gm-enemy-text { z-index: var(--ec-bar-z, 5); scale: var(--ec-bar-s, 1); transform-origin: 0 50%; }
+.gm-enemy-avatar { z-index: var(--ec-face-z, 4); scale: var(--ec-face-s, 1); transform-origin: 50% 100%; }
+.gm-enemy-ship { z-index: var(--ec-ship-z, 3); scale: var(--ec-ship-s, 1); transform-origin: 50% 50%; }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-seg.is-planet { z-index: var(--ec-planet-segz, 1); }
+html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet .gm-sector-planet-bg { scale: var(--ec-planet-s, 1); }
+.ecl-planet { scale: var(--ec-planet-s, 1); z-index: var(--ec-planet-mz, 0); }
+.ecl-stage .gm-enemy-card-in { z-index: 1; }
+.ecl-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.ecl-chips, .ecl-row { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-small); color: var(--color-text-secondary); }
+.ecl-chip.is-on { background: var(--color-primary); color: #000; }
+.ecl-range { width: 140px; }
+.ecl-val { min-width: 3.2em; text-align: center; color: #fff; }
+.ecl-stage[data-sel="title"] .gm-enemy-title, .ecl-stage[data-sel="bar"] .gm-enemy-text, .ecl-stage[data-sel="face"] .gm-enemy-avatar,
+.ecl-stage[data-sel="ship"] .gm-enemy-ship, .ecl-stage[data-sel="planet"] .ecl-planet { outline: 2px solid var(--color-primary); }
+
+.ecl-stage.is-clone { overflow: visible; background: none; border: 0; }
+.ecl-stage.is-clone .galaxy-map-embedded, .ecl-stage.is-clone .gm-map-stage { position: static; width: 100%; height: auto; display: block; background: none; }
+.ecl-stage.is-clone * { pointer-events: none !important; }
+.ecl-stage.is-clone :is(.gm-enemy-title, .gm-enemy-text, .gm-enemy-avatar, .gm-enemy-ship, .gm-sector-planet-bg) { pointer-events: auto !important; cursor: grab; outline: 1px dashed color-mix(in srgb, var(--color-primary) 70%, transparent); }
+.ecl-stage.is-clone .gm-enemy-avatar > * { pointer-events: none !important; }
+.ecl-stage[data-sel="planet"] .gm-sector-planet-bg { outline: 2px solid var(--color-primary) !important; }
+
+/* Enemy card text frames: mostly opaque so the planet behind never fights the text. */
+.gm-enemy-text { background: color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 16%, rgba(5, 6, 10, .9)); }
+.gm-enemy-title { background: rgba(5, 6, 10, .88); }
+
+/* Enemy card text frames hug their text and carry one border all around. */
+.gm-enemy-title, .gm-enemy-text {
+    left: 8px; right: auto; width: max-content; max-width: calc(100% - 16px); box-sizing: border-box;
+    border: 2px solid color-mix(in srgb, var(--ruler-accent, var(--color-primary)) 60%, transparent);
+}
+.gm-enemy-title { top: 6px; height: auto; padding: 2px 12px; line-height: 1.25; }
+.gm-enemy-text { top: 44px; height: 30px; padding: 0 12px; }
+
+.ecl-modal { width: 92%; max-width: 92%; overflow-x: hidden; }

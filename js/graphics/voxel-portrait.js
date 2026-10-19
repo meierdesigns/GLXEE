@@ -59,6 +59,7 @@ const voxelPortrait = (() => {
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
         const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
         const bg = VXP.background(e.preset.faction, t, e.accent, e.preset.bgv), head = e.head[k], dst = e.img.data;
+        if (e.nobg) bg.fill(0);
         // In the portrait picker the selected tile shows the full, brighter backdrop and the others a subdued one
         // (the pilots themselves stay equally bright).
         const pick = e.canvas.closest && e.canvas.closest('.pp-pick');
@@ -66,22 +67,25 @@ const voxelPortrait = (() => {
         // Backdrop gradients are posterised into hard colour bands (no soft ramps), like the rest of the pixel art.
         const Q = 28;
         for (let i = 0; i < bg.length; i += 4) { bg[i] = Math.round(bg[i] / Q) * Q; bg[i + 1] = Math.round(bg[i + 1] / Q) * Q; bg[i + 2] = Math.round(bg[i + 2] / Q) * Q; }
-        // The pilot sits a little smaller (anchored bottom centre) so more of the faction world shows around the head.
-        const SC = 0.8, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1;
+        // The pilot sits a little smaller (anchored a few rows above the bottom edge, not on it)
+        // so the faction world shows all around the head, chin included.
+        const SC = 0.74, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1 - 6;
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const o = (y * W + x) * 4, sx = Math.round(cx + (x - cx) / SC), sy = Math.round(by + (y - by) / SC);
             const ho = sx >= 0 && sy >= 0 && sx < W && sy < H ? (sy * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
+            if (e.nobg) { dst[o] = ho < 0 ? 0 : head[ho]; dst[o + 1] = ho < 0 ? 0 : head[ho + 1]; dst[o + 2] = ho < 0 ? 0 : head[ho + 2]; dst[o + 3] = Math.round(a * 255); continue; }
             dst[o] = ho < 0 ? bg[o] : head[ho] * a + bg[o] * (1 - a);
             dst[o + 1] = ho < 0 ? bg[o + 1] : head[ho + 1] * a + bg[o + 1] * (1 - a);
             dst[o + 2] = ho < 0 ? bg[o + 2] : head[ho + 2] * a + bg[o + 2] * (1 - a);
-            dst[o + 3] = 255;
+            dst[o + 3] = e.nobg ? Math.round(a * 255) : 255;
         }
         present(e);
     }
     const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((list) => list.forEach((r) => { if (r.target.__vx) r.target.__vx.vis = r.isIntersecting; })) : null;
     function register(canvas) {
         if (canvas.__vx || !canvas.getContext) return;
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const nobg = canvas.dataset.nobg === '1';
+        const ctx = canvas.getContext('2d', { alpha: !!nobg });
         if (!ctx) return;   // no Canvas2D (ancient / locked-down browsers)
         let look = null;
         try { look = JSON.parse(canvas.dataset.look); } catch (err) { look = null; }
@@ -89,12 +93,12 @@ const voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
-        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
         draw(e, false);
-        painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
+        (nobg ? Promise.resolve(null) : painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT)).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
         if (!timer) timer = setInterval(tick, 90);
     }
     function tick() {
@@ -122,7 +126,7 @@ const voxelPortrait = (() => {
         scan(document);
     }
     function canvasHtml(look, accent, opts) {
-        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
+        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
     }
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe); else observe();

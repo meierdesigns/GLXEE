@@ -1,6 +1,168 @@
 "use strict";
 
 // GalaxyMapManager members, continued from core.js (kept under ~500 lines per file).
+/** Dev layout editor settings for the enemy card: x/y offset (px), size (%) and layer per element. Stored per browser. */
+const enemyCardLayout = {
+    KEY: 'vf_enemy_card_layout_v1',
+    ELS: ['title', 'bar', 'face', 'ship', 'planet'],
+    LABELS: { title: 'TITLE', bar: 'BAR', face: 'FACE', ship: 'SHIP', planet: 'PLANET' },
+    DEF_Z: { title: 6, bar: 5, face: 4, ship: 3, planet: 0 },
+    /** Shipped defaults (x/y px, s %, z layer); anything missing falls back to neutral. Paste COPY output here. */
+    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":0,"y":0,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":158,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
+    defaults() { const o = {}; this.ELS.forEach((k) => { const b = this.BAKED[k] || {}; o[k] = { x: b.x || 0, y: b.y || 0, s: b.s || 100, z: b.z !== undefined ? b.z : this.DEF_Z[k] }; }); return o; },
+    load() {
+        let v = {};
+        try { v = JSON.parse(localStorage.getItem(this.KEY) || '{}') || {}; } catch (e) { v = {}; }
+        const out = this.defaults();
+        this.ELS.forEach((k) => {
+            if (!v[k]) return;
+            const e = v[k];
+            out[k] = {
+                x: Math.round(+e.x || 0), y: Math.round(+e.y || 0),
+                s: Math.max(20, Math.min(300, Math.round(+e.s || 100))),
+                z: Number.isFinite(+e.z) && e.z !== undefined ? Math.round(+e.z) : this.DEF_Z[k]
+            };
+        });
+        return out;
+    },
+    save(v) { try { localStorage.setItem(this.KEY, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+    reset() { try { localStorage.removeItem(this.KEY); } catch (e) { /* ignore */ } },
+    /** Writes every custom property onto one node. The planet sits behind the card (z < 5) or in front of it. */
+    paint(n, l) {
+        this.ELS.forEach((k) => {
+            n.style.setProperty(`--ec-${k}-x`, l[k].x + 'px');
+            n.style.setProperty(`--ec-${k}-y`, l[k].y + 'px');
+            n.style.setProperty(`--ec-${k}-s`, String(l[k].s / 100));
+            n.style.setProperty(`--ec-${k}-z`, String(l[k].z));
+        });
+        const front = l.planet.z >= 5;
+        n.style.setProperty('--ec-planet-segz', front ? '3' : '1');
+        n.style.setProperty('--ec-planet-mz', front ? '10' : '0');
+    },
+    /** Inline custom properties for a freshly built card. */
+    css(v) {
+        const l = v || this.load(), n = { style: { setProperty(k, val) { this.t.push(k + ':' + val); }, t: [] } };
+        this.paint(n, l);
+        return n.style.t.join(';');
+    },
+    /** Re-applies the saved settings to the page and to every enemy card on screen. */
+    applyLive(v) {
+        const l = v || this.load();
+        this.paint(document.documentElement, l);
+        document.querySelectorAll('.gm-enemy-card-in').forEach((el) => this.paint(el, l));
+    },
+    openModal() {
+        const ecl = this;
+        if (typeof galaxyMapManager === 'undefined' || document.querySelector('.ecl-back')) return;
+        let cur = ecl.load();
+        let last = 'face';
+        const back = document.createElement('div');
+        back.className = 'ecl-back';
+        back.innerHTML = '<div class="ecl-modal" role="dialog" aria-label="Enemy card layout">' +
+            '<div class="ecl-title">ENEMY CARD LAYOUT</div>' +
+            '<div class="ecl-hint">Click or drag an element. Arrow keys nudge it (Shift = 10px). The planet is either behind or in front of the card.</div>' +
+            '<div class="ecl-fit"><div class="ecl-stage"></div></div>' +
+            '<div class="ecl-ctl"><span class="ecl-chips">' + ecl.ELS.map((k) => `<button type="button" class="action-button ecl-chip" data-ecl-sel="${k}">${ecl.LABELS[k]}</button>`).join('') + '</span>' +
+            '<span class="ecl-row">SIZE <button type="button" class="action-button" data-ecl="s-">−</button>' +
+            '<input type="range" class="ecl-range" min="20" max="300" step="5" data-ecl-range><button type="button" class="action-button" data-ecl="s+">+</button><b class="ecl-val" data-ecl-sval></b></span>' +
+            '<span class="ecl-row">LAYER <button type="button" class="action-button" data-ecl="z-">▼</button><b class="ecl-val" data-ecl-zval></b><button type="button" class="action-button" data-ecl="z+">▲</button></span></div>' +
+            '<div class="ecl-actions"><span class="ecl-right"><button type="button" class="action-button" data-ecl="reset">RESET</button><button type="button" class="action-button" data-ecl="copy">COPY AS DEFAULT</button></span>' +
+            '<span class="ecl-right"><button type="button" class="action-button" data-ecl="cancel">CANCEL</button>' +
+            '<button type="button" class="action-button" data-ecl="save">SAVE</button></span></div></div>';
+        document.body.appendChild(back);
+        const stage = back.querySelector('.ecl-stage'), fitBox = back.querySelector('.ecl-fit');
+        const range = back.querySelector('[data-ecl-range]');
+        let sc = 1, SW = 640, SH = 220;
+        const fit = () => {
+            sc = Math.max(0.1, Math.min(1, (back.firstElementChild.clientWidth - 40) / SW, (back.clientHeight * 0.9 - 260) / SH));
+            stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
+            fitBox.style.width = Math.round(SW * sc) + 'px'; fitBox.style.height = Math.round(SH * sc) + 'px';
+            stage.style.transform = 'scale(' + sc + ')';
+        };
+        fit();
+        window.addEventListener('resize', fit);
+        const paintAll = () => {
+            ecl.paint(stage, cur);
+            const card = stage.querySelector('.gm-enemy-card-in');
+            if (card) ecl.paint(card, cur);
+        };
+        const refreshUi = () => {
+            stage.dataset.sel = last;
+            back.querySelectorAll('[data-ecl-sel]').forEach((b) => b.classList.toggle('is-on', b.getAttribute('data-ecl-sel') === last));
+            range.value = cur[last].s;
+            back.querySelector('[data-ecl-sval]').textContent = cur[last].s + '%';
+            back.querySelector('[data-ecl-zval]').textContent = String(cur[last].z);
+        };
+        const draw = () => {
+            const gm = galaxyMapManager, pid = gm.selectedPlanetId;
+            // Preferred: an exact copy of the live bottom bar (same geometry, planet card included); the mock is the fallback.
+            const live = document.querySelector('.galaxy-map-panels');
+            const liveBar = live && live.querySelector('.galaxy-map-ruler.is-bar');
+            if (liveBar && liveBar.querySelector('.gm-enemy-card-in') && liveBar.offsetWidth > 50) {
+                SW = liveBar.offsetWidth; SH = liveBar.offsetHeight;
+                const copy = live.cloneNode(true);
+                copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+                stage.classList.add('is-clone');
+                stage.innerHTML = '<div class="galaxy-map-embedded"><div class="gm-map-stage"></div></div>';
+                stage.querySelector('.gm-map-stage').appendChild(copy);
+                paintAll(); refreshUi(); fit();
+                return;
+            }
+            SW = 640; SH = 220; stage.classList.remove('is-clone');
+            const pInfo = pid && gm.getPlanetInfo ? gm.getPlanetInfo(pid) : null;
+            const art = pid && gm.planetIconHtml ? gm.planetIconHtml(pid, 260) : '';
+            stage.innerHTML = (art ? `<div class="ecl-planet">${art}</div>` : '') +
+                gm.enemyCardHtml({ id: null, name: (pInfo && pInfo.name) || 'Node Array' }, ((pid && typeof planetConfigManager !== 'undefined' && planetConfigManager.getHostileFactions && planetConfigManager.getHostileFactions(pid) || [])[0]) || 'machine');
+            paintAll();
+            refreshUi();
+            fit();
+        };
+        const SEL = { title: '.gm-enemy-title', bar: '.gm-enemy-text', face: '.gm-enemy-avatar', ship: '.gm-enemy-ship', planet: '.ecl-planet, .gm-sector-planet-bg' };
+        const upd = (k, patch) => { Object.assign(cur[k], patch); cur[k].s = Math.max(20, Math.min(300, cur[k].s)); paintAll(); refreshUi(); };
+        stage.addEventListener('pointerdown', (e) => {
+            const k = Object.keys(SEL).find((key) => e.target.closest(SEL[key]));
+            if (!k) return;
+            e.preventDefault();
+            last = k; refreshUi();
+            const sx = e.clientX, sy = e.clientY, ox = cur[k].x, oy = cur[k].y;
+            const mv = (ev) => upd(k, { x: Math.round(ox + (ev.clientX - sx) / sc), y: Math.round(oy + (ev.clientY - sy) / sc) });
+            const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+            window.addEventListener('pointermove', mv);
+            window.addEventListener('pointerup', up);
+        });
+        range.addEventListener('input', () => upd(last, { s: +range.value }));
+        const close = () => { document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', fit); back.remove(); };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; }
+            const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+            if (d && !(e.target && e.target.type === 'range')) { e.preventDefault(); e.stopImmediatePropagation(); const m = e.shiftKey ? 10 : 1; upd(last, { x: cur[last].x + d[0] * m, y: cur[last].y + d[1] * m }); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        back.addEventListener('click', (e) => {
+            if (e.target === back) { close(); return; }
+            const chip = e.target.closest('[data-ecl-sel]');
+            if (chip) { last = chip.getAttribute('data-ecl-sel'); refreshUi(); return; }
+            const b = e.target.closest('[data-ecl]');
+            if (!b) return;
+            const act = b.getAttribute('data-ecl');
+            if (act === 's-' || act === 's+') { upd(last, { s: cur[last].s + (act === 's+' ? 5 : -5) }); return; }
+            if (act === 'z-' || act === 'z+') { upd(last, { z: cur[last].z + (act === 'z+' ? 1 : -1) }); return; }
+            if (act === 'copy') { const t = JSON.stringify(cur); b.textContent = 'COPIED'; try { navigator.clipboard.writeText(t); } catch (err) { window.prompt('Copy:', t); } return; }
+            if (act === 'reset') { cur = ecl.defaults(); draw(); return; }
+            if (act === 'save') { ecl.save(cur); ecl.applyLive(cur); }
+            close();
+        });
+        draw();
+    }
+};
+enemyCardLayout.applyLive();
+document.addEventListener('click', (e) => {
+    if (typeof startScreenManager === 'undefined' || !startScreenManager.devMode) return;
+    if (!e.target.closest || e.target.closest('.ecl-back') || !e.target.closest('.gm-enemy-card')) return;
+    e.preventDefault(); e.stopPropagation();
+    enemyCardLayout.openModal();
+}, true);
+
 extendClass(GalaxyMapManager, {
     getPlanetInfo(planetId) {
         const pid = String(planetId || '').toLowerCase();
@@ -82,7 +244,7 @@ extendClass(GalaxyMapManager, {
         return String(this.galaxyId || '').toUpperCase();
     },
     /** Top-right badge: the faction that rules this galaxy (its main faction). */
-    renderGalaxyRulerBadge() {
+    renderGalaxyRulerBadge(mode) {
         if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxyControl) return '';
         const c = planetConfigManager.getGalaxyControl(this.galaxyId);
         if (!c || !c.main) return '';
@@ -105,7 +267,33 @@ extendClass(GalaxyMapManager, {
             (emblem ? `<span class="galaxy-map-ruler-emblem">${emblem}</span>` : '') +
             `<span class="galaxy-map-ruler-text"><span class="galaxy-map-ruler-galaxy">${galaxyName}</span>` +
             `<span class="galaxy-map-ruler-label">${state}</span></span></div>`;
+        if (mode === 'split') return { ruler: ruler, sit: sit };
         return ruler + sit;
+    },
+    /** Enemy card of the selected planet: the hostile faction's hero portrait and one of its ships. */
+    enemyCardHtml(info, factionOverride) {
+        if (!info || typeof planetConfigManager === 'undefined') return '';
+        const pcm = planetConfigManager;
+        const hostile = factionOverride ? null : pcm.getHostileFactions ? pcm.getHostileFactions(info.id) : (pcm.getPlanetFactions ? pcm.getPlanetFactions(info.id) : []);
+        const f = factionOverride || (hostile && hostile[0]);
+        if (!f || (!factionOverride && this.isUnlocked && !this.isUnlocked(info.id))) return '';
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const accent = (fss && fss.getFactionStyle && (fss.getFactionStyle(f) || {}).accent) || 'var(--color-primary)';
+        const portrait = typeof heroPortrait !== 'undefined' && heroPortrait.html
+            ? heroPortrait.html(heroPortrait.heroLook(f), accent, { nobg: true }) : '';
+        const hs = typeof homeStationUI !== 'undefined' ? homeStationUI : null;
+        const shipSrc = hs && hs.factionShipSrcHd ? hs.factionShipSrcHd(f, 'assault', 4) : '';
+        const meta = pcm.getFactionMeta ? pcm.getFactionMeta(f) : null;
+        const name = String((meta && meta.hero && meta.hero.name) || f).toUpperCase();
+        const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+            ? profileSelectionManager.getFactionEmblemHtml(f, 22) : '';
+        const planetName = String(info.name || '').toUpperCase();
+        return `<div class="gm-enemy-card-in" style="--ruler-accent:${accent};${enemyCardLayout.css()}" data-ui-tip="ENEMY · ${name}">` +
+            (portrait ? `<span class="gm-enemy-avatar">${portrait}</span>` : '') +
+            `<span class="gm-enemy-title">${planetName}</span>` +
+            `<span class="gm-enemy-text">${emblem ? `<span class="gm-enemy-emblem">${emblem}</span>` : ''}<span class="gm-enemy-kind">ENEMY</span><span class="gm-enemy-name">${name}</span></span>` +
+            (shipSrc ? `<img class="gm-enemy-ship" src="${shipSrc}" alt="" draggable="false">` : '') +
+            `</div>`;
     },
     /** Holdings text for the ruler-card tooltip (not shown inline). */
     getHoldingsTip() {
@@ -203,8 +391,26 @@ extendClass(GalaxyMapManager, {
             `</div>`;
     },
     /** Mission modal for the situation card: what is going on here and where to go. */
-    openSituationModal() {
-        const sit = this._situation;
+    /** Current situation (invasion / active mission / conflict) of the player's galaxy, also without a mounted map. */
+    getSituationInfo() {
+        if (typeof planetConfigManager === 'undefined' || typeof profileManager === 'undefined') return null;
+        const gid = profileManager.getCurrentGalaxyId ? profileManager.getCurrentGalaxyId() : this.galaxyId;
+        if (!gid) return null;
+        const keep = { g: this.galaxyId, s: this._situation, a: this._situationAccent };
+        try {
+            this.galaxyId = gid;
+            const c = (planetConfigManager.getGalaxyControl && planetConfigManager.getGalaxyControl(gid)) || {};
+            const styleOf = (f) => (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(f) : null);
+            const emblemOf = (f, size) => (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                ? profileSelectionManager.getFactionEmblemHtml(f, size) : '');
+            this.renderGalaxySituationCard(c, emblemOf, styleOf);
+            return { sit: this._situation, accent: this._situationAccent };
+        } finally {
+            this.galaxyId = keep.g; this._situation = keep.s; this._situationAccent = keep.a;
+        }
+    },
+    openSituationModal(given) {
+        const sit = given || this._situation;
         const host = document.querySelector('.home-station-content') || document.body;
         if (!sit || !host || host.querySelector('.gm-mission-modal')) return;
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -285,14 +491,57 @@ extendClass(GalaxyMapManager, {
             // Map nodes follow the zoom (shared with the ship, getMapDetail);
             // big views (sector card) always get a fine grid.
             const zoomDetail = this.getMapDetail ? this.getMapDetail() : 1;
-            const detail = mapNode && this.planetDetailMul
-                ? Math.min(8, zoomDetail * this.planetDetailMul(sid))
-                : (px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail));
+            // Map nodes: cap detail for spin cost (≤8). Slightly coarser on purpose
+            // so the galaxy map stays smooth; sector-card previews stay finer.
+            let detail;
+            if (mapNode && this.planetDetailMul) {
+                detail = zoomDetail * this.planetDetailMul(sid);
+                try {
+                    const svgEl = typeof document !== 'undefined' ? document.querySelector('.galaxy-map-svg') : null;
+                    const vb = this.getMapViewBox
+                        ? this.getMapViewBox(
+                            typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 640,
+                            typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 320,
+                            typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48
+                        )
+                        : null;
+                    if (svgEl && vb && vb[2] > 0) {
+                        const screenPx = px * (svgEl.clientWidth / vb[2]);
+                        const cells = this.planetGridCells ? this.planetGridCells(sid) : 18;
+                        // ~2.5 CSS px per art cell — a bit coarser, much cheaper to spin.
+                        const need = Math.ceil(screenPx / Math.max(8, cells * 2.5));
+                        if (need > detail) detail = need;
+                        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                        // Global Pixel Size: one art cell == gp screen px.
+                        if (gp > 0) {
+                            const live = this.mapScreenScale ? this.mapScreenScale() : 0;
+                            if (live > 0) detail = Math.max(1, Math.ceil(px * live / (cells * gp) - 0.05)); // round up; snapPixelImg trims to the exact grid
+                        }
+                    }
+                } catch (e) { /* zoom detail only */ }
+                detail = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? Math.min(8, detail) : Math.min(8, detail);
+                if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) detail = Math.max(1, Math.min(8, detail));
+            } else {
+                detail = px >= 160 ? Math.max(8, zoomDetail) : (px >= 80 ? Math.max(2, zoomDetail) : zoomDetail);
+                const gp2 = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                    ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                // Global Pixel Size: big non-node views (selected planet, sector card): one art cell == gp px.
+                if (gp2 > 0) {
+                    const cells2 = this.planetGridCells ? this.planetGridCells(sid) : 18;
+                    detail = Math.max(1, Math.min(8, Math.round(px / (cells2 * gp2))));
+                }
+            }
             // Current rotation frame, so zoom re-renders don't jump.
-            // First paint must be instant: when the fine model isn't built yet, show the
-            // cheap coarse globe now; the spin timer swaps the fine one in (data-spin-frame -1).
+            // First paint: if the target model isn't ready yet, use a medium stand-in
+            // (detail 2 — still readable) and let the spin timer upgrade (data-spin-frame -1).
+            // Detail 1 was too blocky when stretched to map-node size.
             const placeholder = detail > 2 && planetSVGManager.hasSpinModel && !planetSVGManager.hasSpinModel(sid, detail, lightDir);
-            const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, placeholder ? 1 : detail, lightDir) : null;
+            const standIn = placeholder ? Math.min(2, detail) : detail;
+            const spinDetail = (planetSVGManager.clampSpinDetail
+                ? planetSVGManager.clampSpinDetail(standIn)
+                : Math.min(8, standIn));
+            const spinModel = planetSVGManager.getPlanetSpinModel ? planetSVGManager.getPlanetSpinModel(sid, spinDetail, lightDir) : null;
             const realFrame = spinModel ? planetSVGManager.getPlanetSpinIndex(sid, spinModel) : null;
             const spinFrame = placeholder ? -1 : realFrame;
             let svg = spinModel ? planetSVGManager.getPlanetSpinFrame(spinModel, realFrame) : planetSVGManager.getPlanetSVGDetailed
@@ -317,7 +566,9 @@ extendClass(GalaxyMapManager, {
                 const big = px * conv.scale;
                 const off = -(big - px) / 2;
                 if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
-                return `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>` +
+                // Attribute carries the TARGET detail (not the placeholder's 1), so the
+                // spin timer can upgrade the coarse first paint to the fine globe.
+                return `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}" data-planet-px="${px}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>` +
                     `<img class="gm-planet-img" src="${conv.url}" alt="" draggable="false" style="width:${big}px;height:${big}px;left:${off}px;top:${off}px"></span>`;
             }
             if (svg) {
@@ -329,7 +580,7 @@ extendClass(GalaxyMapManager, {
                     .replace(/height="[^"]*"/, `height="${px}"`);
                 // Slow axial rotation (planet-svgs/spin-frames.js).
                 if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
-                return `<span class="gm-planet-icon" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>${svg}</span>`;
+                return `<span class="gm-planet-icon" data-planet-spin="${sid}|${detail}${lightDir == null ? '' : '|' + lightDir}" data-planet-px="${px}"${spinModel ? ` data-spin-frame="${spinFrame}"` : ''}>${svg}</span>`;
             }
         }
         return `<span class="gm-planet-fallback" style="width:${px}px;height:${px}px">${sid.charAt(0).toUpperCase()}</span>`;

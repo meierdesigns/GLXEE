@@ -60,9 +60,10 @@ class SpriteLoader {
     async loadSpriteGroup(names, folder) {
         const manifest = await this.readSpriteManifest(folder);
         const wanted = Array.isArray(names) ? names.map(String) : [];
-        const toLoad = manifest
-            ? wanted.filter((n) => manifest.indexOf(n) !== -1)
-            : wanted;
+        // No manifest = no PNG overrides shipped (e.g. the sprite folders are gitignored): skip instead of probing
+        // every name, which fired hundreds of 404 requests at startup.
+        if (!manifest) return false;
+        const toLoad = wanted.filter((n) => manifest.indexOf(n) !== -1);
         if (!toLoad.length) return false;
 
         const results = await Promise.allSettled(

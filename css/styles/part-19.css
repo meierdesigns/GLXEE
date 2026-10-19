@@ -302,6 +302,27 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
     min-height: 0 !important;
     pointer-events: none;
 }
+.vf-bezel-tools button[hidden] { display: none; }
+.vf-bezel-devmode {
+    position: fixed;
+    /* Placeholder spot before js/core/viewport-fit-part3.js (syncDevBadge) measures the actual tool
+       icon row and overrides left/top/transform with exact px — the icon row's own width varies
+       (devMode adds the layout icon, editing adds save/reset), so a fixed CSS offset alone either
+       overlapped the icons when there were more of them or left a gap when there were fewer. This
+       only has to look reasonable for the one frame before that first measurement lands. */
+    top: calc(13 * var(--bz-u, 1px));
+    right: calc(300 * var(--bz-u, 1px));
+    padding: 4px 10px;
+    font: bold 12px/1 monospace;
+    letter-spacing: 0.08em;
+    color: #ffd79a;
+    border: 2px solid color-mix(in srgb, #ffd79a 55%, transparent);
+    background: color-mix(in srgb, #ffd79a 14%, #0c0e12);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100000;
+}
+.vf-bezel-devmode[hidden] { display: none; }
 .vf-bezel-tools button svg { fill: none; stroke: currentColor; stroke-width: 2; }
 .vf-bezel-tools button > span :is(img, svg) {
     width: 100% !important;

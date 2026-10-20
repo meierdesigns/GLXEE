@@ -20,6 +20,8 @@ const OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular sta
 const TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
     'spires', 'ruins', 'reef', 'chasm', 'icefall', 'pipes', 'ribs', 'delta'];
 const TERRAIN_SEGMENT_ROWS = 40; // wall rows per material segment
+// Carve in square voxel slabs (not 1-row needles). Height in terrain cells.
+const TERRAIN_CARVE_BLOCK = 3;
 const TERRAIN_MATERIALS = {
     rock: { id: 'rock', hp: 1, score: 2 },
     metal: { id: 'metal', hp: 1, score: 6 },

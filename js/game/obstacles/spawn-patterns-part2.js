@@ -146,92 +146,101 @@ extendClass(ObstacleManager, {
         const cell = this.terrainCell();
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
-        const zone = this.terrainZoneAt(wr, prof);
-        // Area threshold: light pillars — floor stripe still marks the seam.
-        const gd = this.terrainGateRow(wr, prof);
-        // Pillar reaches ~4% of W; never seal the enemy band.
-        const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
-        // Occasional big outcrop reaching far into the passage (one side per slot).
-        const outcrop = (side) => {
-            const slot = Math.floor(wr / 70);
-            if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
-            if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
-            const t = (wr - slot * 70 - 10) / 44;
-            if (t < 0 || t > 1) return 0;
-            const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
-            // Rounded bump with a flat-ish top.
-            return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
-        };
-        const depth = (side, mat) => {
-            const s = side * 37.1 + prof.phase;
-            const f = prof.freq;
-            const n = Math.sin(wr * 0.05 * f + s) * 0.5 + Math.sin(wr * 0.11 * f + s * 2) * 0.3
-                + Math.sin(wr * 0.23 * f + s * 3) * 0.2;
-            let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
-                + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
-                + gate;
-            // Per-material silhouette on top of the shared canyon curve.
-            if (mat.id === 'metal') d = Math.round(d / 3) * 3 + 1;              // stepped blocks
-            else if (mat.id === 'crystal') d += 3 * (1 - Math.abs(((wr % 8) + 8) % 8 - 4) / 4); // spikes
-            else if (mat.id === 'rock') d += Math.floor(this.terrainHash(wr, side + 7) * 3) - 1; // rubble
-            else d += Math.sin(wr * 0.4 + side) * 1.5;                             // bulging vents
-            return Math.max(2, Math.round(d));
-        };
-        const structure = (side) => {
-            // Faction silhouettes more often / larger so walls read as occupied, not bare rock.
-            const slot = Math.floor(wr / 36);
-            if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
-            const t = (wr - slot * 36 - 10) / 14;
-            if (t < 0 || t > 1) return 0;
-            let v;
-            switch (style) {
-                case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;           // squared gantries
-                case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break; // pulsing growth
-                case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;             // claw spurs
-                case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;             // welded wreck shelves
-                default: v = 0.045 * Math.sin(t * Math.PI);
-            }
-            return Math.round((W * v) / cell);
-        };
-        const out = {};
-        // Always leave a flyable passage (~62% of the width) so the upper
-        // enemy band stays usable even at zone seams.
+        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const maxCells = Math.floor((W * 0.38) / cell);
-        // Threshold sill marks the new area — skip when a gate is already
-        // active so the two never stack into a sealed wall.
-        const zi = this.terrainZoneIndex(wr, prof);
-        const local = wr - zi * prof.zoneRows;
-        let sill = 0;
-        if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
-            const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
-            sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
-        }
-        const fullOf = [0, 1].map((side) => {
-            const mat = this.terrainMaterial(wr, side) || { id: 'rock', hp: 4 };
-            const base = depth(side, mat);
-            return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
-        });
-        const over = fullOf[0].full + fullOf[1].full - maxCells;
-        if (over > 0) {
-            const tot = fullOf[0].full + fullOf[1].full;
-            fullOf.forEach((f) => {
-                f.full = Math.max(2, f.full - Math.ceil(over * f.full / tot));
-                f.base = Math.min(f.base, f.full);
+        // Build wall extents at an arbitrary world row (used for natural edges
+        // and for the shared lip of a carved block band).
+        const buildAt = (row) => {
+            const zone = this.terrainZoneAt(row, prof);
+            const gd = this.terrainGateRow(row, prof);
+            const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
+            const outcrop = (side) => {
+                const slot = Math.floor(row / 70);
+                if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
+                if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
+                const t = (row - slot * 70 - 10) / 44;
+                if (t < 0 || t > 1) return 0;
+                const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
+                return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
+            };
+            const depth = (side, mat) => {
+                const s = side * 37.1 + prof.phase;
+                const f = prof.freq;
+                const n = Math.sin(row * 0.05 * f + s) * 0.5 + Math.sin(row * 0.11 * f + s * 2) * 0.3
+                    + Math.sin(row * 0.23 * f + s * 3) * 0.2;
+                let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                    + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
+                    + gate;
+                if (mat.id === 'metal') {
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(row, side + 19) < 0.4 ? 1 : 0);
+                } else if (mat.id === 'crystal') {
+                    d += 1 + this.terrainHash(row, side + 31) * 3;
+                } else if (mat.id === 'rock') {
+                    d += Math.floor(this.terrainHash(row, side + 7) * 3) - 1;
+                } else {
+                    d += (this.terrainHash(row, side + 47) - 0.5) * 3;
+                }
+                return Math.max(2, Math.round(d));
+            };
+            const structure = (side) => {
+                const slot = Math.floor(row / 36);
+                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
+                const t = (row - slot * 36 - 10) / 14;
+                if (t < 0 || t > 1) return 0;
+                let v;
+                switch (style) {
+                    case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
+                    case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
+                    case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;
+                    case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;
+                    default: v = 0.045 * Math.sin(t * Math.PI);
+                }
+                return Math.round((W * v) / cell);
+            };
+            const zi = this.terrainZoneIndex(row, prof);
+            const local = row - zi * prof.zoneRows;
+            let sill = 0;
+            if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
+                const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
+                sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
+            }
+            const sides = [0, 1].map((side) => {
+                const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                const base = depth(side, mat);
+                return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
             });
-        }
+            const over = sides[0].full + sides[1].full - maxCells;
+            if (over > 0) {
+                const tot = sides[0].full + sides[1].full;
+                sides.forEach((f) => {
+                    f.full = Math.max(2, f.full - Math.ceil(over * f.full / tot));
+                    f.base = Math.min(f.base, f.full);
+                });
+            }
+            return sides;
+        };
+        // Undamaged rows keep a natural silhouette; carved bands freeze to the
+        // band centre so every row in the slab shares one width (block dig).
+        const band = Math.floor(wr / block);
+        const fullOf = buildAt(wr);
+        let centerOf = null;
+        const out = {};
         for (let side = 0; side < 2; side++) {
-            const { mat, base, full } = fullOf[side];
-            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + wr) || 0) : 0;
-            const eroded = Math.floor(dmg / mat.hp);
-            // Fully carveable — blast the wall away to open the corridor.
-            const width = Math.max(0, full - eroded);
+            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + band) || 0) : 0;
+            const eroded = Math.floor(dmg / Math.max(1, (fullOf[side].mat.hp) || 1));
+            let { mat, base, full, sill } = fullOf[side];
+            if (eroded > 0) {
+                if (!centerOf) centerOf = buildAt(band * block + (block >> 1));
+                ({ mat, base, full, sill } = centerOf[side]);
+            }
+            const hp = Math.max(1, mat.hp || 1);
+            const width = Math.max(0, full - Math.floor(dmg / hp));
             const k = side ? 'right' : 'left';
             out[k] = width;
             out[k + 'Base'] = Math.min(base, width);
             out[k + 'Mat'] = mat;
-            out[k + 'Cracked'] = width > 0 && (dmg % mat.hp) > 0; // edge cell already hit
-            // Sill cells (between the base wall and the edge) get their own look.
-            out[k + 'Sill'] = fullOf[side].sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
+            out[k + 'Cracked'] = width > 0 && eroded > 0 && (dmg % hp) > 0;
+            out[k + 'Sill'] = sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
         }
         return out;
     },
@@ -275,28 +284,36 @@ extendClass(ObstacleManager, {
         };
     },
     /**
-     * A shot hit the wall on `side` at screen y: carve into it. Returns the
-     * number of cells that broke off (0 = only chipped).
+     * A shot hit the wall on `side` at screen y: carve into it. Damage is
+     * stored per carve-block band so the crater is voxel slabs, not 1-row
+     * needles. Returns how many cells broke off (0 = only chipped).
      */
     damageTerrain(y, side, profile) {
         if (!this.terrainDamage) this.terrainDamage = new Map();
         const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
+        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const wr = this.terrainRowAtY(y);
+        const hitBand = Math.floor(wr / block);
+        // Radius in block bands (at least the hit band).
+        const bandR = Math.max(0, Math.ceil(Math.max(1, pr.radius || 1) / block));
         let broken = 0;
-        for (let d = -pr.radius; d <= pr.radius; d++) {
-            const row = wr + d;
-            const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 4 };
-            // Full power at the hit row, falling off towards the crater rim,
-            // with a little randomness so the edge looks torn.
-            const fall = 1 - Math.abs(d) / (pr.radius + 1);
-            let pts = pr.power * fall * (mat.id === 'metal' ? pr.vsMetal : 1);
-            // Always break at least one cell on the impact row.
-            pts = Math.max(d === 0 ? 2 : 1, Math.floor(pts + Math.random() * 0.9));
-            const k = side + ':' + row;
+        for (let bd = -bandR; bd <= bandR; bd++) {
+            const band = hitBand + bd;
+            const mid = band * block + (block >> 1);
+            const mat = this.terrainMaterial(mid, side) || { id: 'rock', hp: 1 };
+            const hp = Math.max(1, mat.hp || 1);
+            const fall = 1 - Math.abs(bd) / (bandR + 1);
+            // Uniform points for the whole band → flat block face.
+            let pts = Math.floor(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1));
+            // Hit band always loses at least one cell; neighbours need a full step.
+            pts = Math.max(bd === 0 ? hp : (fall > 0.35 ? hp : 0), pts);
+            if (pts <= 0) continue;
+            const k = side + ':' + band;
             const before = this.terrainDamage.get(k) || 0;
             this.terrainDamage.set(k, before + pts);
-            const hp = Math.max(1, mat.hp || 4);
-            broken += Math.floor((before + pts) / hp) - Math.floor(before / hp);
+            // Count cells for the whole slab height (block rows × depth broken).
+            const depthBroke = Math.floor((before + pts) / hp) - Math.floor(before / hp);
+            broken += depthBroke * block;
         }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
@@ -304,8 +321,7 @@ extendClass(ObstacleManager, {
             renderManager._terrainLayerKey = null;
         }
         if (this.terrainDamage.size > 4000) {
-            // Forget rows that scrolled far past the bottom.
-            const cutoff = wr - 400;
+            const cutoff = Math.floor(wr / block) - 400;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
         return broken;

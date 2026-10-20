@@ -111,7 +111,10 @@ extendClass(GameControlSystem, {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
         } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
-            icon = galaxyMapManager.planetIconHtml(pid, 320, true);
+            // Defeat card is narrow — smaller globe; victory keeps the large portrait via CSS.
+            const go = typeof document !== 'undefined' && document.getElementById('gameOver');
+            const onDefeat = !!(go && !go.classList.contains('hidden')) || result === 'lost';
+            icon = galaxyMapManager.planetIconHtml(pid, onDefeat ? 168 : 320, true);
         }
 
         let steps = '';
@@ -125,11 +128,12 @@ extendClass(GameControlSystem, {
             const list = [];
             for (let i = 1; i <= n + 1; i++) {
                 const boss = i === n + 1;
+                const transit = !boss && isTransitStage(pid, i);
                 const done = boss ? !!st.bossCleared : i <= (st.highestStage || 0);
                 let state = done ? 'done' : 'locked';
                 if (i === current) state = result === 'won' ? 'won' : 'lost';
-                const mark = state === 'won' || state === 'done' ? '✓' : (state === 'lost' ? '✕' : (boss ? '☠' : String(i)));
-                list.push(`<li class="outcome-step is-${state}${boss ? ' is-boss' : ''}" title="${boss ? 'BOSS' : 'STAGE ' + i}">` +
+                const mark = state === 'won' || state === 'done' ? '✓' : (state === 'lost' ? '✕' : (boss ? '☠' : (transit ? '»' : String(i))));
+                list.push(`<li class="outcome-step is-${state}${boss ? ' is-boss' : ''}" title="${boss ? 'BOSS' : (transit ? 'TRANSIT ' : 'STAGE ') + i}">` +
                     `<span class="outcome-step-dot">${mark}</span></li>`);
             }
             const which = level.isBoss ? 'BOSS' : 'STAGE ' + current + '/' + (n + 1);

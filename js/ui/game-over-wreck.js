@@ -113,16 +113,16 @@ const VFGameOverWreck = {
         if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
         const ctx = cv.getContext('2d');
         ctx.clearRect(0, 0, W, H);
-        // Large wreck centered behind the modal (canvas is z-index under content).
-        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.15), H / (s.h * 1.35))));
-        // Fly in from off-screen left, easing into screen centre.
+        // Compact wreck behind the card — stays in the bezel margins, not under the panel.
+        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.55), H / (s.h * 1.75))));
+        // Fly in from off-screen left, easing into lower-centre (under the card).
         if (s.t0 == null) s.t0 = t;
         const k0 = Math.min(1, (t - s.t0) / 2.4);
         const ease = 1 - Math.pow(1 - k0, 3);
         const laneCx = W * 0.5;
         const cx = -s.w * scale + (laneCx + s.w * scale) * ease;
         const ox = Math.floor(cx - (s.w * scale) / 2);
-        const oy = Math.floor(H * 0.5 - (s.h * scale) / 2);
+        const oy = Math.floor(H * 0.62 - (s.h * scale) / 2);
         const drift = Math.sin(t * 0.4) * scale * 0.6;
         const pull = scale * (1.5 + Math.sin(t * 0.25) * 0.4);
 

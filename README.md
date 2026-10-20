@@ -770,6 +770,7 @@ be reviewed or reverted independently.
 | 66L | Enemy card poster | Planet title, emblem + hero name frames, backdrop-free portrait, dev layout modal (position, size, layer, defaults) |
 | 67A | Natural terrain carve | Organic floor ridges, torn wall craters, less grid/stripe doctrine on planet crust |
 | 67B | Block terrain dig | Wall damage in 3-cell voxel slabs — flat block faces, no 1-row carve needles |
+| 67C | Game-over fit | Compact defeat planet/stepper, softer wreck backdrop, scrollable card |
 
 The wave commit convention is:
 

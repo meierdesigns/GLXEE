@@ -22748,7 +22748,7 @@ var CoreRenderManager = class CoreRenderManager {
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
-    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps }); // functions (hoisted)
+    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot }); // functions (hoisted)
 
     function restoreFxScroll() {
         const body = document.querySelector('#vf-fx .vf-fx-body');
@@ -22789,19 +22789,148 @@ var CoreRenderManager = class CoreRenderManager {
         plate.addEventListener('input', onFxInput);
         return plate;
     }
+    /** Live performance snapshot for PERF / DEBUG tabs and console. */
+    function collectPerfSnapshot(fps) {
+        const canvas = document.getElementById('gameCanvas');
+        const bw = canvas ? canvas.width : 0;
+        const bh = canvas ? canvas.height : 0;
+        let scale = Number(window.PLAYFIELD_RENDER_SCALE) || 0;
+        try {
+            if (typeof renderManager !== 'undefined' && renderManager && renderManager.getRenderScale) {
+                scale = renderManager.getRenderScale();
+            }
+        } catch (e) { /* optional */ }
+        let gp = 0;
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                gp = uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { /* optional */ }
+        const gs = (typeof game !== 'undefined' && game && game.gameState)
+            || (typeof gameStateManager !== 'undefined' ? gameStateManager : null);
+        const running = !!(gs && gs.gameRunning);
+        const paused = !!(gs && gs.isPaused);
+        let combat = false;
+        try {
+            const gl = (typeof game !== 'undefined' && game && game.gameLoop) || null;
+            if (gl && typeof gl.isCombatSurfaceActive === 'function') combat = !!gl.isCombatSurfaceActive();
+            else combat = document.documentElement.classList.contains('vf-game-shown');
+        } catch (e) { combat = false; }
+        let loop = 'IDLE';
+        if (running && combat && paused) loop = 'PAUSED';
+        else if (running && combat) loop = 'COMBAT';
+        else if (running && !combat) loop = 'PARKED';
+        let enemies = 0, bullets = 0, particles = 0, explosions = 0;
+        try {
+            if (typeof enemyManager !== 'undefined' && enemyManager) {
+                enemies = (enemyManager.enemies && enemyManager.enemies.length) || 0;
+                enemies += (enemyManager.sideEnemies && enemyManager.sideEnemies.length) || 0;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof bulletManager !== 'undefined' && bulletManager && bulletManager.bullets) {
+                bullets = bulletManager.bullets.length;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof graphicsManager !== 'undefined' && graphicsManager && graphicsManager.particles) {
+                particles = graphicsManager.particles.length;
+            } else if (typeof particleSystem !== 'undefined' && particleSystem && particleSystem.particles) {
+                particles = particleSystem.particles.length;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof explosionSystem !== 'undefined' && explosionSystem && explosionSystem.active) {
+                explosions = explosionSystem.active.length;
+            }
+        } catch (e) { /* optional */ }
+        let heap = '—';
+        try {
+            const m = performance.memory;
+            if (m && m.usedJSHeapSize) {
+                heap = Math.round(m.usedJSHeapSize / 1048576) + ' / ' +
+                    Math.round(m.jsHeapSizeLimit / 1048576) + ' MB';
+            }
+        } catch (e) { /* Chrome-only */ }
+        const area = document.getElementById('gmMapArea');
+        const mapFilter = !!(area && area.style && /url\(#vfMapPx\)/.test(area.style.filter || ''));
+        const fpsN = (typeof fps === 'number' && fps > 0) ? fps : 0;
+        return {
+            fps: fpsN || null,
+            frameMs: fpsN ? (1000 / fpsN).toFixed(1) : null,
+            loop: loop,
+            backing: bw && bh ? (bw + '×' + bh) : '—',
+            backingPx: bw * bh,
+            scale: scale ? Number(scale).toFixed(2) : '—',
+            gp: gp > 0 ? String(gp) : 'OFF',
+            heap: heap,
+            enemies: enemies,
+            bullets: bullets,
+            particles: particles,
+            explosions: explosions,
+            mapFilter: mapFilter ? 'ON' : 'OFF',
+            cores: navigator.hardwareConcurrency || '?',
+            dpr: window.devicePixelRatio || 1,
+            deviceMem: navigator.deviceMemory ? (navigator.deviceMemory + ' GB') : '?',
+            heavy: perf.heavy,
+            anim: perf.anim,
+            sway: perf.sway,
+            viewport: innerWidth + '×' + innerHeight,
+            hidden: !!(typeof document !== 'undefined' && document.hidden)
+        };
+    }
+    function paintPerfOutputs(root, snap) {
+        if (!root || !snap) return;
+        const set = function (sel, val) {
+            const el = root.querySelector(sel);
+            if (el) el.textContent = val == null ? '—' : String(val);
+        };
+        const fps = snap.fps != null ? snap.fps : '—';
+        const ms = snap.frameMs != null ? snap.frameMs + ' ms' : '—';
+        const ent = snap.enemies + ' E · ' + snap.bullets + ' B · ' + snap.particles + ' P · ' + snap.explosions + ' X';
+        const px = snap.backingPx ? snap.backingPx.toLocaleString() : '—';
+        set('[data-pf-fps]', fps); set('[data-debug-fps]', fps);
+        set('[data-pf-framems]', ms); set('[data-debug-framems]', ms);
+        set('[data-pf-loop]', snap.loop); set('[data-debug-loop]', snap.loop);
+        set('[data-pf-backing]', snap.backing); set('[data-debug-backing]', snap.backing);
+        set('[data-pf-scale]', snap.scale); set('[data-debug-scale]', snap.scale);
+        set('[data-pf-px]', px); set('[data-debug-px]', px);
+        set('[data-pf-gp]', snap.gp); set('[data-debug-gp]', snap.gp);
+        set('[data-pf-heap]', snap.heap); set('[data-debug-heap]', snap.heap);
+        set('[data-pf-entities]', ent); set('[data-debug-entities]', ent);
+        set('[data-pf-mapfilter]', snap.mapFilter); set('[data-debug-mapfilter]', snap.mapFilter);
+        set('[data-debug-cores]', snap.cores);
+        set('[data-debug-dpr]', snap.dpr);
+        set('[data-debug-devmem]', snap.deviceMem);
+        set('[data-debug-heavy]', snap.heavy);
+        set('[data-debug-anim]', snap.anim);
+        set('[data-debug-sway]', snap.sway);
+        set('[data-debug-hidden]', snap.hidden ? 'YES' : 'NO');
+    }
+    function startPerfProbe(tab) {
+        const key = tab === 'debug' ? '_debugProbeRaf' : '_perfProbeRaf';
+        if (vfs[key]) return;
+        let n = 0, t0 = performance.now(), lastFps = 0;
+        const tick = function (now) {
+            const plate = document.getElementById('vf-fx');
+            if (!plate || !vfs.fxOpen || vfs.fxTab !== tab) { vfs[key] = 0; return; }
+            n++;
+            if (now - t0 >= 500) {
+                lastFps = Math.round(n * 1000 / (now - t0));
+                n = 0;
+                t0 = now;
+                paintPerfOutputs(plate, collectPerfSnapshot(lastFps));
+            }
+            vfs[key] = requestAnimationFrame(tick);
+        };
+        vfs[key] = requestAnimationFrame(tick);
+    }
     let debugFpsRaf = 0;
     function startDebugFps() {
-        if (debugFpsRaf) cancelAnimationFrame(debugFpsRaf);
-        let n = 0, t0 = performance.now();
-        const tick = function (now) {
-            const out = document.querySelector('#vf-fx [data-debug-fps]');
-            if (!out || !vfs.fxOpen || vfs.fxTab !== 'debug') { debugFpsRaf = 0; return; }
-            n++;
-            if (now - t0 >= 500) { out.textContent = Math.round(n * 1000 / (now - t0)); n = 0; t0 = now; }
-            debugFpsRaf = requestAnimationFrame(tick);
-        };
-        debugFpsRaf = requestAnimationFrame(tick);
+        if (debugFpsRaf) { cancelAnimationFrame(debugFpsRaf); debugFpsRaf = 0; }
+        startPerfProbe('debug');
     }
+    try { window.vfPerfSnapshot = function () { return collectPerfSnapshot(null); }; } catch (e) { /* optional */ }
 
     // Move (drag the readout) and resize (corner grip); position and size are remembered.
     const FXGEOM_KEY = 'vf-fx-geom';
@@ -22859,22 +22988,9 @@ var CoreRenderManager = class CoreRenderManager {
         const cv = homeStationUI.overlay.querySelector('[data-fleet-preview]');
         if (cv) homeStationUI.startFactionFleetPreview(faction || cv.getAttribute('data-faction'), cv.getAttribute('data-ship'));
     }
-    // FPS readout: only counts while the PERF tab is on screen.
-    let pfFpsRaf = 0;
+    // Live PERF probe: only runs while the PERF tab is on screen.
     function startPerfFps() {
-        if (pfFpsRaf) return;
-        let n = 0, t0 = performance.now();
-        const tick = function (now) {
-            const out = document.querySelector('#vf-fx [data-pf-fps]');
-            if (!out || !vfs.fxOpen || vfs.fxTab !== 'perf') { pfFpsRaf = 0; return; }
-            n++;
-            if (now - t0 >= 500) {
-                out.textContent = Math.round(n * 1000 / (now - t0)) + '';
-                n = 0; t0 = now;
-            }
-            pfFpsRaf = requestAnimationFrame(tick);
-        };
-        pfFpsRaf = requestAnimationFrame(tick);
+        startPerfProbe('perf');
     }
     function onFxClick(e) {
         const b = e.target.closest && e.target.closest('button');
@@ -22922,8 +23038,18 @@ var CoreRenderManager = class CoreRenderManager {
             console.info('[GLXEE DEBUG]', {
                 viewport: [innerWidth, innerHeight],
                 devicePixelRatio: window.devicePixelRatio || 1,
-                localStorage: (() => { try { return JSON.stringify(localStorage).length; } catch (err) { return 'blocked'; } })()
+                localStorage: (() => { try { return JSON.stringify(localStorage).length; } catch (err) { return 'blocked'; } })(),
+                perf: collectPerfSnapshot(null)
             });
+        }
+        else if (d.debugAction === 'perf') {
+            const snap = collectPerfSnapshot(null);
+            console.info('[GLXEE PERF]', snap);
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(JSON.stringify(snap, null, 2));
+                }
+            } catch (err) { /* optional */ }
         }
         else if (d.fxFac) { fxFacPrev = vfs.editFaction || (document.getElementById('vf-bezel') || document.body).getAttribute('data-faction'); vfs.editFaction = d.fxFac; setPreviewFaction(vfs.editFaction); }
         else if (d.frReset) {
@@ -23281,7 +23407,17 @@ var CoreRenderManager = class CoreRenderManager {
             const backdropOk = !!(window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px)'));
             h += '<div class="vf-fx-title">PRESET</div><div class="vf-fx-row">' +
                 fxSeg([['LOW', 'LOW'], ['BALANCED', 'BALANCED'], ['HIGH', 'HIGH']], '', 'pf-preset') + '</div>' +
-                '<div class="vf-fx-title">LIVE</div><div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-pf-fps>--</output></div>' +
+                '<div class="vf-fx-title">LIVE</div>' +
+                '<div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-pf-fps>--</output></div>' +
+                '<div class="vf-fx-row"><span>FRAME</span><output class="vf-fx-fps" data-pf-framems>--</output></div>' +
+                '<div class="vf-fx-row"><span>LOOP</span><output data-pf-loop>--</output></div>' +
+                '<div class="vf-fx-row"><span>PLAYFIELD</span><output data-pf-backing>--</output></div>' +
+                '<div class="vf-fx-row"><span>SCALE</span><output data-pf-scale>--</output></div>' +
+                '<div class="vf-fx-row"><span>BACKING PX</span><output data-pf-px>--</output></div>' +
+                '<div class="vf-fx-row"><span>GLOBAL PIXEL</span><output data-pf-gp>--</output></div>' +
+                '<div class="vf-fx-row"><span>JS HEAP</span><output data-pf-heap>--</output></div>' +
+                '<div class="vf-fx-row"><span>ENTITIES</span><output data-pf-entities>--</output></div>' +
+                '<div class="vf-fx-row"><span>MAP PX FILTER</span><output data-pf-mapfilter>--</output></div>' +
                 '<div class="vf-fx-title">EFFECTS</div>' +
                 '<div class="vf-fx-row"><span>SWAY</span>' + fxSeg([['AUTO', 'AUTO'], ['ON', 'ON'], ['OFF', 'OFF']], perf.sway, 'pf-sway') + '</div>' +
                 '<div class="vf-fx-row"><span>CHROMA/BLOOM/CRT</span>' + fxSeg([['ON', 'ON'], ['OFF', 'OFF']], perf.heavy, 'pf-heavy') + '</div>' +
@@ -23289,7 +23425,8 @@ var CoreRenderManager = class CoreRenderManager {
                 '<div class="vf-fx-row"><span>FRAME PIXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.framePx === 'OFF' ? 'OFF' : 'ON', 'pf-framepx') + '</div>' +
                 '<div class="vf-fx-title">SYSTEM</div>' +
                 '<div class="vf-fx-row"><span>OS REDUCE MOTION</span><output>' + (mq('(prefers-reduced-motion: reduce)') ? 'YES (AUTO = no sway)' : 'NO') + '</output></div>' +
-                '<div class="vf-fx-row"><span>BACKDROP FILTER</span><output>' + (backdropOk ? 'SUPPORTED' : 'MISSING') + '</output></div>';
+                '<div class="vf-fx-row"><span>BACKDROP FILTER</span><output>' + (backdropOk ? 'SUPPORTED' : 'MISSING') + '</output></div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="perf">LOG / COPY PERF</button></div>';
             startPerfFps();
         } else if (vfs.fxTab === 'debug') {
             const storage = (() => {
@@ -23321,14 +23458,31 @@ var CoreRenderManager = class CoreRenderManager {
                 return '<div class="vf-debug-script"><span title="' + r.name + '">' + name + '</span><output>' +
                     loadedMs(r).toFixed(0) + ' MS · ' + Math.round((r.transferSize || 0) / 1024) + ' KB</output></div>';
             }).join('');
-            h += '<div class="vf-fx-title">DIAGNOSTICS</div>' +
-                '<div class="vf-fx-row"><span>FPS</span><output data-debug-fps>--</output></div>' +
+            h += '<div class="vf-fx-title">LIVE PERFORMANCE</div>' +
+                '<div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-debug-fps>--</output></div>' +
+                '<div class="vf-fx-row"><span>FRAME</span><output class="vf-fx-fps" data-debug-framems>--</output></div>' +
+                '<div class="vf-fx-row"><span>LOOP</span><output data-debug-loop>--</output></div>' +
+                '<div class="vf-fx-row"><span>PLAYFIELD</span><output data-debug-backing>--</output></div>' +
+                '<div class="vf-fx-row"><span>SCALE</span><output data-debug-scale>--</output></div>' +
+                '<div class="vf-fx-row"><span>BACKING PX</span><output data-debug-px>--</output></div>' +
+                '<div class="vf-fx-row"><span>GLOBAL PIXEL</span><output data-debug-gp>--</output></div>' +
+                '<div class="vf-fx-row"><span>JS HEAP</span><output data-debug-heap>--</output></div>' +
+                '<div class="vf-fx-row"><span>ENTITIES</span><output data-debug-entities>--</output></div>' +
+                '<div class="vf-fx-row"><span>MAP PX FILTER</span><output data-debug-mapfilter>--</output></div>' +
+                '<div class="vf-fx-row"><span>TAB HIDDEN</span><output data-debug-hidden>--</output></div>' +
+                '<div class="vf-fx-title">MACHINE</div>' +
                 '<div class="vf-fx-row"><span>VIEWPORT</span><output>' + innerWidth + ' × ' + innerHeight + '</output></div>' +
-                '<div class="vf-fx-row"><span>DEVICE PIXEL RATIO</span><output>' + (window.devicePixelRatio || 1) + '</output></div>' +
+                '<div class="vf-fx-row"><span>DEVICE PIXEL RATIO</span><output data-debug-dpr>' + (window.devicePixelRatio || 1) + '</output></div>' +
+                '<div class="vf-fx-row"><span>CPU CORES</span><output data-debug-cores>--</output></div>' +
+                '<div class="vf-fx-row"><span>DEVICE MEMORY</span><output data-debug-devmem>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF HEAVY</span><output data-debug-heavy>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF ANIM</span><output data-debug-anim>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF SWAY</span><output data-debug-sway>--</output></div>' +
                 '<div class="vf-fx-row"><span>LOCAL STORAGE</span><output>' + storage + '</output></div>' +
                 '<div class="vf-fx-title">LOADING BY AREA</div>' + (areaRows || '<div class="vf-fx-row"><output>NO RESOURCE DATA</output></div>') +
                 '<div class="vf-fx-title">SLOWEST SCRIPTS</div>' + (heavy || '<div class="vf-fx-row"><output>NO SCRIPT DATA</output></div>') +
                 '<div class="vf-fx-title">ACTIONS</div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="perf">LOG / COPY PERF</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="reload">RELOAD GAME</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="clear">CLEAR LOCAL SETTINGS</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="console">LOG DEBUG INFO</button></div>';

@@ -152,7 +152,17 @@
             const backdropOk = !!(window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px)'));
             h += '<div class="vf-fx-title">PRESET</div><div class="vf-fx-row">' +
                 fxSeg([['LOW', 'LOW'], ['BALANCED', 'BALANCED'], ['HIGH', 'HIGH']], '', 'pf-preset') + '</div>' +
-                '<div class="vf-fx-title">LIVE</div><div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-pf-fps>--</output></div>' +
+                '<div class="vf-fx-title">LIVE</div>' +
+                '<div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-pf-fps>--</output></div>' +
+                '<div class="vf-fx-row"><span>FRAME</span><output class="vf-fx-fps" data-pf-framems>--</output></div>' +
+                '<div class="vf-fx-row"><span>LOOP</span><output data-pf-loop>--</output></div>' +
+                '<div class="vf-fx-row"><span>PLAYFIELD</span><output data-pf-backing>--</output></div>' +
+                '<div class="vf-fx-row"><span>SCALE</span><output data-pf-scale>--</output></div>' +
+                '<div class="vf-fx-row"><span>BACKING PX</span><output data-pf-px>--</output></div>' +
+                '<div class="vf-fx-row"><span>GLOBAL PIXEL</span><output data-pf-gp>--</output></div>' +
+                '<div class="vf-fx-row"><span>JS HEAP</span><output data-pf-heap>--</output></div>' +
+                '<div class="vf-fx-row"><span>ENTITIES</span><output data-pf-entities>--</output></div>' +
+                '<div class="vf-fx-row"><span>MAP PX FILTER</span><output data-pf-mapfilter>--</output></div>' +
                 '<div class="vf-fx-title">EFFECTS</div>' +
                 '<div class="vf-fx-row"><span>SWAY</span>' + fxSeg([['AUTO', 'AUTO'], ['ON', 'ON'], ['OFF', 'OFF']], perf.sway, 'pf-sway') + '</div>' +
                 '<div class="vf-fx-row"><span>CHROMA/BLOOM/CRT</span>' + fxSeg([['ON', 'ON'], ['OFF', 'OFF']], perf.heavy, 'pf-heavy') + '</div>' +
@@ -160,7 +170,8 @@
                 '<div class="vf-fx-row"><span>FRAME PIXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.framePx === 'OFF' ? 'OFF' : 'ON', 'pf-framepx') + '</div>' +
                 '<div class="vf-fx-title">SYSTEM</div>' +
                 '<div class="vf-fx-row"><span>OS REDUCE MOTION</span><output>' + (mq('(prefers-reduced-motion: reduce)') ? 'YES (AUTO = no sway)' : 'NO') + '</output></div>' +
-                '<div class="vf-fx-row"><span>BACKDROP FILTER</span><output>' + (backdropOk ? 'SUPPORTED' : 'MISSING') + '</output></div>';
+                '<div class="vf-fx-row"><span>BACKDROP FILTER</span><output>' + (backdropOk ? 'SUPPORTED' : 'MISSING') + '</output></div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="perf">LOG / COPY PERF</button></div>';
             startPerfFps();
         } else if (vfs.fxTab === 'debug') {
             const storage = (() => {
@@ -192,14 +203,31 @@
                 return '<div class="vf-debug-script"><span title="' + r.name + '">' + name + '</span><output>' +
                     loadedMs(r).toFixed(0) + ' MS · ' + Math.round((r.transferSize || 0) / 1024) + ' KB</output></div>';
             }).join('');
-            h += '<div class="vf-fx-title">DIAGNOSTICS</div>' +
-                '<div class="vf-fx-row"><span>FPS</span><output data-debug-fps>--</output></div>' +
+            h += '<div class="vf-fx-title">LIVE PERFORMANCE</div>' +
+                '<div class="vf-fx-row"><span>FPS</span><output class="vf-fx-fps" data-debug-fps>--</output></div>' +
+                '<div class="vf-fx-row"><span>FRAME</span><output class="vf-fx-fps" data-debug-framems>--</output></div>' +
+                '<div class="vf-fx-row"><span>LOOP</span><output data-debug-loop>--</output></div>' +
+                '<div class="vf-fx-row"><span>PLAYFIELD</span><output data-debug-backing>--</output></div>' +
+                '<div class="vf-fx-row"><span>SCALE</span><output data-debug-scale>--</output></div>' +
+                '<div class="vf-fx-row"><span>BACKING PX</span><output data-debug-px>--</output></div>' +
+                '<div class="vf-fx-row"><span>GLOBAL PIXEL</span><output data-debug-gp>--</output></div>' +
+                '<div class="vf-fx-row"><span>JS HEAP</span><output data-debug-heap>--</output></div>' +
+                '<div class="vf-fx-row"><span>ENTITIES</span><output data-debug-entities>--</output></div>' +
+                '<div class="vf-fx-row"><span>MAP PX FILTER</span><output data-debug-mapfilter>--</output></div>' +
+                '<div class="vf-fx-row"><span>TAB HIDDEN</span><output data-debug-hidden>--</output></div>' +
+                '<div class="vf-fx-title">MACHINE</div>' +
                 '<div class="vf-fx-row"><span>VIEWPORT</span><output>' + innerWidth + ' × ' + innerHeight + '</output></div>' +
-                '<div class="vf-fx-row"><span>DEVICE PIXEL RATIO</span><output>' + (window.devicePixelRatio || 1) + '</output></div>' +
+                '<div class="vf-fx-row"><span>DEVICE PIXEL RATIO</span><output data-debug-dpr>' + (window.devicePixelRatio || 1) + '</output></div>' +
+                '<div class="vf-fx-row"><span>CPU CORES</span><output data-debug-cores>--</output></div>' +
+                '<div class="vf-fx-row"><span>DEVICE MEMORY</span><output data-debug-devmem>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF HEAVY</span><output data-debug-heavy>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF ANIM</span><output data-debug-anim>--</output></div>' +
+                '<div class="vf-fx-row"><span>PERF SWAY</span><output data-debug-sway>--</output></div>' +
                 '<div class="vf-fx-row"><span>LOCAL STORAGE</span><output>' + storage + '</output></div>' +
                 '<div class="vf-fx-title">LOADING BY AREA</div>' + (areaRows || '<div class="vf-fx-row"><output>NO RESOURCE DATA</output></div>') +
                 '<div class="vf-fx-title">SLOWEST SCRIPTS</div>' + (heavy || '<div class="vf-fx-row"><output>NO SCRIPT DATA</output></div>') +
                 '<div class="vf-fx-title">ACTIONS</div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="perf">LOG / COPY PERF</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="reload">RELOAD GAME</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="clear">CLEAR LOCAL SETTINGS</button></div>' +
                 '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-debug-action="console">LOG DEBUG INFO</button></div>';

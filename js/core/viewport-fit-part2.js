@@ -7,7 +7,7 @@
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
-    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps }); // functions (hoisted)
+    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot }); // functions (hoisted)
 
     function restoreFxScroll() {
         const body = document.querySelector('#vf-fx .vf-fx-body');
@@ -48,19 +48,148 @@
         plate.addEventListener('input', onFxInput);
         return plate;
     }
+    /** Live performance snapshot for PERF / DEBUG tabs and console. */
+    function collectPerfSnapshot(fps) {
+        const canvas = document.getElementById('gameCanvas');
+        const bw = canvas ? canvas.width : 0;
+        const bh = canvas ? canvas.height : 0;
+        let scale = Number(window.PLAYFIELD_RENDER_SCALE) || 0;
+        try {
+            if (typeof renderManager !== 'undefined' && renderManager && renderManager.getRenderScale) {
+                scale = renderManager.getRenderScale();
+            }
+        } catch (e) { /* optional */ }
+        let gp = 0;
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                gp = uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { /* optional */ }
+        const gs = (typeof game !== 'undefined' && game && game.gameState)
+            || (typeof gameStateManager !== 'undefined' ? gameStateManager : null);
+        const running = !!(gs && gs.gameRunning);
+        const paused = !!(gs && gs.isPaused);
+        let combat = false;
+        try {
+            const gl = (typeof game !== 'undefined' && game && game.gameLoop) || null;
+            if (gl && typeof gl.isCombatSurfaceActive === 'function') combat = !!gl.isCombatSurfaceActive();
+            else combat = document.documentElement.classList.contains('vf-game-shown');
+        } catch (e) { combat = false; }
+        let loop = 'IDLE';
+        if (running && combat && paused) loop = 'PAUSED';
+        else if (running && combat) loop = 'COMBAT';
+        else if (running && !combat) loop = 'PARKED';
+        let enemies = 0, bullets = 0, particles = 0, explosions = 0;
+        try {
+            if (typeof enemyManager !== 'undefined' && enemyManager) {
+                enemies = (enemyManager.enemies && enemyManager.enemies.length) || 0;
+                enemies += (enemyManager.sideEnemies && enemyManager.sideEnemies.length) || 0;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof bulletManager !== 'undefined' && bulletManager && bulletManager.bullets) {
+                bullets = bulletManager.bullets.length;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof graphicsManager !== 'undefined' && graphicsManager && graphicsManager.particles) {
+                particles = graphicsManager.particles.length;
+            } else if (typeof particleSystem !== 'undefined' && particleSystem && particleSystem.particles) {
+                particles = particleSystem.particles.length;
+            }
+        } catch (e) { /* optional */ }
+        try {
+            if (typeof explosionSystem !== 'undefined' && explosionSystem && explosionSystem.active) {
+                explosions = explosionSystem.active.length;
+            }
+        } catch (e) { /* optional */ }
+        let heap = '—';
+        try {
+            const m = performance.memory;
+            if (m && m.usedJSHeapSize) {
+                heap = Math.round(m.usedJSHeapSize / 1048576) + ' / ' +
+                    Math.round(m.jsHeapSizeLimit / 1048576) + ' MB';
+            }
+        } catch (e) { /* Chrome-only */ }
+        const area = document.getElementById('gmMapArea');
+        const mapFilter = !!(area && area.style && /url\(#vfMapPx\)/.test(area.style.filter || ''));
+        const fpsN = (typeof fps === 'number' && fps > 0) ? fps : 0;
+        return {
+            fps: fpsN || null,
+            frameMs: fpsN ? (1000 / fpsN).toFixed(1) : null,
+            loop: loop,
+            backing: bw && bh ? (bw + '×' + bh) : '—',
+            backingPx: bw * bh,
+            scale: scale ? Number(scale).toFixed(2) : '—',
+            gp: gp > 0 ? String(gp) : 'OFF',
+            heap: heap,
+            enemies: enemies,
+            bullets: bullets,
+            particles: particles,
+            explosions: explosions,
+            mapFilter: mapFilter ? 'ON' : 'OFF',
+            cores: navigator.hardwareConcurrency || '?',
+            dpr: window.devicePixelRatio || 1,
+            deviceMem: navigator.deviceMemory ? (navigator.deviceMemory + ' GB') : '?',
+            heavy: perf.heavy,
+            anim: perf.anim,
+            sway: perf.sway,
+            viewport: innerWidth + '×' + innerHeight,
+            hidden: !!(typeof document !== 'undefined' && document.hidden)
+        };
+    }
+    function paintPerfOutputs(root, snap) {
+        if (!root || !snap) return;
+        const set = function (sel, val) {
+            const el = root.querySelector(sel);
+            if (el) el.textContent = val == null ? '—' : String(val);
+        };
+        const fps = snap.fps != null ? snap.fps : '—';
+        const ms = snap.frameMs != null ? snap.frameMs + ' ms' : '—';
+        const ent = snap.enemies + ' E · ' + snap.bullets + ' B · ' + snap.particles + ' P · ' + snap.explosions + ' X';
+        const px = snap.backingPx ? snap.backingPx.toLocaleString() : '—';
+        set('[data-pf-fps]', fps); set('[data-debug-fps]', fps);
+        set('[data-pf-framems]', ms); set('[data-debug-framems]', ms);
+        set('[data-pf-loop]', snap.loop); set('[data-debug-loop]', snap.loop);
+        set('[data-pf-backing]', snap.backing); set('[data-debug-backing]', snap.backing);
+        set('[data-pf-scale]', snap.scale); set('[data-debug-scale]', snap.scale);
+        set('[data-pf-px]', px); set('[data-debug-px]', px);
+        set('[data-pf-gp]', snap.gp); set('[data-debug-gp]', snap.gp);
+        set('[data-pf-heap]', snap.heap); set('[data-debug-heap]', snap.heap);
+        set('[data-pf-entities]', ent); set('[data-debug-entities]', ent);
+        set('[data-pf-mapfilter]', snap.mapFilter); set('[data-debug-mapfilter]', snap.mapFilter);
+        set('[data-debug-cores]', snap.cores);
+        set('[data-debug-dpr]', snap.dpr);
+        set('[data-debug-devmem]', snap.deviceMem);
+        set('[data-debug-heavy]', snap.heavy);
+        set('[data-debug-anim]', snap.anim);
+        set('[data-debug-sway]', snap.sway);
+        set('[data-debug-hidden]', snap.hidden ? 'YES' : 'NO');
+    }
+    function startPerfProbe(tab) {
+        const key = tab === 'debug' ? '_debugProbeRaf' : '_perfProbeRaf';
+        if (vfs[key]) return;
+        let n = 0, t0 = performance.now(), lastFps = 0;
+        const tick = function (now) {
+            const plate = document.getElementById('vf-fx');
+            if (!plate || !vfs.fxOpen || vfs.fxTab !== tab) { vfs[key] = 0; return; }
+            n++;
+            if (now - t0 >= 500) {
+                lastFps = Math.round(n * 1000 / (now - t0));
+                n = 0;
+                t0 = now;
+                paintPerfOutputs(plate, collectPerfSnapshot(lastFps));
+            }
+            vfs[key] = requestAnimationFrame(tick);
+        };
+        vfs[key] = requestAnimationFrame(tick);
+    }
     let debugFpsRaf = 0;
     function startDebugFps() {
-        if (debugFpsRaf) cancelAnimationFrame(debugFpsRaf);
-        let n = 0, t0 = performance.now();
-        const tick = function (now) {
-            const out = document.querySelector('#vf-fx [data-debug-fps]');
-            if (!out || !vfs.fxOpen || vfs.fxTab !== 'debug') { debugFpsRaf = 0; return; }
-            n++;
-            if (now - t0 >= 500) { out.textContent = Math.round(n * 1000 / (now - t0)); n = 0; t0 = now; }
-            debugFpsRaf = requestAnimationFrame(tick);
-        };
-        debugFpsRaf = requestAnimationFrame(tick);
+        if (debugFpsRaf) { cancelAnimationFrame(debugFpsRaf); debugFpsRaf = 0; }
+        startPerfProbe('debug');
     }
+    try { window.vfPerfSnapshot = function () { return collectPerfSnapshot(null); }; } catch (e) { /* optional */ }
 
     // Move (drag the readout) and resize (corner grip); position and size are remembered.
     const FXGEOM_KEY = 'vf-fx-geom';
@@ -118,22 +247,9 @@
         const cv = homeStationUI.overlay.querySelector('[data-fleet-preview]');
         if (cv) homeStationUI.startFactionFleetPreview(faction || cv.getAttribute('data-faction'), cv.getAttribute('data-ship'));
     }
-    // FPS readout: only counts while the PERF tab is on screen.
-    let pfFpsRaf = 0;
+    // Live PERF probe: only runs while the PERF tab is on screen.
     function startPerfFps() {
-        if (pfFpsRaf) return;
-        let n = 0, t0 = performance.now();
-        const tick = function (now) {
-            const out = document.querySelector('#vf-fx [data-pf-fps]');
-            if (!out || !vfs.fxOpen || vfs.fxTab !== 'perf') { pfFpsRaf = 0; return; }
-            n++;
-            if (now - t0 >= 500) {
-                out.textContent = Math.round(n * 1000 / (now - t0)) + '';
-                n = 0; t0 = now;
-            }
-            pfFpsRaf = requestAnimationFrame(tick);
-        };
-        pfFpsRaf = requestAnimationFrame(tick);
+        startPerfProbe('perf');
     }
     function onFxClick(e) {
         const b = e.target.closest && e.target.closest('button');
@@ -181,8 +297,18 @@
             console.info('[GLXEE DEBUG]', {
                 viewport: [innerWidth, innerHeight],
                 devicePixelRatio: window.devicePixelRatio || 1,
-                localStorage: (() => { try { return JSON.stringify(localStorage).length; } catch (err) { return 'blocked'; } })()
+                localStorage: (() => { try { return JSON.stringify(localStorage).length; } catch (err) { return 'blocked'; } })(),
+                perf: collectPerfSnapshot(null)
             });
+        }
+        else if (d.debugAction === 'perf') {
+            const snap = collectPerfSnapshot(null);
+            console.info('[GLXEE PERF]', snap);
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(JSON.stringify(snap, null, 2));
+                }
+            } catch (err) { /* optional */ }
         }
         else if (d.fxFac) { fxFacPrev = vfs.editFaction || (document.getElementById('vf-bezel') || document.body).getAttribute('data-faction'); vfs.editFaction = d.fxFac; setPreviewFaction(vfs.editFaction); }
         else if (d.frReset) {

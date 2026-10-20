@@ -513,6 +513,28 @@ FRAME / BOTH). Font sizes cover h1–small plus a separate **game HUD** scale;
 families can override per size. The in-game **SIZES** overlay sets exact pixel
 widths for player, enemy classes, and shots, plus shot-speed percent.
 
+### Bezel remote — PERF and DEBUG
+
+Open the bezel **FX remote** (corner tool) and switch to **PERF** or **DEBUG**.
+Both tabs run a live probe (~2 Hz paint) while that tab is open:
+
+| Readout | Meaning |
+|:---|:---|
+| **FPS** / **FRAME** | Shell RAF rate and ms per frame |
+| **LOOP** | `IDLE` · `PARKED` · `COMBAT` · `PAUSED` |
+| **PLAYFIELD** / **SCALE** / **BACKING PX** | Canvas backing store size and supersample |
+| **GLOBAL PIXEL** | Map/combat Global Pixel Size (`OFF` when unset) |
+| **JS HEAP** | Chrome `performance.memory` used / limit |
+| **ENTITIES** | Enemies · bullets · particles · explosions |
+| **MAP PX FILTER** | SVG `#vfMapPx` on the galaxy map (`ON` only when PERF heavy is on) |
+
+**PERF** also keeps the effect switches (SWAY / CHROMA·BLOOM·CRT / FX ANIMATION /
+FRAME PIXEL) and LOW · BALANCED · HIGH presets. **DEBUG** adds machine info
+(CPU cores, device memory, DPR), load timing by area, slowest scripts, and
+actions: **LOG / COPY PERF**, reload, clear local settings, log debug info.
+
+Console: `vfPerfSnapshot()` returns the same object the remote paints.
+
 ## Screenshots
 
 Live captures from the current build (station shell, factions, travel, combat).
@@ -556,12 +578,15 @@ Short index — details live in the sections above.
 - Full-screen start menu with the pilot's station as backdrop.
 - Galaxy explore: one-pixel-size map, stored nebulae, checkpoints, traffic, ship locator.
 - 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
+- Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
 
 ### Current build focus
 
 ```text
 LOOK    ── FX plate (bloom/HDR/vignette) ── pixel frame ── GUI voxel ── font scales
+   │
+PERF    ── remote FPS / FRAME / LOOP ── backing px ── heap ── entity counts
    │
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
    │
@@ -572,9 +597,9 @@ MATCH   ── restore victory/game-over after refresh ── map opens on the f
 BOOT    ── fight screen hidden until shown ── nebula prepared during menu build
 ```
 
-Recent waves unify the map pixel size, store and thin out the nebula, speed up
-zoom, keep the fight screen from flashing on reload, fix overlays hidden behind
-the fight screen, sweep fast shots against targets, and rework HUD and bezel look.
+Recent waves park the idle combat RAF, cut menu GPU load, and expose a live
+performance probe on the bezel remote (**PERF** / **DEBUG**) so FPS, loop state,
+and backing-store cost can be read without DevTools.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -784,6 +809,7 @@ be reviewed or reverted independently.
 | 67N | Deferred bundle rebuild | Rebuild deferred.js and index cache keys for waves 67A–67M |
 | 67O | Menu FPS park | Idle combat RAF until fight; 2× playfield + 200k px cap; throttle fleet/hangar/spin; map px filter only when PERF heavy ON |
 | 67P | Remote perf probe | PERF/DEBUG live FPS, frame ms, loop, backing, heap, entities; LOG/COPY PERF + vfPerfSnapshot |
+| 67Q | README perf remote | Document bezel PERF/DEBUG probe, presets, and vfPerfSnapshot in the README |
 
 The wave commit convention is:
 

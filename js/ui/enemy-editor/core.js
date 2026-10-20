@@ -95,6 +95,14 @@ class EnemyEditorUI {
                 btn.textContent = 'DEPLOY';
                 tabs.appendChild(btn);
             }
+            if (tabs && !tabs.querySelector('[data-tab="shape"]')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'pe-tab';
+                btn.dataset.tab = 'shape';
+                btn.textContent = 'SHAPE';
+                tabs.appendChild(btn);
+            }
             return;
         }
 
@@ -114,6 +122,7 @@ class EnemyEditorUI {
                     <button type="button" data-tab="armor" class="pe-tab">ARMOR</button>
                     <button type="button" data-tab="abilities" class="pe-tab">ABILITIES</button>
                     <button type="button" data-tab="deploy" class="pe-tab">DEPLOY</button>
+                    <button type="button" data-tab="shape" class="pe-tab">SHAPE</button>
                 </div>
                 <div class="planet-editor-body" id="eeEditorBody">
                     <aside class="planet-editor-sidebar" id="eeSidebar">
@@ -262,6 +271,10 @@ class EnemyEditorUI {
             const cssH = fitH * this.previewZoom;
             const dpr = window.devicePixelRatio || 1;
             this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            // Global Pixel Size: one backing pixel == gp screen px.
+            const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                ? uiAppearanceManager.getGlobalPixelPx() : 0;
+            if (gpx > 0) this.previewBackingScale = cssW / (gpx * this.previewBaseWidth);
             const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
             const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
             if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {

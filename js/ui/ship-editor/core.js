@@ -199,6 +199,14 @@ class ShipEditorUI {
         if (!shipId) return;
         const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         profileManager.setHullShapeSeed(shipId, seed);
+        // Per-part picks in the shape panel override the seed; clear them too,
+        // otherwise a reroll would leave manually-picked parts unchanged.
+        if (profileManager.clearSegmentShapeVariant) {
+            ['front', 'center', 'back', 'wing', 'wingLeft', 'wingRight'].forEach((seg) => {
+                profileManager.clearSegmentShapeVariant(shipId, seg);
+            });
+        }
+        if (this.renderControls) this.renderControls();
         // Animation loop repaints every frame; no forced redraw needed.
     }
 
@@ -227,6 +235,10 @@ class ShipEditorUI {
             // Bake zoom into the canvas backing store so pixel art is regenerated
             // crisp at the target resolution instead of CSS-stretching a fixed bitmap.
             this.previewBackingScale = (cssW * dpr) / this.previewBaseWidth;
+            // Global Pixel Size: one backing pixel == gp screen px.
+            const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                ? uiAppearanceManager.getGlobalPixelPx() : 0;
+            if (gpx > 0) this.previewBackingScale = cssW / (gpx * this.previewBaseWidth);
             const backingW = Math.max(1, Math.round(this.previewBaseWidth * this.previewBackingScale));
             const backingH = Math.max(1, Math.round(this.previewBaseHeight * this.previewBackingScale));
             if (this.previewCanvas.width !== backingW || this.previewCanvas.height !== backingH) {

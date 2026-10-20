@@ -139,32 +139,6 @@ class SpriteLoader {
         return this.loadSpriteGroup(weaponSprites, 'weapons/sprites');
     }
 
-    // Load all level sprites
-    async loadLevelSprites() {
-        const levelSprites = [
-            // Mars
-            'mars-surface', 'mars-canyon', 'mars-volcano', 'mars-dust-storm',
-            'mars-polar-cap', 'mars-phobos', 'mars-deimos', 'mars-sinope',
-
-            // Jupiter
-            'jupiter-atmosphere', 'jupiter-moons', 'jupiter-red-spot',
-            'jupiter-lightning', 'jupiter-magnetosphere', 'jupiter-io', 'jupiter-amalthea',
-
-            // Saturn
-            'saturn-rings', 'saturn-storm', 'saturn-titan', 'saturn-aurora',
-            'saturn-enceladus', 'saturn-europa', 'saturn-himalia',
-
-            // Neptune
-            'neptune-storm', 'neptune-ice', 'neptune-wind', 'neptune-dark-spot',
-            'neptune-triton', 'neptune-ganymede', 'neptune-elara',
-
-            // Pluto
-            'pluto-surface', 'pluto-ice', 'pluto-mountains', 'pluto-nitrogen',
-            'pluto-charon', 'pluto-callisto', 'pluto-pasiphae'
-        ];
-        return this.loadSpriteGroup(levelSprites, 'levels/sprites');
-    }
-
     async loadSpriteQuiet(name, path) {
         if (this.sprites.has(name)) {
             return this.sprites.get(name);
@@ -244,11 +218,10 @@ class SpriteLoader {
             const [shipsLoaded] = await Promise.all([
                 this.loadShipSprites(),
                 this.loadWeaponSprites(),
-                this.loadLevelSprites(),
                 this.loadOverrideSprites()
             ]);
 
-            // Ship sprites are enough for UI previews; do not block on weapons/levels
+            // Ship sprites are enough for UI previews; do not block on weapons
             this.loaded = !!shipsLoaded;
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('vf-sprites-loaded', {

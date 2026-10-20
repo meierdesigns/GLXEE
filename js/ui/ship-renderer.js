@@ -72,7 +72,18 @@ class ShipRenderer {
                 const rh = shipH * fit;
                 const ox = (canvas.width - rw) / 2;
                 const oy = (canvas.height - rh) / 2;
-                loader.renderShip(ctx, ship, ox, oy, fit, colorOverlay, overlayIntensity);
+                const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+                    ? uiAppearanceManager.getGlobalPixelPx() : 0;
+                const prevCell = loader.globalVoxelCell;
+                if (gp > 0 && canvas.clientWidth > 0) {
+                    // One art pixel == gp screen px regardless of canvas CSS scaling.
+                    loader.globalVoxelCell = Math.max(0.25, gp * canvas.width / canvas.clientWidth);
+                }
+                try {
+                    loader.renderShip(ctx, ship, ox, oy, fit, colorOverlay, overlayIntensity);
+                } finally {
+                    loader.globalVoxelCell = prevCell;
+                }
                 return;
             }
         }

@@ -133,7 +133,7 @@ extendClass(ShipAssetLoader, {
 
     getDeviceScale() {
         const d = Number(this.deviceScale);
-        return Number.isFinite(d) && d >= 1 ? d : 1;
+        return Number.isFinite(d) && d > 0 ? d : 1;
     },
 
     /** Round to the nearest whole backing pixel (logical units). */

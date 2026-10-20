@@ -109,6 +109,8 @@ extendClass(ComponentEditorUI, {
         const genBtn = r.querySelector("#ceGenerate");
         if (!genBtn) return;
         genBtn.onclick = () => this.onGenerate();
+        const procBtn = r.querySelector("#ceProcedural");
+        if (procBtn) procBtn.onclick = () => this.onProceduralGenerate();
         r.querySelector("#ceAccept").onclick = () => this.onAccept();
         r.querySelector("#ceDiscard").onclick = () => this.clearStaging();
         r.querySelector("#ceSaveMeta").onclick = () => this.onSaveMeta();

@@ -11,11 +11,11 @@ extendClass(FactionShipStyles, {
         });
     },
 
-    getPixelSprite(faction, enemyClass) {
-        const key = this.spriteKey(faction, enemyClass);
+    getPixelSprite(faction, enemyClass, seed) {
+        const key = this.spriteKey(faction, enemyClass) + this.hullSeedSuffix(seed);
         const cached = this.pixelCache[key];
         if (!cached || this.isPixelSpriteStale(cached)) {
-            this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass);
+            this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass, seed);
             // Variant bakes / hit masks of the stand-in hull are outdated now.
             if (cached) this.dropBakedEnemyHulls();
         }
@@ -83,8 +83,10 @@ extendClass(FactionShipStyles, {
      */
     resolveFactionShipVisual(opts) {
         const meta = this.resolveEnemyMeta(opts);
-        const key = this.spriteKey(meta.faction, meta.enemyClass);
-        const hasPng = this.hasPng(key);
+        // A seeded hull (side craft) is always the generated one: a faction PNG replaces the fixed class hull only.
+        const hullSeed = Math.max(0, Math.floor(Number((opts && opts.hullSeed)) || 0));
+        const key = this.spriteKey(meta.faction, meta.enemyClass) + this.hullSeedSuffix(hullSeed);
+        const hasPng = !hullSeed && this.hasPng(key);
         const style = this.getFactionStyle(meta.faction);
         const colors = this.buildFactionColors(meta.faction);
         const themeColors = {
@@ -92,7 +94,7 @@ extendClass(FactionShipStyles, {
             hull: colors[2],
             accent: colors[3]
         };
-        const sprite = this.getPixelSprite(meta.faction, meta.enemyClass);
+        const sprite = this.getPixelSprite(meta.faction, meta.enemyClass, hullSeed);
         const scaleMul = this.scaleMulForTier(meta.tier);
         // Asset resolution (16/32/64) is for crisp sprites; display size is playfield px.
         const resolution = this.resolutionForClass(meta.enemyClass);
@@ -107,6 +109,7 @@ extendClass(FactionShipStyles, {
             enemyClass: meta.enemyClass,
             tier: meta.tier,
             factionSpriteKey: key,
+            hullSeed: hullSeed,
             weakenOverlay: true,
             forceEnemyOrientation: true,
             assetResolution: resolution,
@@ -114,7 +117,7 @@ extendClass(FactionShipStyles, {
             height: display.height,
             sprite: sprite,
             colors: colors,
-            engineGlow: this.buildEngineGlow(meta.faction, meta.enemyClass, meta.tier)
+            engineGlow: this.buildEngineGlow(meta.faction, meta.enemyClass, meta.tier, hullSeed)
         };
         return {
             faction: meta.faction,

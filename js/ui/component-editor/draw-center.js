@@ -58,7 +58,11 @@ extendClass(ComponentEditorUI, {
         // Keep every source row on an integer pixel height. Scaling the whole
         // image to an arbitrary height makes rows land on fractional pixels
         // and produces uneven/blurry pixel art even with smoothing disabled.
-        const cell = Math.max(1, Math.round(baseCell * zoom));
+        let cell = Math.max(1, Math.round(baseCell * zoom));
+        // Global Pixel Size: every sprite pixel is a whole multiple of the global size.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) cell = Math.max(gp, Math.round(cell / gp) * gp);
         const rowCell = Math.max(1, Math.round(cell * length));
         const drawW = cell * size;
         const drawH = rowCell * size;

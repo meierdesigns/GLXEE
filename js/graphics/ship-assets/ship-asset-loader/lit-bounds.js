@@ -428,7 +428,11 @@ extendClass(ShipAssetLoader, {
             const jitter = Math.sin((block * 0.9 + seedIndex * 1.7) * 3.1) * 0.5 + 0.5;
             const chunk = Math.round(jitter * 2) / 2;
             // Irregular widths, but every row stays centred on the hull axis (no sideways drift off the axis).
-            return { widthMul: 0.62 + chunk * 0.45, offsetMul: 0 };
+            // The core (seedIndex 4) must still read as one fuselage: a shallow floor keeps it from
+            // pinching into a waist that reads as an "H" — that lopsidedness belongs on the wings instead.
+            const floor = seedIndex === 4 ? 0.82 : 0.62;
+            const span = seedIndex === 4 ? 0.26 : 0.45;
+            return { widthMul: floor + chunk * span, offsetMul: 0 };
         }
         if (silhouette === 'circuit') {
             // Rigid slab with deep rectangular notches cut at fixed intervals —

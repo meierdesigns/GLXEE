@@ -133,6 +133,7 @@ extendClass(ComponentEditorUI, {
       </div>
       <div class="hs-comp-actions">
         <button type="button" class="action-button pe-btn pe-primary" id="ceGenerate">GENERATE</button>
+        <button type="button" class="action-button pe-btn" id="ceProcedural">PROCEDURAL</button>
         <button type="button" class="action-button pe-btn" id="ceAccept">ACCEPT</button>
         <button type="button" class="action-button pe-btn" id="ceDiscard">DISCARD</button>
         <button type="button" class="action-button pe-btn" id="ceSaveMeta">SAVE META</button>

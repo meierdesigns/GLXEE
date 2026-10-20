@@ -184,6 +184,7 @@ extendClass(EnemyEditorUI, {
         else if (this.activeTab === 'weapons') this.renderWeaponsTab(root);
         else if (this.activeTab === 'abilities') this.renderAbilitiesTab(root);
         else if (this.activeTab === 'deploy') this.renderDeployTab(root);
+        else if (this.activeTab === 'shape') this.renderShapeControls(root, this.selectedType);
         else this.renderArmorTab(root);
     },
 
@@ -263,5 +264,59 @@ extendClass(EnemyEditorUI, {
             this.draft.planetIds,
             (next) => { this.draft.planetIds = next; }
         ));
+    },
+
+    /**
+     * Simple per-part shape picker: named variants for nose/core/aft plus
+     * wing style, instead of only random faction-seeded shapes. Keyed by
+     * `shipId`, which must match the `id` the live preview model renders
+     * with (this.selectedType — see getPreviewModel() in reset.js).
+     */
+    renderShapeControls(root, shipId) {
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        if (!loader || !shipId || typeof profileManager === 'undefined') return;
+        const title = document.createElement('p');
+        title.className = 'pe-hint';
+        title.textContent = 'Pick a named shape per part, or randomize the whole hull.';
+        root.appendChild(title);
+
+        const segmentRow = (segId, label, labels) => {
+            const current = profileManager.getSegmentShapeVariant(shipId, segId);
+            const options = ['AUTO'].concat(labels);
+            const value = current != null && labels[current] ? labels[current] : 'AUTO';
+            root.appendChild(this.makeSelect(label, value, options, (v) => {
+                if (v === 'AUTO') profileManager.clearSegmentShapeVariant(shipId, segId);
+                else profileManager.setSegmentShapeVariant(shipId, segId, labels.indexOf(v));
+                this.resetPreviewSim();
+            }));
+        };
+        segmentRow('front', 'Nose shape', loader.bodyShapeVariantLabels('front'));
+        segmentRow('center', 'Core shape', loader.bodyShapeVariantLabels('center'));
+        segmentRow('back', 'Aft shape', loader.bodyShapeVariantLabels('back'));
+
+        const symmetric = profileManager.getWingStyleSymmetry(shipId);
+        root.appendChild(this.makeCheckbox('Mirror wings', symmetric, (checked) => {
+            profileManager.setWingStyleSymmetry(shipId, checked);
+            this.resetPreviewSim();
+        }));
+        const wingLabels = loader.wingShapeVariants.map((v) => v.label);
+        segmentRow(symmetric ? 'wing' : 'wingLeft', symmetric ? 'Wing shape' : 'Left wing shape', wingLabels);
+        if (!symmetric) segmentRow('wingRight', 'Right wing shape', wingLabels);
+
+        const reroll = document.createElement('button');
+        reroll.type = 'button';
+        reroll.className = 'pe-btn';
+        reroll.textContent = 'RANDOMIZE ALL';
+        reroll.addEventListener('click', () => {
+            if (!profileManager.setHullShapeSeed) return;
+            const seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            profileManager.setHullShapeSeed(shipId, seed);
+            ['front', 'center', 'back', 'wing', 'wingLeft', 'wingRight'].forEach((seg) => {
+                profileManager.clearSegmentShapeVariant(shipId, seg);
+            });
+            this.resetPreviewSim();
+            this.renderControls();
+        });
+        root.appendChild(reroll);
     },
 });

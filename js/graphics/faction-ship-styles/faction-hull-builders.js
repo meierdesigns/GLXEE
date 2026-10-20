@@ -13,6 +13,9 @@
 //   machine  — grinder: armoured forge block, wings slotted as missile racks
 // Before the ship assets are up, the older one-builder-per-faction hulls
 // below stand in (buildLegacyPixelSprite) and are replaced on next use.
+// A hull seed (side craft) varies part picks and the class layout, so a wave is not one hull copied N times;
+// seed 0 / none is the fixed hull of the class (main enemies). Each hull also records its gun mounts
+// (_hullMounts): nose, wing pair, outrigger pair — see getEnemyMounts.
 // Pixel values: 1 edge, 2 hull, 3 accent, 4/5 hull shade/light, 6/7 accent
 // shade/light. Nose = row 0 (enemies are flipped).
 extendClass(FactionShipStyles, {
@@ -26,11 +29,17 @@ extendClass(FactionShipStyles, {
         };
     },
 
-    buildPixelSprite(faction, enemyClass) {
+    /** Seed part of a cache key: '' for the fixed class hull. */
+    hullSeedSuffix(seed) {
+        const n = Math.max(0, Math.floor(Number(seed) || 0));
+        return n ? '#' + n : '';
+    },
+
+    buildPixelSprite(faction, enemyClass, seed) {
         const loader = this.partLoader();
         if (loader) {
             try {
-                const grid = this.composeEnemyHull(faction, enemyClass, loader);
+                const grid = this.composeEnemyHull(faction, enemyClass, loader, seed);
                 if (grid) return grid;
             } catch (e) {
                 if (typeof console !== 'undefined') console.warn('enemy hull compose failed', e);
@@ -76,15 +85,18 @@ extendClass(FactionShipStyles, {
      * Assemble an enemy hull from the player's part builders. Returns an
      * indexed grid; engine cells are kept in _hullEngines.
      */
-    composeEnemyHull(faction, enemyClass, loader) {
+    composeEnemyHull(faction, enemyClass, loader, seed) {
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
+        const sd = this.hullSeedSuffix(seed);
+        const hullKey = f + '|' + cls + sd;
+        const rnd = (n) => (this.hash(hullKey + '|v' + n) % 1000) / 1000;
         const style = this.getFactionStyle(f);
         const focus = style.focus || {};
         const A = this.getFactionAnatomy(f) || {};
         const ax = (part, axis) => (A[part] && Number.isFinite(A[part][axis]) ? A[part][axis] : 1);
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-        const layout = this.enemyClassLayout(cls);
+        const layout = sd ? this.varyEnemyLayout(this.enemyClassLayout(cls), cls, rnd) : this.enemyClassLayout(cls);
         const { w: W, h: H } = this.enemyGridForClass(cls);
         const cx = W / 2;
         // Even widths keep every part centred on the axis (W is even).
@@ -94,7 +106,7 @@ extendClass(FactionShipStyles, {
         };
         const pick = (segId, key) => {
             const pool = loader.focusVariantPool(style, segId);
-            const h = this.hash(f + '|' + cls + '|' + (key || segId));
+            const h = this.hash(f + '|' + cls + sd + '|' + (key || segId));
             if (pool.length) return pool[h % pool.length];
             const count = /^wing/.test(segId) ? loader.wingShapeVariants.length : loader.bodyShapeVariantCount(segId);
             return h % count;
@@ -269,13 +281,82 @@ extendClass(FactionShipStyles, {
             addEngines(W - o.c0 - o.w, o.w, r0, H - r0, o.variant);
         });
         if (!this._hullEngines) this._hullEngines = Object.create(null);
-        this._hullEngines[f + '|' + cls] = engines;
+        this._hullEngines[hullKey] = engines;
+
+        // Gun mounts (grid-normalised, row 0 = nose): nose, main wing pair, outrigger pair.
+        const groups = [];
+        const mir = (m) => ({ nx: 1 - m.nx, ny: m.ny });
+        let noseR = 0;
+        for (let r = 0; r < H; r++) {
+            if (g[r][cx - 1] || g[r][cx]) { noseR = r; break; }
+        }
+        if (focus.hardpoints === 'twinNose') {
+            const dx = Math.max(1, Math.round(frontW / 2) - 2);
+            groups.push([{ nx: (cx - dx - 0.5) / W, ny: 0 }, { nx: (cx + dx + 0.5) / W, ny: 0 }]);
+        } else {
+            groups.push([{ nx: 0.5, ny: noseR / H }]);
+        }
+        if (wings[0]) {
+            // Leading tip of the wing: first lit row, outermost column of it.
+            let best = null;
+            wings[0].grid.forEach((row, r) => row.forEach((v, c) => {
+                if (v && (!best || r < best.r || (r === best.r && c > best.c))) best = { r, c };
+            }));
+            if (best) {
+                const m = { nx: (wings[0].c0 + best.c + 0.5) / W, ny: (wings[0].r0 + best.r) / H };
+                groups.push([m, mir(m)]);
+            }
+        }
+        if (side[0]) {
+            const m = { nx: (side[0].c0 + side[0].w / 2) / W, ny: side[0].r0 / H };
+            groups.push([m, mir(m)]);
+        }
+        if (!this._hullMounts) this._hullMounts = Object.create(null);
+        this._hullMounts[hullKey] = { groups: groups, cols: W, rows: H };
 
         // Accent blocks get the parts' lit top / shaded sides (not in VOXEL).
         const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
         const out = voxel ? g : loader.shadeAccentBlocks(g);
         out._renderStyle = voxel ? 'voxel' : 'flat';
         return out;
+    },
+
+    /** Seeded variation of a class layout: wing span, rear wings, pods, outriggers. */
+    varyEnemyLayout(layout, cls, rnd) {
+        const L = Object.assign({}, layout);
+        L.body = layout.body * (0.9 + rnd(1) * 0.2);
+        switch (cls) {
+            case 'scout': L.wings = rnd(2) < 0.5 ? 0.6 + rnd(3) * 0.3 : 0; break;
+            case 'assault':
+                L.wings = 0.6 + rnd(2) * 0.4;
+                if (rnd(3) < 0.35) L.rearWings = 0.5;
+                break;
+            case 'heavy':
+                L.wings = 0.5 + rnd(2) * 0.4;
+                L.pods = rnd(3) < 0.55;
+                if (rnd(4) < 0.25) L.rearWings = 0.5;
+                break;
+            case 'elite':
+                L.wings = 0.8 + rnd(2) * 0.2;
+                L.rearWings = 0.5 + rnd(3) * 0.25;
+                break;
+            default:
+                L.wings = 0.65 + rnd(2) * 0.3;
+                L.outriggers = rnd(3) < 0.7;
+        }
+        return L;
+    },
+
+    /**
+     * Gun mounts of a hull: { groups: [[{nx, ny}, …], …], cols, rows }. Group 0 is the nose gun (or the
+     * twin claw lances), 1 the main wing pair, 2 the outrigger pair — as many as the hull has. nx/ny are
+     * grid fractions with row 0 = nose; enemies are drawn flipped, so the nose points down.
+     */
+    getEnemyMounts(faction, enemyClass, seed) {
+        const f = this.normalizeFaction(faction);
+        const cls = this.normalizeClass(enemyClass);
+        this.getPixelSprite(f, cls, seed);
+        return (this._hullMounts && this._hullMounts[f + '|' + cls + this.hullSeedSuffix(seed)]) || null;
     },
 
     /** Engine columns (0..1 across the aft block) per faction aft layout, as in buildAftGrid. */
@@ -559,16 +640,17 @@ extendClass(FactionShipStyles, {
     },
 
     /** Engine glow at the builder's thrusters (falls back to class slots). */
-    buildEngineGlow(faction, enemyClass, tier) {
+    buildEngineGlow(faction, enemyClass, tier, seed) {
         const t = Math.max(1, Math.min(5, tier || 1));
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
-        if (!this._hullEngines || !this._hullEngines[f + '|' + cls]) this.getPixelSprite(f, cls);
+        const hk = f + '|' + cls + this.hullSeedSuffix(seed);
+        if (!this._hullEngines || !this._hullEngines[hk]) this.getPixelSprite(f, cls, seed);
         const cx = Math.floor(this.spriteW / 2);
-        const list = (this._hullEngines && this._hullEngines[f + '|' + cls]) || this.enginePositions(cls, cx);
+        const list = (this._hullEngines && this._hullEngines[hk]) || this.enginePositions(cls, cx);
         const style = this.getFactionStyle(f);
         // Composed hulls differ in size per class: use the sprite's own grid.
-        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls)];
+        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls) + this.hullSeedSuffix(seed)];
         const w = sprite && sprite[0] ? sprite[0].length : this.spriteW * this.spriteScale;
         const h = sprite ? sprite.length : this.spriteH * this.spriteScale;
         return {

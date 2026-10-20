@@ -225,7 +225,7 @@ extendClass(RenderManager, {
         h = Math.imul(h ^ (h >>> 13), 1274126177);
         return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
     },
-    /** Smooth value noise over cell coordinates (two octaves). */
+    /** Smooth value noise over cell coordinates (three octaves — less blotchy striping). */
     envNoise(x, y) {
         const oct = (fx, fy) => {
             const ix = Math.floor(fx), iy = Math.floor(fy);
@@ -235,6 +235,8 @@ extendClass(RenderManager, {
             const c = this.envHash(ix, iy + 1), d = this.envHash(ix + 1, iy + 1);
             return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
         };
-        return oct(x * 0.12, y * 0.12) * 0.7 + oct(x * 0.31 + 17, y * 0.31 + 5) * 0.3;
+        return oct(x * 0.11, y * 0.11) * 0.55
+            + oct(x * 0.27 + 17, y * 0.29 + 5) * 0.3
+            + oct(x * 0.61 + 41, y * 0.57 + 23) * 0.15;
     },
 });

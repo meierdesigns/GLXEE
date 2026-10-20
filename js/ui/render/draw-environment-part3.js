@@ -16,25 +16,26 @@ extendClass(RenderManager, {
                 if (h < 0.09 && n > 0.55) return g[0];
                 return col;
             }
-            case 'tech': { // Machine: rivet rows and cable ticks
-                const gx = ((cx % 12) + 12) % 12, gy = ((wr % 10) + 10) % 10;
-                if (gx === 0 && gy === 0) return pal.accent;
-                if ((gy === 5 && (gx & 1) === 0) || (gx === 6 && gy > 2 && gy < 8)) return g[1];
+            case 'tech': { // Machine: sparse rivets / scuffs — no cable grid
+                const h = this.envHash(cx, wr + 19);
+                if (h < 0.022) return pal.accent;
+                if (h < 0.045 && n > 0.6) return g[1];
                 return col;
             }
-            case 'spike': { // Kronax: diagonal claw scores
-                if ((((cx + wr * 2) % 11) + 11) % 11 === 0) return pal.craterPit;
-                if (this.envHash(cx, wr + 41) < 0.03) return g[0];
+            case 'spike': { // Kronax: short claw nicks, not diagonal rails
+                const h = this.envHash(cx, wr + 41);
+                if (h < 0.028) return pal.craterPit;
+                if (h < 0.05) return g[0];
                 return col;
             }
             case 'scrap': { // Pirate: irregular weld patches
-                const h = this.envHash(cx >> 1, wr >> 1);
-                if (h < 0.05) return pal.accent;
-                if (h > 0.93) return g[3];
+                const h = this.envHash(cx, wr + 7);
+                if (h < 0.04) return pal.accent;
+                if (h > 0.94) return g[3];
                 return col;
             }
             default: { // Terran / rock: sparse survey stakes
-                if ((((cx % 14) + 14) % 14) === 0 && (((wr % 14) + 14) % 14) === 0) return pal.accent;
+                if (this.envHash(cx, wr + 53) < 0.012) return pal.accent;
                 return col;
             }
         }

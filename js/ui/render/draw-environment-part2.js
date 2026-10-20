@@ -232,18 +232,19 @@ extendClass(RenderManager, {
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
-                            /* Soft sill, not a bright cream hairline. */
+                            /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
-                                : ((((cx + wr) % 4) + 4) % 4) < 2 ? pal.accent : '#1a1c22';
+                                : (this.envHash(cx, wr + 5) < 0.42 ? pal.accent : '#1a1c22');
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            // Structure band: faction silhouette colour, not plain wall fill.
+                            // Structure band: faction silhouette as blotches, not row stripes.
                             const st = env.style || 'asteroid';
-                            if (st === 'tech') col = ((wr & 3) < 2) ? pal.accent : mp.lit[1];
-                            else if (st === 'organic') col = ((cx + wr) & 3) ? pal.accent : mp.lit[0];
-                            else if (st === 'spike') col = (edge & 1) ? pal.wall[0] : pal.accent;
-                            else if (st === 'scrap') col = (((wr + edge) % 5) < 2) ? mp.crack || pal.accent : pal.wall[1];
+                            const sh = this.envHash(cx * 3 + edge, wr * 2 + 11);
+                            if (st === 'tech') col = sh < 0.55 ? pal.accent : mp.lit[1];
+                            else if (st === 'organic') col = sh < 0.5 ? pal.accent : mp.lit[0];
+                            else if (st === 'spike') col = sh < 0.45 ? pal.accent : pal.wall[0];
+                            else if (st === 'scrap') col = sh < 0.4 ? (mp.crack || pal.accent) : pal.wall[1];
                             else col = pal.wall[1];
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
@@ -384,96 +385,115 @@ extendClass(RenderManager, {
     /** Floor patterns for the canyon areas (null = keep the noise colour). */
     terrainFloorCell(floor, pal, cx, wr, n) {
         const g = pal.ground;
+        // Multi-scale ridge: thin organic seams without sin-wave striping.
+        const ridge = (sx, sy, a, b) => {
+            const u = this.envNoise(cx * sx + a, wr * sy + b);
+            const v = this.envNoise(cx * sx * 1.9 + b + 4, wr * sy * 1.7 + a + 2);
+            return Math.abs(u - 0.5) * 1.35 + Math.abs(v - 0.5) * 0.65;
+        };
         switch (floor) {
-            case 'plates': { // big bedrock slabs with dark seams
-                const px = ((cx % 7) + 7) % 7, py = ((wr % 6) + 6) % 6;
-                const off = (Math.floor(wr / 6) & 1) ? 3 : 0;
-                if (py === 0 || ((cx + off) % 7 + 7) % 7 === 0) return g[3];
+            case 'plates': { // irregular bedrock slabs (jittered seams)
+                const bx = Math.floor(cx / 7), by = Math.floor(wr / 6);
+                const jx = Math.floor(this.envHash(bx, by + 3) * 3) - 1;
+                const jy = Math.floor(this.envHash(bx + 5, by) * 2);
+                const px = ((cx + jx) % 7 + 7) % 7, py = ((wr + jy) % 6 + 6) % 6;
+                if (py === 0 || px === 0) return g[3];
                 return px + py < 3 ? g[0] : n > 0.5 ? g[1] : g[2];
             }
-            case 'dunes': { // wind ripples drifting diagonally
-                const w = Math.sin(cx * 0.45 + wr * 0.18 + Math.sin(wr * 0.05) * 3);
-                return w > 0.6 ? g[0] : w > 0.1 ? g[1] : w > -0.5 ? g[2] : g[3];
+            case 'dunes': { // wind ripples with noise warp (no clean diagonals)
+                const w = this.envNoise(cx * 0.22 + wr * 0.08, wr * 0.14)
+                    - this.envNoise(cx * 0.09 - wr * 0.11 + 8, wr * 0.07 + 3);
+                return w > 0.22 ? g[0] : w > 0.05 ? g[1] : w > -0.12 ? g[2] : g[3];
             }
-            case 'cracks': { // dried riverbed: cells split by cracks
-                const v = Math.abs(Math.sin(cx * 0.7 + Math.sin(wr * 0.3) * 2) + Math.cos(wr * 0.55 + Math.sin(cx * 0.2) * 2));
-                if (v < 0.18) return pal.craterPit;
-                return n > 0.55 ? g[1] : g[2];
+            case 'cracks': { // sparse branching dry-bed cracks (not a dense mesh)
+                const r = ridge(0.38, 0.36, 1.1, 7.3);
+                if (r < 0.055) return pal.craterPit;
+                if (r < 0.1) return g[3];
+                if (this.envHash(cx, wr) < 0.035) return g[0];
+                return n > 0.58 ? g[1] : g[2];
             }
-            case 'grid': { // buried installation: panel grid with lit nodes
-                const gx = ((cx % 8) + 8) % 8, gy = ((wr % 8) + 8) % 8;
-                if (gx === 0 && gy === 0) return pal.special || pal.craterLit;
-                if (gx === 0 || gy === 0) return g[3];
+            case 'grid': { // weathered panel grid — broken seams, sparse nodes
+                const gx = ((cx % 9) + 9) % 9, gy = ((wr % 9) + 9) % 9;
+                const breakH = this.envHash(Math.floor(cx / 9), wr) > 0.72;
+                const breakV = this.envHash(cx, Math.floor(wr / 9)) > 0.72;
+                if (gx === 0 && gy === 0 && this.envHash(cx, wr) < 0.55) return pal.special || pal.craterLit;
+                if ((gx === 0 && !breakV) || (gy === 0 && !breakH)) return g[3];
                 return n > 0.6 ? g[1] : g[2];
             }
-            case 'ridges': { // parallel rock ridges with a lit crest
-                const v = ((cx + Math.floor(Math.sin(wr * 0.08) * 3)) % 6 + 6) % 6;
-                return v === 0 ? g[0] : v === 1 ? g[1] : v === 5 ? g[3] : g[2];
-            }
-            case 'hex': { // basalt columns / alien hex tiles
-                const row = Math.floor(wr / 4);
-                const hx = ((cx + (row & 1) * 3) % 6 + 6) % 6, hy = ((wr % 4) + 4) % 4;
-                if (hy === 0 || hx === 0) return g[3];
-                return hx + hy < 4 ? g[0] : n > 0.5 ? g[1] : g[2];
-            }
-            case 'rubble': { // scattered boulders with shadows
-                const h = this.envHash(cx >> 1, wr >> 1);
-                if (h < 0.08) return g[0];
-                if (h < 0.14) return pal.craterPit;
+            case 'ridges': { // warped rock ridges — crest breaks, not parallel rails
+                const und = Math.floor(this.envNoise(wr * 0.12, 2.4) * 5) - 2;
+                const v = ((cx + und) % 7 + 7) % 7;
+                const gap = this.envHash(cx, wr) < 0.18;
+                if (v === 0 && !gap) return g[0];
+                if (v === 1) return g[1];
+                if (v === 6) return g[3];
                 return n > 0.5 ? g[2] : g[3];
             }
-            case 'veins': { // glowing veins through dark ground
-                const v = Math.abs(Math.sin(cx * 0.35 + Math.sin(wr * 0.12) * 2.5) * 1.2 - Math.cos(wr * 0.09 + cx * 0.05));
-                if (v < 0.06) return pal.special || pal.accent;
-                if (v < 0.16) return g[1];
+            case 'hex': { // basalt columns with eroded cell edges
+                const row = Math.floor(wr / 4);
+                const hx = ((cx + (row & 1) * 3) % 6 + 6) % 6, hy = ((wr % 4) + 4) % 4;
+                if ((hy === 0 || hx === 0) && this.envHash(cx, wr) > 0.2) return g[3];
+                return hx + hy < 4 ? g[0] : n > 0.5 ? g[1] : g[2];
+            }
+            case 'rubble': { // scattered grit — single-cell stones, not 2×2 blocks
+                const h = this.envHash(cx, wr);
+                if (h < 0.06) return g[0];
+                if (h < 0.11) return pal.craterPit;
+                if (this.envHash(cx + 17, wr + 3) < 0.04) return g[1];
+                return n > 0.5 ? g[2] : g[3];
+            }
+            case 'veins': { // glowing veins — noise ridges, not sinusoidal stripes
+                const r = ridge(0.28, 0.26, 3.2, 11.5);
+                if (r < 0.045) return pal.special || pal.accent;
+                if (r < 0.11) return g[1];
                 return g[3];
             }
             case 'biomass': { // lumpy organic pods / tissue islands
-                const h = this.envHash(cx >> 1, wr >> 1);
-                const blob = this.envNoise(cx * 0.55, wr * 0.55);
-                if (h < 0.1 && blob > 0.55) return pal.accent;
+                const h = this.envHash(cx, wr);
+                const blob = this.envNoise(cx * 0.5, wr * 0.5);
+                if (h < 0.07 && blob > 0.55) return pal.accent;
                 if (blob > 0.72) return g[0];
                 if (blob > 0.55) return g[1];
                 if (blob < 0.28) return pal.craterPit;
                 return g[2];
             }
-            case 'tendrils': { // branching organic roots across the crust
-                const a = Math.sin(cx * 0.28 + Math.sin(wr * 0.17) * 2.2);
-                const b = Math.cos(wr * 0.22 + Math.sin(cx * 0.11) * 1.8);
-                const v = Math.abs(a * 0.7 + b * 0.55);
-                if (v < 0.08) return pal.special || pal.accent;
-                if (v < 0.18) return g[1];
+            case 'tendrils': { // branching roots from noise ridges (no sin lattice)
+                const r = ridge(0.32, 0.3, 5.7, 2.1);
+                if (r < 0.05) return pal.special || pal.accent;
+                if (r < 0.12) return g[1];
                 return n > 0.55 ? g[2] : g[3];
             }
-            case 'spines': { // bone / claw ridge lines (Kronax)
-                const row = ((wr % 7) + 7) % 7;
-                const jag = Math.floor(Math.sin(wr * 0.09) * 2);
-                const v = ((cx + jag) % 5 + 5) % 5;
-                if (row === 0 || row === 1) return v === 0 ? g[0] : pal.craterPit;
-                if (v === 0) return g[1];
+            case 'spines': { // claw ridges with broken runs (Kronax)
+                const und = Math.floor(this.envNoise(wr * 0.1, 4.1) * 4) - 1;
+                const v = ((cx + und) % 6 + 6) % 6;
+                const row = this.envHash(Math.floor(wr / 5), 33) < 0.35;
+                if (row && v === 0) return g[0];
+                if (row) return pal.craterPit;
+                if (v === 0 && this.envHash(cx, wr) > 0.25) return g[1];
                 return n > 0.5 ? g[2] : g[3];
             }
-            case 'conduits': { // buried pipe runs with joint nodes (Machine / Terran)
-                const gx = ((cx % 10) + 10) % 10, gy = ((wr % 8) + 8) % 8;
-                if ((gy === 2 || gy === 3) && gx > 0 && gx < 9) return gx === 5 ? pal.accent : g[1];
-                if ((gx === 2 || gx === 7) && gy > 0) return g[0];
-                if (gx === 0 || gy === 0) return g[3];
+            case 'conduits': { // buried pipes with gaps / breaks (not a full grille)
+                const gx = ((cx % 11) + 11) % 11, gy = ((wr % 9) + 9) % 9;
+                const gap = this.envHash(Math.floor(cx / 11) + Math.floor(wr / 9), 60) > 0.65;
+                if (!gap && (gy === 2 || gy === 3) && gx > 0 && gx < 10) return gx === 5 ? pal.accent : g[1];
+                if (!gap && (gx === 2 || gx === 8) && gy > 0 && this.envHash(cx, wr) > 0.3) return g[0];
                 return n > 0.55 ? g[2] : g[3];
             }
-            case 'plating': { // armored deck plates with rivet corners
-                const px = ((cx % 6) + 6) % 6, py = ((wr % 5) + 5) % 5;
-                const off = (Math.floor(wr / 5) & 1) ? 3 : 0;
-                if (py === 0 || ((cx + off) % 6 + 6) % 6 === 0) return g[3];
-                if (px === 1 && py === 1) return pal.accent;
+            case 'plating': { // armored plates with worn / missing rivets
+                const bx = Math.floor(cx / 6), by = Math.floor(wr / 5);
+                const j = Math.floor(this.envHash(bx, by) * 2);
+                const px = ((cx + j) % 6 + 6) % 6, py = ((wr) % 5 + 5) % 5;
+                if (py === 0 || px === 0) return g[3];
+                if (px === 1 && py === 1 && this.envHash(cx, wr) < 0.7) return pal.accent;
                 return px + py < 3 ? g[0] : n > 0.5 ? g[1] : g[2];
             }
-            case 'scrapyard': { // welded scrap patches and dark weld seams
-                const h = this.envHash(cx >> 1, (wr >> 1) + 19);
-                const seam = (((cx + wr) % 9) + 9) % 9 === 0;
+            case 'scrapyard': { // welded scrap patches — no diagonal seam rails
+                const h = this.envHash(cx, wr + 19);
+                const seam = ridge(0.4, 0.35, 9.1, 1.4) < 0.05;
                 if (seam) return pal.craterPit;
-                if (h < 0.12) return g[0];
-                if (h < 0.22) return pal.accent;
-                if (h < 0.32) return g[3];
+                if (h < 0.1) return g[0];
+                if (h < 0.18) return pal.accent;
+                if (h < 0.26) return g[3];
                 return n > 0.5 ? g[1] : g[2];
             }
             default:
@@ -502,22 +522,23 @@ extendClass(RenderManager, {
         const b = mp.body;
         switch (id) {
             case 'metal': {
-                // Plates with seams every 3 rows / 4 cells and rivets at the corners.
-                const seamRow = ((wr % 3) + 3) % 3 === 0;
-                const seamCol = edge % 4 === 0;
+                // Worn plates: irregular seams, not a checker lattice.
+                const seamRow = ((wr % 4) + 4) % 4 === 0 && this.envHash(Math.floor(wr / 4), 41) > 0.28;
+                const seamCol = edge % 5 === 0 && this.envHash(edge, Math.floor(wr / 4) + 7) > 0.32;
                 if (seamRow && seamCol) return mp.rivet;
                 if (seamRow || seamCol) return b[3];
                 return n > 0.55 ? b[1] : b[2];
             }
             case 'crystal': {
-                // Diagonal facets with bright glints.
-                const f = ((cx + wr) % 5 + 5) % 5;
+                // Facets with jittered glints (less diagonal striping).
+                const f = ((cx + wr + Math.floor(this.envHash(cx, wr) * 3)) % 5 + 5) % 5;
                 if (this.envHash(cx * 7, wr) < 0.05) return '#ffffff';
                 return f === 0 ? b[0] : f < 3 ? b[1] : b[2];
             }
             case 'magma': {
-                // Dark crust with glowing lava veins.
-                if (Math.abs(n - 0.5) < 0.05) return mp.glow[((wr >> 1) & 1)];
+                // Dark crust with glowing lava veins (noise ridge, not row blink).
+                const vein = Math.abs(this.envNoise(cx * 0.45, wr * 0.4) - 0.5);
+                if (vein < 0.05) return mp.glow[this.envHash(cx, wr) < 0.5 ? 0 : 1];
                 return n > 0.6 ? b[1] : n > 0.35 ? b[2] : b[3];
             }
             default:

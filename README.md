@@ -768,6 +768,7 @@ be reviewed or reverted independently.
 | 66K | Cutscene title readable | Title/blurb stay up through act; canvas stroke text + high-contrast card |
 | 66C | Mission logbook | Main quest from story path; sidequests at stations/planets; targets = planet, station, locate, or find galaxy |
 | 66L | Enemy card poster | Planet title, emblem + hero name frames, backdrop-free portrait, dev layout modal (position, size, layer, defaults) |
+| 67A | Natural terrain carve | Organic floor ridges, torn wall craters, less grid/stripe doctrine on planet crust |
 
 The wave commit convention is:
 

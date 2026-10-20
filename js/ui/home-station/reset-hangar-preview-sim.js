@@ -195,8 +195,14 @@ extendClass(HomeStationUI, {
         const viewport = canvas.parentElement;
         const fit = () => {
             if (!viewport) return;
-            const w = Math.max(120, Math.floor(viewport.clientWidth));
-            const h = Math.max(160, Math.floor(viewport.clientHeight));
+            // Cap the backing store: CSS scales the pixel canvas up. Full-viewport
+            // buffers (often 500×800+) at 30 fps were a hangar FPS sink.
+            const maxW = 320;
+            const cssW = Math.max(120, Math.floor(viewport.clientWidth));
+            const cssH = Math.max(160, Math.floor(viewport.clientHeight));
+            const scale = Math.min(1, maxW / cssW);
+            const w = Math.max(120, Math.floor(cssW * scale));
+            const h = Math.max(160, Math.floor(cssH * scale));
             if (canvas.width === w && canvas.height === h) return;
             canvas.width = w;
             canvas.height = h;

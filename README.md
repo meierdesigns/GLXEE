@@ -782,6 +782,7 @@ be reviewed or reverted independently.
 | 67L | Repo footprint trim | Drop faction _reference art and legacy js/levels; ignore local archive/ |
 | 67M | Brand logos and PORT | Meierdesigns brand SVGs and PORT-aware npm start scripts |
 | 67N | Deferred bundle rebuild | Rebuild deferred.js and index cache keys for waves 67A–67M |
+| 67O | Menu FPS park | Idle combat RAF until fight; 2× playfield + 200k px cap; throttle fleet/hangar/spin; map px filter only when PERF heavy ON |
 
 The wave commit convention is:
 

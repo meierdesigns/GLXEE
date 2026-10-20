@@ -48,7 +48,9 @@ var GameStateManager = class GameStateManager {
     constructor() {
         this.width = 240;
         this.height = 300;
-        this.gameRunning = true;
+        // Idle until a fight starts — otherwise the RAF loop paints the combat
+        // canvas through the whole menu / station shell and tanks FPS.
+        this.gameRunning = false;
         this.isPaused = false;
         this.obstacleSpawnTimer = 0;
         this.obstacleSpawnInterval = 3000; // Default speed matching level settings
@@ -19952,12 +19954,31 @@ var GameLoop = class GameLoop {
     start() {
         this.lastTime = 0;
         this.frameCount = 0;
-        this.gameState.gameRunning = true;
+        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        // Do not force gameRunning here — startGame() owns that flag. Boot must
+        // leave the loop idle so menus are not fighting a combat RAF.
+        if (!this.gameState.gameRunning) return;
         this.loop(performance.now());
     }
 
     stop() {
         this.gameState.gameRunning = false;
+        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+    }
+
+    /** True only while the fight screen is the active surface. */
+    isCombatSurfaceActive() {
+        try {
+            if (typeof document === 'undefined') return true;
+            if (!document.documentElement.classList.contains('vf-game-shown')) return false;
+            if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible
+                && startScreenManager.isVisible()) return false;
+            const gc = document.querySelector('.game-container');
+            if (gc && gc.style && gc.style.display === 'none') return false;
+            return true;
+        } catch (e) {
+            return true;
+        }
     }
 
     loop(currentTime) {
@@ -19968,6 +19989,20 @@ var GameLoop = class GameLoop {
         if (typeof document !== 'undefined' && document.hidden) {
             this.lastTime = 0;
             requestAnimationFrame((time) => this.loop(time));
+            return;
+        }
+
+        // Menu / station / overlays: park the combat RAF until a fight starts.
+        // Poll slowly instead of a empty 60 Hz RAF chain.
+        if (!this.isCombatSurfaceActive()) {
+            this.lastTime = 0;
+            if (this._parkTimer) clearTimeout(this._parkTimer);
+            this._parkTimer = setTimeout(() => {
+                this._parkTimer = 0;
+                if (this.gameState.gameRunning) {
+                    requestAnimationFrame((time) => this.loop(time));
+                }
+            }, 250);
             return;
         }
         
@@ -19993,7 +20028,8 @@ var GameLoop = class GameLoop {
         const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
         
         this.update(cappedDeltaTime);
-        this.render();
+        // Paused: keep the last frame; the pause overlay is CSS on top.
+        if (!this.gameState.isPaused) this.render();
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
@@ -20095,8 +20131,9 @@ var GameLoop = class GameLoop {
     }
 
     render() {
-        // Don't render if game is not running
+        // Don't render if game is not running or the fight screen is hidden.
         if (!this.gameState.gameRunning) return;
+        if (!this.isCombatSurfaceActive()) return;
         
         if (typeof renderManager !== 'undefined') renderManager.render();
     }
@@ -22659,14 +22696,13 @@ var CoreRenderManager = class CoreRenderManager {
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
         } else {
-            // First boot: prefer the light path on weak / HiDPI machines.
+            // First boot: light path — heavy FX off; freeze decorative anim on
+            // typical laptops / HiDPI so menus stay interactive.
             const cores = (navigator && navigator.hardwareConcurrency) || 4;
             const mem = (navigator && navigator.deviceMemory) || 4;
             const dpr = window.devicePixelRatio || 1;
-            if (cores <= 4 || mem <= 4 || dpr >= 2) {
-                perf.heavy = 'OFF';
-                perf.anim = 'ON';
-            }
+            perf.heavy = 'OFF';
+            perf.anim = (cores <= 8 || mem <= 8 || dpr >= 1.5) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {
@@ -48232,6 +48268,23 @@ extendClass(UIAppearanceManager, {
         const rw = Math.max(1, Math.round((target && target.clientWidth) || 1));
         const rh = Math.max(1, Math.round((target && target.clientHeight) || 1));
         const key = gp + '|' + cell + '|' + rw + 'x' + rh;
+        // Lattice snap already aligns sprites to the Global Pixel grid. The SVG
+        // feTile+feMorphology pass over the whole #gmMapArea is a major GPU sink;
+        // only run it when PERF heavy is ON (CRT/chroma path).
+        const heavyOn = typeof document !== 'undefined'
+            && document.documentElement.getAttribute('data-vf-perf-heavy') === 'on';
+        if (!heavyOn) {
+            if (target && target.style) target.style.removeProperty('filter');
+            this._mapPxBuilt = 'lat|' + key;
+            if (!this._mapPxRo && target && typeof ResizeObserver !== 'undefined') {
+                this._mapPxRo = new ResizeObserver(() => {
+                    const g = this.getGlobalPixelPx ? this.getGlobalPixelPx() : 0;
+                    if (g > 0) this.ensureMapPxFilter(g, target);
+                });
+                this._mapPxRo.observe(target);
+            }
+            return;
+        }
         if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) {
             if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
             return;
@@ -48247,16 +48300,12 @@ extendClass(UIAppearanceManager, {
             document.body.appendChild(svg);
         }
         // Sample at cell origin (0,0) so lattice-snapped sprites sit on the filter grid.
-        const dilate = Math.max(0.5, cell / 2);
+        const dilate = Math.max(0.5, Math.min(2, cell / 2));
         let h = '<filter id="vfMapPx" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB" primitiveUnits="userSpaceOnUse">' +
             '<feFlood x="0" y="0" width="1" height="1" flood-color="#fff" flood-opacity="1"/>' +
             '<feComposite width="' + cell + '" height="' + cell + '"/><feTile result="t"/>' +
             '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>' +
-            '<feMorphology in="s" operator="dilate" radius="' + dilate + '" result="d"/>';
-        if (cell % 2 === 0) {
-            h += '<feOffset in="d" dx="1" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
-                '<feOffset in="hz" dx="0" dy="1" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
-        }
+            '<feMorphology in="s" operator="dilate" radius="' + dilate + '"/>';
         svg.innerHTML = h + '</filter>';
         this._mapPxBuilt = key;
         if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
@@ -55074,7 +55123,8 @@ var RenderManager = class RenderManager {
         const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
-        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 520000;
+        // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
+        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
         if (gp > 0) {
             const cv = document.getElementById('gameCanvas');
             // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
@@ -55091,9 +55141,10 @@ var RenderManager = class RenderManager {
             }
         } else {
             const k = Number(window.PLAYFIELD_RENDER_SCALE);
-            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+            // Default 2× (was 4×): same voxel look via CSS upscale, far less GPU fill.
+            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 2;
             // VOXEL: larger cells already look blocky — less supersampling is enough
-            // and cuts fill/transform cost hard (4× → 1–2× backing store).
+            // and cuts fill/transform cost hard (2× → 1× backing store).
             if (this.isVoxelCombat && this.isVoxelCombat()) {
                 const cell = this.getCombatVoxelCell();
                 if (cell >= 4) scale = Math.min(scale, 1);
@@ -95987,8 +96038,18 @@ extendClass(HomeStationUI, {
         // Colour edits (sliders, save, reset) are picked up by the loop itself, whatever screen they come from.
         const sig = () => JSON.stringify(fss.getColorOverrides(factionId)) + JSON.stringify(fss.getSavedColorOverrides(factionId));
         let colorSig = sig();
+        // ~24 fps is enough for the tiny pixel fleet sim; full 60 Hz was a menu FPS sink.
+        const frameInterval = 1000 / 24;
         const loop = (ts) => {
             if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
+            this._fleetPreviewAnim = requestAnimationFrame(loop);
+            if (typeof document !== 'undefined' && document.hidden) return;
+            if (this.tab && this.tab !== 'factions') return;
+            if (!last) last = ts;
+            const elapsed = ts - last;
+            if (elapsed < frameInterval) return;
+            const dt = Math.min(50, elapsed);
+            last = ts;
             try {
                 const now = sig();
                 if (now !== colorSig) {
@@ -96001,12 +96062,9 @@ extendClass(HomeStationUI, {
                     if (old) Object.assign(old, { model: np.model });
                 }
             } catch (e) { console.warn('fleet preview colours', e); }
-            const dt = last ? Math.min(50, ts - last) : 16;
-            last = ts;
             // A throwing frame must never stop the loop (that froze the preview).
             try { this.updateFactionFleetPreview(sim, dt, canvas); } catch (e) { console.warn('fleet preview update', e); }
             try { this.drawFactionFleetPreview(sim, canvas); } catch (e) { console.warn('fleet preview draw', e); }
-            this._fleetPreviewAnim = requestAnimationFrame(loop);
         };
         this._fleetPreviewAnim = requestAnimationFrame(loop);
     },
@@ -101998,8 +102056,14 @@ extendClass(HomeStationUI, {
         const viewport = canvas.parentElement;
         const fit = () => {
             if (!viewport) return;
-            const w = Math.max(120, Math.floor(viewport.clientWidth));
-            const h = Math.max(160, Math.floor(viewport.clientHeight));
+            // Cap the backing store: CSS scales the pixel canvas up. Full-viewport
+            // buffers (often 500×800+) at 30 fps were a hangar FPS sink.
+            const maxW = 320;
+            const cssW = Math.max(120, Math.floor(viewport.clientWidth));
+            const cssH = Math.max(160, Math.floor(viewport.clientHeight));
+            const scale = Math.min(1, maxW / cssW);
+            const w = Math.max(120, Math.floor(cssW * scale));
+            const h = Math.max(160, Math.floor(cssH * scale));
             if (canvas.width === w && canvas.height === h) return;
             canvas.width = w;
             canvas.height = h;
@@ -113685,8 +113749,8 @@ extendClass(PlanetSVGManager, {
             for (let i = 0; i < n; i++) {
                 if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
-            const budgetMs = pendingUpgrade ? 14 : 6;
-            const maxUpdates = pendingUpgrade ? 2 : 2;
+            const budgetMs = pendingUpgrade ? 10 : 4;
+            const maxUpdates = pendingUpgrade ? 2 : 1;
             const t0 = performance.now();
             let updated = 0;
             for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
@@ -113766,8 +113830,8 @@ extendClass(PlanetSVGManager, {
             }
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
-        // ~2 Hz: 60s axial turn still reads fine; half the decode/repaint of the old 5 Hz.
-        this._spinTimer = setInterval(tick, 450);
+        // ~1.4 Hz: 60s axial turn still reads fine; lower decode/repaint cost on big maps.
+        this._spinTimer = setInterval(tick, 700);
     }
 });
 

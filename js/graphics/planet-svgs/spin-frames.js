@@ -307,8 +307,8 @@ extendClass(PlanetSVGManager, {
             for (let i = 0; i < n; i++) {
                 if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
-            const budgetMs = pendingUpgrade ? 14 : 6;
-            const maxUpdates = pendingUpgrade ? 2 : 2;
+            const budgetMs = pendingUpgrade ? 10 : 4;
+            const maxUpdates = pendingUpgrade ? 2 : 1;
             const t0 = performance.now();
             let updated = 0;
             for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
@@ -388,7 +388,7 @@ extendClass(PlanetSVGManager, {
             }
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
-        // ~2 Hz: 60s axial turn still reads fine; half the decode/repaint of the old 5 Hz.
-        this._spinTimer = setInterval(tick, 450);
+        // ~1.4 Hz: 60s axial turn still reads fine; lower decode/repaint cost on big maps.
+        this._spinTimer = setInterval(tick, 700);
     }
 });

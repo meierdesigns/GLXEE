@@ -73,7 +73,8 @@ class RenderManager {
         const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
-        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 520000;
+        // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
+        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
         if (gp > 0) {
             const cv = document.getElementById('gameCanvas');
             // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
@@ -90,9 +91,10 @@ class RenderManager {
             }
         } else {
             const k = Number(window.PLAYFIELD_RENDER_SCALE);
-            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+            // Default 2× (was 4×): same voxel look via CSS upscale, far less GPU fill.
+            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 2;
             // VOXEL: larger cells already look blocky — less supersampling is enough
-            // and cuts fill/transform cost hard (4× → 1–2× backing store).
+            // and cuts fill/transform cost hard (2× → 1× backing store).
             if (this.isVoxelCombat && this.isVoxelCombat()) {
                 const cell = this.getCombatVoxelCell();
                 if (cell >= 4) scale = Math.min(scale, 1);

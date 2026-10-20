@@ -8,7 +8,9 @@ class GameStateManager {
     constructor() {
         this.width = 240;
         this.height = 300;
-        this.gameRunning = true;
+        // Idle until a fight starts — otherwise the RAF loop paints the combat
+        // canvas through the whole menu / station shell and tanks FPS.
+        this.gameRunning = false;
         this.isPaused = false;
         this.obstacleSpawnTimer = 0;
         this.obstacleSpawnInterval = 3000; // Default speed matching level settings

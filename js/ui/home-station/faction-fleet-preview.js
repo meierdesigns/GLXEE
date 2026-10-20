@@ -37,8 +37,18 @@ extendClass(HomeStationUI, {
         // Colour edits (sliders, save, reset) are picked up by the loop itself, whatever screen they come from.
         const sig = () => JSON.stringify(fss.getColorOverrides(factionId)) + JSON.stringify(fss.getSavedColorOverrides(factionId));
         let colorSig = sig();
+        // ~24 fps is enough for the tiny pixel fleet sim; full 60 Hz was a menu FPS sink.
+        const frameInterval = 1000 / 24;
         const loop = (ts) => {
             if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
+            this._fleetPreviewAnim = requestAnimationFrame(loop);
+            if (typeof document !== 'undefined' && document.hidden) return;
+            if (this.tab && this.tab !== 'factions') return;
+            if (!last) last = ts;
+            const elapsed = ts - last;
+            if (elapsed < frameInterval) return;
+            const dt = Math.min(50, elapsed);
+            last = ts;
             try {
                 const now = sig();
                 if (now !== colorSig) {
@@ -51,12 +61,9 @@ extendClass(HomeStationUI, {
                     if (old) Object.assign(old, { model: np.model });
                 }
             } catch (e) { console.warn('fleet preview colours', e); }
-            const dt = last ? Math.min(50, ts - last) : 16;
-            last = ts;
             // A throwing frame must never stop the loop (that froze the preview).
             try { this.updateFactionFleetPreview(sim, dt, canvas); } catch (e) { console.warn('fleet preview update', e); }
             try { this.drawFactionFleetPreview(sim, canvas); } catch (e) { console.warn('fleet preview draw', e); }
-            this._fleetPreviewAnim = requestAnimationFrame(loop);
         };
         this._fleetPreviewAnim = requestAnimationFrame(loop);
     },

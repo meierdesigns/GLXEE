@@ -345,6 +345,23 @@ extendClass(UIAppearanceManager, {
         const rw = Math.max(1, Math.round((target && target.clientWidth) || 1));
         const rh = Math.max(1, Math.round((target && target.clientHeight) || 1));
         const key = gp + '|' + cell + '|' + rw + 'x' + rh;
+        // Lattice snap already aligns sprites to the Global Pixel grid. The SVG
+        // feTile+feMorphology pass over the whole #gmMapArea is a major GPU sink;
+        // only run it when PERF heavy is ON (CRT/chroma path).
+        const heavyOn = typeof document !== 'undefined'
+            && document.documentElement.getAttribute('data-vf-perf-heavy') === 'on';
+        if (!heavyOn) {
+            if (target && target.style) target.style.removeProperty('filter');
+            this._mapPxBuilt = 'lat|' + key;
+            if (!this._mapPxRo && target && typeof ResizeObserver !== 'undefined') {
+                this._mapPxRo = new ResizeObserver(() => {
+                    const g = this.getGlobalPixelPx ? this.getGlobalPixelPx() : 0;
+                    if (g > 0) this.ensureMapPxFilter(g, target);
+                });
+                this._mapPxRo.observe(target);
+            }
+            return;
+        }
         if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) {
             if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
             return;
@@ -360,16 +377,12 @@ extendClass(UIAppearanceManager, {
             document.body.appendChild(svg);
         }
         // Sample at cell origin (0,0) so lattice-snapped sprites sit on the filter grid.
-        const dilate = Math.max(0.5, cell / 2);
+        const dilate = Math.max(0.5, Math.min(2, cell / 2));
         let h = '<filter id="vfMapPx" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB" primitiveUnits="userSpaceOnUse">' +
             '<feFlood x="0" y="0" width="1" height="1" flood-color="#fff" flood-opacity="1"/>' +
             '<feComposite width="' + cell + '" height="' + cell + '"/><feTile result="t"/>' +
             '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>' +
-            '<feMorphology in="s" operator="dilate" radius="' + dilate + '" result="d"/>';
-        if (cell % 2 === 0) {
-            h += '<feOffset in="d" dx="1" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
-                '<feOffset in="hz" dx="0" dy="1" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
-        }
+            '<feMorphology in="s" operator="dilate" radius="' + dilate + '"/>';
         svg.innerHTML = h + '</filter>';
         this._mapPxBuilt = key;
         if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');

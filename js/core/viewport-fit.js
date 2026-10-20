@@ -493,14 +493,13 @@
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
         } else {
-            // First boot: prefer the light path on weak / HiDPI machines.
+            // First boot: light path — heavy FX off; freeze decorative anim on
+            // typical laptops / HiDPI so menus stay interactive.
             const cores = (navigator && navigator.hardwareConcurrency) || 4;
             const mem = (navigator && navigator.deviceMemory) || 4;
             const dpr = window.devicePixelRatio || 1;
-            if (cores <= 4 || mem <= 4 || dpr >= 2) {
-                perf.heavy = 'OFF';
-                perf.anim = 'ON';
-            }
+            perf.heavy = 'OFF';
+            perf.anim = (cores <= 8 || mem <= 8 || dpr >= 1.5) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {

@@ -13,12 +13,31 @@ class GameLoop {
     start() {
         this.lastTime = 0;
         this.frameCount = 0;
-        this.gameState.gameRunning = true;
+        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        // Do not force gameRunning here — startGame() owns that flag. Boot must
+        // leave the loop idle so menus are not fighting a combat RAF.
+        if (!this.gameState.gameRunning) return;
         this.loop(performance.now());
     }
 
     stop() {
         this.gameState.gameRunning = false;
+        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+    }
+
+    /** True only while the fight screen is the active surface. */
+    isCombatSurfaceActive() {
+        try {
+            if (typeof document === 'undefined') return true;
+            if (!document.documentElement.classList.contains('vf-game-shown')) return false;
+            if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible
+                && startScreenManager.isVisible()) return false;
+            const gc = document.querySelector('.game-container');
+            if (gc && gc.style && gc.style.display === 'none') return false;
+            return true;
+        } catch (e) {
+            return true;
+        }
     }
 
     loop(currentTime) {
@@ -29,6 +48,20 @@ class GameLoop {
         if (typeof document !== 'undefined' && document.hidden) {
             this.lastTime = 0;
             requestAnimationFrame((time) => this.loop(time));
+            return;
+        }
+
+        // Menu / station / overlays: park the combat RAF until a fight starts.
+        // Poll slowly instead of a empty 60 Hz RAF chain.
+        if (!this.isCombatSurfaceActive()) {
+            this.lastTime = 0;
+            if (this._parkTimer) clearTimeout(this._parkTimer);
+            this._parkTimer = setTimeout(() => {
+                this._parkTimer = 0;
+                if (this.gameState.gameRunning) {
+                    requestAnimationFrame((time) => this.loop(time));
+                }
+            }, 250);
             return;
         }
         
@@ -54,7 +87,8 @@ class GameLoop {
         const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
         
         this.update(cappedDeltaTime);
-        this.render();
+        // Paused: keep the last frame; the pause overlay is CSS on top.
+        if (!this.gameState.isPaused) this.render();
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
@@ -156,8 +190,9 @@ class GameLoop {
     }
 
     render() {
-        // Don't render if game is not running
+        // Don't render if game is not running or the fight screen is hidden.
         if (!this.gameState.gameRunning) return;
+        if (!this.isCombatSurfaceActive()) return;
         
         if (typeof renderManager !== 'undefined') renderManager.render();
     }

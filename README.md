@@ -780,6 +780,7 @@ be reviewed or reverted independently.
 | 67J | Viewport and appearance | Viewport-fit plate polish, GUI appearance hooks, start-screen and parallax |
 | 67K | Editors and hull polish | Ship/enemy editor glass, procedural component gen, hull builders, sprite loader |
 | 67L | Repo footprint trim | Drop faction _reference art and legacy js/levels; ignore local archive/ |
+| 67M | Brand logos and PORT | Meierdesigns brand SVGs and PORT-aware npm start scripts |
 
 The wave commit convention is:
 

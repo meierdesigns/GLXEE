@@ -55,7 +55,7 @@
         var R = document.documentElement, bz = document.getElementById('vf-bezel');
         var sig = [host.className, host.dataset && host.dataset.hsTab, R.getAttribute('data-pf'), R.getAttribute('data-vf-faction'), R.getAttribute('data-faction'), bz && bz.getAttribute('data-faction')].join('|');
         var now = performance.now(), hit = bgReadCache && bgReadCache.get(host);
-        if (hit && hit.sig === sig && now - hit.t < 250) return { img: hit.v.img, bgColor: hit.v.bgColor };
+        if (hit && hit.sig === sig && now - hit.t < 1000) return { img: hit.v.img, bgColor: hit.v.bgColor };
         var v = readHostBackgroundNow(host);
         if (bgReadCache) bgReadCache.set(host, { sig: sig, t: now, v: v });
         return v;

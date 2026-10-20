@@ -3,7 +3,7 @@
 // viewport-fit part 2b: the FX plate builders (split from viewport-fit-part2.js; shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {});
-    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
+    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const { restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps } = NS; // from viewport-fit-part2.js (hoisted functions)
     Object.assign(NS, { fillFxPlate }); // function (hoisted)
 
@@ -28,7 +28,36 @@
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="0" max="' + max + '" step="1" value="' + i +
             '" data-ix="' + id + '" data-opts="' + options.join('|') + '" style="--look-fill:' + (i / max * 100) + '%"><output>' + options[i] + '</output></label>';
     }
+    // Small stroke icons for the DIFFICULTY rows, picked from the setting key.
+    const DF_ICONS = {
+        damage: '<path d="M8 1l2 5h5l-4 3 2 5-5-3-5 3 2-5-4-3h5z"/>',
+        health: '<path d="M8 14L2 8V4h4l2 2 2-2h4v4z"/>',
+        speed: '<path d="M2 3l5 5-5 5M8 3l5 5-5 5"/>',
+        count: '<path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/>',
+        evasion: '<path d="M2 13c3 0 3-10 6-10s3 10 6 10"/>',
+        aim: '<circle cx="8" cy="8" r="4"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>',
+        obstacle: '<path d="M3 13l-1-6 4-4 6 1 3 5-3 5z"/>',
+        rate: '<path d="M9 1L3 9h4l-1 6 7-8H9z"/>',
+        ship: '<path d="M8 1l4 10-4-2-4 2zM5 13h6"/>',
+        shot: '<path d="M2 8h8M10 5l4 3-4 3z"/>',
+        limit: '<path d="M2 4h12M2 8h12M2 12h12"/>'
+    };
+    function dfIcon(key) {
+        let id = 'speed';
+        if (key === 'df:playerSpeedMul') id = 'ship';
+        else if (key.indexOf('ss:') === 0) id = 'shot';
+        else if (/Damage/.test(key)) id = 'damage';
+        else if (/Health/.test(key)) id = 'health';
+        else if (/Evasion|evasion/.test(key)) id = 'evasion';
+        else if (/prediction/.test(key)) id = 'aim';
+        else if (/obstacle/.test(key)) id = 'obstacle';
+        else if (/AttackRate/.test(key)) id = 'rate';
+        else if (/Count/.test(key)) id = 'count';
+        else if (/MaxActive/.test(key)) id = 'limit';
+        return '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true">' + DF_ICONS[id] + '</svg>';
+    }
     function fxSlider(label, key, min, max, step, value, unit, displayValue) {
+        if (key.indexOf('df:') === 0 || key.indexOf('ss:') === 0) label = dfIcon(key) + '<em>' + label + '</em>';
         const shown = displayValue == null ? value : displayValue;
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
             '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
@@ -74,9 +103,14 @@
         const plate = buildFxPlate();
         if (!ui) return;
         vfs.fxScrollLock = true;
-        let h = '<div class="vf-fx-head"><span>VISUAL SETTINGS</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
-            '<div class="vf-fx-tabs">' + FX_TABS.map(function (t) {
-                return '<button type="button" data-fx-tab="' + t[0] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
+        let h = '<div class="vf-fx-head"><span>' + (FX_TABS.filter(function (t) { return t[0] === vfs.fxTab; })[0] || ['', ''])[1] + '</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
+            '<div class="vf-fx-tabs">' + FX_CLUSTERS.map(function (c, ci) {
+                const keys = c[1].map(function (id) {
+                    const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
+                    const html = '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
+                    return html;
+                }).join('');
+                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
             }).join('') + '</div><div class="vf-fx-body">';
         if (vfs.fxTab === 'fx') {
             h += '<div class="vf-fx-row"><span>AREA</span>' + fxStepper([['SCREEN', 'INSIDE'], ['FRAME', 'OUTSIDE'], ['ALL', 'BOTH']], ui.fxArea, 'fx-area') + '</div>';
@@ -100,6 +134,7 @@
             h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +
                 '<div class="vf-fx-row"><span>SHIP RENDER</span>' + fxSeg(ui.getShipRenderStyleOptions().map(function (v) { return [v, v]; }), ui.shipRenderStyle, 'vx-ship') + '</div>' +
                 fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
+                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
                 '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
                 fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
                 fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
@@ -209,6 +244,32 @@
                     '</div>';
             });
             h += '<div class="vf-fx-title">PREVIEW</div><div class="vf-fx-preview"><div class="type-lg">LG TITLE</div><div class="type-md">MD VALUES 100</div><div class="type-sm">SM LABELS</div></div>';
+        } else if (vfs.fxTab === 'difficulty') {
+            const dm = typeof difficultyConfigManager !== 'undefined' ? difficultyConfigManager : null;
+            if (!dm) { h += '<div class="vf-fx-row"><output>DIFFICULTY NOT LOADED</output></div>'; }
+            else {
+                const prof = dm.getProfile();
+                h += '<div class="vf-fx-title">PRESET</div><div class="vf-fx-row">' +
+                    fxSeg([['easy', 'EASY'], ['normal', 'NORMAL'], ['hard', 'HARD']], dm.current, 'df-preset') + '</div>';
+                h += '<div class="vf-fx-title">SPEED</div>' +
+                    fxSlider('PLAYER SHIP', 'df:playerSpeedMul', 0.2, 3, 0.05, Math.round((prof.playerSpeedMul || 1) * 100) / 100, '×') +
+                    fxSlider('PLAYER SHOTS', 'ss:player', 20, 300, 5, ui.getShotSpeedPct('player'), '%') +
+                    fxSlider('ENEMY SHIPS', 'df:enemySpeedMul', 0.2, 3, 0.05, Math.round((prof.enemySpeedMul == null ? 1 : prof.enemySpeedMul) * 100) / 100, '×') +
+                    fxSlider('ENEMY SHOTS', 'ss:enemy', 20, 300, 5, ui.getShotSpeedPct('enemy'), '%') +
+                    fxSlider('BOSS SHOTS', 'ss:boss', 20, 300, 5, ui.getShotSpeedPct('boss'), '%');
+                [['GLOBAL', [['enemyDamageMul', 'ENEMY DMG'], ['playerDamageMul', 'PLAYER DMG'], ['enemyHealthMul', 'ENEMY HP'], ['enemyCountMul', 'ENEMY COUNT'], ['evasionMul', 'EVASION'], ['predictionMul', 'AIMING'], ['obstacleSpawnMul', 'OBSTACLES']]],
+                    ['CHAMPION', [['championDamageMul', 'DAMAGE'], ['championHealthMul', 'HEALTH'], ['championSpeedMul', 'SPEED'], ['championEvasionMul', 'EVASION']]],
+                    ['SIDE ENEMIES', [['sideDamageMul', 'DAMAGE'], ['sideHealthMul', 'HEALTH'], ['sideSpeedMul', 'SPEED'], ['sideCountMul', 'COUNT']]],
+                    ['BOSS', [['bossDamageMul', 'DAMAGE'], ['bossHealthMul', 'HEALTH'], ['bossSpeedMul', 'SPEED'], ['bossAttackRateMul', 'ATTACK RATE']]]].forEach(function (g) {
+                    h += '<div class="vf-fx-title">' + g[0] + '</div>';
+                    g[1].forEach(function (r) {
+                        const v = Math.round((prof[r[0]] == null ? 1 : prof[r[0]]) * 100) / 100;
+                        h += fxSlider(r[1], 'df:' + r[0], 0.2, 3, 0.05, v, '×');
+                    });
+                });
+                h += '<div class="vf-fx-title">LIMITS</div>' + fxSlider('MAX ACTIVE', 'df:enemyMaxActive', 1, 10, 1, prof.enemyMaxActive == null ? 3 : prof.enemyMaxActive, '');
+                h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-df-reset="1">RESET ' + dm.current.toUpperCase() + '</button></div>';
+            }
         } else if (vfs.fxTab === 'sizes') {
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
@@ -226,7 +287,28 @@
         plate.innerHTML = h;
         const body = plate.querySelector('.vf-fx-body');
         restoreFxScroll();
-        plate.insertAdjacentHTML('beforeend', '<i class="vf-fx-grip" title="Resize" aria-hidden="true"></i>');
+        plate.insertAdjacentHTML('beforeend', '<div class="vf-fx-zoom" title="Scale"><input type="range" class="vf-fx-zoom-in" min="50" max="150" step="5" value="' + Math.round((vfs.fxZoom || 1) * 100) + '" aria-label="Remote scale"></div>' + ['nw', 'ne', 'sw', 'se'].map(function (c) { return '<i class="vf-fx-grip" data-corner="' + c + '" title="Resize" aria-hidden="true"></i>'; }).join(''));
+        plate.insertAdjacentHTML('beforeend', '<button type="button" class="vf-fx-more vf-fx-more-up" aria-label="Scroll up" hidden></button><button type="button" class="vf-fx-more vf-fx-more-down" aria-label="Scroll down" hidden></button>');
+        (function () {
+            const up = plate.querySelector('.vf-fx-more-up'), down = plate.querySelector('.vf-fx-more-down');
+            const sync = function () {
+                const b = plate.querySelector('.vf-fx-body');
+                if (!b) return;
+                up.style.left = down.style.left = b.offsetLeft + 'px';
+                up.style.width = down.style.width = b.offsetWidth + 'px';
+                up.style.top = b.offsetTop + 'px';
+                down.style.top = (b.offsetTop + b.offsetHeight - 22) + 'px';
+                up.hidden = !(b.scrollTop > 2);
+                down.hidden = !(b.scrollTop + b.clientHeight < b.scrollHeight - 2);
+            };
+            const step = function (dir) { const b = plate.querySelector('.vf-fx-body'); if (b) b.scrollBy({ top: dir * b.clientHeight * 0.8, behavior: 'smooth' }); };
+            up.addEventListener('click', function () { step(-1); });
+            down.addEventListener('click', function () { step(1); });
+            if (body) body.addEventListener('scroll', sync, { passive: true });
+            requestAnimationFrame(sync);
+            setTimeout(sync, 250);
+            vfs.fxMoreSync = sync;
+        })();
         applyFxGeom();
     }
 })(window.vfFitScope || (window.vfFitScope = {}));

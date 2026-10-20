@@ -777,6 +777,7 @@ be reviewed or reverted independently.
 | 67G | HUD layout editor | Dev layout editor for combat HUD panels with per-slot size and font scales |
 | 67H | Home station polish | Station shell layout, hangar preview, navigation, and sidebars |
 | 67I | Combat spawn polish | Wave director, side enemies, shot bursts, and hit-profile tweaks |
+| 67J | Viewport and appearance | Viewport-fit plate polish, GUI appearance hooks, start-screen and parallax |
 
 The wave commit convention is:
 

@@ -3,7 +3,7 @@
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, POWER, RES_ICON, ROOT, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
+    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     function swayLoop(now) {
@@ -12,7 +12,10 @@
         const dt = Math.min(0.1, (now - vfs.swayLast) / 1000 || 0.016);
         vfs.swayLast = now;
         vfs.swayT += dt;
-        const target = (vfs.swayHover || perf.sway === 'OFF' || (perf.sway === 'AUTO' && reduceMotion) || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
+        // Pixel Size / heavy UI: skip continuous remote sway (rAF transform thrash).
+        let pixelOn = false;
+        try { pixelOn = document.documentElement.getAttribute('data-vf-pixel-size') === 'on'; } catch (e) { /* */ }
+        const target = (vfs.swayHover || pixelOn || perf.sway === 'OFF' || (perf.sway === 'AUTO' && reduceMotion) || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
         vfs.swayAmp += (target - vfs.swayAmp) * Math.min(1, dt * 5); // ease toward held / swaying
         const t = vfs.swayT;
         const x = (Math.sin(t * 0.9) * 1.2 + Math.sin(t * 1.7 + 1) * 0.6) * vfs.swayAmp;
@@ -26,22 +29,86 @@
         vfs.swayLast = performance.now();
         vfs.swayRaf = requestAnimationFrame(swayLoop);
     }
-    // Remember whether the remote was out: restore it after a reload / screen change.
-    (function restoreFx() {
-        let was = false;
-        try { was = localStorage.getItem(FXOPEN_KEY) === '1'; } catch (e) { /* ignore */ }
-        if (!was) return;
-        let tries = 0;
-        (function wait() {
-            if (vfs.fxOpen) return;
-            if (getUi() && document.querySelector('.vf-bezel-tools')) { setFxOpen(true, true); return; }
-            if (++tries < 200) setTimeout(wait, 50);
-        })();
-    })();
+    // Do not auto-restore the FX remote after reload: an open remote runs swayLoop
+    // and keeps a heavy sidebar live (runtime lag with PIXEL SIZE on). User can reopen via FX.
+
     function onFxEsc(e) {
         if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); setFxOpen(false); }
     }
     function placeFxPlate() { /* the sidebar is docked to the window edge */ }
+
+    // "DEVMODE" badge in the bezel's top strip, shown whenever startScreenManager.devMode is on —
+    // on every screen (menu, station, combat), not just the one it happened to be eyeballed on.
+    // Deliberately independent of syncBezelTools()/`#vf-bezel`: that function returns immediately
+    // when `#vf-bezel` isn't found (e.g. a screen that renders its own separate bezel-like chrome,
+    // such as the embedded home station), which silently skipped this badge too when it was called
+    // from inside there — devMode could be genuinely on with nothing ever flipping `hidden` back to
+    // false. Hide/show only ever needs `document.body`, so it's resolved on its own.
+    // Positioned immediately to the LEFT of the tool icon row — never the pilot wallet, a loot
+    // chip, or anything else that may or may not be there, since those differ by screen and kept
+    // putting the badge somewhere wrong (overlapping or stacked below) depending on which neighbor
+    // happened to be present. Save/reset only exist in the DOM while actively editing the layout
+    // (they're not just `hidden`, see hud-layout-editor.js), so the row is genuinely narrower until
+    // then — space for both is reserved unconditionally so starting/stopping an edit never shifts
+    // the badge sideways, rather than only reserving it once they happen to already be there.
+    // Vertically centered on the icon row's own height. An earlier version tried matching
+    // `.vf-pilot-ress` (the pilot resource bar) instead, on the idea that the two aren't always at
+    // the same baseline — but that element isn't reliably the one actually on screen next to the
+    // icons (a leftover/hidden instance elsewhere pulled the badge to an unrelated height), and the
+    // badge sits directly beside the icon row regardless, so matching ITS height is both the
+    // simpler measurement and the one that's actually true of what's visually next to it.
+    //
+    // `document.body` itself carries a `transform: scale(...)` (part of the stage's own stacked
+    // scale layers — see the comment on ui-tooltip.js's `position()`, "body carries the stage scale
+    // transform"). A `transform` on an element makes it the containing block for its `position:
+    // fixed` descendants too, not just `absolute` ones — so this badge, a direct child of body, was
+    // never actually fixed to the viewport at all despite the CSS; it was fixed to body's own
+    // (scaled) box. `getBoundingClientRect()` still correctly reports the icon row in real viewport
+    // pixels, so every px value computed from it was being fed to a containing block operating in a
+    // DIFFERENT, scaled coordinate system — the exact mismatch behind the badge landing at a
+    // plausible-looking but always-slightly-wrong height no matter which element it was measured
+    // against. Fix: work in fractions of body's own rendered box, not raw px — a CSS percentage for
+    // a fixed/absolute child resolves against the containing block's (body's) OWN authored size,
+    // and a pure scale preserves proportions within that box, so the same fraction lands in the
+    // same visual spot regardless of whatever body's transform's scale factor actually is.
+    let devBadgeKey = null;
+    function syncDevBadge() {
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        let badge = document.querySelector('.vf-bezel-devmode');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'vf-bezel-devmode';
+            badge.textContent = 'DEVMODE';
+            document.body.appendChild(badge);
+        }
+        badge.hidden = !devOn;
+        if (!devOn) { devBadgeKey = null; return; }
+        const tools = document.querySelector('.vf-bezel-tools');
+        if (!tools) return; // CSS fallback position (part-19.css) still applies
+        const toolsRect = tools.getBoundingClientRect();
+        if (!toolsRect.width) return;
+        const bodyRect = document.body.getBoundingClientRect();
+        if (!bodyRect.width || !bodyRect.height) return;
+        const btn = tools.querySelector('button:not([hidden])');
+        const btnRect = btn ? btn.getBoundingClientRect() : null;
+        const gap = parseFloat(getComputedStyle(tools).columnGap || getComputedStyle(tools).gap) || 0;
+        const saveBtn = tools.querySelector('[data-tool="save"]');
+        const saveVisible = !!(saveBtn && !saveBtn.hidden);
+        // 2 slots (save + reset) reserved whenever they're not currently shown themselves.
+        const reserve = (btnRect && !saveVisible) ? 2 * (btnRect.width + gap) : 0;
+        const leftPx = toolsRect.left - reserve;
+        const topPx = toolsRect.top + toolsRect.height / 2;
+        const key = Math.round(leftPx) + ':' + Math.round(topPx);
+        if (key === devBadgeKey) return;
+        devBadgeKey = key;
+        const leftPct = ((leftPx - bodyRect.left) / bodyRect.width) * 100;
+        const topPct = ((topPx - bodyRect.top) / bodyRect.height) * 100;
+        badge.style.right = 'auto';
+        badge.style.left = leftPct + '%';
+        badge.style.top = topPct + '%';
+        badge.style.transform = 'translate(-100%, -50%) translateX(-12px)';
+    }
+    setInterval(syncDevBadge, 500);
 
     // Bezel tools (top strip): RES icon (opens the slider), fullscreen (every screen),
     // logout (station only). Fullscreen / logout mirror the real buttons.
@@ -72,9 +139,25 @@
                 if (lo) { lo.click(); return; }
                 if (typeof profileManager !== 'undefined') profileManager.logout();
                 if (typeof startScreenManager !== 'undefined') startScreenManager.show({ forceMenu: true });
+            },
+            layout: function (btn) {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.toggleEdit();
+                btn.classList.toggle('is-open', hudLayoutEditor.isEditing());
+            },
+            save: function (btn) {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.save();
+                btn.classList.add('is-open');
+                setTimeout(function () { btn.classList.remove('is-open'); }, 500);
+            },
+            reset: function () {
+                if (typeof hudLayoutEditor === 'undefined') return;
+                hudLayoutEditor.resetLayout();
             }
         };
         const meta = {
+            save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -133,9 +216,43 @@
             }
         }
         setOff(q('logout'), !logged);
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const nowEditing = devOn && typeof hudLayoutEditor !== 'undefined' && hudLayoutEditor.isEditing();
+        const layoutBtn = q('layout');
+        if (layoutBtn) {
+            layoutBtn.hidden = !devOn;
+            layoutBtn.classList.toggle('is-open', nowEditing);
+            // The button itself becomes the exit: clicking it again always ends the same edit
+            // session it started, so once editing it should read as "cancel", not still as
+            // "open layout edit" sitting there pressed.
+            const editState = nowEditing ? '1' : '0';
+            if (layoutBtn.dataset.state !== editState) {
+                layoutBtn.dataset.state = editState;
+                layoutBtn.innerHTML = nowEditing ? LAYOUT_CANCEL_ICON : LAYOUT_ICON;
+                layoutBtn.title = nowEditing ? 'Cancel layout edit' : 'Layout edit';
+                layoutBtn.setAttribute('aria-label', layoutBtn.title);
+            }
+        }
+        const saveBtn = q('save');
+        if (saveBtn) saveBtn.hidden = !nowEditing;
+        const resetBtn = q('reset');
+        if (resetBtn) resetBtn.hidden = !nowEditing;
     }
-    new MutationObserver(function () { syncBezelTools(); })
-        .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    // Watches the WHOLE document (childList/subtree/characterData) since the bezel's state can
+    // change from almost anywhere (login, fullscreen, a resource tick). Running syncBezelTools()
+    // straight from the callback meant every single mutation anywhere on the page — and a running
+    // game mutates DOM text/nodes constantly (health bars, counters, animations) — did a fresh
+    // round of querySelector lookups and getBoundingClientRect reads synchronously, often many
+    // times within one frame. Coalescing bursts into a single rAF-scheduled run keeps the bezel
+    // exactly as up to date (still before the next paint) for a fraction of the work.
+    let bezelToolsRaf = 0;
+    new MutationObserver(function () {
+        if (bezelToolsRaf) return;
+        bezelToolsRaf = requestAnimationFrame(function () { bezelToolsRaf = 0; syncBezelTools(); });
+    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    // Dev mode can flip without touching the DOM (e.g. Shift+C while in combat), so the layout
+    // key's visibility is also polled rather than relying solely on the mutation observer.
+    setInterval(syncBezelTools, 500);
 
     // The slider plate (fixed pixel size, outside the scaled stage) unfolds to the
     // left of the tool buttons, inside the bezel's top strip.

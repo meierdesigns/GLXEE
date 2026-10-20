@@ -96,7 +96,12 @@ extendClass(StartScreenManager, {
         if (this.selectedIndex >= this.menuItems.length) {
             this.selectedIndex = Math.max(0, this.menuItems.length - 1);
         }
-        this.createStartScreenUI();
+        // Shift+C also toggles this mid-combat (see js/ui/hud-layout-editor.js, bindGlobalToggle),
+        // where the start screen's own overlay DOM isn't even attached/visible — a full
+        // createStartScreenUI() rebuild there is pure wasted work (innerHTML='' + rebuilding the
+        // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
+        // when it's actually on screen to look at.
+        if (this.visible) this.createStartScreenUI();
         // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
             homeStationUI.createUI();

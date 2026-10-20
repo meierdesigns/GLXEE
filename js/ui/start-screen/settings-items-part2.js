@@ -36,6 +36,15 @@ extendClass(StartScreenManager, {
                 fxKey: 'guiVoxel'
             },
             {
+                name: 'Pixel Size',
+                value: (typeof uiAppearanceManager !== 'undefined')
+                    ? uiAppearanceManager.getFxValue('pixelSize') : 'OFF',
+                options: ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'],
+                type: 'uiFx',
+                fxKey: 'pixelSize',
+                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors — 1 is sharpest'
+            },
+            {
                 name: 'Frame Pixel',
                 value: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxValue('framePx') : 'OFF',

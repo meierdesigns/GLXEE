@@ -31,8 +31,16 @@
         for (var i = 0; i < parallax.hosts.length; i++) {
             var host = parallax.hosts[i];
             if (!isHostVisible(host)) continue;
-            var bases = host.querySelectorAll(':scope > .vf-bg-parallax-base');
-            var glow = host.querySelector(':scope > .vf-bg-parallax-glow');
+            // Cache layer nodes on the host — querySelectorAll every RAF was pure overhead.
+            if (!host._vfBgLayers || host._vfBgLayersGen !== host.childElementCount) {
+                host._vfBgLayers = {
+                    bases: host.querySelectorAll(':scope > .vf-bg-parallax-base'),
+                    glow: host.querySelector(':scope > .vf-bg-parallax-glow')
+                };
+                host._vfBgLayersGen = host.childElementCount;
+            }
+            var bases = host._vfBgLayers.bases;
+            var glow = host._vfBgLayers.glow;
             for (var b = 0; b < bases.length; b++) {
                 if (bases[b]._vfTf !== tb) { bases[b]._vfTf = tb; bases[b].style.transform = tb; }   // unchanged frames touch nothing
             }
@@ -160,11 +168,14 @@
                     collectHosts();
                 }, 120);
             });
+            // Do not watch `style`: map/orbit/spin/UI thrash style constantly and the
+            // callback walked every mutation (runtime residual: readHostBackgroundNow/hostZ).
+            // Host BG changes arrive via class / data-hs-tab / faction attrs instead.
             parallax.observer.observe(document.body, {
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ['class', 'style', 'data-hs-tab', 'hidden']
+                attributeFilter: ['class', 'data-hs-tab', 'hidden']
             });
             // A faction change is stamped on <html>, outside the body observer: repaint the backdrops once per frame.
             var facRaf = 0;
@@ -195,6 +206,15 @@
     function step(now) {
         parallax.raf = 0;
         if (!parallax.active || parallax.reduceMotion) return;
+        // Combat owns the glass — skip menu parallax while the fight canvas is up.
+        try {
+            var gc = document.querySelector('.game-container');
+            if (gc && gc.style.display === 'flex') {
+                // Park until menus return; the next mousemove re-schedules.
+                return;
+            }
+        } catch (e) { /* continue */ }
+        if (document.hidden) return;
 
         var w = window.innerWidth || 1;
         var h = window.innerHeight || 1;

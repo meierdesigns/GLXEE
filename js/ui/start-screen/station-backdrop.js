@@ -282,14 +282,31 @@ class StartStationBackdrop {
     }
 
     _startLoop() {
+        if (this._raf) return;
         const tick = (now) => {
+            if (!this.canvas.isConnected) {
+                this._raf = 0;
+                return;
+            }
             this._raf = requestAnimationFrame(tick);
-            if (!this.canvas.isConnected) return;
+            // Pause while the start screen is off-DOM or covered / display:none.
+            try {
+                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
+                if (host.classList.contains('hidden')) return;
+                const st = getComputedStyle(host);
+                if (st.display === 'none' || st.visibility === 'hidden') return;
+            } catch (e) { /* draw anyway */ }
+            if (document.hidden) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
         };
         this._raf = requestAnimationFrame(tick);
+    }
+
+    _stopLoop() {
+        if (this._raf) cancelAnimationFrame(this._raf);
+        this._raf = 0;
     }
 
     /** Sum of all station upgrade levels -> 0..5 build stage. */
@@ -389,7 +406,7 @@ class StartStationBackdrop {
                     planetSVGManager.createPixelPlanetSVG(id, style, faction, pal.hull, {}, 1);
                 }
             }
-            const model = planetSVGManager.getPlanetSpinModel(id, 12);
+            const model = planetSVGManager.getPlanetSpinModel(id, (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? Math.max(1, Math.min(12, Math.round(window.innerHeight / (18 * uiAppearanceManager.getGlobalPixelPx())))) : 12);
             if (!model || model === this._planetSpinModel) return;
             this._planetSpinId = id;
             this._planetSpinModel = model;

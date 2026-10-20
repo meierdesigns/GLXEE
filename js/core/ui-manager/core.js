@@ -21,7 +21,8 @@ class UIManager {
             const maxHp = playerManager.getMaxHealth() || 1;
             const playerHealthPercent = Math.max(0, Math.min(100, (playerManager.getHealth() / maxHp) * 100));
             const playerHealthBar = document.getElementById('playerHealthBar');
-            if (playerHealthBar) {
+            if (playerHealthBar && this._uiHpPct !== playerHealthPercent) {
+                this._uiHpPct = playerHealthPercent;
                 playerHealthBar.style.setProperty('--health-width', `${playerHealthPercent}%`);
             }
 
@@ -29,7 +30,8 @@ class UIManager {
             const energy = playerManager.getEnergy ? playerManager.getEnergy() : 0;
             const energyPercent = Math.max(0, Math.min(100, (energy / maxEnergy) * 100));
             const playerEnergyBar = document.getElementById('playerEnergyBar');
-            if (playerEnergyBar) {
+            if (playerEnergyBar && this._uiEnPct !== energyPercent) {
+                this._uiEnPct = energyPercent;
                 playerEnergyBar.style.setProperty('--health-width', `${energyPercent}%`);
             }
 
@@ -39,7 +41,8 @@ class UIManager {
                 ? Math.max(0, Math.min(100, (shield / maxShield) * 100))
                 : 0;
             const playerShieldBar = document.getElementById('playerShieldBar');
-            if (playerShieldBar) {
+            if (playerShieldBar && this._uiShPct !== shieldPercent) {
+                this._uiShPct = shieldPercent;
                 playerShieldBar.style.setProperty('--health-width', `${shieldPercent}%`);
             }
 
@@ -274,26 +277,40 @@ class UIManager {
             const enemy = enemies[i];
             if (!enemy) continue;
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
-            fill.style.setProperty('--health-width', pct + '%');
+            const hpLabel = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            if (fill._vfHpPct !== pct) {
+                fill._vfHpPct = pct;
+                fill.style.setProperty('--health-width', pct + '%');
+            }
             const hpText = fill.querySelector('.enemy-hp-text');
-            if (hpText) hpText.textContent = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            if (hpText && hpText._vfHpLabel !== hpLabel) {
+                hpText._vfHpLabel = hpLabel;
+                hpText.textContent = hpLabel;
+            }
             // Shield: level + a pulsing charge state while it refills.
             const sh = fill.parentNode && fill.parentNode.querySelector('.enemy-shield-fill');
             if (sh && !(enemy.shieldMax > 0)) {
-                sh.classList.add('is-none');
-                sh.style.setProperty('--shield-width', '0%');
+                if (!sh.classList.contains('is-none')) sh.classList.add('is-none');
+                if (sh._vfShPct !== 0) {
+                    sh._vfShPct = 0;
+                    sh.style.setProperty('--shield-width', '0%');
+                }
                 const t = sh.querySelector('.enemy-shield-text');
-                if (t) t.textContent = 'NO SHIELD';
+                if (t && t._vfShLabel !== 'NO SHIELD') { t._vfShLabel = 'NO SHIELD'; t.textContent = 'NO SHIELD'; }
             } else if (sh) {
                 const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
                 const prev = Number(sh.dataset.prev || sp);
-                sh.style.setProperty('--shield-width', sp + '%');
+                if (sh._vfShPct !== sp) {
+                    sh._vfShPct = sp;
+                    sh.style.setProperty('--shield-width', sp + '%');
+                }
                 sh.classList.toggle('is-charging', sp < 100 && sp > prev);
                 sh.classList.toggle('is-down', sp <= 0);
                 sh.dataset.prev = String(sp);
                 const t = sh.querySelector('.enemy-shield-text');
-                if (t) t.textContent = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
+                const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
                     (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
+                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; }
             }
         }
     }

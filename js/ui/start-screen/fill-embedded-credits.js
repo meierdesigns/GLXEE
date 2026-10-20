@@ -419,7 +419,7 @@ extendClass(StartScreenManager, {
         );
         const isVoxelItem = (item) => item.type === 'shipRenderStyle' || item.type === 'voxelSize'
             || (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined'
-                && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
+                && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
         addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx' && !isVoxelItem(item));
         addSection(right, 'sound', 'SOUND', (item) =>

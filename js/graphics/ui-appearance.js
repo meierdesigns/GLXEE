@@ -292,7 +292,7 @@ class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
-        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '6', '8'];
+        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -312,6 +312,14 @@ class UIAppearanceManager {
     getGlobalPixelPx() {
         const n = Number(this.pixelSize);
         return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    /** Screen CSS px per Global Pixel cell (device-pixel snapped). Shared by filter + map lattice. */
+    getMapPxCellCss() {
+        const gp = this.getGlobalPixelPx();
+        if (!(gp > 0)) return 0;
+        if (this._mapPxCellCss > 0) return this._mapPxCellCss;
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        return Math.max(1, Math.round(gp * dpr)) / dpr;
     }
     getGuiVoxelCell() {
         // The GUI lattice stays on whole pixels even when the ship voxels go finer than 1.
@@ -448,7 +456,7 @@ class UIAppearanceManager {
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
             }
-            if (data.pixelSize === 'OFF' || /^(1|2|3|4|6|8)$/.test(String(data.pixelSize))) {
+            if (data.pixelSize === 'OFF' || /^[1-8]$/.test(String(data.pixelSize))) {
                 this.pixelSize = String(data.pixelSize);
             }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);

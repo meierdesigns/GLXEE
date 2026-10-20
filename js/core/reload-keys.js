@@ -1,5 +1,13 @@
 "use strict";
 
+// Strip the cache-bust query param left over from a hard reload so it
+// doesn't linger in the address bar.
+if (location.search.includes('_cb=')) {
+    const u = new URL(location.href);
+    u.searchParams.delete('_cb');
+    history.replaceState(null, '', u.toString());
+}
+
 // Reload keys inside embedded browsers (VS Code's browser keeps F5 /
 // Ctrl+R / Ctrl+Shift+R for itself): when the page does get the key,
 // reload here. Capture phase, so no menu handler can swallow it first.

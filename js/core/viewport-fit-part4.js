@@ -202,6 +202,18 @@
             !!force
         );
 
+        // Global pixel size: backing-store scale depends on the on-screen canvas width, so
+        // re-derive it once the new CSS size is laid out (two frames: after the settle pass).
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                const rm = window.renderManager;
+                const am = (typeof uiAppearanceManager !== 'undefined') ? uiAppearanceManager : null;
+                if (!rm || !rm.setPlayfieldSize || !am || !(am.getGlobalPixelPx && am.getGlobalPixelPx() > 0)) return;
+                const w = readCssNumber('--map-w', 0), h = readCssNumber('--map-h', 0);
+                if (w > 0 && h > 0) rm.setPlayfieldSize(w, h);
+            });
+        });
+
         // Settle once after first paint (fonts / zoom / measured middle)
         const token = ++vfs.secondPassToken;
         requestAnimationFrame(function () {

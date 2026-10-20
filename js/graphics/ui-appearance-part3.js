@@ -104,6 +104,16 @@ extendClass(UIAppearanceManager, {
         Object.keys(this.guiVoxelParts).forEach((k) => {
             root.setAttribute('data-vf-gv-' + k, this.guiVoxelParts[k] === 'ON' ? 'on' : 'off');
         });
+        root.setAttribute('data-vf-pixel-size', this.pixelSize === 'OFF' ? 'off' : 'on');
+        root.setAttribute('data-vf-px', String(this.getGlobalPixelPx() || 0));
+        // Cell size for vfMapPx on #gmMapArea (and any CSS that keys off --vf-px-n).
+        root.style.setProperty('--vf-px-n', String(Math.max(1, this.getGlobalPixelPx() || 1)));
+        root.style.setProperty('--vf-px', (this.getGlobalPixelPx() || 1) + 'px');
+        try {
+            const area = document.getElementById('gmMapArea');
+            const gpA = this.getGlobalPixelPx();
+            if (this.ensureMapPxFilter) this.ensureMapPxFilter(gpA > 0 ? gpA : 0, area);
+        } catch (e) { /* map not mounted */ }
         root.setAttribute('data-vf-frame-px', this.framePx === 'OFF' ? 'off' : 'on');
         if (this.framePx !== 'OFF') {
             this.ensureFramePxFilter(Number(this.framePx));

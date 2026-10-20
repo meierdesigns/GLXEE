@@ -192,6 +192,13 @@
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
     const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
+    // Shown on the layout key itself in place of LAYOUT_ICON while editing — clicking it again
+    // exits the edit (it's the same toggle either way), so the icon reads as "cancel/close" rather
+    // than still offering to "open" something that's already open.
+    const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
+    const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
+    const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     vfs.resOpen = false;
     vfs.fxOpen = false;
 
@@ -458,7 +465,9 @@
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
     // tabs FX / VOXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    // Remote key clusters: [caption, tab ids]; the plate lays them out two clusters per row.
+    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug']]];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
@@ -466,20 +475,32 @@
         sizes: svg16('<path d="M2 14V9M2 14h5M14 2v5M14 2H9M3 13l10-10"/>'),
         text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>'),
         perf: svg16('<path d="M2 12a6 6 0 0112 0M8 12l3-5"/>'),
+        difficulty: svg16('<path d="M3 13V8a5 5 0 0110 0v5zM6 9h1M9 9h1M6 13v-2M8 13v-2M10 13v-2"/>'),
         debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>')
     };
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
     //   heavy ON/OFF = the backdrop-filter layers (chroma / bloom / CRT)
     //   anim  ON/OFF = looping animations of the screen-effect layers and selection pulse
+    // Default heavy OFF: SVG backdrop-filters over the whole shell were the main
+    // full-app jank source when any CRT/chroma/bloom value was non-zero.
     const PERF_KEY = 'vf-perf';
-    const perf = { sway: 'AUTO', heavy: 'ON', anim: 'ON' };
+    const perf = { sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
     try {
         const sp = JSON.parse(localStorage.getItem(PERF_KEY) || 'null');
         if (sp) {
             if (/^(AUTO|ON|OFF)$/.test(sp.sway)) perf.sway = sp.sway;
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
+        } else {
+            // First boot: prefer the light path on weak / HiDPI machines.
+            const cores = (navigator && navigator.hardwareConcurrency) || 4;
+            const mem = (navigator && navigator.deviceMemory) || 4;
+            const dpr = window.devicePixelRatio || 1;
+            if (cores <= 4 || mem <= 4 || dpr >= 2) {
+                perf.heavy = 'OFF';
+                perf.anim = 'ON';
+            }
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {
@@ -511,5 +532,5 @@
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_TABS, FX_TAB_ICONS, OVERLAY_CHROME, POWER, RES_ICON, ROOT, RO_SUPPRESS_MS, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));

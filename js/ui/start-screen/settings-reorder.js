@@ -259,6 +259,22 @@ extendClass(StartScreenManager, {
                     if (action === 'perf') {
                         const on = document.documentElement.toggleAttribute('data-vf-performance');
                         button.textContent = on ? 'ON' : 'OFF';
+                        try {
+                            if (window.vfPerf) {
+                                window.vfPerf.sway = on ? 'OFF' : 'AUTO';
+                                window.vfPerf.heavy = 'OFF';
+                                window.vfPerf.anim = on ? 'OFF' : 'ON';
+                                localStorage.setItem('vf-perf', JSON.stringify(window.vfPerf));
+                            }
+                            document.documentElement.setAttribute('data-vf-perf-heavy', 'off');
+                            document.documentElement.setAttribute('data-vf-perf-anim', on ? 'off' : 'on');
+                            if (window.VFBgMouseParallaxParts && VFBgMouseParallaxParts.applyIntensity) {
+                                VFBgMouseParallaxParts.applyIntensity(on ? 'OFF' : 'NORMAL', true);
+                            }
+                            if (on && typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setFx) {
+                                uiAppearanceManager.setFx('framePx', 'OFF');
+                            }
+                        } catch (e) { /* ignore */ }
                     }
                 });
             });

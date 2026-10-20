@@ -39,6 +39,7 @@ extendClass(UIAppearanceManager, {
                 guiVoxel: this.guiVoxel,
                 guiVoxelCell: this.guiVoxelCell,
                 framePx: this.framePx,
+                pixelSize: this.pixelSize,
                 frameRound: this.frameRound,
                 guiVoxelParts: Object.assign({}, this.guiVoxelParts)
             }));
@@ -237,6 +238,17 @@ extendClass(UIAppearanceManager, {
             this.apply();
             return;
         }
+        if (key === 'pixelSize') {
+            if (!this.getFxOptions('pixelSize').includes(val)) return;
+            this.pixelSize = val;
+            this.persist();
+            this.apply();
+            if (typeof graphicsManager !== 'undefined' && graphicsManager._voxelShipBake) {
+                graphicsManager._voxelShipBake = Object.create(null);
+            }
+            try { window.dispatchEvent(new CustomEvent('vf:pixelsize', { detail: { px: this.getGlobalPixelPx() } })); } catch (e) { /* ignore */ }
+            return;
+        }
         if (key === 'gvCell') {
             if (val !== 'AUTO' && !/^[1-8]$/.test(val)) return;
             this.guiVoxelCell = val;
@@ -296,6 +308,94 @@ extendClass(UIAppearanceManager, {
         if (typeof window.vfBuildFramePxFilter === 'function') window.vfBuildFramePxFilter(odd);
         this._framePxBuilt = odd;
     },
+    /**
+     * Global Pixel Size: SVG pixelate filter on #gmMapArea (live DOM — no canvas mirror).
+     * Canvas serialize/redraw flickered and corrupted the map; filter stays on the live layer.
+     */
+    ensureMapPxFilter(gp, el) {
+        const target = (el && el.id === 'gmMapArea') ? el
+            : (el && el.closest && el.closest('#gmMapArea')) || document.getElementById('gmMapArea') || el;
+        this._stopMapPxCanvas(target);
+        if (!(gp > 0)) {
+            if (target && target.style) target.style.removeProperty('filter');
+            this._mapPxBuilt = '';
+            return;
+        }
+        let sa = 1;
+        if (target && target.clientWidth > 0) {
+            let probe = target.parentNode && target.parentNode.querySelector(':scope > .vf-px-probe');
+            if (!probe && target.parentNode) {
+                probe = document.createElement('div');
+                probe.className = 'vf-px-probe';
+                probe.style.cssText = 'position:absolute;left:0;top:0;width:1000px;height:0;visibility:hidden;pointer-events:none';
+                target.parentNode.appendChild(probe);
+            }
+            const w = probe ? probe.getBoundingClientRect().width / 1000
+                : target.getBoundingClientRect().width / Math.max(1, target.clientWidth);
+            if (w > 0.05 && w < 20) sa = w;
+        }
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        // Local CSS px per cell: gp screen CSS px, snapped to whole device pixels.
+        const deviceCell = Math.max(1, Math.round(gp * dpr));
+        const cell = Math.max(1, Math.round(deviceCell / (sa * dpr)));
+        // Publish the exact cell the filter uses so the map lattice snaps to the same grid.
+        this._mapPxSa = sa;
+        this._mapPxCellLocal = cell;
+        this._mapPxCellCss = cell * sa;
+        const rw = Math.max(1, Math.round((target && target.clientWidth) || 1));
+        const rh = Math.max(1, Math.round((target && target.clientHeight) || 1));
+        const key = gp + '|' + cell + '|' + rw + 'x' + rh;
+        if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) {
+            if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
+            return;
+        }
+        let svg = document.getElementById('vfMapPxSvg');
+        if (!svg) {
+            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = 'vfMapPxSvg';
+            svg.setAttribute('width', '0');
+            svg.setAttribute('height', '0');
+            svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+            svg.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(svg);
+        }
+        // Sample at cell origin (0,0) so lattice-snapped sprites sit on the filter grid.
+        const dilate = Math.max(0.5, cell / 2);
+        let h = '<filter id="vfMapPx" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB" primitiveUnits="userSpaceOnUse">' +
+            '<feFlood x="0" y="0" width="1" height="1" flood-color="#fff" flood-opacity="1"/>' +
+            '<feComposite width="' + cell + '" height="' + cell + '"/><feTile result="t"/>' +
+            '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>' +
+            '<feMorphology in="s" operator="dilate" radius="' + dilate + '" result="d"/>';
+        if (cell % 2 === 0) {
+            h += '<feOffset in="d" dx="1" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
+                '<feOffset in="hz" dx="0" dy="1" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
+        }
+        svg.innerHTML = h + '</filter>';
+        this._mapPxBuilt = key;
+        if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
+        if (!this._mapPxRo && target && typeof ResizeObserver !== 'undefined') {
+            this._mapPxRo = new ResizeObserver(() => {
+                const g = this.getGlobalPixelPx ? this.getGlobalPixelPx() : 0;
+                if (g > 0) this.ensureMapPxFilter(g, target);
+            });
+            this._mapPxRo.observe(target);
+        }
+    },
+    _stopMapPxCanvas(area) {
+        if (this._mapPxRaf) {
+            cancelAnimationFrame(this._mapPxRaf);
+            this._mapPxRaf = 0;
+        }
+        this._mapPxLoop = false;
+        const cv = area && area.querySelector(':scope > canvas.gm-px-canvas');
+        if (cv) cv.remove();
+        const raster = area && area.querySelector('.gm-px-raster');
+        if (raster) {
+            raster.style.opacity = '';
+            raster.style.visibility = '';
+        }
+    },
+    dirtyMapPxCanvas() { /* no-op: live SVG filter, no canvas mirror */ },
     applyScanWarp() {
         // The filter re-rasterises the whole backdrop per seed change, so it is throttled
         // (>= 100 ms), paused while hidden and skipped when the heavy/anim perf switches are off.

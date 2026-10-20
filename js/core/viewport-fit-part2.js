@@ -27,13 +27,14 @@
         plate = document.createElement('div');
         plate.id = 'vf-fx';
         plate.className = 'vf-bezel-fx';
+        try { const z = Number(localStorage.getItem('vf-fx-zoom')); if (z >= 50 && z <= 150) { vfs.fxZoom = z / 100; plate.style.scale = String(z / 100); } } catch (err) { /* ignore */ }
         plate.style.display = 'none';
         document.documentElement.appendChild(plate);
         ['keydown', 'keyup'].forEach(function (t) {
             plate.addEventListener(t, function (e) { e.stopPropagation(); });
         });
         plate.addEventListener('pointerdown', function (e) {
-            if (e.target.closest('.vf-fx-grip')) startFxDrag(e, 'size');
+            if (e.target.closest('.vf-fx-grip')) startFxDrag(e, e.target.closest('.vf-fx-grip').getAttribute('data-corner') || 'se');
             else if (e.target.closest('.vf-fx-head') && !e.target.closest('button')) startFxDrag(e, 'move');
         });
         plate.addEventListener('pointerenter', function () { vfs.swayHover = true; });
@@ -67,10 +68,15 @@
     try { fxGeom = JSON.parse(localStorage.getItem(FXGEOM_KEY) || 'null'); } catch (e) { fxGeom = null; }
     function applyFxGeom() {
         const plate = document.getElementById('vf-fx');
+        if (plate && !fxGeom) setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
         if (!plate || !fxGeom) return;
         const W = window.innerWidth, H = window.innerHeight;
+        // Clamp the scaled (visual) box: scale pivots on transform-origin, so it sits offset from left/top.
+        const k = vfs.fxZoom || 1;
         const w = Math.max(260, Math.min(fxGeom.w, W)), h = Math.max(300, Math.min(fxGeom.h, H));
-        const l = Math.max(0, Math.min(fxGeom.l, W - w)), t = Math.max(0, Math.min(fxGeom.t, H - h));
+        setFxOrigin(plate, w, h);
+        const dxo = (w / 2 + 78) * (1 - k), dyo = (h - 43) * (1 - k);
+        const l = Math.max(-dxo, Math.min(fxGeom.l, W - w * k - dxo)), t = Math.max(-dyo, Math.min(fxGeom.t, H - h * k - dyo));
         plate.style.width = w + 'px'; plate.style.height = h + 'px';
         plate.style.left = l + 'px'; plate.style.top = t + 'px';
         plate.style.right = 'auto'; plate.style.bottom = 'auto';
@@ -79,14 +85,20 @@
         const plate = document.getElementById('vf-fx');
         const r = plate.getBoundingClientRect();
         const sx = e.clientX, sy = e.clientY;
-        const g0 = { l: r.left, t: r.top, w: r.width, h: r.height };
+        const k = vfs.fxZoom || 1;
+        const g0 = { l: plate.offsetLeft, t: plate.offsetTop, w: plate.offsetWidth, h: plate.offsetHeight };
         e.preventDefault();
         plate.classList.add('is-dragging');
         const move = function (ev) {
-            const dx = ev.clientX - sx, dy = ev.clientY - sy;
-            fxGeom = mode === 'move'
-                ? { l: g0.l + dx, t: g0.t + dy, w: g0.w, h: g0.h }
-                : { l: g0.l, t: g0.t, w: g0.w + dx, h: g0.h + dy };
+            const dx = (ev.clientX - sx) / k, dy = (ev.clientY - sy) / k;
+            if (mode === 'move') {
+                // left/top are not scaled, so the plate follows the pointer 1:1
+                fxGeom = { l: g0.l + ev.clientX - sx, t: g0.t + ev.clientY - sy, w: g0.w, h: g0.h };
+            } else {
+                const west = mode.indexOf('w') >= 0, north = mode.indexOf('n') >= 0;
+                const w = Math.max(260, g0.w + (west ? -dx : dx)), h = Math.max(300, g0.h + (north ? -dy : dy));
+                fxGeom = { l: west ? g0.l + g0.w - w : g0.l, t: north ? g0.t + g0.h - h : g0.t, w: w, h: h };
+            }
             applyFxGeom();
         };
         const up = function () {
@@ -147,6 +159,8 @@
         else if (d.vxSize) ui.setVoxelSize(d.vxSize);
         else if (d.vxGui) ui.setGuiVoxel(d.vxGui);
         else if (d.vxGv) { const kv = d.vxGv.split(':'); ui.setFx(kv[0], kv[1]); }
+        else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
+        else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
         else if (d.pfSway) setPerf('sway', d.pfSway);
         else if (d.pfHeavy) setPerf('heavy', d.pfHeavy);
         else if (d.pfAnim) setPerf('anim', d.pfAnim);
@@ -205,8 +219,28 @@
         void plate.offsetWidth;
         a.classList.remove('on'); b.classList.add('on');
     }
+    // Remote scale (UI resolution): zooms around the centre of the slider so it stays under the pointer.
+    // Pivot = centre of the scale slider (CSS: left 50% + 36px, width 84px, bottom 34px, height 18px).
+    function setFxOrigin(plate, w, h) {
+        plate.style.transformOrigin = (w / 2 + 78) + 'px ' + (h - 43) + 'px';
+    }
+    function applyFxZoom(plate, pct) {
+        const k = Math.max(50, Math.min(150, pct)) / 100;
+        vfs.fxZoom = k;
+        setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        plate.style.scale = String(k);
+    }
+    // Re-clamp into the window only once the scale slider is released, so the pivot never jumps while dragging.
+    document.addEventListener('change', function (e) {
+        if (e.target.classList && e.target.classList.contains('vf-fx-zoom-in')) applyFxGeom();
+    });
     function onFxInput(e) {
         const inp = e.target;
+        if (inp.classList && inp.classList.contains('vf-fx-zoom-in')) {
+            applyFxZoom(inp.closest('.vf-bezel-fx'), Number(inp.value));
+            try { localStorage.setItem('vf-fx-zoom', String(inp.value)); } catch (err) { /* ignore */ }
+            return;
+        }
         const ui = getUi();
         if (!ui) return;
         if (inp.dataset.frColor) {
@@ -259,6 +293,7 @@
             const id = inp.dataset.ix;
             if (id === 'vxsize') ui.setVoxelSize(v);
             else if (id === 'gvcell') ui.setFx('gvCell', v);
+            else if (id === 'pxsize') ui.setFx('pixelSize', v);
             else if (id === 'framepx') ui.setFx('framePx', v);
             else if (id === 'framerad') ui.setFx('frameRound', v);
             else if (id.indexOf('fsize:') === 0) {
@@ -281,6 +316,10 @@
             ui.setSizePx(parts[1], parts[2], v);
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
+        }
+        else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
+        else if (parts[0] === 'df') {
+            if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
         }
         else if (parts[0] === 'fr') {
             const frame = document.getElementById('vf-bezel');

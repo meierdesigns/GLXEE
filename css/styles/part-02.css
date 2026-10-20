@@ -1,3 +1,20 @@
+/* Per-panel font scale for the HUD layout editor's size controls (js/ui/hud-layout-editor.js).
+   This redeclares --font-sm/--font-md with a LITERAL base (11px/14px, matching part-01.css's
+   "3 sizes only" root values) rather than `calc(var(--font-sm) * scale)` — a custom property that
+   references itself by name in its OWN declaration (even just to read the "inherited" value) is a
+   genuine dependency cycle per spec once the same selector redeclares it, not the valid
+   parent→child "nested counter" pattern; the property goes invalid and font-size silently falls
+   back to whatever it inherits from outside the panel instead. Literal bases sidestep that. */
+#gameInfoPanel,
+.weapon-selection,
+.player-vitals-side,
+.gi-loadout-side,
+.enemy-vitals-side,
+.gi-mission-side {
+    --font-sm: calc(11px * var(--hle-font-scale, 1));
+    --font-md: calc(14px * var(--hle-font-scale, 1));
+}
+
 .gi-row {
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr);
@@ -8,8 +25,10 @@
 }
 
 .gi-row-icon {
-    width: 24px;
-    height: 24px;
+    /* --hle-icon-scale is only ever set (by the HUD layout editor's size controls) on one of its
+       panel slots; everywhere else it falls back to 1, so this multiplier is a no-op by default. */
+    width: calc(24px * var(--hle-icon-scale, 1));
+    height: calc(24px * var(--hle-icon-scale, 1));
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -18,8 +37,8 @@
 
 .gi-icon {
     display: block;
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--hle-icon-scale, 1));
+    height: calc(24px * var(--hle-icon-scale, 1));
     image-rendering: pixelated;
     image-rendering: crisp-edges;
 }
@@ -1064,8 +1083,8 @@ html[data-faction="machine"] .mission-start-frame .ms-br,
     margin-right: 0;
     margin-bottom: 4px;
     /* Native 16×16 canvas → 3× nearest-neighbor (no Scale2x mush). */
-    width: 48px;
-    height: 48px;
+    width: calc(48px * var(--hle-icon-scale, 1));
+    height: calc(48px * var(--hle-icon-scale, 1));
     image-rendering: pixelated !important;
     image-rendering: -moz-crisp-edges !important;
     image-rendering: crisp-edges !important;
@@ -1157,8 +1176,12 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 .gi-loadout-side > .gi-cluster {
     width: 100%;
+    height: 100%;
     box-sizing: border-box;
     padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 .gi-loadout-side .gi-cluster-title {
     margin: 0 0 6px;
@@ -1199,12 +1222,12 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 .gi-loadout-side :is(.gi-row-icon, .gi-icon) {
-    width: 28px;
-    height: 28px;
+    width: calc(28px * var(--hle-icon-scale, 1));
+    height: calc(28px * var(--hle-icon-scale, 1));
 }
 .gi-loadout-side .gi-row-icon img {
-    width: 28px !important;
-    height: 28px !important;
+    width: calc(28px * var(--hle-icon-scale, 1)) !important;
+    height: calc(28px * var(--hle-icon-scale, 1)) !important;
 }
 
 .gi-mission-side {
@@ -1218,8 +1241,12 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 .gi-mission-side > .gi-cluster {
     width: 100%;
+    height: 100%;
     box-sizing: border-box;
     padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 .gi-mission-side .gi-cluster-title {
     margin: 0 0 6px;
@@ -1246,6 +1273,48 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     color: #fff;
 }
 
+/* Once the player has resized a loadout/mission panel tall enough, rows read better icon-on-top
+   (bigger icon, centered, label/value underneath) than icon-left — icon-left only exists because
+   that's the compact layout these panels are born at. A class toggled by a ResizeObserver (see
+   js/ui/hud-layout-editor.js, watchRoomyPanels) drives this rather than a CSS container query —
+   @container size-containment support can't be assumed on every engine this ships to, while
+   ResizeObserver is effectively universal. */
+.gi-loadout-side.gi-roomy .gi-row,
+.gi-mission-side.gi-roomy .gi-row {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    padding: 10px 0;
+}
+.gi-loadout-side.gi-roomy .gi-row-text,
+.gi-mission-side.gi-roomy .gi-row-text {
+    align-items: center;
+}
+.gi-loadout-side.gi-roomy :is(.gi-row-icon, .gi-icon) {
+    width: calc(36px * var(--hle-icon-scale, 1));
+    height: calc(36px * var(--hle-icon-scale, 1));
+}
+.gi-loadout-side.gi-roomy .gi-row-icon img {
+    width: calc(36px * var(--hle-icon-scale, 1)) !important;
+    height: calc(36px * var(--hle-icon-scale, 1)) !important;
+}
+.gi-mission-side.gi-roomy .gi-mission-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+}
+.gi-mission-side.gi-roomy .gi-mission-card-icon {
+    width: calc(44px * var(--hle-icon-scale, 1));
+    height: calc(44px * var(--hle-icon-scale, 1));
+}
+.gi-mission-side.gi-roomy .gi-mission-card-icon :is(img, .gi-icon, canvas) {
+    width: calc(40px * var(--hle-icon-scale, 1)) !important;
+    height: calc(40px * var(--hle-icon-scale, 1)) !important;
+}
+.gi-mission-side.gi-roomy .gi-mission-card-copy {
+    align-items: center;
+}
+
 /* Mission card: icon | action → target → status (readable, not cramped) */
 .gi-mission-card {
     display: grid;
@@ -1262,13 +1331,13 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: calc(36px * var(--hle-icon-scale, 1));
+    height: calc(36px * var(--hle-icon-scale, 1));
     flex-shrink: 0;
 }
 .gi-mission-card-icon :is(img, .gi-icon, canvas) {
-    width: 32px !important;
-    height: 32px !important;
+    width: calc(32px * var(--hle-icon-scale, 1)) !important;
+    height: calc(32px * var(--hle-icon-scale, 1)) !important;
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
@@ -1383,8 +1452,8 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 
 .enemy-vitals-side .health-ship-icon {
-    width: var(--enemy-icon-size, 20px);
-    height: var(--enemy-icon-size, 20px);
+    width: calc(var(--enemy-icon-size, 20px) * var(--hle-icon-scale, 1));
+    height: calc(var(--enemy-icon-size, 20px) * var(--hle-icon-scale, 1));
     margin-right: 0;
     flex-shrink: 0;
 }
@@ -1532,8 +1601,8 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-    width: 32px;
-    height: 32px;
+    width: calc(32px * var(--hle-icon-scale, 1));
+    height: calc(32px * var(--hle-icon-scale, 1));
     border: var(--ui-border-width-thin) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background: var(--ui-surface);
     flex-shrink: 0;

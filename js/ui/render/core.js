@@ -48,8 +48,9 @@ class RenderManager {
         const canvas = document.getElementById('gameCanvas');
         if (!canvas) return;
         const k = this.getRenderScale();
-        if (canvas.width !== w * k) canvas.width = w * k;
-        if (canvas.height !== h * k) canvas.height = h * k;
+        const bw = Math.max(1, Math.round(w * k)), bh = Math.max(1, Math.round(h * k));
+        if (canvas.width !== bw) canvas.width = bw;
+        if (canvas.height !== bh) canvas.height = bh;
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.imageSmoothingEnabled = false;
     }
@@ -60,15 +61,56 @@ class RenderManager {
      * voxelised finer than one logical pixel.
      */
     getRenderScale() {
-        const k = Number(window.PLAYFIELD_RENDER_SCALE);
-        let scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
-        // VOXEL: larger cells already look blocky — less supersampling is enough
-        // and cuts fill/transform cost hard (4× → 1–2× backing store).
-        if (this.isVoxelCombat && this.isVoxelCombat()) {
-            const cell = this.getCombatVoxelCell();
-            if (cell >= 4) scale = Math.min(scale, 1);
-            else if (cell >= 2) scale = Math.min(scale, 2);
+        // Sticky within ~one frame so fillCombatRect / voxel helpers do not recompute.
+        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+        if (this._scaleFrameValue != null && this._scaleStickyAt && (now - this._scaleStickyAt) < 12) {
+            return this._scaleFrameValue;
         }
+        // Global Pixel Size: one buffer pixel == P screen px, so every art pixel is equal.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        let scale;
+        const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
+        const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
+        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 520000;
+        if (gp > 0) {
+            const cv = document.getElementById('gameCanvas');
+            // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
+            // so measure the on-screen width to make one art pixel == gp real screen px.
+            let shown = cv && cv.clientWidth ? cv.clientWidth : lw;
+            if (cv && cv.clientWidth) {
+                const bw = cv.getBoundingClientRect().width;
+                if (bw > 1) shown = bw;
+            }
+            // Keep fractional — rounding would make combat pixels ≠ Pixel Size.
+            scale = Math.max(0.05, shown / (gp * lw));
+            if ((lw * scale) * (lh * scale) > maxPx) {
+                scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
+            }
+        } else {
+            const k = Number(window.PLAYFIELD_RENDER_SCALE);
+            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+            // VOXEL: larger cells already look blocky — less supersampling is enough
+            // and cuts fill/transform cost hard (4× → 1–2× backing store).
+            if (this.isVoxelCombat && this.isVoxelCombat()) {
+                const cell = this.getCombatVoxelCell();
+                if (cell >= 4) scale = Math.min(scale, 1);
+                else if (cell >= 2) scale = Math.min(scale, 2);
+            }
+            // Pixel budget: runtime evidence showed ~1312×1200 (@4×) with only ~10ms of JS
+            // work but ~15 FPS wall-clock — paint/composite of ~1.5MP dominated. Cap the
+            // backing store so CSS can upscale crisp pixels instead.
+            if (scale >= 1) {
+                let s = Math.max(1, Math.round(scale));
+                while (s > 1 && (lw * s) * (lh * s) > maxPx) s--;
+                scale = s;
+            } else if ((lw * Math.max(scale, 0.05)) * (lh * Math.max(scale, 0.05)) > maxPx) {
+                scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
+            }
+        }
+        this._scaleStickyAt = now;
+        this._scaleFrameValue = scale;
         return scale;
     }
     /** Planet background strength in combat (window.PLAYFIELD_BG_OPACITY). */
@@ -87,6 +129,8 @@ class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) return 1 / this.getRenderScale();
         const style = (typeof uiAppearanceManager !== 'undefined'
             && uiAppearanceManager.shipRenderStyle)
             ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
@@ -145,9 +189,10 @@ class RenderManager {
         const k = this.getRenderScale();
         const lw = Math.round((typeof game !== 'undefined' && game && game.internalWidth) || canvas.width / k);
         const lh = Math.round((typeof game !== 'undefined' && game && game.internalHeight) || canvas.height / k);
-        if (canvas.width !== lw * k || canvas.height !== lh * k) {
-            canvas.width = lw * k;
-            canvas.height = lh * k;
+        const bw = Math.max(1, Math.round(lw * k)), bh = Math.max(1, Math.round(lh * k));
+        if (canvas.width !== bw || canvas.height !== bh) {
+            canvas.width = bw;
+            canvas.height = bh;
         }
         const c = ctx || canvas.getContext('2d');
         if (!c) return;
@@ -164,6 +209,7 @@ class RenderManager {
             loader.deviceScale = k;
             loader.voxelDetail = this.getCombatVoxelDetail();
             loader.globalVoxelCell = this.getCombatVoxelCell();
+            if (k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
         }
         try {
             return this.renderFrame(c, width || lw, height || lh);
@@ -400,6 +446,10 @@ class RenderManager {
         // Non-fog obstacles that sit on top of the canyon walls.
         this.drawSolidObstacles(ctx, fogList, player, 'over');
         if (obstacleManager.renderDebris) obstacleManager.renderDebris(ctx);
+
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.render) {
+            objectiveManager.render(ctx);
+        }
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
             pickupManager.render(ctx);

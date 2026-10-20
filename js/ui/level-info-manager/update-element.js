@@ -48,15 +48,24 @@ extendClass(LevelInfoManager, {
                 const dailyVal = document.getElementById('dailyHudValue');
                 if (objVal) {
                     const obj = this.getObjectiveBits();
-                    objVal.textContent = String(obj.progress).toUpperCase();
+                    const next = String(obj.progress).toUpperCase();
+                    if (objVal.textContent !== next) objVal.textContent = next;
                 }
                 if (dailyVal) {
                     const daily = this.getDailyBits();
-                    dailyVal.textContent = daily.active ? daily.progress : '—';
+                    const next = daily.active ? daily.progress : '—';
+                    if (dailyVal.textContent !== next) dailyVal.textContent = next;
                 }
+                // Only refresh loot chips when the bag actually changed — a full
+                // updateDisplay()/renderBody() every second rebuilt the whole GI panel.
                 if (this.levelData) {
-                    this.levelData.resources = this.collectRunResources();
-                    this.updateDisplay();
+                    const resources = this.collectRunResources();
+                    const sig = (resources || []).map((r) => r.id + ':' + r.amount).join('|');
+                    if (sig !== this._resourceSig) {
+                        this._resourceSig = sig;
+                        this.levelData.resources = resources;
+                        this.updateDisplay();
+                    }
                 }
             }
         }, 1000);

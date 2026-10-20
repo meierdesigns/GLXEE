@@ -333,7 +333,14 @@ extendClass(ProfileSelectionManager, {
                 if (arrival && arrival.faction && profileManager.discoverFaction) profileManager.discoverFaction(arrival.faction);
                 map = planetConfigManager.getGalaxyMap(gid) || {};
             }
-            const startId = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            // Story step: bind the start-profile story onto start-cluster planets.
+            // Fall back to the galaxy's own start planet if nothing (valid) was chosen.
+            const storyPath = (this.currentStoryPath && this.currentStoryPath()) || null;
+            const boundMissions = (storyPath && this.bindStoryMissionsToPlanets)
+                ? this.bindStoryMissionsToPlanets(storyPath, gid) : [];
+            if (boundMissions[0] && boundMissions[0].planetId) o.missionPlanetId = boundMissions[0].planetId;
+            const chosenPlanet = (o.missionPlanetId && map.nodes && map.nodes.some((n) => n.planetId === o.missionPlanetId)) ? o.missionPlanetId : null;
+            const startId = chosenPlanet || map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
             if (startId) {
                 if (profileManager.ensureGalaxyProgress) profileManager.ensureGalaxyProgress(p, gid);
                 if (profileManager.unlockPlanet) profileManager.unlockPlanet(startId);
@@ -346,11 +353,53 @@ extendClass(ProfileSelectionManager, {
             if (meta && meta.homeGalaxy === gid && profileManager.scheduleHomeInvasion) {
                 profileManager.scheduleHomeInvasion(p, gid);
             }
-            const start = map.startPlanetId || (map.nodes && map.nodes[0] && map.nodes[0].planetId);
+            const start = startId;
             if (start && profileManager.setShipLocation) {
                 profileManager._suppressHoldingTick = true;
                 profileManager.setShipLocation(gid, 'planet', start);
                 profileManager._suppressHoldingTick = false;
+            }
+            // Persist story as MAIN QUEST in the mission logbook.
+            if (storyPath && boundMissions.length) {
+                const kitId = (this.currentKit && this.currentKit().id) || o.kit || null;
+                p.storyPath = {
+                    kitId: kitId,
+                    pathId: storyPath.id,
+                    title: storyPath.title,
+                    blurb: storyPath.blurb,
+                    icon: storyPath.icon || null,
+                    missionIndex: 0,
+                    missions: boundMissions.map((m) => Object.assign({}, m, { done: false }))
+                };
+                if (profileManager.setMainQuestFromStory) {
+                    profileManager.setMainQuestFromStory({
+                        kitId: kitId,
+                        pathId: storyPath.id,
+                        id: storyPath.id,
+                        title: storyPath.title,
+                        blurb: storyPath.blurb,
+                        icon: storyPath.icon || null
+                    }, boundMissions, p);
+                } else {
+                    const first = boundMissions[0];
+                    if (first && first.planetId) {
+                        const rw = profileManager.getMissionReward
+                            ? profileManager.getMissionReward(gid, first.planetId, false, p) : null;
+                        p.activeMission = {
+                            galaxyId: first.galaxyId || gid,
+                            planetId: first.planetId,
+                            type: String(first.type || 'patrol').toUpperCase(),
+                            name: first.name,
+                            reward: (rw && rw.reward) || { credits: 60 },
+                            story: true,
+                            main: true,
+                            targetKind: first.targetKind || 'planet',
+                            objective: first.objective || '',
+                            storyPathId: storyPath.id,
+                            storyMissionId: first.id
+                        };
+                    }
+                }
             }
         }
         // Each start profile brings its own hull: owned, active and discovered before the kit and hull-area bonuses land on it.
@@ -442,14 +491,38 @@ extendClass(ProfileSelectionManager, {
             profileManager.ensureEconomyDefaults(p);
             this.applyStartOptions(p);
             this.hide();
-            if (typeof homeStationUI !== 'undefined') {
-                homeStationUI.show({
-                    tab: 'play',
-                    onClose: this.onClose
-                });
-            } else if (typeof this.onClose === 'function') {
-                this.onClose();
-            }
+            const proceed = () => {
+                if (typeof homeStationUI !== 'undefined') {
+                    homeStationUI.show({
+                        tab: 'play',
+                        onClose: this.onClose
+                    });
+                } else if (typeof this.onClose === 'function') {
+                    this.onClose();
+                }
+            };
+            // Defer past the START Enter/click so it cannot instantly skip the cutscene.
+            const story = (this.currentStoryPath && this.currentStoryPath()) || (p.storyPath || null);
+            const startCut = () => {
+                if (typeof launchCutsceneManager !== 'undefined') {
+                    launchCutsceneManager.play({
+                        faction: p.faction,
+                        shipId: p.activeShipId,
+                        profile: p,
+                        story: story ? {
+                            id: story.id || story.pathId,
+                            title: story.title,
+                            blurb: story.blurb,
+                            cut: story.cut,
+                            missions: story.missions
+                        } : null,
+                        onDone: proceed
+                    });
+                } else {
+                    proceed();
+                }
+            };
+            requestAnimationFrame(() => setTimeout(startCut, 40));
             return;
         } else if (this.mode === 'rename') {
             const profiles = this.getProfiles();

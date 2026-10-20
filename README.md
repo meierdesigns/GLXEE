@@ -772,6 +772,7 @@ be reviewed or reverted independently.
 | 67B | Block terrain dig | Wall damage in 3-cell voxel slabs — flat block faces, no 1-row carve needles |
 | 67C | Game-over fit | Compact defeat planet/stepper, softer wreck backdrop, scrollable card |
 | 67D | Map route line zoom | Under Global Pixel Size, route beams stay N screen cells thick instead of growing chunky when zoomed in |
+| 67E | Story cutscene sources | Track story-paths, launch cutscene, and hero-planet modules as first-class sources |
 
 The wave commit convention is:
 

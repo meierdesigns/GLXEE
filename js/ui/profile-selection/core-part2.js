@@ -79,21 +79,52 @@ extendClass(ProfileSelectionManager, {
         picks.style.setProperty('--pp-tile', tile + 'px');
         picks.style.setProperty('--pp-gap', gap + 'px');
     },
-    /** Keep picker tiles fitted on first paint and when the dialog resizes. */
+    /**
+     * Size the big preview portrait to the largest 48×54 box that fits the card's
+     * left column. CSS aspect-ratio + grid stretch doesn't reliably derive both
+     * axes together once max-width clamps the free one, so measure in px instead
+     * (same reasoning as fitPilotPicks above).
+     */
+    fitPilotPortrait() {
+        const ov = this.overlay;
+        if (!ov || !ov.querySelector('.is-pilot-step')) return;
+        const card = ov.querySelector('.profile-pilot-card');
+        const portrait = ov.querySelector('.profile-pilot-portrait');
+        if (!card || !portrait) return;
+        const ratio = 48 / 54;
+        const availH = card.clientHeight;
+        if (!(availH > 0)) return;
+        const maxW = Math.min(card.clientWidth * 0.55, 640);
+        let w = Math.floor(availH * ratio);
+        if (w > maxW) w = Math.floor(maxW);
+        const h = Math.floor(w / ratio);
+        card.style.setProperty('--pp-portrait-w', w + 'px');
+        card.style.setProperty('--pp-portrait-h', h + 'px');
+        // Belt and braces: the grid/aspect-ratio CSS above has a long history of
+        // overrides fighting each other, so pin the final box directly too.
+        portrait.style.setProperty('width', w + 'px', 'important');
+        portrait.style.setProperty('height', h + 'px', 'important');
+        portrait.style.setProperty('max-width', w + 'px', 'important');
+        portrait.style.setProperty('max-height', h + 'px', 'important');
+    },
+    /** Keep picker tiles and the preview portrait fitted on first paint and when the dialog resizes. */
     ensurePilotPicksFit() {
         this.fitPilotPicks();
-        requestAnimationFrame(() => this.fitPilotPicks());
+        this.fitPilotPortrait();
+        requestAnimationFrame(() => { this.fitPilotPicks(); this.fitPilotPortrait(); });
         if (!this._ppFitResize) {
-            this._ppFitResize = () => this.fitPilotPicks();
+            this._ppFitResize = () => { this.fitPilotPicks(); this.fitPilotPortrait(); };
             window.addEventListener('resize', this._ppFitResize);
             if (typeof ResizeObserver !== 'undefined') {
                 this._ppFitRo = new ResizeObserver(this._ppFitResize);
             }
         }
         const host = this.overlay && this.overlay.querySelector('.profile-pilot-controls');
-        if (host && this._ppFitRo) {
+        const card = this.overlay && this.overlay.querySelector('.profile-pilot-card');
+        if (this._ppFitRo) {
             this._ppFitRo.disconnect();
-            this._ppFitRo.observe(host);
+            if (host) this._ppFitRo.observe(host);
+            if (card) this._ppFitRo.observe(card);
         }
     },
     /** Re-render the portrait and feature values after a change. */
@@ -143,6 +174,7 @@ extendClass(ProfileSelectionManager, {
             host: this.overlay.querySelector('.profile-selection-content') || this.overlay,
             onCreate: (g) => {
                 this._startOpts.galaxy = g.id;
+                this._startOpts.missionPlanetId = null;   // a different galaxy invalidates a previously chosen mission
                 const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(this.pendingFaction) : null;
                 box.innerHTML = this.renderStartGalaxyCardHtml(g.id, (meta && meta.homeGalaxy) || 'milky_way', GALAXY_MAP_H);
             }

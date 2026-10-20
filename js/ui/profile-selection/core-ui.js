@@ -51,6 +51,7 @@ extendClass(ProfileSelectionManager, {
         this.isVisible = false;
         if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-pf');
         if (typeof menuStateManager !== 'undefined') menuStateManager.save({ pmode: null, pstep: null, pstation: false });
+        if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.unmount();
         if (this._keyHandler) {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;

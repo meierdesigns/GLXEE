@@ -34,12 +34,13 @@ extendClass(ProfileSelectionManager, {
         const step = create ? (this.createStep || 'faction') : 'name';
         const pickFaction = create && step === 'faction';
         const pilotStep = create && step === 'pilot';
-        const galaxyStep = create && step === 'galaxy';                      // last step: pick the galaxy right before the game starts
-        const startStep = create && !pickFaction && !pilotStep && !galaxyStep;
-        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : 'START SETUP')));
-        // Wizard progress: faction -> pilot -> setup -> galaxy (same order the NEXT/BACK buttons walk).
-        const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : 2));
-        const stepperHtml = create ? `<ol class="profile-stepper" aria-label="Step ${stepIdx + 1} of 4">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY']].map(([key, label], i) => `
+        const galaxyStep = create && step === 'galaxy';
+        const missionStep = create && step === 'mission';                    // last step: pick a story path offered by the start profile
+        const startStep = create && !pickFaction && !pilotStep && !galaxyStep && !missionStep;
+        const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : (missionStep ? 'CHOOSE YOUR STORY' : 'START SETUP'))));
+        // Wizard progress: faction -> pilot -> setup -> galaxy -> story (same order the NEXT/BACK buttons walk).
+        const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : (missionStep ? 4 : 2)));
+        const stepperHtml = create ? `<ol class="profile-stepper" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
             <li class="profile-stepper-step${i < stepIdx ? ' is-done' : ''}${i === stepIdx ? ' is-current' : ''}"${i === stepIdx ? ' aria-current="step"' : ''}>
                 ${i < stepIdx ? `<button type="button" class="profile-stepper-btn" data-step-go="${key}" tabindex="-1" title="Back to ${label}">` : '<span class="profile-stepper-btn">'}
                 <span class="profile-stepper-dot">${ProfileSelectionManager.stepIconHtml(key)}</span><span class="profile-stepper-label">${label}</span>
@@ -100,29 +101,31 @@ extendClass(ProfileSelectionManager, {
                 </div>`).join('')}
             </div>
             </div>` : '';
-        const inputHtml = (pickFaction || startStep || galaxyStep) ? ''
+        const inputHtml = (pickFaction || startStep || galaxyStep || missionStep) ? ''
             : '<div class="profile-name-row">' + (pilotStep ? '<span class="profile-name-crest"></span>' : '') + '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'
                 + '<div class="profile-selection-actions profile-name-gen-wrap"><button type="button" class="action-button profile-name-gen" id="psGenName" title="Generate a name">GENERATE NAME</button></div></div>';
         const btnIcon = (kind) => ProfileSelectionManager.btnIconHtml(kind);
-        const primary = (pickFaction || pilotStep || startStep) ? 'NEXT' : (galaxyStep ? 'START' : 'SAVE');
+        const primary = (pickFaction || pilotStep || startStep || galaxyStep) ? 'NEXT' : (missionStep ? 'START' : 'SAVE');
         const secondary = create && !pickFaction ? 'BACK' : 'CANCEL';
         const hint = pickFaction ? '← → Faction | ENTER Confirm | ESC Cancel'
             : pilotStep ? '↑ ↓ Row | ← → Change | R Randomize | ENTER Next | ESC Back'
             : startStep ? '↑ ↓ Row | ← → Change | ENTER Next | ESC Back'
-            : galaxyStep ? '← → Galaxy | N New galaxy | ENTER Start | ESC Back'
+            : galaxyStep ? '← → Galaxy | N New galaxy | ENTER Next | ESC Back'
+            : missionStep ? '↑ ↓ ← → Story | ENTER Start | ESC Back'
             : (create ? '↑ ↓ Row | ← → Change | ENTER Save | ESC Back' : 'ENTER Save | ESC Cancel');
+        const missionHtml = missionStep ? this.renderMissionStepHtml() : '';
         setHtml(`
             ${stepperHtml}
             <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
-                ${pickFaction || startStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
-                ${pickFaction ? '' : swatchesHtml + inputHtml}
-                ${create && !pickFaction ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
+                ${pickFaction || startStep || missionStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
+                ${pickFaction || missionStep ? '' : swatchesHtml + inputHtml}
+                ${create && !pickFaction && !missionStep ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${pickFaction ? swatchesHtml : ''}
-                ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : previewHtml}
+                ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : (missionStep ? missionHtml : previewHtml)}
             </div>
             <div class="profile-selection-bar"><div class="profile-selection-actions">
                 <button class="action-button secondary" id="psCancelMode">${btnIcon(secondary === 'BACK' ? 'back' : 'cancel')}${secondary}</button>
-                <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep) ? 'next' : 'save')}${primary}</button>
+                <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep || galaxyStep) ? 'next' : 'save')}${primary}</button>
             </div>
             <div class="profile-selection-instructions"><p>${hint}</p></div></div>
         `);
@@ -139,6 +142,16 @@ extendClass(ProfileSelectionManager, {
         }
         if (input && create && this._pilotName) input.value = this._pilotName;
         if (create) { this.applyPendingFactionLook(); this.warmFactionAssets(); }
+        // Animated hero planet behind the faction card (faction-pick step only, for now).
+        const heroPreviewEl = pickFaction ? this.overlay.querySelector('.profile-faction-preview') : null;
+        if (heroPreviewEl && typeof HeroPlanetBackdrop !== 'undefined') {
+            if (!this._heroPlanetBackdrop) this._heroPlanetBackdrop = new HeroPlanetBackdrop();
+            this._heroPlanetBackdrop.setFaction(this.pendingFaction);
+            this._heroPlanetBackdrop.mount(heroPreviewEl);
+            heroPreviewEl.classList.add('has-hero-planet');
+        } else if (this._heroPlanetBackdrop) {
+            this._heroPlanetBackdrop.unmount();
+        }
         if (input && create) {
             this._pilotName = input.value;
             input.addEventListener('input', () => { this._pilotName = input.value; this.savePilotState(); });
@@ -178,12 +191,14 @@ extendClass(ProfileSelectionManager, {
                     const step = Number(nav.getAttribute('data-galaxy-step')) || 1;
                     this._startOpts.galaxy = ids[(((i < 0 ? 0 : i) + step) % ids.length + ids.length) % ids.length];
                 }
+                this._startOpts.missionPlanetId = null;   // a different galaxy invalidates a previously chosen mission
                 const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(this.pendingFaction) : null;
                 galaxyBox.innerHTML = this.renderStartGalaxyCardHtml(this._startOpts.galaxy, (meta && meta.homeGalaxy) || 'milky_way', GALAXY_MAP_H);
                 const on = galaxyBox.querySelector('.profile-start-galaxy-side .selected');
                 if (on) on.scrollIntoView({ block: 'nearest' });
             });
         }
+        if (missionStep) this.bindMissionEvents();
         // Pilot portrait pickers.
         this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
             const k = el.getAttribute('data-pp-key');
@@ -224,6 +239,7 @@ extendClass(ProfileSelectionManager, {
                 });
                 if (group === 'kit') {                                                  // a start profile suggests its own hull; the SHIP row can override it afterwards
                     this._startOpts.ship = this.kitShipId(this._startOpts.kit);
+                    this._startOpts.storyPathId = null;                                  // stories belong to the kit
                     this.overlay.querySelectorAll('[data-start-opt="ship"]').forEach((b) => {
                         const on = b.getAttribute('data-value') === this._startOpts.ship;
                         b.classList.toggle('selected', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -264,10 +280,11 @@ extendClass(ProfileSelectionManager, {
             // Start step: the kit list belongs to the faction, so rebuild the whole step once (no half-updated frames).
             if (startStep) { this.createUI(); return; }
             this.applyPendingFactionLook();
+            if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(this.pendingFaction);
         };
         const confirm = () => {
-            if (pickFaction || pilotStep || startStep) {
-                this.createStep = pickFaction ? 'pilot' : (pilotStep ? 'name' : 'galaxy');
+            if (pickFaction || pilotStep || startStep || galaxyStep) {
+                this.createStep = pickFaction ? 'pilot' : (pilotStep ? 'name' : (startStep ? 'galaxy' : 'mission'));
                 this.createUI();
             } else {
                 this.saveName();
@@ -275,7 +292,7 @@ extendClass(ProfileSelectionManager, {
         };
         const cancel = () => {
             if (create && !pickFaction) {
-                this.createStep = galaxyStep ? 'name' : (pilotStep ? 'faction' : 'pilot');
+                this.createStep = missionStep ? 'galaxy' : (galaxyStep ? 'name' : (pilotStep ? 'faction' : 'pilot'));
             } else if (create && (this._createOnly || !this.getProfiles().length)) {
                 // Nothing to go back to: leave (back to the start menu).
                 this.close();
@@ -323,7 +340,7 @@ extendClass(ProfileSelectionManager, {
         // buttons move between buttons, the name input moves the caret.
         const rows = pickFaction ? ['faction', 'buttons']
             : (pilotStep ? ['name'].concat(this._startOpts && this._startOpts.look ? ['pilot'] : [], ['buttons'])
-                : (startStep ? ['kit', 'buttons'] : (galaxyStep ? ['galaxy', 'buttons'] : ['name', 'buttons'])));
+                : (startStep ? ['kit', 'buttons'] : (galaxyStep ? ['galaxy', 'buttons'] : (missionStep ? ['mission', 'buttons'] : ['name', 'buttons']))));
         let row = 0;
         let btnIdx = 0;
         const buttons = [saveBtn, cancelBtn];
@@ -346,6 +363,13 @@ extendClass(ProfileSelectionManager, {
                 if (nav) nav.click();
                 return;
             }
+            if (group === 'mission') {
+                const cards = Array.from(this.overlay.querySelectorAll('.profile-story-card'));
+                if (!cards.length) return;
+                const cur = cards.findIndex((c) => c.classList.contains('selected'));
+                cards[((cur < 0 ? 0 : cur) + d + cards.length) % cards.length].click();
+                return;
+            }
             const chips = Array.from(this.overlay.querySelectorAll(`[data-start-opt="${group}"]`));
             if (!chips.length) return;
             const cur = chips.findIndex((c) => c.classList.contains('selected'));
@@ -366,7 +390,7 @@ extendClass(ProfileSelectionManager, {
                     e.preventDefault();
                     btnIdx = (btnIdx + d + buttons.length) % buttons.length;
                     syncFocus();
-                } else if (id === 'galaxy' || id === 'kit') {
+                } else if (id === 'galaxy' || id === 'kit' || id === 'mission') {
                     e.preventDefault();
                     stepOption(id, d);
                 } else if (id === 'pilot') {
@@ -537,13 +561,14 @@ ProfileSelectionManager.btnIconHtml = function (kind) {
     return `<svg class="ps-btn-icon" viewBox="0 0 12 12" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[kind] || paths.next}"/></svg>`;
 };
 
-// Wizard step glyphs (12×12, currentColor): shield, pilot, gear, planet.
+// Wizard step glyphs (12×12, currentColor): shield, pilot, gear, planet, beacon.
 ProfileSelectionManager.stepIconHtml = function (key) {
     const paths = {
         faction: 'M2 1h8v6H9v1H8v1H7v1H5V9H4V8H3V7H2zM5 3v3h2V3z',
         pilot: 'M4 1h4v1h1v3H8v1H4V5H3V2h1zM2 8h8v1h1v2H1V9h1z',
         name: 'M5 1h2v2h2v1h2v4h-2v1H7v2H5v-2H3V9H1V4h2V3h2zM5 5v2h2V5z',
-        galaxy: 'M4 1h4v1h2v1h1v2h1v2h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V5h1V3h1V2h2zM4 4v4h4V4z'
+        galaxy: 'M4 1h4v1h2v1h1v2h1v2h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V5h1V3h1V2h2zM4 4v4h4V4z',
+        mission: 'M5 0h2v2h3v2h2v2h-2V4H8v2H6V4H4v2H2V6H0V4h2V2h3zM5 6h2v2h2v2H8v2H6v-2H4V8h2z'
     };
     return `<svg class="profile-stepper-icon" viewBox="0 0 12 12" width="40" height="40" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[key]}"/></svg>`;
 };

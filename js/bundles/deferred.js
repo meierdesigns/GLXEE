@@ -4631,11 +4631,11 @@ var FACTION_ZONES = {
 };
 // Holding faction paints the playfield: organic growth vs welded plating.
 var FACTION_FLOORS = {
-    pirate: ['scrapyard', 'rubble', 'plates', 'cracks'],
-    terran: ['plating', 'grid', 'conduits', 'plates'],
-    kronax: ['spines', 'ridges', 'rubble', 'cracks'],
-    machine: ['conduits', 'plating', 'grid', 'hex'],
-    voidborn: ['biomass', 'tendrils', 'veins', 'hex']
+    pirate: ['scrapyard', 'rubble', 'cracks', 'plates'],
+    terran: ['plating', 'rubble', 'cracks', 'plates'],
+    kronax: ['rubble', 'cracks', 'spines', 'ridges'],
+    machine: ['rubble', 'plating', 'conduits', 'cracks'],
+    voidborn: ['biomass', 'tendrils', 'veins', 'rubble']
 };
 var FACTION_MATS = {
     pirate: ['metal', 'rock'],
@@ -4648,21 +4648,21 @@ var FACTION_MATS = {
 var PLANET_LOOK_ENV = {
     lava: { surface: 'lava', floors: ['cracks', 'veins', 'rubble', 'spines'], mats: ['magma', 'rock'], zones: { teeth: 3, narrows: 2, gorge: 2, zigzag: 1, chasm: 2 }, width: 1.25 },
     cracked: { surface: 'lava', floors: ['cracks', 'plates', 'rubble', 'veins'], mats: ['rock', 'magma'], zones: { teeth: 2, canyon: 2, terraces: 2, chasm: 2 } },
-    glacial: { surface: 'ice', floors: ['plates', 'cracks', 'hex', 'ridges'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 3 } },
-    oceanic: { surface: 'ice', floors: ['dunes', 'plates', 'ridges', 'tendrils'], mats: ['crystal', 'rock'], zones: { open: 4, bulges: 2, reef: 2, delta: 2 }, width: 0.7 },
-    crystal: { surface: 'void', floors: ['plates', 'grid', 'hex', 'spines'], mats: ['crystal'], zones: { teeth: 3, narrows: 1, zigzag: 3, spires: 3 }, width: 1.2 },
+    glacial: { surface: 'ice', floors: ['cracks', 'plates', 'rubble', 'dunes'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 3 } },
+    oceanic: { surface: 'ice', floors: ['dunes', 'tendrils', 'plates', 'rubble'], mats: ['crystal', 'rock'], zones: { open: 4, bulges: 2, reef: 2, delta: 2 }, width: 0.7 },
+    crystal: { surface: 'void', floors: ['veins', 'plates', 'rubble', 'spines'], mats: ['crystal'], zones: { teeth: 3, narrows: 1, zigzag: 3, spires: 3 }, width: 1.2 },
     toxic: { surface: 'toxic', floors: ['cracks', 'biomass', 'veins', 'tendrils'], mats: ['crystal', 'rock'], zones: { narrows: 3, winding: 2, funnel: 2, gorge: 1, reef: 2 }, width: 1.3 },
-    dunes: { surface: 'banded', floors: ['dunes', 'ridges', 'plates'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 1, delta: 2 }, width: 0.9 },
-    craters: { surface: 'plain', floors: ['craters', 'rubble', 'ridges', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 1, terraces: 2, ruins: 2 } },
-    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'ridges'], mats: ['rock', 'metal'], zones: { canyon: 2, teeth: 2, bulges: 2, ruins: 1 }, width: 1.1 },
-    continents: { surface: 'plain', floors: ['plates', 'craters', 'ridges', 'plating'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 1 } },
+    dunes: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 1, delta: 2 }, width: 0.9 },
+    craters: { surface: 'plain', floors: ['craters', 'rubble', 'cracks', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 1, terraces: 2, ruins: 2 } },
+    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'dunes'], mats: ['rock', 'metal'], zones: { canyon: 2, teeth: 2, bulges: 2, ruins: 1 }, width: 1.1 },
+    continents: { surface: 'plain', floors: ['plates', 'craters', 'rubble', 'cracks'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 1 } },
     spotted: { surface: 'plain', floors: ['craters', 'dunes', 'rubble', 'biomass'], mats: ['rock', 'crystal'], zones: { open: 2, canyon: 2, bulges: 2, reef: 1 } },
-    banded: { surface: 'banded', floors: ['dunes', 'grid', 'ridges', 'conduits'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 1, funnel: 2, ribs: 2 }, width: 0.8 },
-    striped: { surface: 'banded', floors: ['dunes', 'grid', 'ridges', 'plating'], mats: ['metal'], zones: { winding: 3, zigzag: 2, ribs: 2 } },
+    banded: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'veins'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 1, funnel: 2, ribs: 2 }, width: 0.8 },
+    striped: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['metal'], zones: { winding: 3, zigzag: 2, ribs: 2 } },
     swirl: { surface: 'banded', floors: ['dunes', 'plates', 'veins', 'tendrils'], mats: ['metal', 'crystal'], zones: { winding: 3, open: 1, funnel: 2, delta: 2 } },
-    cloudy: { surface: 'banded', floors: ['dunes', 'ridges', 'grid'], mats: ['metal', 'crystal'], zones: { open: 4, funnel: 1, delta: 2 }, width: 0.7 },
+    cloudy: { surface: 'banded', floors: ['dunes', 'rubble', 'plates'], mats: ['metal', 'crystal'], zones: { open: 4, funnel: 1, delta: 2 }, width: 0.7 },
     marbled: { surface: 'plain', floors: ['plates', 'dunes', 'veins', 'biomass'], mats: ['crystal', 'metal'], zones: { winding: 2, narrows: 2, zigzag: 1, reef: 2 } },
-    ringed: { surface: 'banded', floors: ['grid', 'conduits', 'hex', 'plating'], mats: ['metal', 'crystal'], zones: { open: 2, narrows: 2, terraces: 2, gorge: 1, pipes: 3 } }
+    ringed: { surface: 'banded', floors: ['plates', 'rubble', 'conduits', 'cracks'], mats: ['metal', 'crystal'], zones: { open: 2, narrows: 2, terraces: 2, gorge: 1, pipes: 3 } }
 };
 
 // PlanetConfigManager methods, split from planet-config.js.
@@ -17267,6 +17267,7 @@ var ObjectiveManager = class ObjectiveManager {
         this.won = false;
         this.awaitingFieldClear = false;
         this.label = '';
+        this.goal = null;
     }
 
     reset() {
@@ -17279,6 +17280,7 @@ var ObjectiveManager = class ObjectiveManager {
         this.won = false;
         this.awaitingFieldClear = false;
         this.label = '';
+        this.goal = null;
     }
 
     needsFieldClear() {
@@ -17329,6 +17331,8 @@ var ObjectiveManager = class ObjectiveManager {
                 return `SURVIVE ${o.count} SPAWNS`;
             case 'surviveTime':
                 return `SURVIVE ${o.seconds}s`;
+            case 'reachGoal':
+                return o.goal === 'warp' ? 'REACH THE WARP RING' : 'REACH THE SLUICE';
             default:
                 return 'OBJECTIVE';
         }
@@ -17345,6 +17349,12 @@ var ObjectiveManager = class ObjectiveManager {
             case 'surviveCount':
                 return `${this.spawnsSeen}/${o.count}`;
             case 'surviveTime': {
+                const left = Math.max(0, Math.ceil((o.seconds * 1000 - this.elapsedMs) / 1000));
+                return `${left}s`;
+            }
+            case 'reachGoal': {
+                if (this.completed) return 'DONE';
+                if (this.goal) return 'GO!';
                 const left = Math.max(0, Math.ceil((o.seconds * 1000 - this.elapsedMs) / 1000));
                 return `${left}s`;
             }
@@ -17392,6 +17402,10 @@ var ObjectiveManager = class ObjectiveManager {
     update(deltaTime) {
         if (this.won || !this.objective) return;
 
+        if (!this.completed && this.objective.type === 'reachGoal') {
+            this.updateGoal(deltaTime);
+        }
+
         if (!this.completed) {
             this.elapsedMs += deltaTime;
             if (this.objective.type === 'surviveTime') {
@@ -17407,6 +17421,93 @@ var ObjectiveManager = class ObjectiveManager {
                 this.triggerWin();
             }
         }
+    }
+
+    /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
+    updateGoal(deltaTime) {
+        const o = this.objective;
+        const W = (typeof renderManager !== 'undefined' && renderManager.width) || 240;
+        if (!this.goal) {
+            if (this.elapsedMs < o.seconds * 1000) return;
+            const open = o.goal === 'warp' ? 44 : 64;
+            this.goal = {
+                kind: o.goal === 'warp' ? 'warp' : 'sluice',
+                y: -30,
+                h: 22,
+                open: open,
+                cx: W * (0.3 + Math.random() * 0.4),
+                restY: 46
+            };
+            return;
+        }
+        const g = this.goal;
+        if (g.y < g.restY) g.y = Math.min(g.restY, g.y + 0.04 * deltaTime);
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p || g.y < g.restY) return;
+        const px = p.x + p.width / 2;
+        const py = p.y + p.height / 2;
+        const inOpening = Math.abs(px - g.cx) <= g.open / 2;
+        if (py <= g.y + g.h && inOpening) {
+            this.complete();
+            return;
+        }
+        // The gate walls are solid: ships outside the opening are held below them.
+        if (!inOpening && p.y < g.y + g.h) p.y = g.y + g.h;
+    }
+
+    render(ctx) {
+        const g = this.goal;
+        if (!g || !ctx) return;
+        const W = ctx.canvas ? ctx.canvas.width : 240;
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 160);
+        ctx.save();
+        const l = g.cx - g.open / 2;
+        const r = g.cx + g.open / 2;
+        const stripes = (x, w) => {
+            if (w <= 0) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, g.y, w, g.h);
+            ctx.clip();
+            ctx.fillStyle = '#e8b020';
+            for (let sx = x - g.h; sx < x + w; sx += 12) {
+                ctx.beginPath();
+                ctx.moveTo(sx, g.y + g.h);
+                ctx.lineTo(sx + 6, g.y + g.h);
+                ctx.lineTo(sx + 6 + g.h, g.y);
+                ctx.lineTo(sx + g.h, g.y);
+                ctx.fill();
+            }
+            ctx.restore();
+        };
+        if (g.kind === 'warp') {
+            // Two pylons with a pulsing energy field between them.
+            [[0, l], [r, W]].forEach(([x0, x1]) => {
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(x0, g.y, x1 - x0, g.h);
+                ctx.fillStyle = '#3a4a6a';
+                ctx.fillRect(x0, g.y + g.h - 4, x1 - x0, 4);
+            });
+            ctx.fillStyle = 'rgba(127,232,255,' + (0.2 + pulse * 0.3) + ')';
+            ctx.fillRect(l, g.y, g.open, g.h);
+            ctx.strokeStyle = '#7fe8ff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(l + 1, g.y + 1, g.open - 2, g.h - 2);
+        } else {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(0, g.y, l, g.h);
+            ctx.fillRect(r, g.y, W - r, g.h);
+            stripes(0, l);
+            stripes(r, W - r);
+            ctx.fillStyle = '#8c96a8';
+            ctx.fillRect(0, g.y + g.h - 3, l, 3);
+            ctx.fillRect(r, g.y + g.h - 3, W - r, 3);
+            ctx.fillStyle = 'rgba(120,255,160,' + (0.35 + pulse * 0.45) + ')';
+            ctx.fillRect(l - 2, g.y, 3, g.h);
+            ctx.fillRect(r - 1, g.y, 3, g.h);
+        }
+        ctx.restore();
     }
 
     complete() {
@@ -17660,6 +17761,11 @@ function getPlanetStageCount(planetId) {
     for (let i = 0; i < pid.length; i++) { h ^= pid.charCodeAt(i); h = Math.imul(h, 16777619); }
     const jitter = ((h >>> 0) % 3) - 1;
     return Math.max(2, Math.min(5, base + jitter));
+}
+
+/** Transit stages (side craft only, reach the gate): every second regular stage. */
+function isTransitStage(planetId, stageIndex) {
+    return String(planetId || '').indexOf('ambush_') !== 0 && stageIndex >= 2 && stageIndex % 2 === 0;
 }
 
 var CoreLevelManager = class CoreLevelManager {
@@ -17935,6 +18041,21 @@ extendClass(CoreLevelManager, {
             resolved = planetConfigManager.resolveStageContent(parsed.planetId, stageKey);
         }
 
+        // Every second regular stage is a transit run: only side craft, and
+        // the goal is a sluice / warp ring at the end instead of a kill.
+        const isTransit = !parsed.isBoss && isTransitStage(parsed.planetId, parsed.stageIndex);
+        if (isTransit) {
+            const seconds = 50 + parsed.stageIndex * 5;
+            resolved = {
+                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex),
+                objective: {
+                    type: 'reachGoal',
+                    seconds: seconds,
+                    goal: parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp'
+                }
+            };
+        }
+
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
         const enemyType = parsed.isBoss
             ? (base.bossEnemyType || 'enemyBoss')
@@ -17950,6 +18071,7 @@ extendClass(CoreLevelManager, {
             name: `${base.name} — ${stageLabel}`,
             planetName: base.name,
             stageLabel,
+            stageKind: isTransit ? 'transit' : (parsed.isBoss ? 'boss' : 'combat'),
             difficulty: parsed.isBoss ? 'BOSS' : base.difficulty,
             description: parsed.isBoss
                 ? `${base.name} boss chamber`
@@ -17969,44 +18091,32 @@ extendClass(CoreLevelManager, {
         };
     },
 
+    /** Steady stream of side craft (no champion) across a transit run. */
+    buildTransitEnemies(source, seconds, stageIndex) {
+        const pool = (source || []).filter(e => e && e.type);
+        const types = pool.length ? pool : [{ type: 'enemyBasic' }];
+        const roles = ['assault', 'gunner', 'assault', 'bomber'];
+        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25);
+        const out = [];
+        for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
+            const src = types[i % types.length];
+            out.push(Object.assign({}, src, {
+                id: 'transit_' + i,
+                champion: false,
+                cluster: 'transit_' + i,
+                level: 1,
+                role: roles[i % roles.length],
+                spawnAt: t,
+                combatEvents: []
+            }));
+        }
+        return out;
+    },
+
     getLevel(levelId) {
         const parsed = this.parseLevelId(levelId);
         if (!parsed) return null;
         return this.buildStageLevel(parsed);
-    },
-
-    resolveFromLegacyLevelManager(levelId) {
-        if (typeof levelManager === 'undefined') return null;
-        const parsed = this.parseLevelId(levelId);
-        if (!parsed) return null;
-
-        let legacy = null;
-        if (typeof levelManager.getLevelByPlanetId === 'function') {
-            legacy = levelManager.getLevelByPlanetId(parsed.planetId);
-        } else if (typeof levelManager.getLevelById === 'function') {
-            legacy = levelManager.getLevelById(parsed.planetId);
-            if (!legacy) {
-                const idx = this.planetOrder.indexOf(parsed.planetId);
-                if (idx >= 0) legacy = levelManager.getLevelById(idx + 1);
-            }
-        }
-
-        if (!legacy) return null;
-
-        const stage = this.buildStageLevel(parsed);
-        return Object.assign({}, legacy, stage, {
-            id: stage.id,
-            name: stage.name,
-            background: stage.background,
-            enemyType: stage.enemyType,
-            enemySpeed: stage.enemySpeed,
-            enemyHealth: stage.enemyHealth,
-            enemies: stage.enemies,
-            objective: stage.objective,
-            dailies: stage.dailies,
-            obstacleSpawnInterval: stage.obstacleSpawnRate,
-            obstacleSpawnRate: stage.obstacleSpawnRate
-        });
     },
 
     setCurrentLevel(levelId) {
@@ -18016,10 +18126,7 @@ extendClass(CoreLevelManager, {
             return false;
         }
 
-        let level = this.resolveFromLegacyLevelManager(parsed.id);
-        if (!level) {
-            level = this.buildStageLevel(parsed);
-        }
+        const level = this.buildStageLevel(parsed);
 
         if (!level) {
             console.error('Level not found:', levelId);
@@ -18057,6 +18164,7 @@ extendClass(CoreLevelManager, {
                 enemySpeed: level.enemySpeed,
                 enemyHealth: level.enemyHealth,
                 isBoss: level.isBoss,
+                transit: level.stageKind === 'transit',
                 planetId: planetId
             });
             // setEnemySchedule rebuilds sideEnemyPool from `enemies` (usually
@@ -19512,7 +19620,10 @@ extendClass(GameControlSystem, {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
         } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
-            icon = galaxyMapManager.planetIconHtml(pid, 320, true);
+            // Defeat card is narrow — smaller globe; victory keeps the large portrait via CSS.
+            const go = typeof document !== 'undefined' && document.getElementById('gameOver');
+            const onDefeat = !!(go && !go.classList.contains('hidden')) || result === 'lost';
+            icon = galaxyMapManager.planetIconHtml(pid, onDefeat ? 168 : 320, true);
         }
 
         let steps = '';
@@ -19526,11 +19637,12 @@ extendClass(GameControlSystem, {
             const list = [];
             for (let i = 1; i <= n + 1; i++) {
                 const boss = i === n + 1;
+                const transit = !boss && isTransitStage(pid, i);
                 const done = boss ? !!st.bossCleared : i <= (st.highestStage || 0);
                 let state = done ? 'done' : 'locked';
                 if (i === current) state = result === 'won' ? 'won' : 'lost';
-                const mark = state === 'won' || state === 'done' ? '✓' : (state === 'lost' ? '✕' : (boss ? '☠' : String(i)));
-                list.push(`<li class="outcome-step is-${state}${boss ? ' is-boss' : ''}" title="${boss ? 'BOSS' : 'STAGE ' + i}">` +
+                const mark = state === 'won' || state === 'done' ? '✓' : (state === 'lost' ? '✕' : (boss ? '☠' : (transit ? '»' : String(i))));
+                list.push(`<li class="outcome-step is-${state}${boss ? ' is-boss' : ''}" title="${boss ? 'BOSS' : (transit ? 'TRANSIT ' : 'STAGE ') + i}">` +
                     `<span class="outcome-step-dot">${mark}</span></li>`);
             }
             const which = level.isBoss ? 'BOSS' : 'STAGE ' + current + '/' + (n + 1);
@@ -21390,29 +21502,14 @@ var CheatSystem = class CheatSystem {
     }
     
     initializeCheatLevels() {
-        // Initialize cheat levels from level manager (all unlocked)
-        if (typeof levelManager !== 'undefined') {
-            const allLevels = levelManager.getAllLevels();
-            this.availableLevels = allLevels.map((level, index) => ({
-                id: level.name === 'MARS' ? 1 : 
-                    level.name === 'JUPITER' ? 2 :
-                    level.name === 'SATURN' ? 3 :
-                    level.name === 'NEPTUNE' ? 4 :
-                    level.name === 'PLUTO' ? 5 : index + 1,
-                name: level.name,
-                difficulty: level.difficulty,
-                unlocked: true // All levels unlocked in cheat mode
-            }));
-        } else {
-            // Fallback if level manager is not available
-            this.availableLevels = [
-                { id: 1, name: "MARS", difficulty: "EASY", unlocked: true },
-                { id: 2, name: "JUPITER", difficulty: "MEDIUM", unlocked: true },
-                { id: 3, name: "SATURN", difficulty: "HARD", unlocked: true },
-                { id: 4, name: "NEPTUNE", difficulty: "EXTREME", unlocked: true },
-                { id: 5, name: "PLUTO", difficulty: "NIGHTMARE", unlocked: true }
-            ];
-        }
+        // All levels unlocked in cheat mode
+        this.availableLevels = [
+            { id: 1, name: "MARS", difficulty: "EASY", unlocked: true },
+            { id: 2, name: "JUPITER", difficulty: "MEDIUM", unlocked: true },
+            { id: 3, name: "SATURN", difficulty: "HARD", unlocked: true },
+            { id: 4, name: "NEPTUNE", difficulty: "EXTREME", unlocked: true },
+            { id: 5, name: "PLUTO", difficulty: "NIGHTMARE", unlocked: true }
+        ];
     }
     
     detectCheatSequence(key) {
@@ -22534,7 +22631,9 @@ var CoreRenderManager = class CoreRenderManager {
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
     // tabs FX / VOXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    // Remote key clusters: [caption, tab ids]; the plate lays them out two clusters per row.
+    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug']]];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
@@ -22542,6 +22641,7 @@ var CoreRenderManager = class CoreRenderManager {
         sizes: svg16('<path d="M2 14V9M2 14h5M14 2v5M14 2H9M3 13l10-10"/>'),
         text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>'),
         perf: svg16('<path d="M2 12a6 6 0 0112 0M8 12l3-5"/>'),
+        difficulty: svg16('<path d="M3 13V8a5 5 0 0110 0v5zM6 9h1M9 9h1M6 13v-2M8 13v-2M10 13v-2"/>'),
         debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>')
     };
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
@@ -22598,7 +22698,7 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -22632,13 +22732,14 @@ var CoreRenderManager = class CoreRenderManager {
         plate = document.createElement('div');
         plate.id = 'vf-fx';
         plate.className = 'vf-bezel-fx';
+        try { const z = Number(localStorage.getItem('vf-fx-zoom')); if (z >= 50 && z <= 150) { vfs.fxZoom = z / 100; plate.style.scale = String(z / 100); } } catch (err) { /* ignore */ }
         plate.style.display = 'none';
         document.documentElement.appendChild(plate);
         ['keydown', 'keyup'].forEach(function (t) {
             plate.addEventListener(t, function (e) { e.stopPropagation(); });
         });
         plate.addEventListener('pointerdown', function (e) {
-            if (e.target.closest('.vf-fx-grip')) startFxDrag(e, 'size');
+            if (e.target.closest('.vf-fx-grip')) startFxDrag(e, e.target.closest('.vf-fx-grip').getAttribute('data-corner') || 'se');
             else if (e.target.closest('.vf-fx-head') && !e.target.closest('button')) startFxDrag(e, 'move');
         });
         plate.addEventListener('pointerenter', function () { vfs.swayHover = true; });
@@ -22672,10 +22773,15 @@ var CoreRenderManager = class CoreRenderManager {
     try { fxGeom = JSON.parse(localStorage.getItem(FXGEOM_KEY) || 'null'); } catch (e) { fxGeom = null; }
     function applyFxGeom() {
         const plate = document.getElementById('vf-fx');
+        if (plate && !fxGeom) setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
         if (!plate || !fxGeom) return;
         const W = window.innerWidth, H = window.innerHeight;
+        // Clamp the scaled (visual) box: scale pivots on transform-origin, so it sits offset from left/top.
+        const k = vfs.fxZoom || 1;
         const w = Math.max(260, Math.min(fxGeom.w, W)), h = Math.max(300, Math.min(fxGeom.h, H));
-        const l = Math.max(0, Math.min(fxGeom.l, W - w)), t = Math.max(0, Math.min(fxGeom.t, H - h));
+        setFxOrigin(plate, w, h);
+        const dxo = (w / 2 + 78) * (1 - k), dyo = (h - 43) * (1 - k);
+        const l = Math.max(-dxo, Math.min(fxGeom.l, W - w * k - dxo)), t = Math.max(-dyo, Math.min(fxGeom.t, H - h * k - dyo));
         plate.style.width = w + 'px'; plate.style.height = h + 'px';
         plate.style.left = l + 'px'; plate.style.top = t + 'px';
         plate.style.right = 'auto'; plate.style.bottom = 'auto';
@@ -22684,14 +22790,20 @@ var CoreRenderManager = class CoreRenderManager {
         const plate = document.getElementById('vf-fx');
         const r = plate.getBoundingClientRect();
         const sx = e.clientX, sy = e.clientY;
-        const g0 = { l: r.left, t: r.top, w: r.width, h: r.height };
+        const k = vfs.fxZoom || 1;
+        const g0 = { l: plate.offsetLeft, t: plate.offsetTop, w: plate.offsetWidth, h: plate.offsetHeight };
         e.preventDefault();
         plate.classList.add('is-dragging');
         const move = function (ev) {
-            const dx = ev.clientX - sx, dy = ev.clientY - sy;
-            fxGeom = mode === 'move'
-                ? { l: g0.l + dx, t: g0.t + dy, w: g0.w, h: g0.h }
-                : { l: g0.l, t: g0.t, w: g0.w + dx, h: g0.h + dy };
+            const dx = (ev.clientX - sx) / k, dy = (ev.clientY - sy) / k;
+            if (mode === 'move') {
+                // left/top are not scaled, so the plate follows the pointer 1:1
+                fxGeom = { l: g0.l + ev.clientX - sx, t: g0.t + ev.clientY - sy, w: g0.w, h: g0.h };
+            } else {
+                const west = mode.indexOf('w') >= 0, north = mode.indexOf('n') >= 0;
+                const w = Math.max(260, g0.w + (west ? -dx : dx)), h = Math.max(300, g0.h + (north ? -dy : dy));
+                fxGeom = { l: west ? g0.l + g0.w - w : g0.l, t: north ? g0.t + g0.h - h : g0.t, w: w, h: h };
+            }
             applyFxGeom();
         };
         const up = function () {
@@ -22752,6 +22864,8 @@ var CoreRenderManager = class CoreRenderManager {
         else if (d.vxSize) ui.setVoxelSize(d.vxSize);
         else if (d.vxGui) ui.setGuiVoxel(d.vxGui);
         else if (d.vxGv) { const kv = d.vxGv.split(':'); ui.setFx(kv[0], kv[1]); }
+        else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
+        else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
         else if (d.pfSway) setPerf('sway', d.pfSway);
         else if (d.pfHeavy) setPerf('heavy', d.pfHeavy);
         else if (d.pfAnim) setPerf('anim', d.pfAnim);
@@ -22810,8 +22924,28 @@ var CoreRenderManager = class CoreRenderManager {
         void plate.offsetWidth;
         a.classList.remove('on'); b.classList.add('on');
     }
+    // Remote scale (UI resolution): zooms around the centre of the slider so it stays under the pointer.
+    // Pivot = centre of the scale slider (CSS: left 50% + 36px, width 84px, bottom 34px, height 18px).
+    function setFxOrigin(plate, w, h) {
+        plate.style.transformOrigin = (w / 2 + 78) + 'px ' + (h - 43) + 'px';
+    }
+    function applyFxZoom(plate, pct) {
+        const k = Math.max(50, Math.min(150, pct)) / 100;
+        vfs.fxZoom = k;
+        setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        plate.style.scale = String(k);
+    }
+    // Re-clamp into the window only once the scale slider is released, so the pivot never jumps while dragging.
+    document.addEventListener('change', function (e) {
+        if (e.target.classList && e.target.classList.contains('vf-fx-zoom-in')) applyFxGeom();
+    });
     function onFxInput(e) {
         const inp = e.target;
+        if (inp.classList && inp.classList.contains('vf-fx-zoom-in')) {
+            applyFxZoom(inp.closest('.vf-bezel-fx'), Number(inp.value));
+            try { localStorage.setItem('vf-fx-zoom', String(inp.value)); } catch (err) { /* ignore */ }
+            return;
+        }
         const ui = getUi();
         if (!ui) return;
         if (inp.dataset.frColor) {
@@ -22888,6 +23022,10 @@ var CoreRenderManager = class CoreRenderManager {
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
         }
+        else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
+        else if (parts[0] === 'df') {
+            if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
+        }
         else if (parts[0] === 'fr') {
             const frame = document.getElementById('vf-bezel');
             const cur = vfs.editFaction || frame.getAttribute('data-faction');
@@ -22958,7 +23096,7 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 2b: the FX plate builders (split from viewport-fit-part2.js; shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {});
-    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
+    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const { restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps } = NS; // from viewport-fit-part2.js (hoisted functions)
     Object.assign(NS, { fillFxPlate }); // function (hoisted)
 
@@ -22983,7 +23121,36 @@ var CoreRenderManager = class CoreRenderManager {
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="0" max="' + max + '" step="1" value="' + i +
             '" data-ix="' + id + '" data-opts="' + options.join('|') + '" style="--look-fill:' + (i / max * 100) + '%"><output>' + options[i] + '</output></label>';
     }
+    // Small stroke icons for the DIFFICULTY rows, picked from the setting key.
+    const DF_ICONS = {
+        damage: '<path d="M8 1l2 5h5l-4 3 2 5-5-3-5 3 2-5-4-3h5z"/>',
+        health: '<path d="M8 14L2 8V4h4l2 2 2-2h4v4z"/>',
+        speed: '<path d="M2 3l5 5-5 5M8 3l5 5-5 5"/>',
+        count: '<path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/>',
+        evasion: '<path d="M2 13c3 0 3-10 6-10s3 10 6 10"/>',
+        aim: '<circle cx="8" cy="8" r="4"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>',
+        obstacle: '<path d="M3 13l-1-6 4-4 6 1 3 5-3 5z"/>',
+        rate: '<path d="M9 1L3 9h4l-1 6 7-8H9z"/>',
+        ship: '<path d="M8 1l4 10-4-2-4 2zM5 13h6"/>',
+        shot: '<path d="M2 8h8M10 5l4 3-4 3z"/>',
+        limit: '<path d="M2 4h12M2 8h12M2 12h12"/>'
+    };
+    function dfIcon(key) {
+        let id = 'speed';
+        if (key === 'df:playerSpeedMul') id = 'ship';
+        else if (key.indexOf('ss:') === 0) id = 'shot';
+        else if (/Damage/.test(key)) id = 'damage';
+        else if (/Health/.test(key)) id = 'health';
+        else if (/Evasion|evasion/.test(key)) id = 'evasion';
+        else if (/prediction/.test(key)) id = 'aim';
+        else if (/obstacle/.test(key)) id = 'obstacle';
+        else if (/AttackRate/.test(key)) id = 'rate';
+        else if (/Count/.test(key)) id = 'count';
+        else if (/MaxActive/.test(key)) id = 'limit';
+        return '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true">' + DF_ICONS[id] + '</svg>';
+    }
     function fxSlider(label, key, min, max, step, value, unit, displayValue) {
+        if (key.indexOf('df:') === 0 || key.indexOf('ss:') === 0) label = dfIcon(key) + '<em>' + label + '</em>';
         const shown = displayValue == null ? value : displayValue;
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
             '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
@@ -23029,9 +23196,14 @@ var CoreRenderManager = class CoreRenderManager {
         const plate = buildFxPlate();
         if (!ui) return;
         vfs.fxScrollLock = true;
-        let h = '<div class="vf-fx-head"><span>VISUAL SETTINGS</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
-            '<div class="vf-fx-tabs">' + FX_TABS.map(function (t) {
-                return '<button type="button" data-fx-tab="' + t[0] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
+        let h = '<div class="vf-fx-head"><span>' + (FX_TABS.filter(function (t) { return t[0] === vfs.fxTab; })[0] || ['', ''])[1] + '</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
+            '<div class="vf-fx-tabs">' + FX_CLUSTERS.map(function (c, ci) {
+                const keys = c[1].map(function (id) {
+                    const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
+                    const html = '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
+                    return html;
+                }).join('');
+                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
             }).join('') + '</div><div class="vf-fx-body">';
         if (vfs.fxTab === 'fx') {
             h += '<div class="vf-fx-row"><span>AREA</span>' + fxStepper([['SCREEN', 'INSIDE'], ['FRAME', 'OUTSIDE'], ['ALL', 'BOTH']], ui.fxArea, 'fx-area') + '</div>';
@@ -23165,6 +23337,32 @@ var CoreRenderManager = class CoreRenderManager {
                     '</div>';
             });
             h += '<div class="vf-fx-title">PREVIEW</div><div class="vf-fx-preview"><div class="type-lg">LG TITLE</div><div class="type-md">MD VALUES 100</div><div class="type-sm">SM LABELS</div></div>';
+        } else if (vfs.fxTab === 'difficulty') {
+            const dm = typeof difficultyConfigManager !== 'undefined' ? difficultyConfigManager : null;
+            if (!dm) { h += '<div class="vf-fx-row"><output>DIFFICULTY NOT LOADED</output></div>'; }
+            else {
+                const prof = dm.getProfile();
+                h += '<div class="vf-fx-title">PRESET</div><div class="vf-fx-row">' +
+                    fxSeg([['easy', 'EASY'], ['normal', 'NORMAL'], ['hard', 'HARD']], dm.current, 'df-preset') + '</div>';
+                h += '<div class="vf-fx-title">SPEED</div>' +
+                    fxSlider('PLAYER SHIP', 'df:playerSpeedMul', 0.2, 3, 0.05, Math.round((prof.playerSpeedMul || 1) * 100) / 100, '×') +
+                    fxSlider('PLAYER SHOTS', 'ss:player', 20, 300, 5, ui.getShotSpeedPct('player'), '%') +
+                    fxSlider('ENEMY SHIPS', 'df:enemySpeedMul', 0.2, 3, 0.05, Math.round((prof.enemySpeedMul == null ? 1 : prof.enemySpeedMul) * 100) / 100, '×') +
+                    fxSlider('ENEMY SHOTS', 'ss:enemy', 20, 300, 5, ui.getShotSpeedPct('enemy'), '%') +
+                    fxSlider('BOSS SHOTS', 'ss:boss', 20, 300, 5, ui.getShotSpeedPct('boss'), '%');
+                [['GLOBAL', [['enemyDamageMul', 'ENEMY DMG'], ['playerDamageMul', 'PLAYER DMG'], ['enemyHealthMul', 'ENEMY HP'], ['enemyCountMul', 'ENEMY COUNT'], ['evasionMul', 'EVASION'], ['predictionMul', 'AIMING'], ['obstacleSpawnMul', 'OBSTACLES']]],
+                    ['CHAMPION', [['championDamageMul', 'DAMAGE'], ['championHealthMul', 'HEALTH'], ['championSpeedMul', 'SPEED'], ['championEvasionMul', 'EVASION']]],
+                    ['SIDE ENEMIES', [['sideDamageMul', 'DAMAGE'], ['sideHealthMul', 'HEALTH'], ['sideSpeedMul', 'SPEED'], ['sideCountMul', 'COUNT']]],
+                    ['BOSS', [['bossDamageMul', 'DAMAGE'], ['bossHealthMul', 'HEALTH'], ['bossSpeedMul', 'SPEED'], ['bossAttackRateMul', 'ATTACK RATE']]]].forEach(function (g) {
+                    h += '<div class="vf-fx-title">' + g[0] + '</div>';
+                    g[1].forEach(function (r) {
+                        const v = Math.round((prof[r[0]] == null ? 1 : prof[r[0]]) * 100) / 100;
+                        h += fxSlider(r[1], 'df:' + r[0], 0.2, 3, 0.05, v, '×');
+                    });
+                });
+                h += '<div class="vf-fx-title">LIMITS</div>' + fxSlider('MAX ACTIVE', 'df:enemyMaxActive', 1, 10, 1, prof.enemyMaxActive == null ? 3 : prof.enemyMaxActive, '');
+                h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-df-reset="1">RESET ' + dm.current.toUpperCase() + '</button></div>';
+            }
         } else if (vfs.fxTab === 'sizes') {
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
@@ -23182,7 +23380,28 @@ var CoreRenderManager = class CoreRenderManager {
         plate.innerHTML = h;
         const body = plate.querySelector('.vf-fx-body');
         restoreFxScroll();
-        plate.insertAdjacentHTML('beforeend', '<i class="vf-fx-grip" title="Resize" aria-hidden="true"></i>');
+        plate.insertAdjacentHTML('beforeend', '<div class="vf-fx-zoom" title="Scale"><input type="range" class="vf-fx-zoom-in" min="50" max="150" step="5" value="' + Math.round((vfs.fxZoom || 1) * 100) + '" aria-label="Remote scale"></div>' + ['nw', 'ne', 'sw', 'se'].map(function (c) { return '<i class="vf-fx-grip" data-corner="' + c + '" title="Resize" aria-hidden="true"></i>'; }).join(''));
+        plate.insertAdjacentHTML('beforeend', '<button type="button" class="vf-fx-more vf-fx-more-up" aria-label="Scroll up" hidden></button><button type="button" class="vf-fx-more vf-fx-more-down" aria-label="Scroll down" hidden></button>');
+        (function () {
+            const up = plate.querySelector('.vf-fx-more-up'), down = plate.querySelector('.vf-fx-more-down');
+            const sync = function () {
+                const b = plate.querySelector('.vf-fx-body');
+                if (!b) return;
+                up.style.left = down.style.left = b.offsetLeft + 'px';
+                up.style.width = down.style.width = b.offsetWidth + 'px';
+                up.style.top = b.offsetTop + 'px';
+                down.style.top = (b.offsetTop + b.offsetHeight - 22) + 'px';
+                up.hidden = !(b.scrollTop > 2);
+                down.hidden = !(b.scrollTop + b.clientHeight < b.scrollHeight - 2);
+            };
+            const step = function (dir) { const b = plate.querySelector('.vf-fx-body'); if (b) b.scrollBy({ top: dir * b.clientHeight * 0.8, behavior: 'smooth' }); };
+            up.addEventListener('click', function () { step(-1); });
+            down.addEventListener('click', function () { step(1); });
+            if (body) body.addEventListener('scroll', sync, { passive: true });
+            requestAnimationFrame(sync);
+            setTimeout(sync, 250);
+            vfs.fxMoreSync = sync;
+        })();
         applyFxGeom();
     }
 })(window.vfFitScope || (window.vfFitScope = {}));
@@ -23203,7 +23422,10 @@ var CoreRenderManager = class CoreRenderManager {
         const dt = Math.min(0.1, (now - vfs.swayLast) / 1000 || 0.016);
         vfs.swayLast = now;
         vfs.swayT += dt;
-        const target = (vfs.swayHover || perf.sway === 'OFF' || (perf.sway === 'AUTO' && reduceMotion) || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
+        // Pixel Size / heavy UI: skip continuous remote sway (rAF transform thrash).
+        let pixelOn = false;
+        try { pixelOn = document.documentElement.getAttribute('data-vf-pixel-size') === 'on'; } catch (e) { /* */ }
+        const target = (vfs.swayHover || pixelOn || perf.sway === 'OFF' || (perf.sway === 'AUTO' && reduceMotion) || !plate.classList.contains('is-in') || plate.classList.contains('is-dragging')) ? 0 : 1;
         vfs.swayAmp += (target - vfs.swayAmp) * Math.min(1, dt * 5); // ease toward held / swaying
         const t = vfs.swayT;
         const x = (Math.sin(t * 0.9) * 1.2 + Math.sin(t * 1.7 + 1) * 0.6) * vfs.swayAmp;
@@ -23217,18 +23439,9 @@ var CoreRenderManager = class CoreRenderManager {
         vfs.swayLast = performance.now();
         vfs.swayRaf = requestAnimationFrame(swayLoop);
     }
-    // Remember whether the remote was out: restore it after a reload / screen change.
-    (function restoreFx() {
-        let was = false;
-        try { was = localStorage.getItem(FXOPEN_KEY) === '1'; } catch (e) { /* ignore */ }
-        if (!was) return;
-        let tries = 0;
-        (function wait() {
-            if (vfs.fxOpen) return;
-            if (getUi() && document.querySelector('.vf-bezel-tools')) { setFxOpen(true, true); return; }
-            if (++tries < 200) setTimeout(wait, 50);
-        })();
-    })();
+    // Do not auto-restore the FX remote after reload: an open remote runs swayLoop
+    // and keeps a heavy sidebar live (runtime lag with PIXEL SIZE on). User can reopen via FX.
+
     function onFxEsc(e) {
         if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); setFxOpen(false); }
     }
@@ -24187,6 +24400,18 @@ var CoreRenderManager = class CoreRenderManager {
             fillScale,
             !!force
         );
+
+        // Global pixel size: backing-store scale depends on the on-screen canvas width, so
+        // re-derive it once the new CSS size is laid out (two frames: after the settle pass).
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                const rm = window.renderManager;
+                const am = (typeof uiAppearanceManager !== 'undefined') ? uiAppearanceManager : null;
+                if (!rm || !rm.setPlayfieldSize || !am || !(am.getGlobalPixelPx && am.getGlobalPixelPx() > 0)) return;
+                const w = readCssNumber('--map-w', 0), h = readCssNumber('--map-h', 0);
+                if (w > 0 && h > 0) rm.setPlayfieldSize(w, h);
+            });
+        });
 
         // Settle once after first paint (fonts / zoom / measured middle)
         const token = ++vfs.secondPassToken;
@@ -26362,7 +26587,12 @@ var PlayerManager = class PlayerManager {
         if (typeof enemyManager !== 'undefined' && enemyManager.getTetherSpeedMul) {
             tetherMul = enemyManager.getTetherSpeedMul();
         }
-        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul;
+        let diffSpeedMul = 1;
+        if (typeof difficultyConfigManager !== 'undefined') {
+            const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
+            if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
+        }
+        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul;
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
 
@@ -26974,6 +27204,12 @@ var BulletManager = class BulletManager {
     }
 
     setShipModel(shipModel) {
+        // Re-applying the same hull (late asset swap, loadout refresh) must not
+        // reset the weapon the player picked.
+        const prev = this.currentShipModel;
+        const keepWeapon = (prev && shipModel && (prev === shipModel
+            || (prev.id != null && prev.id === shipModel.id)))
+            ? this.currentWeapon : null;
         this.currentShipModel = shipModel;
         if (shipModel) {
             // Ensure every equipped weapon has a config entry (loadout can add
@@ -26989,7 +27225,10 @@ var BulletManager = class BulletManager {
                     ? weaponConfigManager.getDefaultsForShip(id) : null;
                 if (fromReg) shipModel.weaponConfig[id] = Object.assign({}, fromReg);
             });
-            if (shipModel.defaultWeapon) {
+            if (keepWeapon && ids.indexOf(keepWeapon) !== -1) {
+                this.currentWeapon = keepWeapon;
+                shipModel.defaultWeapon = shipModel.defaultWeapon || keepWeapon;
+            } else if (shipModel.defaultWeapon) {
                 this.currentWeapon = shipModel.defaultWeapon;
             } else {
                 this.currentWeapon = ids[0] || 'laser';
@@ -28230,15 +28469,28 @@ extendClass(BulletManager, {
         let weaponId = this.getEnemyWeaponId(enemy);
         const hasCfg = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[weaponId])
             || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip);
-        if (hasCfg) {
-            this.enemyShootWithWeapon(enemy, enemyModel, weaponId);
+        const fireFrom = (pos, dmgMul) => {
+            if (hasCfg) {
+                this.enemyShootWithWeapon(enemy, enemyModel, weaponId, pos, dmgMul);
+            } else {
+                // Fallback to default enemy weapon
+                const before = this.enemyBullets.length;
+                this.enemyShootDefault(enemy, pos, dmgMul);
+                this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
+                this.applyShotSizeSetting(this.enemyBullets, before,
+                    enemy && enemy.isBoss ? 'boss' : 'enemy');
+            }
+        };
+        // Guns sit on the hull's mounts (nose, wing pair, outrigger pair): each shot comes from the next
+        // group in turn, a pair firing both guns at 60 % damage each. No mounts known = the nose tip.
+        const groups = this.getEnemyMuzzleGroups(enemy);
+        if (groups) {
+            const idx = (enemy._muzzleNext || 0) % groups.length;
+            enemy._muzzleNext = idx + 1;
+            const group = groups[idx];
+            group.forEach((p) => fireFrom({ x: p.x - 0.5, y: p.y, width: 1, height: 0 }, group.length > 1 ? 0.6 : 1));
         } else {
-            // Fallback to default enemy weapon
-            const before = this.enemyBullets.length;
-            this.enemyShootDefault(enemy);
-            this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
-            this.applyShotSizeSetting(this.enemyBullets, before,
-                enemy && enemy.isBoss ? 'boss' : 'enemy');
+            fireFrom(null, 1);
         }
 
         if (typeof soundManager !== 'undefined') {
@@ -28256,7 +28508,24 @@ extendClass(BulletManager, {
         this.lastEnemyShotTime = currentTime;
     },
 
-    enemyShootWithWeapon(enemy, enemyModel, weaponId) {
+    /**
+     * Gun muzzles of an enemy in playfield px, grouped (nose / wing pair / outrigger pair), from its hull's
+     * mounts (factionShipStyles.getEnemyMounts). Side craft carry only their first `muzzleGroups` groups.
+     * The hull is drawn flipped, so the nose (grid row 0) is at the bottom of the footprint. Null = no mounts.
+     */
+    getEnemyMuzzleGroups(enemy) {
+        const fs = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        if (!enemy || !enemy.faction || !enemy.enemyClass || !fs || !fs.getEnemyMounts) return null;
+        const m = fs.getEnemyMounts(enemy.faction, enemy.enemyClass, enemy.hullSeed);
+        if (!m || !m.groups || !m.groups.length) return null;
+        const n = enemy.muzzleGroups != null
+            ? Math.max(1, Math.min(m.groups.length, Math.floor(enemy.muzzleGroups) || 1)) : m.groups.length;
+        const w = enemy.width || 0;
+        const h = enemy.height || 0;
+        return m.groups.slice(0, n).map((g) => g.map((p) => ({ x: enemy.x + w * p.nx, y: enemy.y + h * (1 - p.ny) })));
+    },
+
+    enemyShootWithWeapon(enemy, enemyModel, weaponId, pos, dmgMul) {
         const defaultWeapon = weaponId || (enemyModel && enemyModel.defaultWeapon) || 'laser';
         // The model's tuning for this weapon, else the weapon's own defaults.
         const weaponConfig = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[defaultWeapon])
@@ -28277,13 +28546,13 @@ extendClass(BulletManager, {
         }
         // Side craft hit at half strength: escorts pressure, the champion is the threat.
         const damageMul = (enemy && enemy.damageMul != null ? enemy.damageMul : 1)
-            * (enemy && enemy.isSideEnemy ? 0.5 : 1);
+            * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1);
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
         if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
             weaponConfigManager.clampWeaponShot(cfg);
         }
         const before = this.enemyBullets.length;
-        this.fireWeaponByType(defaultWeapon, enemy, cfg, true);
+        this.fireWeaponByType(defaultWeapon, pos || enemy, cfg, true);
         // Tag with the weapon: drawn in its type colour and shape, like player shots.
         for (let i = before; i < this.enemyBullets.length; i++) {
             this.enemyBullets[i].weaponId = defaultWeapon;
@@ -28294,16 +28563,17 @@ extendClass(BulletManager, {
             enemy && enemy.isBoss ? 'boss' : 'enemy');
     },
 
-    enemyShootDefault(enemy) {
+    enemyShootDefault(enemy, pos, dmgMul) {
+        const at = pos || enemy;
         const bullet = {
-            x: enemy.x + enemy.width / 2 - 1.5,
-            y: enemy.y + enemy.height,
+            x: at.x + at.width / 2 - 1.5,
+            y: at.y + at.height,
             width: 2,
             height: enemy && enemy.isSideEnemy ? Math.max(3, 8 * (enemy.weaponScale || 1)) : 8,
             speed: 2.5,
             damage: Math.max(1, Math.round(8 * (
                 enemy && enemy.damageMul != null ? enemy.damageMul : 1
-            ) * (enemy && enemy.isSideEnemy ? 0.5 : 1))),
+            ) * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1))),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
             // Lighting properties
@@ -28706,7 +28976,9 @@ var EnemyManager = class EnemyManager {
             // enemyMaxActive:1 × sideCountMul left room < 2 forever and froze events.
             this.sideEnemyCap = Math.max(3, Math.min(6,
                 Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
-            if (profile.enemyCountMul < 1 || sideMul < 1) {
+            if (this.levelMods && this.levelMods.transit) {
+                this.sideEnemyCap = Math.max(this.sideEnemyCap, 5);
+            } else if (profile.enemyCountMul < 1 || sideMul < 1) {
                 const mul = Math.min(profile.enemyCountMul || 1, sideMul);
                 const normalEntries = this.schedule.filter(e => !e.champion);
                 normalEntries.slice(Math.max(1, Math.ceil(normalEntries.length * mul)))
@@ -28822,7 +29094,8 @@ extendClass(EnemyManager, {
                 level: o.level,
                 typeId: o.type || o.typeId,
                 width: o.width,
-                height: o.height
+                height: o.height,
+                hullSeed: o.hullSeed
             });
             if (visual && visual.model) {
                 model = visual.model;
@@ -29033,6 +29306,7 @@ extendClass(EnemyManager, {
                 tier: side.tier,
                 level: side.level,
                 type: side.type,
+                hullSeed: side.hullSeed,
                 drawScale: scale
             });
         });
@@ -29281,6 +29555,18 @@ extendClass(EnemyManager, {
         return gaps;
     },
 
+    /** Mount groups a side craft of this class carries: scouts one gun, bigger classes add wing / outrigger pairs. */
+    sideMuzzleGroupCount(enemyClass) {
+        const r = Math.random();
+        switch (String(enemyClass || 'assault').toLowerCase()) {
+            case 'scout': return 1;
+            case 'assault': return r < 0.5 ? 1 : 2;
+            case 'heavy': return 2;
+            case 'elite': return r < 0.5 ? 2 : 3;
+            default: return 3;
+        }
+    },
+
     /** Pick a rim gap and place the side craft just off-screen outside it. */
     placeSideEntryFromGap(side, canvasWidth, canvasHeight) {
         const W = canvasWidth || 240;
@@ -29344,6 +29630,7 @@ extendClass(EnemyManager, {
             baseHp = Math.max(6, Math.round(baseHp * 0.35));
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
+        const SIDE_HULL_SEEDS = 12;
         const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
             ? 0.78 : 0.68;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
@@ -29366,8 +29653,8 @@ extendClass(EnemyManager, {
         // Enter from an empty rim opening, then settle into cruise / escort.
         const cruiseSpeed = isEscort
             ? 0
-            : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul;
-        const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul;
+            : (-0.8 - Math.random() * 0.5) * levelMul * sideSpeedMul;
+        const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.5 * sideSpeedMul;
         const side = {
             x: 0,
             y: 0,
@@ -29421,7 +29708,11 @@ extendClass(EnemyManager, {
             repairBeamActive: false,
             bomberDamage: role === 'bomber' ? 18 : 0,
             bomberSpeed: role === 'bomber' ? 1.35 : 0,
-            weaponScale: SIDE_DRAW_SCALE
+            weaponScale: SIDE_DRAW_SCALE,
+            // Generative hull: a seed from a small pool (each seed = one cached hull + gun mounts), and how
+            // many mount groups (nose, wing pair, outrigger pair) this craft carries.
+            hullSeed: 1 + Math.floor(Math.random() * SIDE_HULL_SEEDS),
+            muzzleGroups: this.sideMuzzleGroupCount(entry.enemyClass)
         };
         // Give escorts distinct attack profiles instead of making the whole
         // formation fire the champion's weapon in unison.
@@ -29439,6 +29730,7 @@ extendClass(EnemyManager, {
             tier: side.tier,
             level: side.level,
             type: side.type,
+            hullSeed: side.hullSeed,
             drawScale: SIDE_DRAW_SCALE
         });
         // Only enter through empty rim openings — never through solid rock.
@@ -29645,7 +29937,10 @@ extendClass(EnemyManager, {
             : 0;
         const mainAlive = this.enemy && !this.exploding;
         // Keep calling while the field is clearing so late / stuck sides also flee.
-        if (!mainAlive && this.sideEnemies.length) {
+        // Transit stages have no champion: the side craft are the whole stage.
+        const transit = !!(this.levelMods && this.levelMods.transit);
+        const transitDone = transit && typeof objectiveManager !== 'undefined' && objectiveManager.completed;
+        if (this.sideEnemies.length && (transit ? transitDone : !mainAlive)) {
             this.beginSideEnemyFlee(gameState);
         }
         const pendingCluster = this.pendingChampionEntry
@@ -29666,7 +29961,7 @@ extendClass(EnemyManager, {
                 && Math.random() < 0.08) {
                 e.isEscort = false;
                 e.escortSlot = -1;
-                e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.45 + Math.random() * 0.35);
+                e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.5);
                 e.verticalSpeed = (Math.random() - 0.5) * 0.7;
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
@@ -29753,6 +30048,18 @@ extendClass(EnemyManager, {
                 e.verticalSpeed = fy;
                 e.x += fx * speedMul;
                 e.y += fy * speedMul;
+            } else if (e.pass) {
+                // Fly-through row: keep heading, no hovering, no bounce.
+                e.x += e.speed * speedMul;
+                e.y += e.verticalSpeed * speedMul;
+                if (e.pass.sway) {
+                    e.pass.phase += 0.04 * speedMul;
+                    e.x += Math.sin(e.pass.phase) * e.pass.sway * speedMul;
+                }
+                if (!e.pass.entered && e.x + w > 0 && e.x < canvasWidth && e.y + h > 0) {
+                    e.pass.entered = true;
+                }
+                e.arrived = true;
             } else if (e.isEscort && mainAlive && (teamWithMain || teamPending)) {
                 const formationTightness = e.flightProfile ? e.flightProfile.formationTightness : 1;
                 const formationPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
@@ -29788,12 +30095,21 @@ extendClass(EnemyManager, {
                     e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
                 }
                 if (bobY) e.y += bobY * 0.12;
+                // Lazy vertical weave so roaming craft don't just hover.
+                e.y += Math.sin((e.wobblePhase || 0) * 0.6) * 0.35 * speedMul;
                 const push = this.computeObstacleAvoidance(e);
                 if (push) {
                     e.x += push.x * 1.6 * speedMul;
                     e.y += push.y * 1.2 * speedMul;
                 }
-                if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
+                // Stay in the enemy flight band (top ~38%, same as the champion)
+                // instead of drifting into the midfield; drift back up softly.
+                const bandMaxY = Math.max(pad + 8, Math.round(canvasHeight * 0.38));
+                if (e.y < 10) e.verticalSpeed = Math.abs(e.verticalSpeed || 0.25);
+                if (e.y > bandMaxY) {
+                    e.verticalSpeed = -Math.abs(e.verticalSpeed || 0.25);
+                    e.y -= Math.min(e.y - bandMaxY, 0.8 * speedMul);
+                }
                 if (e.x + w > laneRight - 4 && e.speed > 0) e.speed = -Math.abs(e.speed);
                 if (e.x < laneLeft + 4 && e.speed < 0 && (e.lifetimeMs == null || e.lifetimeMs > 4000)) {
                     e.speed = Math.abs(e.speed) * 0.85;
@@ -29805,7 +30121,6 @@ extendClass(EnemyManager, {
                 if (this.avoidTerrainWalls) this.avoidTerrainWalls(canvasWidth, e);
                 e.arrived = true;
             }
-
             if (mainAlive && !e.fleeing && !e.entering && (role === 'repair' || role === 'shieldBattery')) {
                 const dx = (e.x + e.width / 2) - (this.enemy.x + this.enemy.width / 2);
                 const dy = (e.y + e.height / 2) - (this.enemy.y + this.enemy.height / 2);
@@ -29861,7 +30176,8 @@ extendClass(EnemyManager, {
             // Outside = fled / irrelevant → drop (re-check after this frame's move).
             const nowOutside = e.x + w < 0 || e.x > canvasWidth
                 || e.y + h < 0 || e.y > canvasHeight;
-            if (!(e.entering && !e.fleeing) && nowOutside) {
+            const passPending = e.pass && !e.pass.entered && !e.fleeing;
+            if (!(e.entering && !e.fleeing) && !passPending && nowOutside) {
                 this.sideEnemies.splice(i, 1);
             }
         }
@@ -30462,6 +30778,9 @@ extendClass(EnemyManager, {
             enemySpeed *= champFlightProfile.speedMul;
             enemyVerticalSpeed *= champFlightProfile.speedMul;
         }
+        // The champion (and the escorts that follow it) used to crawl.
+        enemySpeed *= 1.6;
+        enemyVerticalSpeed *= 1.6;
         // Randomize initial horizontal direction so enemies don't always
         // appear to head right first (they still bounce both ways after).
         if (Math.random() < 0.5) {
@@ -31327,8 +31646,79 @@ extendClass(EnemyManager, {
             lastPlayerHp: null,
             recentDamage: 0,
             pendingRevengeMs: 0,
-            waves: 0
+            waves: 0,
+            passMs: 0,
+            passAt: rand(8000, 14000)
         };
+    },
+
+    /**
+     * Row of craft that simply flies through the level (no hovering): either
+     * down the screen as a rank across the width, or sweeping across it from
+     * one rim to the other. They shoot on the way and leave on the far side.
+     */
+    spawnPassRow(gameState) {
+        if (!gameState || !this.sideEnemyPool.length) return 0;
+        const W = gameState.width || 200;
+        const H = gameState.height || 300;
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const sweep = Math.random() < 0.5;
+        const fromLeft = Math.random() < 0.5;
+        const count = 3 + Math.floor(Math.random() * 3);
+        const cluster = 'pass_' + Date.now() + '_' + Math.floor(Math.random() * 999);
+        const speed = rand(0.9, 1.5);
+        const sway = Math.random() < 0.5 ? rand(0.2, 0.5) : 0;
+        const baseY = H * rand(0.08, 0.34);
+        const capBefore = this.sideEnemyCap;
+        this.sideEnemyCap = Math.max(capBefore, this.sideEnemies.length + count);
+        const spawned = [];
+        for (let n = 0; n < count; n++) {
+            const type = this.pickSideEnemyType();
+            if (!type) break;
+            const side = this.spawnScheduledNormal({
+                id: cluster + '_' + n,
+                type: type,
+                faction: (this.enemy && this.enemy.faction) || (this.levelFactions && this.levelFactions[0]) || 'pirate',
+                enemyClass: 'assault',
+                tier: 1,
+                level: 1,
+                champion: false,
+                cluster: cluster,
+                role: 'assault',
+                forceEscort: false
+            }, gameState);
+            if (side) spawned.push(side);
+        }
+        this.sideEnemyCap = capBefore;
+        const total = spawned.length;
+        spawned.forEach((s, n) => {
+            const sw = s.width || 12;
+            const sh = s.height || 10;
+            s.entering = false;
+            s.arrived = true;
+            s.isEscort = false;
+            s.fleeing = false;
+            s.lifetimeMs = null;
+            s.entryTargetX = null;
+            s.entryTargetY = null;
+            s.entryFromSide = null;
+            if (sweep) {
+                const gap = sw + 10;
+                s.x = fromLeft ? -sw - n * gap : W + n * gap;
+                s.y = baseY + (n % 2 ? 6 : 0);
+                s.speed = fromLeft ? speed : -speed;
+                s.verticalSpeed = 0.12;
+            } else {
+                s.x = (W / (total + 1)) * (n + 1) - sw / 2;
+                s.y = -sh - 4 - (n % 2) * 10;
+                s.speed = 0;
+                s.verticalSpeed = speed * 0.8;
+            }
+            s.cruiseSpeed = s.speed;
+            s.cruiseVerticalSpeed = s.verticalSpeed;
+            s.pass = { entered: false, sway: sway, phase: Math.random() * Math.PI * 2 };
+        });
+        return spawned.length;
     },
 
     /** Champion combat events vary per run: thresholds, counts, one surprise. */
@@ -31391,6 +31781,18 @@ extendClass(EnemyManager, {
         if (d.pendingRevengeMs > 0) {
             d.pendingRevengeMs -= deltaTime;
             if (d.pendingRevengeMs <= 0) this.spawnDirectorWave(gameState, 'revenge');
+        }
+        // Fly-through rows run on their own timer, independent of the wave pacing.
+        const transitStage = !!(this.levelMods && this.levelMods.transit);
+        if (!this.sideFleeing && ((this.enemy && !this.exploding) || transitStage)) {
+            d.passMs = (d.passMs || 0) + deltaTime;
+            if (d.passMs >= (d.passAt || 12000)) {
+                d.passMs = 0;
+                d.passAt = 12000 + Math.random() * 12000;
+                const pm0 = typeof playerManager !== 'undefined' ? playerManager : null;
+                const hp0 = pm0 && pm0.maxHealth ? pm0.health / pm0.maxHealth : 1;
+                if (hp0 >= 0.3) this.spawnPassRow(gameState);
+            }
         }
         d.tickMs += deltaTime;
         if (d.tickMs < DIRECTOR_TICK_MS) return;
@@ -32190,6 +32592,8 @@ var OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular stage
 var TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
     'spires', 'ruins', 'reef', 'chasm', 'icefall', 'pipes', 'ribs', 'delta'];
 var TERRAIN_SEGMENT_ROWS = 40; // wall rows per material segment
+// Carve in square voxel slabs (not 1-row needles). Height in terrain cells.
+var TERRAIN_CARVE_BLOCK = 3;
 var TERRAIN_MATERIALS = {
     rock: { id: 'rock', hp: 1, score: 2 },
     metal: { id: 'metal', hp: 1, score: 6 },
@@ -32788,92 +33192,101 @@ extendClass(ObstacleManager, {
         const cell = this.terrainCell();
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
-        const zone = this.terrainZoneAt(wr, prof);
-        // Area threshold: light pillars — floor stripe still marks the seam.
-        const gd = this.terrainGateRow(wr, prof);
-        // Pillar reaches ~4% of W; never seal the enemy band.
-        const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
-        // Occasional big outcrop reaching far into the passage (one side per slot).
-        const outcrop = (side) => {
-            const slot = Math.floor(wr / 70);
-            if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
-            if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
-            const t = (wr - slot * 70 - 10) / 44;
-            if (t < 0 || t > 1) return 0;
-            const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
-            // Rounded bump with a flat-ish top.
-            return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
-        };
-        const depth = (side, mat) => {
-            const s = side * 37.1 + prof.phase;
-            const f = prof.freq;
-            const n = Math.sin(wr * 0.05 * f + s) * 0.5 + Math.sin(wr * 0.11 * f + s * 2) * 0.3
-                + Math.sin(wr * 0.23 * f + s * 3) * 0.2;
-            let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
-                + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
-                + gate;
-            // Per-material silhouette on top of the shared canyon curve.
-            if (mat.id === 'metal') d = Math.round(d / 3) * 3 + 1;              // stepped blocks
-            else if (mat.id === 'crystal') d += 3 * (1 - Math.abs(((wr % 8) + 8) % 8 - 4) / 4); // spikes
-            else if (mat.id === 'rock') d += Math.floor(this.terrainHash(wr, side + 7) * 3) - 1; // rubble
-            else d += Math.sin(wr * 0.4 + side) * 1.5;                             // bulging vents
-            return Math.max(2, Math.round(d));
-        };
-        const structure = (side) => {
-            // Faction silhouettes more often / larger so walls read as occupied, not bare rock.
-            const slot = Math.floor(wr / 36);
-            if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
-            const t = (wr - slot * 36 - 10) / 14;
-            if (t < 0 || t > 1) return 0;
-            let v;
-            switch (style) {
-                case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;           // squared gantries
-                case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break; // pulsing growth
-                case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;             // claw spurs
-                case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;             // welded wreck shelves
-                default: v = 0.045 * Math.sin(t * Math.PI);
-            }
-            return Math.round((W * v) / cell);
-        };
-        const out = {};
-        // Always leave a flyable passage (~62% of the width) so the upper
-        // enemy band stays usable even at zone seams.
+        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const maxCells = Math.floor((W * 0.38) / cell);
-        // Threshold sill marks the new area — skip when a gate is already
-        // active so the two never stack into a sealed wall.
-        const zi = this.terrainZoneIndex(wr, prof);
-        const local = wr - zi * prof.zoneRows;
-        let sill = 0;
-        if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
-            const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
-            sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
-        }
-        const fullOf = [0, 1].map((side) => {
-            const mat = this.terrainMaterial(wr, side) || { id: 'rock', hp: 4 };
-            const base = depth(side, mat);
-            return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
-        });
-        const over = fullOf[0].full + fullOf[1].full - maxCells;
-        if (over > 0) {
-            const tot = fullOf[0].full + fullOf[1].full;
-            fullOf.forEach((f) => {
-                f.full = Math.max(2, f.full - Math.ceil(over * f.full / tot));
-                f.base = Math.min(f.base, f.full);
+        // Build wall extents at an arbitrary world row (used for natural edges
+        // and for the shared lip of a carved block band).
+        const buildAt = (row) => {
+            const zone = this.terrainZoneAt(row, prof);
+            const gd = this.terrainGateRow(row, prof);
+            const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
+            const outcrop = (side) => {
+                const slot = Math.floor(row / 70);
+                if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
+                if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
+                const t = (row - slot * 70 - 10) / 44;
+                if (t < 0 || t > 1) return 0;
+                const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
+                return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
+            };
+            const depth = (side, mat) => {
+                const s = side * 37.1 + prof.phase;
+                const f = prof.freq;
+                const n = Math.sin(row * 0.05 * f + s) * 0.5 + Math.sin(row * 0.11 * f + s * 2) * 0.3
+                    + Math.sin(row * 0.23 * f + s * 3) * 0.2;
+                let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                    + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
+                    + gate;
+                if (mat.id === 'metal') {
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(row, side + 19) < 0.4 ? 1 : 0);
+                } else if (mat.id === 'crystal') {
+                    d += 1 + this.terrainHash(row, side + 31) * 3;
+                } else if (mat.id === 'rock') {
+                    d += Math.floor(this.terrainHash(row, side + 7) * 3) - 1;
+                } else {
+                    d += (this.terrainHash(row, side + 47) - 0.5) * 3;
+                }
+                return Math.max(2, Math.round(d));
+            };
+            const structure = (side) => {
+                const slot = Math.floor(row / 36);
+                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
+                const t = (row - slot * 36 - 10) / 14;
+                if (t < 0 || t > 1) return 0;
+                let v;
+                switch (style) {
+                    case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
+                    case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
+                    case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;
+                    case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;
+                    default: v = 0.045 * Math.sin(t * Math.PI);
+                }
+                return Math.round((W * v) / cell);
+            };
+            const zi = this.terrainZoneIndex(row, prof);
+            const local = row - zi * prof.zoneRows;
+            let sill = 0;
+            if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
+                const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
+                sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
+            }
+            const sides = [0, 1].map((side) => {
+                const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                const base = depth(side, mat);
+                return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
             });
-        }
+            const over = sides[0].full + sides[1].full - maxCells;
+            if (over > 0) {
+                const tot = sides[0].full + sides[1].full;
+                sides.forEach((f) => {
+                    f.full = Math.max(2, f.full - Math.ceil(over * f.full / tot));
+                    f.base = Math.min(f.base, f.full);
+                });
+            }
+            return sides;
+        };
+        // Undamaged rows keep a natural silhouette; carved bands freeze to the
+        // band centre so every row in the slab shares one width (block dig).
+        const band = Math.floor(wr / block);
+        const fullOf = buildAt(wr);
+        let centerOf = null;
+        const out = {};
         for (let side = 0; side < 2; side++) {
-            const { mat, base, full } = fullOf[side];
-            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + wr) || 0) : 0;
-            const eroded = Math.floor(dmg / mat.hp);
-            // Fully carveable — blast the wall away to open the corridor.
-            const width = Math.max(0, full - eroded);
+            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + band) || 0) : 0;
+            const eroded = Math.floor(dmg / Math.max(1, (fullOf[side].mat.hp) || 1));
+            let { mat, base, full, sill } = fullOf[side];
+            if (eroded > 0) {
+                if (!centerOf) centerOf = buildAt(band * block + (block >> 1));
+                ({ mat, base, full, sill } = centerOf[side]);
+            }
+            const hp = Math.max(1, mat.hp || 1);
+            const width = Math.max(0, full - Math.floor(dmg / hp));
             const k = side ? 'right' : 'left';
             out[k] = width;
             out[k + 'Base'] = Math.min(base, width);
             out[k + 'Mat'] = mat;
-            out[k + 'Cracked'] = width > 0 && (dmg % mat.hp) > 0; // edge cell already hit
-            // Sill cells (between the base wall and the edge) get their own look.
-            out[k + 'Sill'] = fullOf[side].sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
+            out[k + 'Cracked'] = width > 0 && eroded > 0 && (dmg % hp) > 0;
+            out[k + 'Sill'] = sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
         }
         return out;
     },
@@ -32917,28 +33330,36 @@ extendClass(ObstacleManager, {
         };
     },
     /**
-     * A shot hit the wall on `side` at screen y: carve into it. Returns the
-     * number of cells that broke off (0 = only chipped).
+     * A shot hit the wall on `side` at screen y: carve into it. Damage is
+     * stored per carve-block band so the crater is voxel slabs, not 1-row
+     * needles. Returns how many cells broke off (0 = only chipped).
      */
     damageTerrain(y, side, profile) {
         if (!this.terrainDamage) this.terrainDamage = new Map();
         const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
+        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const wr = this.terrainRowAtY(y);
+        const hitBand = Math.floor(wr / block);
+        // Radius in block bands (at least the hit band).
+        const bandR = Math.max(0, Math.ceil(Math.max(1, pr.radius || 1) / block));
         let broken = 0;
-        for (let d = -pr.radius; d <= pr.radius; d++) {
-            const row = wr + d;
-            const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 4 };
-            // Full power at the hit row, falling off towards the crater rim,
-            // with a little randomness so the edge looks torn.
-            const fall = 1 - Math.abs(d) / (pr.radius + 1);
-            let pts = pr.power * fall * (mat.id === 'metal' ? pr.vsMetal : 1);
-            // Always break at least one cell on the impact row.
-            pts = Math.max(d === 0 ? 2 : 1, Math.floor(pts + Math.random() * 0.9));
-            const k = side + ':' + row;
+        for (let bd = -bandR; bd <= bandR; bd++) {
+            const band = hitBand + bd;
+            const mid = band * block + (block >> 1);
+            const mat = this.terrainMaterial(mid, side) || { id: 'rock', hp: 1 };
+            const hp = Math.max(1, mat.hp || 1);
+            const fall = 1 - Math.abs(bd) / (bandR + 1);
+            // Uniform points for the whole band → flat block face.
+            let pts = Math.floor(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1));
+            // Hit band always loses at least one cell; neighbours need a full step.
+            pts = Math.max(bd === 0 ? hp : (fall > 0.35 ? hp : 0), pts);
+            if (pts <= 0) continue;
+            const k = side + ':' + band;
             const before = this.terrainDamage.get(k) || 0;
             this.terrainDamage.set(k, before + pts);
-            const hp = Math.max(1, mat.hp || 4);
-            broken += Math.floor((before + pts) / hp) - Math.floor(before / hp);
+            // Count cells for the whole slab height (block rows × depth broken).
+            const depthBroke = Math.floor((before + pts) / hp) - Math.floor(before / hp);
+            broken += depthBroke * block;
         }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
@@ -32946,8 +33367,7 @@ extendClass(ObstacleManager, {
             renderManager._terrainLayerKey = null;
         }
         if (this.terrainDamage.size > 4000) {
-            // Forget rows that scrolled far past the bottom.
-            const cutoff = wr - 400;
+            const cutoff = Math.floor(wr / block) - 400;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
         return broken;
@@ -41944,11 +42364,11 @@ extendClass(FactionShipStyles, {
         });
     },
 
-    getPixelSprite(faction, enemyClass) {
-        const key = this.spriteKey(faction, enemyClass);
+    getPixelSprite(faction, enemyClass, seed) {
+        const key = this.spriteKey(faction, enemyClass) + this.hullSeedSuffix(seed);
         const cached = this.pixelCache[key];
         if (!cached || this.isPixelSpriteStale(cached)) {
-            this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass);
+            this.pixelCache[key] = this.buildPixelSprite(faction, enemyClass, seed);
             // Variant bakes / hit masks of the stand-in hull are outdated now.
             if (cached) this.dropBakedEnemyHulls();
         }
@@ -42016,8 +42436,10 @@ extendClass(FactionShipStyles, {
      */
     resolveFactionShipVisual(opts) {
         const meta = this.resolveEnemyMeta(opts);
-        const key = this.spriteKey(meta.faction, meta.enemyClass);
-        const hasPng = this.hasPng(key);
+        // A seeded hull (side craft) is always the generated one: a faction PNG replaces the fixed class hull only.
+        const hullSeed = Math.max(0, Math.floor(Number((opts && opts.hullSeed)) || 0));
+        const key = this.spriteKey(meta.faction, meta.enemyClass) + this.hullSeedSuffix(hullSeed);
+        const hasPng = !hullSeed && this.hasPng(key);
         const style = this.getFactionStyle(meta.faction);
         const colors = this.buildFactionColors(meta.faction);
         const themeColors = {
@@ -42025,7 +42447,7 @@ extendClass(FactionShipStyles, {
             hull: colors[2],
             accent: colors[3]
         };
-        const sprite = this.getPixelSprite(meta.faction, meta.enemyClass);
+        const sprite = this.getPixelSprite(meta.faction, meta.enemyClass, hullSeed);
         const scaleMul = this.scaleMulForTier(meta.tier);
         // Asset resolution (16/32/64) is for crisp sprites; display size is playfield px.
         const resolution = this.resolutionForClass(meta.enemyClass);
@@ -42040,6 +42462,7 @@ extendClass(FactionShipStyles, {
             enemyClass: meta.enemyClass,
             tier: meta.tier,
             factionSpriteKey: key,
+            hullSeed: hullSeed,
             weakenOverlay: true,
             forceEnemyOrientation: true,
             assetResolution: resolution,
@@ -42047,7 +42470,7 @@ extendClass(FactionShipStyles, {
             height: display.height,
             sprite: sprite,
             colors: colors,
-            engineGlow: this.buildEngineGlow(meta.faction, meta.enemyClass, meta.tier)
+            engineGlow: this.buildEngineGlow(meta.faction, meta.enemyClass, meta.tier, hullSeed)
         };
         return {
             faction: meta.faction,
@@ -42137,6 +42560,9 @@ extendClass(FactionShipStyles, {
 //   machine  — grinder: armoured forge block, wings slotted as missile racks
 // Before the ship assets are up, the older one-builder-per-faction hulls
 // below stand in (buildLegacyPixelSprite) and are replaced on next use.
+// A hull seed (side craft) varies part picks and the class layout, so a wave is not one hull copied N times;
+// seed 0 / none is the fixed hull of the class (main enemies). Each hull also records its gun mounts
+// (_hullMounts): nose, wing pair, outrigger pair — see getEnemyMounts.
 // Pixel values: 1 edge, 2 hull, 3 accent, 4/5 hull shade/light, 6/7 accent
 // shade/light. Nose = row 0 (enemies are flipped).
 extendClass(FactionShipStyles, {
@@ -42150,11 +42576,17 @@ extendClass(FactionShipStyles, {
         };
     },
 
-    buildPixelSprite(faction, enemyClass) {
+    /** Seed part of a cache key: '' for the fixed class hull. */
+    hullSeedSuffix(seed) {
+        const n = Math.max(0, Math.floor(Number(seed) || 0));
+        return n ? '#' + n : '';
+    },
+
+    buildPixelSprite(faction, enemyClass, seed) {
         const loader = this.partLoader();
         if (loader) {
             try {
-                const grid = this.composeEnemyHull(faction, enemyClass, loader);
+                const grid = this.composeEnemyHull(faction, enemyClass, loader, seed);
                 if (grid) return grid;
             } catch (e) {
                 if (typeof console !== 'undefined') console.warn('enemy hull compose failed', e);
@@ -42200,15 +42632,18 @@ extendClass(FactionShipStyles, {
      * Assemble an enemy hull from the player's part builders. Returns an
      * indexed grid; engine cells are kept in _hullEngines.
      */
-    composeEnemyHull(faction, enemyClass, loader) {
+    composeEnemyHull(faction, enemyClass, loader, seed) {
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
+        const sd = this.hullSeedSuffix(seed);
+        const hullKey = f + '|' + cls + sd;
+        const rnd = (n) => (this.hash(hullKey + '|v' + n) % 1000) / 1000;
         const style = this.getFactionStyle(f);
         const focus = style.focus || {};
         const A = this.getFactionAnatomy(f) || {};
         const ax = (part, axis) => (A[part] && Number.isFinite(A[part][axis]) ? A[part][axis] : 1);
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-        const layout = this.enemyClassLayout(cls);
+        const layout = sd ? this.varyEnemyLayout(this.enemyClassLayout(cls), cls, rnd) : this.enemyClassLayout(cls);
         const { w: W, h: H } = this.enemyGridForClass(cls);
         const cx = W / 2;
         // Even widths keep every part centred on the axis (W is even).
@@ -42218,7 +42653,7 @@ extendClass(FactionShipStyles, {
         };
         const pick = (segId, key) => {
             const pool = loader.focusVariantPool(style, segId);
-            const h = this.hash(f + '|' + cls + '|' + (key || segId));
+            const h = this.hash(f + '|' + cls + sd + '|' + (key || segId));
             if (pool.length) return pool[h % pool.length];
             const count = /^wing/.test(segId) ? loader.wingShapeVariants.length : loader.bodyShapeVariantCount(segId);
             return h % count;
@@ -42393,13 +42828,82 @@ extendClass(FactionShipStyles, {
             addEngines(W - o.c0 - o.w, o.w, r0, H - r0, o.variant);
         });
         if (!this._hullEngines) this._hullEngines = Object.create(null);
-        this._hullEngines[f + '|' + cls] = engines;
+        this._hullEngines[hullKey] = engines;
+
+        // Gun mounts (grid-normalised, row 0 = nose): nose, main wing pair, outrigger pair.
+        const groups = [];
+        const mir = (m) => ({ nx: 1 - m.nx, ny: m.ny });
+        let noseR = 0;
+        for (let r = 0; r < H; r++) {
+            if (g[r][cx - 1] || g[r][cx]) { noseR = r; break; }
+        }
+        if (focus.hardpoints === 'twinNose') {
+            const dx = Math.max(1, Math.round(frontW / 2) - 2);
+            groups.push([{ nx: (cx - dx - 0.5) / W, ny: 0 }, { nx: (cx + dx + 0.5) / W, ny: 0 }]);
+        } else {
+            groups.push([{ nx: 0.5, ny: noseR / H }]);
+        }
+        if (wings[0]) {
+            // Leading tip of the wing: first lit row, outermost column of it.
+            let best = null;
+            wings[0].grid.forEach((row, r) => row.forEach((v, c) => {
+                if (v && (!best || r < best.r || (r === best.r && c > best.c))) best = { r, c };
+            }));
+            if (best) {
+                const m = { nx: (wings[0].c0 + best.c + 0.5) / W, ny: (wings[0].r0 + best.r) / H };
+                groups.push([m, mir(m)]);
+            }
+        }
+        if (side[0]) {
+            const m = { nx: (side[0].c0 + side[0].w / 2) / W, ny: side[0].r0 / H };
+            groups.push([m, mir(m)]);
+        }
+        if (!this._hullMounts) this._hullMounts = Object.create(null);
+        this._hullMounts[hullKey] = { groups: groups, cols: W, rows: H };
 
         // Accent blocks get the parts' lit top / shaded sides (not in VOXEL).
         const voxel = loader.isVoxelStyle && loader.isVoxelStyle();
         const out = voxel ? g : loader.shadeAccentBlocks(g);
         out._renderStyle = voxel ? 'voxel' : 'flat';
         return out;
+    },
+
+    /** Seeded variation of a class layout: wing span, rear wings, pods, outriggers. */
+    varyEnemyLayout(layout, cls, rnd) {
+        const L = Object.assign({}, layout);
+        L.body = layout.body * (0.9 + rnd(1) * 0.2);
+        switch (cls) {
+            case 'scout': L.wings = rnd(2) < 0.5 ? 0.6 + rnd(3) * 0.3 : 0; break;
+            case 'assault':
+                L.wings = 0.6 + rnd(2) * 0.4;
+                if (rnd(3) < 0.35) L.rearWings = 0.5;
+                break;
+            case 'heavy':
+                L.wings = 0.5 + rnd(2) * 0.4;
+                L.pods = rnd(3) < 0.55;
+                if (rnd(4) < 0.25) L.rearWings = 0.5;
+                break;
+            case 'elite':
+                L.wings = 0.8 + rnd(2) * 0.2;
+                L.rearWings = 0.5 + rnd(3) * 0.25;
+                break;
+            default:
+                L.wings = 0.65 + rnd(2) * 0.3;
+                L.outriggers = rnd(3) < 0.7;
+        }
+        return L;
+    },
+
+    /**
+     * Gun mounts of a hull: { groups: [[{nx, ny}, …], …], cols, rows }. Group 0 is the nose gun (or the
+     * twin claw lances), 1 the main wing pair, 2 the outrigger pair — as many as the hull has. nx/ny are
+     * grid fractions with row 0 = nose; enemies are drawn flipped, so the nose points down.
+     */
+    getEnemyMounts(faction, enemyClass, seed) {
+        const f = this.normalizeFaction(faction);
+        const cls = this.normalizeClass(enemyClass);
+        this.getPixelSprite(f, cls, seed);
+        return (this._hullMounts && this._hullMounts[f + '|' + cls + this.hullSeedSuffix(seed)]) || null;
     },
 
     /** Engine columns (0..1 across the aft block) per faction aft layout, as in buildAftGrid. */
@@ -42683,16 +43187,17 @@ extendClass(FactionShipStyles, {
     },
 
     /** Engine glow at the builder's thrusters (falls back to class slots). */
-    buildEngineGlow(faction, enemyClass, tier) {
+    buildEngineGlow(faction, enemyClass, tier, seed) {
         const t = Math.max(1, Math.min(5, tier || 1));
         const f = this.normalizeFaction(faction);
         const cls = this.normalizeClass(enemyClass);
-        if (!this._hullEngines || !this._hullEngines[f + '|' + cls]) this.getPixelSprite(f, cls);
+        const hk = f + '|' + cls + this.hullSeedSuffix(seed);
+        if (!this._hullEngines || !this._hullEngines[hk]) this.getPixelSprite(f, cls, seed);
         const cx = Math.floor(this.spriteW / 2);
-        const list = (this._hullEngines && this._hullEngines[f + '|' + cls]) || this.enginePositions(cls, cx);
+        const list = (this._hullEngines && this._hullEngines[hk]) || this.enginePositions(cls, cx);
         const style = this.getFactionStyle(f);
         // Composed hulls differ in size per class: use the sprite's own grid.
-        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls)];
+        const sprite = this.pixelCache && this.pixelCache[this.spriteKey(f, cls) + this.hullSeedSuffix(seed)];
         const w = sprite && sprite[0] ? sprite[0].length : this.spriteW * this.spriteScale;
         const h = sprite ? sprite.length : this.spriteH * this.spriteScale;
         return {
@@ -42838,16 +43343,16 @@ var VFGameOverWreck = {
         if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
         const ctx = cv.getContext('2d');
         ctx.clearRect(0, 0, W, H);
-        // Large wreck centered behind the modal (canvas is z-index under content).
-        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.15), H / (s.h * 1.35))));
-        // Fly in from off-screen left, easing into screen centre.
+        // Compact wreck behind the card — stays in the bezel margins, not under the panel.
+        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.55), H / (s.h * 1.75))));
+        // Fly in from off-screen left, easing into lower-centre (under the card).
         if (s.t0 == null) s.t0 = t;
         const k0 = Math.min(1, (t - s.t0) / 2.4);
         const ease = 1 - Math.pow(1 - k0, 3);
         const laneCx = W * 0.5;
         const cx = -s.w * scale + (laneCx + s.w * scale) * ease;
         const ox = Math.floor(cx - (s.w * scale) / 2);
-        const oy = Math.floor(H * 0.5 - (s.h * scale) / 2);
+        const oy = Math.floor(H * 0.62 - (s.h * scale) / 2);
         const drift = Math.sin(t * 0.4) * scale * 0.6;
         const pull = scale * (1.5 + Math.sin(t * 0.25) * 0.4);
 
@@ -44615,7 +45120,8 @@ var GraphicsManager = class GraphicsManager {
                 level: enemy.level,
                 typeId: enemy.type,
                 width: enemy.width,
-                height: enemy.height
+                height: enemy.height,
+                hullSeed: enemy.hullSeed
             });
         }
 
@@ -44670,9 +45176,10 @@ var GraphicsManager = class GraphicsManager {
     }
 
     /**
-     * The enemy's weapon on its hull: same per-weapon gun art as the player's,
-     * in the enemy faction's colours, muzzle pointing down at the bottom
-     * centre where its shots spawn (bulletManager.enemyShoot).
+     * The enemy's weapons on its hull: same per-weapon gun art as the player's, in the enemy faction's
+     * colours, one gun per hull mount (nose, wing pair, outrigger pair — bulletManager.getEnemyMuzzleGroups),
+     * muzzles pointing down where the shots spawn (bulletManager.enemyShoot). Hulls without mounts keep
+     * the single gun at the bottom centre.
      */
     drawEnemyGun(ctx, enemy) {
         const loader = this.shipAssetLoader;
@@ -44681,58 +45188,67 @@ var GraphicsManager = class GraphicsManager {
         const weaponId = bulletManager.getEnemyWeaponId(enemy);
         const style = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
             ? factionShipStyles.getFactionStyle(enemy.faction || 'pirate') : null;
-        // Same generated gun and faction shade ramp as ships in the hangar,
-        // at its S/M/L size on the player's scale (one grid cell = one px).
-        // Side craft (weaponScale set): a shorter gun sitting mostly
-        // on the hull — the long barrel made them look stretched.
-        const side = enemy.weaponScale != null;
-        const gunW = bulletManager.getEnemyGunWidth(enemy);
-        const cols = Math.max(side ? 3 : 4, Math.round(gunW));
-        const rows = side
-            ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
-            : Math.max(8, Math.round(cols * 2.2));
-        const tpl = loader.generateWeaponGrid
-            ? loader.generateWeaponGrid(weaponId, cols, rows)
-            : loader.getWeaponTemplate(weaponId, style, false);
-        if (!tpl || !tpl.length) return;
         const ramp = loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, weaponId) : null;
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
         const cell = cv && cv.cell ? cv.cell() : null;
         const px = cell || 1;
-        const gw = cols * px;
-        const gh = rows * px;
-        let gx = enemy.x + enemy.width / 2 - gw / 2;
-        // Breech tucked under the hull, barrel sticking out below it.
-        let gy = enemy.y + enemy.height - gh * (side ? 0.8 : 0.45);
-        if (cell) {
-            gx = Math.round(gx / cell) * cell;
-            gy = Math.round(gy / cell) * cell;
-        } else {
-            gx = Math.round(gx);
-            gy = Math.round(gy);
-        }
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        for (let r = 0; r < tpl.length; r++) {
-            for (let c = 0; c < tpl[r].length; c++) {
-                const idx = tpl[r][c];
-                if (!idx) continue;
-                const color = (ramp && ramp[idx])
-                    || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
-                    || (loader.getHullMountShade && loader.getHullMountShade(idx));
-                if (!color) continue;
-                // Flip vertically: template muzzle is at the top, enemy guns face down.
-                const bx = gx + c * px;
-                const by = gy + (tpl.length - 1 - r) * px;
-                if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
-                else {
-                    ctx.fillStyle = color;
-                    ctx.fillRect(bx, by, px, px);
+        // Side craft (weaponScale set): a shorter gun sitting mostly
+        // on the hull — the long barrel made them look stretched.
+        const side = enemy.weaponScale != null;
+        const gunW = bulletManager.getEnemyGunWidth(enemy);
+        const groups = bulletManager.getEnemyMuzzleGroups ? bulletManager.getEnemyMuzzleGroups(enemy) : null;
+        const muzzles = groups
+            ? groups.reduce((acc, g) => acc.concat(g.map((p) => ({ x: p.x, y: p.y, pair: g.length > 1 }))), [])
+            : [{ x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height, pair: false }];
+        const grids = Object.create(null);
+        muzzles.forEach((m) => {
+            // Paired guns (split mounts) are lighter than a single centre gun.
+            const k = m.pair ? 0.75 : 1;
+            const cols = Math.max(side ? 3 : 4, Math.round(gunW * k));
+            const rows = side
+                ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
+                : Math.max(8, Math.round(cols * 2.2));
+            const gk = cols + 'x' + rows;
+            // Same generated gun and faction shade ramp as ships in the hangar,
+            // at its S/M/L size on the player's scale (one grid cell = one px).
+            const tpl = grids[gk] || (grids[gk] = loader.generateWeaponGrid
+                ? loader.generateWeaponGrid(weaponId, cols, rows)
+                : loader.getWeaponTemplate(weaponId, style, false));
+            if (!tpl || !tpl.length) return;
+            const gw = cols * px;
+            const gh = rows * px;
+            let gx = m.x - gw / 2;
+            // Breech tucked under the hull, barrel sticking out below it.
+            let gy = m.y - gh * (side ? 0.8 : 0.45);
+            if (cell) {
+                gx = Math.round(gx / cell) * cell;
+                gy = Math.round(gy / cell) * cell;
+            } else {
+                gx = Math.round(gx);
+                gy = Math.round(gy);
+            }
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            for (let r = 0; r < tpl.length; r++) {
+                for (let c = 0; c < tpl[r].length; c++) {
+                    const idx = tpl[r][c];
+                    if (!idx) continue;
+                    const color = (ramp && ramp[idx])
+                        || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
+                        || (loader.getHullMountShade && loader.getHullMountShade(idx));
+                    if (!color) continue;
+                    // Flip vertically: template muzzle is at the top, enemy guns face down.
+                    const bx = gx + c * px;
+                    const by = gy + (tpl.length - 1 - r) * px;
+                    if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
+                    else {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(bx, by, px, px);
+                    }
                 }
             }
-        }
-        ctx.restore();
-
+            ctx.restore();
+        });
     }
 
     // Set enemy ship type based on level or difficulty
@@ -44862,7 +45378,7 @@ extendClass(GraphicsManager, {
         // Faction enemies are drawn from the entity's faction/class, not from
         // the legacy model: key the cache on that so each keeps its own rim.
         const factionSig = flip && entity.faction
-            ? '|' + entity.faction + ':' + (entity.enemyClass || '') + ':' + (entity.tier || entity.level || '') + ':' + (entity.type || '')
+            ? '|' + entity.faction + ':' + (entity.enemyClass || '') + ':' + (entity.tier || entity.level || '') + ':' + (entity.type || '') + ':' + (entity.hullSeed || 0)
             : '';
         const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
@@ -44883,7 +45399,7 @@ extendClass(GraphicsManager, {
             const ghost = {
                 x: padX, y: padY, width: entity.width, height: entity.height,
                 faction: entity.faction, enemyClass: entity.enemyClass,
-                tier: entity.tier, level: entity.level, type: entity.type,
+                tier: entity.tier, level: entity.level, type: entity.type, hullSeed: entity.hullSeed,
                 // Same livery variant as the ship itself (enemy-variants.js).
                 variantSeed: entity.variantSeed != null ? entity.variantSeed : 0,
                 champion: entity.champion, renegade: entity.renegade, renegadeColor: entity.renegadeColor
@@ -47187,7 +47703,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
-        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '6', '8'];
+        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -47207,6 +47723,14 @@ var UIAppearanceManager = class UIAppearanceManager {
     getGlobalPixelPx() {
         const n = Number(this.pixelSize);
         return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    /** Screen CSS px per Global Pixel cell (device-pixel snapped). Shared by filter + map lattice. */
+    getMapPxCellCss() {
+        const gp = this.getGlobalPixelPx();
+        if (!(gp > 0)) return 0;
+        if (this._mapPxCellCss > 0) return this._mapPxCellCss;
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        return Math.max(1, Math.round(gp * dpr)) / dpr;
     }
     getGuiVoxelCell() {
         // The GUI lattice stays on whole pixels even when the ship voxels go finer than 1.
@@ -47343,7 +47867,7 @@ var UIAppearanceManager = class UIAppearanceManager {
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
             }
-            if (data.pixelSize === 'OFF' || /^(1|2|3|4|6|8)$/.test(String(data.pixelSize))) {
+            if (data.pixelSize === 'OFF' || /^[1-8]$/.test(String(data.pixelSize))) {
                 this.pixelSize = String(data.pixelSize);
             }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
@@ -47672,55 +48196,93 @@ extendClass(UIAppearanceManager, {
         this._framePxBuilt = odd;
     },
     /**
-     * Global Pixel Size screen: SVG filter that samples one pixel per gp x gp screen cell and dilates it back,
-     * so everything under it (planets, ship, lines, stars) lands on the same screen grid and its pixels
-     * wander cell by cell while it moves. Odd gp: 1x1 sample; even gp: 2x2 sample.
+     * Global Pixel Size: SVG pixelate filter on #gmMapArea (live DOM — no canvas mirror).
+     * Canvas serialize/redraw flickered and corrupted the map; filter stays on the live layer.
      */
-    ensureMapPxFilter(gp, svgEl) {
-        // Ancestor transforms (UI scale, viewport fit) scale the filter's user units: convert so a cell is gp *screen* px.
-        let sa = 1, ox = 0, oy = 0;
-        if (svgEl && svgEl.clientWidth > 0) {
-            // clientWidth is rounded to whole px (too coarse for the filter): measure a 1000px probe instead.
-            let probe = svgEl.parentNode && svgEl.parentNode.querySelector(':scope > .vf-px-probe');
-            if (!probe && svgEl.parentNode) {
+    ensureMapPxFilter(gp, el) {
+        const target = (el && el.id === 'gmMapArea') ? el
+            : (el && el.closest && el.closest('#gmMapArea')) || document.getElementById('gmMapArea') || el;
+        this._stopMapPxCanvas(target);
+        if (!(gp > 0)) {
+            if (target && target.style) target.style.removeProperty('filter');
+            this._mapPxBuilt = '';
+            return;
+        }
+        let sa = 1;
+        if (target && target.clientWidth > 0) {
+            let probe = target.parentNode && target.parentNode.querySelector(':scope > .vf-px-probe');
+            if (!probe && target.parentNode) {
                 probe = document.createElement('div');
                 probe.className = 'vf-px-probe';
                 probe.style.cssText = 'position:absolute;left:0;top:0;width:1000px;height:0;visibility:hidden;pointer-events:none';
-                svgEl.parentNode.appendChild(probe);
+                target.parentNode.appendChild(probe);
             }
-            const w = probe ? probe.getBoundingClientRect().width / 1000 : svgEl.getBoundingClientRect().width / svgEl.clientWidth;
+            const w = probe ? probe.getBoundingClientRect().width / 1000
+                : target.getBoundingClientRect().width / Math.max(1, target.clientWidth);
             if (w > 0.05 && w < 20) sa = w;
         }
-        const key = gp + '|' + sa.toFixed(6);
-        if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) return;
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        // Local CSS px per cell: gp screen CSS px, snapped to whole device pixels.
+        const deviceCell = Math.max(1, Math.round(gp * dpr));
+        const cell = Math.max(1, Math.round(deviceCell / (sa * dpr)));
+        // Publish the exact cell the filter uses so the map lattice snaps to the same grid.
+        this._mapPxSa = sa;
+        this._mapPxCellLocal = cell;
+        this._mapPxCellCss = cell * sa;
+        const rw = Math.max(1, Math.round((target && target.clientWidth) || 1));
+        const rh = Math.max(1, Math.round((target && target.clientHeight) || 1));
+        const key = gp + '|' + cell + '|' + rw + 'x' + rh;
+        if (this._mapPxBuilt === key && document.getElementById('vfMapPx')) {
+            if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
+            return;
+        }
         let svg = document.getElementById('vfMapPxSvg');
         if (!svg) {
             svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.id = 'vfMapPxSvg';
             svg.setAttribute('width', '0');
             svg.setAttribute('height', '0');
-            svg.style.position = 'absolute';
+            svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
             svg.setAttribute('aria-hidden', 'true');
             document.body.appendChild(svg);
         }
-        // One 1x1 sample per gp x gp cell, dilated to (2r+1) and, for even gp, merged with a 1px shifted copy.
-        // Skia floors device sizes: aim a hair above the whole-pixel size (cells are 7.9992 px wide otherwise).
-        const sf = sa * 0.9999;
-        const f = (v) => (v / sf).toFixed(5);
-        const r = Math.floor((gp - 1) / 2);
-        const at = Math.floor(gp / 2);
-        let h = '<filter id="vfMapPx" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">' +
-            '<feFlood x="' + f(ox + at) + '" y="' + f(oy + at) + '" width="' + f(1) + '" height="' + f(1) + '"/>' +
-            '<feComposite x="' + f(ox) + '" y="' + f(oy) + '" width="' + f(gp) + '" height="' + f(gp) + '"/><feTile result="t"/>' +
-            '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>';
-        h += r > 0 ? '<feMorphology in="s" operator="dilate" radius="' + f(r) + '" result="d"/>' : '<feOffset in="s" dx="0" result="d"/>';
-        if (gp % 2 === 0) {
-            h += '<feOffset in="d" dx="' + f(1) + '" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
-                '<feOffset in="hz" dx="0" dy="' + f(1) + '" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
+        // Sample at cell origin (0,0) so lattice-snapped sprites sit on the filter grid.
+        const dilate = Math.max(0.5, cell / 2);
+        let h = '<filter id="vfMapPx" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB" primitiveUnits="userSpaceOnUse">' +
+            '<feFlood x="0" y="0" width="1" height="1" flood-color="#fff" flood-opacity="1"/>' +
+            '<feComposite width="' + cell + '" height="' + cell + '"/><feTile result="t"/>' +
+            '<feComposite in="SourceGraphic" in2="t" operator="in" result="s"/>' +
+            '<feMorphology in="s" operator="dilate" radius="' + dilate + '" result="d"/>';
+        if (cell % 2 === 0) {
+            h += '<feOffset in="d" dx="1" dy="0" result="d1"/><feMerge result="hz"><feMergeNode in="d"/><feMergeNode in="d1"/></feMerge>' +
+                '<feOffset in="hz" dx="0" dy="1" result="hz1"/><feMerge><feMergeNode in="hz"/><feMergeNode in="hz1"/></feMerge>';
         }
         svg.innerHTML = h + '</filter>';
         this._mapPxBuilt = key;
+        if (target && target.style) target.style.setProperty('filter', 'url(#vfMapPx)', 'important');
+        if (!this._mapPxRo && target && typeof ResizeObserver !== 'undefined') {
+            this._mapPxRo = new ResizeObserver(() => {
+                const g = this.getGlobalPixelPx ? this.getGlobalPixelPx() : 0;
+                if (g > 0) this.ensureMapPxFilter(g, target);
+            });
+            this._mapPxRo.observe(target);
+        }
     },
+    _stopMapPxCanvas(area) {
+        if (this._mapPxRaf) {
+            cancelAnimationFrame(this._mapPxRaf);
+            this._mapPxRaf = 0;
+        }
+        this._mapPxLoop = false;
+        const cv = area && area.querySelector(':scope > canvas.gm-px-canvas');
+        if (cv) cv.remove();
+        const raster = area && area.querySelector('.gm-px-raster');
+        if (raster) {
+            raster.style.opacity = '';
+            raster.style.visibility = '';
+        }
+    },
+    dirtyMapPxCanvas() { /* no-op: live SVG filter, no canvas mirror */ },
     applyScanWarp() {
         // The filter re-rasterises the whole backdrop per seed change, so it is throttled
         // (>= 100 ms), paused while hidden and skipped when the heavy/anim perf switches are off.
@@ -47910,8 +48472,15 @@ extendClass(UIAppearanceManager, {
             root.setAttribute('data-vf-gv-' + k, this.guiVoxelParts[k] === 'ON' ? 'on' : 'off');
         });
         root.setAttribute('data-vf-pixel-size', this.pixelSize === 'OFF' ? 'off' : 'on');
-        if (this.getGlobalPixelPx() > 0 && this.ensureMapPxFilter) this.ensureMapPxFilter(this.getGlobalPixelPx());
+        root.setAttribute('data-vf-px', String(this.getGlobalPixelPx() || 0));
+        // Cell size for vfMapPx on #gmMapArea (and any CSS that keys off --vf-px-n).
+        root.style.setProperty('--vf-px-n', String(Math.max(1, this.getGlobalPixelPx() || 1)));
         root.style.setProperty('--vf-px', (this.getGlobalPixelPx() || 1) + 'px');
+        try {
+            const area = document.getElementById('gmMapArea');
+            const gpA = this.getGlobalPixelPx();
+            if (this.ensureMapPxFilter) this.ensureMapPxFilter(gpA > 0 ? gpA : 0, area);
+        } catch (e) { /* map not mounted */ }
         root.setAttribute('data-vf-frame-px', this.framePx === 'OFF' ? 'off' : 'on');
         if (this.framePx !== 'OFF') {
             this.ensureFramePxFilter(Number(this.framePx));
@@ -54149,32 +54718,6 @@ var SpriteLoader = class SpriteLoader {
         return this.loadSpriteGroup(weaponSprites, 'weapons/sprites');
     }
 
-    // Load all level sprites
-    async loadLevelSprites() {
-        const levelSprites = [
-            // Mars
-            'mars-surface', 'mars-canyon', 'mars-volcano', 'mars-dust-storm',
-            'mars-polar-cap', 'mars-phobos', 'mars-deimos', 'mars-sinope',
-
-            // Jupiter
-            'jupiter-atmosphere', 'jupiter-moons', 'jupiter-red-spot',
-            'jupiter-lightning', 'jupiter-magnetosphere', 'jupiter-io', 'jupiter-amalthea',
-
-            // Saturn
-            'saturn-rings', 'saturn-storm', 'saturn-titan', 'saturn-aurora',
-            'saturn-enceladus', 'saturn-europa', 'saturn-himalia',
-
-            // Neptune
-            'neptune-storm', 'neptune-ice', 'neptune-wind', 'neptune-dark-spot',
-            'neptune-triton', 'neptune-ganymede', 'neptune-elara',
-
-            // Pluto
-            'pluto-surface', 'pluto-ice', 'pluto-mountains', 'pluto-nitrogen',
-            'pluto-charon', 'pluto-callisto', 'pluto-pasiphae'
-        ];
-        return this.loadSpriteGroup(levelSprites, 'levels/sprites');
-    }
-
     async loadSpriteQuiet(name, path) {
         if (this.sprites.has(name)) {
             return this.sprites.get(name);
@@ -54254,11 +54797,10 @@ var SpriteLoader = class SpriteLoader {
             const [shipsLoaded] = await Promise.all([
                 this.loadShipSprites(),
                 this.loadWeaponSprites(),
-                this.loadLevelSprites(),
                 this.loadOverrideSprites()
             ]);
 
-            // Ship sprites are enough for UI previews; do not block on weapons/levels
+            // Ship sprites are enough for UI previews; do not block on weapons
             this.loaded = !!shipsLoaded;
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('vf-sprites-loaded', {
@@ -54520,24 +55062,56 @@ var RenderManager = class RenderManager {
      * voxelised finer than one logical pixel.
      */
     getRenderScale() {
+        // Sticky within ~one frame so fillCombatRect / voxel helpers do not recompute.
+        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+        if (this._scaleFrameValue != null && this._scaleStickyAt && (now - this._scaleStickyAt) < 12) {
+            return this._scaleFrameValue;
+        }
         // Global Pixel Size: one buffer pixel == P screen px, so every art pixel is equal.
         const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        let scale;
+        const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
+        const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
+        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 520000;
         if (gp > 0) {
             const cv = document.getElementById('gameCanvas');
-            const lw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
-            const shown = cv && cv.clientWidth ? cv.clientWidth : lw;
-            return Math.max(0.05, shown / (gp * lw));
+            // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
+            // so measure the on-screen width to make one art pixel == gp real screen px.
+            let shown = cv && cv.clientWidth ? cv.clientWidth : lw;
+            if (cv && cv.clientWidth) {
+                const bw = cv.getBoundingClientRect().width;
+                if (bw > 1) shown = bw;
+            }
+            // Keep fractional — rounding would make combat pixels ≠ Pixel Size.
+            scale = Math.max(0.05, shown / (gp * lw));
+            if ((lw * scale) * (lh * scale) > maxPx) {
+                scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
+            }
+        } else {
+            const k = Number(window.PLAYFIELD_RENDER_SCALE);
+            scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
+            // VOXEL: larger cells already look blocky — less supersampling is enough
+            // and cuts fill/transform cost hard (4× → 1–2× backing store).
+            if (this.isVoxelCombat && this.isVoxelCombat()) {
+                const cell = this.getCombatVoxelCell();
+                if (cell >= 4) scale = Math.min(scale, 1);
+                else if (cell >= 2) scale = Math.min(scale, 2);
+            }
+            // Pixel budget: runtime evidence showed ~1312×1200 (@4×) with only ~10ms of JS
+            // work but ~15 FPS wall-clock — paint/composite of ~1.5MP dominated. Cap the
+            // backing store so CSS can upscale crisp pixels instead.
+            if (scale >= 1) {
+                let s = Math.max(1, Math.round(scale));
+                while (s > 1 && (lw * s) * (lh * s) > maxPx) s--;
+                scale = s;
+            } else if ((lw * Math.max(scale, 0.05)) * (lh * Math.max(scale, 0.05)) > maxPx) {
+                scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
+            }
         }
-        const k = Number(window.PLAYFIELD_RENDER_SCALE);
-        let scale = Number.isFinite(k) && k >= 1 ? Math.round(k) : 4;
-        // VOXEL: larger cells already look blocky — less supersampling is enough
-        // and cuts fill/transform cost hard (4× → 1–2× backing store).
-        if (this.isVoxelCombat && this.isVoxelCombat()) {
-            const cell = this.getCombatVoxelCell();
-            if (cell >= 4) scale = Math.min(scale, 1);
-            else if (cell >= 2) scale = Math.min(scale, 2);
-        }
+        this._scaleStickyAt = now;
+        this._scaleFrameValue = scale;
         return scale;
     }
     /** Planet background strength in combat (window.PLAYFIELD_BG_OPACITY). */
@@ -54873,6 +55447,10 @@ var RenderManager = class RenderManager {
         // Non-fog obstacles that sit on top of the canyon walls.
         this.drawSolidObstacles(ctx, fogList, player, 'over');
         if (obstacleManager.renderDebris) obstacleManager.renderDebris(ctx);
+
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.render) {
+            objectiveManager.render(ctx);
+        }
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
             pickupManager.render(ctx);
@@ -55645,7 +56223,7 @@ extendClass(RenderManager, {
         h = Math.imul(h ^ (h >>> 13), 1274126177);
         return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
     },
-    /** Smooth value noise over cell coordinates (two octaves). */
+    /** Smooth value noise over cell coordinates (three octaves — less blotchy striping). */
     envNoise(x, y) {
         const oct = (fx, fy) => {
             const ix = Math.floor(fx), iy = Math.floor(fy);
@@ -55655,7 +56233,9 @@ extendClass(RenderManager, {
             const c = this.envHash(ix, iy + 1), d = this.envHash(ix + 1, iy + 1);
             return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
         };
-        return oct(x * 0.12, y * 0.12) * 0.7 + oct(x * 0.31 + 17, y * 0.31 + 5) * 0.3;
+        return oct(x * 0.11, y * 0.11) * 0.55
+            + oct(x * 0.27 + 17, y * 0.29 + 5) * 0.3
+            + oct(x * 0.61 + 41, y * 0.57 + 23) * 0.15;
     },
 });
 
@@ -55895,18 +56475,19 @@ extendClass(RenderManager, {
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
-                            /* Soft sill, not a bright cream hairline. */
+                            /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
-                                : ((((cx + wr) % 4) + 4) % 4) < 2 ? pal.accent : '#1a1c22';
+                                : (this.envHash(cx, wr + 5) < 0.42 ? pal.accent : '#1a1c22');
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            // Structure band: faction silhouette colour, not plain wall fill.
+                            // Structure band: faction silhouette as blotches, not row stripes.
                             const st = env.style || 'asteroid';
-                            if (st === 'tech') col = ((wr & 3) < 2) ? pal.accent : mp.lit[1];
-                            else if (st === 'organic') col = ((cx + wr) & 3) ? pal.accent : mp.lit[0];
-                            else if (st === 'spike') col = (edge & 1) ? pal.wall[0] : pal.accent;
-                            else if (st === 'scrap') col = (((wr + edge) % 5) < 2) ? mp.crack || pal.accent : pal.wall[1];
+                            const sh = this.envHash(cx * 3 + edge, wr * 2 + 11);
+                            if (st === 'tech') col = sh < 0.55 ? pal.accent : mp.lit[1];
+                            else if (st === 'organic') col = sh < 0.5 ? pal.accent : mp.lit[0];
+                            else if (st === 'spike') col = sh < 0.45 ? pal.accent : pal.wall[0];
+                            else if (st === 'scrap') col = sh < 0.4 ? (mp.crack || pal.accent) : pal.wall[1];
                             else col = pal.wall[1];
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
@@ -56047,96 +56628,115 @@ extendClass(RenderManager, {
     /** Floor patterns for the canyon areas (null = keep the noise colour). */
     terrainFloorCell(floor, pal, cx, wr, n) {
         const g = pal.ground;
+        // Multi-scale ridge: thin organic seams without sin-wave striping.
+        const ridge = (sx, sy, a, b) => {
+            const u = this.envNoise(cx * sx + a, wr * sy + b);
+            const v = this.envNoise(cx * sx * 1.9 + b + 4, wr * sy * 1.7 + a + 2);
+            return Math.abs(u - 0.5) * 1.35 + Math.abs(v - 0.5) * 0.65;
+        };
         switch (floor) {
-            case 'plates': { // big bedrock slabs with dark seams
-                const px = ((cx % 7) + 7) % 7, py = ((wr % 6) + 6) % 6;
-                const off = (Math.floor(wr / 6) & 1) ? 3 : 0;
-                if (py === 0 || ((cx + off) % 7 + 7) % 7 === 0) return g[3];
+            case 'plates': { // irregular bedrock slabs (jittered seams)
+                const bx = Math.floor(cx / 7), by = Math.floor(wr / 6);
+                const jx = Math.floor(this.envHash(bx, by + 3) * 3) - 1;
+                const jy = Math.floor(this.envHash(bx + 5, by) * 2);
+                const px = ((cx + jx) % 7 + 7) % 7, py = ((wr + jy) % 6 + 6) % 6;
+                if (py === 0 || px === 0) return g[3];
                 return px + py < 3 ? g[0] : n > 0.5 ? g[1] : g[2];
             }
-            case 'dunes': { // wind ripples drifting diagonally
-                const w = Math.sin(cx * 0.45 + wr * 0.18 + Math.sin(wr * 0.05) * 3);
-                return w > 0.6 ? g[0] : w > 0.1 ? g[1] : w > -0.5 ? g[2] : g[3];
+            case 'dunes': { // wind ripples with noise warp (no clean diagonals)
+                const w = this.envNoise(cx * 0.22 + wr * 0.08, wr * 0.14)
+                    - this.envNoise(cx * 0.09 - wr * 0.11 + 8, wr * 0.07 + 3);
+                return w > 0.22 ? g[0] : w > 0.05 ? g[1] : w > -0.12 ? g[2] : g[3];
             }
-            case 'cracks': { // dried riverbed: cells split by cracks
-                const v = Math.abs(Math.sin(cx * 0.7 + Math.sin(wr * 0.3) * 2) + Math.cos(wr * 0.55 + Math.sin(cx * 0.2) * 2));
-                if (v < 0.18) return pal.craterPit;
-                return n > 0.55 ? g[1] : g[2];
+            case 'cracks': { // sparse branching dry-bed cracks (not a dense mesh)
+                const r = ridge(0.38, 0.36, 1.1, 7.3);
+                if (r < 0.055) return pal.craterPit;
+                if (r < 0.1) return g[3];
+                if (this.envHash(cx, wr) < 0.035) return g[0];
+                return n > 0.58 ? g[1] : g[2];
             }
-            case 'grid': { // buried installation: panel grid with lit nodes
-                const gx = ((cx % 8) + 8) % 8, gy = ((wr % 8) + 8) % 8;
-                if (gx === 0 && gy === 0) return pal.special || pal.craterLit;
-                if (gx === 0 || gy === 0) return g[3];
+            case 'grid': { // weathered panel grid — broken seams, sparse nodes
+                const gx = ((cx % 9) + 9) % 9, gy = ((wr % 9) + 9) % 9;
+                const breakH = this.envHash(Math.floor(cx / 9), wr) > 0.72;
+                const breakV = this.envHash(cx, Math.floor(wr / 9)) > 0.72;
+                if (gx === 0 && gy === 0 && this.envHash(cx, wr) < 0.55) return pal.special || pal.craterLit;
+                if ((gx === 0 && !breakV) || (gy === 0 && !breakH)) return g[3];
                 return n > 0.6 ? g[1] : g[2];
             }
-            case 'ridges': { // parallel rock ridges with a lit crest
-                const v = ((cx + Math.floor(Math.sin(wr * 0.08) * 3)) % 6 + 6) % 6;
-                return v === 0 ? g[0] : v === 1 ? g[1] : v === 5 ? g[3] : g[2];
-            }
-            case 'hex': { // basalt columns / alien hex tiles
-                const row = Math.floor(wr / 4);
-                const hx = ((cx + (row & 1) * 3) % 6 + 6) % 6, hy = ((wr % 4) + 4) % 4;
-                if (hy === 0 || hx === 0) return g[3];
-                return hx + hy < 4 ? g[0] : n > 0.5 ? g[1] : g[2];
-            }
-            case 'rubble': { // scattered boulders with shadows
-                const h = this.envHash(cx >> 1, wr >> 1);
-                if (h < 0.08) return g[0];
-                if (h < 0.14) return pal.craterPit;
+            case 'ridges': { // warped rock ridges — crest breaks, not parallel rails
+                const und = Math.floor(this.envNoise(wr * 0.12, 2.4) * 5) - 2;
+                const v = ((cx + und) % 7 + 7) % 7;
+                const gap = this.envHash(cx, wr) < 0.18;
+                if (v === 0 && !gap) return g[0];
+                if (v === 1) return g[1];
+                if (v === 6) return g[3];
                 return n > 0.5 ? g[2] : g[3];
             }
-            case 'veins': { // glowing veins through dark ground
-                const v = Math.abs(Math.sin(cx * 0.35 + Math.sin(wr * 0.12) * 2.5) * 1.2 - Math.cos(wr * 0.09 + cx * 0.05));
-                if (v < 0.06) return pal.special || pal.accent;
-                if (v < 0.16) return g[1];
+            case 'hex': { // basalt columns with eroded cell edges
+                const row = Math.floor(wr / 4);
+                const hx = ((cx + (row & 1) * 3) % 6 + 6) % 6, hy = ((wr % 4) + 4) % 4;
+                if ((hy === 0 || hx === 0) && this.envHash(cx, wr) > 0.2) return g[3];
+                return hx + hy < 4 ? g[0] : n > 0.5 ? g[1] : g[2];
+            }
+            case 'rubble': { // scattered grit — single-cell stones, not 2×2 blocks
+                const h = this.envHash(cx, wr);
+                if (h < 0.06) return g[0];
+                if (h < 0.11) return pal.craterPit;
+                if (this.envHash(cx + 17, wr + 3) < 0.04) return g[1];
+                return n > 0.5 ? g[2] : g[3];
+            }
+            case 'veins': { // glowing veins — noise ridges, not sinusoidal stripes
+                const r = ridge(0.28, 0.26, 3.2, 11.5);
+                if (r < 0.045) return pal.special || pal.accent;
+                if (r < 0.11) return g[1];
                 return g[3];
             }
             case 'biomass': { // lumpy organic pods / tissue islands
-                const h = this.envHash(cx >> 1, wr >> 1);
-                const blob = this.envNoise(cx * 0.55, wr * 0.55);
-                if (h < 0.1 && blob > 0.55) return pal.accent;
+                const h = this.envHash(cx, wr);
+                const blob = this.envNoise(cx * 0.5, wr * 0.5);
+                if (h < 0.07 && blob > 0.55) return pal.accent;
                 if (blob > 0.72) return g[0];
                 if (blob > 0.55) return g[1];
                 if (blob < 0.28) return pal.craterPit;
                 return g[2];
             }
-            case 'tendrils': { // branching organic roots across the crust
-                const a = Math.sin(cx * 0.28 + Math.sin(wr * 0.17) * 2.2);
-                const b = Math.cos(wr * 0.22 + Math.sin(cx * 0.11) * 1.8);
-                const v = Math.abs(a * 0.7 + b * 0.55);
-                if (v < 0.08) return pal.special || pal.accent;
-                if (v < 0.18) return g[1];
+            case 'tendrils': { // branching roots from noise ridges (no sin lattice)
+                const r = ridge(0.32, 0.3, 5.7, 2.1);
+                if (r < 0.05) return pal.special || pal.accent;
+                if (r < 0.12) return g[1];
                 return n > 0.55 ? g[2] : g[3];
             }
-            case 'spines': { // bone / claw ridge lines (Kronax)
-                const row = ((wr % 7) + 7) % 7;
-                const jag = Math.floor(Math.sin(wr * 0.09) * 2);
-                const v = ((cx + jag) % 5 + 5) % 5;
-                if (row === 0 || row === 1) return v === 0 ? g[0] : pal.craterPit;
-                if (v === 0) return g[1];
+            case 'spines': { // claw ridges with broken runs (Kronax)
+                const und = Math.floor(this.envNoise(wr * 0.1, 4.1) * 4) - 1;
+                const v = ((cx + und) % 6 + 6) % 6;
+                const row = this.envHash(Math.floor(wr / 5), 33) < 0.35;
+                if (row && v === 0) return g[0];
+                if (row) return pal.craterPit;
+                if (v === 0 && this.envHash(cx, wr) > 0.25) return g[1];
                 return n > 0.5 ? g[2] : g[3];
             }
-            case 'conduits': { // buried pipe runs with joint nodes (Machine / Terran)
-                const gx = ((cx % 10) + 10) % 10, gy = ((wr % 8) + 8) % 8;
-                if ((gy === 2 || gy === 3) && gx > 0 && gx < 9) return gx === 5 ? pal.accent : g[1];
-                if ((gx === 2 || gx === 7) && gy > 0) return g[0];
-                if (gx === 0 || gy === 0) return g[3];
+            case 'conduits': { // buried pipes with gaps / breaks (not a full grille)
+                const gx = ((cx % 11) + 11) % 11, gy = ((wr % 9) + 9) % 9;
+                const gap = this.envHash(Math.floor(cx / 11) + Math.floor(wr / 9), 60) > 0.65;
+                if (!gap && (gy === 2 || gy === 3) && gx > 0 && gx < 10) return gx === 5 ? pal.accent : g[1];
+                if (!gap && (gx === 2 || gx === 8) && gy > 0 && this.envHash(cx, wr) > 0.3) return g[0];
                 return n > 0.55 ? g[2] : g[3];
             }
-            case 'plating': { // armored deck plates with rivet corners
-                const px = ((cx % 6) + 6) % 6, py = ((wr % 5) + 5) % 5;
-                const off = (Math.floor(wr / 5) & 1) ? 3 : 0;
-                if (py === 0 || ((cx + off) % 6 + 6) % 6 === 0) return g[3];
-                if (px === 1 && py === 1) return pal.accent;
+            case 'plating': { // armored plates with worn / missing rivets
+                const bx = Math.floor(cx / 6), by = Math.floor(wr / 5);
+                const j = Math.floor(this.envHash(bx, by) * 2);
+                const px = ((cx + j) % 6 + 6) % 6, py = ((wr) % 5 + 5) % 5;
+                if (py === 0 || px === 0) return g[3];
+                if (px === 1 && py === 1 && this.envHash(cx, wr) < 0.7) return pal.accent;
                 return px + py < 3 ? g[0] : n > 0.5 ? g[1] : g[2];
             }
-            case 'scrapyard': { // welded scrap patches and dark weld seams
-                const h = this.envHash(cx >> 1, (wr >> 1) + 19);
-                const seam = (((cx + wr) % 9) + 9) % 9 === 0;
+            case 'scrapyard': { // welded scrap patches — no diagonal seam rails
+                const h = this.envHash(cx, wr + 19);
+                const seam = ridge(0.4, 0.35, 9.1, 1.4) < 0.05;
                 if (seam) return pal.craterPit;
-                if (h < 0.12) return g[0];
-                if (h < 0.22) return pal.accent;
-                if (h < 0.32) return g[3];
+                if (h < 0.1) return g[0];
+                if (h < 0.18) return pal.accent;
+                if (h < 0.26) return g[3];
                 return n > 0.5 ? g[1] : g[2];
             }
             default:
@@ -56165,22 +56765,23 @@ extendClass(RenderManager, {
         const b = mp.body;
         switch (id) {
             case 'metal': {
-                // Plates with seams every 3 rows / 4 cells and rivets at the corners.
-                const seamRow = ((wr % 3) + 3) % 3 === 0;
-                const seamCol = edge % 4 === 0;
+                // Worn plates: irregular seams, not a checker lattice.
+                const seamRow = ((wr % 4) + 4) % 4 === 0 && this.envHash(Math.floor(wr / 4), 41) > 0.28;
+                const seamCol = edge % 5 === 0 && this.envHash(edge, Math.floor(wr / 4) + 7) > 0.32;
                 if (seamRow && seamCol) return mp.rivet;
                 if (seamRow || seamCol) return b[3];
                 return n > 0.55 ? b[1] : b[2];
             }
             case 'crystal': {
-                // Diagonal facets with bright glints.
-                const f = ((cx + wr) % 5 + 5) % 5;
+                // Facets with jittered glints (less diagonal striping).
+                const f = ((cx + wr + Math.floor(this.envHash(cx, wr) * 3)) % 5 + 5) % 5;
                 if (this.envHash(cx * 7, wr) < 0.05) return '#ffffff';
                 return f === 0 ? b[0] : f < 3 ? b[1] : b[2];
             }
             case 'magma': {
-                // Dark crust with glowing lava veins.
-                if (Math.abs(n - 0.5) < 0.05) return mp.glow[((wr >> 1) & 1)];
+                // Dark crust with glowing lava veins (noise ridge, not row blink).
+                const vein = Math.abs(this.envNoise(cx * 0.45, wr * 0.4) - 0.5);
+                if (vein < 0.05) return mp.glow[this.envHash(cx, wr) < 0.5 ? 0 : 1];
                 return n > 0.6 ? b[1] : n > 0.35 ? b[2] : b[3];
             }
             default:
@@ -56223,25 +56824,26 @@ extendClass(RenderManager, {
                 if (h < 0.09 && n > 0.55) return g[0];
                 return col;
             }
-            case 'tech': { // Machine: rivet rows and cable ticks
-                const gx = ((cx % 12) + 12) % 12, gy = ((wr % 10) + 10) % 10;
-                if (gx === 0 && gy === 0) return pal.accent;
-                if ((gy === 5 && (gx & 1) === 0) || (gx === 6 && gy > 2 && gy < 8)) return g[1];
+            case 'tech': { // Machine: sparse rivets / scuffs — no cable grid
+                const h = this.envHash(cx, wr + 19);
+                if (h < 0.022) return pal.accent;
+                if (h < 0.045 && n > 0.6) return g[1];
                 return col;
             }
-            case 'spike': { // Kronax: diagonal claw scores
-                if ((((cx + wr * 2) % 11) + 11) % 11 === 0) return pal.craterPit;
-                if (this.envHash(cx, wr + 41) < 0.03) return g[0];
+            case 'spike': { // Kronax: short claw nicks, not diagonal rails
+                const h = this.envHash(cx, wr + 41);
+                if (h < 0.028) return pal.craterPit;
+                if (h < 0.05) return g[0];
                 return col;
             }
             case 'scrap': { // Pirate: irregular weld patches
-                const h = this.envHash(cx >> 1, wr >> 1);
-                if (h < 0.05) return pal.accent;
-                if (h > 0.93) return g[3];
+                const h = this.envHash(cx, wr + 7);
+                if (h < 0.04) return pal.accent;
+                if (h > 0.94) return g[3];
                 return col;
             }
             default: { // Terran / rock: sparse survey stakes
-                if ((((cx % 14) + 14) % 14) === 0 && (((wr % 14) + 14) % 14) === 0) return pal.accent;
+                if (this.envHash(cx, wr + 53) < 0.012) return pal.accent;
                 return col;
             }
         }
@@ -57578,7 +58180,7 @@ var parallaxManager = new ParallaxManager();
         var R = document.documentElement, bz = document.getElementById('vf-bezel');
         var sig = [host.className, host.dataset && host.dataset.hsTab, R.getAttribute('data-pf'), R.getAttribute('data-vf-faction'), R.getAttribute('data-faction'), bz && bz.getAttribute('data-faction')].join('|');
         var now = performance.now(), hit = bgReadCache && bgReadCache.get(host);
-        if (hit && hit.sig === sig && now - hit.t < 250) return { img: hit.v.img, bgColor: hit.v.bgColor };
+        if (hit && hit.sig === sig && now - hit.t < 1000) return { img: hit.v.img, bgColor: hit.v.bgColor };
         var v = readHostBackgroundNow(host);
         if (bgReadCache) bgReadCache.set(host, { sig: sig, t: now, v: v });
         return v;
@@ -58194,11 +58796,14 @@ var parallaxManager = new ParallaxManager();
                     collectHosts();
                 }, 120);
             });
+            // Do not watch `style`: map/orbit/spin/UI thrash style constantly and the
+            // callback walked every mutation (runtime residual: readHostBackgroundNow/hostZ).
+            // Host BG changes arrive via class / data-hs-tab / faction attrs instead.
             parallax.observer.observe(document.body, {
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ['class', 'style', 'data-hs-tab', 'hidden']
+                attributeFilter: ['class', 'data-hs-tab', 'hidden']
             });
             // A faction change is stamped on <html>, outside the body observer: repaint the backdrops once per frame.
             var facRaf = 0;
@@ -71879,503 +72484,6 @@ extendClass(MissionStartManager, {
 var missionStartManager = new MissionStartManager();
 
 
-/* --- js/levels/mars.js --- */
-"use strict";
-
-// Mars Level - Easy Desert Environment
-var MarsLevel = class MarsLevel {
-    constructor() {
-        this.id = "mars";
-        this.name = "MARS";
-        this.difficulty = "EASY";
-        this.environment = "DESERT";
-        this.color = "#808080";
-        this.description = "Red planet with basic obstacles";
-        this.background = "mars";
-        this.enemyType = "enemyBasic";
-        
-        // Mars-specific obstacle patterns
-        this.obstaclePatterns = [
-            {
-                type: "rock",
-                spawnRate: 0.3,
-                speed: 2,
-                size: { width: 18, height: 18 }, // Reduced to moderate size
-                color: "#606060"
-            },
-            {
-                type: "dust_cloud",
-                spawnRate: 0.2,
-                speed: 1.5,
-                size: { width: 25, height: 25 }, // Reduced to moderate size
-                color: "#a0a0a0"
-            }
-        ];
-        
-        // Mars-specific settings
-        this.obstacleSpawnInterval = 3000; // 3 seconds
-        this.enemySpeed = 1.5;
-        this.enemyHealth = 80;
-        this.playerSpeed = 8;
-    }
-    
-    getObstaclePattern() {
-        // Return a random obstacle pattern based on spawn rates
-        const totalRate = this.obstaclePatterns.reduce((sum, pattern) => sum + pattern.spawnRate, 0);
-        let random = Math.random() * totalRate;
-        
-        for (const pattern of this.obstaclePatterns) {
-            random -= pattern.spawnRate;
-            if (random <= 0) {
-                return pattern;
-            }
-        }
-        
-        // Fallback to first pattern
-        return this.obstaclePatterns[0];
-    }
-    
-    getEnvironmentColor() {
-        return this.color;
-    }
-    
-    getBackgroundElements() {
-        return [
-            { type: "dust_storm", intensity: 0.3 },
-            { type: "red_sand", particles: 5 }
-        ];
-    }
-}
-
-
-/* --- js/levels/jupiter.js --- */
-"use strict";
-
-// Jupiter Level - Medium Gas Giant Environment
-var JupiterLevel = class JupiterLevel {
-    constructor() {
-        this.id = "jupiter";
-        this.name = "JUPITER";
-        this.difficulty = "MEDIUM";
-        this.environment = "GAS_GIANT";
-        this.color = "#808080";
-        this.description = "Gas giant with swirling storms";
-        this.background = "jupiter";
-        this.enemyType = "enemyFast";
-        
-        // Jupiter-specific obstacle patterns
-        this.obstaclePatterns = [
-            {
-                type: "gas_cloud",
-                spawnRate: 0.4,
-                speed: 2.5,
-                size: { width: 30, height: 30 }, // Reduced to moderate size
-                color: "#a0a0a0"
-            },
-            {
-                type: "lightning",
-                spawnRate: 0.3,
-                speed: 3,
-                size: { width: 18, height: 45 }, // Reduced to moderate size
-                color: "#d0d0d0"
-            },
-            {
-                type: "storm_eye",
-                spawnRate: 0.2,
-                speed: 1.8,
-                size: { width: 40, height: 40 }, // Reduced to moderate size
-                color: "#606060"
-            }
-        ];
-        
-        // Jupiter-specific settings
-        this.obstacleSpawnInterval = 2500; // 2.5 seconds
-        this.enemySpeed = 2;
-        this.enemyHealth = 100;
-        this.playerSpeed = 7;
-    }
-    
-    getObstaclePattern() {
-        const totalRate = this.obstaclePatterns.reduce((sum, pattern) => sum + pattern.spawnRate, 0);
-        let random = Math.random() * totalRate;
-        
-        for (const pattern of this.obstaclePatterns) {
-            random -= pattern.spawnRate;
-            if (random <= 0) {
-                return pattern;
-            }
-        }
-        
-        return this.obstaclePatterns[0];
-    }
-    
-    getEnvironmentColor() {
-        return this.color;
-    }
-    
-    getBackgroundElements() {
-        return [
-            { type: "swirling_gas", intensity: 0.5 },
-            { type: "storm_clouds", particles: 8 },
-            { type: "lightning_flashes", frequency: 0.1 }
-        ];
-    }
-}
-
-
-/* --- js/levels/saturn.js --- */
-"use strict";
-
-// Saturn Level - Hard Ringed Planet Environment
-var SaturnLevel = class SaturnLevel {
-    constructor() {
-        this.id = "saturn";
-        this.name = "SATURN";
-        this.difficulty = "HARD";
-        this.environment = "RINGED_PLANET";
-        this.color = "#808080";
-        this.description = "Ringed planet with debris fields";
-        this.background = "saturn";
-        this.enemyType = "enemyHeavy";
-        
-        // Saturn-specific obstacle patterns
-        this.obstaclePatterns = [
-            {
-                type: "ring_debris",
-                spawnRate: 0.5,
-                speed: 3,
-                size: { width: 25, height: 25 }, // Reduced to moderate size
-                color: "#a0a0a0"
-            },
-            {
-                type: "ice_crystal",
-                spawnRate: 0.3,
-                speed: 2.8,
-                size: { width: 20, height: 35 }, // Reduced to moderate size
-                color: "#d0d0d0"
-            },
-            {
-                type: "meteor_shower",
-                spawnRate: 0.2,
-                speed: 4,
-                size: { width: 18, height: 18 }, // Reduced to moderate size
-                color: "#808080"
-            }
-        ];
-        
-        // Saturn-specific settings
-        this.obstacleSpawnInterval = 2000; // 2 seconds
-        this.enemySpeed = 2.5;
-        this.enemyHealth = 120;
-        this.playerSpeed = 6;
-    }
-    
-    getObstaclePattern() {
-        const totalRate = this.obstaclePatterns.reduce((sum, pattern) => sum + pattern.spawnRate, 0);
-        let random = Math.random() * totalRate;
-        
-        for (const pattern of this.obstaclePatterns) {
-            random -= pattern.spawnRate;
-            if (random <= 0) {
-                return pattern;
-            }
-        }
-        
-        return this.obstaclePatterns[0];
-    }
-    
-    getEnvironmentColor() {
-        return this.color;
-    }
-    
-    getBackgroundElements() {
-        return [
-            { type: "ring_particles", intensity: 0.7 },
-            { type: "ice_shards", particles: 12 },
-            { type: "debris_field", density: 0.4 }
-        ];
-    }
-}
-
-
-/* --- js/levels/neptune.js --- */
-"use strict";
-
-// Neptune Level - Extreme Ice Planet Environment
-var NeptuneLevel = class NeptuneLevel {
-    constructor() {
-        this.id = "neptune";
-        this.name = "NEPTUNE";
-        this.difficulty = "EXTREME";
-        this.environment = "ICE_PLANET";
-        this.color = "#808080";
-        this.description = "Ice planet with freezing storms";
-        this.background = "neptune";
-        this.enemyType = "enemyHeavy";
-        
-        // Neptune-specific obstacle patterns
-        this.obstaclePatterns = [
-            {
-                type: "ice_spike",
-                spawnRate: 0.4,
-                speed: 3.5,
-                size: { width: 30, height: 30 }, // Reduced to moderate size
-                color: "#a0a0a0"
-            },
-            {
-                type: "freeze_ray",
-                spawnRate: 0.3,
-                speed: 4,
-                size: { width: 15, height: 50 }, // Reduced to moderate size
-                color: "#808080"
-            },
-            {
-                type: "blizzard",
-                spawnRate: 0.3,
-                speed: 2.5,
-                size: { width: 45, height: 45 }, // Reduced to moderate size
-                color: "#d0d0d0"
-            }
-        ];
-        
-        // Neptune-specific settings
-        this.obstacleSpawnInterval = 1500; // 1.5 seconds
-        this.enemySpeed = 3;
-        this.enemyHealth = 150;
-        this.playerSpeed = 5;
-    }
-    
-    getObstaclePattern() {
-        const totalRate = this.obstaclePatterns.reduce((sum, pattern) => sum + pattern.spawnRate, 0);
-        let random = Math.random() * totalRate;
-        
-        for (const pattern of this.obstaclePatterns) {
-            random -= pattern.spawnRate;
-            if (random <= 0) {
-                return pattern;
-            }
-        }
-        
-        return this.obstaclePatterns[0];
-    }
-    
-    getEnvironmentColor() {
-        return this.color;
-    }
-    
-    getBackgroundElements() {
-        return [
-            { type: "ice_storm", intensity: 0.8 },
-            { type: "freezing_wind", particles: 15 },
-            { type: "crystal_formation", density: 0.6 }
-        ];
-    }
-}
-
-
-/* --- js/levels/pluto.js --- */
-"use strict";
-
-// Pluto Level - Nightmare Dwarf Planet Environment
-var PlutoLevel = class PlutoLevel {
-    constructor() {
-        this.id = "pluto";
-        this.name = "PLUTO";
-        this.difficulty = "NIGHTMARE";
-        this.environment = "DWARF_PLANET";
-        this.color = "#808080";
-        this.description = "Dwarf planet with chaotic gravity";
-        this.background = "pluto";
-        this.enemyType = "enemyBoss";
-        
-        // Pluto-specific obstacle patterns
-        this.obstaclePatterns = [
-            {
-                type: "gravity_well",
-                spawnRate: 0.3,
-                speed: 2,
-                size: { width: 35, height: 35 }, // Reduced to moderate size
-                color: "#606060"
-            },
-            {
-                type: "dark_matter",
-                spawnRate: 0.4,
-                speed: 4.5,
-                size: { width: 22, height: 22 }, // Reduced to moderate size
-                color: "#404040"
-            },
-            {
-                type: "void_portal",
-                spawnRate: 0.3,
-                speed: 3.5,
-                size: { width: 40, height: 40 }, // Reduced to moderate size
-                color: "#202020"
-            }
-        ];
-        
-        // Pluto-specific settings
-        this.obstacleSpawnInterval = 1000; // 1 second
-        this.enemySpeed = 3.5;
-        this.enemyHealth = 200;
-        this.playerSpeed = 4;
-    }
-    
-    getObstaclePattern() {
-        const totalRate = this.obstaclePatterns.reduce((sum, pattern) => sum + pattern.spawnRate, 0);
-        let random = Math.random() * totalRate;
-        
-        for (const pattern of this.obstaclePatterns) {
-            random -= pattern.spawnRate;
-            if (random <= 0) {
-                return pattern;
-            }
-        }
-        
-        return this.obstaclePatterns[0];
-    }
-    
-    getEnvironmentColor() {
-        return this.color;
-    }
-    
-    getBackgroundElements() {
-        return [
-            { type: "chaotic_gravity", intensity: 1.0 },
-            { type: "dark_energy", particles: 20 },
-            { type: "void_distortion", density: 0.8 }
-        ];
-    }
-}
-
-
-/* --- js/levels/level-manager.js?v=stages-2 --- */
-"use strict";
-
-// Level Manager - Handles all level-specific logic
-var LevelManager = class LevelManager {
-    constructor() {
-        this.currentLevel = null;
-        this.levels = new Map();
-        this.planetOrder = ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
-        this.initializeLevels();
-    }
-    
-    initializeLevels() {
-        const instances = [
-            new MarsLevel(),
-            new JupiterLevel(),
-            new SaturnLevel(),
-            new NeptuneLevel(),
-            new PlutoLevel()
-        ];
-
-        instances.forEach((level, index) => {
-            if (!level.id) {
-                level.id = this.planetOrder[index] || level.name.toLowerCase();
-            }
-            if (!level.background) {
-                level.background = level.id;
-            }
-            this.levels.set(level.id, level);
-            this.levels.set(index + 1, level);
-            this.levels.set(String(index + 1), level);
-        });
-    }
-    
-    setLevel(levelId) {
-        this.currentLevel = this.getLevelById(levelId);
-        if (this.currentLevel) {
-            this.applyLevelSettings();
-        }
-        return this.currentLevel;
-    }
-    
-    getCurrentLevel() {
-        return this.currentLevel;
-    }
-
-    getLevelByPlanetId(planetId) {
-        if (planetId == null) return null;
-        const key = planetIdOfLevelId(planetId);
-        return this.levels.get(key) || null;
-    }
-    
-    getLevelById(levelId) {
-        if (levelId == null) return null;
-
-        if (this.levels.has(levelId)) {
-            return this.levels.get(levelId);
-        }
-
-        const raw = String(levelId).toLowerCase();
-        if (this.levels.has(raw)) {
-            return this.levels.get(raw);
-        }
-
-        const planetKey = planetIdOfLevelId(raw);
-        if (this.levels.has(planetKey)) {
-            return this.levels.get(planetKey);
-        }
-
-        const asNum = parseInt(raw, 10);
-        if (!Number.isNaN(asNum) && this.levels.has(asNum)) {
-            return this.levels.get(asNum);
-        }
-
-        return null;
-    }
-    
-    getAllLevels() {
-        return this.planetOrder
-            .map(id => this.levels.get(id))
-            .filter(Boolean);
-    }
-    
-    applyLevelSettings() {
-        if (!this.currentLevel) return;
-        
-        if (typeof game !== 'undefined') {
-            game.obstacleSpawnInterval = this.currentLevel.obstacleSpawnInterval;
-            
-            if (typeof enemyManager !== 'undefined') {
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.setEnemyShipType(this.currentLevel.enemyType);
-                }
-            }
-        }
-    }
-    
-    getObstaclePattern() {
-        if (!this.currentLevel) return null;
-        return this.currentLevel.getObstaclePattern();
-    }
-    
-    getEnvironmentColor() {
-        if (!this.currentLevel) return '#808080';
-        return this.currentLevel.getEnvironmentColor();
-    }
-    
-    getBackgroundElements() {
-        if (!this.currentLevel) return [];
-        return this.currentLevel.getBackgroundElements();
-    }
-    
-    getLevelInfo() {
-        if (!this.currentLevel) return null;
-        return {
-            name: this.currentLevel.name,
-            difficulty: this.currentLevel.difficulty,
-            environment: this.currentLevel.environment,
-            color: this.currentLevel.color,
-            description: this.currentLevel.description
-        };
-    }
-}
-
-// Global level manager instance
-var levelManager = new LevelManager();
-
-
 /* --- js/ui/ship-renderer.js --- */
 "use strict";
 
@@ -74465,7 +74573,6 @@ var GalaxyMapManager = class GalaxyMapManager {
     show(options) {
         this.isVisible = true;
         this.galaxyId = options && options.galaxyId;
-        this.restoreGalaxyView();
         this.onConfirm = options && options.onConfirm;
         this.onBack = options && options.onBack;
         this.onExplored = options && options.onExplored;
@@ -74477,10 +74584,14 @@ var GalaxyMapManager = class GalaxyMapManager {
         // The standalone map overlay takes the keyboard right away.
         this._inputActive = !this._mountEl;
         this.statusMsg = '';
-        if (
-            typeof planetConfigManager !== 'undefined' &&
-            planetConfigManager.ensureGalaxyArrivalContent &&
-            typeof profileManager !== 'undefined'
+        const reuse = !!(this._mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId);
+        // Parked map already has live zoom/pan — restoreGalaxyView from LS fought it and forced art swaps.
+        if (!reuse) this.restoreGalaxyView();
+        else this._reuseQuietUntil = performance.now() + 250;
+        if (!reuse
+            && typeof planetConfigManager !== 'undefined'
+            && planetConfigManager.ensureGalaxyArrivalContent
+            && typeof profileManager !== 'undefined'
         ) {
             const profile = profileManager.getActiveProfile && profileManager.getActiveProfile();
             const firstVisit = profile
@@ -74501,19 +74612,23 @@ var GalaxyMapManager = class GalaxyMapManager {
                 profileManager.ensureAllyDefense(this.galaxyId, profile);
             }
         }
-        this.loadMap();
+        // Reuse keeps selection/camera; loadMap() would reset selectedPlanetId.
+        if (!reuse) this.loadMap();
         this.createUI();
         if (this.startOrbitLoop) this.startOrbitLoop();
         // Open with the route to the selected planet centred (animated).
-        requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
+        // Skip camera tween when reusing a parked map — it already frames the selection.
+        if (!reuse) {
+            requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
+        }
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');
         }
     }
     hide() {
         if (this.isVisible) this.saveGalaxyView();
+        const wasEmbedded = !!(this._mountEl && this.overlay && this.overlay.classList.contains('galaxy-map-embedded'));
         this.isVisible = false;
-        this._mountEl = null;
         this._inputActive = false;
         this.hoveredPlanetId = null;
         this.onEscape = null;
@@ -74521,10 +74636,37 @@ var GalaxyMapManager = class GalaxyMapManager {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;
         }
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
+        if (this._orbitTimer) {
+            try { clearInterval(this._orbitTimer); } catch (e) { /* */ }
+            this._orbitTimer = null;
         }
+        if (this.overlay) {
+            // Embedded PLAY map: park DOM for reuse (H9 — hide+show was a full SVG rebuild).
+            if (wasEmbedded) {
+                this._parkedGalaxyId = this.galaxyId;
+                // Cancel pending art swaps + size observers (detach → 0×0 RO fired apply/swap).
+                clearTimeout(this._detailTimer);
+                clearTimeout(this._lineTimer);
+                clearTimeout(this._nebTimer);
+                clearTimeout(this._nebPanTimer);
+                clearTimeout(this._snapTimer);
+                if (this._mapAreaRO) {
+                    try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+                    this._mapAreaRO = null;
+                }
+                this.overlay.remove();
+            } else {
+                this.overlay.remove();
+                this.overlay = null;
+                this._parkedGalaxyId = null;
+                this._pxLatticeSeated = false;
+                if (this._mapAreaRO) {
+                    try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+                    this._mapAreaRO = null;
+                }
+            }
+        }
+        this._mountEl = null;
     }
     isInputActive() {
         return !!this._inputActive;
@@ -74798,6 +74940,9 @@ var GalaxyMapManager = class GalaxyMapManager {
             } else if (done) {
                 // Cleared: solid green tile with a dark pixel check.
                 inner = '<svg viewBox="0 0 10 10" shape-rendering="crispEdges"><rect class="gm-stage-done-bg" width="10" height="10"/><path class="gm-stage-check" d="M2 5h1v1h1v1h1V6h1V5h1V4h1V3H7v1H6v1H5v1H4V5H3V4H2z"/></svg>';
+            } else if (!isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i)) {
+                // Transit stage: arrow flying up between two gate walls.
+                inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M4 0h1v1h1v1h1v1H2V2h1V1h1zM4 3h1v3H4zM0 7h3v2H0zM6 7h3v2H6z"/></svg>';
             } else {
                 // Open stage: pixel target / crosshair.
                 inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M3 0h3v1H3zM0 3h1v3H0zM8 3h1v3H8zM3 8h3v1H3zM1 1h2v1H2v1H1zM6 1h2v2H7V2H6zM1 6h1v1h1v1H1zM7 6h1v2H6V7h1zM4 2h1v2h2v1H5v2H4V5H2V4h2z"/></svg>';
@@ -74808,7 +74953,7 @@ var GalaxyMapManager = class GalaxyMapManager {
             html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
                 (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
                 (!dev && done && canReplay ? ` data-replay-stage="${i}" data-replay-planet="${pid}"` : '') +
-                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
+                ` title="${isBoss ? 'BOSS' : (typeof isTransitStage === 'function' && isTransitStage(pid, i) ? 'TRANSIT ' : 'STAGE ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;
@@ -74823,7 +74968,7 @@ var GalaxyMapManager = class GalaxyMapManager {
 
 // GalaxyMapManager members, continued from core.js (kept under ~500 lines per file).
 /** Dev layout editor settings for the enemy card: x/y offset (px), size (%) and layer per element. Stored per browser. */
-const enemyCardLayout = {
+var enemyCardLayout = {
     KEY: 'vf_enemy_card_layout_v1',
     ELS: ['title', 'bar', 'face', 'ship', 'planet'],
     LABELS: { title: 'TITLE', bar: 'BAR', face: 'FACE', ship: 'SHIP', planet: 'PLANET' },
@@ -75416,7 +75561,26 @@ extendClass(GalaxyMapManager, {
 extendClass(GalaxyMapManager, {
     createUI() {
         const mountEl = this._mountEl;
+        // Reuse parked embedded map (same galaxy): tab switches were full-rebuilds (~120ms+).
+        if (mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId
+            && this.overlay.classList.contains('galaxy-map-embedded')) {
+            if (this.overlay.parentNode !== mountEl) mountEl.appendChild(this.overlay);
+            this.overlay.hidden = false;
+            this.overlay.style.display = '';
+            this._parkedGalaxyId = null;
+            // Park disconnected the size observer — reattach without rebinding wheel/drag.
+            if (this.reattachMapAreaObserver) this.reattachMapAreaObserver();
+            if (this.startOrbitLoop) this.startOrbitLoop();
+            // Parked overlay left the document → spin timer may have cleared; restart.
+            if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+                planetSVGManager.startPlanetSpin();
+            }
+            if (this.updateSelectionFrames) requestAnimationFrame(() => this.updateSelectionFrames());
+            if (this.syncRoutePreview) this.syncRoutePreview();
+            return;
+        }
         if (this.overlay) this.overlay.remove();
+        this._pxLatticeSeated = false;
         this.hoveredPlanetId = null;
         if (typeof planetSVGManager !== 'undefined') {
             planetSVGManager.init();
@@ -75426,7 +75590,8 @@ extendClass(GalaxyMapManager, {
                 ids.forEach((pid) => {
                     const cfg = planetConfigManager.getConfig(pid);
                     if (cfg && planetSVGManager.registerFromConfig) {
-                        planetSVGManager.registerFromConfig(cfg, { force: true });
+                        // Cache hit unless missing — force:true rebuilt every planet on every PLAY open.
+                        planetSVGManager.registerFromConfig(cfg);
                     }
                 });
             }
@@ -75477,7 +75642,7 @@ extendClass(GalaxyMapManager, {
                 <!-- Map above; bottom bar (planet / ruler / actions) sits under it. -->
                 <div class="gm-map-stage">
                 <div class="galaxy-map-area" id="gmMapArea">
-                    ${this.renderMapSvg()}
+                    ${this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg()}
                 </div>
                 ${panelsHtml}
                 </div>
@@ -75497,7 +75662,7 @@ extendClass(GalaxyMapManager, {
                     </div>
                     ${emptyHint}
                     <div class="galaxy-map-area" id="gmMapArea">
-                        ${this.renderMapSvg()}
+                        ${this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg()}
                     </div>
                     ${panelsHtml}
                     ${exploreUi}
@@ -75880,7 +76045,7 @@ var NEB_SCALE = 0.0038;
 var NEB_PIXEL_BUDGET = 160000;
 // Time per compute slice: the fine patch (rebuilt while zooming / panning) takes small bites so frames keep running;
 // the coarse field is built once and may take bigger ones.
-var NEB_SLICE_FINE_MS = 5;
+var NEB_SLICE_FINE_MS = 8;
 var NEB_SLICE_COARSE_MS = 12;
 // How steeply nebula density drops with distance from the suns (higher = faster).
 var NEB_SUN_FALLOFF = 1.8;
@@ -76202,6 +76367,10 @@ extendClass(GalaxyMapManager, {
 
 // GalaxyMapManager members, continued from render-explore-controls.js (kept under ~500 lines per file).
 extendClass(GalaxyMapManager, {
+    /** Map SVG wrapped for Global Pixel Size: CSS scale(N) nearest-neighbor raster. */
+    mapAreaInnerHtml() {
+        return `<div class="gm-px-raster">${this.renderMapSvg()}</div>`;
+    },
     renderMapSvg() {
         const nodes = this.map.nodes || [];
         const edges = this.map.edges || [];
@@ -76238,8 +76407,11 @@ extendClass(GalaxyMapManager, {
             // Progress label only while there's still something to fight.
             const stageProgress = !unlocked || cleared ? null : this.getPlanetStageProgress(n.planetId);
             const baseSize = this.planetNodeSize(n.planetId);
-            const size = baseSize * this.getMapObjectScale();
+            let size = baseSize * this.getMapObjectScale();
+            const uLat = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            if (uLat > 0) size = Math.max(uLat * 2, Math.round(size / uLat) * uLat);
             const frame = size / 2 + 10;
+            const npt = this.latticeMapPt ? this.latticeMapPt(x, y) : { x: x, y: y };
             const stateClass = [
                 unlocked ? 'unlocked' : 'locked',
                 cleared ? 'cleared' : '',
@@ -76248,12 +76420,12 @@ extendClass(GalaxyMapManager, {
             ].filter(Boolean).join(' ');
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
-                   data-planet="${n.planetId}" data-size="${size}" transform="translate(${x},${y})">
+                   data-planet="${n.planetId}" data-size="${size}" transform="translate(${npt.x},${npt.y})">
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
-                    <foreignObject class="gm-planet-lit" data-lit-x="${x}" data-lit-y="${y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
+                    <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
-                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y), true)}
+                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true)}
                         </div>
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
@@ -76286,22 +76458,20 @@ extendClass(GalaxyMapManager, {
             const x = W / 2 + (post.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (post.y - 0.5) * (H - pad * 2) * mapSpread;
             const open = profileManager.isTradingPostUnlocked(post);
-            const anchor = this.getPlanetInfo(post.planetId);
-            // One station cell = one pixel of its anchor planet.
-            // Stations are small next to planets: half a planet pixel per
-            // cell for shops, a bit more for faction stations.
-            // Base cell = one planet pixel at zoom detail 1; the station's own
-            // sub-pixel detail then follows the zoom like the planets do.
+            // Fixed map footprint (same as planets/ship). Under GP, screen cells stay gp via
+            // vfMapPx — do not scale stations by live zoom (that made cells grow on zoom-out).
             const pp = this.planetPixelSize(post.planetId) * this.getMapObjectScale();
             const half = 2.6 * pp;
+            const stDetail = this.getMapDetail();
+            const ppt = this.latticeMapPt ? this.latticeMapPt(x, y) : { x: x, y: y };
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
-                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
+                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${ppt.x},${ppt.y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
                     <rect class="gm-post-hit" x="${-half - 2}" y="${-half - 2}" width="${2 * half + 4}" height="${2 * half + 4}"/>
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
                     ${post.faction ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
+                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, stDetail, open)}</g>
                 </g>
             `;
         });
@@ -76326,6 +76496,8 @@ extendClass(GalaxyMapManager, {
             const box = this.shipIconBox();
             const k = box.w / 11;
             const shipPt = this.latticeShipPt ? this.latticeShipPt(x, y) : { x: x, y: y };
+            const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0;
             const shipSvg = icon
                 ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
                 : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
@@ -76337,13 +76509,15 @@ extendClass(GalaxyMapManager, {
             const showShipLabel = (this.mapZoom || 1) < 1.1 &&
                 !centered &&
                 this._shipLabelReady;
+            // Under GP skip sub-pixel bob — it fights the shared screen lattice.
+            const bob = gpOn ? '' : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
                     <title>YOUR SHIP</title>
                     <g class="gm-ship-scale" transform="scale(1)">
                     ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
                     <g>
-                        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>
+                        ${bob}
                         ${shipSvg}
                     </g>
                     </g>
@@ -76453,10 +76627,10 @@ extendClass(GalaxyMapManager, {
         let fine = null;
         if (this.getMapViewBox) {
             const v = this.getMapViewBox(W, H, typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48);
-            // The patch snaps to a tile grid, so small pans reuse the same finished patch
-            // (no recompute while dragging); only crossing a tile edge builds a new one.
-            const tile = 8 * Math.pow(2, Math.max(0, Math.round(Math.log2(Math.max(8, v[2] * 0.25) / 8))));
-            const mx = v[2] * 0.1, my = v[3] * 0.1;
+            // Larger margin + coarser tiles: pan stays inside one fine patch longer, so the
+            // nebula only refines (higher-res overlay) instead of rebuilding every nudge.
+            const tile = 8 * Math.pow(2, Math.max(0, Math.round(Math.log2(Math.max(8, v[2] * 0.35) / 8))));
+            const mx = v[2] * 0.5, my = v[3] * 0.5;
             fine = { x: Math.floor((v[0] - mx) / tile) * tile, y: Math.floor((v[1] - my) / tile) * tile };
             fine.w = Math.ceil((v[0] + v[2] + mx) / tile) * tile - fine.x;
             fine.h = Math.ceil((v[1] + v[3] + my) / tile) * tile - fine.y;
@@ -76621,12 +76795,19 @@ extendClass(GalaxyMapManager, {
                 delete this._nebJobs[jobKey];
                 if (opaque) this._nebLastFine = { key: jobKey, tag: tag(url) };
                 const applyUrl = (el) => {
+                    // Fade fine patch in over the coarse field — reads as "getting finer", not a hard pop.
+                    try {
+                        el.style.opacity = '0';
+                        el.style.transition = 'opacity 0.28s ease-out';
+                    } catch (e) { /* */ }
                     el.setAttribute('href', url);
-                    if (el.style && el.style.opacity === '0') el.style.opacity = '';
                     const st = el.getAttribute('style') || '';
-                    if (st.indexOf('opacity:0') !== -1) {
+                    if (st.indexOf('opacity:0') !== -1 && st.indexOf('transition') === -1) {
                         el.setAttribute('style', st.replace(/;?opacity:0/, ''));
                     }
+                    requestAnimationFrame(() => {
+                        try { el.style.opacity = '1'; } catch (e2) { /* */ }
+                    });
                 };
                 const mounted = document.querySelectorAll(`image[data-neb-key="${jobKey}"]`);
                 if (mounted.length) {
@@ -76822,10 +77003,14 @@ extendClass(GalaxyMapManager, {
             // to screen pixels); the pixel budget below caps the cost.
             // Target: about 2 screen pixels per cell, as fine as the budget allows.
             const unit = this.mapPixelUnitGlobal();
-            const want = Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
+            const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0;
+            // Global Pixel Size: keep nebula cells at mapPixelUnitGlobal (gp screen px).
+            // Budget coarsening made nebula blocks look larger than planet/ship cells.
+            const want = gpOn ? unit : Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
             // Cell = 8 / 2^k: nests exactly in the coarse 8-unit grid (patch
             // origin is a multiple of 8), so pixels never shift between patches.
-            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / want))));
+            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
             // Same base octaves as the coarse field; finer cells add detail on top.
             const oct = Math.min(7, 5 + Math.max(0, Math.round(Math.log2(8 / cell)) - 1));
             const fk = `${gid}|f${cell}|${fine.x}|${fine.y}|${fine.w}|${fine.h}`;
@@ -76870,6 +77055,29 @@ extendClass(GalaxyMapManager, {
         }
         const svg = `<g class="gm-nebula" shape-rendering="crispEdges">${out}${far}</g>`;
         return svg;
+    },
+
+    /**
+     * Refine nebula in place (coarse stays; fine patch updates). Avoids rebuilding
+     * the whole .gm-space layer, which made pan/zoom look like a strange rebuild.
+     */
+    refreshNebulaInPlace() {
+        const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!cur || this._parkedGalaxyId) return false;
+        const old = cur.querySelector('.gm-nebula');
+        if (!old) return false;
+        const W = typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 1600;
+        const H = typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 900;
+        const pad = typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48;
+        const html = this.galaxyNebulaSvg(W, H, -pad, -pad);
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${html}</svg>`;
+        const next = wrap.querySelector('.gm-nebula');
+        if (!next) return false;
+        // Keep the still-valid fine image under the new group until the job finishes
+        // (galaxyNebulaSvg already embeds prevTag when the new key is not ready).
+        old.replaceWith(next);
+        return true;
     },
 });
 
@@ -77037,6 +77245,11 @@ extendClass(GalaxyMapManager, {
                 this._sunDriftTimer = null;
                 return;
             }
+            // Decorative sun drift: skip while pixel-size is on (idle map stays static, less SVG thrash).
+            try {
+                if (document.documentElement.getAttribute('data-vf-pixel-size') === 'on') return;
+                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off') return;
+            } catch (e) { /* */ }
             const t = performance.now() / 1000;
             svg.querySelectorAll('.gm-sun[data-sun]').forEach((el) => {
                 const pose = this._sunDrift[+el.getAttribute('data-sun')];
@@ -77053,7 +77266,7 @@ extendClass(GalaxyMapManager, {
                 if (parts[2] === String(dir)) return;
                 span.setAttribute('data-planet-spin', parts[0] + '|' + parts[1] + '|' + dir);
             });
-        }, 1000);
+        }, 2000);
     },
     /**
      * Lanes from each station / trading post to its anchor planet(s), routed
@@ -77072,23 +77285,22 @@ extendClass(GalaxyMapManager, {
         let width = (o.width || 2.6) / this.getLineDetail();
         // Fine grid (smoother diagonals), but never more than ~8 px across.
         let p = Math.max(1 / d, width / 8);
-        // Global Pixel Size: lines are built from exactly the global pixel (and at least one pixel thick).
-        const gpl = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
-            ? uiAppearanceManager.getGlobalPixelPx() : 0;
-        if (gpl > 0) {
-            // Lines keep their map-unit geometry (they zoom with the map and get thicker as you zoom in), but
-            // never thinner than one pixel-screen cell plus 1px, so the cell sampler always hits them fully.
-            const liveL = this.mapScreenScale();
-            if (liveL > 0) {
-                width = Math.max(width, (gpl + 1.05) / liveL);
-                p = Math.max(1 / d, width / 8);
-            }
+        // Global Pixel Size: brush cell = lattice / vfMapPx cell.
+        // Width is N cells (from design width at GM_PIXEL_U0), not a fixed map
+        // length — otherwise zoom-in makes beams look chunkier on screen.
+        const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+        if (uL > 0) {
+            const cells = Math.max(1, Math.round((o.width || 2.6) / GM_PIXEL_U0));
+            width = cells * uL;
+            p = uL;
         }
         const rad = width / 2 / p;          // brush radius in pixels
         // Energy beam: white-hot centre, coloured core, glow, faint halo.
+        // On the lattice, keep glow/halo proportional to the core (fixed +1.6/+3.6
+        // cell padding made close-zoom routes look several gp too thick).
         const hotRad = Math.max(0.5, rad * 0.4);
-        const glowRad = rad + 1.6;
-        const haloRad = rad + 3.6;
+        const glowRad = uL > 0 ? Math.max(rad + 0.5, rad * 1.55) : rad + 1.6;
+        const haloRad = uL > 0 ? Math.max(rad + 1, rad * 2.35) : rad + 3.6;
         // Route preview: thin dashes with wide gaps, marching towards the target.
         if (o.run) {
             const dash = width * 5, gap = width * 4.4, period = dash + gap;
@@ -77325,17 +77537,35 @@ extendClass(GalaxyMapManager, {
      * (×1.19 each), so lines thin out in small pixel steps while zooming.
      */
     getLineDetail() {
+        // Global Pixel Size: thin with lattice (GM_PIXEL_U0 / uL) so baked width
+        // stays ~N screen cells as zoom changes — returning 1 froze map-unit
+        // thickness and made routes chunky when zoomed in.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            if (uL > 0) {
+                const raw = Math.max(1, Math.min(12, GM_PIXEL_U0 / uL));
+                return Math.pow(2, Math.round(Math.log2(raw) * 4) / 4);
+            }
+            return 1;
+        }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
         return Math.pow(2, Math.round(Math.log2(Math.max(1, Math.min(12, z))) * 4) / 4);
     },
     /** Stage counter size: big when zoomed out (readable), settling down as you zoom in. */
     stageTextScale() {
-        // Global Pixel Size: one glyph cell is one grid cell on screen at every zoom.
+        // Global Pixel Size: local glyph cell (F=1) == one vfMapPx / lattice cell.
+        if (this.mapPxLatticeUnit) {
+            const u = this.mapPxLatticeUnit();
+            if (u > 0) return u;
+        }
         const gpS = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
         if (gpS > 0) {
-            const liveS = this.mapScreenScale();
-            if (liveS > 0) return gpS / liveS;
+            const live = (this.mapScreenScale && this.mapScreenScale()) || this._pxScreenScale || 0;
+            if (live > 0) return gpS / live;
+            return GM_PIXEL_U0;
         }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? Math.max(1, this.mapZoom) : 1;
         return 1 + 1.5 / z;
@@ -77344,27 +77574,43 @@ extendClass(GalaxyMapManager, {
     mapScreenScale() {
         const svgEl = document.querySelector('.galaxy-map-svg');
         if (!svgEl || !svgEl.clientWidth) return 0;
+        let live = 0;
         // Exact px per user unit (viewBox + preserveAspectRatio letterboxing included).
         try {
             const m = svgEl.getScreenCTM();
-            if (m && m.a > 0) return m.a;
+            if (m && m.a > 0) live = m.a;
         } catch (e) { /* fall back below */ }
-        const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
-        return vb && vb.width > 0 && vb.height > 0
-            ? Math.min(svgEl.clientWidth / vb.width, svgEl.clientHeight / vb.height) : 0;
+        if (!(live > 0)) {
+            const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+            live = vb && vb.width > 0 && vb.height > 0
+                ? Math.min(svgEl.clientWidth / vb.width, svgEl.clientHeight / vb.height) : 0;
+        }
+        // Cache for mapPixelUnitGlobal during bake (before CTM is ready on remount).
+        if (live > 0) this._pxScreenScale = live;
+        return live;
     },
-    /** Global Pixel Size: put the ship marker centre where its icon box (odd cell counts sit half a cell off) lands on the lattice. */
+    /** Map units per Global Pixel cell (same cell CSS size as vfMapPx). */
+    mapPxLatticeUnit() {
+        if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.getGlobalPixelPx
+            || !(uiAppearanceManager.getGlobalPixelPx() > 0)) return 0;
+        const live = this.mapScreenScale() || this._pxScreenScale || 0;
+        if (!(live > 0)) return 0;
+        const cellCss = uiAppearanceManager.getMapPxCellCss
+            ? uiAppearanceManager.getMapPxCellCss()
+            : uiAppearanceManager.getGlobalPixelPx();
+        return cellCss > 0 ? cellCss / live : 0;
+    },
+    /**
+     * Snap a map point onto the Global Pixel Size lattice (same grid as vfMapPx).
+     */
+    latticeMapPt(x, y) {
+        const u = this.mapPxLatticeUnit();
+        if (!(u > 0)) return { x: x, y: y };
+        return { x: Math.round(x / u) * u, y: Math.round(y / u) * u };
+    },
+    /** Ship centre on the same lattice as planets (no half-cell offset — that broke the grid). */
     latticeShipPt(x, y) {
-        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
-            ? uiAppearanceManager.getGlobalPixelPx() : 0;
-        // The pixel screen filter owns alignment now; keep the true position.
-        return { x: x, y: y };
-        const live = gp > 0 ? this.mapScreenScale() : 0;
-        if (!(live > 0)) return { x: x, y: y };
-        const u = gp / live;
-        const dk = Math.max(1, Math.round(this.getMapDetail()));
-        const ox = ((13 * dk) % 2) * u / 2, oy = ((17 * dk) % 2) * u / 2;
-        return { x: Math.round((x - ox) / u) * u + ox, y: Math.round((y - oy) / u) * u + oy };
+        return this.latticeMapPt(x, y);
     },
     /**
      * Global Pixel Size: faction crests are 16x16 sprites, shown with one sprite pixel per grid cell
@@ -77415,20 +77661,18 @@ extendClass(GalaxyMapManager, {
     },
     /** Lattice geometry of a planet icon: cell size u (map units) and the node centre / icon box size. */
     planetLatticeGeo(iconEl, size, live) {
-        const gp = uiAppearanceManager.getGlobalPixelPx();
-        const node = iconEl.closest('.gm-node');
-        const m = node && /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(node.getAttribute('transform') || '');
-        return null; // no per-object lattice: the pixel screen filter aligns everything
-        // eslint-disable-next-line no-unreachable
-        if (!m || !(gp > 0) || !(live > 0)) return null;
-        return { u: gp / live, cx: +m[1], cy: +m[2], size: size };
+        // Screen filter (gp≥2) or quantized bitmap (gp=1) owns pixel size — keep icon box from layout.
+        return null;
     },
     /** Global Pixel Size: snap every planet image on the map to the global pixel grid. */
     snapMapPlanets() {
         const svg = document.querySelector('.galaxy-map-svg');
         const gp0 = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) ? uiAppearanceManager.getGlobalPixelPx() : 0;
         this.snapMapEmblems();
-        if (svg && gp0 > 0 && uiAppearanceManager.ensureMapPxFilter) uiAppearanceManager.ensureMapPxFilter(gp0, svg);
+        if (gp0 > 0 && uiAppearanceManager.ensureMapPxFilter) {
+            const area = (svg && svg.closest && svg.closest('#gmMapArea')) || document.getElementById('gmMapArea') || svg;
+            uiAppearanceManager.ensureMapPxFilter(gp0, area);
+        }
         if (svg) {
             svg.querySelectorAll('.gm-px-txt').forEach((g) => {
                 g.innerHTML = this.pixelTextSvg(g.dataset.s, +g.dataset.x, +g.dataset.y, g.dataset.a);
@@ -77444,42 +77688,51 @@ extendClass(GalaxyMapManager, {
             const raw = im._rawUrl || im.getAttribute('src');
             const px = Number(el.getAttribute('data-planet-px')) || 0;
             const w = px * (im._frameK || 1.6);
-            if (raw && px > 0) planetSVGManager.snapPixelImg(im, raw, w * live, gp0 > 0 ? this.planetLatticeGeo(el, px, live) : { live: live, size: px });
+            // gp>0: null geo → quantize bitmap only, keep CSS size from planetIconHtml.
+            if (raw && px > 0) planetSVGManager.snapPixelImg(im, raw, w * live, gp0 > 0 ? null : { live: live, size: px });
         });
     },
-    /** Global Pixel Size: bucket of the on-screen scale (~12% steps) so art is re-baked while zooming between detail steps. */
+    /** Scale bucket for art re-bake. Always 0: zoom-driven re-bake coarsened GP pixels on zoom-out. */
     getMapScaleKey() {
-        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
-            ? uiAppearanceManager.getGlobalPixelPx() : 0;
-        if (!(gp > 0)) return 0;
-        const s = this.mapScreenScale();
-        return s > 0 ? Math.round(Math.log(s) / Math.log(1.12)) : 0;
+        return 0;
     },
-    getMapDetail() {
-        // Global Pixel Size: pick the detail so one map art pixel == gp screen px.
+    /** Mild zoom-only curve when Global Pixel Size is off (cap 4 = art budget). */
+    _zoomDetailCurve(z) {
+        const zc = Math.max(0.35, Math.min(12, Number(z) || 1));
+        // Gentler than before (was *2.2 → detail 8): 1→2→3→4 without hammering spin.
+        return Math.max(1, Math.min(4, 1 + Math.log2(Math.max(1, zc)) * 1.35));
+    },
+    /** Continuous map detail (no rounding) — drives --gm-px every zoom frame. */
+    getMapDetailFloat() {
+        const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
+        const zoomCurve = this._zoomDetailCurve(z);
         const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
         if (gp > 0) {
-            // Cached: this runs several times per zoom frame and clientWidth forces a layout.
-            const zk = (typeof this.mapZoom === 'number' ? this.mapZoom : 1).toFixed(3) + '|' + gp + '|' + window.innerWidth;
-            if (this._pxDetailKey === zk && this._pxDetail) return this._pxDetail;
+            // Ratchet: refine when zooming in, never coarsen on zoom-out (pixels stay gp-sized).
             try {
-                // Real on-screen scale: the live (already zoomed) viewBox vs the element width.
-                const s = this.mapScreenScale();
+                const s = this.mapScreenScale() || this._pxScreenScale || 0;
                 if (s > 0) {
-                    this._pxDetailKey = zk;
-                    this._pxScreenScale = s;
-                    this._pxDetail = Math.max(1, Math.min(16, Math.round(GM_PIXEL_U0 * s / gp)));
-                    return this._pxDetail;
+                    const need = Math.max(1, Math.min(4, GM_PIXEL_U0 * s / gp));
+                    this._pxDetailPeak = Math.max(this._pxDetailPeak || 1, need);
+                    return this._pxDetailPeak;
                 }
-            } catch (e) { /* fall through to zoom steps */ }
+            } catch (e) { /* fall through */ }
+            return this._pxDetailPeak || 2;
         }
-        const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
-        // Cap at 8 — map planet spin past that tanks frame time.
-        if (z >= 3.5) return 8;
-        if (z >= 2.5) return 4;
-        if (z >= 1.35) return 2;
-        return 1;
+        return zoomCurve;
+    },
+    getMapDetail() {
+        // Integer detail for art rebuilds; CSS pixel size uses getMapDetailFloat.
+        return Math.max(1, Math.min(4, Math.round(this.getMapDetailFloat())));
+    },
+    /** Reset GP detail ratchet when Pixel Size changes. */
+    resetPixelSizeDetailPeak() {
+        this._pxDetailPeak = 0;
+        this._pxDetailFloatKey = null;
+        this._pxDetailFloat = null;
+        this._mapArtDetail = -1;
+        this._mapArtSKey = null;
     },
     /**
      * Keep map objects visually proportional while the camera zooms.
@@ -77511,6 +77764,14 @@ extendClass(GalaxyMapManager, {
      * so ship and planet pixels always match at every zoom.
      */
     shipIconBox() {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        // Global Pixel Size: fixed map footprint so zoom does not grow/shrink ship cells;
+        // screen pixel size is gp via vfMapPx (or live scale). Bake detail still follows getMapDetail.
+        if (gp > 0) {
+            const w = 13 * GM_PIXEL_U0, h = 17 * GM_PIXEL_U0;
+            return { x: -w / 2, y: -h / 2, w: w, h: h, attrs: `x="${(-w / 2).toFixed(3)}" y="${(-h / 2).toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}"` };
+        }
         const dk = Math.max(1, Math.round(this.getMapDetail()));
         const u = this.mapPixelUnitGlobal();
         const w = 13 * dk * u, h = 17 * dk * u;
@@ -77610,9 +77871,8 @@ extendClass(GalaxyMapManager, {
      * organic curling tendrils that breathe instead of snapping.
      */
     /**
-     * Selection corners keep a fixed on-screen gap to the planet surface and a
-     * fixed on-screen size at every zoom: rebuilt from the current screen
-     * scale (screen px per map unit), snapped to whole screen pixels.
+     * Selection corners: fixed on-screen gap/size, snapped to whole screen pixels.
+     * Global Pixel Size: whole lattice cells (same grid as planets / vfMapPx).
      */
     updateSelectionFrames() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
@@ -77620,15 +77880,11 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
             return;
         }
-        // Screen scale from the cached element size + viewBox (meet): reading
-        // getScreenCTM right after a viewBox change forced a full layout of
-        // the map on every zoom frame.
         if (this._svgSizeEl !== svg || !this._svgSize) {
             const r = svg.getBoundingClientRect();
             const vb0 = svg.viewBox.baseVal;
             const ctm = svg.getScreenCTM && svg.getScreenCTM();
             const fit = vb0.width && vb0.height ? Math.min(r.width / vb0.width, r.height / vb0.height) : 0;
-            // CTM vs. rect ratio (the GUI's CSS zoom), measured once.
             const c = ctm && fit ? Math.hypot(ctm.a, ctm.b) / fit : 1;
             this._svgSizeEl = svg;
             this._svgSize = { w: r.width * c, h: r.height * c };
@@ -77643,40 +77899,97 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
             return;
         }
-        // Global Pixel Size: sizes are whole grid cells (a cell is the filter's sampling unit), so the marks are exact pixel art.
         const gpf = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
-        // The pixel screen needs the exact on-screen scale (the cached estimate can be ~20% off).
         const sx = gpf > 0 ? this.mapScreenScale() : 0;
-        // +1px: the filter samples one px per cell, so a mark must fully cover a sample wherever it sits.
-        const px = gpf > 0
-            ? (n) => (Math.max(1, Math.round(n / gpf)) * gpf + 1.05) / (sx > 0 ? sx : s)
-            : (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
-        const key = (sx > 0 ? sx : s).toFixed(4) + '|' + gpf;
-        // Only visible frames (selected / hovered) are rebuilt per zoom frame;
-        // the rest catch up when they get selected (syncNodeHighlight).
+        const u = (gpf > 0 && sx > 0) ? (gpf / sx) : 0;
+        // GP: sizes in whole lattice cells. Off: screen-px → map units.
+        const cells = (nCells) => (u > 0 ? Math.max(1, nCells) * u : 0);
+        const px = (n) => Math.max(1, Math.round(n)) / s;
+        const key = (sx > 0 ? sx : s).toFixed(4) + '|' + gpf + (u > 0 ? '|' + u.toFixed(5) : '');
         svg.querySelectorAll(':is(.gm-node, .gm-post-node, .gm-border-station):is(.selected, .hovered) .gm-frame-slot').forEach((slot) => {
             if (slot._frameKey === key) return;
             slot._frameKey = key;
             const r = Number(slot.getAttribute('data-frame-r')) || 16;
             const ry = slot.hasAttribute('data-frame-ry') ? Number(slot.getAttribute('data-frame-ry')) : null;
             const post = slot.hasAttribute('data-frame-post');
-            const gap = post ? 8 : 12, arm = post ? 10 : 16, thick = post ? 2 : 2;
-            // Corner sits `gap` px outside the surface (a square frame around a disc).
-            const f = r + px(gap);
-            slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick), ry == null ? null : ry + px(gap));
+            let gap, arm, thick, f, fy;
+            if (u > 0) {
+                const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : u;
+                const cu = uL > 0 ? uL : u;
+                gap = Math.max(1, post ? 2 : 3) * cu;
+                arm = Math.max(1, post ? 4 : 5) * cu;
+                thick = cu;
+                f = Math.round((r + gap) / cu) * cu;
+                fy = ry == null ? null : Math.round((ry + gap) / cu) * cu;
+            } else {
+                gap = px(post ? 8 : 12);
+                arm = px(post ? 10 : 16);
+                thick = px(post ? 2 : 2);
+                f = r + gap;
+                fy = ry == null ? null : ry + gap;
+            }
+            slot.innerHTML = this.selectionFrameSvg(f, arm, thick, fy);
         });
+        // Stage labels: keep glyph scale = one lattice cell under GP.
+        if (u > 0 && this.stageTextScale) {
+            const kS = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
+            svg.querySelectorAll('.gm-stage-anchor').forEach((g) => {
+                const rawR = Number(g.getAttribute('data-r')) || 0;
+                const rSnap = Math.round(rawR / u) * u;
+                g.setAttribute('data-r', String(rSnap));
+                g.setAttribute('transform', `translate(0,${rSnap}) scale(${kS})`);
+            });
+            svg.querySelectorAll('.gm-px-txt').forEach((g) => {
+                g.innerHTML = this.pixelTextSvg(g.dataset.s, +g.dataset.x, +g.dataset.y, g.dataset.a);
+            });
+        }
+        try { if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.dirtyMapPxCanvas) uiAppearanceManager.dirtyMapPxCanvas(); } catch (e) { /* */ }
         this.syncLocateShipButton();
     },
     selectionFrameSvg(f, L, t, fy) {
         const faction = this.getCursorFaction();
+        const gpf = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const live = gpf > 0 ? (this.mapScreenScale() || this._pxScreenScale || 0) : 0;
+        const u = (gpf > 0 && live > 0) ? (gpf / live) : 0;
+        const snap = (v) => (u > 0 ? Math.round(v / u) * u : v);
+        // Under GP every faction uses axis-aligned cell rects (curves/strokes miss the raster).
+        const raster = u > 0;
+        f = snap(f);
+        L = raster ? Math.max(u, snap(L)) : L;
+        t = raster ? Math.max(u, snap(t)) : t;
+        const fyS = fy == null ? null : snap(fy);
         const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
         let body = '';
+        const rectCorner = (x, y, ix, iy) => {
+            const x0 = Math.min(x, x + ix * L);
+            const y0 = Math.min(y, y + iy * t);
+            const x1 = Math.min(x, x + ix * t);
+            const y1 = Math.min(y, y + iy * L);
+            body += `<rect class="gm-corner" x="${x0}" y="${y0}" width="${L}" height="${t}"/>`;
+            body += `<rect class="gm-corner" x="${x1}" y="${y1}" width="${t}" height="${L}"/>`;
+        };
         corners.forEach(([sx, sy]) => {
-            const x = sx * f;
-            const y = sy * (fy == null ? f : fy);
-            const ix = -sx; // points inward
+            const x = snap(sx * f);
+            const y = snap(sy * (fyS == null ? f : fyS));
+            const ix = -sx;
             const iy = -sy;
+            if (raster) {
+                if (faction === 'machine') {
+                    for (let i = 0; i < 3; i++) {
+                        const d = i * (t + u);
+                        const ox = ix < 0 ? t : 0;
+                        const oy = iy < 0 ? t : 0;
+                        body += `<rect class="gm-corner" x="${snap(x + ix * d - ox)}" y="${snap(y - oy)}" width="${t}" height="${t}"/>`;
+                        if (i) body += `<rect class="gm-corner" x="${snap(x - ox)}" y="${snap(y + iy * d - oy)}" width="${t}" height="${t}"/>`;
+                    }
+                } else {
+                    // Terran / Kronax / Pirate / Voidborn: same L-bracket cells (faction color via CSS).
+                    rectCorner(x, y, ix, iy);
+                }
+                return;
+            }
             switch (faction) {
                 case 'voidborn': {
                     const c = L * 1.1;
@@ -77705,11 +78018,10 @@ extendClass(GalaxyMapManager, {
                         `L${x} ${y + iy * L * 0.6} L${x + ix * t} ${y + iy * L}"/>`;
                     break;
                 default:
-                    body += `<rect class="gm-corner" x="${Math.min(x, x + ix * L)}" y="${Math.min(y, y + iy * t)}" width="${L}" height="${t}"/>`;
-                    body += `<rect class="gm-corner" x="${Math.min(x, x + ix * t)}" y="${Math.min(y, y + iy * L)}" width="${t}" height="${L}"/>`;
+                    rectCorner(x, y, ix, iy);
             }
         });
-        return `<g class="gm-selection-frame gm-cursor-${faction}" style="--cursor-t:${t}px">${body}</g>`;
+        return `<g class="gm-selection-frame gm-cursor-${faction}" style="--cursor-t:${t}">${body}</g>`;
     },
     bindNodeClicks() {
         // Hover ends as soon as the pointer leaves the planet disc — the node
@@ -78047,19 +78359,24 @@ extendClass(GalaxyMapManager, {
         requestAnimationFrame(() => this.updateSelectionFrames());
         // Detail swap (planets, stations, lines, stars) is heavy: run it once
         // the zoom has settled, not on every animation frame.
+        const mapLive = () => !!(this.overlay && this.overlay.isConnected && !this._parkedGalaxyId);
         const swapDetail = (force) => {
+            if (!mapLive()) return;
+            // After park→reuse, first layout/resize must not rebuild planets (H12).
+            if (this._reuseQuietUntil && performance.now() < this._reuseQuietUntil) {
+                this._mapArtSKey = this.getMapScaleKey();
+                this._mapArtDetail = this.getMapDetail();
+                this._mapLineDetail = this.getLineDetail();
+                return;
+            }
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
             const detail = this.getMapDetail();
             const skey = this.getMapScaleKey();
             const same = this._mapArtDetail === detail && this._mapArtSKey === skey;
             if (same && force === true) {
-                // Same detail, view left the fine nebula patch: only swap space.
-                // Build the space layer alone (not the whole map).
-                const fresh = document.createElement('div');
-                fresh.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${this.galaxyStarsSvg(GM_MAP_W, GM_MAP_H)}</svg>`;
-                const next = fresh.querySelector('.gm-space'), old = cur.querySelector('.gm-space');
-                if (next && old) old.replaceWith(next);
+                // Same detail, view left the fine patch: refine nebula only (keep stars).
+                if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
                 return;
             }
             if (same && force === 'lines') {
@@ -78077,7 +78394,8 @@ extendClass(GalaxyMapManager, {
             // Stars / lines are drawn on the art pixel grid: swap in fresh ones.
             // Only these layers are built — rendering the whole map here made
             // every zoom step rebuild all planets, stations and checkpoints.
-            cur.style.setProperty('--gm-px', String(1 / detail));
+            const dPx = this.getMapDetailFloat ? this.getMapDetailFloat() : detail;
+            cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dPx)));
             this._linesByDetail = {}; // checkpoints in the lines follow the art detail
             const fresh = document.createElement('div');
             fresh.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${this.galaxyStarsSvg(GM_MAP_W, GM_MAP_H)}</svg>`;
@@ -78106,7 +78424,7 @@ extendClass(GalaxyMapManager, {
                     if (next) facs.innerHTML = next.innerHTML;
                 }
             });
-            // Stations share the zoom detail (sub-pixel shading, windows, cells).
+            // Stations share bake detail; map footprint stays fixed (GP screen cells via vfMapPx).
             cur.querySelectorAll('.gm-post-node[data-post]').forEach((node) => {
                 const art = node.querySelector('.gm-post-art');
                 const post = art && this.getTradingPosts().find((p) => p.id === node.getAttribute('data-post'));
@@ -78115,20 +78433,46 @@ extendClass(GalaxyMapManager, {
             applyShip();
             this.snapMapPlanets();
         };
-        let apply = () => {
+        // Zoom glide: only the viewBox moves. Selection frames, --gm-px, snap,
+        // nebula and art swaps each forced layout / rebuilds and made the map stutter.
+        const applyCamera = () => {
+            if (!mapLive()) return;
+            const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!cur) return;
+            const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+            cur.setAttribute('viewBox', v.join(' '));
+        };
+        let apply = (src) => {
+            if (!mapLive()) return;
             clearTimeout(this._snapTimer);
             this._snapTimer = setTimeout(() => this.snapMapPlanets(), 250);
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
+            // Remount layout: camera + re-key only — never schedule art swap in the quiet window.
+            if (this._reuseQuietUntil && performance.now() < this._reuseQuietUntil) {
+                const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+                cur.setAttribute('viewBox', v.join(' '));
+                const dFloat = this.getMapDetailFloat ? this.getMapDetailFloat() : this.getMapDetail();
+                cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dFloat)));
+                this._mapArtSKey = this.getMapScaleKey();
+                this._mapArtDetail = this.getMapDetail();
+                this._mapLineDetail = this.getLineDetail();
+                if (this.updateSelectionFrames) this.updateSelectionFrames();
+                return;
+            }
             cur.classList.toggle('gm-close-view', (this.mapZoom || 1) >= 2.5);
             // Only the camera moves: set the viewBox directly (no re-render).
             if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0
                 && uiAppearanceManager.ensureMapPxFilter) {
-                uiAppearanceManager.ensureMapPxFilter(uiAppearanceManager.getGlobalPixelPx(), cur);
+                const area = (cur.closest && cur.closest('#gmMapArea')) || document.getElementById('gmMapArea') || cur;
+                uiAppearanceManager.ensureMapPxFilter(uiAppearanceManager.getGlobalPixelPx(), area);
             }
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
+            const dFloat = this.getMapDetailFloat ? this.getMapDetailFloat() : this.getMapDetail();
+            cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dFloat)));
             this.updateSelectionFrames();
+            try { if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.dirtyMapPxCanvas) uiAppearanceManager.dirtyMapPxCanvas(); } catch (e) { /* */ }
             // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
             const shipScale = cur.querySelector('.gm-ship-scale');
             if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
@@ -78137,18 +78481,20 @@ extendClass(GalaxyMapManager, {
             if (this._mapArtDetail === this.getMapDetail() && this._mapArtSKey === this.getMapScaleKey()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
-                    this._lineTimer = setTimeout(() => swapDetail('lines'), this._zoomAnim ? 120 : 0);
+                    this._lineTimer = setTimeout(() => swapDetail('lines'), 0);
                 }
-                // Panned / zoomed out of the fine nebula patch → rebuild it (debounced).
                 const R = this._nebulaRegion;
                 if (R && (v[0] < R.x || v[1] < R.y || v[0] + v[2] > R.x + R.w || v[1] + v[3] > R.y + R.h)) {
                     clearTimeout(this._nebTimer);
-                    this._nebTimer = setTimeout(() => swapDetail(true), 80);
+                    // Was 120ms — felt like the nebula lagged behind the camera.
+                    this._nebTimer = setTimeout(() => {
+                        swapDetail(true);
+                    }, 32);
                 }
                 return;
             }
             clearTimeout(this._detailTimer);
-            this._detailTimer = setTimeout(swapDetail, this._zoomAnim ? 180 : 0);
+            this._detailTimer = setTimeout(swapDetail, 0);
         };
         // Ship outline is baked into its texture, so refresh it on every zoom
         // step to keep the outline the same on-screen width.
@@ -78180,23 +78526,31 @@ extendClass(GalaxyMapManager, {
         const stopZoom = () => { this._zoomAnim = null; };
         this._mapArtDetail = this.getMapDetail();
         this._mapArtSKey = this.getMapScaleKey();
-        // Global Pixel Size: the first render happens before the SVG is laid out, so seat everything on the lattice once it is.
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) {
+        // Global Pixel Size: seat the lattice once after first layout — not on every bindMapZoom.
+        if (!this._pxLatticeSeated
+            && typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) {
+            this._pxLatticeSeated = true;
             clearTimeout(this._detailTimer);
             this._detailTimer = setTimeout(() => { this._mapArtSKey = null; swapDetail(); }, 450);
         }
         this._mapLineDetail = this.getLineDetail();
         // Global Pixel Size changed (settings slider): drop the cached detail and rebuild the map art.
         this._swapMapDetail = swapDetail;
+        this._mapApply = apply;
+        this._mapApplyCamera = applyCamera;
         if (!this._pxEvtBound) {
             this._pxEvtBound = true;
             window.addEventListener('vf:pixelsize', () => {
                 try {
                     const cv = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+                    const area = (this.overlay && this.overlay.querySelector('#gmMapArea'))
+                        || document.getElementById('gmMapArea') || cv;
                     const g0 = uiAppearanceManager.getGlobalPixelPx();
-                    if (cv && g0 > 0) uiAppearanceManager.ensureMapPxFilter(g0, cv);
+                    if (uiAppearanceManager.ensureMapPxFilter) uiAppearanceManager.ensureMapPxFilter(g0 > 0 ? g0 : 0, area);
                     if (cv && !(g0 > 0)) cv.style.translate = '';
                 } catch (e) { /* no map */ }
+                if (this.resetPixelSizeDetailPeak) this.resetPixelSizeDetailPeak();
                 this._pxDetailKey = null;
                 this._mapArtDetail = -1;
                 clearTimeout(this._detailTimer);
@@ -78233,7 +78587,8 @@ extendClass(GalaxyMapManager, {
             }
             this.mapZoom = next;
             this._userMapZoom = next; // the zoom the keyboard camera may not exceed
-            apply();
+            if (this._zoomAnim) applyCamera();
+            else apply();
         };
         // A camera glide writes its own viewBox; adopt that as the zoom/pan
         // state first, otherwise the first zoom step snaps back (jump).
@@ -78261,6 +78616,11 @@ extendClass(GalaxyMapManager, {
             if (done) {
                 this._zoomAnim = null;
                 clearTimeout(this._detailTimer);
+                clearTimeout(this._lineTimer);
+                clearTimeout(this._nebTimer);
+                clearTimeout(this._snapTimer);
+                // One full sync after the glide — never mid-frame.
+                apply();
                 swapDetail();
                 return;
             }
@@ -78270,18 +78630,7 @@ extendClass(GalaxyMapManager, {
         // out after the first render (fonts, header, stage size), so refit whenever the
         // area changes size — otherwise a reload at another zoom keeps a stale aspect
         // and the planets come out smaller than at the same zoom reached by scrolling.
-        const mapArea = this.overlay && this.overlay.querySelector('#gmMapArea');
-        if (this._mapAreaRO) { this._mapAreaRO.disconnect(); this._mapAreaRO = null; }
-        if (mapArea && typeof ResizeObserver !== 'undefined') {
-            let lastW = 0, lastH = 0; // first callback always refits (the render may predate the final size)
-            this._mapAreaRO = new ResizeObserver(() => {
-                if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
-                lastW = mapArea.clientWidth;
-                lastH = mapArea.clientHeight;
-                if (!this._flight && !this._zoomAnim && !this._camAnim) apply();
-            });
-            this._mapAreaRO.observe(mapArea);
-        }
+        this.reattachMapAreaObserver();
         svg.addEventListener('wheel', (e) => {
             e.preventDefault();
             stopGlide();
@@ -78295,6 +78644,11 @@ extendClass(GalaxyMapManager, {
             if (target === from && !this._zoomAnim) return;
             const running = !!this._zoomAnim;
             this._zoomAnim = { target: target, pt: pt };
+            // Cancel any pending heavy work from a previous zoom settle.
+            clearTimeout(this._detailTimer);
+            clearTimeout(this._lineTimer);
+            clearTimeout(this._nebTimer);
+            clearTimeout(this._snapTimer);
             delayShipLabel();
             if (!running) requestAnimationFrame(runZoom);
         }, { passive: false });
@@ -78330,6 +78684,8 @@ extendClass(GalaxyMapManager, {
             if (drag.moved) {
                 this._mapDragSwallow = true;
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
+                clearTimeout(this._nebPanTimer);
+                apply();
             } else if (drag.planetId || drag.postId) {
                 this.markUserPicked();
                 if (drag.planetId) this.selectPlanet(drag.planetId);
@@ -78403,21 +78759,55 @@ extendClass(GalaxyMapManager, {
             delayShipLabel();
             drag.x = e.clientX;
             drag.y = e.clientY;
-            apply();
+            // Pan: camera only (same as zoom glide) — full apply was H3 stutter.
+            applyCamera();
+            // Debounced refine: only rebuild nebula when the view leaves the fine patch.
+            clearTimeout(this._nebPanTimer);
+            this._nebPanTimer = setTimeout(() => {
+                if (!mapLive()) return;
+                const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+                const R = this._nebulaRegion;
+                if (!R || v[0] < R.x || v[1] < R.y || v[0] + v[2] > R.x + R.w || v[1] + v[3] > R.y + R.h) {
+                    if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
+                }
+            }, 50);
         });
         const stopWindowDrag = () => {
             const drag = this._mapDrag;
+            const moved = !!(drag && drag.moved);
             this._mapDrag = null;
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (cur) cur.classList.remove('is-panning');
-            if (drag && drag.moved) {
+            if (moved) {
                 this._mapDragSwallow = true;
                 // Clear if no click follows (released outside the map).
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
+                clearTimeout(this._nebPanTimer);
+                // H16: pan end never refreshed nebula — patch stayed on the old tile.
+                apply();
             }
         };
         window.addEventListener('pointerup', stopWindowDrag);
         window.addEventListener('pointercancel', stopWindowDrag);
+    },
+    /** Reattach #gmMapArea ResizeObserver after park/reuse (bindMapZoom must not re-run). */
+    reattachMapAreaObserver() {
+        const mapArea = this.overlay && this.overlay.querySelector('#gmMapArea');
+        if (this._mapAreaRO) {
+            try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+            this._mapAreaRO = null;
+        }
+        if (!mapArea || typeof ResizeObserver === 'undefined' || !this._mapApply) return;
+        let lastW = 0, lastH = 0;
+        this._mapAreaRO = new ResizeObserver(() => {
+            if (this._parkedGalaxyId || !this.overlay || !this.overlay.isConnected) return;
+            if (mapArea.clientWidth < 8 || mapArea.clientHeight < 8) return;
+            if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
+            lastW = mapArea.clientWidth;
+            lastH = mapArea.clientHeight;
+            if (!this._flight && !this._zoomAnim && !this._camAnim) this._mapApply('resize');
+        });
+        this._mapAreaRO.observe(mapArea);
     },
     bindPostClicks() {
         this.overlay.querySelectorAll('.gm-post-node[data-post]').forEach(node => {
@@ -78640,12 +79030,16 @@ extendClass(GalaxyMapManager, {
     },
     /** The one pixel size of the whole map (map units per art pixel) at the current zoom detail. */
     mapPixelUnitGlobal() {
-        // Global Pixel Size: exact map units per art pixel (not stepped by the integer detail),
-        // so ship / stations / sun match the chosen size at bake time.
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
-            && uiAppearanceManager.getGlobalPixelPx() > 0 && this.getMapDetail) {
-            this.getMapDetail();
-            if (this._pxScreenScale > 0) return uiAppearanceManager.getGlobalPixelPx() / this._pxScreenScale;
+        // Global Pixel Size: one art cell == one vfMapPx / lattice cell (device-snapped CSS px).
+        if (this.mapPxLatticeUnit) {
+            const u = this.mapPxLatticeUnit();
+            if (u > 0) return u;
+        }
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            const live = (this.mapScreenScale && this.mapScreenScale()) || this._pxScreenScale || 0;
+            if (live > 0) return gp / live;
         }
         return GM_PIXEL_U0 / (this.getMapDetail ? this.getMapDetail() : 1);
     },
@@ -78693,13 +79087,11 @@ extendClass(GalaxyMapManager, {
         return `<g class="gm-px-txt" data-s="${String(str).replace(/"/g, '')}" data-x="${x}" data-y="${y}" data-a="${anchor || 'start'}">${this.pixelTextSvg(str, x, y, anchor)}</g>`;
     },
     pixelTextSvg(str, x, y, anchor, px) {
-        // Global Pixel Size: glyph cell = 1 local unit (the anchor group scales it to one grid cell on screen),
-        // always the 5x7 font, each lit cell padded by 1px so the one-sample-per-cell screen keeps every pixel.
+        // Global Pixel Size: glyph cell = 1 local unit; .gm-stage-anchor scales by stageTextScale()
+        // (= one lattice cell). Integer local coords → same axis-aligned grid as planets/markers.
         const gpT = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
         const P = px || 1.5;
-        // Zoomed in the text switches to finer bitmap fonts (3x5 → 5x7 → 7x9) of the same
-        // height, so the pixels get smaller but stay square and the digits stay legible.
         const detail = this.getMapDetail ? this.getMapDetail() : 1;
         const lvl = gpT > 0 ? 1 : (detail >= 4 ? 2 : (detail >= 2 ? 1 : 0));
         const text = String(str).split('');
@@ -78711,16 +79103,20 @@ extendClass(GalaxyMapManager, {
             glyphs = text.map((c) => (font[c] || font[' ']).split(',')); gw = lvl === 1 ? 5 : 7; gh = lvl === 1 ? 7 : 9;
         }
         const F = gpT > 0 ? 1 : (5 * P) / gh;
-        const Fw = gpT > 0 ? 1 + 1.05 / gpT : F;
+        const Fw = F;
         const step = gw + 1, cols = glyphs.length * step - 1;
         const on = new Set();
         glyphs.forEach((g, i) => g.forEach((row, ry) => row.split('').forEach((b, rx) => {
             if (b === '1') on.add((i * step + rx) + ',' + ry);
         })));
-        const x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
-        const y0 = y - gh * F;
+        let x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
+        let y0 = y - gh * F;
+        if (gpT > 0) {
+            x0 = Math.round(x0);
+            y0 = Math.round(y0);
+        }
         let outline = '', fill = '';
-        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F).toFixed(3)}" y="${(y0 + cy * F).toFixed(3)}" width="${Fw.toFixed(3)}" height="${Fw.toFixed(3)}" class="${cls}"/>`;
+        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F)}" y="${(y0 + cy * F)}" width="${Fw}" height="${Fw}" class="${cls}"/>`;
         for (let cy = -1; cy <= gh; cy++) {
             for (let cx = -1; cx <= cols; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
@@ -79588,6 +79984,7 @@ extendClass(GalaxyMapManager, {
     },
     startOrbitLoop() {
         if (this._orbitTimer) return;
+        // 4 Hz is enough for slow station orbits; 10 Hz was mostly SVG attribute thrash.
         this._orbitTimer = setInterval(() => {
             if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
             if (document.hidden) return;
@@ -79596,7 +79993,7 @@ extendClass(GalaxyMapManager, {
                     || document.documentElement.getAttribute('data-vf-performance') != null) return;
             } catch (e) { /* tick */ }
             this.tickOrbits();
-        }, 100);
+        }, 250);
     },
     getSelectedPost() {
         if (!this.selectedPostId) return null;
@@ -79641,7 +80038,7 @@ extendClass(GalaxyMapManager, {
         profileManager.setShipLocation(this.galaxyId, kind, id);
         const area = this.overlay && this.overlay.querySelector('#gmMapArea');
         if (area) {
-            area.innerHTML = this.renderMapSvg();
+            area.innerHTML = this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg();
             this.bindNodeClicks();
             this.bindPostClicks();
             this.bindMapZoom();
@@ -89143,11 +89540,17 @@ extendClass(HomeStationUI, {
             if (this.overlay) this.overlay.remove();
             this.overlay = document.createElement('div');
             this.overlay.className = 'profile-selection-overlay home-station-overlay';
+            this._hsShellReady = false;
         } else {
             this.overlay.className = 'profile-selection-overlay home-station-overlay';
         }
         this.overlay.dataset.hsTab = this.tab || 'station';
         this.applyFactionTheme();
+
+        // Soft tab switch: keep header/shell, only swap .hs-body (H10 — full setOverlayHtml was ~70–100ms).
+        if (profile && this._hsShellReady && this._trySoftTabSwitch(profile, scrollState)) {
+            return;
+        }
 
         if (!profile) {
             this.overlay.dataset.hsTab = 'station';
@@ -89175,120 +89578,8 @@ extendClass(HomeStationUI, {
             return;
         }
 
-        const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const stationBpHtml = this.renderBlueprintList(profile.blueprints);
-        const stats = (typeof profileManager !== 'undefined')
-            ? profileManager.getStationStats(profile)
-            : { shipSlots: 2 };
-        const owned = profile.ownedShipIds || [];
-        const ownedHtml = owned.length
-            ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                (id === profile.activeShipId
-                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
-                    : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
-                      `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
-                `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
-                `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
-            )).join(''), true)
-            : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
-        const slotsLabel = `${owned.length}/${stats.shipSlots}`;
-
-        let body = '';
-        if (this.tab === 'menu') {
-            body = `<div class="hs-menu-host" id="hsMenuHost"></div>`;
-        } else if (this.tab === 'shop') {
-            body = this.renderShopTab(profile);
-        } else if (this.tab === 'missions') {
-            body = this.renderMissionsTab(profile);
-        } else if (this.tab === 'craft') {
-            body = this.renderCraftTab(profile);
-        } else if (this.tab === 'hangar') {
-            // Use new HangarUI module — DISABLED TEMPORARILY
-            // if (this.hangarUI) {
-            //     const owned = profile.ownedShipIds || [];
-            //     if (!owned.length) {
-            //         body = `<div class="hs-section"><h3>HANGAR</h3><p class="hs-muted">No ships owned.</p></div>`;
-            //     } else {
-            //         if (!this.hangarShipId || owned.indexOf(this.hangarShipId) === -1) {
-            //             this.hangarShipId = profile.activeShipId || owned[0];
-            //         }
-            //         this.hangarUI.setShip(this.hangarShipId);
-            //         body = this.hangarUI.render();
-            //     }
-            // } else {
-                body = this.renderHangarTab(profile);
-            // }
-        } else if (this.tab === 'components') {
-            body = this.renderComponentsTab(profile);
-        } else if (this.tab === 'upgrade') {
-            body = this.renderUpgradeTab(profile);
-        } else if (this.tab === 'travel') {
-            body = this.renderTravelTab(profile);
-        } else if (this.tab === 'explorations') {
-            body = this.renderExplorationsTab(profile);
-        } else if (this.tab === 'factions') {
-            body = this.renderFactionsTab(profile);
-        } else if (this.tab === 'ffleet') {
-            body = this.renderFactionFleetTab(profile);
-        } else if (this.tab === 'ftrade') {
-            body = this.renderFactionTradeTab(profile);
-        } else if (this.tab === 'fcontracts') {
-            body = this.renderFactionContractsTab(profile);
-        } else if (this.tab === 'play') {
-            body = this.renderPlayTab(profile);
-        } else {
-            body = `
-                <div class="hs-station-grid">
-                    <div class="hs-station-cover" aria-label="Home station">
-                        <div class="hs-station-cover-image"></div>
-                        <div class="hs-station-cover-faction" aria-hidden="true"></div>
-                        <div class="hs-station-cover-scanline"></div>
-                        <div class="hs-station-cover-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'banner')}</div>
-                        <div class="hs-station-cover-caption">
-                            <span class="hs-station-cover-kicker">HOME STATION // STORAGE</span>
-                            <strong>STATION STORAGE</strong>
-                        </div>
-                    </div>
-                    <div class="hs-panel hs-panel-stores">
-                        ${this.panelTitle('hsStores', 'STATION STORES')}
-                        <div class="hs-row hs-res-grid">${walletHtml}</div>
-                    </div>
-                    <div class="hs-panel hs-panel-bp">
-                        ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
-                        <div class="hs-row hs-bp">${stationBpHtml}</div>
-                        ${this.renderUnlockList(profile)}
-                    </div>
-                    <div class="hs-panel-stack">
-                        <div class="hs-panel hs-panel-ships">
-                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
-                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
-                        </div>
-                        <div class="hs-panel hs-panel-parts">
-                            ${this.panelTitle('hsCraft', 'PARTS')}
-                            <div class="hs-row">${this.renderPartsList(profile)}</div>
-                        </div>
-                    </div>
-                </div>`;
-        }
-
-        let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
-            // Tabs unlock the moment any stage is cleared anywhere, not just on the
-            // tutorial galaxy's start planet — otherwise a stage cleared elsewhere
-            // (e.g. an invasion defense) left the rest of the navbar stuck hidden.
-            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
-        }
-        const isPlay = this.tab === 'play';
-        const isMenu = this.tab === 'menu';
-        const bodyClass = isPlay
-            ? 'hs-body hs-body-play'
-            : (isMenu
-                ? 'hs-body hs-body-menu'
-                : (this.tab === 'components' ? 'hs-body hs-body-components' : 'hs-body'));
-        let footerHint = '[TABS] ←→ Switch | ENTER Enter Tab | ESC Menu';
-        if (isPlay) footerHint = '[TABS] ←→ Switch | ENTER Enter Map | ESC Menu';
-        if (isMenu) footerHint = '← → Menu Tabs | ↑ ↓ Navigate | ENTER Select | ESC Back';
-        if (this.tab === 'components') footerHint = '[TABS] ←→ Switch | ENTER Enter Tab | ESC Menu';
+        const built = this._buildTabBody(profile);
+        const { body, bodyClass, isPlay, isMenu, hideTabsForTutorial } = built;
 
         this.unmountMenuTab();
         this.unmountPlayTab();
@@ -89344,52 +89635,390 @@ extendClass(HomeStationUI, {
             this.overlay.classList.add('vf-menu-enter');
             document.body.appendChild(this.overlay);
         }
-        this.bindEvents();
-        // Header PLAY is a launch button, not a nav tab: straight into the map.
-        const playBtn = this.overlay.querySelector('.hs-header-split > [data-play-launch]');
-        if (playBtn) {
-            playBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.launchPlay();
-            });
+        this._softBodyCache = null;
+        this._softBodyTab = null;
+        this._finishTabMount(scrollState, { bindChrome: true });
+        this._hsShellReady = true;
+        this._softBodyTab = this.tab;
+    },
+
+    /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
+    _buildTabBody(profile) {
+        const walletHtml = this.renderResourceList(profile.resources, 'station');
+        const stationBpHtml = this.renderBlueprintList(profile.blueprints);
+        const stats = (typeof profileManager !== 'undefined')
+            ? profileManager.getStationStats(profile)
+            : { shipSlots: 2 };
+        const owned = profile.ownedShipIds || [];
+        const ownedHtml = owned.length
+            ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
+                (id === profile.activeShipId
+                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
+                    : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
+                      `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
+                `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
+            )).join(''), true)
+            : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
+        const slotsLabel = `${owned.length}/${stats.shipSlots}`;
+
+        let body = '';
+        if (this.tab === 'menu') {
+            body = `<div class="hs-menu-host" id="hsMenuHost"></div>`;
+        } else if (this.tab === 'shop') {
+            body = this.renderShopTab(profile);
+        } else if (this.tab === 'missions') {
+            body = this.renderMissionsTab(profile);
+        } else if (this.tab === 'craft') {
+            body = this.renderCraftTab(profile);
+        } else if (this.tab === 'hangar') {
+            body = this.renderHangarTab(profile);
+        } else if (this.tab === 'components') {
+            body = this.renderComponentsTab(profile);
+        } else if (this.tab === 'upgrade') {
+            body = this.renderUpgradeTab(profile);
+        } else if (this.tab === 'travel') {
+            body = this.renderTravelTab(profile);
+        } else if (this.tab === 'explorations') {
+            body = this.renderExplorationsTab(profile);
+        } else if (this.tab === 'factions') {
+            body = this.renderFactionsTab(profile);
+        } else if (this.tab === 'ffleet') {
+            body = this.renderFactionFleetTab(profile);
+        } else if (this.tab === 'ftrade') {
+            body = this.renderFactionTradeTab(profile);
+        } else if (this.tab === 'fcontracts') {
+            body = this.renderFactionContractsTab(profile);
+        } else if (this.tab === 'play') {
+            body = this.renderPlayTab(profile);
+        } else {
+            body = `
+                <div class="hs-station-grid">
+                    <div class="hs-station-cover" aria-label="Home station">
+                        <div class="hs-station-cover-image"></div>
+                        <div class="hs-station-cover-faction" aria-hidden="true"></div>
+                        <div class="hs-station-cover-scanline"></div>
+                        <div class="hs-station-cover-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'banner')}</div>
+                        <div class="hs-station-cover-caption">
+                            <span class="hs-station-cover-kicker">HOME STATION // STORAGE</span>
+                            <strong>STATION STORAGE</strong>
+                        </div>
+                    </div>
+                    <div class="hs-panel hs-panel-stores">
+                        ${this.panelTitle('hsStores', 'STATION STORES')}
+                        <div class="hs-row hs-res-grid">${walletHtml}</div>
+                    </div>
+                    <div class="hs-panel hs-panel-bp">
+                        ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
+                        <div class="hs-row hs-bp">${stationBpHtml}</div>
+                        ${this.renderUnlockList(profile)}
+                    </div>
+                    <div class="hs-panel-stack">
+                        <div class="hs-panel hs-panel-ships">
+                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
+                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
+                        </div>
+                        <div class="hs-panel hs-panel-parts">
+                            ${this.panelTitle('hsCraft', 'PARTS')}
+                            <div class="hs-row">${this.renderPartsList(profile)}</div>
+                        </div>
+                    </div>
+                </div>`;
         }
-        this.bindMissionButton();
-        this.bindControlsToggle();
-        this.bindStationColumnResize();
-        this.moveHangarBayTools();
-        this.syncTopbarResLayout();
-        // MENU area button = same as pressing ESC.
-        this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
-            menuBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+
+        let hideTabsForTutorial = false;
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
+            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
+        }
+        const isPlay = this.tab === 'play';
+        const isMenu = this.tab === 'menu';
+        const bodyClass = isPlay
+            ? 'hs-body hs-body-play'
+            : (isMenu
+                ? 'hs-body hs-body-menu'
+                : (this.tab === 'components' ? 'hs-body hs-body-components' : 'hs-body'));
+        return { body, bodyClass, isPlay, isMenu, hideTabsForTutorial };
+    },
+
+    /**
+     * Soft tab switch: keep shell/header, swap .hs-body + tab/subnav chrome only.
+     * Avoids full setOverlayHtml (~70–100ms) on every LAUNCH↔STATION↔HANGAR hop.
+     */
+    _softBodyFingerprint(profile) {
+        if (!profile) return '';
+        const res = profile.resources || {};
+        return [
+            this.tab,
+            profile.activeShipId || '',
+            profile.credits != null ? profile.credits : (res.credits || 0),
+            (profile.ownedShipIds || []).length,
+            this.upgradeSubTab || '',
+            this.shopCategory || '',
+            this.visitPostId || '',
+            this.hangarShipId || ''
+        ].join('|');
+    },
+
+    _parkSoftBody(bodyEl, leavingTab) {
+        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu' || leavingTab === 'components') return;
+        if (!this._softBodyCache) this._softBodyCache = Object.create(null);
+        const frag = document.createDocumentFragment();
+        while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
+        this._softBodyCache[leavingTab] = {
+            frag,
+            className: bodyEl.className,
+            fp: this._softBodyParkFp || ''
+        };
+    },
+
+    _restoreSoftBody(bodyEl, profile) {
+        const cache = this._softBodyCache && this._softBodyCache[this.tab];
+        if (!cache) return false;
+        const fp = this._softBodyFingerprint(profile);
+        if (cache.fp && cache.fp !== fp) {
+            delete this._softBodyCache[this.tab];
+            return false;
+        }
+        bodyEl.className = cache.className;
+        bodyEl.appendChild(cache.frag);
+        delete this._softBodyCache[this.tab];
+        return true;
+    },
+
+    _trySoftTabSwitch(profile, scrollState) {
+        // syncNavZone swaps hs-nav-tabs/sub/content — do not require hs-nav-tabs.
+        const content = this.overlay && (
+            this.overlay.querySelector('.vf-browser-shell .home-station-content')
+            || this.overlay.querySelector('.home-station-content')
+        );
+        if (!content) return false;
+        const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
+        if (!bodyEl) return false;
+
+        const leavingTab = this._softBodyTab || null;
+        // Fingerprint uses this.tab — compute for the tab we are parking.
+        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu' && leavingTab !== 'components') {
+            const cur = this.tab;
+            this.tab = leavingTab;
+            this._softBodyParkFp = this._softBodyFingerprint(profile);
+            this.tab = cur;
+        } else {
+            this._softBodyParkFp = '';
+        }
+
+        this.unmountMenuTab();
+        this.unmountPlayTab();
+        this.unmountComponentsTab();
+        // Park leaving body DOM (keeps listeners) before wiping.
+        this._parkSoftBody(bodyEl, leavingTab);
+
+        const cacheHit = this._restoreSoftBody(bodyEl, profile);
+        let hideTabsForTutorial = false;
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
+            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
+        }
+        const isPlay = this.tab === 'play';
+        const isMenu = this.tab === 'menu';
+        const isComp = this.tab === 'components';
+        if (!cacheHit) {
+            const built = this._buildTabBody(profile);
+            const { body, bodyClass } = built;
+            hideTabsForTutorial = built.hideTabsForTutorial;
+            bodyEl.className = bodyClass;
+            bodyEl.innerHTML = body;
+        }
+        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
+
+        Array.from(content.classList).filter((c) => c.indexOf('hs-mode-') === 0).forEach((c) => content.classList.remove(c));
+        if (this.tab === 'station') content.classList.add('hs-mode-station');
+        if (isPlay) content.classList.add('hs-mode-play');
+        if (isMenu || this.isMenuRowTab()) content.classList.add('hs-mode-menu');
+        if (isComp) content.classList.add('hs-mode-components');
+        if (undimmedTabs.indexOf(this.tab) !== -1) content.classList.add('hs-mode-' + this.tab);
+
+        const tabsWrap = content.querySelector('.hs-tabs');
+        if (tabsWrap) tabsWrap.classList.toggle('hs-tabs-hidden', !!hideTabsForTutorial);
+
+        // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
+        const subRebound = this._syncSoftNavChrome(content, bodyEl, hideTabsForTutorial);
+
+        const playBtn = content.querySelector('[data-play-launch]');
+        if (playBtn) {
+            playBtn.classList.toggle('active', this.tab === 'play');
+            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
+        }
+
+        // Fresh body needs binds; cache hit already has listeners on parked nodes.
+        if (!cacheHit) this._bindSoftBodyChrome(bodyEl);
+        if (subRebound) {
+            const sub = content.querySelector(':scope > .hs-subnav');
+            if (sub) this._bindSoftTabButtons(sub);
+        }
+        this._finishTabMount(scrollState, { bindChrome: false, soft: true, bodyCached: cacheHit });
+        this._softBodyTab = this.tab;
+
+        return true;
+    },
+
+    /** Update area/subnav active state; rebuild subnav only when the area changes. */
+    _syncSoftNavChrome(content, bodyEl, hideTabsForTutorial) {
+        if (hideTabsForTutorial) return false;
+        const activeArea = this.getTabArea(this.tab);
+        const areaId = activeArea ? activeArea.id
+            : (this.isMenuRowTab() ? 'menu' : (this.tab === 'play' ? 'play' : null));
+
+        content.querySelectorAll('.hs-area-btn[data-area]').forEach((btn) => {
+            const on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+            btn.classList.toggle('active', on);
+            btn.classList.remove('hs-anim-activate', 'holo-on', 'hs-anim-from-left', 'hs-anim-from-right');
+        });
+        content.querySelectorAll('.hs-home-btn[data-tab="station"]').forEach((btn) => {
+            btn.classList.toggle('active', this.tab === 'station');
+        });
+
+        const areaChanged = this._softAreaId !== areaId;
+        this._softAreaId = areaId;
+        if (!areaChanged) {
+            content.querySelectorAll('.hs-subnav [data-tab]').forEach((btn) => {
+                btn.classList.toggle('active', btn.getAttribute('data-tab') === this.tab);
+            });
+            return false;
+        }
+
+        content.querySelectorAll(':scope > .hs-subnav').forEach((el) => el.remove());
+        const subHtml = this.renderAreaSubnav();
+        if (subHtml) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = subHtml;
+            const subEl = tmp.firstElementChild;
+            if (subEl) content.insertBefore(subEl, bodyEl);
+        }
+        return true;
+    },
+
+    _bindSoftTabButtons(scope) {
+        if (!scope) return;
+        scope.querySelectorAll('[data-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                const next = btn.getAttribute('data-tab') || 'station';
+                if (this.tab === 'menu' && next !== 'menu') {
+                    this.unmountMenuTab();
+                    this._menuOpts = null;
+                    this._prevTab = null;
+                }
+                this.tab = next;
+                this._resBuyModal = null;
+                this.statusMsg = '';
+                this.focusIndex = 0;
+                this._navLevel = 'tabs';
+                this.persistTab();
+                this.createUI();
             });
         });
-        // Status messages show once as a toast (bottom centre), not as a line
-        // under the tabs; consume it so re-renders don't repeat it.
+    },
+
+    _bindSoftBodyChrome(bodyEl) {
+        if (!bodyEl) return;
+        bodyEl.querySelectorAll('[data-explore]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.openExploration(btn.getAttribute('data-explore'));
+            });
+        });
+        bodyEl.querySelectorAll('[data-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                this.tab = btn.getAttribute('data-tab') || 'station';
+                this._resBuyModal = null;
+                this.statusMsg = '';
+                this.focusIndex = 0;
+                this._navLevel = 'tabs';
+                this.persistTab();
+                this.createUI();
+            });
+        });
+    },
+
+    /** Shared post-body mount: hangar/play/menu + focus/scroll. */
+    _finishTabMount(scrollState, opts) {
+        const soft = !!(opts && opts.soft);
+        const bindChrome = !!(opts && opts.bindChrome);
+        if (bindChrome) {
+            this.bindEvents();
+            const playBtn = this.overlay.querySelector('.hs-header-split > [data-play-launch]');
+            if (playBtn) {
+                playBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.launchPlay();
+                });
+            }
+            this.bindMissionButton();
+            this.bindControlsToggle();
+            this.bindStationColumnResize();
+            this.syncTopbarResLayout();
+            this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+                menuBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+                });
+            });
+        } else {
+            // Soft path: only bind handlers the active tab's body needs.
+            // Cached body DOM already has listeners from the prior visit.
+            const t = this.tab;
+            if (!(opts && opts.bodyCached)) {
+                if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
+                if (t === 'station' || t === 'shop' || t === 'craft') this.bindStationEvents();
+                if (t === 'hangar') this.bindHangarTabEvents();
+            }
+            this.bindKeyNav();
+        }
+        this.moveHangarBayTools();
         if (this.statusMsg) {
             this.showStatusToast(this.statusMsg);
             this.statusMsg = '';
         }
         if (['factions', 'ffleet', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
-        this.restoreNavFocus();
-        if (this._focusExplore) {
-            this.focusExploreItem(this._focusExplore);
-            this._focusExplore = null;
-        }
-        this.syncNavHint();
         this.restoreScrollState(scrollState);
         this.applyPendingFlash();
+        // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
+        if (soft) {
+            requestAnimationFrame(() => {
+                this.restoreNavFocus();
+                if (this._focusExplore) {
+                    this.focusExploreItem(this._focusExplore);
+                    this._focusExplore = null;
+                }
+                this.syncNavHint();
+            });
+        } else {
+            this.restoreNavFocus();
+            if (this._focusExplore) {
+                this.focusExploreItem(this._focusExplore);
+                this._focusExplore = null;
+            }
+            this.syncNavHint();
+        }
         if (this.tab === 'hangar') {
-            // Bind new HangarUI events — DISABLED TEMPORARILY
-            // this._bindHangarEvents();
             this.setupHangarPanelResize();
-            this.startHangarPreview();
-            this.drawHangarBay();
-            this.bindHangarSlotEvents();
-            this.bindHangarPartsGrid();
+            // Soft: hangar canvas draw was ~30–65ms on the click path.
+            if (soft) {
+                requestAnimationFrame(() => {
+                    this.startHangarPreview();
+                    this.drawHangarBay();
+                    this.bindHangarSlotEvents();
+                    this.bindHangarPartsGrid();
+                });
+            } else {
+                this.startHangarPreview();
+                this.drawHangarBay();
+                this.bindHangarSlotEvents();
+                this.bindHangarPartsGrid();
+            }
         } else {
             this.destroyHangarPanelResize();
             this._hangarOpenSlot = null;
@@ -89402,17 +90031,27 @@ extendClass(HomeStationUI, {
         if (this.tab === 'play') {
             this.mountPlayTab();
         }
-        if (this.tab === 'menu') {
-            this.mountMenuTab(this._menuOpts);
+        if (this.tab === 'menu') this.mountMenuTab(this._menuOpts);
+        if (this.tab === 'components') this.mountComponentsTab();
+        // Soft: defer ship thumbs + skip parallax (shell/bg unchanged) so the tab paints first.
+        if (soft && this.tab === 'play') {
+            /* play body has no ship thumbs */
+        } else if (soft) {
+            requestAnimationFrame(() => {
+                this.scheduleShipThumbs();
+                this.bindShipSelectButtons();
+            });
+        } else {
+            this.scheduleShipThumbs();
+            this.bindShipSelectButtons();
+            if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
+                VFBgMouseParallax.refresh();
+            }
         }
-        if (this.tab === 'components') {
-            this.mountComponentsTab();
-        }
-        this.scheduleShipThumbs();
-        this.bindShipSelectButtons();
-        this.syncTabDrop();
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
+        if (soft) {
+            requestAnimationFrame(() => this.syncTabDrop());
+        } else {
+            this.syncTabDrop();
         }
     },
 
@@ -105862,10 +106501,10 @@ extendClass(StartScreenManager, {
                 name: 'Pixel Size',
                 value: (typeof uiAppearanceManager !== 'undefined')
                     ? uiAppearanceManager.getFxValue('pixelSize') : 'OFF',
-                options: ['OFF', '1', '2', '3', '4', '6', '8'],
+                options: ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'],
                 type: 'uiFx',
                 fxKey: 'pixelSize',
-                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors'
+                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors — 1 is sharpest'
             },
             {
                 name: 'Frame Pixel',
@@ -112945,8 +113584,10 @@ extendClass(PlanetSVGManager, {
         const place = (entry) => {
             if (imgEl.getAttribute('src') !== entry.url) imgEl.src = entry.url;
             const g = imgEl._snapGeo;
+            // Auto mode only: seat whole-screen-pixel texels in the icon box.
+            // Global Pixel Size keeps the icon box from planetIconHtml / spin and only
+            // swaps in a gp-quantized bitmap (resizing here shrank planets to native texels).
             if (!g || !(g.live > 0) || !entry.t) return;
-            // Whole-pixel texels: W = n * t screen px, centred in the icon box.
             const W = entry.n * entry.t / g.live;
             imgEl.style.width = W + 'px';
             imgEl.style.height = W + 'px';
@@ -112991,6 +113632,10 @@ extendClass(PlanetSVGManager, {
             if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 return false;
             }
+            // Combat owns the main thread (runtime: spin tick spikes >200ms while
+            // GameLoop JS stayed cheap). Decorative planet spin waits outside fights.
+            if (root.classList.contains('vf-game-shown')) return false;
+            // Map spin is allowed again — round-robin budget in startPlanetSpin caps cost.
         } catch (e) { /* allow */ }
         return true;
     },
@@ -113059,7 +113704,8 @@ extendClass(PlanetSVGManager, {
                 // (viewBox / foreignObject often reports planets far off-screen
                 // while they are clearly visible). Never cull those — the
                 // round-robin budget already caps the work.
-                if (!el.closest('.galaxy-map-svg')) {
+                const onMap = !!el.closest('.galaxy-map-svg');
+                if (!onMap) {
                     try {
                         const rect = el.getBoundingClientRect();
                         if (rect.width < 2 || rect.height < 2) continue;
@@ -113120,8 +113766,8 @@ extendClass(PlanetSVGManager, {
             }
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
-        // ~5 Hz is enough for a 60s axial turn; 10 Hz was mostly decode/repaint cost.
-        this._spinTimer = setInterval(tick, 200);
+        // ~2 Hz: 60s axial turn still reads fine; half the decode/repaint of the old 5 Hz.
+        this._spinTimer = setInterval(tick, 450);
     }
 });
 

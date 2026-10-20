@@ -781,6 +781,7 @@ be reviewed or reverted independently.
 | 67K | Editors and hull polish | Ship/enemy editor glass, procedural component gen, hull builders, sprite loader |
 | 67L | Repo footprint trim | Drop faction _reference art and legacy js/levels; ignore local archive/ |
 | 67M | Brand logos and PORT | Meierdesigns brand SVGs and PORT-aware npm start scripts |
+| 67N | Deferred bundle rebuild | Rebuild deferred.js and index cache keys for waves 67A–67M |
 
 The wave commit convention is:
 

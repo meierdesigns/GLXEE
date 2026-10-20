@@ -51,3 +51,6 @@ cursed-modules.html
 assets/levels/sprites/
 assets/ships/sprites/
 assets/weapons/sprites/
+
+# Local archive of unused assets (not shipped)
+archive/

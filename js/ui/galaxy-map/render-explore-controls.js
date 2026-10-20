@@ -8,13 +8,13 @@ const GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-const NEB_VERSION = 17;
+const NEB_VERSION = 21;
 const NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 const NEB_PIXEL_BUDGET = 160000;
 // Time per compute slice: the fine patch (rebuilt while zooming / panning) takes small bites so frames keep running;
 // the coarse field is built once and may take bigger ones.
-const NEB_SLICE_FINE_MS = 5;
+const NEB_SLICE_FINE_MS = 8;
 const NEB_SLICE_COARSE_MS = 12;
 // How steeply nebula density drops with distance from the suns (higher = faster).
 const NEB_SUN_FALLOFF = 1.8;

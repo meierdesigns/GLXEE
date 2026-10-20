@@ -2,6 +2,10 @@
 
 // GalaxyMapManager members, continued from render-explore-controls.js (kept under ~500 lines per file).
 extendClass(GalaxyMapManager, {
+    /** Map SVG wrapped for Global Pixel Size: CSS scale(N) nearest-neighbor raster. */
+    mapAreaInnerHtml() {
+        return `<div class="gm-px-raster">${this.renderMapSvg()}</div>`;
+    },
     renderMapSvg() {
         const nodes = this.map.nodes || [];
         const edges = this.map.edges || [];
@@ -38,8 +42,11 @@ extendClass(GalaxyMapManager, {
             // Progress label only while there's still something to fight.
             const stageProgress = !unlocked || cleared ? null : this.getPlanetStageProgress(n.planetId);
             const baseSize = this.planetNodeSize(n.planetId);
-            const size = baseSize * this.getMapObjectScale();
+            let size = baseSize * this.getMapObjectScale();
+            const uLat = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            if (uLat > 0) size = Math.max(uLat * 2, Math.round(size / uLat) * uLat);
             const frame = size / 2 + 10;
+            const npt = this.latticeMapPt ? this.latticeMapPt(x, y) : { x: x, y: y };
             const stateClass = [
                 unlocked ? 'unlocked' : 'locked',
                 cleared ? 'cleared' : '',
@@ -48,12 +55,12 @@ extendClass(GalaxyMapManager, {
             ].filter(Boolean).join(' ');
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
-                   data-planet="${n.planetId}" data-size="${size}" transform="translate(${x},${y})">
+                   data-planet="${n.planetId}" data-size="${size}" transform="translate(${npt.x},${npt.y})">
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
-                    <foreignObject class="gm-planet-lit" data-lit-x="${x}" data-lit-y="${y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
+                    <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
-                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(x, y), true)}
+                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true)}
                         </div>
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
@@ -67,8 +74,8 @@ extendClass(GalaxyMapManager, {
                         ${stageProgress.boss
                             // Boss stage: skull + "/4". The skull sits clear of the text's
                             // dark outline stroke, which used to paint over its right edge.
-                            ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextSvg('/' + stageProgress.total, 0, 12, 'start')}`
-                            : this.pixelTextSvg(stageProgress.next + '/' + stageProgress.total, 0, 12, 'middle')}
+                            ? `${this.bossIconSvg(-7.5, 9, 1)}${this.pixelTextGroup('/' + stageProgress.total, 0, 12, 'start')}`
+                            : this.pixelTextGroup(stageProgress.next + '/' + stageProgress.total, 0, 12, 'middle')}
                     </g>` : ''}
                     ${!unlocked ? `
                         <g class="gm-locked-icon" transform="translate(-6,${size / 2 + 3})">
@@ -86,22 +93,20 @@ extendClass(GalaxyMapManager, {
             const x = W / 2 + (post.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (post.y - 0.5) * (H - pad * 2) * mapSpread;
             const open = profileManager.isTradingPostUnlocked(post);
-            const anchor = this.getPlanetInfo(post.planetId);
-            // One station cell = one pixel of its anchor planet.
-            // Stations are small next to planets: half a planet pixel per
-            // cell for shops, a bit more for faction stations.
-            // Base cell = one planet pixel at zoom detail 1; the station's own
-            // sub-pixel detail then follows the zoom like the planets do.
+            // Fixed map footprint (same as planets/ship). Under GP, screen cells stay gp via
+            // vfMapPx — do not scale stations by live zoom (that made cells grow on zoom-out).
             const pp = this.planetPixelSize(post.planetId) * this.getMapObjectScale();
             const half = 2.6 * pp;
+            const stDetail = this.getMapDetail();
+            const ppt = this.latticeMapPt ? this.latticeMapPt(x, y) : { x: x, y: y };
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
             postsHtml += `
-                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${x},${y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
+                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${ppt.x},${ppt.y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
                     <rect class="gm-post-hit" x="${-half - 2}" y="${-half - 2}" width="${2 * half + 4}" height="${2 * half + 4}"/>
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
                     ${post.faction ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, this.getMapDetail(), open)}</g>
+                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, stDetail, open)}</g>
                 </g>
             `;
         });
@@ -125,6 +130,9 @@ extendClass(GalaxyMapManager, {
             // Whole-pixel magnification of the 13×17 icon, so every pixel is the same size.
             const box = this.shipIconBox();
             const k = box.w / 11;
+            const shipPt = this.latticeShipPt ? this.latticeShipPt(x, y) : { x: x, y: y };
+            const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0;
             const shipSvg = icon
                 ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
                 : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
@@ -136,13 +144,15 @@ extendClass(GalaxyMapManager, {
             const showShipLabel = (this.mapZoom || 1) < 1.1 &&
                 !centered &&
                 this._shipLabelReady;
+            // Under GP skip sub-pixel bob — it fights the shared screen lattice.
+            const bob = gpOn ? '' : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
             shipHtml = `
-                <g class="gm-ship-marker" transform="translate(${x},${y})">
+                <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
                     <title>YOUR SHIP</title>
                     <g class="gm-ship-scale" transform="scale(1)">
                     ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
                     <g>
-                        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>
+                        ${bob}
                         ${shipSvg}
                     </g>
                     </g>

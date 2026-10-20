@@ -160,6 +160,11 @@ extendClass(GalaxyMapManager, {
                 this._sunDriftTimer = null;
                 return;
             }
+            // Decorative sun drift: skip while pixel-size is on (idle map stays static, less SVG thrash).
+            try {
+                if (document.documentElement.getAttribute('data-vf-pixel-size') === 'on') return;
+                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off') return;
+            } catch (e) { /* */ }
             const t = performance.now() / 1000;
             svg.querySelectorAll('.gm-sun[data-sun]').forEach((el) => {
                 const pose = this._sunDrift[+el.getAttribute('data-sun')];
@@ -176,7 +181,7 @@ extendClass(GalaxyMapManager, {
                 if (parts[2] === String(dir)) return;
                 span.setAttribute('data-planet-spin', parts[0] + '|' + parts[1] + '|' + dir);
             });
-        }, 1000);
+        }, 2000);
     },
     /**
      * Lanes from each station / trading post to its anchor planet(s), routed
@@ -192,14 +197,25 @@ extendClass(GalaxyMapManager, {
         const d = this.getMapDetail ? this.getMapDetail() : 1;
         // Thinner in map units as the zoom detail rises, so lines stay
         // about the same thickness on screen instead of growing chunky.
-        const width = (o.width || 2.6) / this.getLineDetail();
+        let width = (o.width || 2.6) / this.getLineDetail();
         // Fine grid (smoother diagonals), but never more than ~8 px across.
-        const p = Math.max(1 / d, width / 8);
+        let p = Math.max(1 / d, width / 8);
+        // Global Pixel Size: brush cell = lattice / vfMapPx cell.
+        // Width is N cells (from design width at GM_PIXEL_U0), not a fixed map
+        // length — otherwise zoom-in makes beams look chunkier on screen.
+        const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+        if (uL > 0) {
+            const cells = Math.max(1, Math.round((o.width || 2.6) / GM_PIXEL_U0));
+            width = cells * uL;
+            p = uL;
+        }
         const rad = width / 2 / p;          // brush radius in pixels
         // Energy beam: white-hot centre, coloured core, glow, faint halo.
+        // On the lattice, keep glow/halo proportional to the core (fixed +1.6/+3.6
+        // cell padding made close-zoom routes look several gp too thick).
         const hotRad = Math.max(0.5, rad * 0.4);
-        const glowRad = rad + 1.6;
-        const haloRad = rad + 3.6;
+        const glowRad = uL > 0 ? Math.max(rad + 0.5, rad * 1.55) : rad + 1.6;
+        const haloRad = uL > 0 ? Math.max(rad + 1, rad * 2.35) : rad + 3.6;
         // Route preview: thin dashes with wide gaps, marching towards the target.
         if (o.run) {
             const dash = width * 5, gap = width * 4.4, period = dash + gap;
@@ -367,9 +383,10 @@ extendClass(GalaxyMapManager, {
             `<rect class="gm-invasion-ring" x="${-f}" y="${-f}" width="${f * 2}" height="${f * 2}"/>` +
             `<rect class="gm-invasion-ring gm-invasion-ring-2" x="${-f - 6}" y="${-f - 6}" width="${f * 2 + 12}" height="${f * 2 + 12}"/>` +
             this.planetBattleSvg(planetId) +
-            `<text class="gm-invasion-label" x="0" y="${f + 14}">UNDER ATTACK</text>` +
+            `<text class="gm-invasion-label gm-vec-text" x="0" y="${f + 14}">UNDER ATTACK</text>` +
+            `<g class="gm-stage-anchor gm-px-only" data-r="${f + 14}" transform="translate(0,${f + 14})">${this.pixelTextGroup('UNDER ATTACK', 0, 0, 'middle')}</g>` +
             `<foreignObject x="${f - 10}" y="${-f - 10}" width="20" height="20">` +
-            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem">${emblem}</div></foreignObject>` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem" data-fac="${inv.attacker}">${emblem}</div></foreignObject>` +
             `</g>`;
     },
     /**
@@ -413,7 +430,7 @@ extendClass(GalaxyMapManager, {
         if (typeof profileSelectionManager === 'undefined' || !profileSelectionManager.getFactionEmblemHtml) return '';
         // Bare faction icons — no boxes around them.
         const names = visibleFactions.map((f) =>
-            `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16, this.getMapDetail())}</span>`
+            `<span class="gm-node-faction-icon" title="${String(f).toUpperCase()}">${profileSelectionManager.getFactionEmblemHtml(f, 16, (uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0) ? 1 : this.getMapDetail())}</span>`
         ).join('');
         const w = 80;
         const h = 18;
@@ -435,17 +452,202 @@ extendClass(GalaxyMapManager, {
      * (×1.19 each), so lines thin out in small pixel steps while zooming.
      */
     getLineDetail() {
+        // Global Pixel Size: thin with lattice (GM_PIXEL_U0 / uL) so baked width
+        // stays ~N screen cells as zoom changes — returning 1 froze map-unit
+        // thickness and made routes chunky when zoomed in.
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            if (uL > 0) {
+                const raw = Math.max(1, Math.min(12, GM_PIXEL_U0 / uL));
+                return Math.pow(2, Math.round(Math.log2(raw) * 4) / 4);
+            }
+            return 1;
+        }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
         return Math.pow(2, Math.round(Math.log2(Math.max(1, Math.min(12, z))) * 4) / 4);
     },
     /** Stage counter size: big when zoomed out (readable), settling down as you zoom in. */
     stageTextScale() {
+        // Global Pixel Size: local glyph cell (F=1) == one vfMapPx / lattice cell.
+        if (this.mapPxLatticeUnit) {
+            const u = this.mapPxLatticeUnit();
+            if (u > 0) return u;
+        }
+        const gpS = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gpS > 0) {
+            const live = (this.mapScreenScale && this.mapScreenScale()) || this._pxScreenScale || 0;
+            if (live > 0) return gpS / live;
+            return GM_PIXEL_U0;
+        }
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? Math.max(1, this.mapZoom) : 1;
         return 1 + 1.5 / z;
     },
-    getMapDetail() {
+    /** Screen px per map unit right now (zoom included), read from the live SVG; 0 if unavailable. */
+    mapScreenScale() {
+        const svgEl = document.querySelector('.galaxy-map-svg');
+        if (!svgEl || !svgEl.clientWidth) return 0;
+        let live = 0;
+        // Exact px per user unit (viewBox + preserveAspectRatio letterboxing included).
+        try {
+            const m = svgEl.getScreenCTM();
+            if (m && m.a > 0) live = m.a;
+        } catch (e) { /* fall back below */ }
+        if (!(live > 0)) {
+            const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+            live = vb && vb.width > 0 && vb.height > 0
+                ? Math.min(svgEl.clientWidth / vb.width, svgEl.clientHeight / vb.height) : 0;
+        }
+        // Cache for mapPixelUnitGlobal during bake (before CTM is ready on remount).
+        if (live > 0) this._pxScreenScale = live;
+        return live;
+    },
+    /** Map units per Global Pixel cell (same cell CSS size as vfMapPx). */
+    mapPxLatticeUnit() {
+        if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.getGlobalPixelPx
+            || !(uiAppearanceManager.getGlobalPixelPx() > 0)) return 0;
+        const live = this.mapScreenScale() || this._pxScreenScale || 0;
+        if (!(live > 0)) return 0;
+        const cellCss = uiAppearanceManager.getMapPxCellCss
+            ? uiAppearanceManager.getMapPxCellCss()
+            : uiAppearanceManager.getGlobalPixelPx();
+        return cellCss > 0 ? cellCss / live : 0;
+    },
+    /**
+     * Snap a map point onto the Global Pixel Size lattice (same grid as vfMapPx).
+     */
+    latticeMapPt(x, y) {
+        const u = this.mapPxLatticeUnit();
+        if (!(u > 0)) return { x: x, y: y };
+        return { x: Math.round(x / u) * u, y: Math.round(y / u) * u };
+    },
+    /** Ship centre on the same lattice as planets (no half-cell offset — that broke the grid). */
+    latticeShipPt(x, y) {
+        return this.latticeMapPt(x, y);
+    },
+    /**
+     * Global Pixel Size: faction crests are 16x16 sprites, shown with one sprite pixel per grid cell
+     * (16 cells wide) so they stay recognisable; reset to the normal sizes when the setting is off.
+     */
+    snapMapEmblems() {
+        const svg = document.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const live = gp > 0 ? this.mapScreenScale() : 0;
+        const on = gp > 0 && live > 0;
+        // Cells across the sprite: 16 at normal size, fewer when zoomed out so the crest shrinks with its planet.
+        const cellsFor = (origMapSize) => {
+            const o = origMapSize * live / gp;
+            return o >= 12 ? 16 : o >= 6 ? 8 : 4;
+        };
+        const D = on ? cellsFor(16) * gp / live : 0;
+        const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
+        svg.querySelectorAll('.gm-node-faction-icon').forEach((el) => {
+            el.style.width = on ? D + 'px' : '';
+            el.style.height = on ? D + 'px' : '';
+            const im = el.querySelector('img');
+            if (im) { im.style.width = on ? D + 'px' : ''; im.style.height = on ? D + 'px' : ''; }
+        });
+        svg.querySelectorAll('.gm-invasion-emblem').forEach((el) => {
+            const fo = el.closest('foreignObject');
+            if (!fo) return;
+            if (el.dataset.orig == null) {
+                el.dataset.orig = el.innerHTML;
+                el.dataset.fo = [fo.getAttribute('x'), fo.getAttribute('y'), fo.getAttribute('width'), fo.getAttribute('height')].join(',');
+            }
+            const o = el.dataset.fo.split(',').map(Number);
+            if (on && psm && psm.getFactionEmblemHtml && el.dataset.fac) {
+                if (el.dataset.px !== '1') { el.innerHTML = psm.getFactionEmblemHtml(el.dataset.fac, 16, 1); el.dataset.px = '1'; }
+                const Di = cellsFor(Math.max(1, o[2] - 8)) * gp / live;
+                const B = Di + 8, cx = o[0] + o[2] / 2, cy = o[1] + o[3] / 2;
+                fo.setAttribute('x', cx - B / 2); fo.setAttribute('y', cy - B / 2);
+                fo.setAttribute('width', B); fo.setAttribute('height', B);
+                el.style.width = B + 'px'; el.style.height = B + 'px';
+                const im = el.querySelector('img');
+                if (im) { im.style.width = Di + 'px'; im.style.height = Di + 'px'; }
+            } else if (el.dataset.px === '1') {
+                el.innerHTML = el.dataset.orig; el.dataset.px = '';
+                ['x', 'y', 'width', 'height'].forEach((a, i) => fo.setAttribute(a, o[i]));
+                el.style.width = ''; el.style.height = '';
+            }
+        });
+    },
+    /** Lattice geometry of a planet icon: cell size u (map units) and the node centre / icon box size. */
+    planetLatticeGeo(iconEl, size, live) {
+        // Screen filter (gp≥2) or quantized bitmap (gp=1) owns pixel size — keep icon box from layout.
+        return null;
+    },
+    /** Global Pixel Size: snap every planet image on the map to the global pixel grid. */
+    snapMapPlanets() {
+        const svg = document.querySelector('.galaxy-map-svg');
+        const gp0 = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        this.snapMapEmblems();
+        if (gp0 > 0 && uiAppearanceManager.ensureMapPxFilter) {
+            const area = (svg && svg.closest && svg.closest('#gmMapArea')) || document.getElementById('gmMapArea') || svg;
+            uiAppearanceManager.ensureMapPxFilter(gp0, area);
+        }
+        if (svg) {
+            svg.querySelectorAll('.gm-px-txt').forEach((g) => {
+                g.innerHTML = this.pixelTextSvg(g.dataset.s, +g.dataset.x, +g.dataset.y, g.dataset.a);
+            });
+            const kS = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
+            svg.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${kS})`));
+        }
+        const live = this.mapScreenScale();
+        if (!svg || !(live > 0) || typeof planetSVGManager === 'undefined' || !planetSVGManager.snapPixelImg) return;
+        svg.querySelectorAll('.gm-planet-icon-img').forEach((el) => {
+            const im = el.querySelector('img.gm-planet-img');
+            if (!im) return;
+            const raw = im._rawUrl || im.getAttribute('src');
+            const px = Number(el.getAttribute('data-planet-px')) || 0;
+            const w = px * (im._frameK || 1.6);
+            // gp>0: null geo → quantize bitmap only, keep CSS size from planetIconHtml.
+            if (raw && px > 0) planetSVGManager.snapPixelImg(im, raw, w * live, gp0 > 0 ? null : { live: live, size: px });
+        });
+    },
+    /** Scale bucket for art re-bake. Always 0: zoom-driven re-bake coarsened GP pixels on zoom-out. */
+    getMapScaleKey() {
+        return 0;
+    },
+    /** Mild zoom-only curve when Global Pixel Size is off (cap 4 = art budget). */
+    _zoomDetailCurve(z) {
+        const zc = Math.max(0.35, Math.min(12, Number(z) || 1));
+        // Gentler than before (was *2.2 → detail 8): 1→2→3→4 without hammering spin.
+        return Math.max(1, Math.min(4, 1 + Math.log2(Math.max(1, zc)) * 1.35));
+    },
+    /** Continuous map detail (no rounding) — drives --gm-px every zoom frame. */
+    getMapDetailFloat() {
         const z = (typeof this.mapZoom === 'number' && Number.isFinite(this.mapZoom)) ? this.mapZoom : 1;
-        return z >= 2.5 ? 4 : (z >= 1.35 ? 2 : 1);
+        const zoomCurve = this._zoomDetailCurve(z);
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            // Ratchet: refine when zooming in, never coarsen on zoom-out (pixels stay gp-sized).
+            try {
+                const s = this.mapScreenScale() || this._pxScreenScale || 0;
+                if (s > 0) {
+                    const need = Math.max(1, Math.min(4, GM_PIXEL_U0 * s / gp));
+                    this._pxDetailPeak = Math.max(this._pxDetailPeak || 1, need);
+                    return this._pxDetailPeak;
+                }
+            } catch (e) { /* fall through */ }
+            return this._pxDetailPeak || 2;
+        }
+        return zoomCurve;
+    },
+    getMapDetail() {
+        // Integer detail for art rebuilds; CSS pixel size uses getMapDetailFloat.
+        return Math.max(1, Math.min(4, Math.round(this.getMapDetailFloat())));
+    },
+    /** Reset GP detail ratchet when Pixel Size changes. */
+    resetPixelSizeDetailPeak() {
+        this._pxDetailPeak = 0;
+        this._pxDetailFloatKey = null;
+        this._pxDetailFloat = null;
+        this._mapArtDetail = -1;
+        this._mapArtSKey = null;
     },
     /**
      * Keep map objects visually proportional while the camera zooms.

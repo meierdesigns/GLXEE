@@ -1237,8 +1237,56 @@ html[data-vf-pixel-size="on"] #ceCanvas {
 html[data-vf-pixel-size="on"] .gm-node .gm-node-icon-wrap:not(.dimmed) { filter: none; }
 html[data-vf-pixel-size="on"] .gm-planet-icon-img .gm-planet-img { image-rendering: pixelated !important; }
 
-/* Global Pixel Size screen: the whole galaxy-map SVG is sampled on one screen grid. */
-html[data-vf-pixel-size="on"] .galaxy-map-svg { filter: url(#vfMapPx); }
+/* Global Pixel Size: live map + vfMapPx filter (no canvas mirror — that flickered). */
+#gmMapArea > .gm-px-raster {
+    width: 100%;
+    height: 100%;
+}
+#gmMapArea > .gm-px-raster .galaxy-map-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+html[data-vf-pixel-size="on"] #gmMapArea {
+    position: relative;
+    overflow: hidden;
+    filter: url(#vfMapPx) !important;
+}
+html[data-vf-pixel-size="on"] #gmMapArea > .gm-px-raster {
+    width: 100%;
+    height: 100%;
+    transform: none;
+    opacity: 1;
+    will-change: auto;
+}
+html[data-vf-pixel-size="on"] #gmMapArea > .gm-px-raster .galaxy-map-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    shape-rendering: crispEdges;
+    filter: none !important;
+}
+html[data-vf-pixel-size="on"] #gmMapArea > canvas.gm-px-canvas {
+    display: none !important;
+}
+html:not([data-vf-pixel-size="on"]) #gmMapArea {
+    filter: none;
+}
+html:not([data-vf-pixel-size="on"]) #gmMapArea > .gm-px-raster {
+    width: 100%;
+    height: 100%;
+    transform: none;
+    opacity: 1;
+}
+html:not([data-vf-pixel-size="on"]) #gmMapArea > .gm-px-raster .galaxy-map-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+html[data-vf-pixel-size="on"] .galaxy-map-svg .gm-pxline-flow {
+    filter: none !important;
+}
 
 /* Map texts: vector text off, cell-built pixel text on while the pixel screen is active. */
 html[data-vf-pixel-size="on"] .galaxy-map-svg .gm-vec-text { display: none; }

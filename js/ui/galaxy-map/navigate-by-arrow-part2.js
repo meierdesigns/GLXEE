@@ -9,6 +9,8 @@ extendClass(GalaxyMapManager, {
             const el = this.overlay.querySelector('#' + id);
             if (el) el.textContent = text;
         };
+        const enemyEl = this.overlay.querySelector('#gmEnemyCard');
+        if (enemyEl) enemyEl.innerHTML = (this.selectedBorder || this.getSelectedPost()) ? '' : this.enemyCardHtml(info);
         const border = this.selectedBorder;
         if (border) {
             const nm = (id) => String((this.getPlanetInfo(id) || {}).name || id).toUpperCase();

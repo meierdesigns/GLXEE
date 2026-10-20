@@ -8,6 +8,14 @@ extendClass(GalaxyMapManager, {
      * so ship and planet pixels always match at every zoom.
      */
     shipIconBox() {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        // Global Pixel Size: fixed map footprint so zoom does not grow/shrink ship cells;
+        // screen pixel size is gp via vfMapPx (or live scale). Bake detail still follows getMapDetail.
+        if (gp > 0) {
+            const w = 13 * GM_PIXEL_U0, h = 17 * GM_PIXEL_U0;
+            return { x: -w / 2, y: -h / 2, w: w, h: h, attrs: `x="${(-w / 2).toFixed(3)}" y="${(-h / 2).toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}"` };
+        }
         const dk = Math.max(1, Math.round(this.getMapDetail()));
         const u = this.mapPixelUnitGlobal();
         const w = 13 * dk * u, h = 17 * dk * u;
@@ -25,7 +33,9 @@ extendClass(GalaxyMapManager, {
         const key = (model.id || model.name || 'ship') + '|' + (model.layout ? JSON.stringify(model.layout).length : 0);
         this._shipIcons = this._shipIcons && this._shipIconsKey === key ? this._shipIcons : {};
         this._shipIconsKey = key;
-        const cacheKey = dk + '|' + outlinePx;
+        const gpx = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const cacheKey = dk + '|' + outlinePx + '|' + gpx;
         if (this._shipIcons[cacheKey]) return this._shipIcons[cacheKey];
         let url = null;
         try {
@@ -33,7 +43,16 @@ extendClass(GalaxyMapManager, {
             // Small render → coarse voxels when scaled up pixelated on the map.
             inner.width = 11 * dk;
             inner.height = 15 * dk;
-            shipRenderer.renderShipPreview(inner, model, 1);
+            // Global Pixel Size: the hull's own voxels must be exactly one canvas texel
+            // (the map shows one texel as one global pixel), not its private lattice.
+            const ldr = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;
+            const prevCell = ldr ? ldr.globalVoxelCell : null;
+            if (ldr && gpx > 0) ldr.globalVoxelCell = 1;
+            try {
+                shipRenderer.renderShipPreview(inner, model, 1);
+            } finally {
+                if (ldr) ldr.globalVoxelCell = prevCell;
+            }
             // Dark outline (1 base pixel wide, at least 1 px), pixel-exact:
             // empty pixels touching the ship become dark.
             const c = document.createElement('canvas');
@@ -96,9 +115,8 @@ extendClass(GalaxyMapManager, {
      * organic curling tendrils that breathe instead of snapping.
      */
     /**
-     * Selection corners keep a fixed on-screen gap to the planet surface and a
-     * fixed on-screen size at every zoom: rebuilt from the current screen
-     * scale (screen px per map unit), snapped to whole screen pixels.
+     * Selection corners: fixed on-screen gap/size, snapped to whole screen pixels.
+     * Global Pixel Size: whole lattice cells (same grid as planets / vfMapPx).
      */
     updateSelectionFrames() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
@@ -106,15 +124,11 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
             return;
         }
-        // Screen scale from the cached element size + viewBox (meet): reading
-        // getScreenCTM right after a viewBox change forced a full layout of
-        // the map on every zoom frame.
         if (this._svgSizeEl !== svg || !this._svgSize) {
             const r = svg.getBoundingClientRect();
             const vb0 = svg.viewBox.baseVal;
             const ctm = svg.getScreenCTM && svg.getScreenCTM();
             const fit = vb0.width && vb0.height ? Math.min(r.width / vb0.width, r.height / vb0.height) : 0;
-            // CTM vs. rect ratio (the GUI's CSS zoom), measured once.
             const c = ctm && fit ? Math.hypot(ctm.a, ctm.b) / fit : 1;
             this._svgSizeEl = svg;
             this._svgSize = { w: r.width * c, h: r.height * c };
@@ -129,32 +143,97 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
             return;
         }
-        const px = (n) => Math.max(1, Math.round(n)) / s;   // screen px → map units
-        const key = s.toFixed(4);
-        // Only visible frames (selected / hovered) are rebuilt per zoom frame;
-        // the rest catch up when they get selected (syncNodeHighlight).
+        const gpf = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const sx = gpf > 0 ? this.mapScreenScale() : 0;
+        const u = (gpf > 0 && sx > 0) ? (gpf / sx) : 0;
+        // GP: sizes in whole lattice cells. Off: screen-px → map units.
+        const cells = (nCells) => (u > 0 ? Math.max(1, nCells) * u : 0);
+        const px = (n) => Math.max(1, Math.round(n)) / s;
+        const key = (sx > 0 ? sx : s).toFixed(4) + '|' + gpf + (u > 0 ? '|' + u.toFixed(5) : '');
         svg.querySelectorAll(':is(.gm-node, .gm-post-node, .gm-border-station):is(.selected, .hovered) .gm-frame-slot').forEach((slot) => {
             if (slot._frameKey === key) return;
             slot._frameKey = key;
             const r = Number(slot.getAttribute('data-frame-r')) || 16;
             const ry = slot.hasAttribute('data-frame-ry') ? Number(slot.getAttribute('data-frame-ry')) : null;
             const post = slot.hasAttribute('data-frame-post');
-            const gap = post ? 8 : 12, arm = post ? 10 : 16, thick = post ? 2 : 2;
-            // Corner sits `gap` px outside the surface (a square frame around a disc).
-            const f = r + px(gap);
-            slot.innerHTML = this.selectionFrameSvg(f, px(arm), px(thick), ry == null ? null : ry + px(gap));
+            let gap, arm, thick, f, fy;
+            if (u > 0) {
+                const uL = this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : u;
+                const cu = uL > 0 ? uL : u;
+                gap = Math.max(1, post ? 2 : 3) * cu;
+                arm = Math.max(1, post ? 4 : 5) * cu;
+                thick = cu;
+                f = Math.round((r + gap) / cu) * cu;
+                fy = ry == null ? null : Math.round((ry + gap) / cu) * cu;
+            } else {
+                gap = px(post ? 8 : 12);
+                arm = px(post ? 10 : 16);
+                thick = px(post ? 2 : 2);
+                f = r + gap;
+                fy = ry == null ? null : ry + gap;
+            }
+            slot.innerHTML = this.selectionFrameSvg(f, arm, thick, fy);
         });
+        // Stage labels: keep glyph scale = one lattice cell under GP.
+        if (u > 0 && this.stageTextScale) {
+            const kS = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
+            svg.querySelectorAll('.gm-stage-anchor').forEach((g) => {
+                const rawR = Number(g.getAttribute('data-r')) || 0;
+                const rSnap = Math.round(rawR / u) * u;
+                g.setAttribute('data-r', String(rSnap));
+                g.setAttribute('transform', `translate(0,${rSnap}) scale(${kS})`);
+            });
+            svg.querySelectorAll('.gm-px-txt').forEach((g) => {
+                g.innerHTML = this.pixelTextSvg(g.dataset.s, +g.dataset.x, +g.dataset.y, g.dataset.a);
+            });
+        }
+        try { if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.dirtyMapPxCanvas) uiAppearanceManager.dirtyMapPxCanvas(); } catch (e) { /* */ }
         this.syncLocateShipButton();
     },
     selectionFrameSvg(f, L, t, fy) {
         const faction = this.getCursorFaction();
+        const gpf = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        const live = gpf > 0 ? (this.mapScreenScale() || this._pxScreenScale || 0) : 0;
+        const u = (gpf > 0 && live > 0) ? (gpf / live) : 0;
+        const snap = (v) => (u > 0 ? Math.round(v / u) * u : v);
+        // Under GP every faction uses axis-aligned cell rects (curves/strokes miss the raster).
+        const raster = u > 0;
+        f = snap(f);
+        L = raster ? Math.max(u, snap(L)) : L;
+        t = raster ? Math.max(u, snap(t)) : t;
+        const fyS = fy == null ? null : snap(fy);
         const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
         let body = '';
+        const rectCorner = (x, y, ix, iy) => {
+            const x0 = Math.min(x, x + ix * L);
+            const y0 = Math.min(y, y + iy * t);
+            const x1 = Math.min(x, x + ix * t);
+            const y1 = Math.min(y, y + iy * L);
+            body += `<rect class="gm-corner" x="${x0}" y="${y0}" width="${L}" height="${t}"/>`;
+            body += `<rect class="gm-corner" x="${x1}" y="${y1}" width="${t}" height="${L}"/>`;
+        };
         corners.forEach(([sx, sy]) => {
-            const x = sx * f;
-            const y = sy * (fy == null ? f : fy);
-            const ix = -sx; // points inward
+            const x = snap(sx * f);
+            const y = snap(sy * (fyS == null ? f : fyS));
+            const ix = -sx;
             const iy = -sy;
+            if (raster) {
+                if (faction === 'machine') {
+                    for (let i = 0; i < 3; i++) {
+                        const d = i * (t + u);
+                        const ox = ix < 0 ? t : 0;
+                        const oy = iy < 0 ? t : 0;
+                        body += `<rect class="gm-corner" x="${snap(x + ix * d - ox)}" y="${snap(y - oy)}" width="${t}" height="${t}"/>`;
+                        if (i) body += `<rect class="gm-corner" x="${snap(x - ox)}" y="${snap(y + iy * d - oy)}" width="${t}" height="${t}"/>`;
+                    }
+                } else {
+                    // Terran / Kronax / Pirate / Voidborn: same L-bracket cells (faction color via CSS).
+                    rectCorner(x, y, ix, iy);
+                }
+                return;
+            }
             switch (faction) {
                 case 'voidborn': {
                     const c = L * 1.1;
@@ -183,11 +262,10 @@ extendClass(GalaxyMapManager, {
                         `L${x} ${y + iy * L * 0.6} L${x + ix * t} ${y + iy * L}"/>`;
                     break;
                 default:
-                    body += `<rect class="gm-corner" x="${Math.min(x, x + ix * L)}" y="${Math.min(y, y + iy * t)}" width="${L}" height="${t}"/>`;
-                    body += `<rect class="gm-corner" x="${Math.min(x, x + ix * t)}" y="${Math.min(y, y + iy * L)}" width="${t}" height="${L}"/>`;
+                    rectCorner(x, y, ix, iy);
             }
         });
-        return `<g class="gm-selection-frame gm-cursor-${faction}" style="--cursor-t:${t}px">${body}</g>`;
+        return `<g class="gm-selection-frame gm-cursor-${faction}" style="--cursor-t:${t}">${body}</g>`;
     },
     bindNodeClicks() {
         // Hover ends as soon as the pointer leaves the planet disc — the node
@@ -321,6 +399,26 @@ extendClass(GalaxyMapManager, {
         return [cx - w / 2, cy - h / 2, w, h];
     },
     /**
+     * Align mapZoom / pan with the SVG's live viewBox (flight and camera
+     * anims write the viewBox directly; without this, the next re-render
+     * snaps to a stale mapZoom — usually a zoom-out jump on arrival).
+     */
+    adoptViewBoxZoom(svg) {
+        const el = svg || (this.overlay && this.overlay.querySelector('.galaxy-map-svg'));
+        if (!el || !el.viewBox || !el.viewBox.baseVal) return;
+        const vb = el.viewBox.baseVal;
+        if (!(vb.width > 0) || !(vb.height > 0)) return;
+        const z0 = this.mapZoom;
+        this.mapZoom = 1;
+        const base = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+        this.mapZoom = z0;
+        const next = Math.min(12, Math.max(0.35, base[2] / vb.width));
+        this.mapZoom = next;
+        this._userMapZoom = next;
+        this._panAnchor = { x: vb.x + vb.width / 2, y: vb.y + vb.height / 2 };
+        this.mapPan = { x: 0, y: 0 };
+    },
+    /**
      * Camera: when the selection changes, glide (animated viewBox) so both
      * the player ship and the selected planet / station are in view. Only
      * zooms out if they don't fit; never zooms in past the player's zoom.
@@ -375,10 +473,11 @@ extendClass(GalaxyMapManager, {
         const cx = (x0 + x1) / 2;
         const cy = (y0 + y1) / 2;
         const to = [cx - w / 2, cy - h / 2, w, h];
-        // Persist as the camera state getMapViewBox uses on re-render.
-        this.mapZoom = (this.mapZoom || 1) * (cur.width / w);
+        // Pan target now; commit mapZoom only when the glide finishes so an
+        // interrupted anim (flight start) cannot leave a stale zoom behind.
         this._panAnchor = { x: cx, y: cy };
         this.mapPan = { x: 0, y: 0 };
+        const targetZoom = (this.mapZoom || 1) * (cur.width / w);
         // Animate the viewBox: centre moves linearly, zoom in log space, so pan and zoom stay in sync.
         const start = performance.now();
         const fcx = from[0] + from[2] / 2, fcy = from[1] + from[3] / 2;
@@ -388,7 +487,11 @@ extendClass(GalaxyMapManager, {
         const lw0 = Math.log(from[2]), lw1 = Math.log(w);
         const token = (this._camAnim = {});
         const step = (now) => {
-            if (this._camAnim !== token || !svg.isConnected || this._flight) return;
+            if (this._camAnim !== token || !svg.isConnected || this._flight) {
+                // Flight / cancel: keep whatever viewBox is showing.
+                if (this._flight && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
+                return;
+            }
             const t = Math.min(1, (now - start) / dur);
             const k = ease(t);
             const vw = Math.exp(lw0 + (lw1 - lw0) * k);
@@ -396,7 +499,14 @@ extendClass(GalaxyMapManager, {
             const vcx = fcx + (cx - fcx) * k, vcy = fcy + (cy - fcy) * k;
             svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
             this.updateSelectionFrames();
-            if (t < 1) requestAnimationFrame(step);
+            if (t < 1) {
+                requestAnimationFrame(step);
+                return;
+            }
+            this.mapZoom = targetZoom;
+            this._panAnchor = { x: cx, y: cy };
+            this.mapPan = { x: 0, y: 0 };
+            this._camAnim = null;
         };
         requestAnimationFrame(step);
     },

@@ -181,10 +181,117 @@ extendClass(PlanetSVGManager, {
         return { url: url, scale: (n + 2 * pad) / n };
     },
 
+    /**
+     * Global Pixel Size: show `rawUrl` in `imgEl` snapped to a grid of gp screen px per pixel.
+     * The raster is decoded once and nearest-sampled down to round(shownW / gp) pixels (cached),
+     * so art that is finer than gp (already at the minimum detail) still has uniform pixels.
+     */
+    snapPixelImg(imgEl, rawUrl, shownW, geo) {
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        imgEl._rawUrl = rawUrl;
+        imgEl._snapGeo = geo || null;
+        // Without a global Pixel Size the planet still gets whole-screen-pixel texels ("auto" mode, needs geo.live).
+        const auto = !(gp > 0) && geo && geo.live > 0 && shownW > 0;
+        if ((!(gp > 0) && !auto) || !(shownW > 0)) {
+            if (imgEl.getAttribute('src') !== rawUrl) imgEl.src = rawUrl;
+            return;
+        }
+        const N = gp > 0 ? Math.max(1, Math.round(shownW / gp)) : 0;
+        let h = 5381;
+        for (let i = 0; i < rawUrl.length; i += 17) h = ((h << 5) + h + rawUrl.charCodeAt(i)) | 0;
+        const key = rawUrl.length + ':' + h + '|' + (gp > 0 ? N : 'a' + Math.round(shownW));
+        this._snapCache = this._snapCache || new Map();
+        imgEl.style.imageRendering = 'pixelated';
+        const place = (entry) => {
+            if (imgEl.getAttribute('src') !== entry.url) imgEl.src = entry.url;
+            const g = imgEl._snapGeo;
+            // Auto mode only: seat whole-screen-pixel texels in the icon box.
+            // Global Pixel Size keeps the icon box from planetIconHtml / spin and only
+            // swaps in a gp-quantized bitmap (resizing here shrank planets to native texels).
+            if (!g || !(g.live > 0) || !entry.t) return;
+            const W = entry.n * entry.t / g.live;
+            imgEl.style.width = W + 'px';
+            imgEl.style.height = W + 'px';
+            imgEl.style.left = ((g.size - W) / 2) + 'px';
+            imgEl.style.top = ((g.size - W) / 2) + 'px';
+        };
+        const hit = this._snapCache.get(key);
+        if (hit) { place(hit); return; }
+        const im = new Image();
+        im.onload = () => {
+            let out = rawUrl;
+            const nat = im.naturalWidth || 0;
+            let n = nat || N, t = 0;
+            if (auto) {
+                t = Math.max(1, Math.ceil(shownW / Math.max(1, nat) - 0.2)); // never shrink the planet by more than ~1/5 texel
+                n = Math.max(1, Math.min(nat, Math.round(shownW / t)));
+            } else {
+                n = nat > N ? N : (nat || N);
+            }
+            if (nat > n) {
+                const c = document.createElement('canvas');
+                c.width = c.height = n;
+                const ctx = c.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(im, 0, 0, n, n);
+                out = c.toDataURL();
+            }
+            const entry = { url: out, n: n, t: t };
+            if (this._snapCache.size > 600) this._snapCache.delete(this._snapCache.keys().next().value);
+            this._snapCache.set(key, entry);
+            if (imgEl._rawUrl === rawUrl) place(entry);
+        };
+        im.src = rawUrl;
+    },
+
+    /** True when global PERF / reduced-motion says planet spin should freeze. */
+    isPlanetSpinAllowed() {
+        try {
+            const root = document.documentElement;
+            if (root.getAttribute('data-vf-perf-anim') === 'off') return false;
+            if (root.getAttribute('data-vf-performance') != null) return false;
+            if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return false;
+            }
+            // Combat owns the main thread (runtime: spin tick spikes >200ms while
+            // GameLoop JS stayed cheap). Decorative planet spin waits outside fights.
+            if (root.classList.contains('vf-game-shown')) return false;
+            // Map spin is allowed again — round-robin budget in startPlanetSpin caps cost.
+        } catch (e) { /* allow */ }
+        return true;
+    },
+
+    /** Keep spin detail aligned with map node art (same grid as planetIconHtml). */
+    clampSpinDetail(detail) {
+        const d = Math.max(1, Math.round(Number(detail) || 1));
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        return Math.min(8, d);
+    },
+
+    /** Keep a small LRU of spin frame data-URLs (full turns are hundreds of ~200KB blobs). */
+    rememberSpinFrameUrl(model, frame, url) {
+        if (!model) return;
+        model.frameUrls = model.frameUrls || {};
+        model.frameUrlOrder = model.frameUrlOrder || [];
+        if (!model.frameUrls[frame]) {
+            model.frameUrls[frame] = url;
+            model.frameUrlOrder.push(frame);
+            while (model.frameUrlOrder.length > 12) {
+                const drop = model.frameUrlOrder.shift();
+                delete model.frameUrls[drop];
+            }
+        }
+        return model.frameUrls[frame];
+    },
+
     startPlanetSpin(periodMs) {
         this.spinPeriod = periodMs || this.spinPeriod || 60000;
         if (this._spinTimer) return;
+        this._spinCursor = 0;
         const tick = () => {
+            if (!this.isPlanetSpinAllowed()) return;
             const els = document.querySelectorAll('[data-planet-spin]');
             if (!els.length) {
                 clearInterval(this._spinTimer);
@@ -192,34 +299,83 @@ extendClass(PlanetSVGManager, {
                 return;
             }
             if (document.hidden) return;
-            // New high-detail models are built a few per tick (frame budget) so the
-            // map never freezes; planets show a cheap low-detail globe meanwhile.
+            // Round-robin with a short frame budget: same detail/quality as before,
+            // but never rebuild every planet in one tick (that froze the shell).
+            const n = els.length;
+            // Placeholders (data-spin-frame=-1) get extra budget so coarse first paints upgrade fast.
+            let pendingUpgrade = 0;
+            for (let i = 0; i < n; i++) {
+                if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
+            }
+            const budgetMs = pendingUpgrade ? 14 : 6;
+            const maxUpdates = pendingUpgrade ? 2 : 2;
             const t0 = performance.now();
-            els.forEach((el) => {
+            let updated = 0;
+            for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
+                // Prefer placeholders so zoomed map nodes leave detail-1 ASAP.
+                let el = null;
+                if (pendingUpgrade > 0) {
+                    for (let j = 0; j < n; j++) {
+                        const cand = els[(this._spinCursor + tried + j) % n];
+                        if (cand && cand.getAttribute('data-spin-frame') === '-1') { el = cand; break; }
+                    }
+                }
+                if (!el) el = els[(this._spinCursor + tried) % n];
+                if (!el || !el.isConnected) continue;
+                // Inside the galaxy-map SVG, getBoundingClientRect is unreliable
+                // (viewBox / foreignObject often reports planets far off-screen
+                // while they are clearly visible). Never cull those — the
+                // round-robin budget already caps the work.
+                const onMap = !!el.closest('.galaxy-map-svg');
+                if (!onMap) {
+                    try {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width < 2 || rect.height < 2) continue;
+                        if (rect.bottom < -40 || rect.right < -40
+                            || rect.top > innerHeight + 40 || rect.left > innerWidth + 40) continue;
+                    } catch (e) { /* still try */ }
+                }
                 const [id, d, l] = String(el.getAttribute('data-planet-spin')).split('|');
-                if (performance.now() - t0 > 10 && !this.hasSpinModel(id, Number(d) || 1, l)) return;
-                const model = this.getPlanetSpinModel(id, Number(d) || 1, l);
-                if (!model) return;
+                const detail = this.clampSpinDetail(d);
+                const upgrading = el.getAttribute('data-spin-frame') === '-1';
+                if (performance.now() - t0 > budgetMs && !this.hasSpinModel(id, detail, l)) continue;
+                const model = this.getPlanetSpinModel(id, detail, l);
+                if (!model) continue;
                 const f = this.getPlanetSpinIndex(id, model);
-                // Fresh elements already carry the current frame (data-spin-frame);
-                // a new light direction (l) is a different model, so redraw.
                 const fk = model.uid + ':' + f;
-                // Fine grids are costly to turn: they advance a frame at most every 1.2 s.
-                if (model.n > 96 && el._spinFrame != null && el._spinFrame !== fk) {
+                // Fine grids advance slowly; coarse map icons stay on the shared period.
+                // Upgrades from the placeholder always go through immediately.
+                if (!upgrading && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
                     const nowT = performance.now();
-                    if (el._lastSpinT && nowT - el._lastSpinT < 1200) return;
+                    if (el._lastSpinT && nowT - el._lastSpinT < 900) continue;
                     el._lastSpinT = nowT;
                 }
                 if (el._spinFrame == null) el._spinFrame = model.uid + ':' + el.getAttribute('data-spin-frame');
-                if (el._spinFrame === fk) return;
+                if (el._spinFrame === fk) continue;
                 el._spinFrame = fk;
-                // Map planets are <img> (rasterised once, cheap to zoom): swap src.
+                el.setAttribute('data-spin-frame', String(f));
                 const imgEl = el.querySelector('img.gm-planet-img');
                 if (imgEl) {
-                    model.frameUrls = model.frameUrls || {};
-                    if (!model.frameUrls[f]) model.frameUrls[f] = this.planetSvgToImg(this.getPlanetSpinFrame(model, f)).url;
-                    imgEl.src = model.frameUrls[f];
-                    return;
+                    const conv = this.planetSvgToImg(this.getPlanetSpinFrame(model, f));
+                    let url = model.frameUrls && model.frameUrls[f];
+                    if (!url) url = this.rememberSpinFrameUrl(model, f, conv.url);
+                    // Match icon box to the (possibly finer) frame's scale after an upgrade.
+                    const px = Number(el.getAttribute('data-planet-px')) || imgEl.clientWidth || 48;
+                    const big = px * (conv.scale || model.frameScale || 1);
+                    const gm = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.mapScreenScale && el.closest('.galaxy-map-svg')) ? galaxyMapManager : null;
+                    const live = gm ? gm.mapScreenScale() : 0;
+                    const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                        && uiAppearanceManager.getGlobalPixelPx() > 0;
+                    if (live > 0) this.snapPixelImg(imgEl, url, big * live, gpOn ? null : { live: live, size: px });
+                    else if (imgEl.getAttribute('src') !== url) imgEl.src = url;
+                    const off = -(big - px) / 2;
+                    imgEl.style.width = big + 'px';
+                    imgEl.style.height = big + 'px';
+                    imgEl.style.left = off + 'px';
+                    imgEl.style.top = off + 'px';
+                    if (conv.scale) model.frameScale = conv.scale;
+                    updated++;
+                    continue;
                 }
                 const svgEl = el.querySelector('svg');
                 const w = svgEl ? svgEl.getAttribute('width') : null;
@@ -228,8 +384,11 @@ extendClass(PlanetSVGManager, {
                 if (w) svg = svg.replace(/width="[^"]*"/, `width="${w}"`);
                 if (h) svg = svg.replace(/height="[^"]*"/, `height="${h}"`);
                 el.innerHTML = svg;
-            });
+                updated++;
+            }
+            this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
-        this._spinTimer = setInterval(tick, 100);
+        // ~2 Hz: 60s axial turn still reads fine; half the decode/repaint of the old 5 Hz.
+        this._spinTimer = setInterval(tick, 450);
     }
 });

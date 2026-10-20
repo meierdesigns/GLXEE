@@ -771,6 +771,7 @@ be reviewed or reverted independently.
 | 67A | Natural terrain carve | Organic floor ridges, torn wall craters, less grid/stripe doctrine on planet crust |
 | 67B | Block terrain dig | Wall damage in 3-cell voxel slabs — flat block faces, no 1-row carve needles |
 | 67C | Game-over fit | Compact defeat planet/stepper, softer wreck backdrop, scrollable card |
+| 67D | Map route line zoom | Under Global Pixel Size, route beams stay N screen cells thick instead of growing chunky when zoomed in |
 
 The wave commit convention is:
 

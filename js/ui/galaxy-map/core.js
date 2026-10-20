@@ -95,7 +95,6 @@ class GalaxyMapManager {
     show(options) {
         this.isVisible = true;
         this.galaxyId = options && options.galaxyId;
-        this.restoreGalaxyView();
         this.onConfirm = options && options.onConfirm;
         this.onBack = options && options.onBack;
         this.onExplored = options && options.onExplored;
@@ -107,10 +106,14 @@ class GalaxyMapManager {
         // The standalone map overlay takes the keyboard right away.
         this._inputActive = !this._mountEl;
         this.statusMsg = '';
-        if (
-            typeof planetConfigManager !== 'undefined' &&
-            planetConfigManager.ensureGalaxyArrivalContent &&
-            typeof profileManager !== 'undefined'
+        const reuse = !!(this._mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId);
+        // Parked map already has live zoom/pan — restoreGalaxyView from LS fought it and forced art swaps.
+        if (!reuse) this.restoreGalaxyView();
+        else this._reuseQuietUntil = performance.now() + 250;
+        if (!reuse
+            && typeof planetConfigManager !== 'undefined'
+            && planetConfigManager.ensureGalaxyArrivalContent
+            && typeof profileManager !== 'undefined'
         ) {
             const profile = profileManager.getActiveProfile && profileManager.getActiveProfile();
             const firstVisit = profile
@@ -131,19 +134,23 @@ class GalaxyMapManager {
                 profileManager.ensureAllyDefense(this.galaxyId, profile);
             }
         }
-        this.loadMap();
+        // Reuse keeps selection/camera; loadMap() would reset selectedPlanetId.
+        if (!reuse) this.loadMap();
         this.createUI();
         if (this.startOrbitLoop) this.startOrbitLoop();
         // Open with the route to the selected planet centred (animated).
-        requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
+        // Skip camera tween when reusing a parked map — it already frames the selection.
+        if (!reuse) {
+            requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
+        }
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');
         }
     }
     hide() {
         if (this.isVisible) this.saveGalaxyView();
+        const wasEmbedded = !!(this._mountEl && this.overlay && this.overlay.classList.contains('galaxy-map-embedded'));
         this.isVisible = false;
-        this._mountEl = null;
         this._inputActive = false;
         this.hoveredPlanetId = null;
         this.onEscape = null;
@@ -151,10 +158,37 @@ class GalaxyMapManager {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;
         }
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
+        if (this._orbitTimer) {
+            try { clearInterval(this._orbitTimer); } catch (e) { /* */ }
+            this._orbitTimer = null;
         }
+        if (this.overlay) {
+            // Embedded PLAY map: park DOM for reuse (H9 — hide+show was a full SVG rebuild).
+            if (wasEmbedded) {
+                this._parkedGalaxyId = this.galaxyId;
+                // Cancel pending art swaps + size observers (detach → 0×0 RO fired apply/swap).
+                clearTimeout(this._detailTimer);
+                clearTimeout(this._lineTimer);
+                clearTimeout(this._nebTimer);
+                clearTimeout(this._nebPanTimer);
+                clearTimeout(this._snapTimer);
+                if (this._mapAreaRO) {
+                    try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+                    this._mapAreaRO = null;
+                }
+                this.overlay.remove();
+            } else {
+                this.overlay.remove();
+                this.overlay = null;
+                this._parkedGalaxyId = null;
+                this._pxLatticeSeated = false;
+                if (this._mapAreaRO) {
+                    try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+                    this._mapAreaRO = null;
+                }
+            }
+        }
+        this._mountEl = null;
     }
     isInputActive() {
         return !!this._inputActive;
@@ -428,6 +462,9 @@ class GalaxyMapManager {
             } else if (done) {
                 // Cleared: solid green tile with a dark pixel check.
                 inner = '<svg viewBox="0 0 10 10" shape-rendering="crispEdges"><rect class="gm-stage-done-bg" width="10" height="10"/><path class="gm-stage-check" d="M2 5h1v1h1v1h1V6h1V5h1V4h1V3H7v1H6v1H5v1H4V5H3V4H2z"/></svg>';
+            } else if (!isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i)) {
+                // Transit stage: arrow flying up between two gate walls.
+                inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M4 0h1v1h1v1h1v1H2V2h1V1h1zM4 3h1v3H4zM0 7h3v2H0zM6 7h3v2H6z"/></svg>';
             } else {
                 // Open stage: pixel target / crosshair.
                 inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M3 0h3v1H3zM0 3h1v3H0zM8 3h1v3H8zM3 8h3v1H3zM1 1h2v1H2v1H1zM6 1h2v2H7V2H6zM1 6h1v1h1v1H1zM7 6h1v2H6V7h1zM4 2h1v2h2v1H5v2H4V5H2V4h2z"/></svg>';
@@ -438,7 +475,7 @@ class GalaxyMapManager {
             html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
                 (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
                 (!dev && done && canReplay ? ` data-replay-stage="${i}" data-replay-planet="${pid}"` : '') +
-                ` title="${isBoss ? 'BOSS' : 'STAGE ' + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
+                ` title="${isBoss ? 'BOSS' : (typeof isTransitStage === 'function' && isTransitStage(pid, i) ? 'TRANSIT ' : 'STAGE ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;

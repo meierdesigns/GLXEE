@@ -4,7 +4,26 @@
 extendClass(GalaxyMapManager, {
     createUI() {
         const mountEl = this._mountEl;
+        // Reuse parked embedded map (same galaxy): tab switches were full-rebuilds (~120ms+).
+        if (mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId
+            && this.overlay.classList.contains('galaxy-map-embedded')) {
+            if (this.overlay.parentNode !== mountEl) mountEl.appendChild(this.overlay);
+            this.overlay.hidden = false;
+            this.overlay.style.display = '';
+            this._parkedGalaxyId = null;
+            // Park disconnected the size observer — reattach without rebinding wheel/drag.
+            if (this.reattachMapAreaObserver) this.reattachMapAreaObserver();
+            if (this.startOrbitLoop) this.startOrbitLoop();
+            // Parked overlay left the document → spin timer may have cleared; restart.
+            if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+                planetSVGManager.startPlanetSpin();
+            }
+            if (this.updateSelectionFrames) requestAnimationFrame(() => this.updateSelectionFrames());
+            if (this.syncRoutePreview) this.syncRoutePreview();
+            return;
+        }
         if (this.overlay) this.overlay.remove();
+        this._pxLatticeSeated = false;
         this.hoveredPlanetId = null;
         if (typeof planetSVGManager !== 'undefined') {
             planetSVGManager.init();
@@ -14,7 +33,8 @@ extendClass(GalaxyMapManager, {
                 ids.forEach((pid) => {
                     const cfg = planetConfigManager.getConfig(pid);
                     if (cfg && planetSVGManager.registerFromConfig) {
-                        planetSVGManager.registerFromConfig(cfg, { force: true });
+                        // Cache hit unless missing — force:true rebuilt every planet on every PLAY open.
+                        planetSVGManager.registerFromConfig(cfg);
                     }
                 });
             }
@@ -53,6 +73,7 @@ extendClass(GalaxyMapManager, {
                 <div class="galaxy-map-header">
                 <h2 class="galaxy-map-title">${this.getGalaxyName()}</h2>
                 <div class="galaxy-map-toolbar">
+                    ${this._headerRulerHtml ? `<div class="galaxy-map-ruler is-header" style="--ruler-accent:${this._barAccent || 'var(--color-primary)'}">${this._headerRulerHtml}</div>` : ''}
                     ${this.shipBarHtml()}
                     <div class="gm-progress-col">
                     ${exploreUi}
@@ -64,7 +85,7 @@ extendClass(GalaxyMapManager, {
                 <!-- Map above; bottom bar (planet / ruler / actions) sits under it. -->
                 <div class="gm-map-stage">
                 <div class="galaxy-map-area" id="gmMapArea">
-                    ${this.renderMapSvg()}
+                    ${this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg()}
                 </div>
                 ${panelsHtml}
                 </div>
@@ -84,7 +105,7 @@ extendClass(GalaxyMapManager, {
                     </div>
                     ${emptyHint}
                     <div class="galaxy-map-area" id="gmMapArea">
-                        ${this.renderMapSvg()}
+                        ${this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg()}
                     </div>
                     ${panelsHtml}
                     ${exploreUi}
@@ -352,7 +373,17 @@ extendClass(GalaxyMapManager, {
         const planetIcon = this.planetIconHtml(info.id, 260);
         const planetAtmo = this.planetAtmoColor(planetIcon);
         this._barAccent = null;
-        const rulerSegs = this.renderGalaxyRulerBadge() || '';
+        let rulerSegs;
+        this._headerRulerHtml = '';
+        if (this._mountEl) {
+            // Embedded (station) map: the galaxy ruler card moves up beside the ship bar; the bar shows the enemy instead.
+            const parts = this.renderGalaxyRulerBadge('split') || { ruler: '', sit: '' };
+            this._headerRulerHtml = parts.ruler;
+            // The situation card is now the header mission icon (tooltip), so the bottom bar is all enemy.
+            rulerSegs = `<div class="galaxy-map-ruler-seg gm-enemy-card" id="gmEnemyCard">${this.enemyCardHtml(info)}</div>`;
+        } else {
+            rulerSegs = this.renderGalaxyRulerBadge() || '';
+        }
         const barAccent = this._barAccent || 'var(--color-primary)';
         return `
             <div class="galaxy-map-panels">

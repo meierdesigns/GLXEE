@@ -94,7 +94,7 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -172,7 +172,8 @@ extendClass(GalaxyMapManager, {
         const ship = svg.querySelector(':scope > .gm-ship-marker');
         if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
             const q = px(byId[loc.id]);
-            ship.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+            const sq = this.latticeShipPt ? this.latticeShipPt(q.x, q.y) : q;
+            ship.setAttribute('transform', 'translate(' + sq.x.toFixed(3) + ',' + sq.y.toFixed(3) + ')');
         }
         this._orbitTick = (this._orbitTick || 0) + 1;
         const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
@@ -180,10 +181,16 @@ extendClass(GalaxyMapManager, {
     },
     startOrbitLoop() {
         if (this._orbitTimer) return;
+        // 4 Hz is enough for slow station orbits; 10 Hz was mostly SVG attribute thrash.
         this._orbitTimer = setInterval(() => {
             if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
+            if (document.hidden) return;
+            try {
+                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off'
+                    || document.documentElement.getAttribute('data-vf-performance') != null) return;
+            } catch (e) { /* tick */ }
             this.tickOrbits();
-        }, 66);
+        }, 250);
     },
     getSelectedPost() {
         if (!this.selectedPostId) return null;
@@ -200,7 +207,7 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;
@@ -228,7 +235,7 @@ extendClass(GalaxyMapManager, {
         profileManager.setShipLocation(this.galaxyId, kind, id);
         const area = this.overlay && this.overlay.querySelector('#gmMapArea');
         if (area) {
-            area.innerHTML = this.renderMapSvg();
+            area.innerHTML = this.mapAreaInnerHtml ? this.mapAreaInnerHtml() : this.renderMapSvg();
             this.bindNodeClicks();
             this.bindPostClicks();
             this.bindMapZoom();

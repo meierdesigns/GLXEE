@@ -181,6 +181,17 @@ extendClass(GalaxyMapManager, {
     },
     /** The one pixel size of the whole map (map units per art pixel) at the current zoom detail. */
     mapPixelUnitGlobal() {
+        // Global Pixel Size: one art cell == one vfMapPx / lattice cell (device-snapped CSS px).
+        if (this.mapPxLatticeUnit) {
+            const u = this.mapPxLatticeUnit();
+            if (u > 0) return u;
+        }
+        const gp = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
+        if (gp > 0) {
+            const live = (this.mapScreenScale && this.mapScreenScale()) || this._pxScreenScale || 0;
+            if (live > 0) return gp / live;
+        }
         return GM_PIXEL_U0 / (this.getMapDetail ? this.getMapDetail() : 1);
     },
     /**
@@ -222,12 +233,18 @@ extendClass(GalaxyMapManager, {
      * Text as pixel rects (baseline at y), with a dark one-pixel outline so
      * it reads on any background. anchor: 'start' | 'middle'.
      */
+    /** pixelTextSvg wrapped so it can be rebuilt in place when the Pixel Size setting changes. */
+    pixelTextGroup(str, x, y, anchor) {
+        return `<g class="gm-px-txt" data-s="${String(str).replace(/"/g, '')}" data-x="${x}" data-y="${y}" data-a="${anchor || 'start'}">${this.pixelTextSvg(str, x, y, anchor)}</g>`;
+    },
     pixelTextSvg(str, x, y, anchor, px) {
+        // Global Pixel Size: glyph cell = 1 local unit; .gm-stage-anchor scales by stageTextScale()
+        // (= one lattice cell). Integer local coords → same axis-aligned grid as planets/markers.
+        const gpT = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx)
+            ? uiAppearanceManager.getGlobalPixelPx() : 0;
         const P = px || 1.5;
-        // Zoomed in the text switches to finer bitmap fonts (3x5 → 5x7 → 7x9) of the same
-        // height, so the pixels get smaller but stay square and the digits stay legible.
         const detail = this.getMapDetail ? this.getMapDetail() : 1;
-        const lvl = detail >= 4 ? 2 : (detail >= 2 ? 1 : 0);
+        const lvl = gpT > 0 ? 1 : (detail >= 4 ? 2 : (detail >= 2 ? 1 : 0));
         const text = String(str).split('');
         let glyphs, gw, gh;
         if (lvl === 0) {
@@ -236,16 +253,21 @@ extendClass(GalaxyMapManager, {
             const font = lvl === 1 ? this.PIXEL_GLYPHS_5X7 : this.PIXEL_GLYPHS_7X9;
             glyphs = text.map((c) => (font[c] || font[' ']).split(',')); gw = lvl === 1 ? 5 : 7; gh = lvl === 1 ? 7 : 9;
         }
-        const F = (5 * P) / gh;
+        const F = gpT > 0 ? 1 : (5 * P) / gh;
+        const Fw = F;
         const step = gw + 1, cols = glyphs.length * step - 1;
         const on = new Set();
         glyphs.forEach((g, i) => g.forEach((row, ry) => row.split('').forEach((b, rx) => {
             if (b === '1') on.add((i * step + rx) + ',' + ry);
         })));
-        const x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
-        const y0 = y - gh * F;
+        let x0 = anchor === 'middle' ? x - (cols * F) / 2 : x;
+        let y0 = y - gh * F;
+        if (gpT > 0) {
+            x0 = Math.round(x0);
+            y0 = Math.round(y0);
+        }
         let outline = '', fill = '';
-        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F).toFixed(3)}" y="${(y0 + cy * F).toFixed(3)}" width="${F.toFixed(3)}" height="${F.toFixed(3)}" class="${cls}"/>`;
+        const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F)}" y="${(y0 + cy * F)}" width="${Fw}" height="${Fw}" class="${cls}"/>`;
         for (let cy = -1; cy <= gh; cy++) {
             for (let cx = -1; cx <= cols; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
@@ -420,3 +442,20 @@ extendClass(GalaxyMapManager, {
         return fid ? factionShipStyles.getFactionStyle(fid) : null;
     },
 });
+
+// Capital letters for the 5x7 map font (used by the pixel screen's text, e.g. "UNDER ATTACK").
+GalaxyMapManager.prototype.PIXEL_GLYPHS_5X7 = Object.assign({
+    A: '01110,10001,10001,11111,10001,10001,10001', B: '11110,10001,10001,11110,10001,10001,11110',
+    C: '01110,10001,10000,10000,10000,10001,01110', D: '11110,10001,10001,10001,10001,10001,11110',
+    E: '11111,10000,10000,11110,10000,10000,11111', F: '11111,10000,10000,11110,10000,10000,10000',
+    G: '01110,10001,10000,10111,10001,10001,01111', H: '10001,10001,10001,11111,10001,10001,10001',
+    I: '01110,00100,00100,00100,00100,00100,01110', J: '00111,00010,00010,00010,00010,10010,01100',
+    K: '10001,10010,10100,11000,10100,10010,10001', L: '10000,10000,10000,10000,10000,10000,11111',
+    M: '10001,11011,10101,10101,10001,10001,10001', N: '10001,11001,10101,10011,10001,10001,10001',
+    O: '01110,10001,10001,10001,10001,10001,01110', P: '11110,10001,10001,11110,10000,10000,10000',
+    Q: '01110,10001,10001,10001,10101,10010,01101', R: '11110,10001,10001,11110,10100,10010,10001',
+    S: '01111,10000,10000,01110,00001,00001,11110', T: '11111,00100,00100,00100,00100,00100,00100',
+    U: '10001,10001,10001,10001,10001,10001,01110', V: '10001,10001,10001,10001,10001,01010,00100',
+    W: '10001,10001,10001,10101,10101,11011,10001', X: '10001,10001,01010,00100,01010,10001,10001',
+    Y: '10001,10001,01010,00100,00100,00100,00100', Z: '11111,00001,00010,00100,01000,10000,11111'
+}, GalaxyMapManager.prototype.PIXEL_GLYPHS_5X7);

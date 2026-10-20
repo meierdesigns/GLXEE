@@ -267,6 +267,11 @@ extendClass(GalaxyMapManager, {
         const from = this.locationPoint(current);
         const to = this.locationPoint({ kind: kind, id: id });
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        // Stop camera / wheel glides and lock zoom to the live viewBox so the
+        // flight's fixed width matches what the player actually sees.
+        this._camAnim = null;
+        this._zoomAnim = null;
+        if (svg && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
         const originalViewBox = svg && svg.getAttribute('viewBox');
         const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!from || !to || !svg || reduced) {
@@ -322,7 +327,8 @@ extendClass(GalaxyMapManager, {
             const path = f.path || [f.from, f.to];
             const at = this.pointOnPath(path, e);
             f.t = t;
-            f.ship.setAttribute('transform', `translate(${at.x},${at.y})`);
+            const sat = this.latticeShipPt ? this.latticeShipPt(at.x, at.y) : at;
+            f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
             if (vb.length === 4 && vb.every(Number.isFinite)) {
                 f.svg.setAttribute('viewBox', `${at.x - vb[2] / 2} ${at.y - vb[3] / 2} ${vb[2]} ${vb[3]}`);
@@ -341,20 +347,13 @@ extendClass(GalaxyMapManager, {
         const f = this._flight;
         this._flight = null;
         if (f && f.svg) {
-            const vb = f.svg.viewBox && f.svg.viewBox.baseVal;
-            if (f.to && Number.isFinite(f.to.x) && Number.isFinite(f.to.y)
-                && vb && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
+            // Keep the flight zoom: commitFlight re-renders from mapZoom, which
+            // must match the viewBox width we were flying with (not a stale
+            // frameSelectionCamera target that zooms out on arrival).
+            if (this.adoptViewBoxZoom) this.adoptViewBoxZoom(f.svg);
+            if (f.to && Number.isFinite(f.to.x) && Number.isFinite(f.to.y)) {
                 this._panAnchor = { x: f.to.x, y: f.to.y };
-                this.mapPan = null;
-            } else if (vb && Number.isFinite(vb.x) && Number.isFinite(vb.y)
-                && Number.isFinite(vb.width) && Number.isFinite(vb.height)) {
-                // Keep the camera at the destination when commitFlight rebuilds
-                // the map instead of restoring the pre-flight viewBox.
-                this._panAnchor = {
-                    x: vb.x + vb.width / 2,
-                    y: vb.y + vb.height / 2
-                };
-                this.mapPan = null;
+                this.mapPan = { x: 0, y: 0 };
             }
         }
         if (f && f.g && f.g.parentNode) f.g.parentNode.removeChild(f.g);

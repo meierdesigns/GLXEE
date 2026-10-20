@@ -11,10 +11,10 @@ extendClass(GalaxyMapManager, {
         let fine = null;
         if (this.getMapViewBox) {
             const v = this.getMapViewBox(W, H, typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48);
-            // The patch snaps to a tile grid, so small pans reuse the same finished patch
-            // (no recompute while dragging); only crossing a tile edge builds a new one.
-            const tile = 8 * Math.pow(2, Math.max(0, Math.round(Math.log2(Math.max(8, v[2] * 0.25) / 8))));
-            const mx = v[2] * 0.1, my = v[3] * 0.1;
+            // Larger margin + coarser tiles: pan stays inside one fine patch longer, so the
+            // nebula only refines (higher-res overlay) instead of rebuilding every nudge.
+            const tile = 8 * Math.pow(2, Math.max(0, Math.round(Math.log2(Math.max(8, v[2] * 0.35) / 8))));
+            const mx = v[2] * 0.5, my = v[3] * 0.5;
             fine = { x: Math.floor((v[0] - mx) / tile) * tile, y: Math.floor((v[1] - my) / tile) * tile };
             fine.w = Math.ceil((v[0] + v[2] + mx) / tile) * tile - fine.x;
             fine.h = Math.ceil((v[1] + v[3] + my) / tile) * tile - fine.y;
@@ -69,7 +69,7 @@ extendClass(GalaxyMapManager, {
             layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.5, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         }
         // A deep, dim dust layer in the main colour gives the clouds depth.
-        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.55, sc: NEB_SCALE * 0.6, off: rnd() * 90, dust: true });
+        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.72, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
         const cxm = W / 2, cym = H / 2;
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         const sstep = (a0, a1, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (a1 - a0))); return k * k * (3 - 2 * k); };
@@ -116,7 +116,9 @@ extendClass(GalaxyMapManager, {
             return (h >>> 0).toString(36);
         })();
         const paint = (jobKey, cell, bx, by, cols, rows, oct, opaque) => {
-            const tag = (href) => `<image data-neb-key="${jobKey}"${href ? ` href="${href}"` : ''} x="${bx}" y="${by}" width="${cols * cell}" height="${rows * cell}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges"/>`;
+            // Empty href stays opacity:0 — an opaque fine patch with no pixels was
+            // painting as a black rectangle over the coarse nebula on some engines.
+            const tag = (href) => `<image data-neb-key="${jobKey}"${href ? ` href="${href}"` : ''} x="${bx}" y="${by}" width="${cols * cell}" height="${rows * cell}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges${href ? '' : ';opacity:0'}"/>`;
             if (this._nebUrls[jobKey]) return tag(this._nebUrls[jobKey]);
             // The finished coarse field is kept across reloads (keyed by everything that shapes it).
             const storeKey = opaque ? null : 'vf-neb:' + jobKey + ':' + nebSig;
@@ -139,7 +141,7 @@ extendClass(GalaxyMapManager, {
             const img = ctx.createImageData(cols, rows);
             const px = img.data;
             const lerpTone = (arr, f) => { const x = f * (arr.length - 1), i = Math.min(arr.length - 2, Math.floor(x)); return arr[i] + (arr[i + 1] - arr[i]) * (x - i); };
-            const toneAlpha = [0.05, 0.08, 0.12, 0.16];
+            const toneAlpha = [0.1, 0.16, 0.24, 0.34];
             const job = { opaque: !!opaque, cancel: false };
             this._nebJobs[jobKey] = job;
             let r = 0;
@@ -176,7 +178,44 @@ extendClass(GalaxyMapManager, {
                 });
                 delete this._nebJobs[jobKey];
                 if (opaque) this._nebLastFine = { key: jobKey, tag: tag(url) };
-                document.querySelectorAll(`image[data-neb-key="${jobKey}"]`).forEach((el) => el.setAttribute('href', url));
+                const applyUrl = (el) => {
+                    // Fade fine patch in over the coarse field — reads as "getting finer", not a hard pop.
+                    try {
+                        el.style.opacity = '0';
+                        el.style.transition = 'opacity 0.28s ease-out';
+                    } catch (e) { /* */ }
+                    el.setAttribute('href', url);
+                    const st = el.getAttribute('style') || '';
+                    if (st.indexOf('opacity:0') !== -1 && st.indexOf('transition') === -1) {
+                        el.setAttribute('style', st.replace(/;?opacity:0/, ''));
+                    }
+                    requestAnimationFrame(() => {
+                        try { el.style.opacity = '1'; } catch (e2) { /* */ }
+                    });
+                };
+                const mounted = document.querySelectorAll(`image[data-neb-key="${jobKey}"]`);
+                if (mounted.length) {
+                    mounted.forEach(applyUrl);
+                } else if (opaque) {
+                    // Job finished after we skipped mounting an empty placeholder —
+                    // inject the finished patch so the nebula actually appears.
+                    const neb = document.querySelector('.galaxy-map-svg .gm-nebula');
+                    if (neb) {
+                        // Fine patches are translucent now: a superseded one must go, or the two stack and brighten.
+                        neb.querySelectorAll('.gm-neb-fine image').forEach((el) => {
+                            if (el.getAttribute('data-neb-key') !== jobKey) el.remove();
+                        });
+                        let g = neb.querySelector('.gm-neb-fine');
+                        if (!g) {
+                            g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                            g.setAttribute('class', 'gm-neb-layer gm-neb-fine');
+                            const coarseG = neb.querySelector('.gm-neb-layer:not(.gm-neb-fine)');
+                            if (coarseG) coarseG.after(g);
+                            else neb.appendChild(g);
+                        }
+                        g.insertAdjacentHTML('beforeend', tag(url));
+                    }
+                }
             };
             // Swirl centres that can touch this patch, found once (not per pixel).
             const swirls = [];
@@ -201,15 +240,18 @@ extendClass(GalaxyMapManager, {
                 let o = lat.get(key);
                 if (o) return o;
                 const x = bx + bi * BLK * cell, y = by + bj * BLK * cell;
-                const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.9;
+                const d = Math.hypot((x - cxm) / W, (y - cym) / H) + (fbm(x * 0.0014 + 40, y * 0.0014, 2) - 0.5) * 0.55;
                 o = {
-                    envBase: (0.3 + 0.7 * sstep(0.15, 0.75, d)) * (1 - sstep(0.9, 2.0, d)),
-                    wisp: sstep(0.2, 0.6, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
-                    free: sstep(0.52, 0.68, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
+                    // Dense over the galaxy interior (where the camera / planets are);
+                    // fade only past the playable rim — not an empty hole in the middle.
+                    envBase: (0.7 + 0.3 * (1 - sstep(0.35, 0.95, d))) * (1 - sstep(1.15, 1.75, d)),
+                    wisp: sstep(0.15, 0.5, fbm(x * 0.0007 + 130, y * 0.0007 + 60, 2)),
+                    free: sstep(0.35, 0.58, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
-                    bank: sstep(0.4, 0.62, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
-                    gm: sstep(0.6, 0.74, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
-                    veil: layers.map((_, li) => sstep(0.3, 0.7, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
+                    // Softer banks so voids don't wipe the whole planet field.
+                    bank: 0.35 + 0.65 * sstep(0.28, 0.55, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    gm: sstep(0.55, 0.72, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
+                    veil: layers.map((_, li) => sstep(0.25, 0.65, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
                 if (lat.size > 6000) lat.clear();
                 lat.set(key, o);
@@ -227,9 +269,10 @@ extendClass(GalaxyMapManager, {
                 sl.k = Math.round(slRaw.k * 14) / 14; sl.rgb = slRaw.rgb;
                 lw.wisp = mix('wisp') * 0.5;
                 lw.wispK = lw.wisp / 0.5;
-                const freeCloud = Math.max(mix('free') * 0.35, lw.wisp);
+                const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
-                lw.envNear = mix('envBase') * sunFade;
+                // Ambient floor so the planet field keeps a veil even between suns.
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.45);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -302,7 +345,7 @@ extendClass(GalaxyMapManager, {
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.34 * veil * Math.min(0.6, (L.dust ? lerpTone([0.11, 0.16], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.7 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
@@ -314,9 +357,15 @@ extendClass(GalaxyMapManager, {
                         if (mx > 150) { const k = 150 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
-                        // Over black: premultiplied colour, fully opaque.
-                        px[o] = Math.min(255, R); px[o + 1] = Math.min(255, G); px[o + 2] = Math.min(255, B);
-                        px[o + 3] = 255;
+                        // Fine patch used to write every pixel at alpha 255 over black.
+                        // Empty cells then painted a solid black plate that hid the
+                        // coarse nebula (and looked like "no nebula" on the map).
+                        // Keep real coverage as alpha so gaps let the coarse field show.
+                        if (A <= 0) { px[o + 3] = 0; continue; }
+                        px[o] = Math.min(255, R / A);
+                        px[o + 1] = Math.min(255, G / A);
+                        px[o + 2] = Math.min(255, B / A);
+                        px[o + 3] = Math.min(255, Math.round(A * 255));
                         continue;
                     }
                     if (A <= 0) continue;
@@ -338,20 +387,28 @@ extendClass(GalaxyMapManager, {
             // to screen pixels); the pixel budget below caps the cost.
             // Target: about 2 screen pixels per cell, as fine as the budget allows.
             const unit = this.mapPixelUnitGlobal();
-            const want = Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
+            const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0;
+            // Global Pixel Size: keep nebula cells at mapPixelUnitGlobal (gp screen px).
+            // Budget coarsening made nebula blocks look larger than planet/ship cells.
+            const want = gpOn ? unit : Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
             // Cell = 8 / 2^k: nests exactly in the coarse 8-unit grid (patch
             // origin is a multiple of 8), so pixels never shift between patches.
-            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / want))));
+            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
             // Same base octaves as the coarse field; finer cells add detail on top.
             const oct = Math.min(7, 5 + Math.max(0, Math.round(Math.log2(8 / cell)) - 1));
             const fk = `${gid}|f${cell}|${fine.x}|${fine.y}|${fine.w}|${fine.h}`;
             const fineTag = paint(fk, cell, fine.x, fine.y, Math.ceil(fine.w / cell), Math.ceil(fine.h / cell), oct, true);
             // Keep the last finished patch underneath until the new one is ready
             // (otherwise the coarse field flashes through while it computes).
+            // Do not mount an empty fine <image> — it hid the coarse nebula and
+            // finish() now injects the patch when the job completes.
             const prev = this._nebLastFine;
-            const prevTag = prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
+            // Translucent patches: show the new one alone once ready; the old one only bridges the wait.
+            const readyFine = this._nebUrls[fk] ? fineTag : '';
+            const prevTag = !readyFine && prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
             if (this._nebUrls[fk]) this._nebLastFine = { key: fk, tag: fineTag };
-            out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${fineTag}</g>`;
+            if (prevTag || readyFine) out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${readyFine}</g>`;
         }
         const W5 = 6;
         // Distant pixel galaxies: tilted ellipse of pixels, bright core.
@@ -382,5 +439,28 @@ extendClass(GalaxyMapManager, {
         }
         const svg = `<g class="gm-nebula" shape-rendering="crispEdges">${out}${far}</g>`;
         return svg;
+    },
+
+    /**
+     * Refine nebula in place (coarse stays; fine patch updates). Avoids rebuilding
+     * the whole .gm-space layer, which made pan/zoom look like a strange rebuild.
+     */
+    refreshNebulaInPlace() {
+        const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!cur || this._parkedGalaxyId) return false;
+        const old = cur.querySelector('.gm-nebula');
+        if (!old) return false;
+        const W = typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 1600;
+        const H = typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 900;
+        const pad = typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48;
+        const html = this.galaxyNebulaSvg(W, H, -pad, -pad);
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${html}</svg>`;
+        const next = wrap.querySelector('.gm-nebula');
+        if (!next) return false;
+        // Keep the still-valid fine image under the new group until the job finishes
+        // (galaxyNebulaSvg already embeds prevTag when the new key is not ready).
+        old.replaceWith(next);
+        return true;
     },
 });

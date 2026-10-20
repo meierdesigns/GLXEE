@@ -8,20 +8,27 @@ extendClass(GalaxyMapManager, {
         requestAnimationFrame(() => this.updateSelectionFrames());
         // Detail swap (planets, stations, lines, stars) is heavy: run it once
         // the zoom has settled, not on every animation frame.
+        const mapLive = () => !!(this.overlay && this.overlay.isConnected && !this._parkedGalaxyId);
         const swapDetail = (force) => {
+            if (!mapLive()) return;
+            // After park→reuse, first layout/resize must not rebuild planets (H12).
+            if (this._reuseQuietUntil && performance.now() < this._reuseQuietUntil) {
+                this._mapArtSKey = this.getMapScaleKey();
+                this._mapArtDetail = this.getMapDetail();
+                this._mapLineDetail = this.getLineDetail();
+                return;
+            }
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
             const detail = this.getMapDetail();
-            if (this._mapArtDetail === detail && force === true) {
-                // Same detail, view left the fine nebula patch: only swap space.
-                // Build the space layer alone (not the whole map).
-                const fresh = document.createElement('div');
-                fresh.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${this.galaxyStarsSvg(GM_MAP_W, GM_MAP_H)}</svg>`;
-                const next = fresh.querySelector('.gm-space'), old = cur.querySelector('.gm-space');
-                if (next && old) old.replaceWith(next);
+            const skey = this.getMapScaleKey();
+            const same = this._mapArtDetail === detail && this._mapArtSKey === skey;
+            if (same && force === true) {
+                // Same detail, view left the fine patch: refine nebula only (keep stars).
+                if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
                 return;
             }
-            if (this._mapArtDetail === detail && force === 'lines') {
+            if (same && force === 'lines') {
                 // Only the line thickness step changed: swap the lines alone.
                 this._mapLineDetail = this.getLineDetail();
                 const old = cur.querySelector('.gm-lines');
@@ -29,13 +36,15 @@ extendClass(GalaxyMapManager, {
                 if (this.syncRoutePreview) this.syncRoutePreview();
                 return;
             }
-            if (this._mapArtDetail === detail) return;
+            if (same) return;
             this._mapArtDetail = detail;
+            this._mapArtSKey = skey;
             this._mapLineDetail = this.getLineDetail();
             // Stars / lines are drawn on the art pixel grid: swap in fresh ones.
             // Only these layers are built — rendering the whole map here made
             // every zoom step rebuild all planets, stations and checkpoints.
-            cur.style.setProperty('--gm-px', String(1 / detail));
+            const dPx = this.getMapDetailFloat ? this.getMapDetailFloat() : detail;
+            cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dPx)));
             this._linesByDetail = {}; // checkpoints in the lines follow the art detail
             const fresh = document.createElement('div');
             fresh.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg">${this.galaxyStarsSvg(GM_MAP_W, GM_MAP_H)}</svg>`;
@@ -64,42 +73,77 @@ extendClass(GalaxyMapManager, {
                     if (next) facs.innerHTML = next.innerHTML;
                 }
             });
-            // Stations share the zoom detail (sub-pixel shading, windows, cells).
+            // Stations share bake detail; map footprint stays fixed (GP screen cells via vfMapPx).
             cur.querySelectorAll('.gm-post-node[data-post]').forEach((node) => {
                 const art = node.querySelector('.gm-post-art');
                 const post = art && this.getTradingPosts().find((p) => p.id === node.getAttribute('data-post'));
                 if (post) art.innerHTML = this.stationArtImage(post, detail, node.classList.contains('open'));
             });
             applyShip();
+            this.snapMapPlanets();
         };
-        let apply = () => {
+        // Zoom glide: only the viewBox moves. Selection frames, --gm-px, snap,
+        // nebula and art swaps each forced layout / rebuilds and made the map stutter.
+        const applyCamera = () => {
+            if (!mapLive()) return;
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (!cur) return;
-            cur.classList.toggle('gm-close-view', (this.mapZoom || 1) >= 2.5);
-            // Only the camera moves: set the viewBox directly (no re-render).
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
+        };
+        let apply = (src) => {
+            if (!mapLive()) return;
+            clearTimeout(this._snapTimer);
+            this._snapTimer = setTimeout(() => this.snapMapPlanets(), 250);
+            const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!cur) return;
+            // Remount layout: camera + re-key only — never schedule art swap in the quiet window.
+            if (this._reuseQuietUntil && performance.now() < this._reuseQuietUntil) {
+                const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+                cur.setAttribute('viewBox', v.join(' '));
+                const dFloat = this.getMapDetailFloat ? this.getMapDetailFloat() : this.getMapDetail();
+                cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dFloat)));
+                this._mapArtSKey = this.getMapScaleKey();
+                this._mapArtDetail = this.getMapDetail();
+                this._mapLineDetail = this.getLineDetail();
+                if (this.updateSelectionFrames) this.updateSelectionFrames();
+                return;
+            }
+            cur.classList.toggle('gm-close-view', (this.mapZoom || 1) >= 2.5);
+            // Only the camera moves: set the viewBox directly (no re-render).
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx && uiAppearanceManager.getGlobalPixelPx() > 0
+                && uiAppearanceManager.ensureMapPxFilter) {
+                const area = (cur.closest && cur.closest('#gmMapArea')) || document.getElementById('gmMapArea') || cur;
+                uiAppearanceManager.ensureMapPxFilter(uiAppearanceManager.getGlobalPixelPx(), area);
+            }
+            const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+            cur.setAttribute('viewBox', v.join(' '));
+            const dFloat = this.getMapDetailFloat ? this.getMapDetailFloat() : this.getMapDetail();
+            cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dFloat)));
             this.updateSelectionFrames();
+            try { if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.dirtyMapPxCanvas) uiAppearanceManager.dirtyMapPxCanvas(); } catch (e) { /* */ }
             // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
             const shipScale = cur.querySelector('.gm-ship-scale');
             if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
-            if (this._mapArtDetail === this.getMapDetail()) {
+            if (this._mapArtDetail === this.getMapDetail() && this._mapArtSKey === this.getMapScaleKey()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
-                    this._lineTimer = setTimeout(() => swapDetail('lines'), this._zoomAnim ? 120 : 0);
+                    this._lineTimer = setTimeout(() => swapDetail('lines'), 0);
                 }
-                // Panned / zoomed out of the fine nebula patch → rebuild it (debounced).
                 const R = this._nebulaRegion;
                 if (R && (v[0] < R.x || v[1] < R.y || v[0] + v[2] > R.x + R.w || v[1] + v[3] > R.y + R.h)) {
                     clearTimeout(this._nebTimer);
-                    this._nebTimer = setTimeout(() => swapDetail(true), 80);
+                    // Was 120ms — felt like the nebula lagged behind the camera.
+                    this._nebTimer = setTimeout(() => {
+                        swapDetail(true);
+                    }, 32);
                 }
                 return;
             }
             clearTimeout(this._detailTimer);
-            this._detailTimer = setTimeout(swapDetail, this._zoomAnim ? 180 : 0);
+            this._detailTimer = setTimeout(swapDetail, 0);
         };
         // Ship outline is baked into its texture, so refresh it on every zoom
         // step to keep the outline the same on-screen width.
@@ -112,13 +156,59 @@ extendClass(GalaxyMapManager, {
                 const b = this.shipIconBox();
                 ['x', 'y', 'width', 'height'].forEach((a, i) => shipImg.setAttribute(a, [b.x, b.y, b.w, b.h][i].toFixed(3)));
             }
+            // Global Pixel Size: re-seat the resting marker on the lattice (the true spot is kept in data-tx/ty).
+            const mk = cur && cur.querySelector(':scope > .gm-ship-marker');
+            if (mk && !this._flight && this.latticeShipPt) {
+                if (mk.dataset.tx == null) {
+                    const mm = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(mk.getAttribute('transform') || '');
+                    if (mm) { mk.dataset.tx = mm[1]; mk.dataset.ty = mm[2]; }
+                }
+                if (mk.dataset.tx != null) {
+                    const sp = this.latticeShipPt(+mk.dataset.tx, +mk.dataset.ty);
+                    mk.setAttribute('transform', `translate(${sp.x},${sp.y})`);
+                }
+            }
         };
         // Any manual camera input stops a running glide, which would
         // otherwise keep writing its own viewBox and snap the zoom back.
         const stopGlide = () => { this._camAnim = null; };
         const stopZoom = () => { this._zoomAnim = null; };
         this._mapArtDetail = this.getMapDetail();
+        this._mapArtSKey = this.getMapScaleKey();
+        // Global Pixel Size: seat the lattice once after first layout — not on every bindMapZoom.
+        if (!this._pxLatticeSeated
+            && typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) {
+            this._pxLatticeSeated = true;
+            clearTimeout(this._detailTimer);
+            this._detailTimer = setTimeout(() => { this._mapArtSKey = null; swapDetail(); }, 450);
+        }
         this._mapLineDetail = this.getLineDetail();
+        // Global Pixel Size changed (settings slider): drop the cached detail and rebuild the map art.
+        this._swapMapDetail = swapDetail;
+        this._mapApply = apply;
+        this._mapApplyCamera = applyCamera;
+        if (!this._pxEvtBound) {
+            this._pxEvtBound = true;
+            window.addEventListener('vf:pixelsize', () => {
+                try {
+                    const cv = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+                    const area = (this.overlay && this.overlay.querySelector('#gmMapArea'))
+                        || document.getElementById('gmMapArea') || cv;
+                    const g0 = uiAppearanceManager.getGlobalPixelPx();
+                    if (uiAppearanceManager.ensureMapPxFilter) uiAppearanceManager.ensureMapPxFilter(g0 > 0 ? g0 : 0, area);
+                    if (cv && !(g0 > 0)) cv.style.translate = '';
+                } catch (e) { /* no map */ }
+                if (this.resetPixelSizeDetailPeak) this.resetPixelSizeDetailPeak();
+                this._pxDetailKey = null;
+                this._mapArtDetail = -1;
+                clearTimeout(this._detailTimer);
+                this._detailTimer = setTimeout(() => {
+                    try { if (this._swapMapDetail) this._swapMapDetail(); } catch (e) { /* map not mounted */ }
+                    try { this.updateSelectionFrames(); } catch (e) { /* map not mounted */ }
+                }, 60);
+            });
+        }
         const delayShipLabel = () => {
             this._shipLabelReady = false;
             clearTimeout(this._shipLabelTimer);
@@ -146,7 +236,8 @@ extendClass(GalaxyMapManager, {
             }
             this.mapZoom = next;
             this._userMapZoom = next; // the zoom the keyboard camera may not exceed
-            apply();
+            if (this._zoomAnim) applyCamera();
+            else apply();
         };
         // A camera glide writes its own viewBox; adopt that as the zoom/pan
         // state first, otherwise the first zoom step snaps back (jump).
@@ -174,6 +265,11 @@ extendClass(GalaxyMapManager, {
             if (done) {
                 this._zoomAnim = null;
                 clearTimeout(this._detailTimer);
+                clearTimeout(this._lineTimer);
+                clearTimeout(this._nebTimer);
+                clearTimeout(this._snapTimer);
+                // One full sync after the glide — never mid-frame.
+                apply();
                 swapDetail();
                 return;
             }
@@ -183,18 +279,7 @@ extendClass(GalaxyMapManager, {
         // out after the first render (fonts, header, stage size), so refit whenever the
         // area changes size — otherwise a reload at another zoom keeps a stale aspect
         // and the planets come out smaller than at the same zoom reached by scrolling.
-        const mapArea = this.overlay && this.overlay.querySelector('#gmMapArea');
-        if (this._mapAreaRO) { this._mapAreaRO.disconnect(); this._mapAreaRO = null; }
-        if (mapArea && typeof ResizeObserver !== 'undefined') {
-            let lastW = 0, lastH = 0; // first callback always refits (the render may predate the final size)
-            this._mapAreaRO = new ResizeObserver(() => {
-                if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
-                lastW = mapArea.clientWidth;
-                lastH = mapArea.clientHeight;
-                if (!this._flight && !this._zoomAnim && !this._camAnim) apply();
-            });
-            this._mapAreaRO.observe(mapArea);
-        }
+        this.reattachMapAreaObserver();
         svg.addEventListener('wheel', (e) => {
             e.preventDefault();
             stopGlide();
@@ -204,10 +289,15 @@ extendClass(GalaxyMapManager, {
             const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
             if (!this._zoomAnim) syncZoomToView();
             const from = this._zoomAnim ? this._zoomAnim.target : (this.mapZoom || 1);
-            const target = Math.min(12, Math.max(0.35, from * Math.exp(-Math.max(-120, Math.min(120, dy)) * 0.0022)));
+            let target = Math.min(12, Math.max(0.35, from * Math.exp(-Math.max(-120, Math.min(120, dy)) * 0.0022)));
             if (target === from && !this._zoomAnim) return;
             const running = !!this._zoomAnim;
             this._zoomAnim = { target: target, pt: pt };
+            // Cancel any pending heavy work from a previous zoom settle.
+            clearTimeout(this._detailTimer);
+            clearTimeout(this._lineTimer);
+            clearTimeout(this._nebTimer);
+            clearTimeout(this._snapTimer);
             delayShipLabel();
             if (!running) requestAnimationFrame(runZoom);
         }, { passive: false });
@@ -243,6 +333,8 @@ extendClass(GalaxyMapManager, {
             if (drag.moved) {
                 this._mapDragSwallow = true;
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
+                clearTimeout(this._nebPanTimer);
+                apply();
             } else if (drag.planetId || drag.postId) {
                 this.markUserPicked();
                 if (drag.planetId) this.selectPlanet(drag.planetId);
@@ -316,21 +408,55 @@ extendClass(GalaxyMapManager, {
             delayShipLabel();
             drag.x = e.clientX;
             drag.y = e.clientY;
-            apply();
+            // Pan: camera only (same as zoom glide) — full apply was H3 stutter.
+            applyCamera();
+            // Debounced refine: only rebuild nebula when the view leaves the fine patch.
+            clearTimeout(this._nebPanTimer);
+            this._nebPanTimer = setTimeout(() => {
+                if (!mapLive()) return;
+                const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
+                const R = this._nebulaRegion;
+                if (!R || v[0] < R.x || v[1] < R.y || v[0] + v[2] > R.x + R.w || v[1] + v[3] > R.y + R.h) {
+                    if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
+                }
+            }, 50);
         });
         const stopWindowDrag = () => {
             const drag = this._mapDrag;
+            const moved = !!(drag && drag.moved);
             this._mapDrag = null;
             const cur = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
             if (cur) cur.classList.remove('is-panning');
-            if (drag && drag.moved) {
+            if (moved) {
                 this._mapDragSwallow = true;
                 // Clear if no click follows (released outside the map).
                 setTimeout(() => { this._mapDragSwallow = false; }, 0);
+                clearTimeout(this._nebPanTimer);
+                // H16: pan end never refreshed nebula — patch stayed on the old tile.
+                apply();
             }
         };
         window.addEventListener('pointerup', stopWindowDrag);
         window.addEventListener('pointercancel', stopWindowDrag);
+    },
+    /** Reattach #gmMapArea ResizeObserver after park/reuse (bindMapZoom must not re-run). */
+    reattachMapAreaObserver() {
+        const mapArea = this.overlay && this.overlay.querySelector('#gmMapArea');
+        if (this._mapAreaRO) {
+            try { this._mapAreaRO.disconnect(); } catch (e) { /* */ }
+            this._mapAreaRO = null;
+        }
+        if (!mapArea || typeof ResizeObserver === 'undefined' || !this._mapApply) return;
+        let lastW = 0, lastH = 0;
+        this._mapAreaRO = new ResizeObserver(() => {
+            if (this._parkedGalaxyId || !this.overlay || !this.overlay.isConnected) return;
+            if (mapArea.clientWidth < 8 || mapArea.clientHeight < 8) return;
+            if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
+            lastW = mapArea.clientWidth;
+            lastH = mapArea.clientHeight;
+            if (!this._flight && !this._zoomAnim && !this._camAnim) this._mapApply('resize');
+        });
+        this._mapAreaRO.observe(mapArea);
     },
     bindPostClicks() {
         this.overlay.querySelectorAll('.gm-post-node[data-post]').forEach(node => {

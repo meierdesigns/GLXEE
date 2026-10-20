@@ -1169,7 +1169,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 
 /* Galaxy map cursor: per-faction look (see selectionFrameSvg). */
 .gm-selection-frame { color: var(--faction-accent, var(--color-primary)); }
-.gm-selection-frame .gm-corner { fill: currentColor; vector-effect: non-scaling-stroke; }
+.gm-selection-frame .gm-corner { fill: currentColor; vector-effect: non-scaling-stroke; shape-rendering: crispEdges; }
 .gm-corner-stroke,
 .gm-corner-organic {
     fill: none;
@@ -1181,6 +1181,22 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     vector-effect: non-scaling-stroke;
 }
 .gm-corner-stroke { stroke-linecap: square; stroke-linejoin: miter; }
+/* Global Pixel Size: corners are lattice-cell rects — no non-scaling stroke (that kept them UI-fine). */
+html[data-vf-pixel-size="on"] .gm-selection-frame .gm-corner {
+    vector-effect: none;
+    shape-rendering: crispEdges;
+}
+html[data-vf-pixel-size="on"] .gm-corner-stroke,
+html[data-vf-pixel-size="on"] .gm-corner-organic {
+    vector-effect: none;
+    stroke-width: var(--cursor-t, 1);
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+html[data-vf-pixel-size="on"] .gm-stage-progress-px .gm-pixel-text,
+html[data-vf-pixel-size="on"] .gm-stage-progress-px .gm-pixel-text-o {
+    shape-rendering: crispEdges;
+}
 /* Voidborn: organic, softly glowing and breathing instead of snapping. */
 .gm-cursor-voidborn { filter: none; }
 .galaxy-map-overlay .gm-node.selected .gm-cursor-voidborn,

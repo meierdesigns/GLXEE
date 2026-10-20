@@ -272,7 +272,7 @@ html body .home-station-overlay .home-station-content .hs-fd-tabs .hs-tab-label 
     cursor: pointer;
     font: inherit;
     color: var(--color-primary);
-    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    border: 0;
     background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-primary) 22%, #05060a) 0%, #05060a 80%);
     clip-path: var(--faction-ctl-clip, none);
     transition: background 0.15s, filter 0.15s;
@@ -643,6 +643,10 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
 @media (prefers-reduced-motion: reduce) {
     .gm-nebula .gm-neb-layer { animation: none; }
 }
+/* Fine patch fades over the coarse field — reads as sharpening, not a rebuild pop. */
+.gm-nebula .gm-neb-fine image {
+    transition: opacity 0.28s ease-out;
+}
 
 /* Ship hover card: art left, name/status + compact stat grid right. */
 .galaxy-map-panel-ship.gm-ship-card {
@@ -1003,9 +1007,10 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     height: 70% !important;
 }
 
-/* Locked planets keep their colours, just darker; a pixel lock replaces
-   the LOCKED text under them. */
-.gm-node-icon-wrap.dimmed { filter: brightness(0.45); }
+/* Active = brighter, inactive = darker (opacity survives Global Pixel Size). */
+.gm-planet-lit.is-active { opacity: 1; }
+.gm-planet-lit.is-locked { opacity: 0.38; }
+.gm-node-icon-wrap.dimmed { filter: brightness(0.55); }
 .gm-locked-icon .gm-lock-shackle,
 .gm-locked-icon .gm-lock-body { fill: #ff9b54; stroke: #050508; stroke-width: 1.5px; paint-order: stroke; }
 .gm-locked-icon .gm-lock-hole { fill: #050508; }
@@ -1319,7 +1324,9 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     gap: 2px;
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session {
-    grid-template-columns: minmax(0, 1fr);
+    /* Side by side where the panel is wide enough to fit them, one per row once it isn't —
+       this used to be pinned to a single column regardless of available width. */
+    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
 }
 .game-left-cluster > .game-info-panel .gi-cluster-body > .gi-metrics.gi-metrics-session .gi-metric {
     flex-direction: row;

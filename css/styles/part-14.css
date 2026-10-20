@@ -186,9 +186,11 @@
 }
 
 /* Selection frame: snaps onto the picked planet / post, then breathes. */
-.gm-node.selected .gm-selection-frame,
-.gm-post-node.selected .gm-selection-frame,
-.gm-border-station.selected .gm-selection-frame {
+.gm-node.selected .gm-frame-slot,
+.gm-post-node.selected .gm-frame-slot,
+.gm-border-station.selected .gm-frame-slot {
+    /* On the slot, not the frame: updateSelectionFrames rebuilds the frame on every
+       zoom step, which restarted the animation each time and distorted it. */
     transform-box: fill-box;
     transform-origin: center;
     animation:
@@ -204,8 +206,8 @@
     50%      { transform: scale(1.06); opacity: 0.75; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .gm-node.selected .gm-selection-frame,
-    .gm-post-node.selected .gm-selection-frame { animation: none; }
+    .gm-node.selected .gm-frame-slot,
+    .gm-post-node.selected .gm-frame-slot { animation: none; }
 }
 
 /* Locked planet / station in the map card: padlock over the graphic. */

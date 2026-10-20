@@ -991,7 +991,7 @@ html body .profile-selection-name-mode .pp-ctl .pp-ico { width: clamp(34px, calc
 #vf-cables .vfc[data-side="t"], #vf-cables-old .vfc[data-side="t"] { --dx: 0; --dy: -1; }
 #vf-cables .vfc[data-side="b"], #vf-cables-old .vfc[data-side="b"] { --dx: 0; --dy: 1; }
 #vf-cables-old { position: fixed; left: 0; top: 0; z-index: 0; pointer-events: none; shape-rendering: crispEdges; }
-html[data-vf-frame-px="on"] #vf-cables-old { filter: url(#vfFramePx); }
+html[data-vf-frame-px="on"] #vf-cables-old { filter: none; image-rendering: pixelated; }
 #vf-cables-old[data-x] .vfc, .vfc-out .vfc { animation: vfc-out var(--dur, 0.35s) cubic-bezier(.55, 0, .85, .4) forwards; }
 #vf-cables.vfc-in .vfc { animation: vfc-in var(--dur, 0.4s) cubic-bezier(.15, .6, .25, 1) backwards; }
 @keyframes vfc-out { to { transform: translate(calc(var(--dx) * 40vmin), calc(var(--dy) * 40vmin)); } }

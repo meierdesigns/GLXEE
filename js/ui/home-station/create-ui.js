@@ -41,11 +41,17 @@ extendClass(HomeStationUI, {
             if (this.overlay) this.overlay.remove();
             this.overlay = document.createElement('div');
             this.overlay.className = 'profile-selection-overlay home-station-overlay';
+            this._hsShellReady = false;
         } else {
             this.overlay.className = 'profile-selection-overlay home-station-overlay';
         }
         this.overlay.dataset.hsTab = this.tab || 'station';
         this.applyFactionTheme();
+
+        // Soft tab switch: keep header/shell, only swap .hs-body (H10 — full setOverlayHtml was ~70–100ms).
+        if (profile && this._hsShellReady && this._trySoftTabSwitch(profile, scrollState)) {
+            return;
+        }
 
         if (!profile) {
             this.overlay.dataset.hsTab = 'station';
@@ -73,6 +79,72 @@ extendClass(HomeStationUI, {
             return;
         }
 
+        const built = this._buildTabBody(profile);
+        const { body, bodyClass, isPlay, isMenu, hideTabsForTutorial } = built;
+
+        this.unmountMenuTab();
+        this.unmountPlayTab();
+        this.unmountComponentsTab();
+        const isComp = this.tab === 'components';
+        // Tabs with no separate "tabs vs content" browsing step land directly on
+        // interactive content (mouse clicks work regardless of nav level), so they
+        // must never sit dimmed at the default .hs-nav-tabs opacity like station.
+        const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
+        const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
+        this.setOverlayHtml(`
+            <div class="vf-browser-shell">
+              <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
+                <div class="hs-header hs-header-split">
+                    <div class="hs-pilot-card">
+                        <span class="hs-pilot-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'card')}</span>
+                        <div class="hs-pilot-info">
+                            <p class="hs-profile hs-pilot-name">${profile.name}</p>
+                        </div>
+                    </div>
+                    ${this.renderPlayLaunch()}
+                    <div class="hs-header-main">
+                        <div class="hs-topbar">
+                            <div class="hs-tabs${hideTabsForTutorial ? ' hs-tabs-hidden' : ''}">
+                                ${hideTabsForTutorial ? '' : this.renderTabs()}
+                            </div>
+                        </div>
+                    </div>
+                    ${this.renderMissionButton()}
+                    <!-- Planet-map progress (filled by the embedded galaxy map): own card left of the wallet. -->
+                    <div class="hs-progress-card" id="hsMapProgress" hidden></div>
+                    <!-- Wallet card right of both navbars: resources + logout. -->
+                    <div class="hs-wallet-card">
+                        <div class="hs-wallet-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
+                        ${typeof vfFullscreen !== 'undefined' ? vfFullscreen.buttonHtml('hs-logout-btn hs-fullscreen-btn', 'hsFullscreen') : ''}
+                        <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
+                            <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- Sub-nav opens the content area, under the active index-card tab. -->
+                ${this.renderAreaSubnav()}
+                <div class="${bodyClass}">${body}</div>
+                ${this.renderResourceBuyModal(profile)}
+              </div>
+            </div>
+            <label class="hs-frame-ui-scale" for="hsFrameUiScale">
+                <span>GUI</span>
+                <input type="range" id="hsFrameUiScale" min="50" max="125" step="5" value="${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}" aria-label="GUI scale">
+                <output id="hsFrameUiScaleValue">${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}%</output>
+            </label>`);
+        if (!reuse) {
+            this.overlay.classList.add('vf-menu-enter');
+            document.body.appendChild(this.overlay);
+        }
+        this._softBodyCache = null;
+        this._softBodyTab = null;
+        this._finishTabMount(scrollState, { bindChrome: true });
+        this._hsShellReady = true;
+        this._softBodyTab = this.tab;
+    },
+
+    /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
+    _buildTabBody(profile) {
         const walletHtml = this.renderResourceList(profile.resources, 'station');
         const stationBpHtml = this.renderBlueprintList(profile.blueprints);
         const stats = (typeof profileManager !== 'undefined')
@@ -101,21 +173,7 @@ extendClass(HomeStationUI, {
         } else if (this.tab === 'craft') {
             body = this.renderCraftTab(profile);
         } else if (this.tab === 'hangar') {
-            // Use new HangarUI module — DISABLED TEMPORARILY
-            // if (this.hangarUI) {
-            //     const owned = profile.ownedShipIds || [];
-            //     if (!owned.length) {
-            //         body = `<div class="hs-section"><h3>HANGAR</h3><p class="hs-muted">No ships owned.</p></div>`;
-            //     } else {
-            //         if (!this.hangarShipId || owned.indexOf(this.hangarShipId) === -1) {
-            //             this.hangarShipId = profile.activeShipId || owned[0];
-            //         }
-            //         this.hangarUI.setShip(this.hangarShipId);
-            //         body = this.hangarUI.render();
-            //     }
-            // } else {
-                body = this.renderHangarTab(profile);
-            // }
+            body = this.renderHangarTab(profile);
         } else if (this.tab === 'components') {
             body = this.renderComponentsTab(profile);
         } else if (this.tab === 'upgrade') {
@@ -170,14 +228,8 @@ extendClass(HomeStationUI, {
         }
 
         let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
-            const tutorialGalaxyId = profileManager.getCurrentGalaxyId(profile);
-            const tutorialMap = tutorialGalaxyId && planetConfigManager.getGalaxyMap ? (planetConfigManager.getGalaxyMap(tutorialGalaxyId) || {}) : {};
-            const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
-            if (tutorialPlanetId) {
-                const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
-                hideTabsForTutorial = !(st && st.highestStage >= 1);
-            }
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
+            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
         }
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
@@ -186,109 +238,288 @@ extendClass(HomeStationUI, {
             : (isMenu
                 ? 'hs-body hs-body-menu'
                 : (this.tab === 'components' ? 'hs-body hs-body-components' : 'hs-body'));
-        let footerHint = '[TABS] ←→ Switch | ENTER Enter Tab | ESC Menu';
-        if (isPlay) footerHint = '[TABS] ←→ Switch | ENTER Enter Map | ESC Menu';
-        if (isMenu) footerHint = '← → Menu Tabs | ↑ ↓ Navigate | ENTER Select | ESC Back';
-        if (this.tab === 'components') footerHint = '[TABS] ←→ Switch | ENTER Enter Tab | ESC Menu';
+        return { body, bodyClass, isPlay, isMenu, hideTabsForTutorial };
+    },
+
+    /**
+     * Soft tab switch: keep shell/header, swap .hs-body + tab/subnav chrome only.
+     * Avoids full setOverlayHtml (~70–100ms) on every LAUNCH↔STATION↔HANGAR hop.
+     */
+    _softBodyFingerprint(profile) {
+        if (!profile) return '';
+        const res = profile.resources || {};
+        return [
+            this.tab,
+            profile.activeShipId || '',
+            profile.credits != null ? profile.credits : (res.credits || 0),
+            (profile.ownedShipIds || []).length,
+            this.upgradeSubTab || '',
+            this.shopCategory || '',
+            this.visitPostId || '',
+            this.hangarShipId || ''
+        ].join('|');
+    },
+
+    _parkSoftBody(bodyEl, leavingTab) {
+        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu' || leavingTab === 'components') return;
+        if (!this._softBodyCache) this._softBodyCache = Object.create(null);
+        const frag = document.createDocumentFragment();
+        while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
+        this._softBodyCache[leavingTab] = {
+            frag,
+            className: bodyEl.className,
+            fp: this._softBodyParkFp || ''
+        };
+    },
+
+    _restoreSoftBody(bodyEl, profile) {
+        const cache = this._softBodyCache && this._softBodyCache[this.tab];
+        if (!cache) return false;
+        const fp = this._softBodyFingerprint(profile);
+        if (cache.fp && cache.fp !== fp) {
+            delete this._softBodyCache[this.tab];
+            return false;
+        }
+        bodyEl.className = cache.className;
+        bodyEl.appendChild(cache.frag);
+        delete this._softBodyCache[this.tab];
+        return true;
+    },
+
+    _trySoftTabSwitch(profile, scrollState) {
+        // syncNavZone swaps hs-nav-tabs/sub/content — do not require hs-nav-tabs.
+        const content = this.overlay && (
+            this.overlay.querySelector('.vf-browser-shell .home-station-content')
+            || this.overlay.querySelector('.home-station-content')
+        );
+        if (!content) return false;
+        const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
+        if (!bodyEl) return false;
+
+        const leavingTab = this._softBodyTab || null;
+        // Fingerprint uses this.tab — compute for the tab we are parking.
+        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu' && leavingTab !== 'components') {
+            const cur = this.tab;
+            this.tab = leavingTab;
+            this._softBodyParkFp = this._softBodyFingerprint(profile);
+            this.tab = cur;
+        } else {
+            this._softBodyParkFp = '';
+        }
 
         this.unmountMenuTab();
         this.unmountPlayTab();
         this.unmountComponentsTab();
+        // Park leaving body DOM (keeps listeners) before wiping.
+        this._parkSoftBody(bodyEl, leavingTab);
+
+        const cacheHit = this._restoreSoftBody(bodyEl, profile);
+        let hideTabsForTutorial = false;
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
+            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
+        }
+        const isPlay = this.tab === 'play';
+        const isMenu = this.tab === 'menu';
         const isComp = this.tab === 'components';
-        // Tabs with no separate "tabs vs content" browsing step land directly on
-        // interactive content (mouse clicks work regardless of nav level), so they
-        // must never sit dimmed at the default .hs-nav-tabs opacity like station.
+        if (!cacheHit) {
+            const built = this._buildTabBody(profile);
+            const { body, bodyClass } = built;
+            hideTabsForTutorial = built.hideTabsForTutorial;
+            bodyEl.className = bodyClass;
+            bodyEl.innerHTML = body;
+        }
         const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
-        const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
-        this.setOverlayHtml(`
-            <div class="vf-browser-shell">
-              <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
-                <div class="hs-header hs-header-split">
-                    <div class="hs-pilot-card">
-                        <span class="hs-pilot-crest" aria-hidden="true">${this.factionCrestHtml(profile, 'card')}</span>
-                        <div class="hs-pilot-info">
-                            <p class="hs-profile hs-pilot-name">${profile.name}</p>
-                        </div>
-                    </div>
-                    ${this.renderPlayLaunch()}
-                    <div class="hs-header-main">
-                        <div class="hs-topbar">
-                            <div class="hs-tabs${hideTabsForTutorial ? ' hs-tabs-hidden' : ''}">
-                                ${hideTabsForTutorial ? '' : this.renderTabs()}
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Planet-map progress (filled by the embedded galaxy map): own card left of the wallet. -->
-                    <div class="hs-progress-card" id="hsMapProgress" hidden></div>
-                    <!-- Wallet card right of both navbars: resources + logout. -->
-                    <div class="hs-wallet-card">
-                        <div class="hs-wallet-res hs-pilot-res">${this.renderCreditsBar(profile.resources, profile)}</div>
-                        ${typeof vfFullscreen !== 'undefined' ? vfFullscreen.buttonHtml('hs-logout-btn hs-fullscreen-btn', 'hsFullscreen') : ''}
-                        <button type="button" class="hs-logout-btn" id="hsLogout" aria-label="Logout" data-nav-item>
-                            <span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('hsLogout', 32, 'hs-tab-pixel', false)}</span>
-                        </button>
-                    </div>
-                </div>
-                <!-- Sub-nav opens the content area, under the active index-card tab. -->
-                ${this.renderAreaSubnav()}
-                <div class="${bodyClass}">${body}</div>
-                ${this.renderResourceBuyModal(profile)}
-              </div>
-            </div>
-            <label class="hs-frame-ui-scale" for="hsFrameUiScale">
-                <span>GUI</span>
-                <input type="range" id="hsFrameUiScale" min="50" max="125" step="5" value="${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}" aria-label="GUI scale">
-                <output id="hsFrameUiScaleValue">${typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager.uiScale : '75'}%</output>
-            </label>`);
-        if (!reuse) {
-            this.overlay.classList.add('vf-menu-enter');
-            document.body.appendChild(this.overlay);
-        }
-        this.bindEvents();
-        // Header PLAY is a launch button, not a nav tab: straight into the map.
-        const playBtn = this.overlay.querySelector('.hs-header-split > [data-play-launch]');
+
+        Array.from(content.classList).filter((c) => c.indexOf('hs-mode-') === 0).forEach((c) => content.classList.remove(c));
+        if (this.tab === 'station') content.classList.add('hs-mode-station');
+        if (isPlay) content.classList.add('hs-mode-play');
+        if (isMenu || this.isMenuRowTab()) content.classList.add('hs-mode-menu');
+        if (isComp) content.classList.add('hs-mode-components');
+        if (undimmedTabs.indexOf(this.tab) !== -1) content.classList.add('hs-mode-' + this.tab);
+
+        const tabsWrap = content.querySelector('.hs-tabs');
+        if (tabsWrap) tabsWrap.classList.toggle('hs-tabs-hidden', !!hideTabsForTutorial);
+
+        // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
+        const subRebound = this._syncSoftNavChrome(content, bodyEl, hideTabsForTutorial);
+
+        const playBtn = content.querySelector('[data-play-launch]');
         if (playBtn) {
-            playBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.launchPlay();
-            });
+            playBtn.classList.toggle('active', this.tab === 'play');
+            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
         }
-        this.bindControlsToggle();
-        this.bindStationColumnResize();
-        this.moveHangarBayTools();
-        this.syncTopbarResLayout();
-        // MENU area button = same as pressing ESC.
-        this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
-            menuBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+
+        // Fresh body needs binds; cache hit already has listeners on parked nodes.
+        if (!cacheHit) this._bindSoftBodyChrome(bodyEl);
+        if (subRebound) {
+            const sub = content.querySelector(':scope > .hs-subnav');
+            if (sub) this._bindSoftTabButtons(sub);
+        }
+        this._finishTabMount(scrollState, { bindChrome: false, soft: true, bodyCached: cacheHit });
+        this._softBodyTab = this.tab;
+
+        return true;
+    },
+
+    /** Update area/subnav active state; rebuild subnav only when the area changes. */
+    _syncSoftNavChrome(content, bodyEl, hideTabsForTutorial) {
+        if (hideTabsForTutorial) return false;
+        const activeArea = this.getTabArea(this.tab);
+        const areaId = activeArea ? activeArea.id
+            : (this.isMenuRowTab() ? 'menu' : (this.tab === 'play' ? 'play' : null));
+
+        content.querySelectorAll('.hs-area-btn[data-area]').forEach((btn) => {
+            const on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+            btn.classList.toggle('active', on);
+            btn.classList.remove('hs-anim-activate', 'holo-on', 'hs-anim-from-left', 'hs-anim-from-right');
+        });
+        content.querySelectorAll('.hs-home-btn[data-tab="station"]').forEach((btn) => {
+            btn.classList.toggle('active', this.tab === 'station');
+        });
+
+        const areaChanged = this._softAreaId !== areaId;
+        this._softAreaId = areaId;
+        if (!areaChanged) {
+            content.querySelectorAll('.hs-subnav [data-tab]').forEach((btn) => {
+                btn.classList.toggle('active', btn.getAttribute('data-tab') === this.tab);
+            });
+            return false;
+        }
+
+        content.querySelectorAll(':scope > .hs-subnav').forEach((el) => el.remove());
+        const subHtml = this.renderAreaSubnav();
+        if (subHtml) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = subHtml;
+            const subEl = tmp.firstElementChild;
+            if (subEl) content.insertBefore(subEl, bodyEl);
+        }
+        return true;
+    },
+
+    _bindSoftTabButtons(scope) {
+        if (!scope) return;
+        scope.querySelectorAll('[data-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                const next = btn.getAttribute('data-tab') || 'station';
+                if (this.tab === 'menu' && next !== 'menu') {
+                    this.unmountMenuTab();
+                    this._menuOpts = null;
+                    this._prevTab = null;
+                }
+                this.tab = next;
+                this._resBuyModal = null;
+                this.statusMsg = '';
+                this.focusIndex = 0;
+                this._navLevel = 'tabs';
+                this.persistTab();
+                this.createUI();
             });
         });
-        // Status messages show once as a toast (bottom centre), not as a line
-        // under the tabs; consume it so re-renders don't repeat it.
+    },
+
+    _bindSoftBodyChrome(bodyEl) {
+        if (!bodyEl) return;
+        bodyEl.querySelectorAll('[data-explore]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.openExploration(btn.getAttribute('data-explore'));
+            });
+        });
+        bodyEl.querySelectorAll('[data-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                this.tab = btn.getAttribute('data-tab') || 'station';
+                this._resBuyModal = null;
+                this.statusMsg = '';
+                this.focusIndex = 0;
+                this._navLevel = 'tabs';
+                this.persistTab();
+                this.createUI();
+            });
+        });
+    },
+
+    /** Shared post-body mount: hangar/play/menu + focus/scroll. */
+    _finishTabMount(scrollState, opts) {
+        const soft = !!(opts && opts.soft);
+        const bindChrome = !!(opts && opts.bindChrome);
+        if (bindChrome) {
+            this.bindEvents();
+            const playBtn = this.overlay.querySelector('.hs-header-split > [data-play-launch]');
+            if (playBtn) {
+                playBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.launchPlay();
+                });
+            }
+            this.bindMissionButton();
+            this.bindControlsToggle();
+            this.bindStationColumnResize();
+            this.syncTopbarResLayout();
+            this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+                menuBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+                });
+            });
+        } else {
+            // Soft path: only bind handlers the active tab's body needs.
+            // Cached body DOM already has listeners from the prior visit.
+            const t = this.tab;
+            if (!(opts && opts.bodyCached)) {
+                if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
+                if (t === 'station' || t === 'shop' || t === 'craft') this.bindStationEvents();
+                if (t === 'hangar') this.bindHangarTabEvents();
+            }
+            this.bindKeyNav();
+        }
+        this.moveHangarBayTools();
         if (this.statusMsg) {
             this.showStatusToast(this.statusMsg);
             this.statusMsg = '';
         }
         if (['factions', 'ffleet', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
-        this.restoreNavFocus();
-        if (this._focusExplore) {
-            this.focusExploreItem(this._focusExplore);
-            this._focusExplore = null;
-        }
-        this.syncNavHint();
         this.restoreScrollState(scrollState);
         this.applyPendingFlash();
+        // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
+        if (soft) {
+            requestAnimationFrame(() => {
+                this.restoreNavFocus();
+                if (this._focusExplore) {
+                    this.focusExploreItem(this._focusExplore);
+                    this._focusExplore = null;
+                }
+                this.syncNavHint();
+            });
+        } else {
+            this.restoreNavFocus();
+            if (this._focusExplore) {
+                this.focusExploreItem(this._focusExplore);
+                this._focusExplore = null;
+            }
+            this.syncNavHint();
+        }
         if (this.tab === 'hangar') {
-            // Bind new HangarUI events — DISABLED TEMPORARILY
-            // this._bindHangarEvents();
             this.setupHangarPanelResize();
-            this.startHangarPreview();
-            this.drawHangarBay();
-            this.bindHangarSlotEvents();
-            this.bindHangarPartsGrid();
+            // Soft: hangar canvas draw was ~30–65ms on the click path.
+            if (soft) {
+                requestAnimationFrame(() => {
+                    this.startHangarPreview();
+                    this.drawHangarBay();
+                    this.bindHangarSlotEvents();
+                    this.bindHangarPartsGrid();
+                });
+            } else {
+                this.startHangarPreview();
+                this.drawHangarBay();
+                this.bindHangarSlotEvents();
+                this.bindHangarPartsGrid();
+            }
         } else {
             this.destroyHangarPanelResize();
             this._hangarOpenSlot = null;
@@ -301,17 +532,27 @@ extendClass(HomeStationUI, {
         if (this.tab === 'play') {
             this.mountPlayTab();
         }
-        if (this.tab === 'menu') {
-            this.mountMenuTab(this._menuOpts);
+        if (this.tab === 'menu') this.mountMenuTab(this._menuOpts);
+        if (this.tab === 'components') this.mountComponentsTab();
+        // Soft: defer ship thumbs + skip parallax (shell/bg unchanged) so the tab paints first.
+        if (soft && this.tab === 'play') {
+            /* play body has no ship thumbs */
+        } else if (soft) {
+            requestAnimationFrame(() => {
+                this.scheduleShipThumbs();
+                this.bindShipSelectButtons();
+            });
+        } else {
+            this.scheduleShipThumbs();
+            this.bindShipSelectButtons();
+            if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
+                VFBgMouseParallax.refresh();
+            }
         }
-        if (this.tab === 'components') {
-            this.mountComponentsTab();
-        }
-        this.scheduleShipThumbs();
-        this.bindShipSelectButtons();
-        this.syncTabDrop();
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
+        if (soft) {
+            requestAnimationFrame(() => this.syncTabDrop());
+        } else {
+            this.syncTabDrop();
         }
     },
 
@@ -499,4 +740,35 @@ extendClass(HomeStationUI, {
             this._topbarResObserver.observe(bar.parentElement || bar);
         }
     },
+});
+
+// Mission icon right of the navbar (all sections): the invasion / mission text only shows as a hover tooltip.
+extendClass(HomeStationUI, {
+    renderMissionButton() {
+        const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+        const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+        const sit = info && info.sit;
+        const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const who = sit && sit.attacker ? String(sit.attacker).toUpperCase() : '';
+        const head = !sit ? 'NO ACTIVE MISSION'
+            : (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') ? `${who} ATTACKS ${sit.planet}`
+            : (sit.kind === 'ACTIVE MISSION') ? `${sit.mission} · ${sit.planet}` : sit.kind;
+        const tip = esc(sit ? head + ' — ' + sit.objective : 'NO ACTIVE MISSION — TAKE ONE AT THE HANGAR MISSION BOARD');
+        const accent = info && info.accent ? info.accent : 'var(--color-primary)';
+        return `<button type="button" class="hs-logout-btn hs-mission-btn${calm ? ' is-calm' : ''}" id="hsMissionBtn" style="--mission-accent:${accent}" ` +
+            `data-ui-tip="${tip}" aria-label="Mission" data-nav-item>` +
+            `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 32, 'hs-tab-pixel', false)}</span></button>`;
+    },
+    bindMissionButton() {
+        const btn = this.overlay && this.overlay.querySelector('#hsMissionBtn');
+        if (!btn) return;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+            const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+            if (info && info.sit && gm.openSituationModal) gm.openSituationModal(info.sit);
+        });
+    }
 });

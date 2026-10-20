@@ -109,7 +109,7 @@ class HomeStationUI {
             hangar: { label: 'HANGAR', icon: 'hsHangar' },
             components: { label: 'COMPONENTS', icon: 'hsComponents' },
             shop: { label: 'SHOP', icon: 'hsShop' },
-            missions: { label: 'MISSIONS', icon: 'hsExplore' },
+            missions: { label: 'LOG', icon: 'hsExplore' },
             craft: { label: 'CRAFT', icon: 'hsCraft' },
             travel: { label: 'TRAVEL', icon: 'hsTeleport' },
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },

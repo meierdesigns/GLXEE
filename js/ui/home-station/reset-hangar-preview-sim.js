@@ -209,14 +209,22 @@ extendClass(HomeStationUI, {
         }
         this.resetHangarPreviewSim();
         this.bindHangarPreviewZoom();
+        // ~30 fps is enough for the pixel hangar sim; same look, half the draw cost.
+        const frameInterval = 1000 / 30;
         const loop = (ts) => {
-            if (!this.isVisible || this.tab !== 'hangar') return;
+            if (!this.isVisible || this.tab !== 'hangar') {
+                this._hangarPreviewAnimId = 0;
+                return;
+            }
+            this._hangarPreviewAnimId = requestAnimationFrame(loop);
+            if (document.hidden) return;
             if (!this._hangarPreviewLastTs) this._hangarPreviewLastTs = ts;
-            const dt = Math.min(50, ts - this._hangarPreviewLastTs);
+            const elapsed = ts - this._hangarPreviewLastTs;
+            if (elapsed < frameInterval) return;
+            const dt = Math.min(50, elapsed);
             this._hangarPreviewLastTs = ts;
             this.updateHangarPreviewSim(dt);
             this.drawHangarPreview();
-            this._hangarPreviewAnimId = requestAnimationFrame(loop);
         };
         this._hangarPreviewAnimId = requestAnimationFrame(loop);
     },

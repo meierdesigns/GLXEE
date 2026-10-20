@@ -409,7 +409,9 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-ma
     image-rendering: crisp-edges;
 }
 html[data-vf-frame-px="on"] #vf-cables {
-    filter: url(#vfFramePx);
+    /* See part-20: vfFramePx SVG filter was app-wide ~3 FPS. */
+    filter: none;
+    image-rendering: pixelated;
 }
 
 /* Start screen: no inner housing; the content fills the (larger) screen bezel */
@@ -1452,11 +1454,11 @@ html[data-vf-gui-voxel="on"][data-vf-gv-images="on"] :where(button, input, selec
 .vf-bezel-fx .vf-fx-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;}
 .vf-bezel-fx .vf-fx-body .vf-fx-title { border-top: 0; margin-top: 4px; padding-top: 0; }
 
-/* FRAME PIXEL: the bezel plates are re-sampled on a coarse grid (SVG filter #vfFramePx),
-   so bevels and diagonal silhouettes step like pixels. */
+/* FRAME PIXEL: bevel sizing / clip rules stay; SVG #vfFramePx filter removed (app-wide ~3 FPS). */
 html[data-vf-frame-px="on"] #vf-bezel .vf-fr {
     clip-path: none;
-    filter: url(#vfFramePx);
+    filter: none;
+    image-rendering: pixelated;
 }
 html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelated; }
 

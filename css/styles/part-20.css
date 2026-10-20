@@ -104,6 +104,8 @@
 }
 .vf-bezel-fx .vf-fx-tabs button::before { display: none; }
 .vf-bezel-fx .vf-fx-tabs button svg { width: 26px; height: 26px; flex: none; color: color-mix(in srgb, currentColor 80%, #fff); }
+.vf-bezel-fx .vf-fx-tabs button span { display: none; }
+.vf-bezel-fx .vf-fx-tabs button { min-height: 52px; }
 .vf-bezel-fx .vf-fx-tabs button.on {
     transform: translateY(1px);
     background:
@@ -261,7 +263,10 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco,
 html[data-vf-frame-px="on"] #vf-bezel::before,
 html[data-vf-frame-px="on"] #vf-bezel::after {
     clip-path: none !important;
-    filter: url(#vfFramePx);
+    /* Runtime (1e456a): filter:url(#vfFramePx) on the bezel dropped app-wide RAF
+       from ~59 FPS to ~2.7 FPS with FRAME PIXEL on. Keep pixel look without the SVG filter. */
+    filter: none;
+    image-rendering: pixelated;
 }
 html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { clip-path: none; }
 
@@ -932,8 +937,8 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
     font-smooth: never;
 }
 
-/* Map planets: toned down so the lit side never blows out to white. */
-.gm-node .gm-node-icon-wrap:not(.dimmed) { filter: brightness(0.78) saturate(0.88) contrast(0.95); }
+/* Map planets: unfiltered, full brightness (the 0.78 toning made active planets too dark). */
+.gm-node .gm-node-icon-wrap:not(.dimmed) { filter: none; }
 
 /* Big planet portraits (sector card, victory / defeat, galaxy viewer): same toning. */
 .gm-sector-planet-bg .gm-planet-icon,
@@ -1123,6 +1128,21 @@ html[data-vf-perf-anim="off"] .vf-fx-noise,
 html[data-vf-perf-anim="off"] .vf-fx-flicker,
 html[data-vf-perf-anim="off"] .menu-item.selected,
 html[data-vf-perf-anim="off"] .settings-row.selected { animation: none !important; }
+/* Settings → DEBUG → PERFORMANCE MODE (also freezes map spin / idle parallax via JS) */
+html[data-vf-performance] .vf-fx-chroma,
+html[data-vf-performance] .vf-fx-bloom,
+html[data-vf-performance] .vf-fx-crt,
+html[data-vf-performance] .vf-fx-scanwarp,
+html[data-vf-performance] .vf-fx-hdr,
+html[data-vf-performance] .vf-fx-hdr-shadow { display: none !important; }
+html[data-vf-performance] .vf-fx-scanlines,
+html[data-vf-performance] .vf-fx-noise,
+html[data-vf-performance] .vf-fx-flicker,
+html[data-vf-performance] .menu-item.selected,
+html[data-vf-performance] .settings-row.selected,
+html[data-vf-performance] .gm-sun,
+html[data-vf-performance] .gm-edge,
+html[data-vf-performance] .hs-trait-modal-ico img { animation: none !important; }
 .vf-bezel-fx .vf-fx-fps { font-variant-numeric: tabular-nums; }
 
 /* Faction trait hover modal: all traits stacked, icon container left, info right */
@@ -1244,6 +1264,53 @@ html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go:disable
 html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-go.is-locked span { color: color-mix(in srgb, #fff 70%, transparent) !important; }
 html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort,
 html body .hs-body .hs-panel.hs-missions-root .hs-mission .hs-mission-abort span { font-size: var(--font-h2) !important; letter-spacing: 1px !important; font-weight: bold; }
+
+/* MISSION LOG: main quest chain + sidequests + location offers. */
+.hs-mission-log .hs-log-body { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: auto; }
+.hs-log-block {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 14px 16px;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    background: color-mix(in srgb, var(--color-surface, #0b0b10) 88%, transparent);
+}
+.hs-log-main { border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 65%, transparent); }
+.hs-log-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hs-log-badge {
+    font-size: var(--font-h2); letter-spacing: 0.14em; padding: 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+    color: var(--faction-accent, var(--color-primary));
+}
+.hs-log-title { font-size: 22px; letter-spacing: 0.08em; color: var(--color-text, #fff); }
+.hs-log-blurb, .hs-log-hint { margin: 0; font-size: var(--font-h2); line-height: 1.4; }
+.hs-log-objective { margin: 0; font-size: var(--font-h2); letter-spacing: 0.06em; color: var(--color-text, #fff); }
+.hs-log-objective b { color: var(--faction-accent, var(--color-primary)); margin-right: 8px; }
+.hs-log-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.hs-log-step {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    opacity: 0.55;
+}
+.hs-log-step.is-active, .hs-log-step.is-focus { opacity: 1; border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent); background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, transparent); }
+.hs-log-step.is-done { opacity: 0.75; }
+.hs-log-step-idx {
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--font-h2); font-weight: bold;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.hs-log-step-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hs-log-step-body b { font-size: var(--font-h2); letter-spacing: 0.08em; }
+.hs-log-step-body small { font-size: var(--font-text); opacity: 0.8; letter-spacing: 0.06em; }
+.hs-log-step-diff { font-size: var(--font-text); opacity: 0.85; letter-spacing: 0.08em; }
+html body .hs-mission-log .hs-log-side,
+html body .hs-mission-log .hs-log-offer {
+    grid-template-columns: minmax(200px, 1.4fr) auto auto;
+    gap: 16px; padding: 12px 14px;
+}
+html body .hs-mission-log .hs-line-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+html body .hs-mission-log .hs-line-name small { font-size: var(--font-text); letter-spacing: 0.06em; }
+
 .hs-trait-modal-row { transition: opacity 0.12s, background-color 0.12s, border-color 0.12s; }
 .hs-fd-col[data-im-name] { cursor: help; }
 .hs-trait-modal-ico[data-ico="emblem"] img { animation-name: hs-ti-glow; }
@@ -1533,3 +1600,167 @@ html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block 
 
 /* Faction cards: larger names, relation shown as an icon. */
 html body .home-station-overlay .home-station-content .hs-factions .hs-faction-tabs .hs-faction-name { font-size: var(--font-h2); letter-spacing: 2px; }
+
+/* Remote control: plastic depth — curved hull, glossy top edge, domed keys. */
+.vf-bezel-fx {
+    background:
+        radial-gradient(ellipse 120% 40% at 50% 0, rgba(255, 255, 255, 0.10), transparent 70%),
+        linear-gradient(90deg, color-mix(in srgb, var(--rc-hull) 70%, #000) 0, var(--rc-lit) 8%, var(--rc-hull) 28%, color-mix(in srgb, var(--rc-hull) 90%, #fff) 50%, var(--rc-hull) 72%, color-mix(in srgb, var(--rc-hull) 60%, #000) 100%);
+    box-shadow:
+        inset 4px 4px 0 var(--rc-lit),
+        inset -4px -4px 0 var(--rc-dark),
+        inset 0 0 0 8px color-mix(in srgb, var(--rc-hull) 85%, #000),
+        inset 0 14px 18px -8px rgba(255, 255, 255, 0.16),
+        inset 0 -22px 26px -10px rgba(0, 0, 0, 0.6),
+        -8px 8px 0 rgba(0, 0, 0, 0.5);
+}
+.vf-bezel-fx .vf-fx-tabs button {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0, rgba(255, 255, 255, 0.04) 38%, transparent 50%, rgba(0, 0, 0, 0.35) 100%),
+        radial-gradient(ellipse at 50% 12%, color-mix(in srgb, var(--rc-lit) 90%, #fff) 0, transparent 65%),
+        linear-gradient(180deg, var(--rc-hull), color-mix(in srgb, var(--rc-hull) 60%, #000));
+    box-shadow:
+        inset 0 3px 0 rgba(255, 255, 255, 0.28),
+        inset 3px 0 0 var(--rc-lit),
+        inset -3px 0 0 var(--rc-dark),
+        inset 0 -5px 0 var(--rc-dark),
+        inset 0 -9px 8px -4px rgba(0, 0, 0, 0.55);
+}
+.vf-bezel-fx .vf-fx-tabs button.on {
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0, transparent 40%, rgba(255, 255, 255, 0.08) 100%),
+        color-mix(in srgb, var(--rc-acc) 16%, var(--rc-hull));
+    box-shadow:
+        inset 0 4px 6px rgba(0, 0, 0, 0.7),
+        inset 3px 0 0 var(--rc-dark),
+        inset -3px 0 0 var(--rc-lit),
+        inset 0 -2px 0 var(--rc-lit),
+        inset 0 0 14px color-mix(in srgb, var(--rc-acc) 35%, transparent);
+}
+.vf-bezel-fx .vf-fx-head {
+    box-shadow: inset 3px 3px 0 #000, inset -3px -3px 0 color-mix(in srgb, var(--rc-acc) 25%, #000), inset 0 8px 10px rgba(0, 0, 0, 0.6), inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Remote control: embossed Meierdesigns brand mark above the speaker grill. */
+.vf-bezel-fx::after {
+    flex: 0 0 62px;
+    background:
+        repeating-linear-gradient(90deg, var(--rc-dark) 0 4px, transparent 4px 8px) 0 100% / 100% 14px no-repeat,
+        url("../../assets/brand/meierdesigns-logo-dark.svg") 50% 2px / auto 38px no-repeat,
+        url("../../assets/brand/meierdesigns-logo-light.svg") calc(50% + 1px) 3px / auto 38px no-repeat;
+    box-shadow: none;
+    opacity: 1;
+}
+
+/* Remote control: Meierdesigns mark as a glowing neon emblem (dark outline, then glow). */
+.vf-bezel-fx {
+    padding-bottom: 26px;
+    background:
+        repeating-linear-gradient(90deg, var(--rc-dark) 0 4px, transparent 4px 8px) 12px calc(100% - 8px) / calc(100% - 24px) 14px no-repeat,
+        radial-gradient(ellipse 120% 40% at 50% 0, rgba(255, 255, 255, 0.10), transparent 70%),
+        linear-gradient(90deg, color-mix(in srgb, var(--rc-hull) 70%, #000) 0, var(--rc-lit) 8%, var(--rc-hull) 28%, color-mix(in srgb, var(--rc-hull) 90%, #fff) 50%, var(--rc-hull) 72%, color-mix(in srgb, var(--rc-hull) 60%, #000) 100%);
+}
+.vf-bezel-fx::after {
+    flex: 0 0 56px;
+    background: radial-gradient(circle at 50% 62%, #ffffa0 0, #ffd070 32%, #ff8a2a 62%, #ff5a14 100%);
+    -webkit-mask: url("../../assets/brand/meierdesigns-logo.svg") 50% 50% / auto 46px no-repeat;
+    mask: url("../../assets/brand/meierdesigns-logo.svg") 50% 50% / auto 46px no-repeat;
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a) drop-shadow(0 0 4px #ff7a1a) drop-shadow(0 0 10px rgba(255, 90, 0, 0.65));
+    box-shadow: none;
+    opacity: 1;
+}
+
+/* Logo: orange body, bright only where the shapes are large (heat map baked into the SVG). */
+.vf-bezel-fx::after {
+    background: url("../../assets/brand/meierdesigns-logo-glow.svg") 50% 50% / auto 46px no-repeat;
+    -webkit-mask: none;
+    mask: none;
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a) drop-shadow(0 0 3px #ff6a14) drop-shadow(0 0 9px rgba(255, 80, 0, 0.6));
+}
+
+/* Remote control: resize handles on all four corners, shown on hover only. */
+.vf-bezel-fx .vf-fx-grip {
+    width: 22px; height: 22px; right: auto; bottom: auto; background: none; opacity: 0;
+    transition: opacity 0.15s; z-index: 3;
+}
+.vf-bezel-fx:hover .vf-fx-grip, .vf-bezel-fx.is-dragging .vf-fx-grip { opacity: 1; }
+.vf-bezel-fx .vf-fx-grip::before {
+    content: ""; position: absolute; width: 12px; height: 12px;
+    border: 0 solid var(--rc-acc); filter: drop-shadow(0 0 3px var(--rc-acc));
+}
+.vf-bezel-fx .vf-fx-grip[data-corner="nw"] { left: 6px; top: 6px; cursor: nwse-resize; }
+.vf-bezel-fx .vf-fx-grip[data-corner="ne"] { right: 6px; top: 6px; cursor: nesw-resize; }
+.vf-bezel-fx .vf-fx-grip[data-corner="sw"] { left: 6px; bottom: 6px; cursor: nesw-resize; }
+.vf-bezel-fx .vf-fx-grip[data-corner="se"] { right: 6px; bottom: 6px; cursor: nwse-resize; }
+.vf-bezel-fx .vf-fx-grip[data-corner="nw"]::before { left: 2px; top: 2px; border-width: 3px 0 0 3px; }
+.vf-bezel-fx .vf-fx-grip[data-corner="ne"]::before { right: 2px; top: 2px; border-width: 3px 3px 0 0; }
+.vf-bezel-fx .vf-fx-grip[data-corner="sw"]::before { left: 2px; bottom: 2px; border-width: 0 0 3px 3px; }
+.vf-bezel-fx .vf-fx-grip[data-corner="se"]::before { right: 2px; bottom: 2px; border-width: 0 3px 3px 0; }
+
+/* Each corner handle shows only while hovering that corner (or while it is being dragged). */
+.vf-bezel-fx:hover .vf-fx-grip { opacity: 0; }
+.vf-bezel-fx .vf-fx-grip:hover, .vf-bezel-fx.is-dragging .vf-fx-grip:active { opacity: 1; }
+
+/* Remote scale slider: right of the logo, visible on hover. */
+.vf-bezel-fx .vf-fx-zoom {
+    position: absolute; left: calc(50% + 36px); bottom: 34px; width: 84px; z-index: 3;
+    opacity: 0; transition: opacity 0.15s;
+}
+.vf-bezel-fx:hover .vf-fx-zoom, .vf-bezel-fx.is-dragging .vf-fx-zoom { opacity: 1; }
+.vf-bezel-fx .vf-fx-zoom input[type="range"] { width: 100%; min-width: 0; height: 18px; }
+
+/* No scrollbar in the remote: arrows appear only where scrolling is possible. */
+.vf-bezel-fx .vf-fx-body { scrollbar-width: none; -ms-overflow-style: none; }
+.vf-bezel-fx .vf-fx-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.vf-bezel-fx .vf-fx-more {
+    position: absolute; z-index: 4; width: 24px; height: 20px; padding: 0; border: 0; cursor: pointer;
+    background: linear-gradient(180deg, var(--rc-hull), color-mix(in srgb, var(--rc-hull) 60%, #000));
+    box-shadow: inset 2px 2px 0 var(--rc-lit), inset -2px -2px 0 var(--rc-dark);
+    color: var(--rc-acc); display: flex; align-items: center; justify-content: center;
+}
+.vf-bezel-fx .vf-fx-more[hidden] { display: none; }
+.vf-bezel-fx .vf-fx-more::before {
+    content: ""; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
+    filter: drop-shadow(0 0 3px var(--rc-acc));
+}
+.vf-bezel-fx .vf-fx-more-up::before { border-bottom: 7px solid currentColor; }
+.vf-bezel-fx .vf-fx-more-down::before { border-top: 7px solid currentColor; }
+
+/* Scroll arrow bars: solid, flush with the body edge so no content peeks past them. */
+.vf-bezel-fx .vf-fx-more { height: 22px; background: #0a0c11; box-shadow: inset 0 0 0 2px var(--rc-dark), inset 2px 2px 0 var(--rc-lit); }
+.vf-bezel-fx .vf-fx-more-up { box-shadow: inset 0 -2px 0 var(--rc-lit), inset 0 2px 0 var(--rc-dark); }
+.vf-bezel-fx .vf-fx-more-down { box-shadow: inset 0 2px 0 var(--rc-lit), inset 0 -2px 0 var(--rc-dark); }
+
+/* Remote keys grouped in captioned clusters, two clusters per row. */
+.vf-bezel-fx .vf-fx-tabs { gap: 6px 8px; align-items: stretch; }
+.vf-bezel-fx .vf-fx-tabs-break { flex: 0 0 100%; height: 0; }
+.vf-bezel-fx .vf-fx-cluster {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+    padding: 3px 4px 4px; background: rgba(0, 0, 0, 0.28);
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-cluster-cap {
+    font-size: 8px; letter-spacing: 0.18em; line-height: 1; opacity: 0.6; text-align: center; color: var(--rc-acc);
+}
+.vf-bezel-fx .vf-fx-cluster-keys { display: flex; gap: 4px; }
+.vf-bezel-fx .vf-fx-cluster-keys button { flex: 1 1 0; min-width: 0; }
+
+/* Compact, colour-coded keys: one hue per cluster (display / layout / game / system). */
+.vf-bezel-fx .vf-fx-tabs { gap: 4px 6px; padding: 2px 0; }
+.vf-bezel-fx .vf-fx-cluster { --cl: #4fd8ff; padding: 2px 3px 3px; gap: 2px; box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit), inset 0 2px 0 var(--cl); }
+.vf-bezel-fx .vf-fx-cluster:nth-of-type(2) { --cl: #6dff7a; }
+.vf-bezel-fx .vf-fx-cluster:nth-of-type(3) { --cl: #ff5a3c; }
+.vf-bezel-fx .vf-fx-cluster:nth-of-type(4) { --cl: #ffd23c; }
+.vf-bezel-fx .vf-fx-cluster-cap { font-size: 7px; opacity: 1; color: var(--cl); text-shadow: 0 0 4px color-mix(in srgb, var(--cl) 60%, transparent); }
+.vf-bezel-fx .vf-fx-cluster-keys { gap: 3px; }
+.vf-bezel-fx .vf-fx-cluster .vf-fx-cluster-keys button { min-height: 34px; padding: 5px 0 4px; gap: 0; }
+.vf-bezel-fx .vf-fx-cluster .vf-fx-cluster-keys button svg { width: 20px; height: 20px; color: var(--cl); }
+.vf-bezel-fx .vf-fx-cluster .vf-fx-cluster-keys button.on { box-shadow: inset 0 4px 6px rgba(0, 0, 0, 0.7), inset 3px 0 0 var(--rc-dark), inset -3px 0 0 var(--rc-lit), inset 0 -2px 0 var(--cl), inset 0 0 12px color-mix(in srgb, var(--cl) 40%, transparent); background-color: color-mix(in srgb, var(--cl) 14%, var(--rc-hull)); }
+.vf-bezel-fx .vf-fx-cluster .vf-fx-cluster-keys button.on svg { color: #fff; filter: drop-shadow(0 0 3px var(--cl)); }
+
+/* DIFFICULTY rows: icon + short label, value readout always visible. */
+.vf-bezel-fx .vf-fx-row > span:first-child:has(.vf-fx-ico) { flex: 0 0 88px; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.vf-bezel-fx .vf-fx-row > span:first-child .vf-fx-ico { width: 16px; height: 16px; flex: none; color: var(--rc-acc); filter: drop-shadow(0 0 2px var(--rc-acc)); }
+.vf-bezel-fx .vf-fx-row > span:first-child em { font-style: normal; font-size: 9px; line-height: 1.1; min-width: 0; overflow-wrap: anywhere; }
+.vf-bezel-fx .vf-fx-row:has(.vf-fx-ico) input[type="range"] { min-width: 40px; }
+.vf-bezel-fx .vf-fx-row:has(.vf-fx-ico) output { flex: 0 0 auto; min-width: 3em; color: #fff; }

@@ -1256,6 +1256,7 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
 .hs-toast.is-visible {
     opacity: 1;
     transform: translateY(0);
+    pointer-events: auto;
 }
 .hs-toast.hs-status-ok {
     color: var(--status-success);
@@ -1267,13 +1268,17 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
     border-color: var(--status-error);
     box-shadow: 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 72%, transparent), 0 0 0 10px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 48%, transparent), 0 0 0 18px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 30%, transparent), 0 0 0 24px color-mix(in srgb, color-mix(in srgb, var(--status-error) 45%, transparent) 16%, transparent);
 }
-/* Bigger toast. */
+/* Toast size. */
 .hs-toast {
-    max-width: min(760px, calc(calc(100 * var(--sv-w)) - 32px));
-    padding: 14px 32px;
-    font-size: calc(var(--font-text, 12px) * 1.5);
-    letter-spacing: 3px;
-    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 2px) calc(100% - 12px), calc(100% - 2px) calc(100% - 10px), calc(100% - 4px) calc(100% - 10px), calc(100% - 4px) calc(100% - 8px), calc(100% - 6px) calc(100% - 8px), calc(100% - 6px) calc(100% - 6px), calc(100% - 8px) calc(100% - 6px), calc(100% - 8px) calc(100% - 4px), calc(100% - 10px) calc(100% - 4px), calc(100% - 10px) calc(100% - 2px), calc(100% - 12px) calc(100% - 2px), calc(100% - 12px) 100%, 0 100%, 0 12px, 2px 12px, 2px 10px, 4px 10px, 4px 8px, 6px 8px, 6px 6px, 8px 6px, 8px 4px, 10px 4px, 10px 2px, 12px 2px);
+    max-width: min(420px, calc(calc(100 * var(--sv-w)) - 32px));
+    padding: 6px 14px;
+    font-size: calc(var(--font-text, 12px) * 0.85);
+    letter-spacing: 1.5px;
+}
+/* Hide it out of the way while the cursor is over it. */
+.hs-toast:hover {
+    opacity: 0 !important;
+    pointer-events: none;
 }
 
 /* Dragging a part: slots it is too big for. */

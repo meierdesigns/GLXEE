@@ -53,15 +53,9 @@
             const cols = getComputedStyle(info.parent).gridTemplateColumns.split(' ').filter(Boolean);
             if (cols.length !== info.kids.length) return false;
             cols[info.idx] = Math.round(w) + 'px';
-            // The widest remaining track flexes so the row still fills.
-            let best = -1;
-            let bestW = -1;
-            cols.forEach((c, i) => {
-                if (i === info.idx) return;
-                const v = parseFloat(c) || 0;
-                if (v > bestW) { bestW = v; best = i; }
-            });
-            if (best >= 0) cols[best] = 'minmax(0, 1fr)';
+            // The adjacent track (the center panel this handle borders) flexes to fill.
+            const neighbor = info.edge === 'right' ? info.idx + 1 : info.idx - 1;
+            if (neighbor >= 0 && neighbor < cols.length) cols[neighbor] = 'minmax(0, 1fr)';
             info.parent.style.gridTemplateColumns = cols.join(' ');
         } else {
             side.style.flex = '0 0 ' + Math.round(w) + 'px';

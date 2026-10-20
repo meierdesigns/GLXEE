@@ -277,8 +277,7 @@ extendClass(HomeStationUI, {
 
     /**
      * Dev mode (Shift+C): drag tabs and '|' dividers within their row to
-     * reorder them. Main row only: drag the "+ |" handle in to add a divider,
-     * drag a divider out of the row to remove it.
+     * reorder them. Main row only: drag a divider out of the row to remove it.
      */
     bindTabOrderEditing() {
         if (typeof MENU_ORDER === 'undefined' || typeof startScreenManager === 'undefined' ||
@@ -397,18 +396,5 @@ extendClass(HomeStationUI, {
         row.addEventListener('dragleave', (e) => {
             if (!row.contains(e.relatedTarget)) hideMarker();
         });
-
-        // Top bar: a "+ |" handle adds a divider (drag it between buttons); a
-        // divider dragged out of the bar is removed.
-        if (areaMode) {
-            const handle = document.createElement('span');
-            handle.className = 'hs-tab-divider-handle';
-            handle.textContent = '+ |';
-            handle.draggable = true;
-            handle.title = 'Drag between buttons to add a divider';
-            handle.addEventListener('dragstart', (e) => startDrag(handle, NEW_DIVIDER, e));
-            handle.addEventListener('dragend', () => endDrag(handle));
-            row.appendChild(handle);
-        }
     },
 });

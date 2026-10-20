@@ -775,6 +775,7 @@ be reviewed or reverted independently.
 | 67E | Story cutscene sources | Track story-paths, launch cutscene, and hero-planet modules as first-class sources |
 | 67F | Mission logbook sources | Mission log module, station missions tab, and objective wiring for story sidequests |
 | 67G | HUD layout editor | Dev layout editor for combat HUD panels with per-slot size and font scales |
+| 67H | Home station polish | Station shell layout, hangar preview, navigation, and sidebars |
 
 The wave commit convention is:
 

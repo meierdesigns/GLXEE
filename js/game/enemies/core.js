@@ -226,7 +226,9 @@ class EnemyManager {
             // enemyMaxActive:1 × sideCountMul left room < 2 forever and froze events.
             this.sideEnemyCap = Math.max(3, Math.min(6,
                 Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
-            if (profile.enemyCountMul < 1 || sideMul < 1) {
+            if (this.levelMods && this.levelMods.transit) {
+                this.sideEnemyCap = Math.max(this.sideEnemyCap, 5);
+            } else if (profile.enemyCountMul < 1 || sideMul < 1) {
                 const mul = Math.min(profile.enemyCountMul || 1, sideMul);
                 const normalEntries = this.schedule.filter(e => !e.champion);
                 normalEntries.slice(Math.max(1, Math.ceil(normalEntries.length * mul)))

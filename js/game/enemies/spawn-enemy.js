@@ -98,6 +98,9 @@ extendClass(EnemyManager, {
             enemySpeed *= champFlightProfile.speedMul;
             enemyVerticalSpeed *= champFlightProfile.speedMul;
         }
+        // The champion (and the escorts that follow it) used to crawl.
+        enemySpeed *= 1.6;
+        enemyVerticalSpeed *= 1.6;
         // Randomize initial horizontal direction so enemies don't always
         // appear to head right first (they still bounce both ways after).
         if (Math.random() < 0.5) {

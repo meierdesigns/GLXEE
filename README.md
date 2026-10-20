@@ -776,6 +776,7 @@ be reviewed or reverted independently.
 | 67F | Mission logbook sources | Mission log module, station missions tab, and objective wiring for story sidequests |
 | 67G | HUD layout editor | Dev layout editor for combat HUD panels with per-slot size and font scales |
 | 67H | Home station polish | Station shell layout, hangar preview, navigation, and sidebars |
+| 67I | Combat spawn polish | Wave director, side enemies, shot bursts, and hit-profile tweaks |
 
 The wave commit convention is:
 

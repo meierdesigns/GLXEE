@@ -234,6 +234,12 @@ class BulletManager {
     }
 
     setShipModel(shipModel) {
+        // Re-applying the same hull (late asset swap, loadout refresh) must not
+        // reset the weapon the player picked.
+        const prev = this.currentShipModel;
+        const keepWeapon = (prev && shipModel && (prev === shipModel
+            || (prev.id != null && prev.id === shipModel.id)))
+            ? this.currentWeapon : null;
         this.currentShipModel = shipModel;
         if (shipModel) {
             // Ensure every equipped weapon has a config entry (loadout can add
@@ -249,7 +255,10 @@ class BulletManager {
                     ? weaponConfigManager.getDefaultsForShip(id) : null;
                 if (fromReg) shipModel.weaponConfig[id] = Object.assign({}, fromReg);
             });
-            if (shipModel.defaultWeapon) {
+            if (keepWeapon && ids.indexOf(keepWeapon) !== -1) {
+                this.currentWeapon = keepWeapon;
+                shipModel.defaultWeapon = shipModel.defaultWeapon || keepWeapon;
+            } else if (shipModel.defaultWeapon) {
                 this.currentWeapon = shipModel.defaultWeapon;
             } else {
                 this.currentWeapon = ids[0] || 'laser';

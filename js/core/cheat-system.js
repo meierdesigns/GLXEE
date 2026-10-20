@@ -25,29 +25,14 @@ class CheatSystem {
     }
     
     initializeCheatLevels() {
-        // Initialize cheat levels from level manager (all unlocked)
-        if (typeof levelManager !== 'undefined') {
-            const allLevels = levelManager.getAllLevels();
-            this.availableLevels = allLevels.map((level, index) => ({
-                id: level.name === 'MARS' ? 1 : 
-                    level.name === 'JUPITER' ? 2 :
-                    level.name === 'SATURN' ? 3 :
-                    level.name === 'NEPTUNE' ? 4 :
-                    level.name === 'PLUTO' ? 5 : index + 1,
-                name: level.name,
-                difficulty: level.difficulty,
-                unlocked: true // All levels unlocked in cheat mode
-            }));
-        } else {
-            // Fallback if level manager is not available
-            this.availableLevels = [
-                { id: 1, name: "MARS", difficulty: "EASY", unlocked: true },
-                { id: 2, name: "JUPITER", difficulty: "MEDIUM", unlocked: true },
-                { id: 3, name: "SATURN", difficulty: "HARD", unlocked: true },
-                { id: 4, name: "NEPTUNE", difficulty: "EXTREME", unlocked: true },
-                { id: 5, name: "PLUTO", difficulty: "NIGHTMARE", unlocked: true }
-            ];
-        }
+        // All levels unlocked in cheat mode
+        this.availableLevels = [
+            { id: 1, name: "MARS", difficulty: "EASY", unlocked: true },
+            { id: 2, name: "JUPITER", difficulty: "MEDIUM", unlocked: true },
+            { id: 3, name: "SATURN", difficulty: "HARD", unlocked: true },
+            { id: 4, name: "NEPTUNE", difficulty: "EXTREME", unlocked: true },
+            { id: 5, name: "PLUTO", difficulty: "NIGHTMARE", unlocked: true }
+        ];
     }
     
     detectCheatSequence(key) {

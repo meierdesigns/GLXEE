@@ -21,7 +21,8 @@ extendClass(EnemyManager, {
                 level: o.level,
                 typeId: o.type || o.typeId,
                 width: o.width,
-                height: o.height
+                height: o.height,
+                hullSeed: o.hullSeed
             });
             if (visual && visual.model) {
                 model = visual.model;
@@ -232,6 +233,7 @@ extendClass(EnemyManager, {
                 tier: side.tier,
                 level: side.level,
                 type: side.type,
+                hullSeed: side.hullSeed,
                 drawScale: scale
             });
         });

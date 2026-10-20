@@ -42,8 +42,79 @@ extendClass(EnemyManager, {
             lastPlayerHp: null,
             recentDamage: 0,
             pendingRevengeMs: 0,
-            waves: 0
+            waves: 0,
+            passMs: 0,
+            passAt: rand(8000, 14000)
         };
+    },
+
+    /**
+     * Row of craft that simply flies through the level (no hovering): either
+     * down the screen as a rank across the width, or sweeping across it from
+     * one rim to the other. They shoot on the way and leave on the far side.
+     */
+    spawnPassRow(gameState) {
+        if (!gameState || !this.sideEnemyPool.length) return 0;
+        const W = gameState.width || 200;
+        const H = gameState.height || 300;
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const sweep = Math.random() < 0.5;
+        const fromLeft = Math.random() < 0.5;
+        const count = 3 + Math.floor(Math.random() * 3);
+        const cluster = 'pass_' + Date.now() + '_' + Math.floor(Math.random() * 999);
+        const speed = rand(0.9, 1.5);
+        const sway = Math.random() < 0.5 ? rand(0.2, 0.5) : 0;
+        const baseY = H * rand(0.08, 0.34);
+        const capBefore = this.sideEnemyCap;
+        this.sideEnemyCap = Math.max(capBefore, this.sideEnemies.length + count);
+        const spawned = [];
+        for (let n = 0; n < count; n++) {
+            const type = this.pickSideEnemyType();
+            if (!type) break;
+            const side = this.spawnScheduledNormal({
+                id: cluster + '_' + n,
+                type: type,
+                faction: (this.enemy && this.enemy.faction) || (this.levelFactions && this.levelFactions[0]) || 'pirate',
+                enemyClass: 'assault',
+                tier: 1,
+                level: 1,
+                champion: false,
+                cluster: cluster,
+                role: 'assault',
+                forceEscort: false
+            }, gameState);
+            if (side) spawned.push(side);
+        }
+        this.sideEnemyCap = capBefore;
+        const total = spawned.length;
+        spawned.forEach((s, n) => {
+            const sw = s.width || 12;
+            const sh = s.height || 10;
+            s.entering = false;
+            s.arrived = true;
+            s.isEscort = false;
+            s.fleeing = false;
+            s.lifetimeMs = null;
+            s.entryTargetX = null;
+            s.entryTargetY = null;
+            s.entryFromSide = null;
+            if (sweep) {
+                const gap = sw + 10;
+                s.x = fromLeft ? -sw - n * gap : W + n * gap;
+                s.y = baseY + (n % 2 ? 6 : 0);
+                s.speed = fromLeft ? speed : -speed;
+                s.verticalSpeed = 0.12;
+            } else {
+                s.x = (W / (total + 1)) * (n + 1) - sw / 2;
+                s.y = -sh - 4 - (n % 2) * 10;
+                s.speed = 0;
+                s.verticalSpeed = speed * 0.8;
+            }
+            s.cruiseSpeed = s.speed;
+            s.cruiseVerticalSpeed = s.verticalSpeed;
+            s.pass = { entered: false, sway: sway, phase: Math.random() * Math.PI * 2 };
+        });
+        return spawned.length;
     },
 
     /** Champion combat events vary per run: thresholds, counts, one surprise. */
@@ -106,6 +177,18 @@ extendClass(EnemyManager, {
         if (d.pendingRevengeMs > 0) {
             d.pendingRevengeMs -= deltaTime;
             if (d.pendingRevengeMs <= 0) this.spawnDirectorWave(gameState, 'revenge');
+        }
+        // Fly-through rows run on their own timer, independent of the wave pacing.
+        const transitStage = !!(this.levelMods && this.levelMods.transit);
+        if (!this.sideFleeing && ((this.enemy && !this.exploding) || transitStage)) {
+            d.passMs = (d.passMs || 0) + deltaTime;
+            if (d.passMs >= (d.passAt || 12000)) {
+                d.passMs = 0;
+                d.passAt = 12000 + Math.random() * 12000;
+                const pm0 = typeof playerManager !== 'undefined' ? playerManager : null;
+                const hp0 = pm0 && pm0.maxHealth ? pm0.health / pm0.maxHealth : 1;
+                if (hp0 >= 0.3) this.spawnPassRow(gameState);
+            }
         }
         d.tickMs += deltaTime;
         if (d.tickMs < DIRECTOR_TICK_MS) return;

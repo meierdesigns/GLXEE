@@ -23,6 +23,14 @@ class GameLoop {
 
     loop(currentTime) {
         if (!this.gameState.gameRunning) return;
+
+        // Tab in background: keep the RAF chain alive but skip sim/draw so we
+        // don't burn CPU. Quality is unchanged when the tab is visible again.
+        if (typeof document !== 'undefined' && document.hidden) {
+            this.lastTime = 0;
+            requestAnimationFrame((time) => this.loop(time));
+            return;
+        }
         
         // Fix initial deltaTime spike on first frame
         if (this.lastTime === 0) {

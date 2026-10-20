@@ -224,15 +224,28 @@ extendClass(BulletManager, {
         let weaponId = this.getEnemyWeaponId(enemy);
         const hasCfg = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[weaponId])
             || (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip);
-        if (hasCfg) {
-            this.enemyShootWithWeapon(enemy, enemyModel, weaponId);
+        const fireFrom = (pos, dmgMul) => {
+            if (hasCfg) {
+                this.enemyShootWithWeapon(enemy, enemyModel, weaponId, pos, dmgMul);
+            } else {
+                // Fallback to default enemy weapon
+                const before = this.enemyBullets.length;
+                this.enemyShootDefault(enemy, pos, dmgMul);
+                this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
+                this.applyShotSizeSetting(this.enemyBullets, before,
+                    enemy && enemy.isBoss ? 'boss' : 'enemy');
+            }
+        };
+        // Guns sit on the hull's mounts (nose, wing pair, outrigger pair): each shot comes from the next
+        // group in turn, a pair firing both guns at 60 % damage each. No mounts known = the nose tip.
+        const groups = this.getEnemyMuzzleGroups(enemy);
+        if (groups) {
+            const idx = (enemy._muzzleNext || 0) % groups.length;
+            enemy._muzzleNext = idx + 1;
+            const group = groups[idx];
+            group.forEach((p) => fireFrom({ x: p.x - 0.5, y: p.y, width: 1, height: 0 }, group.length > 1 ? 0.6 : 1));
         } else {
-            // Fallback to default enemy weapon
-            const before = this.enemyBullets.length;
-            this.enemyShootDefault(enemy);
-            this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), weaponId);
-            this.applyShotSizeSetting(this.enemyBullets, before,
-                enemy && enemy.isBoss ? 'boss' : 'enemy');
+            fireFrom(null, 1);
         }
 
         if (typeof soundManager !== 'undefined') {
@@ -250,7 +263,24 @@ extendClass(BulletManager, {
         this.lastEnemyShotTime = currentTime;
     },
 
-    enemyShootWithWeapon(enemy, enemyModel, weaponId) {
+    /**
+     * Gun muzzles of an enemy in playfield px, grouped (nose / wing pair / outrigger pair), from its hull's
+     * mounts (factionShipStyles.getEnemyMounts). Side craft carry only their first `muzzleGroups` groups.
+     * The hull is drawn flipped, so the nose (grid row 0) is at the bottom of the footprint. Null = no mounts.
+     */
+    getEnemyMuzzleGroups(enemy) {
+        const fs = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        if (!enemy || !enemy.faction || !enemy.enemyClass || !fs || !fs.getEnemyMounts) return null;
+        const m = fs.getEnemyMounts(enemy.faction, enemy.enemyClass, enemy.hullSeed);
+        if (!m || !m.groups || !m.groups.length) return null;
+        const n = enemy.muzzleGroups != null
+            ? Math.max(1, Math.min(m.groups.length, Math.floor(enemy.muzzleGroups) || 1)) : m.groups.length;
+        const w = enemy.width || 0;
+        const h = enemy.height || 0;
+        return m.groups.slice(0, n).map((g) => g.map((p) => ({ x: enemy.x + w * p.nx, y: enemy.y + h * (1 - p.ny) })));
+    },
+
+    enemyShootWithWeapon(enemy, enemyModel, weaponId, pos, dmgMul) {
         const defaultWeapon = weaponId || (enemyModel && enemyModel.defaultWeapon) || 'laser';
         // The model's tuning for this weapon, else the weapon's own defaults.
         const weaponConfig = (enemyModel && enemyModel.weaponConfig && enemyModel.weaponConfig[defaultWeapon])
@@ -271,13 +301,13 @@ extendClass(BulletManager, {
         }
         // Side craft hit at half strength: escorts pressure, the champion is the threat.
         const damageMul = (enemy && enemy.damageMul != null ? enemy.damageMul : 1)
-            * (enemy && enemy.isSideEnemy ? 0.5 : 1);
+            * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1);
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
         if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
             weaponConfigManager.clampWeaponShot(cfg);
         }
         const before = this.enemyBullets.length;
-        this.fireWeaponByType(defaultWeapon, enemy, cfg, true);
+        this.fireWeaponByType(defaultWeapon, pos || enemy, cfg, true);
         // Tag with the weapon: drawn in its type colour and shape, like player shots.
         for (let i = before; i < this.enemyBullets.length; i++) {
             this.enemyBullets[i].weaponId = defaultWeapon;
@@ -288,16 +318,17 @@ extendClass(BulletManager, {
             enemy && enemy.isBoss ? 'boss' : 'enemy');
     },
 
-    enemyShootDefault(enemy) {
+    enemyShootDefault(enemy, pos, dmgMul) {
+        const at = pos || enemy;
         const bullet = {
-            x: enemy.x + enemy.width / 2 - 1.5,
-            y: enemy.y + enemy.height,
+            x: at.x + at.width / 2 - 1.5,
+            y: at.y + at.height,
             width: 2,
             height: enemy && enemy.isSideEnemy ? Math.max(3, 8 * (enemy.weaponScale || 1)) : 8,
             speed: 2.5,
             damage: Math.max(1, Math.round(8 * (
                 enemy && enemy.damageMul != null ? enemy.damageMul : 1
-            ) * (enemy && enemy.isSideEnemy ? 0.5 : 1))),
+            ) * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1))),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
             // Lighting properties

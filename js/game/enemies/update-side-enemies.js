@@ -26,7 +26,10 @@ extendClass(EnemyManager, {
             : 0;
         const mainAlive = this.enemy && !this.exploding;
         // Keep calling while the field is clearing so late / stuck sides also flee.
-        if (!mainAlive && this.sideEnemies.length) {
+        // Transit stages have no champion: the side craft are the whole stage.
+        const transit = !!(this.levelMods && this.levelMods.transit);
+        const transitDone = transit && typeof objectiveManager !== 'undefined' && objectiveManager.completed;
+        if (this.sideEnemies.length && (transit ? transitDone : !mainAlive)) {
             this.beginSideEnemyFlee(gameState);
         }
         const pendingCluster = this.pendingChampionEntry
@@ -47,7 +50,7 @@ extendClass(EnemyManager, {
                 && Math.random() < 0.08) {
                 e.isEscort = false;
                 e.escortSlot = -1;
-                e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.45 + Math.random() * 0.35);
+                e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.5);
                 e.verticalSpeed = (Math.random() - 0.5) * 0.7;
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
@@ -134,6 +137,18 @@ extendClass(EnemyManager, {
                 e.verticalSpeed = fy;
                 e.x += fx * speedMul;
                 e.y += fy * speedMul;
+            } else if (e.pass) {
+                // Fly-through row: keep heading, no hovering, no bounce.
+                e.x += e.speed * speedMul;
+                e.y += e.verticalSpeed * speedMul;
+                if (e.pass.sway) {
+                    e.pass.phase += 0.04 * speedMul;
+                    e.x += Math.sin(e.pass.phase) * e.pass.sway * speedMul;
+                }
+                if (!e.pass.entered && e.x + w > 0 && e.x < canvasWidth && e.y + h > 0) {
+                    e.pass.entered = true;
+                }
+                e.arrived = true;
             } else if (e.isEscort && mainAlive && (teamWithMain || teamPending)) {
                 const formationTightness = e.flightProfile ? e.flightProfile.formationTightness : 1;
                 const formationPulse = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
@@ -169,12 +184,21 @@ extendClass(EnemyManager, {
                     e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
                 }
                 if (bobY) e.y += bobY * 0.12;
+                // Lazy vertical weave so roaming craft don't just hover.
+                e.y += Math.sin((e.wobblePhase || 0) * 0.6) * 0.35 * speedMul;
                 const push = this.computeObstacleAvoidance(e);
                 if (push) {
                     e.x += push.x * 1.6 * speedMul;
                     e.y += push.y * 1.2 * speedMul;
                 }
-                if (e.y < 10 || e.y > canvasHeight - 10) e.verticalSpeed *= -1;
+                // Stay in the enemy flight band (top ~38%, same as the champion)
+                // instead of drifting into the midfield; drift back up softly.
+                const bandMaxY = Math.max(pad + 8, Math.round(canvasHeight * 0.38));
+                if (e.y < 10) e.verticalSpeed = Math.abs(e.verticalSpeed || 0.25);
+                if (e.y > bandMaxY) {
+                    e.verticalSpeed = -Math.abs(e.verticalSpeed || 0.25);
+                    e.y -= Math.min(e.y - bandMaxY, 0.8 * speedMul);
+                }
                 if (e.x + w > laneRight - 4 && e.speed > 0) e.speed = -Math.abs(e.speed);
                 if (e.x < laneLeft + 4 && e.speed < 0 && (e.lifetimeMs == null || e.lifetimeMs > 4000)) {
                     e.speed = Math.abs(e.speed) * 0.85;
@@ -186,7 +210,6 @@ extendClass(EnemyManager, {
                 if (this.avoidTerrainWalls) this.avoidTerrainWalls(canvasWidth, e);
                 e.arrived = true;
             }
-
             if (mainAlive && !e.fleeing && !e.entering && (role === 'repair' || role === 'shieldBattery')) {
                 const dx = (e.x + e.width / 2) - (this.enemy.x + this.enemy.width / 2);
                 const dy = (e.y + e.height / 2) - (this.enemy.y + this.enemy.height / 2);
@@ -242,7 +265,8 @@ extendClass(EnemyManager, {
             // Outside = fled / irrelevant → drop (re-check after this frame's move).
             const nowOutside = e.x + w < 0 || e.x > canvasWidth
                 || e.y + h < 0 || e.y > canvasHeight;
-            if (!(e.entering && !e.fleeing) && nowOutside) {
+            const passPending = e.pass && !e.pass.entered && !e.fleeing;
+            if (!(e.entering && !e.fleeing) && !passPending && nowOutside) {
                 this.sideEnemies.splice(i, 1);
             }
         }

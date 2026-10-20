@@ -87,7 +87,12 @@ class PlayerManager {
         if (typeof enemyManager !== 'undefined' && enemyManager.getTetherSpeedMul) {
             tetherMul = enemyManager.getTetherSpeedMul();
         }
-        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul;
+        let diffSpeedMul = 1;
+        if (typeof difficultyConfigManager !== 'undefined') {
+            const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
+            if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
+        }
+        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul;
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
 

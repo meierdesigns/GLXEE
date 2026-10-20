@@ -44,7 +44,7 @@ extendClass(GraphicsManager, {
         // Faction enemies are drawn from the entity's faction/class, not from
         // the legacy model: key the cache on that so each keeps its own rim.
         const factionSig = flip && entity.faction
-            ? '|' + entity.faction + ':' + (entity.enemyClass || '') + ':' + (entity.tier || entity.level || '') + ':' + (entity.type || '')
+            ? '|' + entity.faction + ':' + (entity.enemyClass || '') + ':' + (entity.tier || entity.level || '') + ':' + (entity.type || '') + ':' + (entity.hullSeed || 0)
             : '';
         const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
@@ -65,7 +65,7 @@ extendClass(GraphicsManager, {
             const ghost = {
                 x: padX, y: padY, width: entity.width, height: entity.height,
                 faction: entity.faction, enemyClass: entity.enemyClass,
-                tier: entity.tier, level: entity.level, type: entity.type,
+                tier: entity.tier, level: entity.level, type: entity.type, hullSeed: entity.hullSeed,
                 // Same livery variant as the ship itself (enemy-variants.js).
                 variantSeed: entity.variantSeed != null ? entity.variantSeed : 0,
                 champion: entity.champion, renegade: entity.renegade, renegadeColor: entity.renegadeColor

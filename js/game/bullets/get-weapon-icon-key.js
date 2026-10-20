@@ -263,13 +263,16 @@ extendClass(BulletManager, {
             if (!id) return;
             const st = this.getWeaponHudState(id, now);
             const dim = st.reloading || st.noEnergy;
-            card.classList.toggle('is-dim', dim);
-            card.classList.toggle('is-reloading', st.reloading);
-            card.classList.toggle('is-no-energy', st.noEnergy);
-            card.style.setProperty('--reload-pct', (st.ready * 100).toFixed(1) + '%');
-            card.title = st.noEnergy
+            const pct = (st.ready * 100).toFixed(1) + '%';
+            const title = st.noEnergy
                 ? 'NOT ENOUGH ENERGY'
                 : (st.reloading ? ('RELOAD ' + Math.round(st.ready * 100) + '%') : '');
+            // Skip identical DOM writes — this runs every combat frame.
+            if (card._vfHudDim !== dim) { card._vfHudDim = dim; card.classList.toggle('is-dim', dim); }
+            if (card._vfHudRel !== st.reloading) { card._vfHudRel = st.reloading; card.classList.toggle('is-reloading', st.reloading); }
+            if (card._vfHudNoE !== st.noEnergy) { card._vfHudNoE = st.noEnergy; card.classList.toggle('is-no-energy', st.noEnergy); }
+            if (card._vfHudPct !== pct) { card._vfHudPct = pct; card.style.setProperty('--reload-pct', pct); }
+            if (card._vfHudTitle !== title) { card._vfHudTitle = title; card.title = title; }
         });
     },
     /** Vertical list of equipped weapons as unified cards (icon + name + stats). */

@@ -55,6 +55,7 @@ extendClass(GameControlSystem, {
         const gameContainer = document.querySelector('.game-container');
         if (gameContainer) {
             gameContainer.style.display = 'none';
+            try { document.documentElement.classList.remove('vf-game-shown'); } catch (e) { /* ignore */ }
         }
 
         const leftCluster = document.getElementById('gameLeftCluster');

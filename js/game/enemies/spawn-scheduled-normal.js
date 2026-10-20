@@ -61,6 +61,18 @@ extendClass(EnemyManager, {
         return gaps;
     },
 
+    /** Mount groups a side craft of this class carries: scouts one gun, bigger classes add wing / outrigger pairs. */
+    sideMuzzleGroupCount(enemyClass) {
+        const r = Math.random();
+        switch (String(enemyClass || 'assault').toLowerCase()) {
+            case 'scout': return 1;
+            case 'assault': return r < 0.5 ? 1 : 2;
+            case 'heavy': return 2;
+            case 'elite': return r < 0.5 ? 2 : 3;
+            default: return 3;
+        }
+    },
+
     /** Pick a rim gap and place the side craft just off-screen outside it. */
     placeSideEntryFromGap(side, canvasWidth, canvasHeight) {
         const W = canvasWidth || 240;
@@ -124,6 +136,7 @@ extendClass(EnemyManager, {
             baseHp = Math.max(6, Math.round(baseHp * 0.35));
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
+        const SIDE_HULL_SEEDS = 12;
         const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
             ? 0.78 : 0.68;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
@@ -146,8 +159,8 @@ extendClass(EnemyManager, {
         // Enter from an empty rim opening, then settle into cruise / escort.
         const cruiseSpeed = isEscort
             ? 0
-            : (-0.35 - Math.random() * 0.25) * levelMul * sideSpeedMul;
-        const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.25 * sideSpeedMul;
+            : (-0.8 - Math.random() * 0.5) * levelMul * sideSpeedMul;
+        const cruiseVSpeed = isEscort ? 0 : (Math.random() - 0.5) * 0.5 * sideSpeedMul;
         const side = {
             x: 0,
             y: 0,
@@ -201,7 +214,11 @@ extendClass(EnemyManager, {
             repairBeamActive: false,
             bomberDamage: role === 'bomber' ? 18 : 0,
             bomberSpeed: role === 'bomber' ? 1.35 : 0,
-            weaponScale: SIDE_DRAW_SCALE
+            weaponScale: SIDE_DRAW_SCALE,
+            // Generative hull: a seed from a small pool (each seed = one cached hull + gun mounts), and how
+            // many mount groups (nose, wing pair, outrigger pair) this craft carries.
+            hullSeed: 1 + Math.floor(Math.random() * SIDE_HULL_SEEDS),
+            muzzleGroups: this.sideMuzzleGroupCount(entry.enemyClass)
         };
         // Give escorts distinct attack profiles instead of making the whole
         // formation fire the champion's weapon in unison.
@@ -219,6 +236,7 @@ extendClass(EnemyManager, {
             tier: side.tier,
             level: side.level,
             type: side.type,
+            hullSeed: side.hullSeed,
             drawScale: SIDE_DRAW_SCALE
         });
         // Only enter through empty rim openings — never through solid rock.

@@ -219,7 +219,8 @@ class GraphicsManager {
                 level: enemy.level,
                 typeId: enemy.type,
                 width: enemy.width,
-                height: enemy.height
+                height: enemy.height,
+                hullSeed: enemy.hullSeed
             });
         }
 
@@ -274,9 +275,10 @@ class GraphicsManager {
     }
 
     /**
-     * The enemy's weapon on its hull: same per-weapon gun art as the player's,
-     * in the enemy faction's colours, muzzle pointing down at the bottom
-     * centre where its shots spawn (bulletManager.enemyShoot).
+     * The enemy's weapons on its hull: same per-weapon gun art as the player's, in the enemy faction's
+     * colours, one gun per hull mount (nose, wing pair, outrigger pair — bulletManager.getEnemyMuzzleGroups),
+     * muzzles pointing down where the shots spawn (bulletManager.enemyShoot). Hulls without mounts keep
+     * the single gun at the bottom centre.
      */
     drawEnemyGun(ctx, enemy) {
         const loader = this.shipAssetLoader;
@@ -285,58 +287,67 @@ class GraphicsManager {
         const weaponId = bulletManager.getEnemyWeaponId(enemy);
         const style = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
             ? factionShipStyles.getFactionStyle(enemy.faction || 'pirate') : null;
-        // Same generated gun and faction shade ramp as ships in the hangar,
-        // at its S/M/L size on the player's scale (one grid cell = one px).
-        // Side craft (weaponScale set): a shorter gun sitting mostly
-        // on the hull — the long barrel made them look stretched.
-        const side = enemy.weaponScale != null;
-        const gunW = bulletManager.getEnemyGunWidth(enemy);
-        const cols = Math.max(side ? 3 : 4, Math.round(gunW));
-        const rows = side
-            ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
-            : Math.max(8, Math.round(cols * 2.2));
-        const tpl = loader.generateWeaponGrid
-            ? loader.generateWeaponGrid(weaponId, cols, rows)
-            : loader.getWeaponTemplate(weaponId, style, false);
-        if (!tpl || !tpl.length) return;
         const ramp = loader.getWeaponShadeRamp ? loader.getWeaponShadeRamp(style, weaponId) : null;
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
         const cell = cv && cv.cell ? cv.cell() : null;
         const px = cell || 1;
-        const gw = cols * px;
-        const gh = rows * px;
-        let gx = enemy.x + enemy.width / 2 - gw / 2;
-        // Breech tucked under the hull, barrel sticking out below it.
-        let gy = enemy.y + enemy.height - gh * (side ? 0.8 : 0.45);
-        if (cell) {
-            gx = Math.round(gx / cell) * cell;
-            gy = Math.round(gy / cell) * cell;
-        } else {
-            gx = Math.round(gx);
-            gy = Math.round(gy);
-        }
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        for (let r = 0; r < tpl.length; r++) {
-            for (let c = 0; c < tpl[r].length; c++) {
-                const idx = tpl[r][c];
-                if (!idx) continue;
-                const color = (ramp && ramp[idx])
-                    || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
-                    || (loader.getHullMountShade && loader.getHullMountShade(idx));
-                if (!color) continue;
-                // Flip vertically: template muzzle is at the top, enemy guns face down.
-                const bx = gx + c * px;
-                const by = gy + (tpl.length - 1 - r) * px;
-                if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
-                else {
-                    ctx.fillStyle = color;
-                    ctx.fillRect(bx, by, px, px);
+        // Side craft (weaponScale set): a shorter gun sitting mostly
+        // on the hull — the long barrel made them look stretched.
+        const side = enemy.weaponScale != null;
+        const gunW = bulletManager.getEnemyGunWidth(enemy);
+        const groups = bulletManager.getEnemyMuzzleGroups ? bulletManager.getEnemyMuzzleGroups(enemy) : null;
+        const muzzles = groups
+            ? groups.reduce((acc, g) => acc.concat(g.map((p) => ({ x: p.x, y: p.y, pair: g.length > 1 }))), [])
+            : [{ x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height, pair: false }];
+        const grids = Object.create(null);
+        muzzles.forEach((m) => {
+            // Paired guns (split mounts) are lighter than a single centre gun.
+            const k = m.pair ? 0.75 : 1;
+            const cols = Math.max(side ? 3 : 4, Math.round(gunW * k));
+            const rows = side
+                ? Math.max(5, Math.min(Math.round(cols * 1.5), Math.round(enemy.height * 0.6)))
+                : Math.max(8, Math.round(cols * 2.2));
+            const gk = cols + 'x' + rows;
+            // Same generated gun and faction shade ramp as ships in the hangar,
+            // at its S/M/L size on the player's scale (one grid cell = one px).
+            const tpl = grids[gk] || (grids[gk] = loader.generateWeaponGrid
+                ? loader.generateWeaponGrid(weaponId, cols, rows)
+                : loader.getWeaponTemplate(weaponId, style, false));
+            if (!tpl || !tpl.length) return;
+            const gw = cols * px;
+            const gh = rows * px;
+            let gx = m.x - gw / 2;
+            // Breech tucked under the hull, barrel sticking out below it.
+            let gy = m.y - gh * (side ? 0.8 : 0.45);
+            if (cell) {
+                gx = Math.round(gx / cell) * cell;
+                gy = Math.round(gy / cell) * cell;
+            } else {
+                gx = Math.round(gx);
+                gy = Math.round(gy);
+            }
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            for (let r = 0; r < tpl.length; r++) {
+                for (let c = 0; c < tpl[r].length; c++) {
+                    const idx = tpl[r][c];
+                    if (!idx) continue;
+                    const color = (ramp && ramp[idx])
+                        || (loader.getFactionModuleShade && loader.getFactionModuleShade(idx, style))
+                        || (loader.getHullMountShade && loader.getHullMountShade(idx));
+                    if (!color) continue;
+                    // Flip vertically: template muzzle is at the top, enemy guns face down.
+                    const bx = gx + c * px;
+                    const by = gy + (tpl.length - 1 - r) * px;
+                    if (cv && cv.fill) cv.fill(ctx, bx, by, px, px, color, 1);
+                    else {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(bx, by, px, px);
+                    }
                 }
             }
-        }
-        ctx.restore();
-
+            ctx.restore();
+        });
     }
 
     // Set enemy ship type based on level or difficulty

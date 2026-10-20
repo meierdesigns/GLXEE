@@ -36,6 +36,21 @@ extendClass(CoreLevelManager, {
             resolved = planetConfigManager.resolveStageContent(parsed.planetId, stageKey);
         }
 
+        // Every second regular stage is a transit run: only side craft, and
+        // the goal is a sluice / warp ring at the end instead of a kill.
+        const isTransit = !parsed.isBoss && isTransitStage(parsed.planetId, parsed.stageIndex);
+        if (isTransit) {
+            const seconds = 50 + parsed.stageIndex * 5;
+            resolved = {
+                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex),
+                objective: {
+                    type: 'reachGoal',
+                    seconds: seconds,
+                    goal: parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp'
+                }
+            };
+        }
+
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
         const enemyType = parsed.isBoss
             ? (base.bossEnemyType || 'enemyBoss')
@@ -51,6 +66,7 @@ extendClass(CoreLevelManager, {
             name: `${base.name} — ${stageLabel}`,
             planetName: base.name,
             stageLabel,
+            stageKind: isTransit ? 'transit' : (parsed.isBoss ? 'boss' : 'combat'),
             difficulty: parsed.isBoss ? 'BOSS' : base.difficulty,
             description: parsed.isBoss
                 ? `${base.name} boss chamber`
@@ -70,44 +86,32 @@ extendClass(CoreLevelManager, {
         };
     },
 
+    /** Steady stream of side craft (no champion) across a transit run. */
+    buildTransitEnemies(source, seconds, stageIndex) {
+        const pool = (source || []).filter(e => e && e.type);
+        const types = pool.length ? pool : [{ type: 'enemyBasic' }];
+        const roles = ['assault', 'gunner', 'assault', 'bomber'];
+        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25);
+        const out = [];
+        for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
+            const src = types[i % types.length];
+            out.push(Object.assign({}, src, {
+                id: 'transit_' + i,
+                champion: false,
+                cluster: 'transit_' + i,
+                level: 1,
+                role: roles[i % roles.length],
+                spawnAt: t,
+                combatEvents: []
+            }));
+        }
+        return out;
+    },
+
     getLevel(levelId) {
         const parsed = this.parseLevelId(levelId);
         if (!parsed) return null;
         return this.buildStageLevel(parsed);
-    },
-
-    resolveFromLegacyLevelManager(levelId) {
-        if (typeof levelManager === 'undefined') return null;
-        const parsed = this.parseLevelId(levelId);
-        if (!parsed) return null;
-
-        let legacy = null;
-        if (typeof levelManager.getLevelByPlanetId === 'function') {
-            legacy = levelManager.getLevelByPlanetId(parsed.planetId);
-        } else if (typeof levelManager.getLevelById === 'function') {
-            legacy = levelManager.getLevelById(parsed.planetId);
-            if (!legacy) {
-                const idx = this.planetOrder.indexOf(parsed.planetId);
-                if (idx >= 0) legacy = levelManager.getLevelById(idx + 1);
-            }
-        }
-
-        if (!legacy) return null;
-
-        const stage = this.buildStageLevel(parsed);
-        return Object.assign({}, legacy, stage, {
-            id: stage.id,
-            name: stage.name,
-            background: stage.background,
-            enemyType: stage.enemyType,
-            enemySpeed: stage.enemySpeed,
-            enemyHealth: stage.enemyHealth,
-            enemies: stage.enemies,
-            objective: stage.objective,
-            dailies: stage.dailies,
-            obstacleSpawnInterval: stage.obstacleSpawnRate,
-            obstacleSpawnRate: stage.obstacleSpawnRate
-        });
     },
 
     setCurrentLevel(levelId) {
@@ -117,10 +121,7 @@ extendClass(CoreLevelManager, {
             return false;
         }
 
-        let level = this.resolveFromLegacyLevelManager(parsed.id);
-        if (!level) {
-            level = this.buildStageLevel(parsed);
-        }
+        const level = this.buildStageLevel(parsed);
 
         if (!level) {
             console.error('Level not found:', levelId);
@@ -158,6 +159,7 @@ extendClass(CoreLevelManager, {
                 enemySpeed: level.enemySpeed,
                 enemyHealth: level.enemyHealth,
                 isBoss: level.isBoss,
+                transit: level.stageKind === 'transit',
                 planetId: planetId
             });
             // setEnemySchedule rebuilds sideEnemyPool from `enemies` (usually

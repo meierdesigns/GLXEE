@@ -123,6 +123,15 @@ extendClass(ProfileManager, {
         return true;
     },
 
+    clearSegmentShapeVariant(shipId, segId) {
+        const profile = this.getActiveProfile();
+        const byShip = profile && profile.segmentShapeVariants && profile.segmentShapeVariants[String(shipId || '')];
+        if (!byShip) return false;
+        delete byShip[String(segId || '')];
+        this.save();
+        return true;
+    },
+
     getWingStyleSymmetry(shipId) {
         const profile = this.getActiveProfile();
         const byShip = profile && profile.wingStyleSymmetry;

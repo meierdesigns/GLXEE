@@ -38,6 +38,11 @@ function getPlanetStageCount(planetId) {
     return Math.max(2, Math.min(5, base + jitter));
 }
 
+/** Transit stages (side craft only, reach the gate): every second regular stage. */
+function isTransitStage(planetId, stageIndex) {
+    return String(planetId || '').indexOf('ambush_') !== 0 && stageIndex >= 2 && stageIndex % 2 === 0;
+}
+
 class CoreLevelManager {
     constructor(gameState) {
         this.gameState = gameState;

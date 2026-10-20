@@ -1,68 +1,120 @@
 "use strict";
 
-// HomeStationUI methods: the MISSIONS tab (hangar area, before CRAFT).
-// Lists the current galaxy's planets as contracts; ACCEPT & LAUNCH makes one
-// the active mission and starts it right away, the bounty is paid when a
-// stage on that planet is cleared.
+// HomeStationUI methods: MISSION LOG tab.
+// MAIN QUEST = start-profile story chain. SIDE QUESTS = accepted at stations,
+// planets, or the hangar board. Offers depend on where the ship is docked.
 extendClass(HomeStationUI, {
     renderMissionsTab(profile) {
-        const board = (typeof profileManager !== 'undefined' && profileManager.getMissionBoard)
-            ? profileManager.getMissionBoard(profile) : [];
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const log = pm && pm.getMissionLog ? pm.getMissionLog(profile) : { main: null, side: [], active: null, currentMain: null };
+        const offers = pm && pm.getSideQuestOffers ? pm.getSideQuestOffers(profile) : [];
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const done = Number(profile.missionsCompleted) || 0;
-        const rows = board.map((m) => {
-            const locked = m.status === 'locked';
-            const stages = m.stagesTotal ? `${Math.min(m.stagesDone, m.stagesTotal)}/${m.stagesTotal} STAGES` : '';
-            const ico = (key) => `<span class="hs-go-ico">${this.iconHtml(key, 24, 'hs-pixel', false)}</span>`;
-            const action = m.active
-                ? `<button type="button" class="action-button hs-line-action hs-mission-go" data-mission-launch="${m.planetId}" data-nav-item title="Launch" aria-label="Launch">${ico('navRocket')}</button>` +
-                  `<button type="button" class="action-button secondary hs-line-action hs-mission-abort" data-mission-abandon data-nav-item title="Abandon" aria-label="Abandon">${ico('navDoor')}</button>`
-                : `<button type="button" class="action-button hs-line-action hs-mission-go${locked ? ' is-locked' : ''}" data-mission-accept="${m.planetId}" data-nav-item title="${locked ? 'Locked' : 'Launch'}" aria-label="${locked ? 'Locked' : 'Launch'}"${locked ? ' disabled' : ''}>` +
-                  `${ico(locked ? 'navLock' : 'navRocket')}</button>`;
-            // Who sends you (your faction) and whose hold the planet weakens (the hostile faction fought there).
-            const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
-            const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
-            const giver = pcm && pcm.getPlayerFaction ? pcm.getPlayerFaction() : '';
-            const hostile = pcm && pcm.getHostileFactions ? (pcm.getHostileFactions(m.planetId) || []) : [];
-            const chip = (fid, cls) => {
-                const st = fss && fss.getFactionStyle ? fss.getFactionStyle(fid) : null;
-                return `<span class="hs-mission-fac ${cls}" style="--fac:${(st && st.accent) || 'var(--color-primary)'}">` +
-                    `${this.factionEmblemHtml({ faction: fid }, 24)}<b>${this.factionLabel(fid)}</b></span>`;
-            };
-            const shipCls = (fss && fss.classes && fss.classes[0]) || 'fighter';
-            const foes = hostile.slice(0, 2).map((f) => {
-                const src = this.factionShipSrcHd(f, shipCls, 8);
-                return `<span class="hs-mission-foe" title="Enemy: ${esc(this.factionLabel(f))}">${src ? `<img src="${src}" alt="">` : this.factionEmblemHtml({ faction: f }, 40)}</span>`;
+        const active = log.active;
+        const kindTag = (k) => {
+            const map = { planet: 'PLANET', find_planet: 'LOCATE', station: 'STATION', find_galaxy: 'GALAXY' };
+            return map[k] || 'TARGET';
+        };
+        const targetText = (m) => {
+            if (!m) return '';
+            if (m.targetKind === 'station') return m.stationName || m.planetName || 'STATION';
+            if (m.targetKind === 'find_galaxy') return m.galaxyName || 'UNKNOWN GALAXY';
+            return m.planetName || m.objective || (m.planetId || '').toUpperCase();
+        };
+        const rewardHtml = (reward) => this.renderContractRewards
+            ? this.renderContractRewards(reward)
+            : (this.renderMissionReward ? this.renderMissionReward(reward) : '');
+
+        // —— MAIN QUEST ——
+        let mainHtml = '';
+        if (log.main && log.main.missions && log.main.missions.length) {
+            const idx = Math.max(0, Number(log.main.missionIndex) || 0);
+            const steps = log.main.missions.map((m, i) => {
+                const st = m.done || i < idx ? 'done' : (i === idx ? 'active' : 'locked');
+                const isFocus = !!(active && active.main && active.storyMissionId === m.id);
+                return `<li class="hs-log-step is-${st}${isFocus ? ' is-focus' : ''}" title="${esc(m.hint || m.objective || '')}">` +
+                    `<span class="hs-log-step-idx">${i + 1}</span>` +
+                    `<span class="hs-log-step-body">` +
+                    `<b>${esc(m.name)}</b>` +
+                    `<small>${kindTag(m.targetKind)} · ${esc(targetText(m))}</small>` +
+                    `</span>` +
+                    `<span class="hs-log-step-diff">${esc(String(m.difficulty || '').toUpperCase())}</span>` +
+                    `</li>`;
             }).join('');
-            const planetIcon = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml)
-                ? galaxyMapManager.planetIconHtml(m.planetId, 72, true) : this.iconHtml('menuPlanets', 48, 'hs-pixel', false);
-            const crest = giver ? `<span class="hs-mi-crest">${this.factionEmblemHtml({ faction: giver }, 22)}</span>` : '';
-            const total = Number(m.stagesTotal) || 0;
-            const got = Math.min(Number(m.stagesDone) || 0, total);
-            const pips = total ? `<span class="hs-mission-pips" aria-hidden="true">` +
-                Array.from({ length: total }, (_, i) => `<i class="${i < got ? 'on' : ''}"></i>`).join('') + `</span>` : '';
-            return `<div class="hs-line hs-mission is-${m.status}${m.active ? ' is-active' : ''}">` +
-                `<span class="hs-mission-icons-l" title="${esc(m.name)}"><span class="hs-mi-planet">${planetIcon}</span>${crest}</span>` +
+            const cur = log.currentMain;
+            const trackBtn = cur && !(active && active.main)
+                ? `<button type="button" class="action-button hs-line-action" data-log-track-main data-nav-item title="Track main quest">TRACK</button>`
+                : (cur ? `<span class="hs-mi is-on" title="Tracking">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>` : '');
+            mainHtml = `<section class="hs-log-block hs-log-main">` +
+                `<header class="hs-log-head">` +
+                `<span class="hs-log-badge">MAIN QUEST</span>` +
+                `<strong class="hs-log-title">${esc(log.main.title)}</strong>` +
+                `${trackBtn}` +
+                `</header>` +
+                (log.main.blurb ? `<p class="hs-muted hs-log-blurb">${esc(log.main.blurb)}</p>` : '') +
+                (cur && cur.objective ? `<p class="hs-log-objective"><b>OBJECTIVE</b> ${esc(cur.objective)}</p>` : '') +
+                (cur && cur.hint ? `<p class="hs-muted hs-log-hint">${esc(cur.hint)}</p>` : '') +
+                `<ol class="hs-log-steps">${steps}</ol>` +
+                `</section>`;
+        } else {
+            mainHtml = `<section class="hs-log-block hs-log-main">` +
+                `<header class="hs-log-head"><span class="hs-log-badge">MAIN QUEST</span><strong class="hs-log-title">NONE</strong></header>` +
+                `<p class="hs-muted">No story path on this pilot — start a new profile to pick one.</p></section>`;
+        }
+
+        // —— SIDE QUESTS (accepted) ——
+        const sideRows = (log.side || []).map((s) => {
+            const isFocus = !!(active && active.sideId === s.id);
+            return `<div class="hs-line hs-log-side${isFocus ? ' is-active' : ''}">` +
                 `<span class="hs-line-name">` +
-                `<span class="hs-mission-type">${m.type}</span>` +
-                `<strong class="hs-mission-goal">${esc(m.name)}</strong>` +
+                `<span class="hs-mission-type">${esc(String(s.type || 'SIDE').toUpperCase())}</span>` +
+                `<strong class="hs-mission-goal">${esc(s.name)}</strong>` +
+                `<small class="hs-muted">${kindTag(s.targetKind)} · ${esc(targetText(s))} · via ${esc(s.sourceName || s.source || '')}</small>` +
                 `</span>` +
-                `<span class="hs-mission-foe-wrap">${foes}</span>` +
-                `<span class="hs-mission-info hs-mission-icons">` +
-                `<span class="hs-mi" title="Difficulty: ${esc(m.difficulty)}">${this.iconHtml('navCrosshair', 24, 'hs-pixel', false)}</span>` +
-                (total ? `<span class="hs-mission-stages" title="${got}/${total} stages cleared">${pips}<b>${got}/${total}</b></span>` : '') +
-                (m.active ? `<span class="hs-mi is-on" title="Active mission">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>` : '') +
-                `</span>` +
-                `<span class="hs-mission-reward" title="Bounty paid when a stage on ${esc(m.name)} is cleared">` +
-                `${locked ? '<span class="hs-muted">—</span>' : this.renderContractRewards(m.reward)}</span>` +
-                `<span class="hs-mission-actions">${action}</span>` +
-                `</div>`;
+                `<span class="hs-mission-reward">${rewardHtml(s.reward)}</span>` +
+                `<span class="hs-mission-actions">` +
+                (isFocus
+                    ? `<span class="hs-mi is-on" title="Tracking">${this.iconHtml('navFlag', 24, 'hs-pixel', false)}</span>`
+                    : `<button type="button" class="action-button hs-line-action" data-log-track-side="${esc(s.id)}" data-nav-item title="Track">TRACK</button>`) +
+                `<button type="button" class="action-button secondary hs-line-action" data-log-abandon-side="${esc(s.id)}" data-nav-item title="Abandon">${this.iconHtml('navDoor', 24, 'hs-pixel', false)}</button>` +
+                `</span></div>`;
         }).join('');
-        return `<div class="hs-section hs-panel hs-missions-root hs-faction-contracts">` +
-            `${this.panelTitle('hsExplore', 'MISSION BOARD')}` +
-            `<p class="hs-muted hs-hint">Contracts in your current galaxy. LIBERATE pays the full bounty, PATROL a cleared planet pays half. ` +
-            `The bounty is paid when you clear a stage on the target planet · ${done} completed.</p>` +
-            `<div class="hs-tab-fill hs-mission-list">${rows || this.emptyHtml('navScroll', 'NO CONTRACTS IN THIS GALAXY')}</div>` +
+
+        const sideHtml = `<section class="hs-log-block hs-log-sidequests">` +
+            `<header class="hs-log-head"><span class="hs-log-badge">SIDE QUESTS</span>` +
+            `<strong class="hs-log-title">${(log.side || []).length}/5</strong></header>` +
+            `<div class="hs-mission-list">${sideRows || this.emptyHtml('navScroll', 'NO SIDE QUESTS ACCEPTED')}</div>` +
+            `</section>`;
+
+        // —— OFFERS at current location ——
+        const loc = pm && pm.getShipLocation ? pm.getShipLocation(pm.getCurrentGalaxyId(profile), profile) : null;
+        const locLabel = loc
+            ? (loc.kind === 'post' ? 'STATION' : 'PLANET') + ' OFFERS'
+            : 'BOARD OFFERS';
+        const offerRows = offers.map((o) =>
+            `<div class="hs-line hs-log-offer">` +
+            `<span class="hs-line-name">` +
+            `<span class="hs-mission-type">${esc(String(o.type || 'SIDE').toUpperCase())}</span>` +
+            `<strong class="hs-mission-goal">${esc(o.name)}</strong>` +
+            `<small class="hs-muted">${kindTag(o.targetKind)} · ${esc(targetText(o))} · ${esc(o.sourceName || '')}</small>` +
+            `</span>` +
+            `<span class="hs-mission-reward">${rewardHtml(o.reward)}</span>` +
+            `<span class="hs-mission-actions">` +
+            `<button type="button" class="action-button hs-line-action" data-log-accept="${esc(o.id)}" data-nav-item title="Accept sidequest">ACCEPT</button>` +
+            `</span></div>`
+        ).join('');
+
+        const offersHtml = `<section class="hs-log-block hs-log-offers">` +
+            `<header class="hs-log-head"><span class="hs-log-badge">${esc(locLabel)}</span>` +
+            `<strong class="hs-log-title">AVAILABLE</strong></header>` +
+            `<p class="hs-muted hs-hint">Accept sidequests here, at docked stations, or on planets. Main quest stays in the log.</p>` +
+            `<div class="hs-mission-list">${offerRows || this.emptyHtml('navScroll', 'NO OFFERS HERE')}</div>` +
+            `</section>`;
+
+        return `<div class="hs-section hs-panel hs-missions-root hs-mission-log">` +
+            `${this.panelTitle('hsExplore', 'MISSION LOG')}` +
+            `<p class="hs-muted hs-hint">Main quest from your start profile · sidequests at stations &amp; planets · ${done} completed.</p>` +
+            `<div class="hs-tab-fill hs-log-body">${mainHtml}${sideHtml}${offersHtml}</div>` +
             `</div>`;
     },
 
@@ -77,28 +129,40 @@ extendClass(HomeStationUI, {
 
     bindMissionEvents() {
         if (!this.overlay || typeof profileManager === 'undefined') return;
-        const launch = (planetId) => {
-            const m = profileManager.getMissionBoard().find((x) => x.planetId === planetId);
-            if (!m) return;
-            this.startMission({ planetId: m.planetId, id: m.planetId, name: m.name });
-        };
-        this.overlay.querySelectorAll('[data-mission-accept]').forEach((btn) => {
+        const pm = profileManager;
+        this.overlay.querySelectorAll('[data-log-accept]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const pid = btn.getAttribute('data-mission-accept');
-                if (!profileManager.acceptMission(pid)) {
-                    this.playButtonResult(btn, false, 'NOT AVAILABLE');
+                const res = pm.acceptSideQuest(btn.getAttribute('data-log-accept'));
+                if (!res || res.ok === false) {
+                    this.playButtonResult(btn, false, (res && res.reason) || 'NOT AVAILABLE');
                     return;
                 }
-                launch(pid);
+                this.statusMsg = 'SIDE QUEST ACCEPTED';
+                this.createUI();
             });
         });
-        this.overlay.querySelectorAll('[data-mission-launch]').forEach((btn) => {
-            btn.addEventListener('click', () => launch(btn.getAttribute('data-mission-launch')));
-        });
-        this.overlay.querySelectorAll('[data-mission-abandon]').forEach((btn) => {
+        this.overlay.querySelectorAll('[data-log-abandon-side]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                profileManager.abandonMission();
-                this.statusMsg = 'MISSION ABANDONED';
+                pm.abandonSideQuest(btn.getAttribute('data-log-abandon-side'));
+                this.statusMsg = 'SIDE QUEST ABANDONED';
+                this.createUI();
+            });
+        });
+        this.overlay.querySelectorAll('[data-log-track-main]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                pm.trackMainQuest();
+                this.statusMsg = 'MAIN QUEST TRACKED';
+                this.createUI();
+            });
+        });
+        this.overlay.querySelectorAll('[data-log-track-side]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-log-track-side');
+                const log = pm.getMissionLog();
+                const entry = (log.side || []).find((s) => s.id === id);
+                if (entry) pm.focusMission(entry, { side: true });
+                pm.save();
+                this.statusMsg = 'SIDE QUEST TRACKED';
                 this.createUI();
             });
         });

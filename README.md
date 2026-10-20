@@ -773,6 +773,7 @@ be reviewed or reverted independently.
 | 67C | Game-over fit | Compact defeat planet/stepper, softer wreck backdrop, scrollable card |
 | 67D | Map route line zoom | Under Global Pixel Size, route beams stay N screen cells thick instead of growing chunky when zoomed in |
 | 67E | Story cutscene sources | Track story-paths, launch cutscene, and hero-planet modules as first-class sources |
+| 67F | Mission logbook sources | Mission log module, station missions tab, and objective wiring for story sidequests |
 
 The wave commit convention is:
 

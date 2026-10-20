@@ -412,6 +412,35 @@ extendClass(PlanetConfigManager, {
         return Object.keys(this.galaxies);
     },
 
+    /**
+     * Read-only list of planets a new pilot could start on in this galaxy:
+     * the galaxy's own start planet plus its directly-connected neighbors
+     * (same "nearby cluster" radius as unlockOwnFactionStartCluster, but
+     * without mutating any profile). [{id, name, difficulty, isStart}]
+     */
+    getStartMissionChoices(galaxyId) {
+        const map = this.getGalaxyMap(galaxyId) || {};
+        const nodes = map.nodes || [];
+        if (!nodes.length) return [];
+        const startId = map.startPlanetId || nodes[0].planetId;
+        const ids = [startId];
+        (map.edges || []).forEach((e) => {
+            const a = String((e && e[0]) || '').toLowerCase();
+            const b = String((e && e[1]) || '').toLowerCase();
+            if (a === startId && ids.indexOf(b) === -1) ids.push(b);
+            if (b === startId && ids.indexOf(a) === -1) ids.push(a);
+        });
+        return ids.slice(0, 5).map((pid) => {
+            const cfg = this.getConfig(pid);
+            return {
+                id: pid,
+                name: (cfg && cfg.name) || pid.toUpperCase(),
+                difficulty: (cfg && cfg.difficulty) || '',
+                isStart: pid === startId
+            };
+        });
+    },
+
     getGalaxy(galaxyId) {
         const id = String(galaxyId || '').toLowerCase();
         return this.galaxies[id] || null;

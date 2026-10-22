@@ -5,6 +5,7 @@ extendClass(EnemyManager, {
     updateSideEnemies(deltaTime, gameState) {
         if (!gameState) return;
         const canSpawnSides = !this.sideFleeing && !this.spawnFrozen
+            && !(typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding())
             && !!(this.enemy && !this.exploding);
         if (canSpawnSides && !this.schedule.length && this.sideEnemyPool.length) {
             this.sideEnemySpawnTimer += deltaTime;
@@ -37,9 +38,15 @@ extendClass(EnemyManager, {
             : null;
         let hasJammer = false;
         let hasTether = false;
+        // Transit gate in view: no ship slips away behind the bulkhead. Flybys, chains and fleeing craft
+        // turn around and stay in the fight below the gate until the player is through.
+        const gateFloor = !transitDone && typeof objectiveManager !== 'undefined' && objectiveManager.getGateFloor
+            ? objectiveManager.getGateFloor() : null;
 
         for (let i = this.sideEnemies.length - 1; i >= 0; i--) {
             const e = this.sideEnemies[i];
+            // Mission start: still gliding in on the intro path, so neither moved nor culled off screen.
+            if (e.introEntry) continue;
             const eCluster = e.cluster || 'alpha';
             const teamWithMain = mainAlive && eCluster === (this.enemy.cluster || 'alpha');
             const teamPending = !!pendingCluster && eCluster === pendingCluster;
@@ -53,6 +60,21 @@ extendClass(EnemyManager, {
                 e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.5);
                 e.verticalSpeed = (Math.random() - 0.5) * 0.7;
                 e.lifetimeMs = 12000 + Math.random() * 7000;
+            }
+
+            if (gateFloor != null) {
+                const waiting = (e.chain && !e.chain.entered) || (e.pass && !e.pass.entered);
+                if (waiting) { this.sideEnemies.splice(i, 1); continue; }
+                if (e.chain || e.pass || e.fleeing || e.lifetimeMs != null) {
+                    e.chain = null;
+                    e.pass = null;
+                    e.fleeing = false;
+                    e.entering = false;
+                    e.lifetimeMs = null;
+                    e.arrived = true;
+                    e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 0.5);
+                    e.verticalSpeed = 0.3 + Math.random() * 0.3;
+                }
             }
 
             const pad = 4;
@@ -82,7 +104,7 @@ extendClass(EnemyManager, {
             const fullyInside = e.x >= 0 && e.x + w <= canvasWidth
                 && e.y >= 0 && e.y + h <= canvasHeight;
 
-            if (e.lifetimeMs != null && e.lifetimeMs <= 0 && !e.fleeing && !e.entering) {
+            if (e.lifetimeMs != null && e.lifetimeMs <= 0 && !e.fleeing && !e.entering && !this.isHeroCraft(e)) {
                 // Lifetime flyby done → flee out (then cull as outside).
                 e.fleeing = true;
                 e.isEscort = false;
@@ -103,7 +125,11 @@ extendClass(EnemyManager, {
                         + (e.formOffsetY || 0) - e.height * 0.5);
                 }
                 const dir = e.entryFromSide === 1 ? -1 : 1;
-                const spd = Math.max(0.75, Math.abs(e.speed) || 1);
+                let spd = Math.max(0.75, Math.abs(e.speed) || 1);
+                if (e.launchV > spd) {
+                    spd = e.launchV;
+                    e.launchV *= Math.pow(0.9, speedMul);
+                }
                 e.x += dir * spd * speedMul;
                 // Nudge toward the gap row / formation Y while sliding in.
                 e.y += ((e.entryTargetY != null ? e.entryTargetY : ty) - e.y)
@@ -115,6 +141,7 @@ extendClass(EnemyManager, {
                     e.entering = false;
                     e.arrived = true;
                     e.entryFromSide = null;
+                    e.launchV = 0;
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;
@@ -137,6 +164,12 @@ extendClass(EnemyManager, {
                 e.verticalSpeed = fy;
                 e.x += fx * speedMul;
                 e.y += fy * speedMul;
+            } else if (e.chain) {
+                // Chain member: position comes from the shared path (see spawnChainWave).
+                e.chain.t += deltaTime * (speedMul / Math.max(0.001, (deltaTime || 16.67) / 16.67));
+                if (!this.placeOnChain(e, canvasWidth, canvasHeight)) e.chain.done = true;
+                if (!e.chain.entered && e.x + w > 0 && e.x < canvasWidth && e.y + h > 0) e.chain.entered = true;
+                e.arrived = true;
             } else if (e.pass) {
                 // Fly-through row: keep heading, no hovering, no bounce.
                 e.x += e.speed * speedMul;
@@ -232,7 +265,7 @@ extendClass(EnemyManager, {
 
             // Combat only while fully inside (not entering, not fleeing).
             if (fullyInside && !e.entering && !e.fleeing
-                && (role === 'gunner' || role === 'assault' || role === 'blocker' || role === 'bomber')) {
+                && (role === 'gunner' || role === 'assault' || role === 'bomber' || (role === 'blocker' && !e.lightClass))) {
                 e.shootTimer = (e.shootTimer || 0) + deltaTime;
                 let interval = e.shootInterval || 1900;
                 if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
@@ -253,7 +286,8 @@ extendClass(EnemyManager, {
             if (!e.fleeing && !e.entering && role === 'jammer') hasJammer = true;
             if (!e.fleeing && !e.entering && role === 'tether') hasTether = true;
 
-            if (e.shieldMax > 0 && e.shield < e.shieldMax && e.shieldRegen > 0) {
+            if (e.shieldMax > 0 && e.shield < e.shieldMax && e.shieldRegen > 0
+                && Date.now() - (e.shieldHitAt || 0) > 2500) {
                 const mechs = e.abilities || e.defenseMechanisms || [];
                 const canRegen = !mechs.length || mechs.indexOf('shield_regen') !== -1
                     || e.shieldRegen > 0;
@@ -262,10 +296,15 @@ extendClass(EnemyManager, {
                 }
             }
 
+            if (gateFloor != null && e.y < gateFloor + 2) {
+                e.y = gateFloor + 2;
+                if (e.verticalSpeed < 0) e.verticalSpeed = -e.verticalSpeed;
+            }
+
             // Outside = fled / irrelevant → drop (re-check after this frame's move).
             const nowOutside = e.x + w < 0 || e.x > canvasWidth
                 || e.y + h < 0 || e.y > canvasHeight;
-            const passPending = e.pass && !e.pass.entered && !e.fleeing;
+            const passPending = (e.pass && !e.pass.entered && !e.fleeing) || (e.chain && !e.chain.done && !e.fleeing);
             if (!(e.entering && !e.fleeing) && !passPending && nowOutside) {
                 this.sideEnemies.splice(i, 1);
             }

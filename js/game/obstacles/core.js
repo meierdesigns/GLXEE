@@ -38,6 +38,7 @@ class ObstacleManager {
     setEnvironment(env) {
         this.environment = env || null;
         this.terrainDamage = new Map(); // fresh, undamaged walls per planet
+        this.terrainCut = new Map(); // crater cuts (absolute wall width per row)
     }
 
     getEnvironment() {
@@ -63,6 +64,21 @@ class ObstacleManager {
             if (r <= 0) return pool[i];
         }
         return pool[pool.length - 1];
+    }
+
+    /**
+     * Functional obstacles mixed into every planet's own set, more often on later stages:
+     * a prism that splits shots into a fan, and an indestructible bulwark that shots push away.
+     * Returns a def or null (= use the planet's pool).
+     */
+    maybeFunctionalDef() {
+        const danger = this.stageDanger ? this.stageDanger() : 0;
+        if (Math.random() >= 0.12 + 0.1 * danger) return null;
+        return Math.random() < 0.5
+            ? { id: 'prism', kind: 'prism', type: 'prism', width: 14, height: 14, health: 4, speed: 0.6,
+                opticalMode: 'prism', prismSplitCount: 3, prismAngleDeg: 18, collisionDamage: 12, explosionId: 'crystal_shatter' }
+            : { id: 'bulwark', kind: 'bulwark', type: 'bulwark', width: 16, height: 16, speed: 0.5,
+                destructible: false, collisionDamage: 20, explosionId: 'small_pop' };
     }
 
     directionToSpeed(direction, speed) {
@@ -92,7 +108,7 @@ class ObstacleManager {
      */
     midLane(canvasHeight) {
         const H = canvasHeight || 300;
-        return { top: H * 0.36, bottom: H * 0.66 };
+        return { top: H * 0.38, bottom: H * 0.64 };
     }
 
     pickLaneY(canvasHeight, h, strayChance) {
@@ -147,7 +163,7 @@ class ObstacleManager {
         const height = Math.max(4, Math.min(48, Math.round(baseH * contentScale)));
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
-        const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' ? 'prism' : 'none'));
+        const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' || kind === 'prism' ? 'prism' : 'none'));
         const collisionDamage = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
         return {
             x: ov.x != null ? ov.x : 0,
@@ -179,12 +195,18 @@ class ObstacleManager {
             opticalMode: opticalMode,
             prismSplitCount: Math.max(2, Math.min(4, d.prismSplitCount || 3)),
             prismAngleDeg: d.prismAngleDeg != null ? d.prismAngleDeg : 25,
+            // Prism obstacles fan the shot out on its own side instead of turning it against the shooter.
+            prismKeepTeam: kind === 'prism',
+            // Bulwark: indestructible, shots shove it along their flight direction.
+            pushable: kind === 'bulwark',
+            pushVx: 0,
+            pushVy: 0,
             explosionId: d.explosionId || (kind === 'crystal' ? 'crystal_shatter' : kind === 'shield' ? 'small_pop' : 'asteroid_burst'),
             fragmentGeneration: ov.fragmentGeneration != null ? ov.fragmentGeneration : 0,
             sprite: d.sprite || (isFog ? 'fog' : kind === 'shield' ? 'shield' : kind === 'crystal' ? 'crystal' : 'obstacle'),
             opacity: d.opacity != null ? d.opacity : (isFog ? 0.4 : 1),
-            lightIntensity: kind === 'crystal' ? 0.4 : 0,
-            lightColor: kind === 'crystal' ? 'var(--color-highlight)' : null,
+            lightIntensity: kind === 'crystal' || kind === 'prism' ? 0.4 : 0,
+            lightColor: kind === 'crystal' || kind === 'prism' ? 'var(--color-highlight)' : null,
             // under = tucked behind canyon walls; over = sits on top of them
             wallDepth: ov.wallDepth || (isFog ? 'over' : (Math.random() < 0.55 ? 'under' : 'over'))
         };
@@ -212,6 +234,7 @@ class ObstacleManager {
         this.updateDebris(deltaTime);
         // Victory loot phase: nothing new spawns, the field only drains.
         const frozen = typeof enemyManager !== 'undefined' && enemyManager.spawnFrozen;
+        const levelEnding = typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding();
         if (this.updateCrates && !frozen) this.updateCrates(deltaTime, gameState);
 
         // Update lighting bullets from bullet manager
@@ -223,6 +246,8 @@ class ObstacleManager {
             // Regular stages scroll towards the ship: obstacles arrive from
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
+        } else if (levelEnding) {
+            gameState.obstacleSpawnTimer = 0;
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
                 // Mostly shaped pattern waves; the authored cluster waves stay
@@ -249,8 +274,21 @@ class ObstacleManager {
         for (let i = this.obstacles.length - 1; i >= 0; i--) {
             const obstacle = this.obstacles[i];
 
-            obstacle.x += obstacle.horizontalSpeed;
-            obstacle.y += obstacle.verticalSpeed;
+            if (obstacle.wallAnchor != null) {
+                this.followWallAnchor(obstacle, canvasWidth);
+            } else {
+                obstacle.x += obstacle.horizontalSpeed;
+                obstacle.y += obstacle.verticalSpeed;
+                if (obstacle.pushVx || obstacle.pushVy) {
+                    // Shove from shots: carries on, then bleeds off.
+                    obstacle.x += obstacle.pushVx;
+                    obstacle.y += obstacle.pushVy;
+                    obstacle.pushVx *= 0.92;
+                    obstacle.pushVy *= 0.92;
+                    if (Math.abs(obstacle.pushVx) < 0.01) obstacle.pushVx = 0;
+                    if (Math.abs(obstacle.pushVy) < 0.01) obstacle.pushVy = 0;
+                }
+            }
             obstacle.rotation += obstacle.rotationSpeed;
 
             this.calculateObstacleLighting(obstacle);
@@ -264,6 +302,7 @@ class ObstacleManager {
                     && obstacle.y + obstacle.height > 0 && obstacle.y < canvasHeight;
                 if (inside) {
                     obstacle.entering = false;
+                    this.emergeFromTerrain(obstacle, canvasWidth, canvasHeight);
                 } else {
                     if (obstacle.age > 20000) this.obstacles.splice(i, 1);
                     continue;
@@ -293,6 +332,17 @@ class ObstacleManager {
         const level = this.getCurrentLevel();
         const pid = String((level && level.planetId) || '');
         return pid.indexOf('ambush_') !== 0;
+    }
+
+    /**
+     * Level scroll direction / pace: 1 normally, -1/3 while the player backs down a transit
+     * corridor (holds DOWN at the bottom edge, gate not in view yet).
+     */
+    levelScrollMul() {
+        const transit = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.transit;
+        const pl = typeof playerManager !== 'undefined' && playerManager.player;
+        const goal = typeof objectiveManager !== 'undefined' && objectiveManager.goal;
+        return transit && pl && pl.backtrack && !goal ? -1 / 3 : 1;
     }
 
     /** Non-boss stages scroll down; boss arenas stay static. */

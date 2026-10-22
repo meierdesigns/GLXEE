@@ -146,7 +146,6 @@ extendClass(ObstacleManager, {
         const cell = this.terrainCell();
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
-        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const maxCells = Math.floor((W * 0.38) / cell);
         // Build wall extents at an arbitrary world row (used for natural edges
         // and for the shared lip of a carved block band).
@@ -171,14 +170,17 @@ extendClass(ObstacleManager, {
                 let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
                     + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
                     + gate;
+                // Material jitter changes in blocks of rows, never per single
+                // row: per-row noise left 1-row slivers that read as strata.
+                const jr = Math.floor(row / TERRAIN_JITTER_ROWS);
                 if (mat.id === 'metal') {
-                    d = Math.round(d / 2) * 2 + (this.terrainHash(row, side + 19) < 0.4 ? 1 : 0);
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.4 ? 1 : 0);
                 } else if (mat.id === 'crystal') {
-                    d += 1 + this.terrainHash(row, side + 31) * 3;
+                    d += 1 + this.terrainHash(jr, side + 31) * 3;
                 } else if (mat.id === 'rock') {
-                    d += Math.floor(this.terrainHash(row, side + 7) * 3) - 1;
+                    d += Math.floor(this.terrainHash(jr, side + 7) * 3) - 1;
                 } else {
-                    d += (this.terrainHash(row, side + 47) - 0.5) * 3;
+                    d += (this.terrainHash(jr, side + 47) - 0.5) * 3;
                 }
                 return Math.max(2, Math.round(d));
             };
@@ -205,9 +207,22 @@ extendClass(ObstacleManager, {
                 sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
             }
             const sides = [0, 1].map((side) => {
-                const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
-                const base = depth(side, mat);
-                return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
+                let mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                let base = depth(side, mat);
+                let full = base + sill + (zone.structures && !sill ? structure(side) : 0);
+                // Hangar opening side craft fly out of: open slot, metal jambs around it.
+                const hatch = gd == null && !sill ? this.terrainOpeningInfo(row, side) : null;
+                let tunnel = 0;
+                let lip = 0;
+                if (hatch && hatch.kind === 'gap') {
+                    tunnel = full;
+                    full = base = 0;
+                } else if (hatch) {
+                    lip = this.terrainOpeningLip(style, hatch, row);
+                    if (style === 'tech') mat = TERRAIN_MATERIALS.metal;
+                    full += lip;
+                }
+                return { mat, base, sill, full, tunnel, lip, hatch: hatch ? hatch.kind : null };
             });
             const over = sides[0].full + sides[1].full - maxCells;
             if (over > 0) {
@@ -219,30 +234,72 @@ extendClass(ObstacleManager, {
             }
             return sides;
         };
-        // Undamaged rows keep a natural silhouette; carved bands freeze to the
-        // band centre so every row in the slab shares one width (block dig).
-        const band = Math.floor(wr / block);
+        // Each row keeps its natural silhouette until a crater cuts into it: the cut is an absolute
+        // depth (cells from the screen edge), so a crater bites through the outline instead of
+        // shifting the whole jagged edge outward.
         const fullOf = buildAt(wr);
-        let centerOf = null;
         const out = {};
         for (let side = 0; side < 2; side++) {
-            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + band) || 0) : 0;
-            const eroded = Math.floor(dmg / Math.max(1, (fullOf[side].mat.hp) || 1));
-            let { mat, base, full, sill } = fullOf[side];
-            if (eroded > 0) {
-                if (!centerOf) centerOf = buildAt(band * block + (block >> 1));
-                ({ mat, base, full, sill } = centerOf[side]);
-            }
-            const hp = Math.max(1, mat.hp || 1);
-            const width = Math.max(0, full - Math.floor(dmg / hp));
+            const key = side + ':' + wr;
+            const dmg = this.terrainDamage ? (this.terrainDamage.get(key) || 0) : 0;
+            const cut = this.terrainCut ? this.terrainCut.get(key) : undefined;
+            const { mat, base, full, sill } = fullOf[side];
+            const width = cut != null ? Math.max(0, Math.min(full, cut)) : full;
             const k = side ? 'right' : 'left';
             out[k] = width;
             out[k + 'Base'] = Math.min(base, width);
             out[k + 'Mat'] = mat;
-            out[k + 'Cracked'] = width > 0 && eroded > 0 && (dmg % hp) > 0;
+            out[k + 'Cracked'] = width > 0 && (dmg > 0 || (cut != null && cut < full));
             out[k + 'Sill'] = sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
+            // Hangar opening: recess depth behind an open slot, faction lip on the frame.
+            out[k + 'Hatch'] = fullOf[side].hatch;
+            out[k + 'Tunnel'] = fullOf[side].tunnel;
+            out[k + 'Lip'] = Math.min(width, fullOf[side].lip);
         }
         return out;
+    },
+    /**
+     * Hangar openings in the rim walls: one every ~150px of scroll on an
+     * alternating-ish side, tall enough for a side craft. Returns 'gap' for
+     * the open slot, 'frame' for the jamb rows above/below it, else null.
+     */
+    terrainOpeningAt(row, side) {
+        const info = this.terrainOpeningInfo(row, side);
+        return info ? info.kind : null;
+    },
+    /** { kind: 'gap'|'frame', t: row index inside the hatch, len: total rows } or null. */
+    terrainOpeningInfo(row, side) {
+        const cell = this.terrainCell();
+        const period = Math.max(20, Math.round(150 / cell));
+        const open = Math.max(6, Math.round(TERRAIN_OPENING_PX / cell));
+        // Thick enough to read as a solid jamb (and to be hit), not a thin sliver.
+        const frame = Math.max(4, Math.round(8 / cell));
+        const slot = Math.floor(row / period);
+        if (slot < 1) return null;
+        const prof = this.terrainProfile();
+        if ((this.terrainHash(slot, 613 + prof.seed % 211) < 0.5 ? 0 : 1) !== side) return null;
+        const t = row - slot * period - Math.floor(period * 0.3);
+        const len = open + frame * 2;
+        if (t < 0 || t >= len) return null;
+        return { kind: t >= frame && t < frame + open ? 'gap' : 'frame', t: t, len: len, frame: frame };
+    },
+    /**
+     * How far the frame juts out per faction: tech = flat blast-door jambs,
+     * spike = fangs, organic = swollen rounded lips, scrap = welded junk,
+     * plain rock = a ragged cave rim.
+     */
+    terrainOpeningLip(style, hatch, row) {
+        const below = hatch.t >= hatch.len / 2;
+        const k = below ? hatch.len - 1 - hatch.t : hatch.t; // 0 = outer row of the frame
+        const near = k + 1; // grows towards the slot
+        switch (style) {
+            case 'tech': return 3;
+            case 'spike': return 1 + near * 2;
+            case 'organic': return 2 + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
+            // One width per hatch (seeded by its first row), not re-rolled per row.
+            case 'scrap': return 2 + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
+            default: return 1 + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
+        }
     },
     /** World row of the wall layer at screen y. */
     terrainRowAtY(y) {
@@ -284,36 +341,45 @@ extendClass(ObstacleManager, {
         };
     },
     /**
-     * A shot hit the wall on `side` at screen y: carve into it. Damage is
-     * stored per carve-block band so the crater is voxel slabs, not 1-row
-     * needles. Returns how many cells broke off (0 = only chipped).
+     * A shot hit the wall on `side` at screen y: carve a round, slightly
+     * ragged crater into it (deepest on the hit row, falling off over
+     * `radius` rows). Cells take `hp` points each, so tough material needs
+     * several hits and shows cracks in between, like obstacles.
+     * Returns how many cells broke off (0 = only chipped).
      */
     damageTerrain(y, side, profile) {
         if (!this.terrainDamage) this.terrainDamage = new Map();
+        if (!this.terrainCut) this.terrainCut = new Map();
         const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
-        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const wr = this.terrainRowAtY(y);
-        const hitBand = Math.floor(wr / block);
-        // Radius in block bands (at least the hit band).
-        const bandR = Math.max(0, Math.ceil(Math.max(1, pr.radius || 1) / block));
+        const R = Math.max(1, pr.radius || 1) + 1;
+        const W = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const k0 = side ? 'right' : 'left';
+        // Crater is anchored at the lip of the row that was hit: rows that stick out further are cut
+        // back to the bowl, rows already behind it stay as they are.
+        const lip = this.terrainWallCells(wr, W)[k0];
         let broken = 0;
-        for (let bd = -bandR; bd <= bandR; bd++) {
-            const band = hitBand + bd;
-            const mid = band * block + (block >> 1);
-            const mat = this.terrainMaterial(mid, side) || { id: 'rock', hp: 1 };
+        for (let d = -R; d <= R; d++) {
+            const row = wr + d;
+            const fall = Math.sqrt(Math.max(0, 1 - (d / (R + 0.5)) * (d / (R + 0.5))));
+            const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
             const hp = Math.max(1, mat.hp || 1);
-            const fall = 1 - Math.abs(bd) / (bandR + 1);
-            // Uniform points for the whole band → flat block face.
-            let pts = Math.floor(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1));
-            // Hit band always loses at least one cell; neighbours need a full step.
-            pts = Math.max(bd === 0 ? hp : (fall > 0.35 ? hp : 0), pts);
+            let pts = Math.round(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1)
+                * (0.7 + Math.random() * 0.6));
+            if (d === 0) pts = Math.max(1, pts);
             if (pts <= 0) continue;
-            const k = side + ':' + band;
-            const before = this.terrainDamage.get(k) || 0;
-            this.terrainDamage.set(k, before + pts);
-            // Count cells for the whole slab height (block rows × depth broken).
-            const depthBroke = Math.floor((before + pts) / hp) - Math.floor(before / hp);
-            broken += depthBroke * block;
+            const k = side + ':' + row;
+            // Points below one cell's toughness stay as cracks; every full `hp` digs one cell deeper.
+            const acc = (this.terrainDamage.get(k) || 0) + pts;
+            const depth = Math.floor(acc / hp);
+            this.terrainDamage.set(k, acc - depth * hp);
+            if (depth <= 0) continue;
+            const cur = this.terrainWallCells(row, W)[k0];
+            const target = Math.max(0, lip - depth);
+            if (target < cur) {
+                this.terrainCut.set(k, target);
+                broken += cur - target;
+            }
         }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
@@ -321,10 +387,20 @@ extendClass(ObstacleManager, {
             renderManager._terrainLayerKey = null;
         }
         if (this.terrainDamage.size > 4000) {
-            const cutoff = Math.floor(wr / block) - 400;
+            const cutoff = wr - 1200;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
+        if (this.terrainCut.size > 4000) {
+            const cutoff = wr - 1200;
+            this.terrainCut.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainCut.delete(k); });
+        }
         return broken;
+    },
+    /** Chunk colours for wall debris of a material (painted palette when available). */
+    terrainDebrisColors(mat) {
+        const mp = typeof renderManager !== 'undefined' && renderManager._terrainMats
+            ? renderManager._terrainMats[(mat && mat.id) || 'rock'] : null;
+        return mp ? mp.body.concat([mp.crack, '#05060a']) : ['#9aa0a8', '#6e737b', '#c8ccd2', '#05060a'];
     },
     /** Wall extents in px at screen y: { left, right } = inner edges. */
     terrainWallsAtY(y, W) {

@@ -11,6 +11,7 @@ class PickupManager {
         this._saveDirty = false;
         this._saveTimer = 0;
         this.lootPhase = false;
+        this.popups = [];
     }
 
     resourceColor(id) {
@@ -31,6 +32,7 @@ class PickupManager {
 
     reset(clearCollected) {
         this.pickups.length = 0;
+        this.popups = [];
         this._saveDirty = false;
         this._saveTimer = 0;
         this.lootPhase = false;
@@ -65,7 +67,9 @@ class PickupManager {
             radius *= 1.35;
             magnet = Math.max(magnet, 1) + 1.5;
         }
-        return { radius, magnet, yieldMul };
+        const stats = { radius, magnet, yieldMul };
+        // MAGNET / DOUBLE LOOT power-ups (power-crates.js).
+        return this.applyCollectPerks ? this.applyCollectPerks(stats) : stats;
     }
 
     /** Keep drops alive through the post-victory scoop window. */
@@ -86,6 +90,7 @@ class PickupManager {
         const planetId = (typeof enemyManager !== 'undefined' && enemyManager.levelMods)
             ? (enemyManager.levelMods.planetId || null)
             : null;
+        this.maybeDropFakeCrate(info);
         const stats = this.getCollectStats();
         const drops = economyConfig.rollEnemyKillDrops(info, planetId, stats.yieldMul);
         if (!drops || !drops.length) return;
@@ -111,6 +116,23 @@ class PickupManager {
                 size: 7 + Math.min(4, drop.amount)
             });
         });
+    }
+
+    /**
+     * Wrecks sometimes shed a fake supply crate: rarely for small craft,
+     * more often for elite / capital ships and the champion, most for bosses.
+     */
+    maybeDropFakeCrate(info) {
+        if (this.lootPhase || typeof obstacleManager === 'undefined' || !obstacleManager.spawnFakeCrate) return;
+        const cls = String(info.enemyClass || '').toLowerCase();
+        const boss = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.isBoss;
+        let chance = 0.03;
+        if (cls === 'elite' || cls === 'capital' || info.champion) chance = 0.12;
+        if (boss && info.champion) chance = 0.35;
+        if (Math.random() >= chance) return;
+        const x = Number(info.x);
+        const y = Number(info.y);
+        if (isFinite(x) && isFinite(y)) obstacleManager.spawnFakeCrate(x, y);
     }
 
     /**
@@ -182,8 +204,9 @@ class PickupManager {
     }
 
     update(deltaTime) {
-        if (!this.pickups.length && !this._saveDirty) return;
         const dt = Math.max(1, Number(deltaTime) || 16);
+        this.updatePopups(dt);
+        if (!this.pickups.length && !this._saveDirty) return;
         if (typeof objectiveManager !== 'undefined' && objectiveManager.awaitingFieldClear) {
             this.pickups.forEach((p) => {
                 p.life = Math.max(p.life, p.age + 6000);
@@ -291,6 +314,8 @@ class PickupManager {
                 graphicsManager.createHitEffect(pickup.x, pickup.y, 4, this.resourceColor(pickup.id));
             }
         }
+        // Always confirm the pickup over the ship; 0 granted = cargo full for this resource.
+        this.addPopup(pickup.id, Math.max(0, granted || 0));
     }
 
     /** Vacuum remaining pickups into cargo (victory / end of run). */
@@ -308,6 +333,64 @@ class PickupManager {
         if (typeof profileManager !== 'undefined' && profileManager.save) {
             profileManager.save();
         }
+    }
+
+    /** "+N" above the player on pickup; a fresh popup of the same resource sums up instead of stacking. */
+    addPopup(id, amount) {
+        if (this.lootPhase) return;
+        const recent = this.popups.find((p) => p.id === id && p.age < 250);
+        if (recent) {
+            recent.amount += amount;
+            recent.age = 0;
+            return;
+        }
+        this.popups.push({ id: id, amount: amount, age: 0, life: 1100 });
+    }
+
+    updatePopups(dt) {
+        for (let i = this.popups.length - 1; i >= 0; i--) {
+            this.popups[i].age += dt;
+            if (this.popups[i].age >= this.popups[i].life) this.popups.splice(i, 1);
+        }
+    }
+
+    /** Popups follow the player: hold briefly over the ship, then drift up and fade. */
+    renderPopups(ctx) {
+        if (!this.popups.length) return;
+        const player = (typeof playerManager !== 'undefined' && playerManager.getPosition)
+            ? playerManager.getPosition()
+            : null;
+        if (!player) return;
+        // The combat canvas is tiny and scaled down, so size in playfield units must be generous to read.
+        const fontPx = 12;
+        const icon = 11;
+        const o = 2;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.font = fontPx + "px 'Silkscreen', monospace";
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        this.popups.forEach((p, i) => {
+            const k = p.age / p.life;
+            const rise = k < 0.3 ? 0 : (k - 0.3) / 0.7;
+            const text = p.amount > 0 ? String(p.amount) : 'MAX';
+            const w = icon + 3 + ctx.measureText(text).width;
+            const x = Math.round(player.x + player.width / 2 - w / 2);
+            const y = Math.round(player.y - 12 - i * (fontPx + 2) - rise * 28);
+            ctx.globalAlpha = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
+                iconRenderer.drawKey(ctx, this.resourceIconKey(p.id), x, y - icon / 2, icon, this.resourceColor(p.id));
+            }
+            const tx = x + icon + 3;
+            ctx.fillStyle = '#05060a';
+            ctx.fillText(text, tx - o, y);
+            ctx.fillText(text, tx + o, y);
+            ctx.fillText(text, tx, y - o);
+            ctx.fillText(text, tx, y + o);
+            ctx.fillStyle = this.resourceColor(p.id);
+            ctx.fillText(text, tx, y);
+        });
+        ctx.restore();
     }
 
     render(ctx) {

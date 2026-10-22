@@ -23,12 +23,14 @@ const TERRAIN_SEGMENT_ROWS = 40; // wall rows per material segment
 // Carve in square voxel slabs (not 1-row needles). Height in terrain cells.
 const TERRAIN_CARVE_BLOCK = 3;
 const TERRAIN_MATERIALS = {
-    rock: { id: 'rock', hp: 1, score: 2 },
-    metal: { id: 'metal', hp: 1, score: 6 },
+    rock: { id: 'rock', hp: 2, score: 2 },
+    metal: { id: 'metal', hp: 4, score: 6 },
     crystal: { id: 'crystal', hp: 1, score: 4 },
-    magma: { id: 'magma', hp: 1, score: 3 }
+    magma: { id: 'magma', hp: 2, score: 3 }
 };
-const TERRAIN_SILL_ROWS = 5;     // rows of the threshold at an area change
+const TERRAIN_SILL_ROWS = 5;
+const TERRAIN_JITTER_ROWS = 4; // wall-depth jitter holds this many rows (no 1-row slivers)
+const TERRAIN_OPENING_PX = 34; // height of a hangar opening side craft launch from     // rows of the threshold at an area change
 // Visual marker only — keep the upper flight band open (was 0.13 and stacked
 // with the gate, which sealed the passage).
 const TERRAIN_SILL_REACH = 0.05; // how far it juts in from each side (x W)
@@ -274,7 +276,20 @@ extendClass(ObstacleManager, {
      * A new layer spawns once the previous one has scrolled far enough.
      */
     updateScrollLayers(deltaTime, gameState) {
-        const frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
+        let frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
+        // Transit stages: the level eases to a stop as the sluice / warp ring slides in, and stays stopped.
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        if (om && om.goal) {
+            const g = om.goal;
+            frameScale *= Math.max(0, Math.min(1, (g.restY - g.y) / (g.restY + 30)));
+            if (frameScale <= 0) return;
+        }
+        // Transit runs: holding DOWN at the bottom edge scrolls the corridor back at a third of the speed.
+        // No new layers spawn while backing off.
+        if (this.levelScrollMul() < 0) {
+            this.terrainOffset = Math.max(0, (this.terrainOffset || 0) - this.scrollSpeed() * frameScale / 3);
+            return;
+        }
         this.scrollDistance = (this.scrollDistance || 0) + this.scrollSpeed() * frameScale;
         // Side terrain scrolls with the level (render/draw-environment.js).
         this.terrainOffset = (this.terrainOffset || 0) + this.scrollSpeed() * frameScale;
@@ -287,6 +302,8 @@ extendClass(ObstacleManager, {
         const W = (gameState && gameState.width) || 240;
         const H = (gameState && gameState.height) || 300;
         const intensity = this.patternIntensity();
+        // End of the level: the field only drains, no new layers.
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
         if (alive >= OBSTACLE_MAX_ALIVE) return;
         // Every so often leave a breather layer empty.
@@ -301,7 +318,12 @@ extendClass(ObstacleManager, {
         // Most rows fly straight across; spread their entry height over the
         // whole field instead of a thin top band so obstacles show up
         // through the middle of the playfield too.
-        const baseY = H * (0.05 + Math.random() * 0.85);
+        // Obstacles belong in the vertical middle (enemies hold the top and take cover behind them);
+        // only the odd stray row crosses the rest of the field.
+        const lane = this.midLane(H);
+        const baseY = Math.random() < 0.1
+            ? H * (0.05 + Math.random() * 0.85)
+            : lane.top + Math.random() * (lane.bottom - lane.top);
 
         // Walk along the train: group, hole, group, hole ...
         const trainLen = W * (1.0 + Math.random() * 0.4);

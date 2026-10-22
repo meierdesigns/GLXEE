@@ -45,7 +45,13 @@ class EnemyManager {
         this.sideFleeing = false;
     }
 
-    /** Side craft break formation and exit the field (still able to fire). */
+    /** Heroes: elite / capital craft with a sidebar card. Once in, they fight to the end and never flee. */
+    isHeroCraft(e) {
+        const c = String((e && e.enemyClass) || '').toLowerCase();
+        return c === 'elite' || c === 'capital';
+    }
+
+    /** Side craft break formation and exit the field (still able to fire). Heroes stay. */
     beginSideEnemyFlee(gameState) {
         this.sideFleeing = true;
         if (!this.sideEnemies || !this.sideEnemies.length) return;
@@ -55,7 +61,7 @@ class EnemyManager {
         const midX = canvasWidth * 0.5;
         for (let i = 0; i < this.sideEnemies.length; i++) {
             const e = this.sideEnemies[i];
-            if (!e) continue;
+            if (!e || this.isHeroCraft(e)) continue;
             // Re-kick ships that never got flee velocity (late spawns / stuck escorts).
             const needsKick = !e.fleeing
                 || !e.speed

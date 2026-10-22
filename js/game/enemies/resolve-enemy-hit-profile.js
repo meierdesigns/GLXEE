@@ -210,7 +210,8 @@ extendClass(EnemyManager, {
             // initBoss applies BOSS_SIZE_MUL (1.6) after spawn — re-apply it
             // here or live SIZES tweaks strip the boss to champion footprint.
             if (this.enemy.isBoss) {
-                const mul = 1.6;
+                const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getBossSizeMul)
+                    ? uiAppearanceManager.getBossSizeMul() : 1.6;
                 const cx = this.enemy.x + this.enemy.width / 2;
                 const cy = this.enemy.y + this.enemy.height / 2;
                 this.enemy.width = Math.max(4, Math.round(this.enemy.width * mul));
@@ -225,7 +226,9 @@ extendClass(EnemyManager, {
         (this.sideEnemies || []).forEach((side) => {
             if (!side) return;
             const role = side.role || 'assault';
-            const scale = role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68;
+            const sideMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSideSizeMul)
+                ? uiAppearanceManager.getSideSizeMul() : 1;
+            const scale = (role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68) * sideMul;
             side.weaponScale = scale;
             this.applyEnemyHitProfile(side, {
                 faction: side.faction,

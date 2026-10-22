@@ -140,3 +140,8 @@ Object.assign(IconSprites, {
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ]
 });
+
+// The hand-drawn resource art replaces the old abstract 16x16 symbols everywhere (all sizes, all renderers).
+['resScrap', 'resOre', 'resCrystal', 'resVoltex'].forEach((k) => {
+    if (IconSprites[k + 'Hi']) IconSprites[k] = IconSprites[k + 'Hi'];
+});

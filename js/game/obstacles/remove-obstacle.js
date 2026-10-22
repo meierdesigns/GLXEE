@@ -54,6 +54,32 @@ extendClass(ObstacleManager, {
         if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
     },
 
+    /**
+     * Directed burst out of the wall at (x, y): `dir` = +1 into the corridor
+     * from the left rim, -1 from the right. Used for the compressed-air puff
+     * of a launching craft and for rock breaking out of the wall.
+     */
+    spawnWallBurst(x, y, dir, colors, n, spread, speed) {
+        if (!this.debris) this.debris = [];
+        const cell = this.terrainCell ? this.terrainCell() : 2.5;
+        const count = n || 24;
+        for (let i = 0; i < count; i++) {
+            const a = (Math.random() - 0.5) * (spread || 0.9);
+            const sp = (speed || 2.6) * (0.45 + Math.random() * 0.9);
+            this.debris.push({
+                x: x,
+                y: y + (Math.random() - 0.5) * 6,
+                vx: Math.cos(a) * sp * dir,
+                vy: Math.sin(a) * sp,
+                s: Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell,
+                c: colors[Math.floor(Math.random() * colors.length)],
+                life: 0,
+                ttl: 260 + Math.random() * 420
+            });
+        }
+        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+    },
+
     /** Opaque, non-outline colours from the rock's baked art (fallback grey). */
     debrisColors(o) {
         const img = o && o._hiRes;
@@ -250,5 +276,85 @@ extendClass(ObstacleManager, {
         this.scrollDistance = 0;
         this.terrainOffset = 0;
         this.crateTimer = null;
+    },
+    /**
+     * Scrolling stages: a rock crossing in from a rim must come from somewhere
+     * in the environment. Called once, the moment it reaches the field:
+     * - 'void': slides out of a hangar opening on its side (moved to its row);
+     * - 'breakout': bursts out of the wall at its own row, cratering it;
+     * - 'growth': an organic pod clinging to the wall lip, scrolling with it.
+     */
+    emergeFromTerrain(o, W, H) {
+        if (o.isFog || o._origin || !this.hasTerrain || !this.hasTerrain() || !this.terrainWallsOver) return;
+        const hs = o.horizontalSpeed || 0;
+        if (Math.abs(hs) < Math.abs(o.verticalSpeed || 0)) return; // falls in from the top
+        const side = hs > 0 ? 0 : 1;
+        const dir = side ? -1 : 1;
+        const env = this.getEnvironment();
+        const organic = env.style === 'organic';
+        const roll = Math.random();
+        let kind = roll < (organic ? 0.45 : 0.15) ? 'growth' : (roll < (organic ? 0.7 : 0.55) ? 'void' : 'breakout');
+        if (kind === 'void') {
+            const y = this.nearestOpeningY(o, side, W, H);
+            if (y == null) kind = 'breakout';
+            else {
+                o.y = y;
+                o.x = side ? W : -o.width;
+                this.spawnWallBurst(side ? W - 1 : 1, y + o.height / 2, dir,
+                    ['#3a3f48', '#5a606a', '#20242a'], 12, 0.7, 1.6);
+            }
+        }
+        o._origin = kind;
+        if (kind === 'void') return;
+        const walls = this.terrainWallsOver(o.y, o.y + o.height, W);
+        if (!walls) return;
+        const lip = side ? walls.right : walls.left;
+        const cy = o.y + o.height / 2;
+        if (kind === 'growth') {
+            o.wallAnchor = side;
+            o.horizontalSpeed = 0;
+            o.verticalSpeed = 0;
+            o.rotationSpeed = (o.rotationSpeed || 0) * 0.15;
+            o._anchorOff = this.terrainOffset || 0;
+            this.followWallAnchor(o, W);
+            return;
+        }
+        // Breakout: start half buried in the rock and blow a crater around it.
+        o.x = side ? lip - o.width * 0.5 : lip - o.width * 0.5;
+        if (this.damageTerrain) this.damageTerrain(cy, side, { power: 6, radius: Math.max(2, Math.round(o.height / 4)), vsMetal: 2 });
+        this.spawnWallBurst(lip, cy, dir, [env.base || '#7a7f88', env.accent || '#8B6914', '#05060a', '#c8ccd2'],
+            Math.min(40, 14 + Math.round(o.width)), 1.4, 2.4);
+    },
+
+    /** First on-screen y (upper half preferred) where a hangar opening on `side` fits the rock. */
+    nearestOpeningY(o, side, W, H) {
+        if (!this.terrainOpeningAt) return null;
+        const cell = this.terrainCell();
+        let best = null;
+        for (let y = 8; y < H * 0.75; y += cell) {
+            if (this.terrainOpeningAt(this.terrainRowAtY(y + o.height / 2), side) !== 'gap') continue;
+            const c = this.terrainWallCells(this.terrainRowAtY(y + o.height / 2), W);
+            if ((side ? c.right : c.left) > 1) continue;
+            if (best == null || Math.abs(y - o.y) < Math.abs(best - o.y)) best = y;
+        }
+        return best;
+    },
+
+    /** Organic pod stuck to the wall: rides the scroll and hugs the lip contour. */
+    followWallAnchor(o, W) {
+        const off = this.terrainOffset || 0;
+        o.y += off - (o._anchorOff != null ? o._anchorOff : off);
+        o._anchorOff = off;
+        const walls = this.terrainWallsOver(o.y + o.height * 0.3, o.y + o.height * 0.7, W);
+        if (!walls) return;
+        // Wall shot away under it → it drifts free into the corridor.
+        const lip = o.wallAnchor ? walls.right : walls.left;
+        if (o.wallAnchor ? lip >= W - 1 : lip <= 1) {
+            o.horizontalSpeed = o.wallAnchor ? -0.3 : 0.3;
+            o.wallAnchor = null;
+            o.verticalSpeed = 0.3;
+            return;
+        }
+        o.x = o.wallAnchor ? lip - o.width * 0.6 : lip - o.width * 0.4;
     },
 });

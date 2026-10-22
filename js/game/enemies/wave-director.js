@@ -9,6 +9,9 @@ const WAVE_FORMATIONS = ['wedge', 'line', 'flank', 'box', 'loose'];
 const WAVE_EXTRA_EVENT_ROLES = ['gunner', 'bomber', 'blocker', 'repair', 'shieldBattery'];
 const DIRECTOR_TICK_MS = 1000;
 const DIRECTOR_MIN_GAP_MS = 7000;
+const CHAIN_PATHS = ['swoop', 'snake', 'loop', 'dive', 'circle', 'figure8', 'boomerang', 'zigzag'];
+// Paths with full turns run longer so the craft keep their speed.
+const CHAIN_PATH_DUR_MUL = { circle: 1.35, figure8: 1.5, boomerang: 1.1, zigzag: 1.2 };
 
 extendClass(EnemyManager, {
     /** Per-run variation of the authored schedule. Called by setEnemySchedule. */
@@ -117,6 +120,111 @@ extendClass(EnemyManager, {
         return spawned.length;
     },
 
+    /**
+     * Chain wave (Xenon-style): craft fly one after another along the same path, so the line snakes across
+     * the field with a shared motion. Sometimes two separate chains come at once, mirrored left / right.
+     */
+    spawnChainWave(gameState) {
+        if (!gameState || !this.sideEnemyPool.length) return 0;
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const kind = CHAIN_PATHS[Math.floor(Math.random() * CHAIN_PATHS.length)];
+        const twin = Math.random() < 0.4;
+        const count = 4 + Math.floor(Math.random() * 4);
+        const dur = rand(5200, 7600) * (CHAIN_PATH_DUR_MUL[kind] || 1);
+        const gapMs = rand(220, 320);
+        const mirrorFirst = Math.random() < 0.5;
+        const capBefore = this.sideEnemyCap;
+        let total = 0;
+        (twin ? [mirrorFirst, !mirrorFirst] : [mirrorFirst]).forEach((mirror, c) => {
+            const cluster = 'chain_' + Date.now() + '_' + c + '_' + Math.floor(Math.random() * 999);
+            const type = this.pickSideEnemyType();
+            this.sideEnemyCap = Math.max(this.sideEnemyCap, this.sideEnemies.length + count);
+            for (let n = 0; n < count && type; n++) {
+                const s = this.spawnScheduledNormal({
+                    id: cluster + '_' + n,
+                    type: type,
+                    faction: (this.enemy && this.enemy.faction) || (this.levelFactions && this.levelFactions[0]) || 'pirate',
+                    enemyClass: 'scout',
+                    tier: 1,
+                    level: 1,
+                    champion: false,
+                    cluster: cluster,
+                    role: n === 0 ? 'gunner' : 'assault',
+                    forceEscort: false
+                }, gameState);
+                if (!s) continue;
+                s.entering = false;
+                s.arrived = true;
+                s.isEscort = false;
+                s.fleeing = false;
+                s.lifetimeMs = null;
+                s.entryTargetX = null;
+                s.entryTargetY = null;
+                s.entryFromSide = null;
+                s.speed = 0;
+                s.verticalSpeed = 0;
+                // Every member runs the same path, just later: that is what makes it a chain.
+                s.chain = { kind: kind, mirror: mirror, t: -n * gapMs, dur: dur };
+                this.placeOnChain(s, gameState.width || 200, gameState.height || 300);
+                total++;
+            }
+        });
+        this.sideEnemyCap = capBefore;
+        return total;
+    },
+
+    /** Point on a chain path at u (0..1) as fractions of the field; paths start and end off-screen. */
+    chainPoint(kind, u) {
+        const PI = Math.PI;
+        const ease = (t) => t * t * (3 - 2 * t);
+        switch (kind) {
+            case 'snake': // down from the top in an S, back out over the top
+                return { x: 0.5 + 0.36 * Math.sin(2 * PI * u), y: -0.08 + 0.5 * Math.sin(PI * u) };
+            case 'loop': // across the field with a full loop in the middle
+                return { x: -0.12 + 1.24 * u + 0.16 * Math.sin(4 * PI * u) * Math.sin(PI * u),
+                    y: 0.16 + 0.12 * (1 - Math.cos(4 * PI * u)) * Math.sin(PI * u) };
+            case 'circle': { // down from the top, one full circle, back up the way they came
+                if (u < 0.25) return { x: 0.28, y: -0.1 + 0.4 * ease(u / 0.25) };
+                if (u > 0.75) return { x: 0.28, y: 0.3 - 0.4 * ease((u - 0.75) / 0.25) };
+                const a = PI + 2 * PI * ((u - 0.25) / 0.5);
+                return { x: 0.5 + 0.22 * Math.cos(a), y: 0.3 + 0.14 * Math.sin(a) };
+            }
+            case 'figure8': { // in from the side, a figure eight in the middle, back out the same side
+                if (u < 0.2) return { x: -0.12 + 0.62 * ease(u / 0.2), y: 0.25 };
+                if (u > 0.8) return { x: 0.5 - 0.62 * ease((u - 0.8) / 0.2), y: 0.25 };
+                const s = (u - 0.2) / 0.6;
+                return { x: 0.5 + 0.3 * Math.sin(2 * PI * s), y: 0.25 + 0.12 * Math.sin(4 * PI * s) };
+            }
+            case 'boomerang': { // dive diagonally deep into the field, then retrace the line back out
+                const s = Math.sin(PI * u);
+                return { x: 0.12 + 0.5 * s + 0.06 * Math.sin(2 * PI * u), y: -0.1 + 0.6 * s };
+            }
+            case 'zigzag': { // zigzag down from the top, then zigzag back up
+                const tri = (2 / PI) * Math.asin(Math.sin(6 * PI * u));
+                return { x: 0.5 + 0.32 * tri, y: -0.08 + 0.52 * Math.sin(PI * u) };
+            }
+            case 'dive': // drop in from the top-left, sweep through the middle, leave right
+                return { x: -0.1 + 1.2 * u, y: -0.08 + 0.48 * Math.sin(PI * Math.min(1, u * 1.15)) };
+            default: // 'swoop': a wide arc across the upper field
+                return { x: -0.12 + 1.24 * u, y: 0.06 + 0.3 * Math.sin(PI * u) };
+        }
+    },
+
+    /** Moves a chain member to its path position; returns false once it has run the whole path. */
+    placeOnChain(e, W, H) {
+        const c = e.chain;
+        const u = Math.max(0, Math.min(1, c.t / c.dur));
+        const p = this.chainPoint(c.kind, u);
+        const x = c.mirror ? 1 - p.x : p.x;
+        const w = e.width || 10;
+        const h = e.height || 10;
+        e.x = x * W - w / 2;
+        e.y = p.y * H - h / 2;
+        // Waiting members sit just off the entry point.
+        if (c.t < 0) e.y = Math.min(e.y, -h - 2);
+        return c.t < c.dur;
+    },
+
     /** Champion combat events vary per run: thresholds, counts, one surprise. */
     varyCombatEvents(list) {
         const rand = (a, b) => a + Math.random() * (b - a);
@@ -172,6 +280,7 @@ extendClass(EnemyManager, {
     updateDirector(deltaTime, gameState) {
         const d = this.director;
         if (!d || this.spawnFrozen || !gameState) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         d.sinceWaveMs += deltaTime;
         d.sinceKillMs += deltaTime;
         if (d.pendingRevengeMs > 0) {
@@ -187,7 +296,11 @@ extendClass(EnemyManager, {
                 d.passAt = 12000 + Math.random() * 12000;
                 const pm0 = typeof playerManager !== 'undefined' ? playerManager : null;
                 const hp0 = pm0 && pm0.maxHealth ? pm0.health / pm0.maxHealth : 1;
-                if (hp0 >= 0.3) this.spawnPassRow(gameState);
+                if (hp0 >= 0.3) {
+                    // Chains (shared motion, sometimes two at once) or a plain fly-through row.
+                    if (Math.random() < 0.6) this.spawnChainWave(gameState);
+                    else this.spawnPassRow(gameState);
+                }
             }
         }
         d.tickMs += deltaTime;
@@ -298,7 +411,7 @@ extendClass(EnemyManager, {
             s.x = fromLeft
                 ? Math.max(4, 4 + dx)
                 : Math.min(W - sw - 4, W - sw - 4 - dx);
-            s.y = Math.max(10, Math.min(H * 0.5, baseY + dy));
+            s.y = Math.max(10, Math.min(H * 0.34, baseY + dy));
             const speed = Math.max(0.45, Math.abs(s.cruiseSpeed || s.speed || 0.45));
             s.speed = fromLeft ? speed : -speed;
             s.cruiseSpeed = s.speed;

@@ -1,20 +1,23 @@
 "use strict";
 
+/** Health of light-class side craft relative to their normal value: the lower the rank, the quicker it goes down. */
+const LIGHT_CLASS_HP_MUL = { scout: 0.4, assault: 0.55, heavy: 0.7 };
+
 // EnemyManager methods, split from enemies.js.
 extendClass(EnemyManager, {
     /**
-     * Empty rim openings where side craft may enter (wall cells ≤ 1 on that
-     * side across the ship height). No terrain → both rims are open.
+     * Rim openings where side craft may enter: the hangar openings built into
+     * the canyon walls (terrainOpeningAt). No terrain → both rims are open.
      */
     findSideEntryGaps(canvasWidth, canvasHeight, shipH) {
         const W = canvasWidth || 240;
         const H = canvasHeight || 300;
         const h = Math.max(8, shipH || 10);
         const yMin = 18;
-        const yMax = Math.max(yMin + 8, Math.floor(H * 0.58));
         const gaps = [];
         if (typeof obstacleManager === 'undefined' || !obstacleManager.hasTerrain
-            || !obstacleManager.hasTerrain()) {
+            || !obstacleManager.hasTerrain() || !obstacleManager.terrainOpeningAt) {
+            const yMax = Math.max(yMin + 8, Math.floor(H * 0.34));
             for (let n = 0; n < 6; n++) {
                 const y = yMin + Math.random() * (yMax - yMin);
                 gaps.push({ side: 0, y: y });
@@ -22,43 +25,25 @@ extendClass(EnemyManager, {
             }
             return gaps;
         }
+        // Upper half only: enemies hold the top, the player the bottom.
+        const yMax = Math.max(yMin + 8, Math.floor(H * 0.55) - h);
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 4;
-        const openEnough = (sideCells) => sideCells <= 1;
-        // Track the widest corridor seen as a fallback: some canyon layouts
-        // never have a strictly-open (<=1 cell) rim anywhere in the scanned
-        // band, which used to leave gaps empty and permanently block every
-        // side-craft entry for the whole stage. Picking just the thinnest
-        // wall isn't enough either — the corridor there can still be too
-        // narrow to fly in, leaving craft jittering in place. Pick the
-        // widest corridor instead, so there's actually room to move.
-        let widest = null;
         for (let y = yMin; y <= yMax; y += cell) {
-            let leftOpen = true;
-            let rightOpen = true;
-            for (let dy = 0; dy < h; dy += cell) {
-                const wr = obstacleManager.terrainRowAtY(y + dy);
+            const wr = obstacleManager.terrainRowAtY(y + h * 0.5);
+            for (let side = 0; side < 2; side++) {
+                if (obstacleManager.terrainOpeningAt(wr, side) !== 'gap') continue;
+                // Opening still in one piece (not shot into a wider breach).
                 const c = obstacleManager.terrainWallCells(wr, W);
-                if (!openEnough(c.left)) leftOpen = false;
-                if (!openEnough(c.right)) rightOpen = false;
-                if (!leftOpen && !rightOpen) break;
-            }
-            if (leftOpen) gaps.push({ side: 0, y: y });
-            if (rightOpen) gaps.push({ side: 1, y: y });
-            if (obstacleManager.terrainWallsAtY) {
-                const walls = obstacleManager.terrainWallsAtY(y + h * 0.5, W);
-                if (walls) {
-                    const corridor = walls.right - walls.left;
-                    if (!widest || corridor > widest.corridor) widest = { y: y, corridor: corridor };
-                }
+                if ((side ? c.right : c.left) <= 1) gaps.push({ side: side, y: Math.max(yMin, y) });
             }
         }
-        if (!gaps.length && widest) {
-            // No strictly-open rim: fall back to the widest corridor found
-            // so side craft can still enter and actually have room to fly.
-            gaps.push({ side: 0, y: widest.y });
-            gaps.push({ side: 1, y: widest.y });
-        }
-        return gaps;
+        return gaps; // empty → no opening on screen yet; spawn retries later
+    },
+
+    /** Scout / assault / heavy: single-purpose side craft (see spawnScheduledNormal). */
+    isLightClass(enemyClass) {
+        const c = String(enemyClass || '').toLowerCase();
+        return c === 'scout' || c === 'assault' || c === 'heavy';
     },
 
     /** Mount groups a side craft of this class carries: scouts one gun, bigger classes add wing / outrigger pairs. */
@@ -98,14 +83,21 @@ extendClass(EnemyManager, {
         side.entryTargetY = Math.max(12, Math.min(H - side.height - 12, gap.y));
         side.y = side.entryTargetY;
         if (gap.side === 0) {
-            side.x = -side.width - 6 - Math.random() * 18;
+            side.x = -side.width - 2;
             side.speed = 0.85 + Math.random() * 0.45;
         } else {
-            side.x = W + 6 + Math.random() * 18;
+            side.x = W + 2;
             side.speed = -(0.85 + Math.random() * 0.45);
         }
         side.verticalSpeed = (Math.random() - 0.5) * 0.15;
         side.entering = true;
+        // Shot out of the hangar by compressed air: fast kick, bleeds off to cruise.
+        side.launchV = 4.2 + Math.random() * 1.4;
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.spawnWallBurst) {
+            const env = obstacleManager.getEnvironment ? obstacleManager.getEnvironment() : {};
+            obstacleManager.spawnWallBurst(gap.side ? W - 1 : 1, side.y + side.height * 0.5, gap.side ? -1 : 1,
+                ['#eef4f8', '#c8d2da', '#9aa6b0', '#eef4f8', env.accent || '#ffd27a'], 30, 1.1, 3.4);
+        }
         return true;
     },
 
@@ -137,8 +129,10 @@ extendClass(EnemyManager, {
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
         const SIDE_HULL_SEEDS = 12;
-        const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
-            ? 0.78 : 0.68;
+        const sideSizeMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSideSizeMul)
+            ? uiAppearanceManager.getSideSizeMul() : 1;
+        const SIDE_DRAW_SCALE = (role === 'assault' || role === 'gunner' || role === 'blocker'
+            ? 0.78 : 0.68) * sideSizeMul;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;
@@ -306,6 +300,28 @@ extendClass(EnemyManager, {
             if (side.cruiseSpeed) side.cruiseSpeed *= ai.speedMul || 1;
             if (side.cruiseVerticalSpeed) side.cruiseVerticalSpeed *= ai.speedMul || 1;
         }
+        // Transit (canyon) runs: weaker side craft, scaled by planet tier and stage (see buildTransitEnemies).
+        if (entry.transitScale > 0 && entry.transitScale < 1) {
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * entry.transitScale));
+            side.health = side.maxHealth;
+            side.damageMul = (side.damageMul || 1) * (0.6 + 0.4 * entry.transitScale);
+        }
+        // Light classes (scout / assault / heavy) do exactly one job — their event role — with no extras,
+        // and go down quicker. Elite / capital keep their full kit.
+        if (this.isLightClass(side.enemyClass)) {
+            side.lightClass = true;
+            side.shieldMax = 0;
+            side.shield = 0;
+            side.shieldRegen = 0;
+            side.reflectChance = 0;
+            side.damageReduction = 0;
+            side.armor = 0;
+            side.defenseMechanisms = [];
+            side.abilities = [];
+            side.muzzleGroups = 1;
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * (LIGHT_CLASS_HP_MUL[String(side.enemyClass).toLowerCase()] || 1)));
+            side.health = side.maxHealth;
+        }
         this.sideEnemies.push(side);
         if (typeof profileManager !== 'undefined' && profileManager.discoverEnemyContents && entry.type) {
             profileManager.discoverEnemyContents(entry.type);
@@ -354,7 +370,10 @@ extendClass(EnemyManager, {
 
     updateSchedule(deltaTime, gameState) {
         if (this.spawnFrozen) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         if (!this.schedule.length) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalSpawnHold
+            && objectiveManager.isArrivalSpawnHold()) return;
         this.scheduleElapsedMs += deltaTime;
         const elapsedSec = this.scheduleElapsedMs / 1000;
         const holdNormals = this.sideFleeing || this.exploding

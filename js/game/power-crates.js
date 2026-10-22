@@ -10,17 +10,41 @@ const POWER_SHOT_DAMAGE = 1.6;
 const POWER_SHOT_SIZE = 1.3;
 const RAPID_FIRE_MUL = 0.6;      // cooldown × (fires ~1.7× as fast)
 const BARRIER_DAMAGE_MUL = 0.5;  // damage taken ×
+const SPEED_BOOST_MUL = 1.45;    // move speed ×
+const MAGNET_RADIUS_MUL = 1.8;   // collect radius ×
+const MAGNET_BONUS = 3;          // extra magnet strength
+const DOUBLE_LOOT_MUL = 2;       // resource yield ×
+const REPAIR_PER_SEC = 0.04;     // share of max hull healed per second
 
 /**
  * Temporary power-ups a crate can drop. Each has its own colour, silhouette
- * (diamond / hexagon / circle) and glyph so they read apart at a glance.
+ * (diamond / hexagon / circle / square) and glyph so they read apart at a glance.
  */
 const POWER_UPS = {
-    power_shot: { label: 'POWER SHOT', ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
-    rapid_fire: { label: 'RAPID FIRE', ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
-    barrier:    { label: 'BARRIER',    ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' }
+    power_shot:  { label: 'POWER SHOT',  ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
+    rapid_fire:  { label: 'RAPID FIRE',  ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
+    barrier:     { label: 'BARRIER',     ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' },
+    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'diamond', glyph: 'chevrons' },
+    magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
+    double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'cross' }
 };
 const POWER_UP_IDS = Object.keys(POWER_UPS);
+
+/**
+ * Fake crates / perks. Look like the real thing except for a flickering red
+ * warning pixel. BOMB blasts nearby hull, FREEZE locks the ship briefly.
+ */
+const FAKE_CRATE_CHANCE = 0.25;  // share of drifting supply crates that are fake
+const TRAP_BLAST_RADIUS = 36;
+const TRAP_BLAST_DAMAGE = 0.2;   // share of max hull at the centre
+const TRAP_FREEZE_MS = 1600;
+const TRAP_IDS = ['bomb', 'freeze'];
+const TRAP_WARN = '#ff2a2a';
+
+function pickTrap() {
+    return TRAP_IDS[Math.floor(Math.random() * TRAP_IDS.length)];
+}
 
 extendClass(ObstacleManager, {
     /** Called every frame from update(): spawn a crate on a timer. */
@@ -31,23 +55,31 @@ extendClass(ObstacleManager, {
         this.crateTimer -= Math.max(0, Number(deltaTime) || 16.67);
         if (this.crateTimer > 0) return;
         this.crateTimer = this.nextCrateDelay();
-        this.spawnCrate(gameState);
+        this.spawnCrate(gameState, Math.random() < FAKE_CRATE_CHANCE ? { trap: pickTrap() } : null);
+    },
+
+    /** Enemy wreck sheds a fake crate at (x, y) that drifts with the field. */
+    spawnFakeCrate(x, y) {
+        this.spawnCrate(null, { trap: pickTrap(), x: x - CRATE_SIZE / 2, y: y - CRATE_SIZE / 2 });
     },
 
     nextCrateDelay() {
         return CRATE_INTERVAL_MIN + Math.random() * (CRATE_INTERVAL_MAX - CRATE_INTERVAL_MIN);
     },
 
-    spawnCrate(gameState) {
+    spawnCrate(gameState, opts) {
+        const o = opts || {};
         const W = (gameState && gameState.width) || 240;
         let x = W * (0.25 + Math.random() * 0.5);
         // Keep it inside the canyon passage.
         const walls = this.terrainWallsAtY ? this.terrainWallsAtY(0, W) : null;
         if (walls) x = walls.left + 6 + Math.random() * Math.max(1, walls.right - walls.left - 12 - CRATE_SIZE);
         const scroll = this.isScrollStage();
+        const placed = o.x != null && o.y != null;
         this.obstacles.push({
-            x: scroll ? x : -CRATE_SIZE - 2,
-            y: scroll ? -CRATE_SIZE - 2 : ((gameState && gameState.height) || 300) * (0.3 + Math.random() * 0.3),
+            trap: o.trap || null,
+            x: placed ? o.x : (scroll ? x : -CRATE_SIZE - 2),
+            y: placed ? o.y : (scroll ? -CRATE_SIZE - 2 : ((gameState && gameState.height) || 300) * (0.3 + Math.random() * 0.3)),
             width: CRATE_SIZE,
             height: CRATE_SIZE,
             horizontalSpeed: scroll ? (Math.random() - 0.5) * 0.15 : 0.6,
@@ -71,7 +103,7 @@ extendClass(ObstacleManager, {
             explosionId: 'small_pop',
             sprite: 'obstacle',
             opacity: 1,
-            entering: true,
+            entering: !placed,
             age: 0
         });
     },
@@ -131,17 +163,34 @@ extendClass(ObstacleManager, {
             ctx.globalAlpha = 1;
         }
         ctx.drawImage(this.crateImage(), x, y, w, h);
+        // Fake crate tell: a red pixel in the top-right corner flickers.
+        if (o.trap && Math.floor(t / 220) % 2) {
+            const px = cell || Math.max(1, Math.round(w / 10));
+            if (cv && cv.fill) cv.fill(ctx, x + w - 2 * px, y + px, px, px, TRAP_WARN, 1);
+            else {
+                ctx.fillStyle = TRAP_WARN;
+                ctx.fillRect(x + w - 2 * px, y + px, px, px);
+            }
+        }
         ctx.restore();
     },
 });
 
 extendClass(PickupManager, {
-    /** Crate broke open: drop a random power-up at its centre. */
+    /**
+     * Crate broke open: drop a random power-up at its centre. A BOMB crate
+     * blows up instead; a FREEZE crate drops a disguised freeze perk.
+     */
     spawnPowerUp(o) {
+        if (o && o.trap === 'bomb') {
+            this.trapBlast(o.x + o.width / 2, o.y + o.height / 2);
+            return;
+        }
         const id = POWER_UP_IDS[Math.floor(Math.random() * POWER_UP_IDS.length)];
         this.pickups.push({
             id: id,
             powerUp: id,
+            trap: (o && o.trap) || null,
             amount: 0,
             x: o.x + o.width / 2,
             y: o.y + o.height / 2,
@@ -156,6 +205,10 @@ extendClass(PickupManager, {
     /** Returns true if the pickup was a power-up (handled here). */
     collectPowerUp(p) {
         if (!p || !p.powerUp) return false;
+        if (p.trap) {
+            this.triggerTrap(p);
+            return true;
+        }
         const def = POWER_UPS[p.powerUp] || POWER_UPS.power_shot;
         const id = POWER_UPS[p.powerUp] ? p.powerUp : 'power_shot';
         if (!this.powerUntil) this.powerUntil = {};
@@ -175,12 +228,78 @@ extendClass(PickupManager, {
         return true;
     },
 
+    /** Fake perk picked up: spring its trap on the player. */
+    triggerTrap(p) {
+        if (p.trap === 'bomb') {
+            this.trapBlast(p.x, p.y);
+            return;
+        }
+        if (!this.powerUntil) this.powerUntil = {};
+        this.powerUntil.freeze = Date.now() + TRAP_FREEZE_MS;
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('FAKE! FROZEN');
+        }
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
+            graphicsManager.createHitEffect(p.x, p.y, 8, '#9fdcff');
+        }
+        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
+    },
+
+    /** Trap explosion: hull damage falls off with distance to the player. */
+    trapBlast(x, y) {
+        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
+            try { explosionSystem.play('small_pop', x, y, { width: TRAP_BLAST_RADIUS, height: TRAP_BLAST_RADIUS }); } catch (err) { /* optional fx */ }
+        }
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
+            graphicsManager.createHitEffect(x, y, 10, TRAP_WARN);
+        }
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('FAKE! BOOM');
+        }
+        if (typeof playerManager === 'undefined' || !playerManager.getPosition) return;
+        const pl = playerManager.getPosition();
+        if (!pl) return;
+        const dx = pl.x + pl.width / 2 - x;
+        const dy = pl.y + pl.height / 2 - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > TRAP_BLAST_RADIUS) return;
+        const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth() : 100;
+        const dmg = maxHp * TRAP_BLAST_DAMAGE * (1 - 0.6 * dist / TRAP_BLAST_RADIUS);
+        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
+        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+    },
+
     /** Active power-up state { left, total } or null. */
     getPowerUp(id) {
         const until = id === 'power_shot' ? this.powerShotUntil : (this.powerUntil && this.powerUntil[id]);
         const left = (until || 0) - Date.now();
         if (left <= 0) return null;
-        return { left, total: POWER_UPS[id].ms };
+        return { left, total: id === 'freeze' ? TRAP_FREEZE_MS : POWER_UPS[id].ms };
+    },
+
+    /** FREEZE trap: ship can neither move nor fire. */
+    isFrozen() {
+        return !!this.getPowerUp('freeze');
+    },
+
+    /** Move speed multiplier (AFTERBURNER). */
+    getMoveSpeedMul() {
+        return this.getPowerUp('speed_boost') ? SPEED_BOOST_MUL : 1;
+    },
+
+    /** Hull healed per second (REPAIR). */
+    getRepairPerSec(maxHealth) {
+        return this.getPowerUp('repair') ? (Number(maxHealth) || 0) * REPAIR_PER_SEC : 0;
+    },
+
+    /** Applies MAGNET / DOUBLE LOOT to collect stats in place. */
+    applyCollectPerks(stats) {
+        if (this.getPowerUp('magnet')) {
+            stats.radius *= MAGNET_RADIUS_MUL;
+            stats.magnet += MAGNET_BONUS;
+        }
+        if (this.getPowerUp('double_loot')) stats.yieldMul *= DOUBLE_LOOT_MUL;
+        return stats;
     },
 
     /** Current shot multipliers from active power-ups. */
@@ -219,6 +338,7 @@ extendClass(PickupManager, {
             const a = Math.abs(dy);
             if (def.shape === 'diamond') return rr - a;
             if (def.shape === 'hex') return Math.min(rr - step, (rr - a) * 2);
+            if (def.shape === 'square') return rr - step;
             return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
         };
         const shape = (rr, color, alpha) => {
@@ -265,9 +385,24 @@ extendClass(PickupManager, {
                 mark(x - 2 * step, yy + 2 * step, step, step);
                 mark(x + 2 * step, yy + 2 * step, step, step);
             }
+        } else if (def.glyph === 'magnet') {
+            mark(x - 2 * step, y - 2 * step, step, 4 * step);
+            mark(x + 2 * step, y - 2 * step, step, 4 * step);
+            mark(x - step, y + step, 3 * step, step);
+        } else if (def.glyph === 'dots') {
+            mark(x - 2 * step, y - step, 2 * step, 2 * step);
+            mark(x + step, y - step, 2 * step, 2 * step);
         } else {
             mark(x, y - 2 * step, step, 5 * step);
             mark(x - 2 * step, y, 5 * step, step);
+        }
+        // Fake perk tell: flickering red warning pixel, top right.
+        if (p.trap && Math.floor(t / 220) % 2) {
+            if (cv && cv.fill) cv.fill(ctx, x + r - step, y - r, step, step, TRAP_WARN, 1);
+            else {
+                ctx.fillStyle = TRAP_WARN;
+                ctx.fillRect(x + r - step, y - r, step, step);
+            }
         }
         ctx.restore();
     },
@@ -281,10 +416,10 @@ extendClass(PickupManager, {
         const x = Math.round(pl.x + (pl.width || 16) / 2 - w / 2);
         let y = Math.round(pl.y + (pl.height || 16) + 3);
         ctx.save();
-        POWER_UP_IDS.forEach((id) => {
+        POWER_UP_IDS.concat('freeze').forEach((id) => {
             const ps = this.getPowerUp(id);
             if (!ps) return;
-            const def = POWER_UPS[id];
+            const def = POWER_UPS[id] || { color: '#9fdcff', light: '#ffffff' };
             ctx.fillStyle = '#05060a';
             ctx.fillRect(x - 1, y - 1, w + 2, 4);
             ctx.fillStyle = ps.left < 2500 && Math.floor(ps.left / 150) % 2 ? def.light : def.color;

@@ -80,6 +80,23 @@ extendClass(CollisionManager, {
         if (typeof soundManager !== 'undefined') soundManager.playReflect();
     },
 
+    /**
+     * A ship touched a bulwark: knock the block away from the ship's centre.
+     * Returns false while the block is still on its post-hit cooldown (no repeat damage per frame).
+     */
+    bounceBulwark(obs, sx, sy) {
+        const now = Date.now();
+        if (obs._bumpUntil && now < obs._bumpUntil) return false;
+        obs._bumpUntil = now + 500;
+        const ox = obs.x + obs.width / 2, oy = obs.y + obs.height / 2;
+        const dx = ox - sx, dy = oy - sy;
+        const len = Math.hypot(dx, dy) || 1;
+        obs.pushVx = (dx / len) * 2.2;
+        obs.pushVy = (dy / len) * 2.2;
+        this.createDetailedHitEffect((ox + sx) / 2, (oy + sy) / 2, 'impact');
+        return true;
+    },
+
     checkObstaclePlayerCollisions(gameState) {
         const obstacles = obstacleManager.getObstacles();
         const player = playerManager.getPosition();
@@ -95,6 +112,14 @@ extendClass(CollisionManager, {
                 const obs = obstacles[i];
                 const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 15);
                 const explosionId = obs.explosionId || 'asteroid_burst';
+
+                if (obs.pushable) {
+                    // Indestructible bulwark: ram damage, then it bounces off instead of breaking.
+                    if (!this.bounceBulwark(obs, playerX, playerY)) continue;
+                    if (playerManager.takeDamage(dmg)) game.gameOver();
+                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                    break;
+                }
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
@@ -134,6 +159,14 @@ extendClass(CollisionManager, {
                 const obs = obstacles[i];
                 const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 20);
                 const explosionId = obs.explosionId || 'asteroid_burst';
+
+                if (obs.pushable) {
+                    // Shoving a bulwark into the enemy hurts it; the block itself bounces off.
+                    if (!this.bounceBulwark(obs, enemyX, enemyY)) continue;
+                    enemyManager.takeDamage(dmg);
+                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    break;
+                }
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);

@@ -4,7 +4,7 @@
 extendClass(ObstacleManager, {
     spawnObstacle(gameState = null) {
         if (this.hasDefs()) {
-            this.spawnFromDef(this.pickWeightedDef(), gameState);
+            this.spawnFromDef(this.maybeFunctionalDef() || this.pickWeightedDef(), gameState);
             return;
         }
         const obstacleType = this.getRandomObstacleType();

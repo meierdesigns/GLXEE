@@ -221,8 +221,9 @@ class SpriteLoader {
                 this.loadOverrideSprites()
             ]);
 
-            // Ship sprites are enough for UI previews; do not block on weapons
-            this.loaded = !!shipsLoaded;
+            // "loaded" = the load attempt finished. PNG sprites are optional overrides (the sprite folders are
+            // not shipped with e.g. the itch build); without it the start-screen ship waits forever and boot polls.
+            this.loaded = true;
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('vf-sprites-loaded', {
                     detail: { loaded: this.loaded, count: this.sprites.size }

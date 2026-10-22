@@ -258,7 +258,8 @@ class BulletManager {
             if (keepWeapon && ids.indexOf(keepWeapon) !== -1) {
                 this.currentWeapon = keepWeapon;
                 shipModel.defaultWeapon = shipModel.defaultWeapon || keepWeapon;
-            } else if (shipModel.defaultWeapon) {
+            } else if (shipModel.defaultWeapon && ids.indexOf(shipModel.defaultWeapon) !== -1) {
+                // Stock hull default only when it is actually fitted.
                 this.currentWeapon = shipModel.defaultWeapon;
             } else {
                 this.currentWeapon = ids[0] || 'laser';

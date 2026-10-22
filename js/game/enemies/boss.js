@@ -78,10 +78,12 @@ extendClass(EnemyManager, {
         const e = this.enemy;
         if (!e || !e.isBoss) return;
         const cx = e.x + e.width / 2;
-        e.width = Math.round(e.width * BOSS_SIZE_MUL);
-        e.height = Math.round(e.height * BOSS_SIZE_MUL);
+        const bossMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getBossSizeMul)
+            ? uiAppearanceManager.getBossSizeMul() : BOSS_SIZE_MUL;
+        e.width = Math.round(e.width * bossMul);
+        e.height = Math.round(e.height * bossMul);
         e.x = cx - e.width / 2;
-        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, BOSS_SIZE_MUL);
+        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
         const mods = this.currentTierMods();
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 0.6);
         this.health = this.maxHealth;

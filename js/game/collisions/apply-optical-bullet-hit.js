@@ -58,8 +58,9 @@ extendClass(CollisionManager, {
         if (sourceSide === 'player') bulletManager.removeBullet(bulletIndex);
         else bulletManager.removeEnemyBullet(bulletIndex);
 
-        // Mirror team for reflected shards (player hit → enemy shards, and vice versa)
-        const toEnemy = sourceSide === 'player';
+        // Crystals turn the shards against the shooter (player hit → enemy shards, and vice versa);
+        // prism obstacles (prismKeepTeam) fan them out forward on the shooter's own side.
+        const toEnemy = obstacle.prismKeepTeam ? sourceSide !== 'player' : sourceSide === 'player';
         for (let s = 0; s < splitCount; s++) {
             const t = splitCount === 1 ? 0 : (s / (splitCount - 1)) - 0.5;
             const ang = baseAngle + t * angleSpread * 2;
@@ -76,7 +77,9 @@ extendClass(CollisionManager, {
                 reflected: true,
                 lightRadius: bullet.lightRadius || 50,
                 lightIntensity: 1.2,
-                lightColor: bullet.lightColor || 'var(--color-highlight)'
+                lightColor: bullet.lightColor || 'var(--color-highlight)',
+                // Born inside this obstacle: never split on it again.
+                _ignoreObstacle: obstacle
             };
             // Use angled movement: ensure angle is set and speed is magnitude
             shard.speed = baseSpeed;

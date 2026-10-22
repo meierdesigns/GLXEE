@@ -111,7 +111,7 @@ extendClass(EnemyManager, {
 
         // Full top flight band — do not park under a dead ceiling gap.
         const enemyMinY = 2;
-        const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.38));
+        const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.3));
         const spawnY = enemyMinY + Math.max(0, Math.round((enemyMaxY - enemyMinY - shipHeight) * 0.35));
         const spawnX = Math.max(0, Math.min(Math.max(0, canvasWidth - shipWidth),
             canvasWidth / 2 - shipWidth / 2));
@@ -258,10 +258,12 @@ extendClass(EnemyManager, {
         const floor = Math.max(1, Number(rawDamage) * 0.2);
         dmg = Math.max(floor, dmg);
 
+        // Shield first: a hit on a live shield never bleeds into the hull,
+        // not even the one that breaks it. Regen pauses after every hit.
+        target.shieldHitAt = Date.now();
         if (target.shield != null && target.shield > 0) {
-            const absorbed = Math.min(target.shield, dmg);
-            target.shield -= absorbed;
-            dmg -= absorbed;
+            target.shield = Math.max(0, target.shield - dmg);
+            return 0;
         }
 
         return Math.max(0, dmg);
@@ -279,6 +281,7 @@ extendClass(EnemyManager, {
             ? difficultyConfigManager.getProfile().playerDamageMul : 1;
         const remaining = this.applyDefenseToDamage(target, Number(damage) * playerDamageMul);
         this.shield = target.shield;
+        this.shieldHitAt = target.shieldHitAt;
         this.health -= remaining;
         if (this.health <= 0) {
             this.health = 0;

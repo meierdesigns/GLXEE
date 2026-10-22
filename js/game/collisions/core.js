@@ -24,6 +24,38 @@ class CollisionManager {
         run(this.checkObstacleEnemyCollisions);
         run(this.checkBulletObstacleCollisions);
         run(this.checkTerrainCollisions);
+        run(this.checkGateCollisions);
+    }
+
+    /**
+     * Transit gate: its bulkhead stops every shot (nothing flies on past the level's end),
+     * and player shots crack the sluice's hatch dome until it bursts open.
+     */
+    checkGateCollisions() {
+        if (typeof objectiveManager === 'undefined' || !objectiveManager.goal) return;
+        const g = objectiveManager.goal;
+        const sweep = (list, remove, byPlayer) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const b = list[i];
+                if (!b) continue;
+                const cx = b.x + (b.width || 0) / 2;
+                const cy = b.y + (b.height || 0) / 2;
+                if (objectiveManager.isInGateDome(cx, cy)) {
+                    remove(i);
+                    this.createDetailedHitEffect(cx, cy, 'impact');
+                    if (byPlayer) objectiveManager.hitGateDome(b.damage != null ? b.damage : 10, cx, cy);
+                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    continue;
+                }
+                const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
+                if (cy <= g.y + g.h && (!inOpening || cy <= g.y)) {
+                    remove(i);
+                    if (cy >= g.y - 4) this.createDetailedHitEffect(cx, g.y + g.h, 'impact');
+                }
+            }
+        };
+        sweep(bulletManager.getBullets(), (i) => bulletManager.removeBullet(i), true);
+        sweep(bulletManager.getEnemyBullets(), (i) => bulletManager.removeEnemyBullet(i), false);
     }
 
     /**
@@ -79,6 +111,7 @@ class CollisionManager {
                 }
             }
         }
+        this.checkEnemyTerrainCollisions(W);
         // Shots chip the wall they hit; player shots that break a cell score.
         // Also carve when a shot is within one cell of the wall lip (VOXEL
         // stepping often lands on the corridor edge without entering the rock).
@@ -86,30 +119,48 @@ class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const cx = b.x + (b.width || 0) / 2;
-                const cy = b.y + (b.height || 0) / 2;
-                const w = obstacleManager.terrainWallsAtY(cy, W);
-                if (!w) continue;
+                const ex = b.x + (b.width || 0) / 2;
+                const ey = b.y + (b.height || 0) / 2;
+                // Sweep the path travelled this frame in half-cell steps: fast
+                // shots otherwise jump over 1–2 row thin ledges and hatch lips.
+                const sdx = b._sweepDx || 0;
+                const sdy = b._sweepDy || 0;
+                const steps = Math.max(1, Math.min(32, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
                 let side = -1;
-                if (cx <= w.left + cell) side = 0;
-                else if (cx >= w.right - cell) side = 1;
-                else continue;
-                // Skip if that side is already fully carved away.
-                const wrCheck = obstacleManager.terrainRowAtY(cy);
-                const cells = obstacleManager.terrainWallCells
-                    ? obstacleManager.terrainWallCells(wrCheck, W) : null;
-                if (cells && ((side === 0 && cells.left <= 0) || (side === 1 && cells.right <= 0))) {
-                    continue;
+                let cx = ex, cy = ey, w = null, wrCheck = 0;
+                for (let s = steps - 1; s >= 0 && side < 0; s--) {
+                    const f = s / steps;
+                    cx = ex - sdx * f;
+                    cy = ey - sdy * f;
+                    w = obstacleManager.terrainWallsAtY(cy, W);
+                    if (!w) continue;
+                    if (cx <= w.left + cell) side = 0;
+                    else if (cx >= w.right - cell) side = 1;
+                    else continue;
+                    // Skip if that side is already fully carved away.
+                    wrCheck = obstacleManager.terrainRowAtY(cy);
+                    const cells = obstacleManager.terrainWallCells
+                        ? obstacleManager.terrainWallCells(wrCheck, W) : null;
+                    if (cells && ((side === 0 && cells.left <= 0) || (side === 1 && cells.right <= 0))) {
+                        side = -1;
+                    }
                 }
+                if (side < 0) continue;
                 const profile = obstacleManager.terrainWeaponProfile(b);
                 const row = wrCheck;
                 if (profile.pierce && b._terrainRow === row) continue;
                 b._terrainRow = row;
                 if (!profile.pierce) remove(i);
                 const broke = obstacleManager.damageTerrain(cy, side, profile);
-                this.createDetailedHitEffect(side ? w.right : w.left, cy, broke ? 'destroy' : 'impact');
+                const lipX = side ? w.right : w.left;
+                this.createDetailedHitEffect(lipX, cy, broke ? 'destroy' : 'impact');
+                const mat = obstacleManager.terrainMaterial(row, side);
+                // Chunks fly off into the corridor, like a rock breaking up.
+                if (obstacleManager.spawnWallBurst) {
+                    obstacleManager.spawnWallBurst(lipX, cy, side ? -1 : 1, obstacleManager.terrainDebrisColors(mat),
+                        broke ? Math.min(28, 6 + broke * 3) : 3, broke ? 2.2 : 1.4, broke ? 2 : 1.1);
+                }
                 if (broke && byPlayer && typeof game !== 'undefined') {
-                    const mat = obstacleManager.terrainMaterial(row, side);
                     game.score += (mat.score || 1) * broke;
                 }
                 if (typeof soundManager !== 'undefined') soundManager.playHit();
@@ -177,35 +228,88 @@ class CollisionManager {
                     if (typeof graphicsManager !== 'undefined') {
                         graphicsManager.createHitEffect(sx, sy, 4);
                     }
-                    if (killedByHit) {
-                        const killed = sides[j];
-                        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
-                            explosionSystem.play('small_pop', sx, sy, {
-                                width: killed.width,
-                                height: killed.height,
-                                silent: true,
-                                ship: killed,
-                                voxelPower: 0.85,
-                                scale: 0.75
-                            });
-                        }
-                        sides.splice(j, 1);
-                        if (typeof enemyManager !== 'undefined' && enemyManager.notifyKill) {
-                            enemyManager.notifyKill({
-                                type: killed.type,
-                                entryId: killed.entryId,
-                                faction: killed.faction,
-                                enemyClass: killed.enemyClass,
-                                cluster: killed.cluster,
-                                champion: false,
-                                x: sx,
-                                y: sy
-                            });
-                        }
-                    }
+                    if (killedByHit) this.destroySideEnemy(sides, j);
                     return;
                 }
             }
+        }
+    }
+
+    /** Remove side craft `j` with a pop and count the kill. */
+    destroySideEnemy(sides, j) {
+        const killed = sides[j];
+        if (!killed) return;
+        const sx = killed.x + killed.width / 2;
+        const sy = killed.y + killed.height / 2;
+        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
+            explosionSystem.play('small_pop', sx, sy, {
+                width: killed.width,
+                height: killed.height,
+                silent: true,
+                ship: killed,
+                voxelPower: 0.85,
+                scale: 0.75
+            });
+        }
+        sides.splice(j, 1);
+        if (typeof enemyManager !== 'undefined' && enemyManager.notifyKill) {
+            enemyManager.notifyKill({
+                type: killed.type,
+                entryId: killed.entryId,
+                faction: killed.faction,
+                enemyClass: killed.enemyClass,
+                cluster: killed.cluster,
+                champion: false,
+                x: sx,
+                y: sy
+            });
+        }
+    }
+
+    /**
+     * Enemies scrape the canyon walls like the player: pushed back into the
+     * corridor and damaged (per-ship grace period). Craft still sliding in
+     * through a hangar opening or fleeing out are exempt.
+     */
+    checkEnemyTerrainCollisions(W) {
+        if (typeof enemyManager === 'undefined') return;
+        const now = Date.now();
+        const scrape = (e) => {
+            const walls = obstacleManager.terrainWallsOver(e.y + 2, e.y + e.height - 2, W);
+            if (!walls) return 0;
+            let hitSide = -1;
+            if (e.x < walls.left) {
+                hitSide = 0;
+                e.x = walls.left + 1;
+            } else if (e.x + e.width > walls.right) {
+                hitSide = 1;
+                e.x = walls.right - e.width - 1;
+            }
+            if (hitSide < 0 || now - (e._terrainHitAt || 0) < 600) return 0;
+            const hy = e.y + e.height / 2;
+            const cells = obstacleManager.terrainWallCells(obstacleManager.terrainRowAtY(hy), W);
+            const thick = cells ? (hitSide ? cells.right : cells.left) : 2;
+            if (thick <= 0) return 0;
+            e._terrainHitAt = now;
+            this.createDetailedHitEffect(hitSide ? walls.right : walls.left, hy, 'impact');
+            if (obstacleManager.damageTerrain) {
+                obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
+            }
+            return thick <= 1 ? 3 : 8;
+        };
+        const sides = enemyManager.getSideEnemies ? enemyManager.getSideEnemies() : [];
+        for (let j = sides.length - 1; j >= 0; j--) {
+            const e = sides[j];
+            if (!e || e.entering || e.fleeing) continue;
+            const dmg = scrape(e);
+            if (!dmg) continue;
+            e.health -= dmg;
+            if (e.health <= 0) this.destroySideEnemy(sides, j);
+        }
+        const champ = enemyManager.getEnemy ? enemyManager.getEnemy() : null;
+        if (champ && !(enemyManager.isExploding && enemyManager.isExploding())) {
+            const dmg = scrape(champ);
+            if (dmg) enemyManager.takeDamage(dmg);
         }
     }
 

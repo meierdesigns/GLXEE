@@ -107,6 +107,33 @@ extendClass(CollisionManager, {
         }
     },
 
+    /**
+     * Bulwark hit: no damage, the shot shoves the block along its flight
+     * direction (heavier blocks move less, stronger shots more).
+     */
+    pushObstacleByBullet(obstacle, bullet) {
+        let dx = bullet._sweepDx || 0;
+        let dy = bullet._sweepDy || 0;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.001) {
+            dx = 0;
+            dy = -1;
+        } else {
+            dx /= len;
+            dy /= len;
+        }
+        const mass = Math.max(0.5, (obstacle.width * obstacle.height) / 196);
+        const power = Math.max(0.5, Math.min(3, (bullet.damage != null ? bullet.damage : 10) / 10));
+        const k = 0.35 * power / mass;
+        obstacle.pushVx = Math.max(-2.5, Math.min(2.5, (obstacle.pushVx || 0) + dx * k));
+        obstacle.pushVy = Math.max(-2.5, Math.min(2.5, (obstacle.pushVy || 0) + dy * k));
+        obstacle.pushFlashMs = 120;
+        const hx = bullet.x + (bullet.width || 0) / 2;
+        const hy = bullet.y + (bullet.height || 0) / 2;
+        this.createDetailedHitEffect(hx, hy, 'impact');
+        if (typeof soundManager !== 'undefined') soundManager.playHit();
+    },
+
     checkBulletObstacleCollisions(gameState) {
         const bullets = bulletManager.getBullets();
         const enemyBullets = bulletManager.getEnemyBullets();
@@ -117,7 +144,7 @@ extendClass(CollisionManager, {
             for (let j = obstacles.length - 1; j >= 0; j--) {
                 if (this.isColliding(bullets[i], obstacles[j])) {
                     const obstacle = obstacles[j];
-                    if (obstacle.isFog) continue;
+                    if (obstacle.isFog || bullets[i]._ignoreObstacle === obstacle) continue;
                     const bullet = bullets[i];
                     const bulletX = bullet.x;
                     const bulletY = bullet.y;
@@ -127,6 +154,12 @@ extendClass(CollisionManager, {
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'player', i, j);
                         if (handled) break;
+                    }
+
+                    if (obstacle.pushable) {
+                        this.pushObstacleByBullet(obstacle, bullet);
+                        bulletManager.removeBullet(i);
+                        break;
                     }
 
                     if (obstacle.reflectsShots) {
@@ -192,7 +225,7 @@ extendClass(CollisionManager, {
             for (let j = obstacles.length - 1; j >= 0; j--) {
                 if (this.isColliding(enemyBullets[i], obstacles[j])) {
                     const obstacle = obstacles[j];
-                    if (obstacle.isFog) continue;
+                    if (obstacle.isFog || enemyBullets[i]._ignoreObstacle === obstacle) continue;
                     const bullet = enemyBullets[i];
                     const bulletX = bullet.x;
                     const bulletY = bullet.y;
@@ -202,6 +235,12 @@ extendClass(CollisionManager, {
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'enemy', i, j);
                         if (handled) break;
+                    }
+
+                    if (obstacle.pushable) {
+                        this.pushObstacleByBullet(obstacle, bullet);
+                        bulletManager.removeEnemyBullet(i);
+                        break;
                     }
 
                     if (obstacle.reflectsShots) {

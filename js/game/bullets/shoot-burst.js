@@ -197,6 +197,7 @@ extendClass(BulletManager, {
         const W = (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 240;
         const H = (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300;
         if (enemy.entering
+            || (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalGrace && objectiveManager.isArrivalGrace())
             || enemy.x + (enemy.width || 0) < 0 || enemy.x > W
             || enemy.y + (enemy.height || 0) < 0 || enemy.y > H) {
             return;

@@ -12,6 +12,8 @@ extendClass(EnemyManager, {
         }
 
         if (!this.enemy) return;
+        // Mission start: still gliding in on the intro path (missionStartManager.updateEnemyEntry), no AI yet.
+        if (this.enemy.introEntry) return;
 
         if (!this.exploding) {
             this.championCombatElapsedMs += deltaTime;
@@ -24,7 +26,8 @@ extendClass(EnemyManager, {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
         }
 
-        if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0) {
+        if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0
+            && Date.now() - (this.shieldHitAt || 0) > 2500) {
             const hasRegen = !this.defenseMechanisms.length
                 || this.defenseMechanisms.indexOf('shield_regen') !== -1
                 || this.shieldRegen > 0;
@@ -71,6 +74,7 @@ extendClass(EnemyManager, {
             speedMultiplier *= beatSyncManager.getEnemySpeedMul();
             bobY = beatSyncManager.getEnemyBobOffset() * 0.15;
         }
+        this.seekCover(effectiveDeltaTime);
         let edx = this.enemy.speed * speedMultiplier;
         let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;
 
@@ -164,6 +168,51 @@ extendClass(EnemyManager, {
             this.enemy.y = this.enemy.maxY;
             this.enemy.verticalSpeed = -Math.abs(this.enemy.verticalSpeed);
         }
+    },
+
+    /**
+     * Take cover: stand where an obstacle blocks the line to the player (the "shadow" of the obstacle seen from
+     * the player). Re-evaluated ~5x per second; steers by flipping/scaling the horizontal speed, so the normal
+     * bounce and terrain-avoidance code keeps working. No obstacle below the enemy → unchanged roaming.
+     */
+    seekCover(deltaTime) {
+        const e = this.enemy;
+        if (!e || e.isBoss || e.exploding || typeof obstacleManager === 'undefined' || !obstacleManager.obstacles) return;
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p) return;
+        const W = game?.internalWidth || game?.baseWidth || game?.width || 200;
+        e.coverT = (e.coverT || 0) - deltaTime;
+        if (e.coverT <= 0) {
+            e.coverT = 200;
+            const px = p.x + p.width / 2, py = p.y + p.height / 2;
+            const ex = e.x + e.width / 2, ey = e.y + e.height / 2;
+            let best = null, bestD = Infinity;
+            obstacleManager.obstacles.forEach((o) => {
+                if (!o || o.isFog || o.width < 8 || o.entering || o.wallDepth === 'under') return;
+                const oy = o.y + o.height / 2;
+                if (oy < ey + e.height || oy > py - p.height) return;     // must stand between enemy and player
+                const ox = o.x + o.width / 2;
+                if (ox < -4 || ox > W + 4) return;
+                const t = (py - ey) / Math.max(1, py - oy);
+                // Centre of the obstacle's shadow at the enemy's height.
+                const xc = px + (ox - px) * t;
+                if (xc < e.width / 2 || xc > W - e.width / 2) return;
+                const d = Math.abs(xc - ex);
+                if (d < bestD && d < W * 0.7) { bestD = d; best = xc; }
+            });
+            e.coverX = best;
+        }
+        if (e.coverX == null) {
+            // No cover left: back to the normal cruise speed (the original magnitude was kept).
+            if (e.coverBase) { e.speed = (e.speed < 0 ? -1 : 1) * e.coverBase; e.coverBase = null; }
+            return;
+        }
+        if (!e.coverBase) e.coverBase = Math.abs(e.speed) || 0.5;
+        const dx = e.coverX - (e.x + e.width / 2);
+        // Slow down on arrival so it settles in the shadow instead of overshooting.
+        const k = Math.max(0.15, Math.min(1, Math.abs(dx) / 24));
+        e.speed = (dx >= 0 ? 1 : -1) * e.coverBase * k;
     },
 
     /**

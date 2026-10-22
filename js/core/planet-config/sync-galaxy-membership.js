@@ -75,8 +75,19 @@ extendClass(PlanetConfigManager, {
     },
 
     resolveLayerColor(layer) {
-        const root = document.documentElement;
-        const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+        // Called per layer per frame: read the theme variables at most every 250ms (getComputedStyle forces a style recalc).
+        const now = performance.now();
+        if (!this._layerCssCache || now - this._layerCssCache.t > 250) {
+            const cs = getComputedStyle(document.documentElement);
+            const read = (name) => cs.getPropertyValue(name).trim();
+            this._layerCssCache = { t: now, v: {
+                '--env-primary': read('--env-primary'), '--current-primary': read('--current-primary'),
+                '--env-secondary': read('--env-secondary'), '--current-secondary': read('--current-secondary'),
+                '--env-accent': read('--env-accent'), '--current-accent': read('--current-accent')
+            } };
+        }
+        const cache = this._layerCssCache.v;
+        const css = (name) => cache[name] || '';
         switch (layer.colorSource) {
             case 'secondary':
                 return (css('--env-secondary') || css('--current-secondary')) || '#606060';
@@ -295,6 +306,8 @@ extendClass(PlanetConfigManager, {
         return {
             planetId: String(planetId || c.id || ''),
             faction: faction,
+            // Who built the planet (configured owner) — styles its own structures like the sluice gate.
+            homeFaction: String(all[0] || faction).toLowerCase(),
             planetStyle: look.style,
             // Planet look first, then faction doctrine floors/mats so each theater reads as both.
             floors: this.mergeIdLists(lookEnv && lookEnv.floors, FACTION_FLOORS[faction]),

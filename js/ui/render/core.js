@@ -471,7 +471,31 @@ class RenderManager {
 
         // Player + HUD on top (always visible)
         if (player) {
-            graphicsManager.renderPlayerShip(ctx, player, 1);
+            // Flying into the sluice / warp ring: the ship shrinks and fades into the chamber.
+            const enterFx = (typeof objectiveManager !== 'undefined' && objectiveManager.getEnterFx) ? objectiveManager.getEnterFx() : null;
+            // Leaving the arrival hatch: the hatch rock hides the ship until it is out of the tube mouth.
+            const occ = (typeof objectiveManager !== 'undefined' && objectiveManager.getArrivalOcclusion)
+                ? objectiveManager.getArrivalOcclusion() : null;
+            if (occ) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(-10000, -10000, 20000, 10000 + occ.top);
+                ctx.rect(occ.l, occ.top, occ.r - occ.l, occ.bottom - occ.top);
+                ctx.clip();
+            }
+            if (enterFx) {
+                const pcx = player.x + player.width / 2, pcy = player.y + player.height / 2;
+                ctx.save();
+                ctx.globalAlpha = enterFx.alpha;
+                ctx.translate(pcx, pcy);
+                ctx.scale(enterFx.scale, enterFx.scale);
+                ctx.translate(-pcx, -pcy);
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+                ctx.restore();
+            } else {
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+            }
+            if (occ) ctx.restore();
             if (bulletManager.drawMuzzleFlashes) bulletManager.drawMuzzleFlashes(ctx, player);
             if (playerManager.shieldMax > 0 && playerManager.shield > 0
                 && graphicsManager.drawShieldHull) {
@@ -496,7 +520,10 @@ class RenderManager {
                 }
             }
         }
-        this.drawShotTypeIcon(ctx);
+        // Pickup "+N" popups above the ship (drawn after it so the hull never covers them).
+        if (typeof pickupManager !== 'undefined' && pickupManager.renderPopups) {
+            pickupManager.renderPopups(ctx);
+        }
 
         if (typeof graphicsManager !== 'undefined' && graphicsManager.renderParticles) {
             graphicsManager.renderParticles(ctx);

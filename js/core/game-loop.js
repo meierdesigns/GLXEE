@@ -87,8 +87,10 @@ class GameLoop {
         const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
         
         this.update(cappedDeltaTime);
-        // Paused: keep the last frame; the pause overlay is CSS on top.
-        if (!this.gameState.isPaused) this.render();
+        // Paused: keep the last frame; the pause overlay is CSS on top. While the remote control is open the
+        // field is frozen by it, but still repainted so slider changes (sizes, effects) show up live.
+        const fxScope = (typeof window !== 'undefined' && window.vfFitScope) ? window.vfFitScope.vfs : null;
+        if (!this.gameState.isPaused || (fxScope && fxScope.fxOpen)) this.render();
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
@@ -120,6 +122,9 @@ class GameLoop {
         const introActive = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
         if (introActive) {
             missionStartManager.update(deltaTime);
+            if (typeof objectiveManager !== 'undefined' && objectiveManager.updateArrivalIntro) {
+                objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
+            }
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
@@ -142,11 +147,10 @@ class GameLoop {
             : ((typeof gameCore !== 'undefined' && gameCore.gameControl) ? gameCore.gameControl : null);
         const lootPhase = !!(gameControl && gameControl._victoryLootPhase);
         if (lootPhase) {
-            // Keep in-flight shots / obstacles moving during loot scoop / flee cleanup
+            // Keep in-flight shots / obstacles moving during loot scoop / flee cleanup.
+            // No keys: held fire buttons must not keep shooting after the win.
             if (typeof bulletManager !== 'undefined') {
-                const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
-                const keys = inputHandler ? inputHandler.keys : null;
-                bulletManager.update(deltaTime, keys);
+                bulletManager.update(deltaTime, null);
             }
             if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
             if (typeof enemyManager !== 'undefined'
@@ -173,6 +177,9 @@ class GameLoop {
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
+            missionStartManager.updateEnemyEntry(deltaTime);
+        }
         if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
         if (typeof pickupManager !== 'undefined') pickupManager.update(deltaTime);
         if (typeof collisionManager !== 'undefined') collisionManager.checkCollisions(this.gameState);

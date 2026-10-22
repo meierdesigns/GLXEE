@@ -1261,6 +1261,16 @@ html[data-faction] :is(.victory-stats, .victory-loot) {
     border-color: var(--faction-accent, var(--color-primary));
     clip-path: var(--faction-ctl-clip, none);
 }
+/* Calmer end screen: inner containers drop their frames, a faint fill keeps them grouped. */
+html[data-faction] .victory-screen :is(.victory-stats, .victory-loot, .victory-instructions) {
+    border: none;
+    outline: none;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 6%, transparent);
+}
+html[data-faction] .victory-screen .victory-loot-title {
+    border-bottom: none;
+}
 html[data-faction] .victory-button {
     border-radius: 0;
     clip-path: var(--faction-ctl-clip, none);

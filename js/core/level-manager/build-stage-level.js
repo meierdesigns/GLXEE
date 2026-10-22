@@ -42,7 +42,7 @@ extendClass(CoreLevelManager, {
         if (isTransit) {
             const seconds = 50 + parsed.stageIndex * 5;
             resolved = {
-                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex),
+                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex, base.difficulty),
                 objective: {
                     type: 'reachGoal',
                     seconds: seconds,
@@ -87,11 +87,15 @@ extendClass(CoreLevelManager, {
     },
 
     /** Steady stream of side craft (no champion) across a transit run. */
-    buildTransitEnemies(source, seconds, stageIndex) {
+    buildTransitEnemies(source, seconds, stageIndex, difficulty) {
         const pool = (source || []).filter(e => e && e.type);
         const types = pool.length ? pool : [{ type: 'enemyBasic' }];
         const roles = ['assault', 'gunner', 'assault', 'bomber'];
-        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25);
+        // Side craft in transit runs were too strong early on: scale them with the planet tier and the stage
+        // (0.5 on an easy planet's first stage, up to 1.0 on late stages of hard planets) and thin the stream out.
+        const tier = typeof planetTierIndex === 'function' ? planetTierIndex(difficulty) : 1;
+        const transitScale = Math.max(0.5, Math.min(1, 0.5 + 0.09 * tier + 0.05 * (stageIndex - 1)));
+        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25) * (1 + (1 - transitScale) * 0.8);
         const out = [];
         for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
             const src = types[i % types.length];
@@ -102,6 +106,7 @@ extendClass(CoreLevelManager, {
                 level: 1,
                 role: roles[i % roles.length],
                 spawnAt: t,
+                transitScale: transitScale,
                 combatEvents: []
             }));
         }

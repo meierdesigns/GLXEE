@@ -1404,3 +1404,38 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
 .gm-enemy-text { top: 44px; height: 30px; padding: 0 12px; }
 
 .ecl-modal { width: 92%; max-width: 92%; overflow-x: hidden; }
+
+/* Planet backdrop: animated atmosphere. Soft cloud patches in the planet's
+   haze tone drift sideways across the disc (clipped to it, like the planet
+   turning); the outer haze rings glow up and down. */
+.gm-sector-planet-bg.has-atmo::before {
+    animation: gm-atmo-breathe 5s ease-in-out infinite alternate;
+}
+.gm-sector-planet-bg.has-atmo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse 34px 7px at 20% 30%, color-mix(in srgb, var(--atmo) 30%, transparent), transparent 100%),
+        radial-gradient(ellipse 46px 8px at 70% 52%, color-mix(in srgb, var(--atmo) 24%, transparent), transparent 100%),
+        radial-gradient(ellipse 28px 6px at 42% 74%, color-mix(in srgb, var(--atmo) 28%, transparent), transparent 100%);
+    background-size: 160px 100%;
+    background-repeat: repeat-x;
+    -webkit-mask-image: radial-gradient(circle closest-side, #000 calc(52% * var(--dk, 1)), transparent calc(61% * var(--dk, 1)));
+    mask-image: radial-gradient(circle closest-side, #000 calc(52% * var(--dk, 1)), transparent calc(61% * var(--dk, 1)));
+    animation: gm-atmo-drift 40s linear infinite;
+}
+@keyframes gm-atmo-drift {
+    from { background-position: 0 0; }
+    to { background-position: 160px 0; }
+}
+@keyframes gm-atmo-breathe {
+    from { opacity: .7; }
+    to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-sector-planet-bg.has-atmo::before,
+    .gm-sector-planet-bg.has-atmo::after { animation: none; }
+}

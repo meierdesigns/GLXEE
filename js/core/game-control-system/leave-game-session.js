@@ -5,6 +5,8 @@ extendClass(GameControlSystem, {
     leaveGameSession() {
         this.stopGame();
         this.hideAllOverlays();
+        // Next planet entry is a fresh arrival: launch from the home station again.
+        if (typeof objectiveManager !== 'undefined') objectiveManager.arrivalPlanetId = null;
         if (typeof soundManager !== 'undefined') {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;

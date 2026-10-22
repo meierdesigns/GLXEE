@@ -17,9 +17,34 @@ class GameControlSystem {
         this._victoryFinalizing = false;
     }
 
+    /**
+     * Every mission flies the profile's active hangar ship with its fitted
+     * loadout. Paths like restart / next stage / page restore never picked a
+     * ship, so the default hull ("Player Fighter", spread gun) or a stale
+     * loadout could slip in.
+     */
+    ensureActiveHangarShip() {
+        if (typeof graphicsManager === 'undefined' || !graphicsManager.setPlayerShipModel) return;
+        const shipId = (typeof profileManager !== 'undefined' && profileManager.getActiveShipId)
+            ? profileManager.getActiveShipId() : null;
+        if (!shipId) return;
+        // Always rebuild: the same hull id can carry an older loadout (weapon swapped in the hangar since).
+        let ship = null;
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.getHangarShipModel) {
+            ship = homeStationUI.getHangarShipModel(shipId);
+        } else if (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel) {
+            ship = shipConfigManager.getMergedModel(shipId);
+        }
+        if (!ship) return;
+        if (!ship.id) ship.id = shipId;
+        if (!ship.type) ship.type = shipId;
+        graphicsManager.setPlayerShipModel(ship);
+    }
+
     // Game flow control
     startGame(levelId = 'mars') {
         this.cancelVictoryLootPhase();
+        this.ensureActiveHangarShip();
 
         if (typeof menuStateManager !== 'undefined') {
             // levelId lets a page refresh start the same match again

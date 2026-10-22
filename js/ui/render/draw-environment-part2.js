@@ -148,15 +148,24 @@ extendClass(RenderManager, {
                     ? obstacleManager.terrainFloorAt(baseRow - r, 0) : 'craters';
                 const rc = this.terrainRowCache(wr, cols);
                 for (let cx = 0; cx < cols; cx++) {
-                    const n = rc.n[cx];
+                    // Large lighter / darker patches (macro noise) shift the fine noise, so the floor
+                    // reads as terrain with plains and hollows instead of one even carpet.
+                    const n = Math.max(0, Math.min(1, rc.n[cx] + (rc.m[cx] - 0.5) * 0.7));
                     let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
-                    if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.055 : 0.022) * pal.veinMul) col = pal.special;
+                    // Surface veins (ice / lava / …) follow coarse noise: connected seams, not confetti specks.
+                    if (pal.special && Math.abs(rc.v[cx] - 0.5) < (env.planetStyle ? 0.035 : 0.018) * pal.veinMul) col = pal.special;
                     if (floor === 'craters') {
                         let c = rc.hits[cx];
                         if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
                         if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
                     } else {
                         col = this.terrainFloorCell(floor, pal, cx, wr, n) || col;
+                        // Now and then a crater on the other floors too (sparser than on crater fields).
+                        if (rc.m[cx] < 0.42) {
+                            let c = rc.hits[cx];
+                            if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
+                            if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
+                        }
                     }
                     // Faction doctrine speckles the planet crust (organic / mechanical).
                     col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
@@ -187,22 +196,6 @@ extendClass(RenderManager, {
                     }
                 }
             }
-            // Area threshold on the floor
-            if (obstacleManager.terrainGateRow) {
-                for (let r = -1; r * cell + phase < H; r++) {
-                    const gd = obstacleManager.terrainGateRow(baseRow - r);
-                    if (gd == null || Math.abs(gd) > 1) continue;
-                    const y = r * cell + phase;
-                    for (let cx = 0; cx < cols; cx++) {
-                        let col;
-                        if (gd === 0) col = (cx % 6 === 3) ? pal.accent : '#05060a';
-                        else if (gd === 1) col = pal.craterLit;
-                        else col = pal.ground[3];
-                        rowCols[cx] = col;
-                    }
-                    flushRow(rowCols, y);
-                }
-            }
             // Walls (own batch → drawn after under-wall obstacles)
             batch = wallBatch;
             curPhase = phase;
@@ -225,12 +218,28 @@ extendClass(RenderManager, {
                         runCol = null;
                         runW = 0;
                     };
+                    const hatch = walls[k + 'Hatch'];
+                    if (hatch === 'gap' && walls[k + 'Tunnel'] > 0) {
+                        // Open hangar slot: dark recess on the floor layer so craft fly out over it.
+                        batch = overlayBatch;
+                        this.drawHatchRecess(pushRun, env, pal, mp, side, cols, walls[k + 'Tunnel'], wr, y, cell,
+                            obstacleManager.terrainOpeningInfo(wr, side));
+                        batch = wallBatch;
+                    }
+                    const lip = hatch === 'frame' ? walls[k + 'Lip'] : 0;
+                    // Jamb row right against the slot: one bright accent rim so the door reads at a glance.
+                    const doorRim = hatch === 'frame' && (obstacleManager.terrainOpeningAt(wr + 1, side) === 'gap'
+                        || obstacleManager.terrainOpeningAt(wr - 1, side) === 'gap');
+                    // Rim structure: row inside its 36-row slot (outlined block, see terrainWallCells).
+                    const stT = ((wr % 36) + 36) % 36 - 10;
                     /* edge starts at 0 — no corridor-side rgba shadow column
                        (that read as semi-transparent "frame contours" over the playfield). */
                     for (let edge = 0; edge < width; edge++) {
                         const cx = side ? cols - width + edge : width - 1 - edge;
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
+                        else if (doorRim) col = edge === width - 1 ? '#05060a' : pal.accent;
+                        else if (edge <= lip) col = this.hatchLipCell(env.style, pal, mp, cx, wr, edge);
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
                             /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
@@ -238,14 +247,7 @@ extendClass(RenderManager, {
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            // Structure band: faction silhouette as blotches, not row stripes.
-                            const st = env.style || 'asteroid';
-                            const sh = this.envHash(cx * 3 + edge, wr * 2 + 11);
-                            if (st === 'tech') col = sh < 0.55 ? pal.accent : mp.lit[1];
-                            else if (st === 'organic') col = sh < 0.5 ? pal.accent : mp.lit[0];
-                            else if (st === 'spike') col = sh < 0.45 ? pal.accent : pal.wall[0];
-                            else if (st === 'scrap') col = sh < 0.4 ? (mp.crack || pal.accent) : pal.wall[1];
-                            else col = pal.wall[1];
+                            col = this.structureCell(env.style || 'asteroid', pal, mp, edge, width - base, stT, wr);
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
                         const px = cx * cell;
@@ -301,7 +303,7 @@ extendClass(RenderManager, {
         ctx.fillStyle = '#0a0c10';
         ctx.fillRect(0, 0, W, H);
         [groundLayer, overlayLayer].forEach((l) => {
-            if (l) ctx.drawImage(l.canvas, 0, l.y, cols * cell, rowsN * cell);
+            if (l) ctx.drawImage(l.canvas, 0, this.snapToDevicePx(ctx, l.y), cols * cell, rowsN * cell);
         });
         ctx.restore();
         // Wall layer stays separate so under-wall obstacles show through the
@@ -311,6 +313,63 @@ extendClass(RenderManager, {
         this._terrainWallDims = { w: cols * cell, h: rowsN * cell };
     },
     /** '#rgb' / '#rrggbb' / opaque rgb(a) → packed little-endian RGBA, or null when not exactly representable. */
+    /** Faction look of a hangar frame cell (the lip around the opening). */
+    hatchLipCell(style, pal, mp, cx, wr, edge) {
+        const h = this.envHash(cx * 5 + edge, wr * 3 + 17);
+        switch (style) {
+            case 'tech': return ((edge + wr) & 3) < 2 ? pal.accent : '#1a1c22'; // hazard stripes
+            case 'spike': return edge === 1 ? pal.accent : pal.wall[0];          // bone fangs, lit tips
+            case 'organic': return h < 0.55 ? pal.accent : mp.lit[0];            // swollen flesh lips
+            case 'scrap': return h < 0.35 ? (mp.crack || pal.accent) : (h < 0.7 ? pal.wall[1] : mp.lit[1]);
+            default: return h < 0.5 ? mp.lit[0] : pal.wall[1];                  // ragged cave rim
+        }
+    },
+
+    /**
+     * One cell of a faction structure on the canyon rim, as a solid outlined
+     * block (bunker, pod, fang, junk pile) instead of colour noise.
+     * `edge` 1..band-1 from the corridor, `t` = row inside the 14-row block.
+     */
+    structureCell(style, pal, mp, edge, band, t, wr) {
+        if (t <= 0 || t >= 13 || edge === band - 1) return '#05060a';
+        const top = t === 1;
+        switch (style) {
+            case 'tech': // bunker: lit roof strip, dark hull, a column of accent windows
+                if (top) return mp.lit[0];
+                return edge % 3 === 1 && t % 3 === 0 ? pal.accent : pal.wall[2];
+            case 'organic': // pod: glowing core in a fleshy shell
+                if (top || edge === 1) return mp.lit[0];
+                return Math.abs(t - 6.5) < 3 && edge > 2 && edge < band - 2 ? pal.accent : pal.wall[1];
+            case 'spike': // bone fang: pale body, accent tip at the corridor
+                if (edge === 1) return pal.accent;
+                return top ? '#e6e2d6' : pal.wall[0];
+            case 'scrap': // welded junk: plates with rivets and a weld seam
+                if (top) return mp.lit[1];
+                if (t === 7) return mp.crack || pal.accent;
+                return (edge + t) % 5 === 0 ? pal.accent : pal.wall[1];
+            default: // boulder ridge
+                return top ? pal.wall[0] : (this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1]);
+        }
+    },
+
+    /**
+     * Recess behind an open hangar slot, drawn on the floor layer: dark bay
+     * with accent chevrons pointing into the corridor, so it reads as a launch door.
+     */
+    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info) {
+        const style = env.style || 'asteroid';
+        const inner = { tech: '#07090d', organic: '#14060b', spike: '#0b0507', scrap: '#0b0a08' }[style] || '#06070a';
+        const mid = info ? info.frame + (info.len - 2 * info.frame - 1) / 2 : 0;
+        const dy = info ? Math.abs(info.t - mid) : 99;
+        for (let edge = 0; edge < depth; edge++) {
+            const cx = side ? cols - 1 - edge : edge;
+            let col = inner;
+            if (dy <= 2.5 && ((edge + Math.round(dy)) % 5) === 0 && edge < depth - 1) col = pal.accent;
+            else if (edge === depth - 1) col = '#05060a';
+            push(col, cx * cell, y, cell, cell);
+        }
+    },
+
     packOpaqueColor(css) {
         const cache = this._packedColors || (this._packedColors = new Map());
         let v = cache.get(css);
@@ -366,8 +425,14 @@ extendClass(RenderManager, {
         let rc = c.rows.get(wr);
         if (!rc) {
             const n = new Float64Array(cols);
-            for (let cx = 0; cx < cols; cx++) n[cx] = this.envNoise(cx, wr);
-            rc = { n, hits: new Array(cols) };
+            const v = new Float64Array(cols);
+            const m = new Float64Array(cols);
+            for (let cx = 0; cx < cols; cx++) {
+                n[cx] = this.envNoise(cx, wr);
+                v[cx] = this.envNoise(cx * 0.22 + 31, wr * 0.22 + 17);
+                m[cx] = this.envNoise(cx * 0.16 + 311, wr * 0.16 + 709); // macro patches (~60 cells)
+            }
+            rc = { n, v, m, hits: new Array(cols) };
             c.rows.set(wr, rc);
         }
         return rc;
@@ -378,9 +443,18 @@ extendClass(RenderManager, {
         if (!this._terrainWallReady || !wl) return;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(wl.canvas, 0, wl.y, this._terrainWallDims.w, this._terrainWallDims.h);
+        ctx.drawImage(wl.canvas, 0, this.snapToDevicePx(ctx, wl.y), this._terrainWallDims.w, this._terrainWallDims.h);
         ctx.restore();
         this._terrainWallReady = false;
+    },
+    /**
+     * Round a logical y to the canvas' device-pixel grid. A fractional blit
+     * offset with nearest-neighbour scaling makes voxel rows flicker between
+     * heights while scrolling; snapped, every row keeps its size.
+     */
+    snapToDevicePx(ctx, y) {
+        const s = ctx.getTransform ? Math.abs(ctx.getTransform().d) || 1 : 1;
+        return Math.round(y * s) / s;
     },
     /** Floor patterns for the canyon areas (null = keep the noise colour). */
     terrainFloorCell(floor, pal, cx, wr, n) {

@@ -13,6 +13,8 @@ class MissionStartManager {
         this.goTimer = 0;
         this.flyInElapsed = 0;
         this.flyInDuration = 1400;
+        this.enemyInElapsed = 0;
+        this.enemyInDuration = 900;
         this.overlay = null;
         this.textEl = null;
         this.subEl = null;
@@ -45,6 +47,7 @@ class MissionStartManager {
         this.countdownTimer = 0;
         this.goTimer = 0;
         this.flyInElapsed = 0;
+        this.enemyEntry = false;
         this.playerFrom = null;
         this.playerTo = null;
         this.enemyFrom = null;
@@ -348,11 +351,32 @@ class MissionStartManager {
             this.flyInElapsed += deltaTime;
             const t = Math.min(1, this.flyInElapsed / this.flyInDuration);
             const ease = 1 - Math.pow(1 - t, 3);
-            this.applyFlyIn(ease);
+            // Enemies wait off screen until the player is out of the hatch and in control.
+            this.applyPlayerFlyIn(ease);
+            this.applyEnemyFlyIn(0);
             if (t >= 1) {
                 this.complete();
             }
         }
+    }
+
+    /**
+     * After the intro: champion and side craft glide in from off screen while the player already flies.
+     * Called from the game loop after enemyManager.update so the entry path wins over AI movement.
+     */
+    updateEnemyEntry(deltaTime) {
+        if (!this.enemyEntry) return;
+        this.enemyInElapsed += deltaTime;
+        const t = Math.min(1, this.enemyInElapsed / this.enemyInDuration);
+        this.applyEnemyFlyIn(1 - Math.pow(1 - t, 3));
+        if (t >= 1) this.endEnemyEntry();
+    }
+
+    endEnemyEntry() {
+        this.enemyEntry = false;
+        if (typeof enemyManager === 'undefined') return;
+        if (enemyManager.enemy) enemyManager.enemy.introEntry = false;
+        (enemyManager.sideEnemies || []).forEach((s) => { s.introEntry = false; });
     }
 
     startFlyIn() {

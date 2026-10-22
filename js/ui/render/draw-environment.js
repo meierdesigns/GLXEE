@@ -82,7 +82,9 @@ extendClass(RenderManager, {
         const env = this.getCombatEnvironment();
         // Each rock draws its own shape family, hue variant, material and
         // surface from the level's environment, so a field is never uniform.
-        const style = isShield ? 'shield' : this.pickWeighted(env.styles || [{ id: env.style || 'asteroid', weight: 1 }], rnd);
+        const functional = obstacle.kind === 'prism' || obstacle.kind === 'bulwark' ? obstacle.kind : null;
+        const style = isShield ? 'shield' : functional
+            || this.pickWeighted(env.styles || [{ id: env.style || 'asteroid', weight: 1 }], rnd);
         const material = this.pickWeighted(env.resources || [{ id: 'scrap', weight: 1 }], rnd);
         const surface = env.surface || 'plain';
         const tint = this.hueShift(env.base, (rnd() - 0.5) * 50, 0.7 + rnd() * 0.6);
@@ -109,6 +111,10 @@ extendClass(RenderManager, {
             const a = Math.atan2(ny, nx);
             const r = Math.hypot(nx, ny);
             switch (style) {
+                case 'prism': // upright glass triangle
+                    return ny > -0.92 && ny < 0.9 && Math.abs(nx) < (ny + 0.92) * 0.55;
+                case 'bulwark': // heavy armour block with chamfered corners
+                    return Math.abs(nx) < 0.95 && Math.abs(ny) < 0.95 && Math.abs(nx) + Math.abs(ny) < 1.55;
                 case 'shield': {
                     const seg = Math.PI / 3;
                     const t = ((a % seg) + seg) % seg - seg / 2;
@@ -155,6 +161,8 @@ extendClass(RenderManager, {
                 // nothing but a dark box.
                 if (gw >= 7 && gh >= 7 && (!inside(px - 1, py) || !inside(px + 1, py) || !inside(px, py - 1) || !inside(px, py + 1))) {
                     col = outline;
+                } else if (functional) {
+                    col = this.functionalObstacleCell(functional, px, py, gw, gh, inside, accent);
                 } else {
                     const nx = ((px + 0.5) / gw) * 2 - 1;
                     const ny = ((py + 0.5) / gh) * 2 - 1;
@@ -218,6 +226,45 @@ extendClass(RenderManager, {
         c._w = obstacle.width;
         c._h = obstacle.height;
         return c;
+    },
+    /**
+     * One pixel of a functional obstacle; the look tells what it does.
+     * prism: clear glass with a rainbow band fanning out to the right side,
+     * bright facet edges — it splits light (and shots).
+     * bulwark: dark gunmetal slab with a lit bevel, rivets and accent push
+     * chevrons, no cracks — it can't be broken, only shoved.
+     */
+    functionalObstacleCell(kind, px, py, gw, gh, inside, accent) {
+        const nx = ((px + 0.5) / gw) * 2 - 1;
+        const ny = ((py + 0.5) / gh) * 2 - 1;
+        // Distance (in pixels) to the outline, for bevels / rims.
+        const rim = !inside(px - 2, py) || !inside(px + 2, py) || !inside(px, py - 2) || !inside(px, py + 2);
+        if (kind === 'prism') {
+            const glass = ['#f2fdff', '#b8ecff', '#6cc8ec', '#2f7fae'];
+            const rainbow = ['#ff4d6d', '#ffa24a', '#fff06a', '#6dff8a', '#4dd2ff', '#a77bff'];
+            // Lit facet on the left, shade on the right.
+            if (rim) return nx < 0 ? glass[0] : glass[2];
+            // White light enters from below, the spectrum fans out towards the upper right.
+            const t = (nx * 0.9 - ny * 0.45 + 0.55);
+            if (nx > -0.1 && t > 0.15 && t < 1.05) {
+                const i = Math.max(0, Math.min(rainbow.length - 1, Math.floor((t - 0.15) / 0.9 * rainbow.length)));
+                return rainbow[i];
+            }
+            if (Math.abs(nx + 0.25 - ny * 0.1) < 0.08) return '#ffffff'; // inner light ray
+            return ny < -0.2 ? glass[1] : glass[2];
+        }
+        // bulwark
+        const metal = ['#9aa3b0', '#5c6470', '#3a404a', '#23272e'];
+        if (rim) return (nx + ny) < 0 ? metal[0] : metal[3]; // bevel: lit top-left, dark bottom-right
+        const ax = Math.abs(nx), ay = Math.abs(ny);
+        // Rivets in the four corners of the face.
+        if (Math.abs(ax - 0.6) < 0.1 && Math.abs(ay - 0.6) < 0.1) return metal[0];
+        // Push chevrons (^ ^) in the accent colour: arrows that say "shove me".
+        const cy = ny + 0.1;
+        const chevron = (o) => Math.abs(cy - o - (ax * 0.9 - 0.25)) < 0.11 && ax < 0.45;
+        if (chevron(-0.05) || chevron(0.35)) return accent;
+        // Brushed plate: faint horizontal grain.
+        return py % 3 === 0 ? metal[2] : metal[1];
     },
     /** Deterministic 0..1 hash of an integer cell. */
     envHash(ix, iy) {

@@ -24,7 +24,21 @@ class InputHandler {
         });
     }
 
+    /** Victory loot scoop or win / lose overlay: combat is over, no firing. */
+    isCombatEnded() {
+        const gc = (typeof game !== 'undefined' && game.gameControl)
+            ? game.gameControl
+            : ((typeof gameCore !== 'undefined' && gameCore.gameControl) ? gameCore.gameControl : null);
+        if (gc && gc._victoryLootPhase) return true;
+        return ['gameOver', 'victoryOverlay'].some((id) => {
+            const el = document.getElementById(id);
+            return !!(el && !el.classList.contains('hidden'));
+        });
+    }
+
     handleKeyDown(event) {
+        // Space still held from combat: end screens wait for its release.
+        const spaceHeld = !!(this.keys[' '] || this.keys['Space']);
         const blockShip = typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls();
         if (!(blockShip && typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key))) {
             this.keys[event.key] = true;
@@ -80,12 +94,14 @@ class InputHandler {
         // The generic overlay guard below would otherwise consume it first.
         const gameOverOverlay = document.getElementById('gameOver');
         if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) {
+            if (spaceHeld) { event.preventDefault(); return; }
             if (typeof uiManager !== 'undefined') uiManager.handleGameOverInput(event);
             return;
         }
 
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) {
+            if (spaceHeld) { event.preventDefault(); return; }
             if (typeof uiManager !== 'undefined') uiManager.handleVictoryInput(event);
             return;
         }
@@ -215,7 +231,9 @@ class InputHandler {
         }
 
         // Shoot on spacebar (mode-dependent)
-        if (event.key === ' ') {
+        if (event.key === ' ' && this.isCombatEnded()) {
+            event.preventDefault();
+        } else if (event.key === ' ') {
             event.preventDefault();
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';

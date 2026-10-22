@@ -3,19 +3,10 @@
 // UIManager methods, split from ui-manager.js.
 extendClass(UIManager, {
     updateGameOverMenuDisplay() {
-        const buttons = document.querySelectorAll('.game-over-button');
+        // Same lit-block selection as the victory buttons (no text arrow: icon + label stay intact).
+        const buttons = document.querySelectorAll('#gameOver .game-over-button');
         buttons.forEach((button, index) => {
-            if (index === this.gameOverMenuIndex) {
-                button.classList.add('selected');
-                // Show arrow indicator
-                if (!button.textContent.includes('▶')) {
-                    button.textContent = '▶ ' + button.textContent;
-                }
-            } else {
-                button.classList.remove('selected');
-                // Hide arrow indicator
-                button.textContent = button.textContent.replace('▶ ', '');
-            }
+            button.classList.toggle('selected', index === this.gameOverMenuIndex);
         });
     },
 
@@ -40,18 +31,18 @@ extendClass(UIManager, {
         event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
 
+        // Buttons sit side by side: every arrow steps through the visible ones.
+        const count = this.getVictoryButtons().length || this.victoryMenuItems.length || 1;
         switch (event.key) {
             case 'ArrowUp':
-                this.victoryMenuIndex = (this.victoryMenuIndex - 1 + this.victoryMenuItems.length) % this.victoryMenuItems.length;
+            case 'ArrowLeft':
+                this.victoryMenuIndex = (this.victoryMenuIndex - 1 + count) % count;
                 this.updateVictoryMenuDisplay();
                 break;
             case 'ArrowDown':
-                this.victoryMenuIndex = (this.victoryMenuIndex + 1) % this.victoryMenuItems.length;
-                this.updateVictoryMenuDisplay();
-                break;
-            case 'ArrowLeft':
             case 'ArrowRight':
-                // Ignore horizontal navigation - only vertical selection
+                this.victoryMenuIndex = (this.victoryMenuIndex + 1) % count;
+                this.updateVictoryMenuDisplay();
                 break;
             case 'Enter':
             case ' ':

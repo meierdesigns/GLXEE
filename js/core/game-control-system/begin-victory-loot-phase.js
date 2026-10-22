@@ -57,6 +57,11 @@ extendClass(GameControlSystem, {
         } catch (e) {
             console.warn('Progress save failed', e);
         }
+
+        // Ship already inside the sluice: it cannot scoop anything, so bank the rest and go straight to the win screen.
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.enter) {
+            this.finalizeVictory();
+        }
     },
 
     updateVictoryLootPhase(deltaTime) {
@@ -242,29 +247,40 @@ extendClass(GameControlSystem, {
             machine: ['SYSTEM FAILURE', 'Unit terminated', 'CHASSIS 0x00 · REBOOT PENDING']
         };
         const pick = lines[faction] || lines.terran;
-        const content = overlay.querySelector('.game-over-content');
+        // Same markup as the victory screen (index.html #gameOver).
+        const content = overlay.querySelector('.victory-content');
         if (!content) return;
-        const h = content.querySelector('h2');
-        const p = content.querySelector('p');
+        const h = content.querySelector('.victory-title');
+        const p = content.querySelector('.victory-subtitle');
         if (h) h.textContent = pick[0];
         if (p) p.textContent = pick[1];
         const ep = content.querySelector('.game-over-epitaph');
         if (ep) ep.textContent = pick[2] || '';
-        if (this.applyOutcomeStepper) this.applyOutcomeStepper(ep || p || h, 'lost');
-        let box = content.querySelector('.game-over-loss');
-        if (!box) {
-            box = document.createElement('div');
-            box.className = 'victory-loot game-over-loss';
-            const buttons = content.querySelector('.game-over-buttons');
-            content.insertBefore(box, buttons);
+        overlay.dataset.faction = faction;
+        if (this.applyOutcomeStepper) this.applyOutcomeStepper(content.querySelector('.victory-header'), 'lost');
+        const list = content.querySelector('.game-over-loss .victory-loot-list');
+        if (list) {
+            const ids = Object.keys(lost || {}).filter((id) => lost[id] > 0);
+            list.innerHTML = ids.length && this.renderVictoryLootHtml
+                ? this.renderVictoryLootHtml(lost).replace(/class="victory-loot-amount">/g, 'class="victory-loot-amount">−')
+                : '<div class="victory-loot-empty">NOTHING LOST</div>';
         }
-        const ids = Object.keys(lost || {}).filter((id) => lost[id] > 0);
-        let rows = '<div class="victory-loot-empty">NOTHING LOST</div>';
-        if (ids.length && this.renderVictoryLootHtml) {
-            rows = this.renderVictoryLootHtml(lost).replace(/>\+(\d+)</g, '>−$1<');
+        if (this.applyVictoryPixelIcons) this.applyVictoryPixelIcons(overlay);
+        // Hover moves the keyboard selection too, so only one button is lit.
+        if (!overlay.dataset.bound) {
+            overlay.dataset.bound = '1';
+            overlay.querySelectorAll('.game-over-button').forEach((button) => {
+                button.addEventListener('mouseenter', () => {
+                    if (typeof uiManager === 'undefined') return;
+                    uiManager.gameOverMenuIndex = parseInt(button.dataset.index, 10) || 0;
+                    uiManager.updateGameOverMenuDisplay();
+                });
+            });
         }
-        box.innerHTML = '<div class="victory-loot-title">RESOURCES LOST</div>' +
-            `<div class="victory-loot-list">${rows}</div>`;
+        if (typeof uiManager !== 'undefined') {
+            uiManager.gameOverMenuIndex = 0;
+            uiManager.updateGameOverMenuDisplay();
+        }
     },
 
     hideGameOverOverlay() {

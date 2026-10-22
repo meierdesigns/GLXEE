@@ -111,10 +111,8 @@ extendClass(GameControlSystem, {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
         } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
-            // Defeat card is narrow — smaller globe; victory keeps the large portrait via CSS.
-            const go = typeof document !== 'undefined' && document.getElementById('gameOver');
-            const onDefeat = !!(go && !go.classList.contains('hidden')) || result === 'lost';
-            icon = galaxyMapManager.planetIconHtml(pid, onDefeat ? 168 : 320, true);
+            // Victory and defeat share the wide layout with the large globe.
+            icon = galaxyMapManager.planetIconHtml(pid, 620, true);
         }
 
         let steps = '';
@@ -140,7 +138,13 @@ extendClass(GameControlSystem, {
             steps = `<ol class="outcome-stepper">${list.join('')}</ol>` +
                 `<p class="outcome-status">${which} ${result === 'won' ? 'CLEARED' : 'FAILED'}</p>`;
         }
-        return `<span class="outcome-planet-icon${isAmbush ? ' is-ambush-wreck' : ''}" aria-hidden="true">${icon}</span>` +
+        // Atmosphere haze tone of the planet (same rings as the sector card, css part-23).
+        // The icon is an <img>; read the haze tone from a small inline-SVG render of the same planet.
+        const atmoSvg = (!isAmbush && typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetAtmoColor)
+            ? galaxyMapManager.planetIconHtml(pid, 64, false) : '';
+        const atmo = atmoSvg ? galaxyMapManager.planetAtmoColor(atmoSvg) : '';
+        const atmoAttr = atmo ? ` style="--atmo:${atmo};--dk:${galaxyMapManager.planetAtmoScale(atmoSvg)}"` : '';
+        return `<span class="outcome-planet-icon${isAmbush ? ' is-ambush-wreck' : ''}${atmo ? ' has-atmo' : ''}"${atmoAttr} aria-hidden="true">${icon}</span>` +
             `<div class="outcome-planet">` +
             `<span class="outcome-planet-text"><strong>${name}</strong>` +
             `<span>${galaxy ? String(galaxy.name || gid).toUpperCase() : ''}${isAmbush ? ' · AMBUSH' : ''}</span></span>` +

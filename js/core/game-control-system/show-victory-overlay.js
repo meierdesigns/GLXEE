@@ -51,16 +51,16 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">SCORE</span>
+                        <div class="stat-item" title="Score">
+                            <span class="stat-icon" data-icon="navTrophy" aria-label="Score"></span>
                             <span class="stat-value" id="victoryScore">0</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">TIME</span>
+                        <div class="stat-item" title="Time">
+                            <span class="stat-icon" data-icon="navClock" aria-label="Time"></span>
                             <span class="stat-value" id="victoryTime">00:00</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">ENEMIES</span>
+                        <div class="stat-item" title="Enemies">
+                            <span class="stat-icon" data-icon="navSkull" aria-label="Enemies"></span>
                             <span class="stat-value" id="victoryEnemies">0</span>
                         </div>
                     </div>
@@ -167,10 +167,10 @@ extendClass(GameControlSystem, {
                 ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
                 : '';
             const color = tint || '#ccc';
-            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}">` +
+            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}" title="${label}">` +
                 `<span class="victory-loot-icon">${iconHtml}</span>` +
                 `<span class="victory-loot-label">${label}</span>` +
-                `<span class="victory-loot-amount">+${amount}</span>` +
+                `<span class="victory-loot-amount">${amount}</span>` +
                 `</div>`;
         }).join('');
     },
@@ -181,6 +181,11 @@ extendClass(GameControlSystem, {
             '0': 'menuStart',
             '1': 'menuPlanets'
         };
+        if (typeof iconRenderer !== 'undefined') {
+            victoryOverlay.querySelectorAll('.victory-stats .stat-icon[data-icon]').forEach((iconEl) => {
+                iconEl.innerHTML = iconRenderer.imgHtml(iconEl.dataset.icon, 32, 'victory-pixel-icon');
+            });
+        }
         victoryOverlay.querySelectorAll('.victory-button').forEach((button) => {
             let iconEl = button.querySelector('.button-icon');
             if (!iconEl) {

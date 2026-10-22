@@ -8,7 +8,9 @@ extendClass(InputHandler, {
         if (event.key === ' ') {
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';
-                if (mode === 'charge' && bulletManager.isCharging) {
+                if (mode === 'charge' && bulletManager.isCharging && this.isCombatEnded()) {
+                    bulletManager.resetCharge();
+                } else if (mode === 'charge' && bulletManager.isCharging) {
                     bulletManager.releaseChargeShot(playerManager.getPosition());
                 }
             }

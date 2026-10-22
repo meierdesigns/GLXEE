@@ -23,6 +23,11 @@ extendClass(RenderManager, {
             obstacleManager.drawCrate(ctx, obstacle);
             return;
         }
+        // Functional obstacles get their own baked look (see bakeObstacleImage).
+        if (obstacle.kind === 'prism' || obstacle.kind === 'bulwark') {
+            this.drawHiResObstacle(ctx, obstacle, false);
+            return;
+        }
         const spriteName = obstacle.sprite
             || (obstacle.isFog ? 'fog'
                 : (obstacle.kind === 'crystal' || obstacle.opticalMode === 'mirror'

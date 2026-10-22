@@ -107,11 +107,20 @@ extendClass(MissionStartManager, {
     },
 
     applyFlyIn(ease) {
+        this.applyPlayerFlyIn(ease);
+        this.applyEnemyFlyIn(ease);
+    },
+
+    applyPlayerFlyIn(ease) {
         if (this.playerFrom && this.playerTo && typeof playerManager !== 'undefined') {
             const p = playerManager.player;
             p.x = this.playerFrom.x + (this.playerTo.x - this.playerFrom.x) * ease;
             p.y = this.playerFrom.y + (this.playerTo.y - this.playerFrom.y) * ease;
         }
+    },
+
+    /** Champion and side craft fly in from off screen (0 = still outside). */
+    applyEnemyFlyIn(ease) {
         if (this.enemyFrom && this.enemyTo && typeof enemyManager !== 'undefined' && enemyManager.enemy) {
             const e = enemyManager.enemy;
             e.x = this.enemyFrom.x + (this.enemyTo.x - this.enemyFrom.x) * ease;
@@ -129,7 +138,14 @@ extendClass(MissionStartManager, {
     },
 
     complete() {
-        this.applyFlyIn(1);
+        this.applyPlayerFlyIn(1);
+        // Enemies enter only once the player can fly (see updateEnemyEntry).
+        this.enemyInElapsed = 0;
+        this.enemyEntry = true;
+        if (typeof enemyManager !== 'undefined') {
+            if (enemyManager.enemy && this.enemyFrom) enemyManager.enemy.introEntry = true;
+            (enemyManager.sideEnemies || []).forEach((s, i) => { if (this.sideFrom && this.sideFrom[i]) s.introEntry = true; });
+        }
         this.active = false;
         this.phase = null;
         this._armed = false;
@@ -148,6 +164,7 @@ extendClass(MissionStartManager, {
     },
 
     cancel() {
+        this.endEnemyEntry();
         this.active = false;
         this.phase = null;
         this._armed = false;

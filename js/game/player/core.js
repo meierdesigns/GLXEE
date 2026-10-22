@@ -92,7 +92,14 @@ class PlayerManager {
             const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
             if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
         }
-        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul;
+        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap locks the ship.
+        let perkMul = 1;
+        if (typeof pickupManager !== 'undefined' && pickupManager.getMoveSpeedMul) {
+            perkMul = pickupManager.isFrozen() ? 0 : pickupManager.getMoveSpeedMul();
+            const repair = pickupManager.getRepairPerSec(this.maxHealth);
+            if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
+        }
+        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul * perkMul;
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
 
@@ -122,6 +129,9 @@ class PlayerManager {
             }
             this.player.x = Math.max(-halfW, Math.min(canvasWidth - halfW, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
+            // Pressing on against the bottom edge = fly back down the corridor (transit runs read this).
+            // Lattice snapping can park the ship a few px above maxY, so allow a small band.
+            this.player.backtrack = !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
             if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
             let dx = 0;

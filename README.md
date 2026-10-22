@@ -35,11 +35,11 @@ language.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-combat-65c.png" alt="GLXEE combat on Mars — live game screenshot" width="960" />
+<img src="assets/ui/readme-shot-combat-68a.png" alt="GLXEE combat on Mars — canyon run with enemy hero card" width="960" />
 
 <br/>
 
-`COMBAT  ·  MARS STAGE  ·  FACTION BARS  ·  LOADOUT RAIL`
+`COMBAT  ·  MARS STAGE  ·  WEAPON CARD  ·  ENEMY HERO CARD`
 
 <br/>
 
@@ -492,6 +492,27 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Victory loot pays resources, credits, blueprint progress, and active mission
   rewards; the scoop phase ends as soon as the field is clear (idle vacuum for
   stranded drops; bosses keep a longer safety net).
+- **Launch hatch:** every planet arrival starts in a pixel tube that rises out of
+  the home station's hull; the dome opens on GO and the ship flies out. Later
+  stages on the same planet start from a sluice instead.
+- **Sluice exit:** planet stages no longer end on the last kill. A faction-styled
+  gate (Terran steel, Machine bulkhead, Pirate scrap, Kronax bone, Voidborn
+  flesh) scrolls in, its hatch dome is shot open, and the ship flies through.
+- **Chain waves:** Xenon-style lines of craft snake along one shared path,
+  sometimes as two mirrored chains. Light classes (scout / assault / heavy)
+  do one job and go down faster; side craft launch from canyon hangar openings.
+- **Prism and bulwark obstacles:** prisms fan shots out on the shooter's side,
+  indestructible bulwarks get shoved by shots and rammed into enemies. Enemies
+  take cover in obstacle shadows and scrape the canyon walls like the player.
+- **Enemy hero cards:** the stage's main enemy and elite / capital side craft get
+  a sidebar card with a unique pilot portrait that reacts to hits (pain, anger,
+  dead). Equipped weapons show as side-view pixel-art cards with charge cells.
+
+<div align="center">
+
+<img src="assets/ui/readme-shot-launch-hatch-68a.png" alt="Station launch hatch with GET READY countdown" width="960" />
+
+</div>
 
 ### Playfield and VOXEL combat
 
@@ -537,10 +558,16 @@ Console: `vfPerfSnapshot()` returns the same object the remote paints.
 
 ## Screenshots
 
-Live captures from the current build (station shell, factions, travel, combat).
+Live captures from the current build (pilot creation, mission start, combat,
+station shell, factions, travel).
 
 <div align="center">
 
+| New pilot — faction | New pilot — portrait |
+|:---:|:---:|
+| <img src="assets/ui/readme-shot-faction-pick-68a.png" alt="New pilot faction step" width="460" /> | <img src="assets/ui/readme-shot-pilot-68a.png" alt="Create your pilot portrait grid" width="460" /> |
+| Mission start | Launch hatch |
+| <img src="assets/ui/readme-shot-mission-68a.png" alt="Mission start with galaxy route and planet card" width="460" /> | <img src="assets/ui/readme-shot-launch-hatch-68a.png" alt="Station launch hatch countdown" width="460" /> |
 | Home Station | Galaxy travel |
 |:---:|:---:|
 | <img src="assets/ui/readme-shot-station-65c.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy-65c.png" alt="Galaxy travel map" width="460" /> |
@@ -578,12 +605,20 @@ Short index — details live in the sections above.
 - Full-screen start menu with the pilot's station as backdrop.
 - Galaxy explore: one-pixel-size map, stored nebulae, checkpoints, traffic, ship locator.
 - 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
+- Launch hatch and sluice exit per stage; chain waves, prism / bulwark obstacles.
+- Enemy hero cards with reacting pilot portraits; side-view weapon cards.
 - Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
 
 ### Current build focus
 
 ```text
+STAGE   ── launch hatch ── sluice gate exit ── faction tube / dome styles
+   │
+WAVES   ── chain paths ── hangar launches ── cover AI ── prism / bulwark
+   │
+HUD     ── enemy hero cards ── reacting portraits ── weapon art cards
+   │
 LOOK    ── FX plate (bloom/HDR/vignette) ── pixel frame ── GUI voxel ── font scales
    │
 PERF    ── remote FPS / FRAME / LOOP ── backing px ── heap ── entity counts
@@ -597,9 +632,9 @@ MATCH   ── restore victory/game-over after refresh ── map opens on the f
 BOOT    ── fight screen hidden until shown ── nebula prepared during menu build
 ```
 
-Recent waves park the idle combat RAF, cut menu GPU load, and expose a live
-performance probe on the bezel remote (**PERF** / **DEBUG**) so FPS, loop state,
-and backing-store cost can be read without DevTools.
+Recent waves frame every stage with a launch hatch and a sluice exit, add chain
+waves and functional obstacles, and put enemy heroes on the HUD with portraits
+that react to hits.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -810,6 +845,12 @@ be reviewed or reverted independently.
 | 67O | Menu FPS park | Idle combat RAF until fight; 2× playfield + 200k px cap; throttle fleet/hangar/spin; map px filter only when PERF heavy ON |
 | 67P | Remote perf probe | PERF/DEBUG live FPS, frame ms, loop, backing, heap, entities; LOG/COPY PERF + vfPerfSnapshot |
 | 67Q | README perf remote | Document bezel PERF/DEBUG probe, presets, and vfPerfSnapshot in the README |
+| 68A | Launch hatch and sluice | Station launch tube on arrival, faction-styled sluice gate exit with shootable hatch dome |
+| 68B | Combat waves and obstacles | Chain waves, hangar launches, cover AI, prism / bulwark obstacles, wall scrape, crate and pickup polish |
+| 68C | Enemy hero cards | Sidebar cards with unique reacting portraits; side-view weapon cards with charge cells |
+| 68D | Shell and map polish | Viewport-fit fixed map aspect, resize hold, pilot thumbnail, galaxy map controls, start screen portraits |
+| 68E | Deferred bundle rebuild | Rebuild deferred.js and index cache keys for waves 68A–68D |
+| 68F | README stage archive | Live `-68a` shots: pilot wizard, mission start, launch hatch, combat hero card |
 
 The wave commit convention is:
 

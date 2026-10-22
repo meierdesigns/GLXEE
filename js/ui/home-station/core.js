@@ -318,13 +318,13 @@ class HomeStationUI {
         this._tabs = main.concat(this._menuOnlyTabs);
     }
 
-    /** Developer-only tabs (COMPONENTS, LAYOUT) show only in dev mode (Shift+C). */
+    /** Developer-only tabs (COMPONENTS, LAYOUT, PORTRAITS) show only in dev mode (Shift+C). */
     isDevTabVisible(id) {
-        if (id !== 'components' && id !== 'layout') return true;
+        if (id !== 'components' && id !== 'layout' && id !== 'portraits') return true;
         // The dev tab that is open right now stays visible until you leave it.
         if (id === this.tab) return true;
-        if (id === 'layout' && this.tab === 'menu' && typeof startScreenManager !== 'undefined' &&
-            startScreenManager.embeddedMenuTab === 'layout') return true;
+        if ((id === 'layout' || id === 'portraits') && this.tab === 'menu' && typeof startScreenManager !== 'undefined' &&
+            startScreenManager.embeddedMenuTab === id) return true;
         return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
     }
 

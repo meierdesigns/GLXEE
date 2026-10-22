@@ -28,6 +28,7 @@ const MENU_ORDER = {
         'layout',
         'assets',
         'components',
+        'portraits',
         'credits'
     ]
 };
@@ -74,7 +75,10 @@ const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
             });
         }
         MENU_ORDER.main = main;
-        MENU_ORDER.esc = saved.esc.concat(MENU_ORDER.esc.filter(isNew)).filter((id) => id !== 'station');
+        const esc = saved.esc.slice();
+        // PORTRAITS (dev mode) belongs right before CREDITS, not at the row's end.
+        if (known.indexOf('portraits') === -1 && esc.indexOf('credits') !== -1) esc.splice(esc.indexOf('credits'), 0, 'portraits');
+        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1)).filter((id) => id !== 'station');
     } catch (e) { /* ignore */ }
 })();
 

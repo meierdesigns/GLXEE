@@ -27,6 +27,8 @@ extendClass(HomeStationUI, {
             onDock: (post) => this.openTradingPost(post)
         });
         this.mountTravelControls(mount);
+        // Back from a mission: keep the keyboard in the map on the selected planet.
+        if (galaxyMapManager.isInputActive()) this.enterPlayMap();
         this.syncPlayHint();
     },
 

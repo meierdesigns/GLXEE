@@ -73,7 +73,8 @@ class HeroPlanetBackdrop {
             this._frameCache = {};
             this._frameLoading = {};
             this._frameIdx = 0;
-            // keep _curFrame (last drawn) until the new planet's first raster lands, so it doesn't blank
+            // Drop the previous faction's frame: showing it until the new raster lands read as "wrong planet".
+            this._curFrame = null;
         } catch (err) { /* keep whatever was already showing */ }
         if (this._reduceMotion) this.draw();
     }
@@ -139,25 +140,35 @@ class HeroPlanetBackdrop {
         const cached = this._frameCache[f];
         if (cached) { this._curFrame = cached; return cached; }
         if (!this._frameLoading[f]) {
-            this._frameLoading[f] = true;
+            const loading = this._frameLoading;
+            const cache = this._frameCache;
+            loading[f] = true;
             try {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg, 0.45);
                 const img = new Image();
-                img.onload = () => {
-                    if (Object.keys(this._frameCache).length > 90) this._frameCache = {};
-                    const entry = { img: img, scale: conv.scale };
+                // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
+                // and step the spin so one rotation is at most 128 frames: after the first lap nothing is rebuilt.
+                const step = Math.max(1, Math.ceil(model.count / 128));
+                const store = (src) => {
+                    loading[f] = false;
+                    // A faction switch swapped the model while this frame decoded: it belongs to the old planet.
+                    if (this._spinModel !== model || this._frameCache !== cache) return;
+                    const entry = { img: src, scale: conv.scale };
                     this._frameCache[f] = entry;
-                    this._frameLoading[f] = false;
                     // Show it the moment it's ready — the next draw() tick would otherwise have
                     // already moved _frameIdx past `f` before ever reading this cache entry.
                     this._curFrame = entry;
                     // Only advance to the next frame once this one is actually ready to show.
-                    if (this._frameIdx === f) this._frameIdx = (f + 1) % model.count;
+                    if (this._frameIdx === f) this._frameIdx = (f + step) % model.count;
                     this.draw();
                 };
+                img.onload = () => {
+                    if (typeof createImageBitmap === 'function') createImageBitmap(img).then(store, () => store(img));
+                    else store(img);
+                };
                 img.src = conv.url;
-            } catch (err) { this._frameLoading[f] = false; }
+            } catch (err) { loading[f] = false; }
         }
         return this._curFrame;
     }

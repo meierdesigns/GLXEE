@@ -848,14 +848,14 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 }
 
 /* Animated hero home-planet behind the faction-pick card (hero-planet-backdrop.js). */
-.profile-faction-preview { position: relative; }
+.profile-faction-preview { position: relative; isolation: isolate; }
 .profile-faction-preview .hero-planet-canvas {
     position: absolute;
     inset: 0;
     /* Must beat the card's ::after grid overlay (z-index:-1): ::after always paints
        last among same-stacking-level content regardless of where this canvas sits
        in the DOM, so z-index:-1 here would always end up hidden behind the grid. */
-    z-index: 0;
+    z-index: -1;
     pointer-events: none;
     image-rendering: pixelated;
 }

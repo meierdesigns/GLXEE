@@ -293,15 +293,18 @@ html[data-vf-frame-px="on"] .vf-bezel[data-faction] {
 }
 
 /* Pixel frame: the backing box (its 60u shadow fills the frame area under the hull) would show as
-   a square dark corner outside the stepped silhouette, so it is off; the stage mask replaces it. */
+   a square dark corner outside the stepped silhouette, so it is off; the plates themselves fill the band. */
 html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { display: none !important; }
 
 /* Pixel frame: outer corners follow FRAME ROUND too. The inner plate (hullB) is cut to a rounded
    rect; it sits inside hullA (faction silhouette), so the visible shape is the intersection. */
 html[data-vf-frame-px="on"] #vf-bezel .vf-fr-hullB { clip-path: inset(0 round var(--fr-out, 0px)); }
 
-/* Full-stage layers (tagged by viewport-fit.js) share the pixel-stepped stage clip. */
-html[data-vf-frame-px="on"] [data-vf-stage-clip] { clip-path: url(#vfStageClip); }
+/* Pixel frame: only the frame plates take the stepped silhouette (built by viewport-fit.js); the stage and the
+   bezel's children (pilot thumbnail, screens, tools) are never cut. .vf-fr-p drops its smooth clip so the step shows. */
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-bezel-deco { clip-path: url(#vfStageClip) !important; }
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr-p { clip-path: none; }
 
 /* Empty sub-nav (PROFILES): same bar and frame as the other tabs, nothing inside. */
 .home-station-content .hs-subnav.hs-subnav-empty { pointer-events: none; }

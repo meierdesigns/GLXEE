@@ -269,6 +269,7 @@ class StartStationBackdrop {
         // resolution is handled by scaling the 2D context to match.
         const w = Math.round(this.el.clientWidth), h = Math.round(this.el.clientHeight);
         if (w < 10 || h < 10 || (w === this.W && h === this.H)) return;
+        if (window.vfResizing) { this._deferSync(); return; }
         this.W = w;
         this.H = h;
         // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
@@ -279,6 +280,13 @@ class StartStationBackdrop {
         this.canvas.height = Math.round(h * dpr);
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
+    }
+
+    /** Resize in progress: apply the new backing-store size once, after the drag ends. */
+    _deferSync() {
+        if (this._rsBound) return;
+        this._rsBound = true;
+        window.addEventListener('vf-resize-end', () => { this._rsBound = false; this._syncSize(); }, { once: true });
     }
 
     _startLoop() {
@@ -296,7 +304,7 @@ class StartStationBackdrop {
                 const st = getComputedStyle(host);
                 if (st.display === 'none' || st.visibility === 'hidden') return;
             } catch (e) { /* draw anyway */ }
-            if (document.hidden) return;
+            if (document.hidden || window.vfResizing) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
@@ -429,25 +437,33 @@ class StartStationBackdrop {
         const model = this._planetSpinModel;
         const id = this._planetSpinId;
         if (!model || !id || typeof planetSVGManager === 'undefined') return this._planetCurFrame;
-        const f = planetSVGManager.getPlanetSpinIndex(id, model);
+        // A rotation can be ~500 frames of 300KB SVG each: rasterising a new one every ~120ms (and re-rasterising
+        // the SVG on every drawImage) was the idle CPU cost of this screen. Step the spin so one rotation is at most
+        // 128 frames, and keep every frame as a bitmap — after the first lap nothing is regenerated.
+        const step = Math.max(1, Math.ceil(model.count / 128));
+        const f = (Math.floor(planetSVGManager.getPlanetSpinIndex(id, model) / step) * step) % model.count;
         const cached = this._planetFrameCache[f];
         if (cached) {
             this._planetCurFrame = cached;
             return cached;
         }
         if (!this._planetFrameLoading[f]) {
-            this._planetFrameLoading[f] = true;
+            const cache = this._planetFrameCache, loading = this._planetFrameLoading;
+            loading[f] = true;
             try {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg);
                 const img = new Image();
-                img.onload = () => {
-                    // A full rotation can be a few hundred frames; keep the cache from
-                    // growing without bound over a long-idle start screen.
-                    if (Object.keys(this._planetFrameCache).length > 90) this._planetFrameCache = {};
-                    this._planetFrameCache[f] = { img: img, scale: conv.scale };
-                    this._planetFrameLoading[f] = false;
+                const store = (src) => {
+                    loading[f] = false;
+                    if (this._planetFrameCache !== cache) return;   // faction / planet changed while decoding
+                    cache[f] = { img: src, scale: conv.scale };
                     this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
+                };
+                img.onload = () => {
+                    if (typeof createImageBitmap === 'function') {
+                        createImageBitmap(img).then(store, () => store(img));
+                    } else store(img);
                 };
                 img.src = conv.url;
             } catch (err) { this._planetFrameLoading[f] = false; }

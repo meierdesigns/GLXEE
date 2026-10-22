@@ -104,6 +104,11 @@ extendClass(StartScreenManager, {
         if (this.visible) this.createStartScreenUI();
         // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
+            // A soft rebuild keeps the tab rows unless the area changes, so the dev tabs
+            // would only show after a reload: drop the soft shell and cached bodies first.
+            homeStationUI._hsShellReady = false;
+            homeStationUI._softBodyCache = null;
+            homeStationUI._softAreaId = null;
             homeStationUI.createUI();
         }
     },

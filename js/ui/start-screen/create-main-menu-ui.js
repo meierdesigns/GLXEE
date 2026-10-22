@@ -228,6 +228,7 @@ extendClass(StartScreenManager, {
         const tabs = document.createElement('div');
         tabs.className = 'hs-menu-panel-tabs';
         this.embeddedMenuTabs.forEach((tab) => {
+            if (tab.id === 'portraits' && !this.devMode && this.embeddedMenuTab !== 'portraits') return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'hs-menu-panel-tab' + (tab.id === this.embeddedMenuTab ? ' active' : '');
@@ -260,6 +261,8 @@ extendClass(StartScreenManager, {
             this.fillEmbeddedAssets(body);
         } else if (this.embeddedMenuTab === 'layout' && this.fillEmbeddedLayout) {
             this.fillEmbeddedLayout(body);
+        } else if (this.embeddedMenuTab === 'portraits' && this.fillEmbeddedPortraits) {
+            this.fillEmbeddedPortraits(body);
         } else {
             body.classList.add('hs-menu-panel-body-credits');
             this.fillEmbeddedCredits(body);

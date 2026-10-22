@@ -276,6 +276,23 @@ extendClass(GalaxyMapManager, {
             }
             travelled += len;
         }
+        // A cell belongs to its innermost layer: skip it in outer ones.
+        const toPath = (map, ...skips) => {
+            let out = '';
+            map.forEach((row, gy) => {
+                const xs = Array.from(row)
+                    .filter((x) => !skips.some((sk) => sk.get(gy) && sk.get(gy).has(x)))
+                    .sort((m, q) => m - q);
+                for (let k = 0; k < xs.length;) {
+                    let e = k;
+                    while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
+                    const x = +(xs[k] * p).toFixed(3), y = +(gy * p).toFixed(3), w = +((e - k + 1) * p).toFixed(3);
+                    out += `M${x} ${y}h${w}v${+p.toFixed(3)}h${-w}z`;
+                    k = e + 1;
+                }
+            });
+            return out;
+        };
         // Row runs → one compact path per layer.
         // Data packets use two parallel lanes, one for each direction.
         // Pulse spacing is in map units so slices of one line stay in phase.
@@ -296,36 +313,63 @@ extendClass(GalaxyMapManager, {
             const laneOffset = o.traffic
                 ? Math.max(packetWidth * 1.2, p)
                 : Math.max(packetWidth * 1.4, p * 1.5);
-            const lanePath = (side) => `M${fp.map((q, i) => {
+            const lanePts = (side) => fp.map((q, i) => {
                 const prev = fp[Math.max(0, i - 1)];
                 const next = fp[Math.min(fp.length - 1, i + 1)];
                 const dx = next.x - prev.x;
                 const dy = next.y - prev.y;
                 const length = Math.hypot(dx, dy) || 1;
-                return `${(q.x - dy / length * laneOffset * side).toFixed(2)} ${(q.y + dx / length * laneOffset * side).toFixed(2)}`;
-            }).join('L')}`;
-            const flowStyle = `stroke-width:${packetWidth.toFixed(2)};stroke-dasharray:${dashes};--flow-len:${period.toFixed(2)}px;--flow-from:${(-(off % period)).toFixed(2)}px`;
+                return { x: q.x - dy / length * laneOffset * side, y: q.y + dx / length * laneOffset * side };
+            });
+            // Packets are cells on the line's own grid (not vector strokes), so they share
+            // its pixel size. The march is F pre-built frames shown one after another.
+            const F = 16;
+            const dur = o.traffic ? 5.4 : 3.2;
+            const on = [];
+            let acc = 0;
+            pattern.forEach((v, i) => { if (i % 2 === 0) on.push([acc * width, (acc + v) * width]); acc += v; });
+            const isOn = (s) => {
+                const m = ((s % period) + period) % period;
+                return on.some((iv) => m >= iv[0] && m < iv[1]);
+            };
+            const pr = Math.max(0.71, packetWidth / 2 / p);
+            const PR = Math.ceil(pr);
+            const laneCells = (pts, shift) => {
+                const cells = new Map();
+                let trav = off;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const a = pts[i], b = pts[i + 1];
+                    const len = Math.hypot(b.x - a.x, b.y - a.y);
+                    const n = Math.max(1, Math.ceil(len / (p * 0.5)));
+                    for (let s = 0; s <= n; s++) {
+                        if (!isOn(trav + len * s / n - shift)) continue;
+                        const cx = (a.x + (b.x - a.x) * s / n) / p;
+                        const cy = (a.y + (b.y - a.y) * s / n) / p;
+                        const bx = Math.floor(cx), by = Math.floor(cy);
+                        for (let yy = -PR; yy <= PR; yy++) {
+                            for (let xx = -PR; xx <= PR; xx++) {
+                                const gx = bx + xx, gy = by + yy;
+                                if (Math.hypot(gx + 0.5 - cx, gy + 0.5 - cy) > pr) continue;
+                                let row = cells.get(gy);
+                                if (!row) { row = new Set(); cells.set(gy, row); }
+                                row.add(gx);
+                            }
+                        }
+                    }
+                    trav += len;
+                }
+                return cells;
+            };
             const flowClass = o.traffic ? ' gm-post-traffic' : '';
-            flow = `<path class="gm-pxline-flow${flowClass}" fill="none" d="${lanePath(-1)}" style="${flowStyle}"/>` +
-                `<path class="gm-pxline-flow gm-pxline-flow-reverse${flowClass}" fill="none" d="${lanePath(1)}" style="${flowStyle}"/>`;
-        }
-        // A cell belongs to its innermost layer: skip it in outer ones.
-        const toPath = (map, ...skips) => {
-            let out = '';
-            map.forEach((row, gy) => {
-                const xs = Array.from(row)
-                    .filter((x) => !skips.some((sk) => sk.get(gy) && sk.get(gy).has(x)))
-                    .sort((m, q) => m - q);
-                for (let k = 0; k < xs.length;) {
-                    let e = k;
-                    while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
-                    const x = +(xs[k] * p).toFixed(3), y = +(gy * p).toFixed(3), w = +((e - k + 1) * p).toFixed(3);
-                    out += `M${x} ${y}h${w}v${+p.toFixed(3)}h${-w}z`;
-                    k = e + 1;
+            [[-1, 1, 0, ''], [1, -1, period / 2, ' gm-pxline-flow-reverse']].forEach(([side, dir, base, rev]) => {
+                const pts = lanePts(side);
+                for (let k = 0; k < F; k++) {
+                    const d = toPath(laneCells(pts, base + dir * k * period / F));
+                    if (!d) continue;
+                    flow += `<path class="gm-pxline-flow gm-pxflow-cells${k ? '' : ' gm-pxflow-f0'}${rev}${flowClass}" d="${d}" style="animation-duration:${dur}s;animation-delay:${((k / F - 1) * dur).toFixed(3)}s"/>`;
                 }
             });
-            return out;
-        };
+        }
         return `<g class="${cls} gm-pxline" shape-rendering="crispEdges">` +
             `<path class="gm-pxline-halo" d="${toPath(haloCells, glowCells, coreCells, hotCells)}"/>` +
             `<path class="gm-pxline-glow" d="${toPath(glowCells, coreCells, hotCells)}"/>` +

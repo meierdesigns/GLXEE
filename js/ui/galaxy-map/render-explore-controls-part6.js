@@ -90,6 +90,8 @@ extendClass(GalaxyMapManager, {
             if (!cur) return;
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
+            // Off-screen ship marker follows the pan live (cheap: one rect read, no re-render).
+            if (this.syncLocateShipButton) this.syncLocateShipButton();
         };
         let apply = (src) => {
             if (!mapLive()) return;
@@ -454,7 +456,19 @@ extendClass(GalaxyMapManager, {
             if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
             lastW = mapArea.clientWidth;
             lastH = mapArea.clientHeight;
-            if (!this._flight && !this._zoomAnim && !this._camAnim) this._mapApply('resize');
+            // A resize during a flight / zoom / camera glide (e.g. the map settling right after the intro)
+            // used to be dropped, leaving a stale view-box aspect: the first wheel zoom then jumped.
+            // Re-try until the animation is over instead.
+            const tryApply = () => {
+                if (!this.overlay || !this.overlay.isConnected || this._parkedGalaxyId || !this._mapApply) return;
+                if (this._flight || this._zoomAnim || this._camAnim) {
+                    clearTimeout(this._mapResizeRetry);
+                    this._mapResizeRetry = setTimeout(tryApply, 120);
+                    return;
+                }
+                this._mapApply('resize');
+            };
+            tryApply();
         });
         this._mapAreaRO.observe(mapArea);
     },

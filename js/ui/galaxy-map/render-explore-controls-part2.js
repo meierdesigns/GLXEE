@@ -122,7 +122,7 @@ extendClass(GalaxyMapManager, {
         if (at) {
             const x = W / 2 + (at.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (at.y - 0.5) * (H - pad * 2) * mapSpread;
-            // Ship centred on the location, nose down, gently hovering up and
+            // Ship centred on the location, nose up (never flipped), gently hovering up and
             // down instead of orbiting.
             const r = loc.kind === 'post' ? 18 : 32;
             const icon = this.getShipIconUrl(this.getMapDetail());
@@ -134,8 +134,8 @@ extendClass(GalaxyMapManager, {
             const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
                 && uiAppearanceManager.getGlobalPixelPx() > 0;
             const shipSvg = icon
-                ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
-                : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
+                ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img"/>`
+                : `<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
             const view = this.getMapViewBox(W, H, pad);
             const centered = Math.hypot(
                 x - (view[0] + view[2] / 2),

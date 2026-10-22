@@ -10,9 +10,15 @@ extendClass(LevelInfoManager, {
         const weaponId = (typeof bulletManager !== 'undefined' && bulletManager.currentWeapon)
             ? bulletManager.currentWeapon
             : (d.currentWeapon || 'laser');
-        const weaponName = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
-            ? iconRenderer.weaponIconInfo(weaponId).name
-            : String(weaponId).toUpperCase();
+        const nameOf = (id) => ((typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
+            ? iconRenderer.weaponIconInfo(id).name
+            : String(id).toUpperCase());
+        // Every weapon fitted in the hangar, not just the one currently selected.
+        const sm = typeof bulletManager !== 'undefined' ? bulletManager.currentShipModel : null;
+        const fitted = (sm && sm.loadout && Array.isArray(sm.loadout.weapons) && sm.loadout.weapons.length)
+            ? sm.loadout.weapons.filter((w, i, a) => w && a.indexOf(w) === i)
+            : [weaponId];
+        const weaponName = fitted.map(nameOf).join(' · ');
 
         const session = this.clusterHtml('SESSION',
             `<div class="gi-metrics gi-metrics-session">` +

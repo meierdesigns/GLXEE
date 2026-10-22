@@ -310,8 +310,14 @@ extendClass(HomeStationUI, {
         this.unmountMenuTab();
         this.unmountPlayTab();
         this.unmountComponentsTab();
-        // Park leaving body DOM (keeps listeners) before wiping.
-        this._parkSoftBody(bodyEl, leavingTab);
+        // Same-tab rerender (e.g. hangar SHIPS/PARTS/SLOTS): never restore the stale
+        // parked DOM, rebuild the body so the new state shows.
+        if (leavingTab === this.tab) {
+            if (this._softBodyCache) delete this._softBodyCache[this.tab];
+        } else {
+            // Park leaving body DOM (keeps listeners) before wiping.
+            this._parkSoftBody(bodyEl, leavingTab);
+        }
 
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
         let hideTabsForTutorial = false;
@@ -473,7 +479,8 @@ extendClass(HomeStationUI, {
             const t = this.tab;
             if (!(opts && opts.bodyCached)) {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
-                if (t === 'station' || t === 'shop' || t === 'craft') this.bindStationEvents();
+                // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
+                if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
                 if (t === 'hangar') this.bindHangarTabEvents();
             }
             this.bindKeyNav();
@@ -507,12 +514,14 @@ extendClass(HomeStationUI, {
         if (this.tab === 'hangar') {
             this.setupHangarPanelResize();
             // Soft: hangar canvas draw was ~30–65ms on the click path.
+            // Left-panel tabs (SHIPS / PARTS / SLOTS) bind right away so they
+            // work even when the deferred frame is late or the draw throws.
             if (soft) {
+                this.bindHangarPartsGrid();
                 requestAnimationFrame(() => {
                     this.startHangarPreview();
                     this.drawHangarBay();
                     this.bindHangarSlotEvents();
-                    this.bindHangarPartsGrid();
                 });
             } else {
                 this.startHangarPreview();

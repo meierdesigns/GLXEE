@@ -104,7 +104,8 @@ class GalaxyMapManager {
         // Embedded map (PLAY tab): the keyboard stays with the station until
         // ENTER / SPACE enters the map (armInput). Mouse clicks work anyway.
         // The standalone map overlay takes the keyboard right away.
-        this._inputActive = !this._mountEl;
+        // Left while armed (mission start, dock, re-render): stay in the map.
+        this._inputActive = !this._mountEl || !!this._keepArmed;
         this.statusMsg = '';
         const reuse = !!(this._mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId);
         // Parked map already has live zoom/pan — restoreGalaxyView from LS fought it and forced art swaps.
@@ -195,6 +196,7 @@ class GalaxyMapManager {
     }
     setInputActive(active) {
         this._inputActive = !!active;
+        if (this._mountEl) this._keepArmed = this._inputActive;
         if (this.overlay) {
             this.overlay.classList.toggle('is-input-active', this._inputActive);
         }
@@ -357,6 +359,25 @@ class GalaxyMapManager {
         });
         return `<g class="gm-boss-icon" shape-rendering="crispEdges" transform="translate(${x - 4.5 * s},${y - 4 * s}) scale(${s})"><path d="${d}"/></g>`;
     }
+    /** Pixel mid-boss crown (SVG path, 9×7 px) for champion stages. */
+    midBossIconSvg() {
+        const rows = [
+            '#...#...#',
+            '##..#..##',
+            '##.###.##',
+            '#########',
+            '#########',
+            '.........',
+            '#########'
+        ];
+        let d = '';
+        rows.forEach((row, ry) => {
+            for (let rx = 0; rx < row.length; rx++) {
+                if (row[rx] === '#') d += `M${rx} ${ry}h1v1h-1z`;
+            }
+        });
+        return `<path d="${d}"/>`;
+    }
     /**
      * Stage stepper in the planet card: stages 1..N plus the boss.
      * Cleared stages get a check, the next stage to fight shows the player
@@ -456,13 +477,16 @@ class GalaxyMapManager {
             const isBoss = i === total;
             const done = pick ? (cleared || i < (cleared ? total + 1 : (p.boss ? total : p.done + 1))) : (cleared || i < current);
             const here = i === current;
+            // What the stage holds: champion fight (mid-boss), transit run (corridor) or the planet boss.
+            const transit = !isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i);
+            const kind = isBoss ? 'boss' : (transit ? 'transit' : 'champion');
             let inner = '';
             if (isBoss && !done) {
                 inner = `<svg viewBox="0 0 9 8">${this.bossIconSvg(4.5, 4, 1)}</svg>`;
             } else if (done) {
                 // Cleared: solid green tile with a dark pixel check.
                 inner = '<svg viewBox="0 0 10 10" shape-rendering="crispEdges"><rect class="gm-stage-done-bg" width="10" height="10"/><path class="gm-stage-check" d="M2 5h1v1h1v1h1V6h1V5h1V4h1V3H7v1H6v1H5v1H4V5H3V4H2z"/></svg>';
-            } else if (!isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i)) {
+            } else if (transit) {
                 // Transit stage: arrow flying up between two gate walls.
                 inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M4 0h1v1h1v1h1v1H2V2h1V1h1zM4 3h1v3H4zM0 7h3v2H0zM6 7h3v2H6z"/></svg>';
             } else {
@@ -471,11 +495,16 @@ class GalaxyMapManager {
             }
             // Player ship hovers above the stage it fights next.
             if (here && ship) inner += `<img src="${ship}" alt="" class="gm-stage-ship">`;
-            const tag = isBoss ? 'BOSS' : String(i);
-            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
+            // Boss and mid-boss steps show an icon under the tile, transit runs their number.
+            const tag = isBoss
+                ? `<svg class="gm-stage-tag-boss" viewBox="0 0 9 8" shape-rendering="crispEdges">${this.bossIconSvg(4.5, 4, 1)}</svg>`
+                : (kind === 'champion'
+                    ? `<svg class="gm-stage-tag-boss gm-stage-tag-mid" viewBox="0 0 9 7" shape-rendering="crispEdges">${this.midBossIconSvg()}</svg>`
+                    : String(i));
+            html += `<span class="gm-sector-stage is-kind-${kind}${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
                 (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
                 (!dev && done && canReplay ? ` data-replay-stage="${i}" data-replay-planet="${pid}"` : '') +
-                ` title="${isBoss ? 'BOSS' : (typeof isTransitStage === 'function' && isTransitStage(pid, i) ? 'TRANSIT ' : 'STAGE ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
+                ` title="${isBoss ? 'BOSS' : (transit ? 'TRANSIT ' : 'MID-BOSS ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;

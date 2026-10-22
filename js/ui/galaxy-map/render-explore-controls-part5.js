@@ -539,6 +539,77 @@ extendClass(GalaxyMapManager, {
         const show = !this.isShipOnScreen();
         btn.hidden = !show;
         btn.setAttribute('aria-hidden', show ? 'false' : 'true');
+
+        this.syncShipEdgeMarker(show);
+    },
+
+    /**
+     * Ship off screen: a marker sits on the map edge in the ship's direction.
+     * Clicking it glides the camera back to the ship (returnCameraToShip).
+     */
+    syncShipEdgeMarker(show) {
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!area || !svg) return;
+        let el = area.querySelector('.gm-ship-edge');
+        if (!show || this._flight) {
+            if (el && !el.hidden) el.hidden = true;
+            return;
+        }
+        const loc = profileManager.getShipLocation ? profileManager.getShipLocation(this.galaxyId) : null;
+        const p = loc && this.locationPoint ? this.locationPoint(loc) : null;
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        if (!p || !vb || !vb.width || !r.width || !ar.width) {
+            if (el) el.hidden = true;
+            return;
+        }
+        if (!el) {
+            el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'gm-ship-edge';
+            el.title = 'YOUR SHIP · center map on it';
+            el.setAttribute('aria-label', 'Center map on your ship');
+            const icon = this.getShipIconUrl ? this.getShipIconUrl() : '';
+            el.innerHTML = `<span class="gm-ship-edge-arrow"></span>${icon ? `<img class="gm-ship-edge-img" src="${icon}" alt="" draggable="false">` : ''}`;
+            el.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                this.returnCameraToShip();
+            });
+            ['pointerdown', 'mousedown', 'wheel'].forEach((t) => el.addEventListener(t, (ev) => ev.stopPropagation()));
+            area.appendChild(el);
+        }
+        if (el.hidden) el.hidden = false;
+        // Ship position in client px (preserveAspectRatio meet, same maths as isShipOnScreen).
+        const s = Math.min(r.width / vb.width, r.height / vb.height);
+        const visW = r.width / s;
+        const visH = r.height / s;
+        const left = vb.x + (vb.width - visW) / 2;
+        const top = vb.y + (vb.height - visH) / 2;
+        const shipX = r.left + (p.x - left) * s;
+        const shipY = r.top + (p.y - top) * s;
+        // Ray from the area centre to the ship, clamped to the inset edge.
+        const inset = 60; // room for the arrow that sticks out towards the edge
+        const cx = ar.left + ar.width / 2;
+        const cy = ar.top + ar.height / 2;
+        const dx = shipX - cx;
+        const dy = shipY - cy;
+        const hx = ar.width / 2 - inset;
+        const hy = ar.height / 2 - inset;
+        const k = Math.min(dx ? hx / Math.abs(dx) : Infinity, dy ? hy / Math.abs(dy) : Infinity);
+        // Layout px may differ from client px under the GUI's CSS zoom.
+        const z = area.offsetWidth ? ar.width / area.offsetWidth : 1;
+        const x = Math.round((ar.width / 2 + dx * k) / z);
+        const y = Math.round((ar.height / 2 + dy * k) / z);
+        // Write only on change: idle re-syncs must not dirty the (filtered) map layer.
+        const ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+        const key = x + '|' + y + '|' + ang;
+        if (el._edgeKey === key) return;
+        el._edgeKey = key;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.setProperty('--gm-edge-angle', ang + 'deg');
     },
 
     /** Glide the camera (current zoom) back to centre on the player ship. */

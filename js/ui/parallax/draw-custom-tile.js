@@ -140,7 +140,7 @@ extendClass(ParallaxManager, {
     drawFlyingStars(ctx) {
         ctx.save();
         ctx.globalAlpha = this.starsOpacity != null ? this.starsOpacity : 0.35;
-        const starColor = getComputedStyle(document.documentElement).getPropertyValue('--env-primary').trim() || '#808080';
+        const starColor = this.envVar('--env-primary') || '#808080';
         ctx.fillStyle = starColor;
         this.flyingStars.forEach(star => {
             ctx.fillRect(Math.floor(star.x), Math.floor(star.y), Math.floor(star.size), Math.floor(star.size));

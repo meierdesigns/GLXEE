@@ -50,21 +50,15 @@
         const sidePanel = clamp(Math.round(shellW * 0.12), SIDE_MIN, SIDE_MAX);
         const maxW = Math.max(120, slotMaxW != null ? slotMaxW : (shellW - sidePanel * 2 - gap * 2));
 
-        // Match the middle column exactly so width AND height freiräume are used.
-        const slotAspect = maxW / Math.max(1, availH);
-        let useAspect = fillSlot ? clamp(slotAspect, 0.45, 1.6) : aspect;
+        // The level keeps its own aspect (planet config): a resolution / window change only
+        // rescales the playfield, it never reshapes the map to the slot.
+        const useAspect = aspect;
 
         let canvasW = maxW;
         let canvasH = canvasW / useAspect;
         if (canvasH > availH) {
             canvasH = availH;
             canvasW = canvasH * useAspect;
-        }
-        // Height-first nudge when floating-point left a vertical gap.
-        if (fillSlot && availH - canvasH > 1 && canvasW <= maxW + 0.5) {
-            canvasH = availH;
-            canvasW = Math.min(maxW, canvasH * useAspect);
-            useAspect = canvasW / Math.max(1, canvasH);
         }
 
         return {
@@ -89,9 +83,11 @@
         const controls = mid.querySelector('.controls');
         const controlsHidden = !controls || getComputedStyle(controls).display === 'none';
         const controlsH = controlsHidden ? 0 : controls.offsetHeight;
+        // The faction frame around the playfield pads the stage on every side.
+        const frame = 2 * readCssNumber('--fight-frame', 0);
         return {
-            maxW: mid.clientWidth,
-            maxH: Math.max(120, mid.clientHeight - underH - controlsH)
+            maxW: Math.max(80, mid.clientWidth - frame),
+            maxH: Math.max(120, mid.clientHeight - underH - controlsH - frame)
         };
     }
 
@@ -128,6 +124,11 @@
     function update(force) {
         const real = viewportSize();
         const { aspect, designW, designH } = playfieldParams();
+        // Read layout state BEFORE writing any CSS vars below: reading after a write forces a synchronous
+        // style + layout pass on every resize frame.
+        const gc = document.querySelector('.game-container');
+        const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
+        const userZoom = guiZoom();
 
         ROOT.style.setProperty('--vw', real.vw + 'px');
         ROOT.style.setProperty('--vh', real.vh + 'px');
@@ -143,16 +144,14 @@
         // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size
         ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
-        const gc = document.querySelector('.game-container');
-        const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
-        const zoom = guiZoom() * (inFight ? 0.85 : 1);
+        const zoom = userZoom * (inFight ? 0.85 : 1);
         ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
         const openL = 44 * u;
         const openR = 44 * u;
-        const openT = (44 + 22) * u;
+        const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
         const openB = 44 * u;
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
@@ -163,15 +162,26 @@
         const gap = inFight ? FIGHT_INSET : clamp(Math.round(vw * 0.008), 4, 10);
 
         const measured = inFight ? measureFightSlot(gc) : null;
+        // Fight: the playfield fills the slot down to the under-stage bar. The map keeps its width
+        // and gets its rows ONCE per level (the layout is a fixed 1280x960, so the slot is the same at
+        // every resolution); later resolution / window changes only rescale, never reshape.
+        let fitAspect = aspect;
+        const mapW = readCssNumber('--map-w', 0), mapH = readCssNumber('--map-h', 0);
+        const fitted = vfs.mapFit && vfs.mapFit.w === mapW && vfs.mapFit.h === mapH;
+        if (measured && mapW > 0 && !fitted) {
+            const slotAspect = clamp(measured.maxW / measured.maxH, 0.45, 1.6);
+            if (Math.abs(slotAspect - aspect) > 0.01) {
+                syncMapToAspect(slotAspect, true);
+                fitAspect = playfieldParams().aspect;
+            }
+            vfs.mapFit = { w: readCssNumber('--map-w', 0), h: readCssNumber('--map-h', 0) };
+        }
         let layout = computeLayout(
-            vw, vh, padX, padY, gap, aspect, inFight,
+            vw, vh, padX, padY, gap, fitAspect, inFight,
             measured && measured.maxW,
             measured && measured.maxH
         );
-        let useAspect = layout.aspect || aspect;
-        if (inFight && Math.abs(useAspect - aspect) > 0.001) {
-            syncMapToAspect(useAspect);
-        }
+        const useAspect = layout.aspect || aspect;
         let canvasW = layout.canvasW;
         let canvasH = layout.canvasH;
         let sidePanel = layout.sidePanel;
@@ -224,10 +234,7 @@
                 measured2 && measured2.maxW,
                 measured2 && measured2.maxH
             );
-            let a2 = layout2.aspect || aspect;
-            if (inFight && Math.abs(a2 - readCssNumber('--playfield-aspect', aspect)) > 0.001) {
-                syncMapToAspect(a2);
-            }
+            const a2 = layout2.aspect || aspect;
             let w2 = layout2.canvasW;
             let h2 = layout2.canvasH;
             let side2 = layout2.sidePanel;
@@ -258,6 +265,19 @@
         });
     }
 
+    // True while the window is being dragged to a new size (and 180ms after): heavy canvas backdrops hold their
+    // backing store / redraw until it ends instead of reallocating on every resize event.
+    window.vfResizing = false;
+    let resizeEndTimer = 0;
+    function markResizing() {
+        window.vfResizing = true;
+        clearTimeout(resizeEndTimer);
+        resizeEndTimer = setTimeout(function () {
+            window.vfResizing = false;
+            window.dispatchEvent(new Event('vf-resize-end'));
+        }, 180);
+    }
+    window.addEventListener('resize', markResizing);
     let raf = 0;
     function scheduleUpdate() {
         if (performance.now() < vfs.suppressROUntil) return;

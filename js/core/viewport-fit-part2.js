@@ -275,6 +275,18 @@
         else if (d.vxSize) ui.setVoxelSize(d.vxSize);
         else if (d.vxGui) ui.setGuiVoxel(d.vxGui);
         else if (d.vxGv) { const kv = d.vxGv.split(':'); ui.setFx(kv[0], kv[1]); }
+        else if (d.szCopy) {
+            const text = JSON.stringify({ sizePx: ui.sizePx, shotSpeeds: ui.shotSpeeds }, null, 2);
+            console.info('[GLXEE SIZES]', text);
+            const legacy = function () {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                } catch (err2) { /* optional */ }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(legacy); else legacy();
+        }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
         else if (d.pfSway) setPerf('sway', d.pfSway);
@@ -305,9 +317,18 @@
             const snap = collectPerfSnapshot(null);
             console.info('[GLXEE PERF]', snap);
             try {
+                const text = JSON.stringify(snap, null, 2);
+                // Sandboxed iframes (itch.io) block the Clipboard API: fall back to a hidden textarea copy.
+                const legacyCopy = function () {
+                    try {
+                        const ta = document.createElement('textarea');
+                        ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+                        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                    } catch (err2) { /* optional */ }
+                };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(JSON.stringify(snap, null, 2));
-                }
+                    navigator.clipboard.writeText(text).catch(legacyCopy);
+                } else legacyCopy();
             } catch (err) { /* optional */ }
         }
         else if (d.fxFac) { fxFacPrev = vfs.editFaction || (document.getElementById('vf-bezel') || document.body).getAttribute('data-faction'); vfs.editFaction = d.fxFac; setPreviewFaction(vfs.editFaction); }
@@ -443,6 +464,7 @@
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
         }
+        else if (parts[0] === 'sp') ui.setSizePct(parts[1], v);
         else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
         else if (parts[0] === 'df') {
             if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }

@@ -148,6 +148,25 @@
     from { stroke-dashoffset: var(--flow-from, 0px); }
     to { stroke-dashoffset: calc(var(--flow-from, 0px) - var(--flow-len)); }
 }
+/* Cell-built packets: one path per march frame, each visible for 1/16 of the cycle. */
+.gm-pxline .gm-pxline-flow.gm-pxflow-cells {
+    stroke: none;
+    fill: #efffff;
+    visibility: hidden;
+    animation-name: gm-pxflow-frame;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-direction: normal;
+}
+.gm-pxline .gm-pxline-flow-reverse.gm-pxflow-cells { fill: #78ffd2; }
+.gm-edge.gm-pxline.dim .gm-post-traffic.gm-pxflow-cells { fill: #a8d6d0; }
+@keyframes gm-pxflow-frame {
+    0% { visibility: visible; }
+    6.25%, 100% { visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-pxline .gm-pxline-flow.gm-pxflow-f0 { visibility: visible; }
+}
 /* Border station where reachable space ends. */
 .gm-border-station rect { stroke: none; }
 /* The lines layer ignores the mouse; the station shows its tooltip on hover. */
@@ -371,6 +390,12 @@ html {
     background-repeat: no-repeat;
     image-rendering: pixelated;
 }
+/* In combat: no cockpit art behind the stage, plain dark only. */
+html.vf-game-shown,
+html.vf-game-shown body {
+    background-image: none;
+    background-color: #05060a;
+}
 
 body {
     font-family: var(--ui-font-family);
@@ -387,7 +412,10 @@ body {
     height: var(--vh, 100dvh);
     min-height: var(--vh, 100dvh);
     max-height: var(--vh, 100dvh);
-    overflow: hidden;
+    /* clip (not hidden): no scrolling inside the stage, but bezel parts (pilot crest, tabs)
+       may paint past the stage edge instead of being cut off. */
+    overflow: clip;
+    overflow-clip-margin: 200px;
     font-size: var(--font-text);
     line-height: 1.2;
     letter-spacing: 1px;
@@ -1089,20 +1117,8 @@ html[data-vf-arcade="on"] .settings-row-value {
     min-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     max-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     box-sizing: border-box;
+    /* No cockpit art: the faction bezel (screen-frame.css) is the only frame. */
     background-color: #000;
-    background-image:
-        linear-gradient(
-            to bottom,
-            rgba(0, 0, 0, 0.42) 0%,
-            rgba(0, 0, 0, 0.28) 40%,
-            rgba(0, 0, 0, 0.55) 100%
-        ),
-        url('../../assets/ui/hs-bg-ingame.png');
-    background-size: cover;
-    background-position: center center;
-    background-repeat: no-repeat;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
     color: var(--color-text);
     font-family: var(--ui-font-family);
     position: relative;

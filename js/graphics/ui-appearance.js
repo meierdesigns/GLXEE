@@ -107,7 +107,9 @@ class UIAppearanceManager {
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
         // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
-        this.sizePx = { player: 17, 'enemy:scout': 49, 'enemy:assault': 46, 'enemy:heavy': 49, 'enemy:elite': 50, 'enemy:capital': 49 };
+        this.sizePx = { player: 18, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
+            // Boss / side craft are derived from the class footprint (boss x1.6, side x0.68-0.78); these scale that in % (SIZES tab).
+            'boss:pct': 80, 'side:pct': 80 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };
@@ -164,7 +166,7 @@ class UIAppearanceManager {
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
         // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
-        this.pixelSize = 'OFF';
+        this.pixelSize = '3';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -227,6 +229,25 @@ class UIAppearanceManager {
         const step = this.getShotSize(kind);
         const mul = this.shotSizeScaleSteps[step];
         return Number.isFinite(mul) ? mul : 1;
+    }
+    /** Boss footprint multiplier over its class size (was a fixed 1.6). */
+    getBossSizeMul() {
+        return 1.6 * (this.getSizePct('boss') / 100);
+    }
+    /** Extra scale for side craft on top of their 0.68-0.78 footprint. */
+    getSideSizeMul() {
+        return this.getSizePct('side') / 100;
+    }
+    getSizePct(kind) {
+        const v = Number(this.sizePx[String(kind) + ':pct']);
+        return v > 0 ? v : 80;
+    }
+    setSizePct(kind, pct) {
+        const v = Math.max(30, Math.min(150, Math.round(Number(pct))));
+        if (!(v > 0)) return;
+        this.sizePx[String(kind) + ':pct'] = v;
+        this.persist();
+        if (typeof enemyManager !== 'undefined' && enemyManager.refreshEnemySizes) enemyManager.refreshEnemySizes();
     }
     getPlayerSizeOptions() {
         return Object.keys(this.playerSizeScaleSteps);

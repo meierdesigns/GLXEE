@@ -116,7 +116,7 @@ extendClass(StartScreenManager, {
     },
 
     cycleEmbeddedMenuTab(dir) {
-        const ids = this.embeddedMenuTabs.map((t) => t.id);
+        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => id !== 'portraits' || this.devMode);
         const idx = ids.indexOf(this.embeddedMenuTab);
         const next = (idx + dir + ids.length) % ids.length;
         this.setEmbeddedMenuTab(ids[next]);

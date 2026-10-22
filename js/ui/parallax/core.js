@@ -85,6 +85,17 @@ class ParallaxManager {
         this.starSpawnInterval = 2000;
     }
 
+    /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
+    envVar(name) {
+        const now = performance.now();
+        const c = this._envCache || (this._envCache = {});
+        const hit = c[name];
+        if (hit && now - hit.t < 250) return hit.v;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        c[name] = { v: v, t: now };
+        return v;
+    }
+
     getPlanetLayers(planet) {
         if (typeof planetConfigManager !== 'undefined') {
             return planetConfigManager.getResolvedLayers(planet);
@@ -138,8 +149,12 @@ class ParallaxManager {
         const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
             || obstacleManager.isScrollStage();
         if (scrolling) {
+            // Transit backtrack runs the background in reverse (obstacleManager.levelScrollMul).
+            const mul = typeof obstacleManager !== 'undefined' && obstacleManager.levelScrollMul
+                ? obstacleManager.levelScrollMul() : 1;
             this.layers.forEach(layer => {
-                layer.y += layer.speed * frameScale;
+                // Kept >= 0: the pattern draws wrap with %, which breaks on negatives.
+                layer.y = Math.max(0, layer.y + layer.speed * frameScale * mul);
             });
         }
         this.horizontalOffset += this.horizontalSpeed * frameScale;
@@ -161,7 +176,7 @@ class ParallaxManager {
         ctx.msImageSmoothingEnabled = false;
 
         // Fill base background with theme color
-        const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--env-background').trim();
+        const backgroundColor = this.envVar('--env-background');
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;

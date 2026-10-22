@@ -268,11 +268,13 @@ extendClass(GalaxyMapManager, {
         }
         let outline = '', fill = '';
         const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F)}" y="${(y0 + cy * F)}" width="${Fw}" height="${Fw}" class="${cls}"/>`;
-        for (let cy = -1; cy <= gh; cy++) {
-            for (let cx = -1; cx <= cols; cx++) {
+        // Two-cell outline so the labels stay readable over bright planets and nebulae.
+        const OR = 2;
+        for (let cy = -OR; cy < gh + OR; cy++) {
+            for (let cx = -OR; cx < cols + OR; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
                 let edge = false;
-                for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1; dx++) if (on.has((cx + dx) + ',' + (cy + dy))) { edge = true; break; }
+                for (let dy = -OR; dy <= OR && !edge; dy++) for (let dx = -OR; dx <= OR; dx++) if (on.has((cx + dx) + ',' + (cy + dy))) { edge = true; break; }
                 if (edge) outline += r(cx, cy, 'gm-pixel-text-o');
             }
         }

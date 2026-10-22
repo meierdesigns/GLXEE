@@ -63,14 +63,6 @@
             '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
             (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : shown + (unit || '')) + '</output></label>';
     }
-    // The slider edits the raw, un-scaled px stored in uiAppearanceManager; what actually
-    // reaches the screen/collision box is that raw value times the level's playfield zoom
-    // (game.contentScale, see resolve-enemy-hit-profile.js). Show that effective size so the
-    // panel's numbers match what the player sees, instead of the un-scaled stored value.
-    function effectivePx(rawPx) {
-        const scale = (typeof game !== 'undefined' && game && game.contentScale) ? game.contentScale : 1;
-        return Math.round(rawPx * scale);
-    }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
     }
@@ -302,14 +294,18 @@
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
                 fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
-            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px', effectivePx(ui.getSizePx('player')));
+            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px');
             ['scout', 'assault', 'heavy', 'elite', 'capital'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px', effectivePx(ui.getSizePx('enemy', c)));
+                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px');
             });
+            h += '<div class="vf-fx-title">BOSS / SIDE CRAFT (% OF CLASS SIZE)</div>' +
+                fxSlider('BOSS', 'sp:boss', 30, 150, 5, ui.getSizePct('boss'), '%') +
+                fxSlider('SIDE CRAFT', 'sp:side', 30, 150, 5, ui.getSizePct('side'), '%');
             h += '<div class="vf-fx-title">SHOTS (PX)</div>';
             ['player', 'enemy', 'boss'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px', effectivePx(ui.getSizePx('shot', c)));
+                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px');
             });
+            h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-sz-copy="1">COPY SIZES (JSON)</button></div>';
         }
         h += '</div>';
         plate.innerHTML = h;

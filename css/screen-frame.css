@@ -30,7 +30,7 @@
     --fr-ol: var(--fr-open-side, calc(44 * var(--u)));
     --fr-or: var(--fr-open-side, calc(44 * var(--u)));
     --fr-ob: var(--fr-open-bottom, calc(44 * var(--u)));
-    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 22)) * var(--u)));
+    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)));
     --glass-r: var(--fr-hole-r);
 }
 
@@ -123,12 +123,8 @@
 .vf-bezel::after,
 .vf-bezel-deco { clip-path: var(--fr-shape); }
 
-/* The stage is cut to the frame's own outline (same token, so the bevel is never clipped). */
-body:has(> .vf-bezel[data-faction="terran"]) { clip-path: var(--fr-shape-terran); }
-body:has(> .vf-bezel[data-faction="kronax"]) { clip-path: var(--fr-shape-kronax); }
-body:has(> .vf-bezel[data-faction="voidborn"]) { clip-path: var(--fr-shape-voidborn); }
-body:has(> .vf-bezel[data-faction="pirate"]) { clip-path: var(--fr-shape-pirate); }
-body:has(> .vf-bezel[data-faction="machine"]) { clip-path: var(--fr-shape-machine); }
+/* The stage is NOT cut to the frame outline: pilot plate, crest and other
+   bezel parts must be free to reach past the silhouette. */
 
 /* Faction switch: the colour tokens are typed so the browser cross-fades them
    (shapes/clip-paths cannot interpolate). Every consumer follows the token. */
@@ -168,3 +164,26 @@ body:has(> .vf-bezel[data-faction="machine"]) { clip-path: var(--fr-shape-machin
         var(--fr-eb) var(--fr-eb) 0 0 color-mix(in srgb, var(--hull-lit) 55%, #fff),
         0 0 0 200vmax var(--fr-c);
 }
+
+/* ── Fight frame: the playfield sits in a recessed faction plate ───────────
+   Same reading as the bezel (dark lip, hull band, lit top-left / dark bottom-right
+   bevel), from the root faction tokens so it follows faction switches. The stage pads
+   by --fight-frame so the band never covers the canvas; viewport-fit subtracts it from
+   the measured slot. */
+:root { --fight-frame: 12px; --fight-frame-bv: 3px; }
+html body .game-container .game-canvas-container > .game-stage {
+    padding: var(--fight-frame);
+    box-sizing: border-box;
+}
+html body .game-container .game-canvas-container > .game-stage #gameCanvas {
+    --ff-hull: color-mix(in srgb, var(--faction-edge) 75%, #000);
+    --ff-lit: color-mix(in srgb, var(--faction-hull) 55%, var(--ff-hull));
+    --ff-dark: color-mix(in srgb, var(--faction-edge) 25%, #000);
+    box-shadow:
+        0 0 0 2px #05060a,
+        0 0 0 calc(var(--fight-frame) - var(--fight-frame-bv)) var(--ff-hull),
+        calc(-1 * var(--fight-frame-bv)) calc(-1 * var(--fight-frame-bv)) 0 calc(var(--fight-frame) - var(--fight-frame-bv)) var(--ff-lit),
+        var(--fight-frame-bv) var(--fight-frame-bv) 0 calc(var(--fight-frame) - var(--fight-frame-bv)) var(--ff-dark),
+        0 0 0 var(--fight-frame) #05060a !important;
+}
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas { border-radius: 10px; }

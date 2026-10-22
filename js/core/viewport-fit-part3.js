@@ -289,8 +289,16 @@
             return '<span class="vf-pilot-res" title="' + esc(id.toUpperCase()) + '">' + ico(key) + '<b>' + v + '</b></span>';
         }).join('');
         const fac = String(p.faction || 'pirate').toLowerCase();
-        const big = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
-            ? profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64) : '';
+        // Pilot thumbnail (the look picked at creation), falling back to the faction emblem.
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const accent = fss && fss.getFactionStyle ? (fss.getFactionStyle(fac) || {}).accent : null;
+        let big = '';
+        try {
+            if (typeof heroPortrait !== 'undefined') big = heroPortrait.html(p.portrait || heroPortrait.heroLook(fac), accent, { nobg: true });
+        } catch (e) { big = ''; }
+        if (!big && typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml) {
+            big = profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64);
+        }
         return { plate: '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>', res: res };
     }
     let pilotSig = '';
@@ -352,8 +360,99 @@
             ress.innerHTML = hud.res;
             ress.hidden = !hud.res;
         }
+        syncPilotTuner(frame);
     }
     setInterval(syncPilotPlate, 700);
+
+    // Dev Mode: sliders for the pilot plate / resources screen sizes (--ph-* on the bezel), saved in localStorage.
+    const PH_TUNE_KEY = 'vf_pilot_hud_tune_v1';
+    const PH_TUNE = [
+        ['PILOT SCREEN · POSITION'],
+        ['--ph-top', 'TOP', 0, 70, 1],
+        ['--ph-left', 'LEFT', 40, 400, 2],
+        ['--ph-plate-w', 'WIDTH', 200, 600, 2],
+        ['--ph-height', 'HEIGHT', 20, 70, 1],
+        ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
+        ['PILOT FRAME'],
+        ['--ph-crest-top', 'TOP', -120, 20, 1],
+        ['--ph-crest-left', 'LEFT', -60, 40, 1],
+        ['--ph-crest-w', 'WIDTH', 30, 140, 1],
+        ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
+        ['PILOT IMAGE'],
+        ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
+        ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1],
+        ['RESOURCE SCREEN · POSITION'],
+        ['--ph-gap', 'GAP', 0, 120, 2],
+        ['--ph-res-height', 'HEIGHT', 20, 70, 1],
+        ['--ph-res-pad', 'PADDING', 0, 60, 1],
+        ['RESOURCES'],
+        ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
+        ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
+        ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+    ];
+    let phTune = {};
+    try { phTune = JSON.parse(localStorage.getItem(PH_TUNE_KEY) || '{}') || {}; } catch (e) { phTune = {}; }
+    let phPanel = null, phBtn = null;
+    function applyPilotTune(frame) {
+        PH_TUNE.forEach(function (t) {
+            if (t.length < 2) return;
+            if (phTune[t[0]] != null) frame.style.setProperty(t[0], String(phTune[t[0]]));
+            else frame.style.removeProperty(t[0]);
+        });
+    }
+    function savePilotTune() {
+        try { localStorage.setItem(PH_TUNE_KEY, JSON.stringify(phTune)); } catch (e) { /* ignore */ }
+    }
+    function buildPilotTunePanel(frame) {
+        const cs = getComputedStyle(frame);
+        const rows = PH_TUNE.map(function (t) {
+            if (t.length < 2) return '<div class="vf-ph-tune-h">' + t[0] + '</div>';
+            const v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
+            return '<label class="vf-ph-tune-row"><span>' + t[1] + '</span>'
+                + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4] + '" value="' + v + '">'
+                + '<b>' + v + '</b></label>';
+        }).join('');
+        phPanel.innerHTML = rows + '<div class="vf-ph-tune-btns"><button type="button" data-ph-reset>RESET</button><button type="button" data-ph-close>CLOSE</button></div>';
+    }
+    function syncPilotTuner(frame) {
+        applyPilotTune(frame);
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        if (!phBtn) {
+            phBtn = document.createElement('button');
+            phBtn.type = 'button';
+            phBtn.className = 'vf-ph-tune-btn';
+            phBtn.title = 'Pilot HUD size (Dev Mode)';
+            phBtn.textContent = 'HUD';
+            document.body.appendChild(phBtn);
+            phPanel = document.createElement('div');
+            phPanel.className = 'vf-ph-tune';
+            phPanel.hidden = true;
+            document.body.appendChild(phPanel);
+            phBtn.addEventListener('click', function () {
+                phPanel.hidden = !phPanel.hidden;
+                if (!phPanel.hidden) buildPilotTunePanel(frame);
+            });
+            phPanel.addEventListener('input', function (e) {
+                const k = e.target && e.target.getAttribute('data-ph');
+                if (!k) return;
+                phTune[k] = Number(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+                applyPilotTune(frame);
+                savePilotTune();
+            });
+            phPanel.addEventListener('click', function (e) {
+                if (e.target.closest('[data-ph-close]')) phPanel.hidden = true;
+                else if (e.target.closest('[data-ph-reset]')) {
+                    phTune = {};
+                    savePilotTune();
+                    applyPilotTune(frame);
+                    buildPilotTunePanel(frame);
+                }
+            });
+        }
+        phBtn.hidden = !dev;
+        if (!dev) phPanel.hidden = true;
+    }
 
     function guiZoom() {
         return clamp(readCssNumber('--gui-zoom', 1), 0.25, 4);

@@ -13,6 +13,7 @@ class StartScreenManager {
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
             { id: 'layout', label: 'LAYOUT', icon: 'menuSettings' },
+            { id: 'portraits', label: 'PORTRAITS', icon: 'menuProfiles' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
         ];
         this.title = "GLXEE";

@@ -256,10 +256,18 @@ extendClass(PlanetSVGManager, {
             }
             // Combat owns the main thread (runtime: spin tick spikes >200ms while
             // GameLoop JS stayed cheap). Decorative planet spin waits outside fights.
-            if (root.classList.contains('vf-game-shown')) return false;
+            // Victory / defeat screens sit on top of the (finished) game: their planet still turns.
+            if (root.classList.contains('vf-game-shown') && !this.isOutcomeScreenOpen()) return false;
             // Map spin is allowed again — round-robin budget in startPlanetSpin caps cost.
         } catch (e) { /* allow */ }
         return true;
+    },
+
+    /** Victory or defeat overlay is showing (combat is over, spin is cheap again). */
+    isOutcomeScreenOpen() {
+        const vo = document.getElementById('victoryOverlay');
+        const go = document.getElementById('gameOver');
+        return !!((vo && !vo.classList.contains('hidden')) || (go && !go.classList.contains('hidden')));
     },
 
     /** Keep spin detail aligned with map node art (same grid as planetIconHtml). */
@@ -301,26 +309,37 @@ extendClass(PlanetSVGManager, {
             if (document.hidden) return;
             // Round-robin with a short frame budget: same detail/quality as before,
             // but never rebuild every planet in one tick (that froze the shell).
-            const n = els.length;
+            // Featured planets (card backdrops, outcome screens — not map nodes) are few
+            // and big: they step every tick so their turn reads smooth. Sharing the
+            // round-robin made them wait many ticks and jump several frames at once.
+            const featured = [];
+            const mapEls = [];
+            els.forEach((e) => (e.closest('.galaxy-map-svg') ? mapEls : featured).push(e));
+            const n = mapEls.length;
             // Placeholders (data-spin-frame=-1) get extra budget so coarse first paints upgrade fast.
             let pendingUpgrade = 0;
             for (let i = 0; i < n; i++) {
-                if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
+                if (mapEls[i] && mapEls[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
             const budgetMs = pendingUpgrade ? 10 : 4;
             const maxUpdates = pendingUpgrade ? 2 : 1;
-            const t0 = performance.now();
+            let t0 = performance.now();
             let updated = 0;
-            for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
+            const nf = featured.length;
+            for (let tried = 0; tried < nf + n && (tried <= nf || (updated < maxUpdates && performance.now() - t0 < budgetMs)); tried++) {
+                const isFeatured = tried < nf;
+                // Map nodes get their own budget: big featured frames must not starve them.
+                if (tried === nf) t0 = performance.now();
+                const rr = tried - nf;
                 // Prefer placeholders so zoomed map nodes leave detail-1 ASAP.
-                let el = null;
-                if (pendingUpgrade > 0) {
+                let el = isFeatured ? featured[tried] : null;
+                if (!el && pendingUpgrade > 0) {
                     for (let j = 0; j < n; j++) {
-                        const cand = els[(this._spinCursor + tried + j) % n];
+                        const cand = mapEls[(this._spinCursor + rr + j) % n];
                         if (cand && cand.getAttribute('data-spin-frame') === '-1') { el = cand; break; }
                     }
                 }
-                if (!el) el = els[(this._spinCursor + tried) % n];
+                if (!el) el = mapEls[(this._spinCursor + rr) % n];
                 if (!el || !el.isConnected) continue;
                 // Inside the galaxy-map SVG, getBoundingClientRect is unreliable
                 // (viewBox / foreignObject often reports planets far off-screen
@@ -345,7 +364,7 @@ extendClass(PlanetSVGManager, {
                 const fk = model.uid + ':' + f;
                 // Fine grids advance slowly; coarse map icons stay on the shared period.
                 // Upgrades from the placeholder always go through immediately.
-                if (!upgrading && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
+                if (!upgrading && !isFeatured && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
                     const nowT = performance.now();
                     if (el._lastSpinT && nowT - el._lastSpinT < 900) continue;
                     el._lastSpinT = nowT;
@@ -374,7 +393,7 @@ extendClass(PlanetSVGManager, {
                     imgEl.style.left = off + 'px';
                     imgEl.style.top = off + 'px';
                     if (conv.scale) model.frameScale = conv.scale;
-                    updated++;
+                    if (!isFeatured) updated++;
                     continue;
                 }
                 const svgEl = el.querySelector('svg');
@@ -384,7 +403,7 @@ extendClass(PlanetSVGManager, {
                 if (w) svg = svg.replace(/width="[^"]*"/, `width="${w}"`);
                 if (h) svg = svg.replace(/height="[^"]*"/, `height="${h}"`);
                 el.innerHTML = svg;
-                updated++;
+                if (!isFeatured) updated++;
             }
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };

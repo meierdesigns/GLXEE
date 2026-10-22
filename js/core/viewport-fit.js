@@ -50,15 +50,19 @@
         };
     }
 
-    /** Widen logical map to match display aspect (square pixels, more columns). */
-    function syncMapToAspect(aspect) {
-        const mapH = Math.max(1, Math.round(readCssNumber('--map-h', 300)));
-        const mapW = Math.max(1, Math.round(mapH * aspect));
+    /** Reshape logical map to match display aspect (square pixels): more columns,
+     *  or with keepWidth more rows (walls/lanes stay where the level put them). */
+    function syncMapToAspect(aspect, keepWidth) {
         const prevW = readCssNumber('--map-w', 0);
-        ROOT.style.setProperty('--playfield-aspect', String(Number(aspect.toFixed(6))));
+        const prevH = readCssNumber('--map-h', 0);
+        const mapH = keepWidth
+            ? Math.max(1, Math.round(prevW / aspect))
+            : Math.max(1, Math.round(readCssNumber('--map-h', 300)));
+        const mapW = keepWidth ? Math.max(1, Math.round(prevW)) : Math.max(1, Math.round(mapH * aspect));
+        ROOT.style.setProperty('--playfield-aspect', String(Number((mapW / mapH).toFixed(6))));
         ROOT.style.setProperty('--map-w', String(mapW));
         ROOT.style.setProperty('--map-h', String(mapH));
-        if (Math.abs(prevW - mapW) < 1) return mapW;
+        if (Math.abs(prevW - mapW) < 1 && Math.abs(prevH - mapH) < 1) return mapW;
         const canvas = document.getElementById('gameCanvas');
         const k = (typeof window.renderManager !== 'undefined' && window.renderManager
             && typeof window.renderManager.getRenderScale === 'function')
@@ -251,10 +255,8 @@
         return out;
     }
     let silhouetteRaf = 0, silKey = '';
-    function clearSilhouette(body, frame) {
-        body.style.clipPath = '';
-        frame.style.clipPath = '';
-        document.querySelectorAll('[data-vf-stage-clip]').forEach(function (el) { el.removeAttribute('data-vf-stage-clip'); });
+    function clearSilhouette() {
+        document.documentElement.removeAttribute('data-vf-frame-sil');
     }
     function updateSilhouette() {
         silhouetteRaf = 0;
@@ -267,21 +269,23 @@
         // any window size. The clip itself is normalised (objectBoundingBox): it follows the
         // layer's box whatever scale / zoom the layer has.
         const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fr-px')) || 0;
-        const W = body.offsetWidth, H = body.offsetHeight;
+        // Only the frame's own plates are cut (CSS: html[data-vf-frame-sil] #vf-bezel .vf-fr), never the stage or the
+        // bezel itself — so nothing that sits in the bezel (pilot thumbnail, screens, tools) is ever sheared off.
+        const W = frame.offsetWidth, H = frame.offsetHeight;
         const shape = getComputedStyle(frame).getPropertyValue('--fr-shape').trim();
-        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(body, frame); silKey = ''; return; }
+        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(); silKey = ''; return; }
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
         const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow;
-        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && body.style.clipPath) { tagStageLayers(body, frame); return; }
+        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')) return;
         const probe = document.createElement('div');
         probe.id = 'vfSilProbe';
         probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;width:' + W + 'px;height:' + H + 'px';
         const dot = document.createElement('div');
         dot.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0';
         probe.appendChild(dot);
-        body.appendChild(probe);
+        frame.appendChild(probe);
         const px = function (expr, prop) {
             dot.style[prop] = expr;
             const v = prop === 'left' ? dot.offsetLeft : prop === 'top' ? dot.offsetTop : prop === 'width' ? dot.offsetWidth : dot.offsetHeight;
@@ -319,7 +323,7 @@
             } else ok = false;
         } catch (e) { ok = false; }
         probe.remove();
-        if (!ok) { clearSilhouette(body, frame); silKey = ''; return; }
+        if (!ok) { clearSilhouette(); silKey = ''; return; }
         const data = sx.getImageData(0, 0, cw, ch).data;
         // One path of merged runs of whole cells (square staircase), in 0..1 box units.
         const nx = function (x) { return Math.min(1, x * cell / W).toFixed(6); };
@@ -358,24 +362,8 @@
         }
         document.getElementById('vfStageClipPath').setAttribute('d', d);
         if (window.vfLog) window.vfLog('mask', 'pixel silhouette rebuilt in ' + Math.round(performance.now() - tS) + 'ms (' + cw + 'x' + ch + ' cells, path ' + d.length + ' chars)');
-        body.style.clipPath = 'url(#vfStageClip)';
-        frame.style.clipPath = 'url(#vfStageClip)';
+        document.documentElement.setAttribute('data-vf-frame-sil', '');
         silKey = silKeyNow;
-        tagStageLayers(body, frame);
-    }
-    // Fixed-position stage layers (start screen, station, overlays) ignore the body's clip, so
-    // every full-stage layer gets the same clip. Anything with another box (tooltips, the
-    // remote) is left alone.
-    function tagStageLayers(body, frame) {
-        const br = body.getBoundingClientRect();
-        Array.prototype.forEach.call(body.children, function (el) {
-            if (el === frame || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'svg') return;
-            const r = el.getBoundingClientRect();
-            const full = Math.abs(r.left - br.left) < 2 && Math.abs(r.top - br.top) < 2
-                && Math.abs(r.width - br.width) < 2 && Math.abs(r.height - br.height) < 2;
-            if (full) { if (!el.hasAttribute('data-vf-stage-clip')) el.setAttribute('data-vf-stage-clip', ''); }
-            else if (el.hasAttribute('data-vf-stage-clip')) el.removeAttribute('data-vf-stage-clip');
-        });
     }
     function scheduleSilhouette() {
         if (!silhouetteRaf) silhouetteRaf = requestAnimationFrame(updateSilhouette);

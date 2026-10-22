@@ -66,7 +66,7 @@
 
     </style>
     <link rel="stylesheet" href="css/styles/part-01.css?v=split-4">
-    <link rel="stylesheet" href="css/styles/part-02.css?v=split-3">
+    <link rel="stylesheet" href="css/styles/part-02.css?v=enemy-face-1">
     <link rel="stylesheet" href="css/styles/part-03.css?v=go-fit-67c">
     <link rel="stylesheet" href="css/styles/part-04.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-05.css?v=split-2">
@@ -75,7 +75,7 @@
     <link rel="stylesheet" href="css/styles/part-08.css?v=split-3">
     <link rel="stylesheet" href="css/styles/part-09.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-10.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-11.css?v=map-px-markers-1">
+    <link rel="stylesheet" href="css/styles/part-11.css?v=victory-flat-67r">
     <link rel="stylesheet" href="css/styles/part-12.css?v=split-8">
     <link rel="stylesheet" href="css/styles/part-13.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-14.css?v=split-2">
@@ -83,17 +83,18 @@
     <link rel="stylesheet" href="css/styles/part-16.css?v=planet-bright-1">
     <link rel="stylesheet" href="css/styles/part-17.css?v=go-fit-67c">
     <link rel="stylesheet" href="css/styles/part-18.css?v=outcome-line-zoom-1">
-    <link rel="stylesheet" href="css/styles/part-19.css?v=frame-perf-1">
-    <link rel="stylesheet" href="css/styles/part-20.css?v=frame-perf-1">
+    <link rel="stylesheet" href="css/styles/part-19.css?v=frame-perf-3">
+    <link rel="stylesheet" href="css/styles/part-20.css?v=frame-perf-2">
     <link rel="stylesheet" href="css/styles/part-21.css?v=frame-perf-1">
-    <link rel="stylesheet" href="css/styles/part-22.css?v=map-px-noflicker-1">
+    <link rel="stylesheet" href="css/styles/part-22.css?v=planet-atmo-anim-2">
+    <link rel="stylesheet" href="css/styles/part-23.css?v=outcome-contrast-1">
     <link rel="stylesheet" href="assets/factions/terran/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/kronax/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/voidborn/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/pirate/gui.css?v=split-2">
     <link rel="stylesheet" href="assets/factions/machine/gui.css?v=split-2">
-    <link rel="stylesheet" href="css/pilot-hud.css?v=9">
-    <link rel="stylesheet" href="css/screen-frame.css?v=9">
+    <link rel="stylesheet" href="css/pilot-hud.css?v=20">
+    <link rel="stylesheet" href="css/screen-frame.css?v=12">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
     <script src="js/core/stage-boot.js?v=boot-10"></script>
@@ -291,14 +292,29 @@
         </div>
     </div>
 
-    <div id="gameOver" class="game-over hidden">
-        <div class="game-over-content">
-            <h2>GAME OVER</h2>
-            <p>Mission Failed</p>
-            <div class="game-over-epitaph"></div>
-            <div class="game-over-buttons">
-                <button onclick="game.restartGame()" class="game-over-button" data-index="0">PLAY AGAIN</button>
-                <button onclick="game.showLevelSelection()" class="game-over-button" data-index="1">PLANET SELECT</button>
+    <!-- Defeat screen: same layout as the victory screen (show-victory-overlay.js). -->
+    <div id="gameOver" class="game-over victory-screen is-defeat hidden">
+        <div class="victory-content">
+            <div class="victory-header">
+                <h1 class="victory-title">GAME OVER</h1>
+                <p class="victory-subtitle">Mission Failed</p>
+                <p class="game-over-epitaph"></p>
+            </div>
+            <div class="victory-body">
+                <div class="victory-loot game-over-loss">
+                    <div class="victory-loot-title">RESOURCES LOST</div>
+                    <div class="victory-loot-list"></div>
+                </div>
+                <div class="victory-buttons">
+                    <button type="button" onclick="game.restartGame()" class="victory-button game-over-button" data-index="0" tabindex="-1">
+                        <span class="button-icon" data-icon="menuStart"></span>
+                        <span class="button-text">PLAY AGAIN</span>
+                    </button>
+                    <button type="button" onclick="game.showLevelSelection()" class="victory-button game-over-button" data-index="1" tabindex="-1">
+                        <span class="button-icon" data-icon="menuPlanets"></span>
+                        <span class="button-text">PLANET SELECT</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -371,6 +387,6 @@
             }
         });
     </script>
-<script defer src="js/bundles/deferred.js"></script>
+<script defer src="js/bundles/deferred.js?v=wall-craters-1"></script>
 </body>
 </html>

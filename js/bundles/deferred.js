@@ -4688,8 +4688,19 @@ extendClass(PlanetConfigManager, {
     },
 
     resolveLayerColor(layer) {
-        const root = document.documentElement;
-        const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+        // Called per layer per frame: read the theme variables at most every 250ms (getComputedStyle forces a style recalc).
+        const now = performance.now();
+        if (!this._layerCssCache || now - this._layerCssCache.t > 250) {
+            const cs = getComputedStyle(document.documentElement);
+            const read = (name) => cs.getPropertyValue(name).trim();
+            this._layerCssCache = { t: now, v: {
+                '--env-primary': read('--env-primary'), '--current-primary': read('--current-primary'),
+                '--env-secondary': read('--env-secondary'), '--current-secondary': read('--current-secondary'),
+                '--env-accent': read('--env-accent'), '--current-accent': read('--current-accent')
+            } };
+        }
+        const cache = this._layerCssCache.v;
+        const css = (name) => cache[name] || '';
         switch (layer.colorSource) {
             case 'secondary':
                 return (css('--env-secondary') || css('--current-secondary')) || '#606060';
@@ -4908,6 +4919,8 @@ extendClass(PlanetConfigManager, {
         return {
             planetId: String(planetId || c.id || ''),
             faction: faction,
+            // Who built the planet (configured owner) — styles its own structures like the sluice gate.
+            homeFaction: String(all[0] || faction).toLowerCase(),
             planetStyle: look.style,
             // Planet look first, then faction doctrine floors/mats so each theater reads as both.
             floors: this.mergeIdLists(lookEnv && lookEnv.floors, FACTION_FLOORS[faction]),
@@ -17258,7 +17271,7 @@ window.shipLoadoutManager = shipLoadoutManager;
 /**
  * Level objective progress — hunt / killCount / surviveCount / surviveTime.
  */
-var ObjectiveManager = class ObjectiveManager {
+class ObjectiveManager {
     constructor() {
         this.objective = null;
         this.enemies = [];
@@ -17270,6 +17283,7 @@ var ObjectiveManager = class ObjectiveManager {
         this.awaitingFieldClear = false;
         this.label = '';
         this.goal = null;
+        this.enter = null;
     }
 
     reset() {
@@ -17283,9 +17297,18 @@ var ObjectiveManager = class ObjectiveManager {
         this.awaitingFieldClear = false;
         this.label = '';
         this.goal = null;
+        this.enter = null;
+        this.arrival = null;
+        this.exitGate = false;
+    }
+
+    /** End of the level reached (goal in view, objective met or won): nothing new may spawn. */
+    isLevelEnding() {
+        return !!(this.goal || this.completed || this.won || this.awaitingFieldClear);
     }
 
     needsFieldClear() {
+        if (this.exitGate) return false;
         const t = this.objective && this.objective.type;
         return t === 'hunt' || t === 'killCount';
     }
@@ -17298,12 +17321,137 @@ var ObjectiveManager = class ObjectiveManager {
     }
 
     start(objective, enemies) {
+        const prevArrival = this.arrival;
         this.reset();
+        this.arrival = this.buildArrival(prevArrival);
         this.enemies = Array.isArray(enemies) ? enemies.slice() : [];
         this.objective = objective && typeof objective === 'object'
             ? Object.assign({}, objective)
             : this.fallbackObjective(this.enemies);
         this.label = this.buildLabel();
+    }
+
+    /**
+     * Stage start: the ship flies out of a hatch at the bottom edge. Kept if start() runs again mid-arrival.
+     */
+    buildArrival(prev) {
+        const host = typeof game !== 'undefined' ? game : (typeof gameCore !== 'undefined' ? gameCore : null);
+        const lm = host && (host.coreLevelManager || host.levelManager);
+        const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+        if (!level || !level.planetId) return null;
+        const id = level.id || (level.planetId + '-' + level.stageIndex);
+        if (prev && prev.levelId === id && !prev.done && prev.t < prev.dur) return prev;
+        // Arriving on a planet (stage 1, or any stage entered from elsewhere) launches from the home station;
+        // later stages on the same planet start in a sluice. Boss stages only get the station launch.
+        const arriving = (!level.isBoss && (Number(level.stageIndex) || 1) === 1)
+            || this.arrivalPlanetId !== level.planetId
+            || !!(prev && prev.levelId === id && prev.kind === 'station');
+        this.arrivalPlanetId = level.planetId;
+        if (level.isBoss && !arriving) return null;
+        const kind = arriving ? 'station' : 'sluice';
+        const W = (host && (host.internalWidth || host.baseWidth)) || 240;
+        const restY = 46, h = 22, depth = 22;
+        return {
+            levelId: id, kind: kind, y: -(h + depth), restY: restY, h: h, open: 64, cx: W * 0.5,
+            // Phases: the tube rises in from below, the dome splits open, the ship flies out.
+            riseMs: 700, openMs: 500, flyMs: 1400, t: 0, dur: 2600, done: false, target: null, quietMs: 2000,
+            dome: { hp: 1, max: 1, depth: depth, flashMs: 0, burstMs: 0, split: 0 }
+        };
+    }
+
+    /**
+     * Mission-start intro: the tube rises on FIRE TO START and the dome opens on GO; the intro's own fly-in
+     * then carries the ship out of the tube, so the arrival skips its fly phase afterwards.
+     */
+    updateArrivalIntro(deltaTime, phase) {
+        const a = this.arrival;
+        if (!a || a.done) return;
+        a.intro = true;
+        // The tube is already up on FIRE TO START; the dome stays shut through countdown and GO and only
+        // opens once the ship actually starts flying out (fly-in).
+        // No phase = the intro just completed this frame: keep the dome open, and never rewind it.
+        const cap = phase === 'flyIn' || !phase ? a.riseMs + a.openMs : a.riseMs;
+        a.t = Math.max(a.t, Math.min(cap, a.t + deltaTime));
+        this.applyArrivalHatch(a);
+    }
+
+    applyArrivalHatch(a) {
+        const out = (v) => 1 - (1 - v) * (1 - v);
+        const kRise = Math.min(1, a.t / a.riseMs);
+        a.y = -(a.h + a.dome.depth) + (a.restY + a.h + a.dome.depth) * out(kRise);
+        a.dome.split = Math.max(0, Math.min(1, (a.t - a.riseMs) / a.openMs));
+    }
+
+    /** Arrival: tube rises in, dome opens, ship flies out, then the hatch scrolls away below. */
+    updateArrival(deltaTime) {
+        const a = this.arrival;
+        if (!a) return;
+        if (a.done) {
+            a.quietMs = Math.max(0, (a.quietMs || 0) - deltaTime);
+            return;
+        }
+        if (a.intro && a.t < a.dur) {
+            // Intro already flew the ship out: just let the hatch scroll away.
+            a.t = a.dur;
+            a.y = a.restY;
+            a.dome.split = 1;
+        }
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p) return;
+        const H = (typeof game !== 'undefined' && game.internalHeight) || 320;
+        if (!a.target) a.target = { x: p.x, y: p.y };
+        if (a.t < a.dur) {
+            a.t += deltaTime;
+            const out = (v) => 1 - (1 - v) * (1 - v);
+            this.applyArrivalHatch(a);
+            const kFly = Math.max(0, Math.min(1, (a.t - a.riseMs - a.openMs) / a.flyMs));
+            const ease = out(kFly);
+            const fromY = H + 4;
+            p.x = a.cx - p.width / 2 + (a.target.x - (a.cx - p.width / 2)) * ease;
+            p.y = fromY + (a.target.y - fromY) * ease;
+            return;
+        }
+        a.y -= 0.04 * deltaTime;
+        if (a.y + a.h + a.dome.depth < 0) a.done = true;
+    }
+
+    /** Enemies hold fire while the ship comes out of the arrival hatch and until the hatch has scrolled away. */
+    isArrivalGrace() {
+        return !!(this.arrival && !this.arrival.done);
+    }
+
+    /** No spawns until the hatch has scrolled away plus a short quiet spell after it. */
+    isArrivalSpawnHold() {
+        const a = this.arrival;
+        return !!(a && (!a.done || a.quietMs > 0));
+    }
+
+    /**
+     * Screen area where the ship is visible while the arrival hatch is up: everything above the gate band,
+     * plus the tube mouth inside the band. Below that is solid rock, which hides the ship. Null = no hatch.
+     */
+    getArrivalOcclusion() {
+        const a = this.arrival;
+        if (!a || a.done) return null;
+        const H = (typeof game !== 'undefined' && game.internalHeight) || 320;
+        // The hatch is the goal gate mirrored onto the bottom edge (see render()).
+        const top = H - (a.y + a.h);
+        // The open tube runs down to (and past) the bottom edge, so the ship stays visible all the way up it.
+        return { top: top, bottom: H + 64, l: a.cx - a.open / 2, r: a.cx + a.open / 2 };
+    }
+
+    /** While the ship leaves the arrival hatch: hidden until the dome is open, then grows in from the tube. */
+    getArrivalFx() {
+        const a = this.arrival;
+        if (!a || a.done || a.t >= a.dur) return null;
+        if (a.intro) {
+            // Intro: hidden in the tube until the fly-in starts, then the fly-in moves it.
+            const ms = typeof missionStartManager !== 'undefined' && missionStartManager.isActive() ? missionStartManager.phase : null;
+            return ms && ms !== 'flyIn' ? { k: 0, scale: 0.4, alpha: 0 } : null;
+        }
+        const k =Math.max(0, Math.min(1, (a.t - a.riseMs - a.openMs) / a.flyMs));
+        return { k: k, scale: 0.4 + 0.6 * k, alpha: k <= 0 ? 0 : Math.min(1, 0.2 + k * 1.6) };
     }
 
     fallbackObjective(enemies) {
@@ -17343,6 +17491,7 @@ var ObjectiveManager = class ObjectiveManager {
     getProgressText() {
         const o = this.objective;
         if (!o) return '';
+        if (this.exitGate && !this.completed) return this.isGateSealed() ? 'BREACH THE HATCH' : 'GO!';
         switch (o.type) {
             case 'hunt':
                 return this.completed ? 'DONE' : 'ACTIVE';
@@ -17356,6 +17505,7 @@ var ObjectiveManager = class ObjectiveManager {
             }
             case 'reachGoal': {
                 if (this.completed) return 'DONE';
+                if (this.isGateSealed()) return 'BREACH THE HATCH';
                 if (this.goal) return 'GO!';
                 const left = Math.max(0, Math.ceil((o.seconds * 1000 - this.elapsedMs) / 1000));
                 return `${left}s`;
@@ -17376,7 +17526,7 @@ var ObjectiveManager = class ObjectiveManager {
     }
 
     onEnemyKilled(info) {
-        if (this.completed || this.won) return;
+        if (this.completed || this.won || this.exitGate) return;
         const type = info && info.type;
         const entryId = info && info.entryId;
         const o = this.objective;
@@ -17404,12 +17554,16 @@ var ObjectiveManager = class ObjectiveManager {
     update(deltaTime) {
         if (this.won || !this.objective) return;
 
-        if (!this.completed && this.objective.type === 'reachGoal') {
+        this.updateArrival(deltaTime);
+
+        if (!this.completed && (this.objective.type === 'reachGoal' || this.exitGate)) {
             this.updateGoal(deltaTime);
         }
 
         if (!this.completed) {
-            this.elapsedMs += deltaTime;
+            // Transit run: backing off at the bottom edge rewinds the way to the gate at a third of the pace.
+            const back = this.objective.type === 'reachGoal' && !this.goal && this.isPlayerBacktracking();
+            this.elapsedMs = back ? Math.max(0, this.elapsedMs - deltaTime / 3) : this.elapsedMs + deltaTime;
             if (this.objective.type === 'surviveTime') {
                 if (this.elapsedMs >= this.objective.seconds * 1000) {
                     this.complete();
@@ -17428,61 +17582,239 @@ var ObjectiveManager = class ObjectiveManager {
     /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
     updateGoal(deltaTime) {
         const o = this.objective;
-        const W = (typeof renderManager !== 'undefined' && renderManager.width) || 240;
+        // The playfield's real width (the canvas is wider than renderManager's 240 default), so the gate sits dead centre.
+        const W = (typeof game !== 'undefined' && (game.internalWidth || game.baseWidth))
+            || (typeof renderManager !== 'undefined' && renderManager.width) || 240;
         if (!this.goal) {
-            if (this.elapsedMs < o.seconds * 1000) return;
+            if (!this.exitGate && this.elapsedMs < o.seconds * 1000) return;
             const open = o.goal === 'warp' ? 44 : 64;
             this.goal = {
                 kind: o.goal === 'warp' ? 'warp' : 'sluice',
                 y: -30,
                 h: 22,
                 open: open,
-                cx: W * (0.3 + Math.random() * 0.4),
-                restY: 46
+                cx: W * 0.5,   // always horizontally centred
+                restY: 46,
+                // Sluice: a Metroid-style hatch dome seals the opening until it is shot open. A hero breaks through, not out.
+                dome: o.goal === 'warp' ? null : { hp: 300, max: 300, depth: 22, flashMs: 0, burstMs: 0 }
             };
             return;
         }
         const g = this.goal;
         if (g.y < g.restY) g.y = Math.min(g.restY, g.y + 0.04 * deltaTime);
+        if (g.dome) {
+            g.dome.flashMs = Math.max(0, g.dome.flashMs - deltaTime);
+            // Shot open: the halves fold back like the arrival hatch instead of bursting.
+            if (g.dome.hp <= 0) {
+                g.dome.burstMs += deltaTime;
+                g.dome.split = Math.min(1, g.dome.burstMs / 500);
+            }
+        }
         const pm = typeof playerManager !== 'undefined' ? playerManager : null;
         const p = pm && pm.player;
         if (!p || g.y < g.restY) return;
         const px = p.x + p.width / 2;
         const py = p.y + p.height / 2;
+        // Entering the gate: the ship is flown into the opening and fades into the chamber, then the stage ends.
+        if (this.enter) {
+            const e = this.enter;
+            e.t += deltaTime;
+            const k = Math.min(1, e.t / e.dur);
+            const ease = 1 - (1 - k) * (1 - k);
+            p.x = e.fromX + (g.cx - p.width / 2 - e.fromX) * Math.min(1, ease * 1.6);
+            p.y = e.fromY + (g.y - 24 - e.fromY) * ease;
+            if (k >= 1) { this.complete(); }
+            return;
+        }
         const inOpening = Math.abs(px - g.cx) <= g.open / 2;
+        // Approaching the sealed hatch below its opening makes it fold open on its own.
+        if (this.isGateSealed() && Math.abs(px - g.cx) <= g.open / 2 + 24
+            && p.y - (g.y + g.h + g.dome.depth) <= 48) {
+            this.openGateDome();
+        }
+        // Sealed hatch: the dome is as solid as the walls.
+        if (this.isGateSealed()) {
+            const floor = g.y + g.h + g.dome.depth;
+            if (p.y < floor) p.y = floor;
+            return;
+        }
         if (py <= g.y + g.h && inOpening) {
-            this.complete();
+            this.enter = { t: 0, dur: 1500, fromX: p.x, fromY: p.y };
+            // Leftover drops stream after the ship while it flies in, so no loot scoop is needed afterwards.
+            if (typeof pickupManager !== 'undefined' && pickupManager.beginLootPhase) pickupManager.beginLootPhase(4000);
             return;
         }
         // The gate walls are solid: ships outside the opening are held below them.
         if (!inOpening && p.y < g.y + g.h) p.y = g.y + g.h;
     }
 
-    render(ctx) {
+    /** Player holds DOWN while pinned to the bottom edge (set in player/core.js). */
+    isPlayerBacktracking() {
+        const p = typeof playerManager !== 'undefined' && playerManager.player;
+        return !!(p && p.backtrack);
+    }
+
+    /** The sluice hatch dome is still intact. */
+    isGateSealed() {
+        const d = this.goal && this.goal.dome;
+        return !!(d && d.hp > 0);
+    }
+
+    /** Lowest y of the gate (incl. a sealed dome); ships stay below it. */
+    getGateFloor() {
         const g = this.goal;
-        if (!g || !ctx) return;
-        const W = ctx.canvas ? ctx.canvas.width : 240;
+        if (!g) return null;
+        return g.y + g.h + (this.isGateSealed() ? g.dome.depth : 0);
+    }
+
+    /** Fold the sealed hatch dome open (split animation runs in update). */
+    openGateDome() {
+        const d = this.goal && this.goal.dome;
+        if (!d || d.hp <= 0) return;
+        d.hp = 0;
+        d.burstMs = 0;
+        d.split = 0;
+    }
+
+    /** A player shot hits the hatch dome; returns true once it bursts. */
+    hitGateDome(amount, x, y) {
+        const d = this.goal && this.goal.dome;
+        if (!d || d.hp <= 0) return false;
+        d.hp = Math.max(0, d.hp - Math.max(1, Number(amount) || 10));
+        d.flashMs = 90;
+        if (d.hp > 0) return false;
+        d.burstMs = 0;
+        d.split = 0;
+        if (typeof soundManager !== 'undefined' && soundManager.playExplosion) soundManager.playExplosion();
+        if (typeof game !== 'undefined' && game) game.score += 250;
+        return true;
+    }
+
+    /** True when (x, y) lies inside the sealed dome's pixel shape. */
+    isInGateDome(x, y) {
+        if (!this.isGateSealed()) return false;
+        const g = this.goal;
+        const dy = y - (g.y + g.h);
+        if (dy < -g.h || dy > g.dome.depth) return false;
+        const half = g.open / 2;
+        const k = Math.max(0, dy) / g.dome.depth;
+        return Math.abs(x - g.cx) <= half * Math.sqrt(Math.max(0, 1 - k * k)) + 1;
+    }
+
+    /** While the ship enters the gate: how far along (0..1), for the renderer to shrink/fade the ship. */
+    getEnterFx() {
+        const e = this.enter;
+        if (!e) return this.getArrivalFx();
+        const k = Math.min(1, e.t / e.dur);
+        return { k: k, scale: 1 - 0.7 * k, alpha: 1 - k * k };
+    }
+
+    render(ctx) {
+        if (!ctx) return;
+        // Same width as updateGoal(): ctx.canvas.width is not the playfield width, which cut the gate off on the right.
+        const W = (typeof game !== 'undefined' && (game.internalWidth || game.baseWidth))
+            || (ctx.canvas ? ctx.canvas.width : 240);
         const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 160);
+        const a = this.arrival;
+        if (a && !a.done) {
+            // Arrival hatch: the same gate mirrored onto the bottom edge, its tube leading down off screen.
+            const H = (typeof game !== 'undefined' && game.internalHeight) || 320;
+            this.renderAtTerrainRes(ctx, W, H, H - (a.y + a.h), (oc) => {
+                oc.translate(0, H);
+                oc.scale(1, -1);
+                this.renderGateFrame(oc, a, W, pulse);
+                if (a.dome.split < 1) this.renderGateDome(oc, a);
+            });
+        }
+        const g = this.goal;
+        if (!g) return;
+        const gH = (typeof game !== 'undefined' && game.internalHeight) || 320;
+        this.renderAtTerrainRes(ctx, W, gH, g.y + g.h, (oc) => {
+            this.renderGateFrame(oc, g, W, pulse);
+            if (g.dome) this.renderGateDome(oc, g);
+        });
         ctx.save();
         const l = g.cx - g.open / 2;
+        // Entry animation: the opening lights up as the ship flies in, then a flash washes over the field.
+        if (this.enter) {
+            const k = Math.min(1, this.enter.t / this.enter.dur);
+            const glow = g.kind === 'warp' ? '127,232,255' : this.gateTheme().edge;
+            ctx.fillStyle = 'rgba(' + glow + ',' + (0.55 * k) + ')';
+            ctx.fillRect(l, 0, g.open, g.y + g.h);
+            ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * k * k) + ')';
+            ctx.fillRect(l + g.open * 0.25, 0, g.open * 0.5, g.y + g.h);
+            if (k > 0.8) {
+                ctx.fillStyle = 'rgba(255,255,255,' + (((k - 0.8) / 0.2) * 0.7) + ')';
+                ctx.fillRect(0, 0, W, ctx.canvas ? Math.max(ctx.canvas.height, 400) : 400);
+            }
+        }
+        ctx.restore();
+    }
+
+    /**
+     * Draws `draw(oc)` into a low-res buffer with one pixel per terrain art
+     * cell and blits it up unsmoothed, so the gate has exactly the canyon's
+     * pixel size. The buffer grid is aligned to `anchorY` (the gate edge on
+     * screen), so the pixels travel with the gate instead of re-snapping.
+     */
+    renderAtTerrainRes(ctx, W, H, anchorY, draw) {
+        const cell = (typeof obstacleManager !== 'undefined' && obstacleManager.terrainCell)
+            ? obstacleManager.terrainCell() : 1;
+        const frac = ((anchorY % cell) + cell) % cell;
+        const cols = Math.ceil(W / cell);
+        const rows = Math.ceil(H / cell) + 1;
+        const c = this._gateBuf || (this._gateBuf = document.createElement('canvas'));
+        if (c.width !== cols || c.height !== rows) {
+            c.width = cols;
+            c.height = rows;
+        }
+        const oc = c.getContext('2d');
+        if (!oc) return;
+        oc.setTransform(1, 0, 0, 1, 0, 0);
+        oc.clearRect(0, 0, cols, rows);
+        oc.imageSmoothingEnabled = false;
+        oc.setTransform(1 / cell, 0, 0, 1 / cell, 0, (cell - frac) / cell);
+        draw(oc);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(c, 0, frac - cell, cols * cell, rows * cell);
+        ctx.restore();
+    }
+
+    /** Gate walls, faces and the tube behind the opening (y = 0 is the far end of the tube). */
+    renderGateFrame(ctx, g, W, pulse) {
+        const l = g.cx - g.open / 2;
         const r = g.cx + g.open / 2;
-        const stripes = (x, w) => {
-            if (w <= 0) return;
+        // The level ends at the gate: everything beyond it is solid rock, so no canyon wall, obstacle or ship
+        // shows past it. The opening continues as a tube right through the gate band.
+        const rock = this.gateRock();
+        const th = this.gateTheme();
+        // Rock texture is anchored to the gate, so it scrolls in with it instead of standing still on screen.
+        const anchor = g.y + g.h;
+        // The home station's launch hatch sits in station hull instead of planet rock.
+        const flank = g.kind === 'station'
+            ? (x, y, w, h) => this.renderStationHull(ctx, th, x, y, w, h, anchor)
+            : (x, y, w, h) => this.renderGateRock(ctx, rock, x, y, w, h, anchor);
+        if (g.y > 0) {
+            flank(0, 0, l, g.y + g.h);
+            flank(r, 0, W - r, g.y + g.h);
+        }
+        if (g.kind !== 'warp') {
+            // The tube's inside only shows once the ship flies in; until then the
+            // opening is just a mouth in the band and solid rock sits behind it.
+            // The arrival hatch's tube stays open the whole time: it is the ship's way out.
+            const tubeTop = this.enter || g === this.arrival ? 0 : Math.max(0, g.y);
+            if (tubeTop > 0) this.renderGateRock(ctx, rock, l, 0, g.open, tubeTop, anchor);
             ctx.save();
             ctx.beginPath();
-            ctx.rect(x, g.y, w, g.h);
+            ctx.rect(l, tubeTop, g.open, g.y + g.h - tubeTop);
             ctx.clip();
-            ctx.fillStyle = '#e8b020';
-            for (let sx = x - g.h; sx < x + w; sx += 12) {
-                ctx.beginPath();
-                ctx.moveTo(sx, g.y + g.h);
-                ctx.lineTo(sx + 6, g.y + g.h);
-                ctx.lineTo(sx + 6 + g.h, g.y);
-                ctx.lineTo(sx + g.h, g.y);
-                ctx.fill();
-            }
+            this.renderGateTube(ctx, th, l, g.open, g.y + g.h, pulse);
             ctx.restore();
-        };
+        } else if (g.y > 0) {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(l, 0, g.open, g.y);
+        }
         if (g.kind === 'warp') {
             // Two pylons with a pulsing energy field between them.
             [[0, l], [r, W]].forEach(([x0, x1]) => {
@@ -17497,23 +17829,465 @@ var ObjectiveManager = class ObjectiveManager {
             ctx.lineWidth = 2;
             ctx.strokeRect(l + 1, g.y + 1, g.open - 2, g.h - 2);
         } else {
-            ctx.fillStyle = '#05060a';
-            ctx.fillRect(0, g.y, l, g.h);
-            ctx.fillRect(r, g.y, W - r, g.h);
-            stripes(0, l);
-            stripes(r, W - r);
-            ctx.fillStyle = '#8c96a8';
+            if (g.y <= 0) {
+                flank(0, g.y, l, g.h);
+                flank(r, g.y, W - r, g.h);
+            }
+            ctx.fillStyle = th.trim;
             ctx.fillRect(0, g.y + g.h - 3, l, 3);
             ctx.fillRect(r, g.y + g.h - 3, W - r, 3);
-            ctx.fillStyle = 'rgba(120,255,160,' + (0.35 + pulse * 0.45) + ')';
+            this.renderGateFace(ctx, th, 0, l, g, 0);
+            this.renderGateFace(ctx, th, r, W - r, g, 1);
+            ctx.fillStyle = 'rgba(' + th.edge + ',' + (0.35 + pulse * 0.45) + ')';
             ctx.fillRect(l - 2, g.y, 3, g.h);
             ctx.fillRect(r - 1, g.y, 3, g.h);
+        }
+    }
+
+    /**
+     * Static pixel tube from the far end (y = 0) to `bottom`, built in the home faction's style:
+     * terran steel plates, machine hazard bulkhead, pirate scrap patches, kronax bone ribs, voidborn flesh.
+     * Lamps sit fixed along both flanks and only breathe softly; nothing scrolls.
+     */
+    renderGateTube(ctx, th, x, w, bottom, pulse) {
+        if (bottom <= 0) return;
+        const px = 2;
+        const face = th.face || 'plates';
+        const mark = th.mark instanceof Array ? th.mark : [th.mark];
+        const hash = (a, b) => {
+            const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+            return s - Math.floor(s);
+        };
+        ctx.fillStyle = th.wall;
+        ctx.fillRect(x, 0, w, bottom);
+
+        // Wall surface per faction.
+        if (face === 'plates') {
+            // Steel plates: lighter panels with dark seams and rivets on every corner.
+            for (let y = 0; y < bottom; y += 12) {
+                ctx.fillStyle = mark[0];
+                ctx.fillRect(x + px * 3, y + px, w - px * 6, 12 - px * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.fillRect(x + px * 3, y + px, w - px * 6, px);
+                ctx.fillStyle = th.trim;
+                [x + px * 4, x + w - px * 5].forEach((rx) => {
+                    ctx.fillRect(rx, y + px * 2, px, px);
+                    ctx.fillRect(rx, y + 12 - px * 3, px, px);
+                });
+            }
+        } else if (face === 'hazard') {
+            // Blast bulkhead: dark core, hazard stripes down both flanks, heavy cross beams.
+            for (let y = 0; y < bottom; y += px) {
+                const on = (Math.floor(y / 4) & 1) === 0;
+                ctx.fillStyle = on ? mark[0] : '#1a1c22';
+                ctx.fillRect(x + px, y, px * 3, px);
+                ctx.fillRect(x + w - px * 4, y, px * 3, px);
+            }
+            ctx.fillStyle = '#2a2e36';
+            for (let y = 6; y < bottom; y += 16) ctx.fillRect(x + px * 4, y, w - px * 8, px * 2);
+        } else if (face === 'patch') {
+            // Welded scrap: mismatched patches with rough weld seams.
+            for (let y = 0; y < bottom; y += 8) {
+                for (let cx = x + px * 2; cx < x + w - px * 2; cx += 10) {
+                    const h = hash(cx, y);
+                    ctx.fillStyle = mark[Math.floor(h * mark.length) % mark.length];
+                    ctx.fillRect(cx, y + px, Math.min(10 - px, x + w - px * 2 - cx), 8 - px);
+                    if (h > 0.7) {
+                        ctx.fillStyle = th.trim;
+                        ctx.fillRect(cx + px, y + px * 2, px, px);
+                    }
+                }
+            }
+        } else if (face === 'fangs') {
+            // Bone gullet: curved rib bones with dark gaps, tips pointing to the centre.
+            for (let y = 2; y < bottom; y += 9) {
+                ctx.fillStyle = mark[0];
+                ctx.fillRect(x + px, y, w - px * 2, px);
+                ctx.fillRect(x + px, y + px, px * 3, px);
+                ctx.fillRect(x + w - px * 4, y + px, px * 3, px);
+                ctx.fillStyle = th.trim;
+                ctx.fillRect(x + px * 4, y + px, w - px * 8, px);
+            }
+        } else if (face === 'flesh') {
+            // Living tube: swollen folds with dark creases.
+            for (let y = 0; y < bottom; y += 7) {
+                ctx.fillStyle = mark[0];
+                ctx.fillRect(x + px, y, w - px * 2, 4);
+                ctx.fillStyle = th.trim;
+                ctx.fillRect(x + px * 2, y + 4, w - px * 4, px);
+            }
+        }
+
+        // Cylinder shading: dark flanks, a metal sheen strip left of the centre.
+        [[0, 0.6], [px, 0.4], [px * 2, 0.22]].forEach(([o, alpha]) => {
+            ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
+            ctx.fillRect(x + o, 0, px, bottom);
+            ctx.fillRect(x + w - o - px, 0, px, bottom);
+        });
+        if (face !== 'flesh') {
+            ctx.fillStyle = 'rgba(255,255,255,0.07)';
+            ctx.fillRect(Math.round(x + w * 0.32), 0, px * 2, bottom);
+        }
+
+        // Fixed lamps along both flanks, glowing in the faction colour.
+        const glow = 0.75 + pulse * 0.25;
+        const lampStep = face === 'flesh' ? 10 : 12;
+        for (let y = 6; y < bottom - px; y += lampStep) {
+            const j = face === 'flesh' ? Math.round(hash(y, 3) * 4) : 0;
+            [x + px * 3 + j, x + w - px * 4 - j].forEach((lx) => {
+                ctx.fillStyle = 'rgba(' + th.edge + ',' + (0.25 * glow) + ')';
+                ctx.fillRect(lx - px, y - px, px * 3, px * 3);
+                ctx.globalAlpha = glow;
+                ctx.fillStyle = th.dot;
+                ctx.fillRect(lx, y, px, px);
+                ctx.globalAlpha = 1;
+            });
+        }
+        // Fade into darkness at the far end.
+        const fade = ctx.createLinearGradient(0, 0, 0, Math.min(bottom, 40));
+        fade.addColorStop(0, 'rgba(5,6,10,0.9)');
+        fade.addColorStop(1, 'rgba(5,6,10,0)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(x, 0, w, Math.min(bottom, 40));
+    }
+
+    /** Pixel hatch dome hanging from the opening; cracks with damage, bursts into shards. */
+    renderGateDome(ctx, g) {
+        const d = g.dome;
+        const th = this.gateTheme();
+        const top = g.y + g.h;
+        const half = g.open / 2;
+        const px = 2;
+        // Shot open: fully folded away once the split animation is done.
+        if (d.hp <= 0 && (d.split || 0) >= 1) return;
+        const ratio = d.hp / d.max;
+        const shell = d.flashMs > 0 ? '#ffffff' : th.shell[d.hp <= 0 || ratio > 0.66 ? 0 : (ratio > 0.33 ? 1 : 2)];
+        const rim = d.flashMs > 0 ? '#ffffff' : th.rim;
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 220);
+        const split = d.split || 0;
+        if (split > 0) {
+            // Opening: the two halves fold back towards their outer flanks, so the silhouette never gets clipped.
+            const keep = 1 - split * (2 - split);
+            [-1, 1].forEach((dir) => {
+                for (let y = 0; y < d.depth; y += px) {
+                    const k = (y + px) / d.depth;
+                    const full = Math.max(px, Math.round(half * Math.sqrt(Math.max(0, 1 - k * k)) / px) * px);
+                    const w = Math.round(full * keep / px) * px;
+                    if (w < px) continue;
+                    const x0 = Math.round(dir < 0 ? g.cx - full : g.cx + full - w);
+                    ctx.fillStyle = shell;
+                    ctx.fillRect(x0, top + y, w, px);
+                    ctx.fillStyle = rim;
+                    ctx.fillRect(x0, top + y, px, px);
+                    ctx.fillRect(x0 + w - px, top + y, px, px);
+                }
+            });
+            return;
+        }
+        for (let y = 0; y < d.depth; y += px) {
+            const k = (y + px) / d.depth;
+            const w = Math.max(px, Math.round(half * Math.sqrt(Math.max(0, 1 - k * k)) / px) * px);
+            const x0 = Math.round(g.cx - w);
+            ctx.fillStyle = shell;
+            ctx.fillRect(x0, top + y, w * 2, px);
+            // Rim pixels on both flanks + a pulsing core band.
+            ctx.fillStyle = rim;
+            ctx.fillRect(x0, top + y, px, px);
+            ctx.fillRect(x0 + w * 2 - px, top + y, px, px);
+            if (y > d.depth * 0.25 && y < d.depth * 0.6) {
+                ctx.fillStyle = 'rgba(' + th.core + ',' + (0.25 + pulse * 0.35) + ')';
+                ctx.fillRect(x0 + px, top + y, w * 2 - px * 2, px);
+            }
+        }
+        // Cracks grow as the hatch loses hp.
+        const cracks = Math.floor((1 - ratio) * 6);
+        ctx.fillStyle = th.crack;
+        for (let i = 0; i < cracks; i++) {
+            const cx = Math.round(g.cx + (i % 2 ? 1 : -1) * (4 + i * 4));
+            for (let s = 0; s < 4; s++) ctx.fillRect(cx + (s % 2) * px, top + 4 + s * 3, px, 3);
+        }
+    }
+
+    /**
+     * Sluice look of the planet's HOME faction (the one that built it) — not
+     * the faction attacking the planet, which only drives enemies/obstacles.
+     */
+    gateTheme() {
+        const env = typeof obstacleManager !== 'undefined' && obstacleManager.getEnvironment
+            ? obstacleManager.getEnvironment() : null;
+        const home = String((env && (env.homeFaction || env.faction)) || 'terran').toLowerCase();
+        const themes = this.gateThemes();
+        return themes[home] || themes.terran;
+    }
+
+    gateThemes() {
+        return this._gateThemes || (this._gateThemes = {
+            // Navy bulkhead: steel plates, rivets, blue running lights.
+            terran: { face: 'plates', wall: '#10141c', mark: '#3a4a64', dot: '#9fd0ff', trim: '#8c96a8', edge: '127,200,255',
+                shell: ['#5a7898', '#3e5a7a', '#24384e'], rim: '#bfe0ff', core: '200,235,255', crack: '#0a1420', shard: '160,210,255' },
+            // Industrial: hazard stripes, amber blast door.
+            machine: { face: 'hazard', wall: '#05060a', mark: '#e8b020', dot: '#e8b020', trim: '#8c96a8', edge: '120,255,160',
+                shell: ['#e06a20', '#c84a18', '#8a2a10'], rim: '#ffb04a', core: '255,220,120', crack: '#2a0a04', shard: '255,170,60' },
+            // Welded scrap: mismatched rusty patches, a riveted junk plug.
+            pirate: { face: 'patch', wall: '#140e0a', mark: ['#5a3a22', '#3a2a1c', '#6a5a48', '#8a4a20'], dot: '#ff9a3c', trim: '#6a5a48', edge: '255,150,60',
+                shell: ['#7a6a50', '#5e4e38', '#3e3020'], rim: '#d8a050', core: '255,180,90', crack: '#1a0e06', shard: '220,170,100' },
+            // Bone maw: fangs hang over the opening, a chitin membrane seals it.
+            kronax: { face: 'fangs', wall: '#0b0507', mark: '#d8ccb0', dot: '#ff5a46', trim: '#5a1a1c', edge: '255,70,60',
+                shell: ['#8a1e22', '#6a1418', '#440c10'], rim: '#e0d0b0', core: '255,120,90', crack: '#1a0204', shard: '230,90,70' },
+            // Living sphincter: swollen flesh with glowing pores.
+            voidborn: { face: 'flesh', wall: '#0c0612', mark: '#4a1e5e', dot: '#c88aff', trim: '#2a1238', edge: '200,120,255',
+                shell: ['#6a2a8a', '#4e1c6a', '#30104a'], rim: '#d8a0ff', core: '230,170,255', crack: '#12041a', shard: '200,140,255' }
+        });
+    }
+
+    /** Planet wall colours (light → dark), shared with the canyon walls' terrain palette. */
+    gateRock() {
+        const rm = typeof renderManager !== 'undefined' ? renderManager : null;
+        const pal = rm && rm._terrainPal;
+        if (pal && pal.wall && pal.wall.length >= 4) return pal.wall;
+        const env = typeof obstacleManager !== 'undefined' && obstacleManager.getEnvironment
+            ? obstacleManager.getEnvironment() : null;
+        const base = (env && env.base) || '#7a7f88';
+        if (rm && rm.shadeColor) return [0.2, -0.2, -0.45, -0.7].map((a) => rm.shadeColor(base, a));
+        return ['#7a7f88', '#4a4e56', '#2a2c32', '#141518'];
+    }
+
+    /**
+     * Rock wall block in 4px pixel cells: noisy body, lit top edge, dark seam at the bottom.
+     * `anchorY` pins the cell grid and noise to the gate (not the screen), so the texture moves with it.
+     */
+    renderGateRock(ctx, rock, x, y, w, h, anchorY) {
+        if (w <= 0 || h <= 0) return;
+        // Same pixel size as the canyon walls (one terrain art cell).
+        const c = (typeof obstacleManager !== 'undefined' && obstacleManager.terrainCell) ? obstacleManager.terrainCell() : 4;
+        const ay = Number.isFinite(anchorY) ? anchorY : 0;
+        const th = this.gateTheme();
+        const mark = th.mark instanceof Array ? th.mark : [th.mark];
+        const rm = typeof renderManager !== 'undefined' ? renderManager : null;
+        const shade = (col, t) => (rm && rm.shadeColor ? rm.shadeColor(col, t) : col);
+        const mix = (a, b, t) => (rm && rm.mixColor ? rm.mixColor(a, b, t) : a);
+        // Faction body tones: the home faction's colour worked into the planet rock.
+        const body = [1, 2, 3].map((i) => mix(rock[i], mark[0], 0.45));
+        const hash = (i, j, k) => {
+            const s = Math.sin(i * 12.9898 + j * 78.233 + (k || 0) * 37.719) * 43758.5453;
+            return s - Math.floor(s);
+        };
+        ctx.fillStyle = body[1];
+        ctx.fillRect(x, y, w, h);
+        for (let cy = ay + Math.floor((y - ay) / c) * c; cy < y + h; cy += c) {
+            const j = Math.round((cy - ay) / c);
+            for (let cx = Math.floor(x / c) * c; cx < x + w; cx += c) {
+                const i = Math.round(cx / c);
+                const n = hash(i, j);
+                let col = null;
+                switch (th.face) {
+                    case 'plates': { // terran: riveted steel panels with seams
+                        const pi = ((i % 8) + 8) % 8, pj = ((j % 6) + 6) % 6;
+                        if (pi === 0 || pj === 0) col = shade(th.wall, 0.2);
+                        else if ((pi === 1 || pi === 7) && (pj === 1 || pj === 5)) col = th.trim;
+                        else if (pj === 1) col = shade(mark[0], 0.25);
+                        else col = n > 0.8 ? body[0] : mark[0];
+                        break;
+                    }
+                    case 'hazard': { // machine: dark armour blocks, vents, amber warning tags
+                        const pi = ((i % 6) + 6) % 6, pj = ((j % 6) + 6) % 6;
+                        const blk = hash(Math.floor(i / 6), Math.floor(j / 6), 3);
+                        if (pi === 0 || pj === 0) col = '#05060a';
+                        else if (blk > 0.75 && pj >= 2 && pj <= 4 && ((pi + pj) & 1)) col = mark[0];
+                        else if (blk < 0.3 && pj % 2 === 0) col = '#1a1c22';
+                        else col = n > 0.85 ? '#3a3e48' : '#2a2e36';
+                        break;
+                    }
+                    case 'patch': { // pirate: mismatched welded scrap patches
+                        const bi = Math.floor((i + (Math.floor(j / 4) & 1) * 2) / 5), bj = Math.floor(j / 4);
+                        const pick = hash(bi, bj, 5);
+                        const edge = ((i + (Math.floor(j / 4) & 1) * 2) % 5 + 5) % 5 === 0 || ((j % 4) + 4) % 4 === 0;
+                        if (edge) col = n < 0.25 ? th.dot : th.wall;
+                        else col = mark[Math.floor(pick * mark.length) % mark.length];
+                        if (!edge && n > 0.93) col = th.trim;
+                        break;
+                    }
+                    case 'fangs': { // kronax: bone ribs over dark sinew
+                        const rj = ((j % 5) + 5) % 5;
+                        if (rj === 0) col = mark[0];
+                        else if (rj === 1) col = shade(mark[0], -0.35);
+                        else col = n > 0.85 ? th.dot : (n > 0.4 ? th.trim : th.wall);
+                        break;
+                    }
+                    case 'flesh': { // voidborn: swollen folds with glowing pores
+                        const fold = Math.sin(i * 0.9 + j * 0.35 + Math.sin(j * 0.5) * 1.5);
+                        if (fold > 0.55) col = mark[0];
+                        else if (fold < -0.6) col = th.trim;
+                        else col = shade(mark[0], -0.35);
+                        if (n > 0.97) col = th.dot;
+                        break;
+                    }
+                    default:
+                        col = n > 0.7 ? body[0] : (n < 0.18 ? body[2] : null);
+                }
+                if (!col) continue;
+                ctx.fillStyle = col;
+                const x0 = Math.max(x, cx), y0 = Math.max(y, cy);
+                ctx.fillRect(x0, y0, Math.min(cx + c, x + w) - x0, Math.min(cy + c, y + h) - y0);
+            }
+        }
+    }
+
+    /**
+     * Home station hull around the launch hatch: plated decks with lit window rows and
+     * blinking beacons along the deck edge (`anchorY`), in the home faction's colours.
+     */
+    renderStationHull(ctx, th, x, y, w, h, anchorY) {
+        if (w <= 0 || h <= 0) return;
+        const px = 2;
+        const mark = th.mark instanceof Array ? th.mark : [th.mark];
+        const hash = (a, b) => {
+            const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+            return s - Math.floor(s);
+        };
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.fillStyle = th.wall;
+        ctx.fillRect(x, y, w, h);
+        // Hull plates, rows offset like brickwork, counted from the deck edge down.
+        for (let row = 0, py = anchorY - 4; py > y - 12; row++, py -= 12) {
+            const off = (row & 1) * 10;
+            for (let sx = -off; sx < x + w; sx += 20) {
+                if (sx + 20 < x) continue;
+                ctx.fillStyle = mark[(row + Math.floor(sx / 20)) % mark.length];
+                ctx.fillRect(sx + px, py - 12 + px, 20 - px * 2, 12 - px * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.fillRect(sx + px, py - 12 + px, 20 - px * 2, px);
+            }
+        }
+        // Window rows: mostly lit, a few dark cabins.
+        for (let row = 0, wy = anchorY - 18; wy > y; row++, wy -= 14) {
+            for (let wx = Math.floor(x / 8) * 8 + 2; wx < x + w - 4; wx += 8) {
+                if (wx < x) continue;
+                const n = hash(wx, row);
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(wx - px / 2, wy - px / 2, 4 + px, px * 2 + px);
+                if (n < 0.2) continue;
+                ctx.fillStyle = n > 0.75 ? '#ffd890' : th.dot;
+                ctx.fillRect(wx, wy, 4, px);
+            }
+        }
+        // Deck edge: trim band with a dark lip and blinking landing beacons.
+        ctx.fillStyle = '#05060a';
+        ctx.fillRect(x, anchorY - 7, w, px);
+        ctx.fillStyle = th.trim;
+        ctx.fillRect(x, anchorY - 5, w, 5);
+        const blink = Math.floor(Date.now() / 400);
+        for (let bx = Math.floor(x / 24) * 24 + 10; bx < x + w; bx += 24) {
+            if (bx < x) continue;
+            const on = ((bx / 24 + blink) & 1) === 0;
+            ctx.fillStyle = on ? 'rgba(' + th.edge + ',0.35)' : 'rgba(0,0,0,0)';
+            ctx.fillRect(bx - px, anchorY - 5, px * 3, 5);
+            ctx.fillStyle = on ? th.dot : '#05060a';
+            ctx.fillRect(bx, anchorY - 4, px, px);
+        }
+        ctx.restore();
+    }
+
+    /** Pixel face of one gate wall (x..x+w) in the home faction's style; side 1 = right wall. */
+    renderGateFace(ctx, th, x, w, g, side) {
+        if (w <= 0) return;
+        const px = 2;
+        const y0 = g.y;
+        const h = g.h - 3;
+        const hash = (i) => { const s = Math.sin(i * 12.9898 + side * 78.233) * 43758.5453; return s - Math.floor(s); };
+        // Inner end of the wall (next to the opening).
+        const inner = side ? x : x + w;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y0, w, g.h);
+        ctx.clip();
+        switch (th.face) {
+            case 'hazard':
+                ctx.fillStyle = th.mark;
+                for (let sx = x - g.h; sx < x + w; sx += 12) {
+                    ctx.beginPath();
+                    ctx.moveTo(sx, y0 + g.h);
+                    ctx.lineTo(sx + 6, y0 + g.h);
+                    ctx.lineTo(sx + 6 + g.h, y0);
+                    ctx.lineTo(sx + g.h, y0);
+                    ctx.fill();
+                }
+                break;
+            case 'plates':
+                for (let sx = x, i = 0; sx < x + w; sx += 16, i++) {
+                    ctx.fillStyle = th.mark;
+                    ctx.fillRect(sx, y0 + 2, 14, h - 4);
+                    ctx.fillStyle = th.wall;
+                    ctx.fillRect(sx + 2, y0 + 4, 10, h - 8);
+                    ctx.fillStyle = th.trim;
+                    ctx.fillRect(sx, y0 + 2, px, px);
+                    ctx.fillRect(sx + 12, y0 + h - 4, px, px);
+                }
+                // Running lights stepping towards the opening.
+                ctx.fillStyle = th.dot;
+                for (let i = 0; i < 4; i++) ctx.fillRect(side ? inner + 4 + i * 8 : inner - 6 - i * 8, y0 + Math.floor(h / 2), px, px);
+                break;
+            case 'patch':
+                for (let i = 0; i < Math.ceil(w / 6); i++) {
+                    const pw = 6 + Math.floor(hash(i) * 4) * px;
+                    const ph = 6 + Math.floor(hash(i + 50) * 4) * px;
+                    const sx = x + Math.floor(hash(i + 100) * w / px) * px - 4;
+                    const sy = y0 + Math.floor(hash(i + 150) * Math.max(1, h - ph) / px) * px;
+                    ctx.fillStyle = th.mark[i % th.mark.length];
+                    ctx.fillRect(sx, sy, pw, ph);
+                    ctx.fillStyle = '#c8b090';
+                    ctx.fillRect(sx + px, sy + px, px, px);
+                    ctx.fillRect(sx + pw - px * 2, sy + ph - px * 2, px, px);
+                }
+                ctx.fillStyle = th.dot;
+                ctx.fillRect(side ? inner + 6 : inner - 8, y0 + 4, px, px);
+                break;
+            case 'fangs':
+                // Bone ridge with teeth growing down; the longest fangs flank the opening.
+                ctx.fillStyle = '#2a0e10';
+                ctx.fillRect(x, y0, w, 6);
+                for (let i = 0, sx = side ? x : x + w - 8; side ? sx < x + w : sx > x - 8; i++, sx += side ? 8 : -8) {
+                    const len = Math.max(4, 16 - i * 2 - Math.floor(hash(i) * 3) * px);
+                    ctx.fillStyle = th.mark;
+                    for (let k = 0; k < len; k += px) {
+                        const tw = Math.max(px, Math.round((6 * (1 - k / len)) / px) * px);
+                        ctx.fillRect(sx + 4 - Math.floor(tw / 2 / px) * px, y0 + 4 + k, tw, px);
+                    }
+                }
+                ctx.fillStyle = th.dot;
+                ctx.fillRect(side ? inner + 2 : inner - 4, y0 + 2, px, px);
+                break;
+            case 'flesh':
+                // Swollen tissue folds bulging towards the opening, pores glowing.
+                for (let i = 0; i < Math.ceil(w / 4); i++) {
+                    const sx = x + Math.floor(hash(i) * w / px) * px;
+                    const sy = y0 + Math.floor(hash(i + 30) * h / px) * px;
+                    const rr = 2 + Math.floor(hash(i + 60) * 3) * px;
+                    ctx.fillStyle = th.mark;
+                    ctx.fillRect(sx - rr, sy - rr / 2, rr * 2, rr);
+                    ctx.fillRect(sx - rr / 2, sy - rr, rr, rr * 2);
+                }
+                ctx.fillStyle = th.mark;
+                ctx.fillRect(side ? inner : inner - 6, y0, 6, h);
+                ctx.fillStyle = th.dot;
+                for (let i = 0; i < 6; i++) {
+                    ctx.fillRect(x + Math.floor(hash(i + 90) * w / px) * px, y0 + Math.floor(hash(i + 120) * h / px) * px, px, px);
+                }
+                break;
         }
         ctx.restore();
     }
 
     complete() {
         if (this.completed) return;
+        // Main enemy down: the stage goes on until the sluice scrolls in and the ship flies through it.
+        if (!this.exitGate && this.needsFieldClear() && this.usesExitGate()) {
+            this.exitGate = true;
+            return;
+        }
         this.completed = true;
         if (this.needsFieldClear()) {
             this.awaitingFieldClear = true;
@@ -17524,6 +18298,14 @@ var ObjectiveManager = class ObjectiveManager {
             return;
         }
         this.triggerWin();
+    }
+
+    /** Planet stages (not boss levels) end at a sluice instead of on the kill itself. */
+    usesExitGate() {
+        const host = typeof game !== 'undefined' ? game : (typeof gameCore !== 'undefined' ? gameCore : null);
+        const lm = host && (host.coreLevelManager || host.levelManager);
+        const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+        return !!(level && level.planetId && !level.isBoss);
     }
 
     triggerWin() {
@@ -17542,7 +18324,10 @@ var ObjectiveManager = class ObjectiveManager {
                 gameCore.playerWins();
             }
         };
-        if (typeof setTimeout === 'function') {
+        // Sluice exit: the fly-in already was the pause, so the win follows right away.
+        if (this.enter) {
+            fire();
+        } else if (typeof setTimeout === 'function') {
             setTimeout(fire, 900);
         } else {
             fire();
@@ -17558,7 +18343,7 @@ var ObjectiveManager = class ObjectiveManager {
     }
 }
 
-var objectiveManager = new ObjectiveManager();
+const objectiveManager = new ObjectiveManager();
 
 
 /* --- js/core/daily-tracker.js --- */
@@ -18049,7 +18834,7 @@ extendClass(CoreLevelManager, {
         if (isTransit) {
             const seconds = 50 + parsed.stageIndex * 5;
             resolved = {
-                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex),
+                enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex, base.difficulty),
                 objective: {
                     type: 'reachGoal',
                     seconds: seconds,
@@ -18094,11 +18879,15 @@ extendClass(CoreLevelManager, {
     },
 
     /** Steady stream of side craft (no champion) across a transit run. */
-    buildTransitEnemies(source, seconds, stageIndex) {
+    buildTransitEnemies(source, seconds, stageIndex, difficulty) {
         const pool = (source || []).filter(e => e && e.type);
         const types = pool.length ? pool : [{ type: 'enemyBasic' }];
         const roles = ['assault', 'gunner', 'assault', 'bomber'];
-        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25);
+        // Side craft in transit runs were too strong early on: scale them with the planet tier and the stage
+        // (0.5 on an easy planet's first stage, up to 1.0 on late stages of hard planets) and thin the stream out.
+        const tier = typeof planetTierIndex === 'function' ? planetTierIndex(difficulty) : 1;
+        const transitScale = Math.max(0.5, Math.min(1, 0.5 + 0.09 * tier + 0.05 * (stageIndex - 1)));
+        const gap = Math.max(2.2, 3.6 - stageIndex * 0.25) * (1 + (1 - transitScale) * 0.8);
         const out = [];
         for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
             const src = types[i % types.length];
@@ -18109,6 +18898,7 @@ extendClass(CoreLevelManager, {
                 level: 1,
                 role: roles[i % roles.length],
                 spawnAt: t,
+                transitScale: transitScale,
                 combatEvents: []
             }));
         }
@@ -18503,9 +19293,34 @@ var GameControlSystem = class GameControlSystem {
         this._victoryFinalizing = false;
     }
 
+    /**
+     * Every mission flies the profile's active hangar ship with its fitted
+     * loadout. Paths like restart / next stage / page restore never picked a
+     * ship, so the default hull ("Player Fighter", spread gun) or a stale
+     * loadout could slip in.
+     */
+    ensureActiveHangarShip() {
+        if (typeof graphicsManager === 'undefined' || !graphicsManager.setPlayerShipModel) return;
+        const shipId = (typeof profileManager !== 'undefined' && profileManager.getActiveShipId)
+            ? profileManager.getActiveShipId() : null;
+        if (!shipId) return;
+        // Always rebuild: the same hull id can carry an older loadout (weapon swapped in the hangar since).
+        let ship = null;
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.getHangarShipModel) {
+            ship = homeStationUI.getHangarShipModel(shipId);
+        } else if (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel) {
+            ship = shipConfigManager.getMergedModel(shipId);
+        }
+        if (!ship) return;
+        if (!ship.id) ship.id = shipId;
+        if (!ship.type) ship.type = shipId;
+        graphicsManager.setPlayerShipModel(ship);
+    }
+
     // Game flow control
     startGame(levelId = 'mars') {
         this.cancelVictoryLootPhase();
+        this.ensureActiveHangarShip();
 
         if (typeof menuStateManager !== 'undefined') {
             // levelId lets a page refresh start the same match again
@@ -18883,6 +19698,11 @@ extendClass(GameControlSystem, {
         } catch (e) {
             console.warn('Progress save failed', e);
         }
+
+        // Ship already inside the sluice: it cannot scoop anything, so bank the rest and go straight to the win screen.
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.enter) {
+            this.finalizeVictory();
+        }
     },
 
     updateVictoryLootPhase(deltaTime) {
@@ -19068,29 +19888,40 @@ extendClass(GameControlSystem, {
             machine: ['SYSTEM FAILURE', 'Unit terminated', 'CHASSIS 0x00 · REBOOT PENDING']
         };
         const pick = lines[faction] || lines.terran;
-        const content = overlay.querySelector('.game-over-content');
+        // Same markup as the victory screen (index.html #gameOver).
+        const content = overlay.querySelector('.victory-content');
         if (!content) return;
-        const h = content.querySelector('h2');
-        const p = content.querySelector('p');
+        const h = content.querySelector('.victory-title');
+        const p = content.querySelector('.victory-subtitle');
         if (h) h.textContent = pick[0];
         if (p) p.textContent = pick[1];
         const ep = content.querySelector('.game-over-epitaph');
         if (ep) ep.textContent = pick[2] || '';
-        if (this.applyOutcomeStepper) this.applyOutcomeStepper(ep || p || h, 'lost');
-        let box = content.querySelector('.game-over-loss');
-        if (!box) {
-            box = document.createElement('div');
-            box.className = 'victory-loot game-over-loss';
-            const buttons = content.querySelector('.game-over-buttons');
-            content.insertBefore(box, buttons);
+        overlay.dataset.faction = faction;
+        if (this.applyOutcomeStepper) this.applyOutcomeStepper(content.querySelector('.victory-header'), 'lost');
+        const list = content.querySelector('.game-over-loss .victory-loot-list');
+        if (list) {
+            const ids = Object.keys(lost || {}).filter((id) => lost[id] > 0);
+            list.innerHTML = ids.length && this.renderVictoryLootHtml
+                ? this.renderVictoryLootHtml(lost).replace(/class="victory-loot-amount">/g, 'class="victory-loot-amount">−')
+                : '<div class="victory-loot-empty">NOTHING LOST</div>';
         }
-        const ids = Object.keys(lost || {}).filter((id) => lost[id] > 0);
-        let rows = '<div class="victory-loot-empty">NOTHING LOST</div>';
-        if (ids.length && this.renderVictoryLootHtml) {
-            rows = this.renderVictoryLootHtml(lost).replace(/>\+(\d+)</g, '>−$1<');
+        if (this.applyVictoryPixelIcons) this.applyVictoryPixelIcons(overlay);
+        // Hover moves the keyboard selection too, so only one button is lit.
+        if (!overlay.dataset.bound) {
+            overlay.dataset.bound = '1';
+            overlay.querySelectorAll('.game-over-button').forEach((button) => {
+                button.addEventListener('mouseenter', () => {
+                    if (typeof uiManager === 'undefined') return;
+                    uiManager.gameOverMenuIndex = parseInt(button.dataset.index, 10) || 0;
+                    uiManager.updateGameOverMenuDisplay();
+                });
+            });
         }
-        box.innerHTML = '<div class="victory-loot-title">RESOURCES LOST</div>' +
-            `<div class="victory-loot-list">${rows}</div>`;
+        if (typeof uiManager !== 'undefined') {
+            uiManager.gameOverMenuIndex = 0;
+            uiManager.updateGameOverMenuDisplay();
+        }
     },
 
     hideGameOverOverlay() {
@@ -19157,16 +19988,16 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">SCORE</span>
+                        <div class="stat-item" title="Score">
+                            <span class="stat-icon" data-icon="navTrophy" aria-label="Score"></span>
                             <span class="stat-value" id="victoryScore">0</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">TIME</span>
+                        <div class="stat-item" title="Time">
+                            <span class="stat-icon" data-icon="navClock" aria-label="Time"></span>
                             <span class="stat-value" id="victoryTime">00:00</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">ENEMIES</span>
+                        <div class="stat-item" title="Enemies">
+                            <span class="stat-icon" data-icon="navSkull" aria-label="Enemies"></span>
                             <span class="stat-value" id="victoryEnemies">0</span>
                         </div>
                     </div>
@@ -19273,10 +20104,10 @@ extendClass(GameControlSystem, {
                 ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
                 : '';
             const color = tint || '#ccc';
-            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}">` +
+            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}" title="${label}">` +
                 `<span class="victory-loot-icon">${iconHtml}</span>` +
                 `<span class="victory-loot-label">${label}</span>` +
-                `<span class="victory-loot-amount">+${amount}</span>` +
+                `<span class="victory-loot-amount">${amount}</span>` +
                 `</div>`;
         }).join('');
     },
@@ -19287,6 +20118,11 @@ extendClass(GameControlSystem, {
             '0': 'menuStart',
             '1': 'menuPlanets'
         };
+        if (typeof iconRenderer !== 'undefined') {
+            victoryOverlay.querySelectorAll('.victory-stats .stat-icon[data-icon]').forEach((iconEl) => {
+                iconEl.innerHTML = iconRenderer.imgHtml(iconEl.dataset.icon, 32, 'victory-pixel-icon');
+            });
+        }
         victoryOverlay.querySelectorAll('.victory-button').forEach((button) => {
             let iconEl = button.querySelector('.button-icon');
             if (!iconEl) {
@@ -19622,10 +20458,8 @@ extendClass(GameControlSystem, {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
         } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
-            // Defeat card is narrow — smaller globe; victory keeps the large portrait via CSS.
-            const go = typeof document !== 'undefined' && document.getElementById('gameOver');
-            const onDefeat = !!(go && !go.classList.contains('hidden')) || result === 'lost';
-            icon = galaxyMapManager.planetIconHtml(pid, onDefeat ? 168 : 320, true);
+            // Victory and defeat share the wide layout with the large globe.
+            icon = galaxyMapManager.planetIconHtml(pid, 620, true);
         }
 
         let steps = '';
@@ -19651,7 +20485,13 @@ extendClass(GameControlSystem, {
             steps = `<ol class="outcome-stepper">${list.join('')}</ol>` +
                 `<p class="outcome-status">${which} ${result === 'won' ? 'CLEARED' : 'FAILED'}</p>`;
         }
-        return `<span class="outcome-planet-icon${isAmbush ? ' is-ambush-wreck' : ''}" aria-hidden="true">${icon}</span>` +
+        // Atmosphere haze tone of the planet (same rings as the sector card, css part-23).
+        // The icon is an <img>; read the haze tone from a small inline-SVG render of the same planet.
+        const atmoSvg = (!isAmbush && typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetAtmoColor)
+            ? galaxyMapManager.planetIconHtml(pid, 64, false) : '';
+        const atmo = atmoSvg ? galaxyMapManager.planetAtmoColor(atmoSvg) : '';
+        const atmoAttr = atmo ? ` style="--atmo:${atmo};--dk:${galaxyMapManager.planetAtmoScale(atmoSvg)}"` : '';
+        return `<span class="outcome-planet-icon${isAmbush ? ' is-ambush-wreck' : ''}${atmo ? ' has-atmo' : ''}"${atmoAttr} aria-hidden="true">${icon}</span>` +
             `<div class="outcome-planet">` +
             `<span class="outcome-planet-text"><strong>${name}</strong>` +
             `<span>${galaxy ? String(galaxy.name || gid).toUpperCase() : ''}${isAmbush ? ' · AMBUSH' : ''}</span></span>` +
@@ -19684,6 +20524,8 @@ extendClass(GameControlSystem, {
     leaveGameSession() {
         this.stopGame();
         this.hideAllOverlays();
+        // Next planet entry is a fresh arrival: launch from the home station again.
+        if (typeof objectiveManager !== 'undefined') objectiveManager.arrivalPlanetId = null;
         if (typeof soundManager !== 'undefined') {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
@@ -20028,8 +20870,10 @@ var GameLoop = class GameLoop {
         const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
         
         this.update(cappedDeltaTime);
-        // Paused: keep the last frame; the pause overlay is CSS on top.
-        if (!this.gameState.isPaused) this.render();
+        // Paused: keep the last frame; the pause overlay is CSS on top. While the remote control is open the
+        // field is frozen by it, but still repainted so slider changes (sizes, effects) show up live.
+        const fxScope = (typeof window !== 'undefined' && window.vfFitScope) ? window.vfFitScope.vfs : null;
+        if (!this.gameState.isPaused || (fxScope && fxScope.fxOpen)) this.render();
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
@@ -20061,6 +20905,9 @@ var GameLoop = class GameLoop {
         const introActive = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
         if (introActive) {
             missionStartManager.update(deltaTime);
+            if (typeof objectiveManager !== 'undefined' && objectiveManager.updateArrivalIntro) {
+                objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
+            }
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
@@ -20083,11 +20930,10 @@ var GameLoop = class GameLoop {
             : ((typeof gameCore !== 'undefined' && gameCore.gameControl) ? gameCore.gameControl : null);
         const lootPhase = !!(gameControl && gameControl._victoryLootPhase);
         if (lootPhase) {
-            // Keep in-flight shots / obstacles moving during loot scoop / flee cleanup
+            // Keep in-flight shots / obstacles moving during loot scoop / flee cleanup.
+            // No keys: held fire buttons must not keep shooting after the win.
             if (typeof bulletManager !== 'undefined') {
-                const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
-                const keys = inputHandler ? inputHandler.keys : null;
-                bulletManager.update(deltaTime, keys);
+                bulletManager.update(deltaTime, null);
             }
             if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
             if (typeof enemyManager !== 'undefined'
@@ -20114,6 +20960,9 @@ var GameLoop = class GameLoop {
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
+            missionStartManager.updateEnemyEntry(deltaTime);
+        }
         if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
         if (typeof pickupManager !== 'undefined') pickupManager.update(deltaTime);
         if (typeof collisionManager !== 'undefined') collisionManager.checkCollisions(this.gameState);
@@ -20543,7 +21392,21 @@ var InputHandler = class InputHandler {
         });
     }
 
+    /** Victory loot scoop or win / lose overlay: combat is over, no firing. */
+    isCombatEnded() {
+        const gc = (typeof game !== 'undefined' && game.gameControl)
+            ? game.gameControl
+            : ((typeof gameCore !== 'undefined' && gameCore.gameControl) ? gameCore.gameControl : null);
+        if (gc && gc._victoryLootPhase) return true;
+        return ['gameOver', 'victoryOverlay'].some((id) => {
+            const el = document.getElementById(id);
+            return !!(el && !el.classList.contains('hidden'));
+        });
+    }
+
     handleKeyDown(event) {
+        // Space still held from combat: end screens wait for its release.
+        const spaceHeld = !!(this.keys[' '] || this.keys['Space']);
         const blockShip = typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls();
         if (!(blockShip && typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key))) {
             this.keys[event.key] = true;
@@ -20599,12 +21462,14 @@ var InputHandler = class InputHandler {
         // The generic overlay guard below would otherwise consume it first.
         const gameOverOverlay = document.getElementById('gameOver');
         if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) {
+            if (spaceHeld) { event.preventDefault(); return; }
             if (typeof uiManager !== 'undefined') uiManager.handleGameOverInput(event);
             return;
         }
 
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) {
+            if (spaceHeld) { event.preventDefault(); return; }
             if (typeof uiManager !== 'undefined') uiManager.handleVictoryInput(event);
             return;
         }
@@ -20734,7 +21599,9 @@ var InputHandler = class InputHandler {
         }
 
         // Shoot on spacebar (mode-dependent)
-        if (event.key === ' ') {
+        if (event.key === ' ' && this.isCombatEnded()) {
+            event.preventDefault();
+        } else if (event.key === ' ') {
             event.preventDefault();
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';
@@ -20833,7 +21700,9 @@ extendClass(InputHandler, {
         if (event.key === ' ') {
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';
-                if (mode === 'charge' && bulletManager.isCharging) {
+                if (mode === 'charge' && bulletManager.isCharging && this.isCombatEnded()) {
+                    bulletManager.resetCharge();
+                } else if (mode === 'charge' && bulletManager.isCharging) {
                     bulletManager.releaseChargeShot(playerManager.getPosition());
                 }
             }
@@ -20898,7 +21767,11 @@ extendClass(InputHandler, {
 "use strict";
 
 // UI management and menu handling
-var UIManager = class UIManager {
+const ENEMY_CARD_MAX = 2; // hero cards in the enemy sidebar (champion + toughest side craft)
+const ENEMY_HIT_FACE_MS = 900; // pain / anger face after a hit
+const ENEMY_DEAD_FACE_MS = 3000; // a defeated enemy's card lingers this long with the dead face
+
+class UIManager {
     constructor(gameState) {
         this.gameState = gameState;
         this.pauseMenuIndex = 0;
@@ -21006,12 +21879,14 @@ var UIManager = class UIManager {
         if (enemyManager.enemy && !enemyManager.exploding) {
             const maxHp = enemyManager.getMaxHealth() || 1;
             const hp = enemyManager.getHealth();
+            const e = enemyManager.enemy;
+            // The stage's main enemy always gets a card, whatever its class; side craft only when elite / capital.
             if (hp > 0) {
-                const e = enemyManager.enemy;
                 const type = enemyManager.currentShipType || e.type || 'enemyBasic';
                 const faction = this.resolveEnemyFaction(type, e.faction);
                 list.push({
                     key: 'champion',
+                    isBoss: !!e.isBoss,
                     type: type,
                     model: enemyManager.currentEnemyModel || null,
                     health: hp,
@@ -21034,7 +21909,7 @@ var UIManager = class UIManager {
         const sides = enemyManager.getSideEnemies ? enemyManager.getSideEnemies() : [];
         for (let i = 0; i < sides.length; i++) {
             const side = sides[i];
-            if (!side || side.health <= 0) continue;
+            if (!side || side.health <= 0 || !this.isCardClass(side.enemyClass)) continue;
             const type = side.type || 'enemyBasic';
             const faction = this.resolveEnemyFaction(type, side.faction);
             list.push({
@@ -21059,6 +21934,12 @@ var UIManager = class UIManager {
         return list;
     }
 
+    /** Elite / capital ships get a sidebar card; scout / assault / heavy are single-purpose craft without one. */
+    isCardClass(enemyClass) {
+        const c = String(enemyClass || '').toLowerCase();
+        return c === 'elite' || c === 'capital';
+    }
+
     enemyHudLayout(count) {
         const n = Math.max(0, count | 0);
         if (n <= 0) {
@@ -21080,7 +21961,10 @@ var UIManager = class UIManager {
         const container = document.getElementById('enemyHealthBars');
         if (!container) return;
 
-        const enemies = this.collectActiveEnemies();
+        // Only the most important heroes get a card: the champion first, then the toughest side craft.
+        const enemies = this.withDefeatedEnemies(this.collectActiveEnemies())
+            .sort((a, b) => (b.key === 'champion') - (a.key === 'champion') || (b.maxHealth || 0) - (a.maxHealth || 0))
+            .slice(0, ENEMY_CARD_MAX);
         const keys = enemies.map((e) =>
             e.key + ':' + (e.factionId || '') + ':' + (e.type || '') + ':' +
             (e.enemyClass || '') + ':' + (e.tier != null ? e.tier : '') + ':' +
@@ -21096,83 +21980,17 @@ var UIManager = class UIManager {
             this._enemyBarKeys = keys;
             container.innerHTML = '';
             for (let i = 0; i < enemies.length; i++) {
-                const enemy = enemies[i];
-                const row = document.createElement('div');
-                const isChampion = enemy.key === 'champion';
-                row.className = 'health-bar enemy-health' + (isChampion ? ' is-champion' : ' is-side');
-                row.dataset.enemyKey = enemy.key;
-                row.dataset.faction = enemy.factionId || '';
-
-                const factionEl = document.createElement('div');
-                factionEl.className = 'enemy-faction';
-                factionEl.textContent = enemy.factionLabel || 'UNKNOWN';
-
-                const main = document.createElement('div');
-                main.className = 'enemy-health-main';
-
-                // Readable enemy portrait: big for the champion, rendered at
-                // 2× so the pixel ship stays crisp in its framed box.
-                const iconSize = isChampion ? 44 : 32;
-                const icon = document.createElement('canvas');
-                icon.className = 'health-ship-icon ui-icon-tip';
-                icon.width = iconSize * 2;
-                icon.height = iconSize * 2;
-                icon.style.width = iconSize + 'px';
-                icon.style.height = iconSize + 'px';
-                icon.setAttribute('aria-hidden', 'true');
-
-                const model = enemy.model
-                    || (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getMergedModel
-                        ? enemyConfigManager.getMergedModel(enemy.type)
-                        : null);
-                const tipName = (model && (model.name || model.id || model.type))
-                    || enemy.type
-                    || enemy.factionLabel
-                    || 'ENEMY';
-
-                const text = document.createElement('div');
-                text.className = 'enemy-text';
-                const nameEl = document.createElement('div');
-                nameEl.className = 'enemy-name';
-                nameEl.textContent = (isChampion ? 'BOSS · ' : '') + String(tipName).replace(/_/g, ' ').toUpperCase();
-                text.appendChild(factionEl);
-                text.appendChild(nameEl);
-
-                const head = document.createElement('div');
-                head.className = 'enemy-head';
-                head.appendChild(icon);
-                head.appendChild(text);
-
-                const fill = document.createElement('div');
-                fill.className = 'health-fill';
-                fill.dataset.enemyKey = enemy.key;
-                const hpText = document.createElement('span');
-                hpText.className = 'enemy-hp-text';
-                fill.appendChild(hpText);
-
-                main.appendChild(fill);
-                {
-                    // Always show the shield row so unshielded ships read as such.
-                    const sh = document.createElement('div');
-                    sh.className = 'enemy-shield-fill';
-                    const shText = document.createElement('span');
-                    shText.className = 'enemy-shield-text';
-                    sh.appendChild(shText);
-                    main.appendChild(sh);
-                }
-                row.appendChild(head);
-                row.appendChild(main);
-                container.appendChild(row);
-                icon.setAttribute('data-ui-tip', String(tipName).replace(/_/g, ' ').toUpperCase());
-                this.renderEnemyHealthIcon(icon, enemy);
+                container.appendChild(this.buildEnemyCard(enemies[i]));
             }
         }
 
-        const fills = container.querySelectorAll('.health-fill');
-        for (let i = 0; i < fills.length; i++) {
-            const fill = fills[i];
+        const cards = container.querySelectorAll('.enemy-card-v');
+        for (let i = 0; i < cards.length; i++) {
+            const card = cards[i];
+            const fill = card.querySelector('.health-fill');
             const enemy = enemies[i];
-            if (!enemy) continue;
+            if (!enemy || !fill) continue;
+            this.updateEnemyFace(card, enemy);
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
             const hpLabel = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
             if (fill._vfHpPct !== pct) {
@@ -21183,9 +22001,10 @@ var UIManager = class UIManager {
             if (hpText && hpText._vfHpLabel !== hpLabel) {
                 hpText._vfHpLabel = hpLabel;
                 hpText.textContent = hpLabel;
+                fill.title = 'HULL ' + hpLabel;
             }
             // Shield: level + a pulsing charge state while it refills.
-            const sh = fill.parentNode && fill.parentNode.querySelector('.enemy-shield-fill');
+            const sh = card.querySelector('.enemy-shield-fill');
             if (sh && !(enemy.shieldMax > 0)) {
                 if (!sh.classList.contains('is-none')) sh.classList.add('is-none');
                 if (sh._vfShPct !== 0) {
@@ -21207,9 +22026,156 @@ var UIManager = class UIManager {
                 const t = sh.querySelector('.enemy-shield-text');
                 const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
                     (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
-                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; }
+                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; sh.title = shLabel; }
             }
         }
+    }
+
+    /**
+     * A card whose enemy was just destroyed stays for a moment with the dead face instead of vanishing.
+     * Defeated entries come back with health 0 and `defeated: true`.
+     */
+    withDefeatedEnemies(list) {
+        const now = performance.now();
+        const gone = this._enemyDefeated || (this._enemyDefeated = new Map());
+        const live = new Set(list.map((e) => e.key));
+        (this._enemyLast || []).forEach((e) => {
+            if (!live.has(e.key) && !gone.has(e.key)) {
+                gone.set(e.key, Object.assign({}, e, { health: 0, shield: 0, defeated: true, until: now + ENEMY_DEAD_FACE_MS }));
+            }
+        });
+        this._enemyLast = list;
+        const out = list.slice();
+        gone.forEach((e, key) => {
+            if (live.has(key) || now > e.until) gone.delete(key);
+            else out.push(e);
+        });
+        return out;
+    }
+
+    /** Portrait expression: dead once defeated, pain on a hit (anger once the hull is low), calm otherwise. */
+    updateEnemyFace(card, enemy) {
+        const canvas = card.querySelector('canvas.vx-portrait');
+        if (!canvas || typeof voxelPortrait === 'undefined' || !voxelPortrait.setState) return;
+        const now = performance.now();
+        const total = (enemy.health || 0) + (enemy.shield || 0);
+        const hull = enemy.health / (enemy.maxHealth || 1);
+        if (card._vfPrevHp != null && total < card._vfPrevHp - 0.01) {
+            // Restart the flash/shake animation on every new hit.
+            if (now >= (card._vfHitUntil || 0)) {
+                card.classList.remove('face-hit');
+                void card.offsetWidth;
+                card.classList.add('face-hit');
+            }
+            card._vfHitUntil = now + ENEMY_HIT_FACE_MS;
+        }
+        card._vfPrevHp = total;
+        const hit = now < (card._vfHitUntil || 0);
+        if (!hit && card.classList.contains('face-hit')) card.classList.remove('face-hit');
+        card.classList.toggle('face-dead', !!enemy.defeated);
+        // Below half hull the pilot stays wounded; a hit shows anger (pain while still healthy).
+        const base = hull < 0.5 ? 1 : 0;
+        const state = enemy.defeated ? 2 : (hit ? (base ? 4 : 1) : base);
+        voxelPortrait.setState(canvas, state);
+    }
+
+    /**
+     * Portrait variant (0..15) for one enemy: picked once per enemy and kept, and different from the
+     * faces already handed out in the same faction, so two cards never show the same pilot.
+     */
+    enemyFaceVariant(key, faction) {
+        const faces = this._enemyFaces || (this._enemyFaces = new Map());
+        const id = faction + ':' + key;
+        if (faces.has(id)) return faces.get(id);
+        const used = new Set();
+        faces.forEach((v, k) => { if (k.indexOf(faction + ':') === 0) used.add(v); });
+        let v = Math.floor(Math.random() * 16);
+        for (let i = 0; i < 16 && used.has(v); i++) v = (v + 1) % 16;
+        if (faces.size > 64) faces.clear();
+        faces.set(id, v);
+        return v;
+    }
+
+    /**
+     * Sidebar card for a big enemy: portrait on top with the faction crest in its lower-right corner,
+     * the name, then vertical hull + shield bars like the player's own vitals.
+     */
+    buildEnemyCard(enemy) {
+        const isChampion = enemy.key === 'champion';
+        const card = document.createElement('div');
+        card.className = 'health-bar enemy-health enemy-card-v' + (isChampion ? ' is-champion' : ' is-side') + (enemy.isBoss ? ' is-boss' : '');
+        card.dataset.enemyKey = enemy.key;
+        card.dataset.faction = enemy.factionId || '';
+
+        const model = enemy.model
+            || (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getMergedModel
+                ? enemyConfigManager.getMergedModel(enemy.type) : null);
+        const name = String((model && (model.name || model.id || model.type)) || enemy.type || enemy.factionLabel || 'ENEMY')
+            .replace(/_/g, ' ').toUpperCase();
+        const faction = String(enemy.faction || enemy.factionId || 'pirate').toLowerCase();
+        const style = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
+            ? factionShipStyles.getFactionStyle(faction) : null;
+        const accent = (style && (style.accent || style.hull)) || null;
+
+        const portrait = document.createElement('div');
+        portrait.className = 'enemy-portrait';
+        portrait.setAttribute('data-ui-tip', name);
+        let face = '';
+        try {
+            if (typeof heroPortrait !== 'undefined' && heroPortrait.html) {
+                face = heroPortrait.html({ faction: faction, v: this.enemyFaceVariant(enemy.key, faction) }, accent);
+            }
+        } catch (err) { face = ''; }
+        if (face) {
+            portrait.innerHTML = face;
+        } else {
+            // No portrait renderer: fall back to the ship icon.
+            const icon = document.createElement('canvas');
+            icon.className = 'health-ship-icon';
+            icon.width = 88;
+            icon.height = 88;
+            portrait.appendChild(icon);
+            this.renderEnemyHealthIcon(icon, enemy);
+        }
+        const crestHtml = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
+            ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+        if (crestHtml) {
+            const crest = document.createElement('span');
+            crest.className = 'enemy-crest';
+            crest.innerHTML = crestHtml;
+            portrait.appendChild(crest);
+        }
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'enemy-name';
+        nameEl.textContent = (enemy.isBoss ? 'BOSS · ' : '') + name;
+
+        const bars = document.createElement('div');
+        bars.className = 'enemy-vbars';
+        const hull = document.createElement('div');
+        hull.className = 'enemy-vbar is-hull';
+        const fill = document.createElement('div');
+        fill.className = 'health-fill';
+        fill.dataset.enemyKey = enemy.key;
+        const hpText = document.createElement('span');
+        hpText.className = 'enemy-hp-text';
+        fill.appendChild(hpText);
+        hull.appendChild(fill);
+        const shield = document.createElement('div');
+        shield.className = 'enemy-vbar is-shield';
+        const sh = document.createElement('div');
+        sh.className = 'enemy-shield-fill';
+        const shText = document.createElement('span');
+        shText.className = 'enemy-shield-text';
+        sh.appendChild(shText);
+        shield.appendChild(sh);
+        bars.appendChild(hull);
+        bars.appendChild(shield);
+
+        card.appendChild(portrait);
+        card.appendChild(nameEl);
+        card.appendChild(bars);
+        return card;
     }
 
     /** HUD portrait for a live enemy — same faction visual path as the playfield. */
@@ -21316,10 +22282,12 @@ var UIManager = class UIManager {
 
         switch (event.key) {
             case 'ArrowUp':
+            case 'ArrowLeft':
                 this.gameOverMenuIndex = (this.gameOverMenuIndex - 1 + this.gameOverMenuItems.length) % this.gameOverMenuItems.length;
                 this.updateGameOverMenuDisplay();
                 break;
             case 'ArrowDown':
+            case 'ArrowRight':
                 this.gameOverMenuIndex = (this.gameOverMenuIndex + 1) % this.gameOverMenuItems.length;
                 this.updateGameOverMenuDisplay();
                 break;
@@ -21343,19 +22311,10 @@ var UIManager = class UIManager {
 // UIManager methods, split from ui-manager.js.
 extendClass(UIManager, {
     updateGameOverMenuDisplay() {
-        const buttons = document.querySelectorAll('.game-over-button');
+        // Same lit-block selection as the victory buttons (no text arrow: icon + label stay intact).
+        const buttons = document.querySelectorAll('#gameOver .game-over-button');
         buttons.forEach((button, index) => {
-            if (index === this.gameOverMenuIndex) {
-                button.classList.add('selected');
-                // Show arrow indicator
-                if (!button.textContent.includes('▶')) {
-                    button.textContent = '▶ ' + button.textContent;
-                }
-            } else {
-                button.classList.remove('selected');
-                // Hide arrow indicator
-                button.textContent = button.textContent.replace('▶ ', '');
-            }
+            button.classList.toggle('selected', index === this.gameOverMenuIndex);
         });
     },
 
@@ -21380,18 +22339,18 @@ extendClass(UIManager, {
         event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
 
+        // Buttons sit side by side: every arrow steps through the visible ones.
+        const count = this.getVictoryButtons().length || this.victoryMenuItems.length || 1;
         switch (event.key) {
             case 'ArrowUp':
-                this.victoryMenuIndex = (this.victoryMenuIndex - 1 + this.victoryMenuItems.length) % this.victoryMenuItems.length;
+            case 'ArrowLeft':
+                this.victoryMenuIndex = (this.victoryMenuIndex - 1 + count) % count;
                 this.updateVictoryMenuDisplay();
                 break;
             case 'ArrowDown':
-                this.victoryMenuIndex = (this.victoryMenuIndex + 1) % this.victoryMenuItems.length;
-                this.updateVictoryMenuDisplay();
-                break;
-            case 'ArrowLeft':
             case 'ArrowRight':
-                // Ignore horizontal navigation - only vertical selection
+                this.victoryMenuIndex = (this.victoryMenuIndex + 1) % count;
+                this.updateVictoryMenuDisplay();
                 break;
             case 'Enter':
             case ' ':
@@ -22253,15 +23212,19 @@ var CoreRenderManager = class CoreRenderManager {
         };
     }
 
-    /** Widen logical map to match display aspect (square pixels, more columns). */
-    function syncMapToAspect(aspect) {
-        const mapH = Math.max(1, Math.round(readCssNumber('--map-h', 300)));
-        const mapW = Math.max(1, Math.round(mapH * aspect));
+    /** Reshape logical map to match display aspect (square pixels): more columns,
+     *  or with keepWidth more rows (walls/lanes stay where the level put them). */
+    function syncMapToAspect(aspect, keepWidth) {
         const prevW = readCssNumber('--map-w', 0);
-        ROOT.style.setProperty('--playfield-aspect', String(Number(aspect.toFixed(6))));
+        const prevH = readCssNumber('--map-h', 0);
+        const mapH = keepWidth
+            ? Math.max(1, Math.round(prevW / aspect))
+            : Math.max(1, Math.round(readCssNumber('--map-h', 300)));
+        const mapW = keepWidth ? Math.max(1, Math.round(prevW)) : Math.max(1, Math.round(mapH * aspect));
+        ROOT.style.setProperty('--playfield-aspect', String(Number((mapW / mapH).toFixed(6))));
         ROOT.style.setProperty('--map-w', String(mapW));
         ROOT.style.setProperty('--map-h', String(mapH));
-        if (Math.abs(prevW - mapW) < 1) return mapW;
+        if (Math.abs(prevW - mapW) < 1 && Math.abs(prevH - mapH) < 1) return mapW;
         const canvas = document.getElementById('gameCanvas');
         const k = (typeof window.renderManager !== 'undefined' && window.renderManager
             && typeof window.renderManager.getRenderScale === 'function')
@@ -22454,10 +23417,8 @@ var CoreRenderManager = class CoreRenderManager {
         return out;
     }
     let silhouetteRaf = 0, silKey = '';
-    function clearSilhouette(body, frame) {
-        body.style.clipPath = '';
-        frame.style.clipPath = '';
-        document.querySelectorAll('[data-vf-stage-clip]').forEach(function (el) { el.removeAttribute('data-vf-stage-clip'); });
+    function clearSilhouette() {
+        document.documentElement.removeAttribute('data-vf-frame-sil');
     }
     function updateSilhouette() {
         silhouetteRaf = 0;
@@ -22470,21 +23431,23 @@ var CoreRenderManager = class CoreRenderManager {
         // any window size. The clip itself is normalised (objectBoundingBox): it follows the
         // layer's box whatever scale / zoom the layer has.
         const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fr-px')) || 0;
-        const W = body.offsetWidth, H = body.offsetHeight;
+        // Only the frame's own plates are cut (CSS: html[data-vf-frame-sil] #vf-bezel .vf-fr), never the stage or the
+        // bezel itself — so nothing that sits in the bezel (pilot thumbnail, screens, tools) is ever sheared off.
+        const W = frame.offsetWidth, H = frame.offsetHeight;
         const shape = getComputedStyle(frame).getPropertyValue('--fr-shape').trim();
-        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(body, frame); silKey = ''; return; }
+        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(); silKey = ''; return; }
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
         const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow;
-        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && body.style.clipPath) { tagStageLayers(body, frame); return; }
+        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')) return;
         const probe = document.createElement('div');
         probe.id = 'vfSilProbe';
         probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;width:' + W + 'px;height:' + H + 'px';
         const dot = document.createElement('div');
         dot.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0';
         probe.appendChild(dot);
-        body.appendChild(probe);
+        frame.appendChild(probe);
         const px = function (expr, prop) {
             dot.style[prop] = expr;
             const v = prop === 'left' ? dot.offsetLeft : prop === 'top' ? dot.offsetTop : prop === 'width' ? dot.offsetWidth : dot.offsetHeight;
@@ -22522,7 +23485,7 @@ var CoreRenderManager = class CoreRenderManager {
             } else ok = false;
         } catch (e) { ok = false; }
         probe.remove();
-        if (!ok) { clearSilhouette(body, frame); silKey = ''; return; }
+        if (!ok) { clearSilhouette(); silKey = ''; return; }
         const data = sx.getImageData(0, 0, cw, ch).data;
         // One path of merged runs of whole cells (square staircase), in 0..1 box units.
         const nx = function (x) { return Math.min(1, x * cell / W).toFixed(6); };
@@ -22561,24 +23524,8 @@ var CoreRenderManager = class CoreRenderManager {
         }
         document.getElementById('vfStageClipPath').setAttribute('d', d);
         if (window.vfLog) window.vfLog('mask', 'pixel silhouette rebuilt in ' + Math.round(performance.now() - tS) + 'ms (' + cw + 'x' + ch + ' cells, path ' + d.length + ' chars)');
-        body.style.clipPath = 'url(#vfStageClip)';
-        frame.style.clipPath = 'url(#vfStageClip)';
+        document.documentElement.setAttribute('data-vf-frame-sil', '');
         silKey = silKeyNow;
-        tagStageLayers(body, frame);
-    }
-    // Fixed-position stage layers (start screen, station, overlays) ignore the body's clip, so
-    // every full-stage layer gets the same clip. Anything with another box (tooltips, the
-    // remote) is left alone.
-    function tagStageLayers(body, frame) {
-        const br = body.getBoundingClientRect();
-        Array.prototype.forEach.call(body.children, function (el) {
-            if (el === frame || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'svg') return;
-            const r = el.getBoundingClientRect();
-            const full = Math.abs(r.left - br.left) < 2 && Math.abs(r.top - br.top) < 2
-                && Math.abs(r.width - br.width) < 2 && Math.abs(r.height - br.height) < 2;
-            if (full) { if (!el.hasAttribute('data-vf-stage-clip')) el.setAttribute('data-vf-stage-clip', ''); }
-            else if (el.hasAttribute('data-vf-stage-clip')) el.removeAttribute('data-vf-stage-clip');
-        });
     }
     function scheduleSilhouette() {
         if (!silhouetteRaf) silhouetteRaf = requestAnimationFrame(updateSilhouette);
@@ -23016,6 +23963,18 @@ var CoreRenderManager = class CoreRenderManager {
         else if (d.vxSize) ui.setVoxelSize(d.vxSize);
         else if (d.vxGui) ui.setGuiVoxel(d.vxGui);
         else if (d.vxGv) { const kv = d.vxGv.split(':'); ui.setFx(kv[0], kv[1]); }
+        else if (d.szCopy) {
+            const text = JSON.stringify({ sizePx: ui.sizePx, shotSpeeds: ui.shotSpeeds }, null, 2);
+            console.info('[GLXEE SIZES]', text);
+            const legacy = function () {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                } catch (err2) { /* optional */ }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(legacy); else legacy();
+        }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
         else if (d.pfSway) setPerf('sway', d.pfSway);
@@ -23046,9 +24005,18 @@ var CoreRenderManager = class CoreRenderManager {
             const snap = collectPerfSnapshot(null);
             console.info('[GLXEE PERF]', snap);
             try {
+                const text = JSON.stringify(snap, null, 2);
+                // Sandboxed iframes (itch.io) block the Clipboard API: fall back to a hidden textarea copy.
+                const legacyCopy = function () {
+                    try {
+                        const ta = document.createElement('textarea');
+                        ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+                        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                    } catch (err2) { /* optional */ }
+                };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(JSON.stringify(snap, null, 2));
-                }
+                    navigator.clipboard.writeText(text).catch(legacyCopy);
+                } else legacyCopy();
             } catch (err) { /* optional */ }
         }
         else if (d.fxFac) { fxFacPrev = vfs.editFaction || (document.getElementById('vf-bezel') || document.body).getAttribute('data-faction'); vfs.editFaction = d.fxFac; setPreviewFaction(vfs.editFaction); }
@@ -23184,6 +24152,7 @@ var CoreRenderManager = class CoreRenderManager {
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
         }
+        else if (parts[0] === 'sp') ui.setSizePct(parts[1], v);
         else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
         else if (parts[0] === 'df') {
             if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
@@ -23317,14 +24286,6 @@ var CoreRenderManager = class CoreRenderManager {
         return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
             '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
             (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : shown + (unit || '')) + '</output></label>';
-    }
-    // The slider edits the raw, un-scaled px stored in uiAppearanceManager; what actually
-    // reaches the screen/collision box is that raw value times the level's playfield zoom
-    // (game.contentScale, see resolve-enemy-hit-profile.js). Show that effective size so the
-    // panel's numbers match what the player sees, instead of the un-scaled stored value.
-    function effectivePx(rawPx) {
-        const scale = (typeof game !== 'undefined' && game && game.contentScale) ? game.contentScale : 1;
-        return Math.round(rawPx * scale);
     }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
@@ -23557,14 +24518,18 @@ var CoreRenderManager = class CoreRenderManager {
             h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
                 fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
                 fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
-            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px', effectivePx(ui.getSizePx('player')));
+            h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px');
             ['scout', 'assault', 'heavy', 'elite', 'capital'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px', effectivePx(ui.getSizePx('enemy', c)));
+                h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px');
             });
+            h += '<div class="vf-fx-title">BOSS / SIDE CRAFT (% OF CLASS SIZE)</div>' +
+                fxSlider('BOSS', 'sp:boss', 30, 150, 5, ui.getSizePct('boss'), '%') +
+                fxSlider('SIDE CRAFT', 'sp:side', 30, 150, 5, ui.getSizePct('side'), '%');
             h += '<div class="vf-fx-title">SHOTS (PX)</div>';
             ['player', 'enemy', 'boss'].forEach(function (c) {
-                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px', effectivePx(ui.getSizePx('shot', c)));
+                h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px');
             });
+            h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-sz-copy="1">COPY SIZES (JSON)</button></div>';
         }
         h += '</div>';
         plate.innerHTML = h;
@@ -23889,8 +24854,16 @@ var CoreRenderManager = class CoreRenderManager {
             return '<span class="vf-pilot-res" title="' + esc(id.toUpperCase()) + '">' + ico(key) + '<b>' + v + '</b></span>';
         }).join('');
         const fac = String(p.faction || 'pirate').toLowerCase();
-        const big = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
-            ? profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64) : '';
+        // Pilot thumbnail (the look picked at creation), falling back to the faction emblem.
+        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
+        const accent = fss && fss.getFactionStyle ? (fss.getFactionStyle(fac) || {}).accent : null;
+        let big = '';
+        try {
+            if (typeof heroPortrait !== 'undefined') big = heroPortrait.html(p.portrait || heroPortrait.heroLook(fac), accent, { nobg: true });
+        } catch (e) { big = ''; }
+        if (!big && typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml) {
+            big = profileSelectionManager.getFactionEmblemHtml(p.faction || 'pirate', 64);
+        }
         return { plate: '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>', res: res };
     }
     let pilotSig = '';
@@ -23952,8 +24925,99 @@ var CoreRenderManager = class CoreRenderManager {
             ress.innerHTML = hud.res;
             ress.hidden = !hud.res;
         }
+        syncPilotTuner(frame);
     }
     setInterval(syncPilotPlate, 700);
+
+    // Dev Mode: sliders for the pilot plate / resources screen sizes (--ph-* on the bezel), saved in localStorage.
+    const PH_TUNE_KEY = 'vf_pilot_hud_tune_v1';
+    const PH_TUNE = [
+        ['PILOT SCREEN · POSITION'],
+        ['--ph-top', 'TOP', 0, 70, 1],
+        ['--ph-left', 'LEFT', 40, 400, 2],
+        ['--ph-plate-w', 'WIDTH', 200, 600, 2],
+        ['--ph-height', 'HEIGHT', 20, 70, 1],
+        ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
+        ['PILOT FRAME'],
+        ['--ph-crest-top', 'TOP', -120, 20, 1],
+        ['--ph-crest-left', 'LEFT', -60, 40, 1],
+        ['--ph-crest-w', 'WIDTH', 30, 140, 1],
+        ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
+        ['PILOT IMAGE'],
+        ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
+        ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1],
+        ['RESOURCE SCREEN · POSITION'],
+        ['--ph-gap', 'GAP', 0, 120, 2],
+        ['--ph-res-height', 'HEIGHT', 20, 70, 1],
+        ['--ph-res-pad', 'PADDING', 0, 60, 1],
+        ['RESOURCES'],
+        ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
+        ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
+        ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+    ];
+    let phTune = {};
+    try { phTune = JSON.parse(localStorage.getItem(PH_TUNE_KEY) || '{}') || {}; } catch (e) { phTune = {}; }
+    let phPanel = null, phBtn = null;
+    function applyPilotTune(frame) {
+        PH_TUNE.forEach(function (t) {
+            if (t.length < 2) return;
+            if (phTune[t[0]] != null) frame.style.setProperty(t[0], String(phTune[t[0]]));
+            else frame.style.removeProperty(t[0]);
+        });
+    }
+    function savePilotTune() {
+        try { localStorage.setItem(PH_TUNE_KEY, JSON.stringify(phTune)); } catch (e) { /* ignore */ }
+    }
+    function buildPilotTunePanel(frame) {
+        const cs = getComputedStyle(frame);
+        const rows = PH_TUNE.map(function (t) {
+            if (t.length < 2) return '<div class="vf-ph-tune-h">' + t[0] + '</div>';
+            const v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
+            return '<label class="vf-ph-tune-row"><span>' + t[1] + '</span>'
+                + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4] + '" value="' + v + '">'
+                + '<b>' + v + '</b></label>';
+        }).join('');
+        phPanel.innerHTML = rows + '<div class="vf-ph-tune-btns"><button type="button" data-ph-reset>RESET</button><button type="button" data-ph-close>CLOSE</button></div>';
+    }
+    function syncPilotTuner(frame) {
+        applyPilotTune(frame);
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        if (!phBtn) {
+            phBtn = document.createElement('button');
+            phBtn.type = 'button';
+            phBtn.className = 'vf-ph-tune-btn';
+            phBtn.title = 'Pilot HUD size (Dev Mode)';
+            phBtn.textContent = 'HUD';
+            document.body.appendChild(phBtn);
+            phPanel = document.createElement('div');
+            phPanel.className = 'vf-ph-tune';
+            phPanel.hidden = true;
+            document.body.appendChild(phPanel);
+            phBtn.addEventListener('click', function () {
+                phPanel.hidden = !phPanel.hidden;
+                if (!phPanel.hidden) buildPilotTunePanel(frame);
+            });
+            phPanel.addEventListener('input', function (e) {
+                const k = e.target && e.target.getAttribute('data-ph');
+                if (!k) return;
+                phTune[k] = Number(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+                applyPilotTune(frame);
+                savePilotTune();
+            });
+            phPanel.addEventListener('click', function (e) {
+                if (e.target.closest('[data-ph-close]')) phPanel.hidden = true;
+                else if (e.target.closest('[data-ph-reset]')) {
+                    phTune = {};
+                    savePilotTune();
+                    applyPilotTune(frame);
+                    buildPilotTunePanel(frame);
+                }
+            });
+        }
+        phBtn.hidden = !dev;
+        if (!dev) phPanel.hidden = true;
+    }
 
     function guiZoom() {
         return clamp(readCssNumber('--gui-zoom', 1), 0.25, 4);
@@ -24439,21 +25503,15 @@ var CoreRenderManager = class CoreRenderManager {
         const sidePanel = clamp(Math.round(shellW * 0.12), SIDE_MIN, SIDE_MAX);
         const maxW = Math.max(120, slotMaxW != null ? slotMaxW : (shellW - sidePanel * 2 - gap * 2));
 
-        // Match the middle column exactly so width AND height freiräume are used.
-        const slotAspect = maxW / Math.max(1, availH);
-        let useAspect = fillSlot ? clamp(slotAspect, 0.45, 1.6) : aspect;
+        // The level keeps its own aspect (planet config): a resolution / window change only
+        // rescales the playfield, it never reshapes the map to the slot.
+        const useAspect = aspect;
 
         let canvasW = maxW;
         let canvasH = canvasW / useAspect;
         if (canvasH > availH) {
             canvasH = availH;
             canvasW = canvasH * useAspect;
-        }
-        // Height-first nudge when floating-point left a vertical gap.
-        if (fillSlot && availH - canvasH > 1 && canvasW <= maxW + 0.5) {
-            canvasH = availH;
-            canvasW = Math.min(maxW, canvasH * useAspect);
-            useAspect = canvasW / Math.max(1, canvasH);
         }
 
         return {
@@ -24478,9 +25536,11 @@ var CoreRenderManager = class CoreRenderManager {
         const controls = mid.querySelector('.controls');
         const controlsHidden = !controls || getComputedStyle(controls).display === 'none';
         const controlsH = controlsHidden ? 0 : controls.offsetHeight;
+        // The faction frame around the playfield pads the stage on every side.
+        const frame = 2 * readCssNumber('--fight-frame', 0);
         return {
-            maxW: mid.clientWidth,
-            maxH: Math.max(120, mid.clientHeight - underH - controlsH)
+            maxW: Math.max(80, mid.clientWidth - frame),
+            maxH: Math.max(120, mid.clientHeight - underH - controlsH - frame)
         };
     }
 
@@ -24517,6 +25577,11 @@ var CoreRenderManager = class CoreRenderManager {
     function update(force) {
         const real = viewportSize();
         const { aspect, designW, designH } = playfieldParams();
+        // Read layout state BEFORE writing any CSS vars below: reading after a write forces a synchronous
+        // style + layout pass on every resize frame.
+        const gc = document.querySelector('.game-container');
+        const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
+        const userZoom = guiZoom();
 
         ROOT.style.setProperty('--vw', real.vw + 'px');
         ROOT.style.setProperty('--vh', real.vh + 'px');
@@ -24532,16 +25597,14 @@ var CoreRenderManager = class CoreRenderManager {
         // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size
         ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
-        const gc = document.querySelector('.game-container');
-        const inFight = !!(gc && getComputedStyle(gc).display !== 'none' && gc.offsetWidth > 0);
-        const zoom = guiZoom() * (inFight ? 0.85 : 1);
+        const zoom = userZoom * (inFight ? 0.85 : 1);
         ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
         const openL = 44 * u;
         const openR = 44 * u;
-        const openT = (44 + 22) * u;
+        const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
         const openB = 44 * u;
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
@@ -24552,15 +25615,26 @@ var CoreRenderManager = class CoreRenderManager {
         const gap = inFight ? FIGHT_INSET : clamp(Math.round(vw * 0.008), 4, 10);
 
         const measured = inFight ? measureFightSlot(gc) : null;
+        // Fight: the playfield fills the slot down to the under-stage bar. The map keeps its width
+        // and gets its rows ONCE per level (the layout is a fixed 1280x960, so the slot is the same at
+        // every resolution); later resolution / window changes only rescale, never reshape.
+        let fitAspect = aspect;
+        const mapW = readCssNumber('--map-w', 0), mapH = readCssNumber('--map-h', 0);
+        const fitted = vfs.mapFit && vfs.mapFit.w === mapW && vfs.mapFit.h === mapH;
+        if (measured && mapW > 0 && !fitted) {
+            const slotAspect = clamp(measured.maxW / measured.maxH, 0.45, 1.6);
+            if (Math.abs(slotAspect - aspect) > 0.01) {
+                syncMapToAspect(slotAspect, true);
+                fitAspect = playfieldParams().aspect;
+            }
+            vfs.mapFit = { w: readCssNumber('--map-w', 0), h: readCssNumber('--map-h', 0) };
+        }
         let layout = computeLayout(
-            vw, vh, padX, padY, gap, aspect, inFight,
+            vw, vh, padX, padY, gap, fitAspect, inFight,
             measured && measured.maxW,
             measured && measured.maxH
         );
-        let useAspect = layout.aspect || aspect;
-        if (inFight && Math.abs(useAspect - aspect) > 0.001) {
-            syncMapToAspect(useAspect);
-        }
+        const useAspect = layout.aspect || aspect;
         let canvasW = layout.canvasW;
         let canvasH = layout.canvasH;
         let sidePanel = layout.sidePanel;
@@ -24613,10 +25687,7 @@ var CoreRenderManager = class CoreRenderManager {
                 measured2 && measured2.maxW,
                 measured2 && measured2.maxH
             );
-            let a2 = layout2.aspect || aspect;
-            if (inFight && Math.abs(a2 - readCssNumber('--playfield-aspect', aspect)) > 0.001) {
-                syncMapToAspect(a2);
-            }
+            const a2 = layout2.aspect || aspect;
             let w2 = layout2.canvasW;
             let h2 = layout2.canvasH;
             let side2 = layout2.sidePanel;
@@ -24647,6 +25718,19 @@ var CoreRenderManager = class CoreRenderManager {
         });
     }
 
+    // True while the window is being dragged to a new size (and 180ms after): heavy canvas backdrops hold their
+    // backing store / redraw until it ends instead of reallocating on every resize event.
+    window.vfResizing = false;
+    let resizeEndTimer = 0;
+    function markResizing() {
+        window.vfResizing = true;
+        clearTimeout(resizeEndTimer);
+        resizeEndTimer = setTimeout(function () {
+            window.vfResizing = false;
+            window.dispatchEvent(new Event('vf-resize-end'));
+        }, 180);
+    }
+    window.addEventListener('resize', markResizing);
     let raf = 0;
     function scheduleUpdate() {
         if (performance.now() < vfs.suppressROUntil) return;
@@ -26782,7 +27866,14 @@ var PlayerManager = class PlayerManager {
             const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
             if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
         }
-        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul;
+        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap locks the ship.
+        let perkMul = 1;
+        if (typeof pickupManager !== 'undefined' && pickupManager.getMoveSpeedMul) {
+            perkMul = pickupManager.isFrozen() ? 0 : pickupManager.getMoveSpeedMul();
+            const repair = pickupManager.getRepairPerSec(this.maxHealth);
+            if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
+        }
+        const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul * perkMul;
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
 
@@ -26812,6 +27903,9 @@ var PlayerManager = class PlayerManager {
             }
             this.player.x = Math.max(-halfW, Math.min(canvasWidth - halfW, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
+            // Pressing on against the bottom edge = fly back down the corridor (transit runs read this).
+            // Lattice snapping can park the ship a few px above maxY, so allow a small band.
+            this.player.backtrack = !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
             if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
             let dx = 0;
@@ -27418,7 +28512,8 @@ var BulletManager = class BulletManager {
             if (keepWeapon && ids.indexOf(keepWeapon) !== -1) {
                 this.currentWeapon = keepWeapon;
                 shipModel.defaultWeapon = shipModel.defaultWeapon || keepWeapon;
-            } else if (shipModel.defaultWeapon) {
+            } else if (shipModel.defaultWeapon && ids.indexOf(shipModel.defaultWeapon) !== -1) {
+                // Stock hull default only when it is actually fitted.
                 this.currentWeapon = shipModel.defaultWeapon;
             } else {
                 this.currentWeapon = ids[0] || 'laser';
@@ -27649,6 +28744,96 @@ extendClass(BulletManager, {
             ? profileManager.getActiveProfile() : null;
         return (p && p.faction) || null;
     },
+    /**
+     * Side-view pixel art of a weapon on a 48×16 grid: the barrel comes from the weapon type,
+     * the receiver shape and paint from the faction, glowing parts in the weapon's UI colour.
+     */
+    renderWeaponArt(weaponId, canvas, factionId) {
+        if (!canvas || !canvas.getContext) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        canvas.width = 48;
+        canvas.height = 16;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, 48, 16);
+        const id = String(weaponId || 'laser').toLowerCase();
+        const kind = ({ claw_beam: 'ion', spike_burst: 'spread', laser_twin: 'burst', railgun: 'pierce', normal: 'laser' })[id] || id;
+        const faction = String(factionId || 'terran').toLowerCase();
+        // body dark / mid / light, trim
+        const pal = ({
+            terran: ['#2a3442', '#53657c', '#9fb3c8', '#e0c060'],
+            kronax: ['#3a1612', '#7a2e1e', '#c0643a', '#e8b040'],
+            voidborn: ['#1c1230', '#45306e', '#8a6cc8', '#5ff0d0'],
+            pirate: ['#2e1d10', '#6a4424', '#a8743e', '#d8b048'],
+            machine: ['#1a2020', '#3d4a4a', '#7c8e8a', '#7cff6a']
+        })[faction] || ['#2a3442', '#53657c', '#9fb3c8', '#e0c060'];
+        const [dk, md, lt, trim] = pal;
+        const glow = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
+            && weaponConfigManager.getWeaponUiColor(weaponId)) || '#7fe8ff';
+        const r = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+        // Barrel helper: a shaded horizontal tube.
+        const tube = (x, y, w, h) => { r(x, y, w, h, md); r(x, y, w, 1, lt); r(x, y + h - 1, w, 1, dk); };
+
+        // Receiver per faction.
+        if (faction === 'kronax') {
+            r(3, 4, 18, 9, dk); r(4, 5, 16, 7, md); r(4, 5, 16, 1, lt);
+            r(6, 12, 4, 3, dk); r(14, 12, 6, 2, trim);           // grip + blade under the barrel
+            r(2, 3, 2, 2, trim); r(20, 3, 2, 2, trim);           // spikes
+        } else if (faction === 'voidborn') {
+            r(5, 5, 15, 7, dk); r(4, 6, 17, 5, md); r(6, 5, 12, 1, lt);
+            r(3, 7, 1, 3, md); r(8, 12, 3, 2, md);
+            r(9, 7, 3, 3, trim);                                  // organic core
+        } else if (faction === 'pirate') {
+            r(1, 8, 8, 4, md); r(1, 8, 8, 1, lt); r(0, 9, 1, 3, dk); // wooden stock
+            r(8, 5, 13, 7, dk); r(9, 6, 11, 5, md); r(9, 6, 11, 1, lt);
+            r(11, 12, 3, 3, dk); r(12, 5, 1, 7, trim); r(17, 5, 1, 7, trim);
+        } else if (faction === 'machine') {
+            for (let i = 0; i < 3; i++) { r(3 + i * 6, 4, 5, 9, dk); r(4 + i * 6, 5, 3, 7, md); r(4 + i * 6, 5, 3, 1, lt); }
+            r(5, 7, 1, 1, trim); r(11, 7, 1, 1, trim); r(17, 7, 1, 1, trim); // status LEDs
+            r(9, 13, 4, 2, dk);
+        } else {
+            r(2, 7, 6, 4, md); r(2, 7, 6, 1, lt);                // stock
+            r(7, 4, 15, 9, dk); r(8, 5, 13, 7, md); r(8, 5, 13, 1, lt);
+            r(10, 12, 3, 3, dk); r(15, 7, 4, 2, trim);
+        }
+
+        // Barrel per weapon type, from x = 21 to the muzzle.
+        if (kind === 'rapid') {
+            r(21, 4, 4, 9, dk); r(22, 5, 2, 7, trim);            // drum
+            [5, 8, 11].forEach((y) => { tube(25, y - 1, 18, 2); r(43, y - 1, 1, 2, glow); });
+        } else if (kind === 'spread') {
+            tube(21, 6, 10, 5);
+            r(31, 4, 11, 2, md); r(31, 7, 13, 3, md); r(31, 11, 11, 2, md);
+            r(42, 4, 2, 2, glow); r(44, 7, 2, 3, glow); r(42, 11, 2, 2, glow);
+        } else if (kind === 'plasma') {
+            tube(21, 4, 20, 9);
+            for (let x = 24; x < 38; x += 3) r(x, 5, 1, 7, glow); // coil
+            r(41, 5, 3, 7, dk); r(44, 6, 2, 5, glow);
+        } else if (kind === 'missile') {
+            r(21, 3, 20, 11, dk); r(22, 4, 18, 9, md); r(22, 4, 18, 1, lt);
+            [5, 9].forEach((y) => { r(40, y, 4, 3, dk); r(44, y, 2, 3, glow); r(36, y + 1, 4, 1, trim); });
+        } else if (kind === 'ion') {
+            tube(21, 6, 14, 5);
+            r(35, 3, 9, 2, md); r(35, 12, 9, 2, md); r(35, 5, 2, 7, dk); // prongs
+            r(38, 6, 1, 1, glow); r(40, 8, 1, 1, glow); r(42, 9, 1, 1, glow); r(39, 10, 1, 1, glow); r(44, 7, 1, 3, glow);
+        } else if (kind === 'wave') {
+            tube(21, 6, 13, 5);
+            r(34, 3, 2, 11, md); r(36, 2, 2, 13, lt); r(38, 4, 1, 9, glow); r(40, 6, 1, 5, glow); r(42, 7, 1, 3, glow);
+        } else if (kind === 'burst') {
+            tube(21, 4, 21, 3); tube(21, 9, 21, 3); r(28, 7, 3, 2, dk);
+            r(42, 4, 2, 3, glow); r(42, 9, 2, 3, glow);
+        } else if (kind === 'pierce') {
+            r(21, 4, 25, 2, lt); r(21, 11, 25, 2, lt); r(21, 6, 25, 1, dk); r(21, 10, 25, 1, dk);
+            r(22, 7, 23, 3, glow); for (let x = 25; x < 44; x += 5) r(x, 4, 1, 9, trim);
+        } else if (kind === 'nova') {
+            tube(21, 6, 9, 5);
+            r(31, 3, 11, 11, dk); r(32, 4, 9, 9, md); r(34, 5, 5, 7, glow); r(33, 7, 7, 3, glow); r(35, 6, 2, 2, '#ffffff');
+            r(42, 7, 3, 3, md);
+        } else {
+            tube(21, 6, 22, 4); r(30, 5, 6, 6, dk); r(31, 6, 4, 4, trim);
+            r(43, 6, 2, 4, md); r(45, 7, 2, 2, glow);
+        }
+    },
     getWeaponIconKey(weaponType) {
         const map = {
             normal: 'shotLaser',
@@ -27804,9 +28989,19 @@ extendClass(BulletManager, {
             if (card._vfHudNoE !== st.noEnergy) { card._vfHudNoE = st.noEnergy; card.classList.toggle('is-no-energy', st.noEnergy); }
             if (card._vfHudPct !== pct) { card._vfHudPct = pct; card.style.setProperty('--reload-pct', pct); }
             if (card._vfHudTitle !== title) { card._vfHudTitle = title; card.title = title; }
+            // Charge cells: reload progress, or the hold-to-charge level on the active weapon.
+            const charging = !!(this.isCharging && card.classList.contains('is-active'));
+            const lvl = charging ? Math.max(0, Math.min(1, this.chargeLevel || 0)) : st.ready;
+            const lit = Math.floor(lvl * 5 + 1e-6);
+            if (card._vfHudChg !== charging) { card._vfHudChg = charging; card.classList.toggle('is-charging', charging); }
+            if (card._vfHudPips !== lit) {
+                card._vfHudPips = lit;
+                const cells = card.querySelectorAll('.weapon-card-pips > i');
+                for (let i = 0; i < cells.length; i++) cells[i].classList.toggle('is-on', i < lit);
+            }
         });
     },
-    /** Vertical list of equipped weapons as unified cards (icon + name + stats). */
+    /** Vertical list of equipped weapons as cards (name + side-view weapon art; stats on hover). */
     renderWeaponList() {
         const list = document.getElementById('weaponList');
         if (!list) return;
@@ -27824,7 +29019,7 @@ extendClass(BulletManager, {
         ids = ids.filter((id) => id && !seen[id] && (seen[id] = true));
         const active = String(this.currentWeapon || ids[0] || '').toLowerCase();
         const mode = this.getFireMode ? this.getFireMode() : 'auto';
-        const idSig = ids.join('|') + '@' + mode;
+        const idSig = ids.join('|') + '@' + mode + '@' + (this.getShipFactionId() || '');
         if (idSig === this._weaponListIdSig && list.childElementCount === ids.length) {
             list.querySelectorAll('.weapon-card').forEach((card) => {
                 const on = String(card.dataset.weapon || '').toLowerCase() === active;
@@ -27855,9 +29050,9 @@ extendClass(BulletManager, {
             fill.setAttribute('aria-hidden', 'true');
 
             const canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            canvas.className = 'weapon-card-icon';
+            canvas.width = 48;
+            canvas.height = 16;
+            canvas.className = 'weapon-card-art';
             canvas.setAttribute('aria-hidden', 'true');
 
             const body = document.createElement('div');
@@ -27870,13 +29065,23 @@ extendClass(BulletManager, {
             if (on) stats.id = 'weaponInfo';
             stats.innerHTML = this.weaponStatsHtml(id);
 
+            const art = document.createElement('div');
+            art.className = 'weapon-card-artbox';
+            art.appendChild(canvas);
+            // Charge cells on the receiver: they light up one by one as the weapon reloads / charges.
+            const pips = document.createElement('div');
+            pips.className = 'weapon-card-pips';
+            for (let p = 0; p < 5; p++) pips.appendChild(document.createElement('i'));
+            art.appendChild(pips);
+
+            // Name, then the weapon art; stats only on hover.
             body.appendChild(label);
+            body.appendChild(art);
             body.appendChild(stats);
             card.appendChild(fill);
-            card.appendChild(canvas);
             card.appendChild(body);
             list.appendChild(card);
-            this.renderWeaponIcon(id, canvas);
+            this.renderWeaponArt(id, canvas, this.getShipFactionId());
         });
         this.updateWeaponHudState();
     },
@@ -27901,6 +29106,8 @@ extendClass(BulletManager, {
         infoElement.textContent = `CHARGE ${pct}% [${'#'.repeat(bars)}${'-'.repeat(10 - bars)}] ×${this.getChargeMultiplier().toFixed(1)}`;
     },
     shoot(playerPosition, options) {
+        // FREEZE trap (power-crates.js): guns are locked too.
+        if (typeof pickupManager !== 'undefined' && pickupManager.isFrozen && pickupManager.isFrozen()) return false;
         const opts = Object.assign({}, options || {});
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
             const beatOpts = beatSyncManager.getShotOptions();
@@ -28632,6 +29839,7 @@ extendClass(BulletManager, {
         const W = (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 240;
         const H = (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300;
         if (enemy.entering
+            || (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalGrace && objectiveManager.isArrivalGrace())
             || enemy.x + (enemy.width || 0) < 0 || enemy.x > W
             || enemy.y + (enemy.height || 0) < 0 || enemy.y > H) {
             return;
@@ -28985,7 +30193,13 @@ var EnemyManager = class EnemyManager {
         this.sideFleeing = false;
     }
 
-    /** Side craft break formation and exit the field (still able to fire). */
+    /** Heroes: elite / capital craft with a sidebar card. Once in, they fight to the end and never flee. */
+    isHeroCraft(e) {
+        const c = String((e && e.enemyClass) || '').toLowerCase();
+        return c === 'elite' || c === 'capital';
+    }
+
+    /** Side craft break formation and exit the field (still able to fire). Heroes stay. */
     beginSideEnemyFlee(gameState) {
         this.sideFleeing = true;
         if (!this.sideEnemies || !this.sideEnemies.length) return;
@@ -28995,7 +30209,7 @@ var EnemyManager = class EnemyManager {
         const midX = canvasWidth * 0.5;
         for (let i = 0; i < this.sideEnemies.length; i++) {
             const e = this.sideEnemies[i];
-            if (!e) continue;
+            if (!e || this.isHeroCraft(e)) continue;
             // Re-kick ships that never got flee velocity (late spawns / stuck escorts).
             const needsKick = !e.fleeing
                 || !e.speed
@@ -29473,7 +30687,8 @@ extendClass(EnemyManager, {
             // initBoss applies BOSS_SIZE_MUL (1.6) after spawn — re-apply it
             // here or live SIZES tweaks strip the boss to champion footprint.
             if (this.enemy.isBoss) {
-                const mul = 1.6;
+                const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getBossSizeMul)
+                    ? uiAppearanceManager.getBossSizeMul() : 1.6;
                 const cx = this.enemy.x + this.enemy.width / 2;
                 const cy = this.enemy.y + this.enemy.height / 2;
                 this.enemy.width = Math.max(4, Math.round(this.enemy.width * mul));
@@ -29488,7 +30703,9 @@ extendClass(EnemyManager, {
         (this.sideEnemies || []).forEach((side) => {
             if (!side) return;
             const role = side.role || 'assault';
-            const scale = role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68;
+            const sideMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSideSizeMul)
+                ? uiAppearanceManager.getSideSizeMul() : 1;
+            const scale = (role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68) * sideMul;
             side.weaponScale = scale;
             this.applyEnemyHitProfile(side, {
                 faction: side.faction,
@@ -29684,21 +30901,24 @@ extendClass(EnemyManager, {
 /* --- js/game/enemies/spawn-scheduled-normal.js?v=role-diff-1 --- */
 "use strict";
 
+/** Health of light-class side craft relative to their normal value: the lower the rank, the quicker it goes down. */
+var LIGHT_CLASS_HP_MUL = { scout: 0.4, assault: 0.55, heavy: 0.7 };
+
 // EnemyManager methods, split from enemies.js.
 extendClass(EnemyManager, {
     /**
-     * Empty rim openings where side craft may enter (wall cells ≤ 1 on that
-     * side across the ship height). No terrain → both rims are open.
+     * Rim openings where side craft may enter: the hangar openings built into
+     * the canyon walls (terrainOpeningAt). No terrain → both rims are open.
      */
     findSideEntryGaps(canvasWidth, canvasHeight, shipH) {
         const W = canvasWidth || 240;
         const H = canvasHeight || 300;
         const h = Math.max(8, shipH || 10);
         const yMin = 18;
-        const yMax = Math.max(yMin + 8, Math.floor(H * 0.58));
         const gaps = [];
         if (typeof obstacleManager === 'undefined' || !obstacleManager.hasTerrain
-            || !obstacleManager.hasTerrain()) {
+            || !obstacleManager.hasTerrain() || !obstacleManager.terrainOpeningAt) {
+            const yMax = Math.max(yMin + 8, Math.floor(H * 0.34));
             for (let n = 0; n < 6; n++) {
                 const y = yMin + Math.random() * (yMax - yMin);
                 gaps.push({ side: 0, y: y });
@@ -29706,43 +30926,25 @@ extendClass(EnemyManager, {
             }
             return gaps;
         }
+        // Upper half only: enemies hold the top, the player the bottom.
+        const yMax = Math.max(yMin + 8, Math.floor(H * 0.55) - h);
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 4;
-        const openEnough = (sideCells) => sideCells <= 1;
-        // Track the widest corridor seen as a fallback: some canyon layouts
-        // never have a strictly-open (<=1 cell) rim anywhere in the scanned
-        // band, which used to leave gaps empty and permanently block every
-        // side-craft entry for the whole stage. Picking just the thinnest
-        // wall isn't enough either — the corridor there can still be too
-        // narrow to fly in, leaving craft jittering in place. Pick the
-        // widest corridor instead, so there's actually room to move.
-        let widest = null;
         for (let y = yMin; y <= yMax; y += cell) {
-            let leftOpen = true;
-            let rightOpen = true;
-            for (let dy = 0; dy < h; dy += cell) {
-                const wr = obstacleManager.terrainRowAtY(y + dy);
+            const wr = obstacleManager.terrainRowAtY(y + h * 0.5);
+            for (let side = 0; side < 2; side++) {
+                if (obstacleManager.terrainOpeningAt(wr, side) !== 'gap') continue;
+                // Opening still in one piece (not shot into a wider breach).
                 const c = obstacleManager.terrainWallCells(wr, W);
-                if (!openEnough(c.left)) leftOpen = false;
-                if (!openEnough(c.right)) rightOpen = false;
-                if (!leftOpen && !rightOpen) break;
-            }
-            if (leftOpen) gaps.push({ side: 0, y: y });
-            if (rightOpen) gaps.push({ side: 1, y: y });
-            if (obstacleManager.terrainWallsAtY) {
-                const walls = obstacleManager.terrainWallsAtY(y + h * 0.5, W);
-                if (walls) {
-                    const corridor = walls.right - walls.left;
-                    if (!widest || corridor > widest.corridor) widest = { y: y, corridor: corridor };
-                }
+                if ((side ? c.right : c.left) <= 1) gaps.push({ side: side, y: Math.max(yMin, y) });
             }
         }
-        if (!gaps.length && widest) {
-            // No strictly-open rim: fall back to the widest corridor found
-            // so side craft can still enter and actually have room to fly.
-            gaps.push({ side: 0, y: widest.y });
-            gaps.push({ side: 1, y: widest.y });
-        }
-        return gaps;
+        return gaps; // empty → no opening on screen yet; spawn retries later
+    },
+
+    /** Scout / assault / heavy: single-purpose side craft (see spawnScheduledNormal). */
+    isLightClass(enemyClass) {
+        const c = String(enemyClass || '').toLowerCase();
+        return c === 'scout' || c === 'assault' || c === 'heavy';
     },
 
     /** Mount groups a side craft of this class carries: scouts one gun, bigger classes add wing / outrigger pairs. */
@@ -29782,14 +30984,21 @@ extendClass(EnemyManager, {
         side.entryTargetY = Math.max(12, Math.min(H - side.height - 12, gap.y));
         side.y = side.entryTargetY;
         if (gap.side === 0) {
-            side.x = -side.width - 6 - Math.random() * 18;
+            side.x = -side.width - 2;
             side.speed = 0.85 + Math.random() * 0.45;
         } else {
-            side.x = W + 6 + Math.random() * 18;
+            side.x = W + 2;
             side.speed = -(0.85 + Math.random() * 0.45);
         }
         side.verticalSpeed = (Math.random() - 0.5) * 0.15;
         side.entering = true;
+        // Shot out of the hangar by compressed air: fast kick, bleeds off to cruise.
+        side.launchV = 4.2 + Math.random() * 1.4;
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.spawnWallBurst) {
+            const env = obstacleManager.getEnvironment ? obstacleManager.getEnvironment() : {};
+            obstacleManager.spawnWallBurst(gap.side ? W - 1 : 1, side.y + side.height * 0.5, gap.side ? -1 : 1,
+                ['#eef4f8', '#c8d2da', '#9aa6b0', '#eef4f8', env.accent || '#ffd27a'], 30, 1.1, 3.4);
+        }
         return true;
     },
 
@@ -29821,8 +31030,10 @@ extendClass(EnemyManager, {
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
         const SIDE_HULL_SEEDS = 12;
-        const SIDE_DRAW_SCALE = role === 'assault' || role === 'gunner' || role === 'blocker'
-            ? 0.78 : 0.68;
+        const sideSizeMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSideSizeMul)
+            ? uiAppearanceManager.getSideSizeMul() : 1;
+        const SIDE_DRAW_SCALE = (role === 'assault' || role === 'gunner' || role === 'blocker'
+            ? 0.78 : 0.68) * sideSizeMul;
         const forceEscort = !!entry.forceEscort || this.roleForcesEscort(role);
         const isEscort = forceEscort || this.shouldEscortChampion(entry);
         const escortSlot = isEscort ? this.nextEscortSlot() : -1;
@@ -29990,6 +31201,28 @@ extendClass(EnemyManager, {
             if (side.cruiseSpeed) side.cruiseSpeed *= ai.speedMul || 1;
             if (side.cruiseVerticalSpeed) side.cruiseVerticalSpeed *= ai.speedMul || 1;
         }
+        // Transit (canyon) runs: weaker side craft, scaled by planet tier and stage (see buildTransitEnemies).
+        if (entry.transitScale > 0 && entry.transitScale < 1) {
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * entry.transitScale));
+            side.health = side.maxHealth;
+            side.damageMul = (side.damageMul || 1) * (0.6 + 0.4 * entry.transitScale);
+        }
+        // Light classes (scout / assault / heavy) do exactly one job — their event role — with no extras,
+        // and go down quicker. Elite / capital keep their full kit.
+        if (this.isLightClass(side.enemyClass)) {
+            side.lightClass = true;
+            side.shieldMax = 0;
+            side.shield = 0;
+            side.shieldRegen = 0;
+            side.reflectChance = 0;
+            side.damageReduction = 0;
+            side.armor = 0;
+            side.defenseMechanisms = [];
+            side.abilities = [];
+            side.muzzleGroups = 1;
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * (LIGHT_CLASS_HP_MUL[String(side.enemyClass).toLowerCase()] || 1)));
+            side.health = side.maxHealth;
+        }
         this.sideEnemies.push(side);
         if (typeof profileManager !== 'undefined' && profileManager.discoverEnemyContents && entry.type) {
             profileManager.discoverEnemyContents(entry.type);
@@ -30038,7 +31271,10 @@ extendClass(EnemyManager, {
 
     updateSchedule(deltaTime, gameState) {
         if (this.spawnFrozen) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         if (!this.schedule.length) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalSpawnHold
+            && objectiveManager.isArrivalSpawnHold()) return;
         this.scheduleElapsedMs += deltaTime;
         const elapsedSec = this.scheduleElapsedMs / 1000;
         const holdNormals = this.sideFleeing || this.exploding
@@ -30106,6 +31342,7 @@ extendClass(EnemyManager, {
     updateSideEnemies(deltaTime, gameState) {
         if (!gameState) return;
         const canSpawnSides = !this.sideFleeing && !this.spawnFrozen
+            && !(typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding())
             && !!(this.enemy && !this.exploding);
         if (canSpawnSides && !this.schedule.length && this.sideEnemyPool.length) {
             this.sideEnemySpawnTimer += deltaTime;
@@ -30138,9 +31375,15 @@ extendClass(EnemyManager, {
             : null;
         let hasJammer = false;
         let hasTether = false;
+        // Transit gate in view: no ship slips away behind the bulkhead. Flybys, chains and fleeing craft
+        // turn around and stay in the fight below the gate until the player is through.
+        const gateFloor = !transitDone && typeof objectiveManager !== 'undefined' && objectiveManager.getGateFloor
+            ? objectiveManager.getGateFloor() : null;
 
         for (let i = this.sideEnemies.length - 1; i >= 0; i--) {
             const e = this.sideEnemies[i];
+            // Mission start: still gliding in on the intro path, so neither moved nor culled off screen.
+            if (e.introEntry) continue;
             const eCluster = e.cluster || 'alpha';
             const teamWithMain = mainAlive && eCluster === (this.enemy.cluster || 'alpha');
             const teamPending = !!pendingCluster && eCluster === pendingCluster;
@@ -30154,6 +31397,21 @@ extendClass(EnemyManager, {
                 e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.5);
                 e.verticalSpeed = (Math.random() - 0.5) * 0.7;
                 e.lifetimeMs = 12000 + Math.random() * 7000;
+            }
+
+            if (gateFloor != null) {
+                const waiting = (e.chain && !e.chain.entered) || (e.pass && !e.pass.entered);
+                if (waiting) { this.sideEnemies.splice(i, 1); continue; }
+                if (e.chain || e.pass || e.fleeing || e.lifetimeMs != null) {
+                    e.chain = null;
+                    e.pass = null;
+                    e.fleeing = false;
+                    e.entering = false;
+                    e.lifetimeMs = null;
+                    e.arrived = true;
+                    e.speed = (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 0.5);
+                    e.verticalSpeed = 0.3 + Math.random() * 0.3;
+                }
             }
 
             const pad = 4;
@@ -30183,7 +31441,7 @@ extendClass(EnemyManager, {
             const fullyInside = e.x >= 0 && e.x + w <= canvasWidth
                 && e.y >= 0 && e.y + h <= canvasHeight;
 
-            if (e.lifetimeMs != null && e.lifetimeMs <= 0 && !e.fleeing && !e.entering) {
+            if (e.lifetimeMs != null && e.lifetimeMs <= 0 && !e.fleeing && !e.entering && !this.isHeroCraft(e)) {
                 // Lifetime flyby done → flee out (then cull as outside).
                 e.fleeing = true;
                 e.isEscort = false;
@@ -30204,7 +31462,11 @@ extendClass(EnemyManager, {
                         + (e.formOffsetY || 0) - e.height * 0.5);
                 }
                 const dir = e.entryFromSide === 1 ? -1 : 1;
-                const spd = Math.max(0.75, Math.abs(e.speed) || 1);
+                let spd = Math.max(0.75, Math.abs(e.speed) || 1);
+                if (e.launchV > spd) {
+                    spd = e.launchV;
+                    e.launchV *= Math.pow(0.9, speedMul);
+                }
                 e.x += dir * spd * speedMul;
                 // Nudge toward the gap row / formation Y while sliding in.
                 e.y += ((e.entryTargetY != null ? e.entryTargetY : ty) - e.y)
@@ -30216,6 +31478,7 @@ extendClass(EnemyManager, {
                     e.entering = false;
                     e.arrived = true;
                     e.entryFromSide = null;
+                    e.launchV = 0;
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;
@@ -30238,6 +31501,12 @@ extendClass(EnemyManager, {
                 e.verticalSpeed = fy;
                 e.x += fx * speedMul;
                 e.y += fy * speedMul;
+            } else if (e.chain) {
+                // Chain member: position comes from the shared path (see spawnChainWave).
+                e.chain.t += deltaTime * (speedMul / Math.max(0.001, (deltaTime || 16.67) / 16.67));
+                if (!this.placeOnChain(e, canvasWidth, canvasHeight)) e.chain.done = true;
+                if (!e.chain.entered && e.x + w > 0 && e.x < canvasWidth && e.y + h > 0) e.chain.entered = true;
+                e.arrived = true;
             } else if (e.pass) {
                 // Fly-through row: keep heading, no hovering, no bounce.
                 e.x += e.speed * speedMul;
@@ -30333,7 +31602,7 @@ extendClass(EnemyManager, {
 
             // Combat only while fully inside (not entering, not fleeing).
             if (fullyInside && !e.entering && !e.fleeing
-                && (role === 'gunner' || role === 'assault' || role === 'blocker' || role === 'bomber')) {
+                && (role === 'gunner' || role === 'assault' || role === 'bomber' || (role === 'blocker' && !e.lightClass))) {
                 e.shootTimer = (e.shootTimer || 0) + deltaTime;
                 let interval = e.shootInterval || 1900;
                 if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
@@ -30354,7 +31623,8 @@ extendClass(EnemyManager, {
             if (!e.fleeing && !e.entering && role === 'jammer') hasJammer = true;
             if (!e.fleeing && !e.entering && role === 'tether') hasTether = true;
 
-            if (e.shieldMax > 0 && e.shield < e.shieldMax && e.shieldRegen > 0) {
+            if (e.shieldMax > 0 && e.shield < e.shieldMax && e.shieldRegen > 0
+                && Date.now() - (e.shieldHitAt || 0) > 2500) {
                 const mechs = e.abilities || e.defenseMechanisms || [];
                 const canRegen = !mechs.length || mechs.indexOf('shield_regen') !== -1
                     || e.shieldRegen > 0;
@@ -30363,10 +31633,15 @@ extendClass(EnemyManager, {
                 }
             }
 
+            if (gateFloor != null && e.y < gateFloor + 2) {
+                e.y = gateFloor + 2;
+                if (e.verticalSpeed < 0) e.verticalSpeed = -e.verticalSpeed;
+            }
+
             // Outside = fled / irrelevant → drop (re-check after this frame's move).
             const nowOutside = e.x + w < 0 || e.x > canvasWidth
                 || e.y + h < 0 || e.y > canvasHeight;
-            const passPending = e.pass && !e.pass.entered && !e.fleeing;
+            const passPending = (e.pass && !e.pass.entered && !e.fleeing) || (e.chain && !e.chain.done && !e.fleeing);
             if (!(e.entering && !e.fleeing) && !passPending && nowOutside) {
                 this.sideEnemies.splice(i, 1);
             }
@@ -30656,6 +31931,8 @@ extendClass(EnemyManager, {
         }
 
         if (!this.enemy) return;
+        // Mission start: still gliding in on the intro path (missionStartManager.updateEnemyEntry), no AI yet.
+        if (this.enemy.introEntry) return;
 
         if (!this.exploding) {
             this.championCombatElapsedMs += deltaTime;
@@ -30668,7 +31945,8 @@ extendClass(EnemyManager, {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
         }
 
-        if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0) {
+        if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0
+            && Date.now() - (this.shieldHitAt || 0) > 2500) {
             const hasRegen = !this.defenseMechanisms.length
                 || this.defenseMechanisms.indexOf('shield_regen') !== -1
                 || this.shieldRegen > 0;
@@ -30715,6 +31993,7 @@ extendClass(EnemyManager, {
             speedMultiplier *= beatSyncManager.getEnemySpeedMul();
             bobY = beatSyncManager.getEnemyBobOffset() * 0.15;
         }
+        this.seekCover(effectiveDeltaTime);
         let edx = this.enemy.speed * speedMultiplier;
         let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;
 
@@ -30808,6 +32087,51 @@ extendClass(EnemyManager, {
             this.enemy.y = this.enemy.maxY;
             this.enemy.verticalSpeed = -Math.abs(this.enemy.verticalSpeed);
         }
+    },
+
+    /**
+     * Take cover: stand where an obstacle blocks the line to the player (the "shadow" of the obstacle seen from
+     * the player). Re-evaluated ~5x per second; steers by flipping/scaling the horizontal speed, so the normal
+     * bounce and terrain-avoidance code keeps working. No obstacle below the enemy → unchanged roaming.
+     */
+    seekCover(deltaTime) {
+        const e = this.enemy;
+        if (!e || e.isBoss || e.exploding || typeof obstacleManager === 'undefined' || !obstacleManager.obstacles) return;
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p) return;
+        const W = game?.internalWidth || game?.baseWidth || game?.width || 200;
+        e.coverT = (e.coverT || 0) - deltaTime;
+        if (e.coverT <= 0) {
+            e.coverT = 200;
+            const px = p.x + p.width / 2, py = p.y + p.height / 2;
+            const ex = e.x + e.width / 2, ey = e.y + e.height / 2;
+            let best = null, bestD = Infinity;
+            obstacleManager.obstacles.forEach((o) => {
+                if (!o || o.isFog || o.width < 8 || o.entering || o.wallDepth === 'under') return;
+                const oy = o.y + o.height / 2;
+                if (oy < ey + e.height || oy > py - p.height) return;     // must stand between enemy and player
+                const ox = o.x + o.width / 2;
+                if (ox < -4 || ox > W + 4) return;
+                const t = (py - ey) / Math.max(1, py - oy);
+                // Centre of the obstacle's shadow at the enemy's height.
+                const xc = px + (ox - px) * t;
+                if (xc < e.width / 2 || xc > W - e.width / 2) return;
+                const d = Math.abs(xc - ex);
+                if (d < bestD && d < W * 0.7) { bestD = d; best = xc; }
+            });
+            e.coverX = best;
+        }
+        if (e.coverX == null) {
+            // No cover left: back to the normal cruise speed (the original magnitude was kept).
+            if (e.coverBase) { e.speed = (e.speed < 0 ? -1 : 1) * e.coverBase; e.coverBase = null; }
+            return;
+        }
+        if (!e.coverBase) e.coverBase = Math.abs(e.speed) || 0.5;
+        const dx = e.coverX - (e.x + e.width / 2);
+        // Slow down on arrival so it settles in the shadow instead of overshooting.
+        const k = Math.max(0.15, Math.min(1, Math.abs(dx) / 24));
+        e.speed = (dx >= 0 ? 1 : -1) * e.coverBase * k;
     },
 
     /**
@@ -30981,7 +32305,7 @@ extendClass(EnemyManager, {
 
         // Full top flight band — do not park under a dead ceiling gap.
         const enemyMinY = 2;
-        const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.38));
+        const enemyMaxY = Math.max(enemyMinY + 8, Math.round(canvasHeight * 0.3));
         const spawnY = enemyMinY + Math.max(0, Math.round((enemyMaxY - enemyMinY - shipHeight) * 0.35));
         const spawnX = Math.max(0, Math.min(Math.max(0, canvasWidth - shipWidth),
             canvasWidth / 2 - shipWidth / 2));
@@ -31128,10 +32452,12 @@ extendClass(EnemyManager, {
         const floor = Math.max(1, Number(rawDamage) * 0.2);
         dmg = Math.max(floor, dmg);
 
+        // Shield first: a hit on a live shield never bleeds into the hull,
+        // not even the one that breaks it. Regen pauses after every hit.
+        target.shieldHitAt = Date.now();
         if (target.shield != null && target.shield > 0) {
-            const absorbed = Math.min(target.shield, dmg);
-            target.shield -= absorbed;
-            dmg -= absorbed;
+            target.shield = Math.max(0, target.shield - dmg);
+            return 0;
         }
 
         return Math.max(0, dmg);
@@ -31149,6 +32475,7 @@ extendClass(EnemyManager, {
             ? difficultyConfigManager.getProfile().playerDamageMul : 1;
         const remaining = this.applyDefenseToDamage(target, Number(damage) * playerDamageMul);
         this.shield = target.shield;
+        this.shieldHitAt = target.shieldHitAt;
         this.health -= remaining;
         if (this.health <= 0) {
             this.health = 0;
@@ -31261,10 +32588,12 @@ extendClass(EnemyManager, {
         const e = this.enemy;
         if (!e || !e.isBoss) return;
         const cx = e.x + e.width / 2;
-        e.width = Math.round(e.width * BOSS_SIZE_MUL);
-        e.height = Math.round(e.height * BOSS_SIZE_MUL);
+        const bossMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getBossSizeMul)
+            ? uiAppearanceManager.getBossSizeMul() : BOSS_SIZE_MUL;
+        e.width = Math.round(e.width * bossMul);
+        e.height = Math.round(e.height * bossMul);
         e.x = cx - e.width / 2;
-        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, BOSS_SIZE_MUL);
+        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
         const mods = this.currentTierMods();
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 0.6);
         this.health = this.maxHealth;
@@ -31803,6 +33132,9 @@ var WAVE_FORMATIONS = ['wedge', 'line', 'flank', 'box', 'loose'];
 var WAVE_EXTRA_EVENT_ROLES = ['gunner', 'bomber', 'blocker', 'repair', 'shieldBattery'];
 var DIRECTOR_TICK_MS = 1000;
 var DIRECTOR_MIN_GAP_MS = 7000;
+var CHAIN_PATHS = ['swoop', 'snake', 'loop', 'dive', 'circle', 'figure8', 'boomerang', 'zigzag'];
+// Paths with full turns run longer so the craft keep their speed.
+var CHAIN_PATH_DUR_MUL = { circle: 1.35, figure8: 1.5, boomerang: 1.1, zigzag: 1.2 };
 
 extendClass(EnemyManager, {
     /** Per-run variation of the authored schedule. Called by setEnemySchedule. */
@@ -31911,6 +33243,111 @@ extendClass(EnemyManager, {
         return spawned.length;
     },
 
+    /**
+     * Chain wave (Xenon-style): craft fly one after another along the same path, so the line snakes across
+     * the field with a shared motion. Sometimes two separate chains come at once, mirrored left / right.
+     */
+    spawnChainWave(gameState) {
+        if (!gameState || !this.sideEnemyPool.length) return 0;
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const kind = CHAIN_PATHS[Math.floor(Math.random() * CHAIN_PATHS.length)];
+        const twin = Math.random() < 0.4;
+        const count = 4 + Math.floor(Math.random() * 4);
+        const dur = rand(5200, 7600) * (CHAIN_PATH_DUR_MUL[kind] || 1);
+        const gapMs = rand(220, 320);
+        const mirrorFirst = Math.random() < 0.5;
+        const capBefore = this.sideEnemyCap;
+        let total = 0;
+        (twin ? [mirrorFirst, !mirrorFirst] : [mirrorFirst]).forEach((mirror, c) => {
+            const cluster = 'chain_' + Date.now() + '_' + c + '_' + Math.floor(Math.random() * 999);
+            const type = this.pickSideEnemyType();
+            this.sideEnemyCap = Math.max(this.sideEnemyCap, this.sideEnemies.length + count);
+            for (let n = 0; n < count && type; n++) {
+                const s = this.spawnScheduledNormal({
+                    id: cluster + '_' + n,
+                    type: type,
+                    faction: (this.enemy && this.enemy.faction) || (this.levelFactions && this.levelFactions[0]) || 'pirate',
+                    enemyClass: 'scout',
+                    tier: 1,
+                    level: 1,
+                    champion: false,
+                    cluster: cluster,
+                    role: n === 0 ? 'gunner' : 'assault',
+                    forceEscort: false
+                }, gameState);
+                if (!s) continue;
+                s.entering = false;
+                s.arrived = true;
+                s.isEscort = false;
+                s.fleeing = false;
+                s.lifetimeMs = null;
+                s.entryTargetX = null;
+                s.entryTargetY = null;
+                s.entryFromSide = null;
+                s.speed = 0;
+                s.verticalSpeed = 0;
+                // Every member runs the same path, just later: that is what makes it a chain.
+                s.chain = { kind: kind, mirror: mirror, t: -n * gapMs, dur: dur };
+                this.placeOnChain(s, gameState.width || 200, gameState.height || 300);
+                total++;
+            }
+        });
+        this.sideEnemyCap = capBefore;
+        return total;
+    },
+
+    /** Point on a chain path at u (0..1) as fractions of the field; paths start and end off-screen. */
+    chainPoint(kind, u) {
+        const PI = Math.PI;
+        const ease = (t) => t * t * (3 - 2 * t);
+        switch (kind) {
+            case 'snake': // down from the top in an S, back out over the top
+                return { x: 0.5 + 0.36 * Math.sin(2 * PI * u), y: -0.08 + 0.5 * Math.sin(PI * u) };
+            case 'loop': // across the field with a full loop in the middle
+                return { x: -0.12 + 1.24 * u + 0.16 * Math.sin(4 * PI * u) * Math.sin(PI * u),
+                    y: 0.16 + 0.12 * (1 - Math.cos(4 * PI * u)) * Math.sin(PI * u) };
+            case 'circle': { // down from the top, one full circle, back up the way they came
+                if (u < 0.25) return { x: 0.28, y: -0.1 + 0.4 * ease(u / 0.25) };
+                if (u > 0.75) return { x: 0.28, y: 0.3 - 0.4 * ease((u - 0.75) / 0.25) };
+                const a = PI + 2 * PI * ((u - 0.25) / 0.5);
+                return { x: 0.5 + 0.22 * Math.cos(a), y: 0.3 + 0.14 * Math.sin(a) };
+            }
+            case 'figure8': { // in from the side, a figure eight in the middle, back out the same side
+                if (u < 0.2) return { x: -0.12 + 0.62 * ease(u / 0.2), y: 0.25 };
+                if (u > 0.8) return { x: 0.5 - 0.62 * ease((u - 0.8) / 0.2), y: 0.25 };
+                const s = (u - 0.2) / 0.6;
+                return { x: 0.5 + 0.3 * Math.sin(2 * PI * s), y: 0.25 + 0.12 * Math.sin(4 * PI * s) };
+            }
+            case 'boomerang': { // dive diagonally deep into the field, then retrace the line back out
+                const s = Math.sin(PI * u);
+                return { x: 0.12 + 0.5 * s + 0.06 * Math.sin(2 * PI * u), y: -0.1 + 0.6 * s };
+            }
+            case 'zigzag': { // zigzag down from the top, then zigzag back up
+                const tri = (2 / PI) * Math.asin(Math.sin(6 * PI * u));
+                return { x: 0.5 + 0.32 * tri, y: -0.08 + 0.52 * Math.sin(PI * u) };
+            }
+            case 'dive': // drop in from the top-left, sweep through the middle, leave right
+                return { x: -0.1 + 1.2 * u, y: -0.08 + 0.48 * Math.sin(PI * Math.min(1, u * 1.15)) };
+            default: // 'swoop': a wide arc across the upper field
+                return { x: -0.12 + 1.24 * u, y: 0.06 + 0.3 * Math.sin(PI * u) };
+        }
+    },
+
+    /** Moves a chain member to its path position; returns false once it has run the whole path. */
+    placeOnChain(e, W, H) {
+        const c = e.chain;
+        const u = Math.max(0, Math.min(1, c.t / c.dur));
+        const p = this.chainPoint(c.kind, u);
+        const x = c.mirror ? 1 - p.x : p.x;
+        const w = e.width || 10;
+        const h = e.height || 10;
+        e.x = x * W - w / 2;
+        e.y = p.y * H - h / 2;
+        // Waiting members sit just off the entry point.
+        if (c.t < 0) e.y = Math.min(e.y, -h - 2);
+        return c.t < c.dur;
+    },
+
     /** Champion combat events vary per run: thresholds, counts, one surprise. */
     varyCombatEvents(list) {
         const rand = (a, b) => a + Math.random() * (b - a);
@@ -31966,6 +33403,7 @@ extendClass(EnemyManager, {
     updateDirector(deltaTime, gameState) {
         const d = this.director;
         if (!d || this.spawnFrozen || !gameState) return;
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         d.sinceWaveMs += deltaTime;
         d.sinceKillMs += deltaTime;
         if (d.pendingRevengeMs > 0) {
@@ -31981,7 +33419,11 @@ extendClass(EnemyManager, {
                 d.passAt = 12000 + Math.random() * 12000;
                 const pm0 = typeof playerManager !== 'undefined' ? playerManager : null;
                 const hp0 = pm0 && pm0.maxHealth ? pm0.health / pm0.maxHealth : 1;
-                if (hp0 >= 0.3) this.spawnPassRow(gameState);
+                if (hp0 >= 0.3) {
+                    // Chains (shared motion, sometimes two at once) or a plain fly-through row.
+                    if (Math.random() < 0.6) this.spawnChainWave(gameState);
+                    else this.spawnPassRow(gameState);
+                }
             }
         }
         d.tickMs += deltaTime;
@@ -32092,7 +33534,7 @@ extendClass(EnemyManager, {
             s.x = fromLeft
                 ? Math.max(4, 4 + dx)
                 : Math.min(W - sw - 4, W - sw - 4 - dx);
-            s.y = Math.max(10, Math.min(H * 0.5, baseY + dy));
+            s.y = Math.max(10, Math.min(H * 0.34, baseY + dy));
             const speed = Math.max(0.45, Math.abs(s.cruiseSpeed || s.speed || 0.45));
             s.speed = fromLeft ? speed : -speed;
             s.cruiseSpeed = s.speed;
@@ -32160,6 +33602,7 @@ var ObstacleManager = class ObstacleManager {
     setEnvironment(env) {
         this.environment = env || null;
         this.terrainDamage = new Map(); // fresh, undamaged walls per planet
+        this.terrainCut = new Map(); // crater cuts (absolute wall width per row)
     }
 
     getEnvironment() {
@@ -32185,6 +33628,21 @@ var ObstacleManager = class ObstacleManager {
             if (r <= 0) return pool[i];
         }
         return pool[pool.length - 1];
+    }
+
+    /**
+     * Functional obstacles mixed into every planet's own set, more often on later stages:
+     * a prism that splits shots into a fan, and an indestructible bulwark that shots push away.
+     * Returns a def or null (= use the planet's pool).
+     */
+    maybeFunctionalDef() {
+        const danger = this.stageDanger ? this.stageDanger() : 0;
+        if (Math.random() >= 0.12 + 0.1 * danger) return null;
+        return Math.random() < 0.5
+            ? { id: 'prism', kind: 'prism', type: 'prism', width: 14, height: 14, health: 4, speed: 0.6,
+                opticalMode: 'prism', prismSplitCount: 3, prismAngleDeg: 18, collisionDamage: 12, explosionId: 'crystal_shatter' }
+            : { id: 'bulwark', kind: 'bulwark', type: 'bulwark', width: 16, height: 16, speed: 0.5,
+                destructible: false, collisionDamage: 20, explosionId: 'small_pop' };
     }
 
     directionToSpeed(direction, speed) {
@@ -32214,7 +33672,7 @@ var ObstacleManager = class ObstacleManager {
      */
     midLane(canvasHeight) {
         const H = canvasHeight || 300;
-        return { top: H * 0.36, bottom: H * 0.66 };
+        return { top: H * 0.38, bottom: H * 0.64 };
     }
 
     pickLaneY(canvasHeight, h, strayChance) {
@@ -32269,7 +33727,7 @@ var ObstacleManager = class ObstacleManager {
         const height = Math.max(4, Math.min(48, Math.round(baseH * contentScale)));
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
-        const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' ? 'prism' : 'none'));
+        const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' || kind === 'prism' ? 'prism' : 'none'));
         const collisionDamage = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
         return {
             x: ov.x != null ? ov.x : 0,
@@ -32301,12 +33759,18 @@ var ObstacleManager = class ObstacleManager {
             opticalMode: opticalMode,
             prismSplitCount: Math.max(2, Math.min(4, d.prismSplitCount || 3)),
             prismAngleDeg: d.prismAngleDeg != null ? d.prismAngleDeg : 25,
+            // Prism obstacles fan the shot out on its own side instead of turning it against the shooter.
+            prismKeepTeam: kind === 'prism',
+            // Bulwark: indestructible, shots shove it along their flight direction.
+            pushable: kind === 'bulwark',
+            pushVx: 0,
+            pushVy: 0,
             explosionId: d.explosionId || (kind === 'crystal' ? 'crystal_shatter' : kind === 'shield' ? 'small_pop' : 'asteroid_burst'),
             fragmentGeneration: ov.fragmentGeneration != null ? ov.fragmentGeneration : 0,
             sprite: d.sprite || (isFog ? 'fog' : kind === 'shield' ? 'shield' : kind === 'crystal' ? 'crystal' : 'obstacle'),
             opacity: d.opacity != null ? d.opacity : (isFog ? 0.4 : 1),
-            lightIntensity: kind === 'crystal' ? 0.4 : 0,
-            lightColor: kind === 'crystal' ? 'var(--color-highlight)' : null,
+            lightIntensity: kind === 'crystal' || kind === 'prism' ? 0.4 : 0,
+            lightColor: kind === 'crystal' || kind === 'prism' ? 'var(--color-highlight)' : null,
             // under = tucked behind canyon walls; over = sits on top of them
             wallDepth: ov.wallDepth || (isFog ? 'over' : (Math.random() < 0.55 ? 'under' : 'over'))
         };
@@ -32334,6 +33798,7 @@ var ObstacleManager = class ObstacleManager {
         this.updateDebris(deltaTime);
         // Victory loot phase: nothing new spawns, the field only drains.
         const frozen = typeof enemyManager !== 'undefined' && enemyManager.spawnFrozen;
+        const levelEnding = typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding();
         if (this.updateCrates && !frozen) this.updateCrates(deltaTime, gameState);
 
         // Update lighting bullets from bullet manager
@@ -32345,6 +33810,8 @@ var ObstacleManager = class ObstacleManager {
             // Regular stages scroll towards the ship: obstacles arrive from
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
+        } else if (levelEnding) {
+            gameState.obstacleSpawnTimer = 0;
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
                 // Mostly shaped pattern waves; the authored cluster waves stay
@@ -32371,8 +33838,21 @@ var ObstacleManager = class ObstacleManager {
         for (let i = this.obstacles.length - 1; i >= 0; i--) {
             const obstacle = this.obstacles[i];
 
-            obstacle.x += obstacle.horizontalSpeed;
-            obstacle.y += obstacle.verticalSpeed;
+            if (obstacle.wallAnchor != null) {
+                this.followWallAnchor(obstacle, canvasWidth);
+            } else {
+                obstacle.x += obstacle.horizontalSpeed;
+                obstacle.y += obstacle.verticalSpeed;
+                if (obstacle.pushVx || obstacle.pushVy) {
+                    // Shove from shots: carries on, then bleeds off.
+                    obstacle.x += obstacle.pushVx;
+                    obstacle.y += obstacle.pushVy;
+                    obstacle.pushVx *= 0.92;
+                    obstacle.pushVy *= 0.92;
+                    if (Math.abs(obstacle.pushVx) < 0.01) obstacle.pushVx = 0;
+                    if (Math.abs(obstacle.pushVy) < 0.01) obstacle.pushVy = 0;
+                }
+            }
             obstacle.rotation += obstacle.rotationSpeed;
 
             this.calculateObstacleLighting(obstacle);
@@ -32386,6 +33866,7 @@ var ObstacleManager = class ObstacleManager {
                     && obstacle.y + obstacle.height > 0 && obstacle.y < canvasHeight;
                 if (inside) {
                     obstacle.entering = false;
+                    this.emergeFromTerrain(obstacle, canvasWidth, canvasHeight);
                 } else {
                     if (obstacle.age > 20000) this.obstacles.splice(i, 1);
                     continue;
@@ -32415,6 +33896,17 @@ var ObstacleManager = class ObstacleManager {
         const level = this.getCurrentLevel();
         const pid = String((level && level.planetId) || '');
         return pid.indexOf('ambush_') !== 0;
+    }
+
+    /**
+     * Level scroll direction / pace: 1 normally, -1/3 while the player backs down a transit
+     * corridor (holds DOWN at the bottom edge, gate not in view yet).
+     */
+    levelScrollMul() {
+        const transit = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.transit;
+        const pl = typeof playerManager !== 'undefined' && playerManager.player;
+        const goal = typeof objectiveManager !== 'undefined' && objectiveManager.goal;
+        return transit && pl && pl.backtrack && !goal ? -1 / 3 : 1;
     }
 
     /** Non-boss stages scroll down; boss arenas stay static. */
@@ -32477,7 +33969,7 @@ var ObstacleManager = class ObstacleManager {
 extendClass(ObstacleManager, {
     spawnObstacle(gameState = null) {
         if (this.hasDefs()) {
-            this.spawnFromDef(this.pickWeightedDef(), gameState);
+            this.spawnFromDef(this.maybeFunctionalDef() || this.pickWeightedDef(), gameState);
             return;
         }
         const obstacleType = this.getRandomObstacleType();
@@ -32785,12 +34277,14 @@ var TERRAIN_SEGMENT_ROWS = 40; // wall rows per material segment
 // Carve in square voxel slabs (not 1-row needles). Height in terrain cells.
 var TERRAIN_CARVE_BLOCK = 3;
 var TERRAIN_MATERIALS = {
-    rock: { id: 'rock', hp: 1, score: 2 },
-    metal: { id: 'metal', hp: 1, score: 6 },
+    rock: { id: 'rock', hp: 2, score: 2 },
+    metal: { id: 'metal', hp: 4, score: 6 },
     crystal: { id: 'crystal', hp: 1, score: 4 },
-    magma: { id: 'magma', hp: 1, score: 3 }
+    magma: { id: 'magma', hp: 2, score: 3 }
 };
-var TERRAIN_SILL_ROWS = 5;     // rows of the threshold at an area change
+var TERRAIN_SILL_ROWS = 5;
+var TERRAIN_JITTER_ROWS = 4; // wall-depth jitter holds this many rows (no 1-row slivers)
+var TERRAIN_OPENING_PX = 34; // height of a hangar opening side craft launch from     // rows of the threshold at an area change
 // Visual marker only — keep the upper flight band open (was 0.13 and stacked
 // with the gate, which sealed the passage).
 var TERRAIN_SILL_REACH = 0.05; // how far it juts in from each side (x W)
@@ -33036,7 +34530,20 @@ extendClass(ObstacleManager, {
      * A new layer spawns once the previous one has scrolled far enough.
      */
     updateScrollLayers(deltaTime, gameState) {
-        const frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
+        let frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
+        // Transit stages: the level eases to a stop as the sluice / warp ring slides in, and stays stopped.
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        if (om && om.goal) {
+            const g = om.goal;
+            frameScale *= Math.max(0, Math.min(1, (g.restY - g.y) / (g.restY + 30)));
+            if (frameScale <= 0) return;
+        }
+        // Transit runs: holding DOWN at the bottom edge scrolls the corridor back at a third of the speed.
+        // No new layers spawn while backing off.
+        if (this.levelScrollMul() < 0) {
+            this.terrainOffset = Math.max(0, (this.terrainOffset || 0) - this.scrollSpeed() * frameScale / 3);
+            return;
+        }
         this.scrollDistance = (this.scrollDistance || 0) + this.scrollSpeed() * frameScale;
         // Side terrain scrolls with the level (render/draw-environment.js).
         this.terrainOffset = (this.terrainOffset || 0) + this.scrollSpeed() * frameScale;
@@ -33049,6 +34556,8 @@ extendClass(ObstacleManager, {
         const W = (gameState && gameState.width) || 240;
         const H = (gameState && gameState.height) || 300;
         const intensity = this.patternIntensity();
+        // End of the level: the field only drains, no new layers.
+        if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
         if (alive >= OBSTACLE_MAX_ALIVE) return;
         // Every so often leave a breather layer empty.
@@ -33063,7 +34572,12 @@ extendClass(ObstacleManager, {
         // Most rows fly straight across; spread their entry height over the
         // whole field instead of a thin top band so obstacles show up
         // through the middle of the playfield too.
-        const baseY = H * (0.05 + Math.random() * 0.85);
+        // Obstacles belong in the vertical middle (enemies hold the top and take cover behind them);
+        // only the odd stray row crosses the rest of the field.
+        const lane = this.midLane(H);
+        const baseY = Math.random() < 0.1
+            ? H * (0.05 + Math.random() * 0.85)
+            : lane.top + Math.random() * (lane.bottom - lane.top);
 
         // Walk along the train: group, hole, group, hole ...
         const trainLen = W * (1.0 + Math.random() * 0.4);
@@ -33382,7 +34896,6 @@ extendClass(ObstacleManager, {
         const cell = this.terrainCell();
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
-        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const maxCells = Math.floor((W * 0.38) / cell);
         // Build wall extents at an arbitrary world row (used for natural edges
         // and for the shared lip of a carved block band).
@@ -33407,14 +34920,17 @@ extendClass(ObstacleManager, {
                 let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
                     + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
                     + gate;
+                // Material jitter changes in blocks of rows, never per single
+                // row: per-row noise left 1-row slivers that read as strata.
+                const jr = Math.floor(row / TERRAIN_JITTER_ROWS);
                 if (mat.id === 'metal') {
-                    d = Math.round(d / 2) * 2 + (this.terrainHash(row, side + 19) < 0.4 ? 1 : 0);
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.4 ? 1 : 0);
                 } else if (mat.id === 'crystal') {
-                    d += 1 + this.terrainHash(row, side + 31) * 3;
+                    d += 1 + this.terrainHash(jr, side + 31) * 3;
                 } else if (mat.id === 'rock') {
-                    d += Math.floor(this.terrainHash(row, side + 7) * 3) - 1;
+                    d += Math.floor(this.terrainHash(jr, side + 7) * 3) - 1;
                 } else {
-                    d += (this.terrainHash(row, side + 47) - 0.5) * 3;
+                    d += (this.terrainHash(jr, side + 47) - 0.5) * 3;
                 }
                 return Math.max(2, Math.round(d));
             };
@@ -33441,9 +34957,22 @@ extendClass(ObstacleManager, {
                 sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
             }
             const sides = [0, 1].map((side) => {
-                const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
-                const base = depth(side, mat);
-                return { mat, base, sill, full: base + sill + (zone.structures && !sill ? structure(side) : 0) };
+                let mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                let base = depth(side, mat);
+                let full = base + sill + (zone.structures && !sill ? structure(side) : 0);
+                // Hangar opening side craft fly out of: open slot, metal jambs around it.
+                const hatch = gd == null && !sill ? this.terrainOpeningInfo(row, side) : null;
+                let tunnel = 0;
+                let lip = 0;
+                if (hatch && hatch.kind === 'gap') {
+                    tunnel = full;
+                    full = base = 0;
+                } else if (hatch) {
+                    lip = this.terrainOpeningLip(style, hatch, row);
+                    if (style === 'tech') mat = TERRAIN_MATERIALS.metal;
+                    full += lip;
+                }
+                return { mat, base, sill, full, tunnel, lip, hatch: hatch ? hatch.kind : null };
             });
             const over = sides[0].full + sides[1].full - maxCells;
             if (over > 0) {
@@ -33455,30 +34984,72 @@ extendClass(ObstacleManager, {
             }
             return sides;
         };
-        // Undamaged rows keep a natural silhouette; carved bands freeze to the
-        // band centre so every row in the slab shares one width (block dig).
-        const band = Math.floor(wr / block);
+        // Each row keeps its natural silhouette until a crater cuts into it: the cut is an absolute
+        // depth (cells from the screen edge), so a crater bites through the outline instead of
+        // shifting the whole jagged edge outward.
         const fullOf = buildAt(wr);
-        let centerOf = null;
         const out = {};
         for (let side = 0; side < 2; side++) {
-            const dmg = this.terrainDamage ? (this.terrainDamage.get(side + ':' + band) || 0) : 0;
-            const eroded = Math.floor(dmg / Math.max(1, (fullOf[side].mat.hp) || 1));
-            let { mat, base, full, sill } = fullOf[side];
-            if (eroded > 0) {
-                if (!centerOf) centerOf = buildAt(band * block + (block >> 1));
-                ({ mat, base, full, sill } = centerOf[side]);
-            }
-            const hp = Math.max(1, mat.hp || 1);
-            const width = Math.max(0, full - Math.floor(dmg / hp));
+            const key = side + ':' + wr;
+            const dmg = this.terrainDamage ? (this.terrainDamage.get(key) || 0) : 0;
+            const cut = this.terrainCut ? this.terrainCut.get(key) : undefined;
+            const { mat, base, full, sill } = fullOf[side];
+            const width = cut != null ? Math.max(0, Math.min(full, cut)) : full;
             const k = side ? 'right' : 'left';
             out[k] = width;
             out[k + 'Base'] = Math.min(base, width);
             out[k + 'Mat'] = mat;
-            out[k + 'Cracked'] = width > 0 && eroded > 0 && (dmg % hp) > 0;
+            out[k + 'Cracked'] = width > 0 && (dmg > 0 || (cut != null && cut < full));
             out[k + 'Sill'] = sill > 0 ? Math.max(0, width - out[k + 'Base']) : 0;
+            // Hangar opening: recess depth behind an open slot, faction lip on the frame.
+            out[k + 'Hatch'] = fullOf[side].hatch;
+            out[k + 'Tunnel'] = fullOf[side].tunnel;
+            out[k + 'Lip'] = Math.min(width, fullOf[side].lip);
         }
         return out;
+    },
+    /**
+     * Hangar openings in the rim walls: one every ~150px of scroll on an
+     * alternating-ish side, tall enough for a side craft. Returns 'gap' for
+     * the open slot, 'frame' for the jamb rows above/below it, else null.
+     */
+    terrainOpeningAt(row, side) {
+        const info = this.terrainOpeningInfo(row, side);
+        return info ? info.kind : null;
+    },
+    /** { kind: 'gap'|'frame', t: row index inside the hatch, len: total rows } or null. */
+    terrainOpeningInfo(row, side) {
+        const cell = this.terrainCell();
+        const period = Math.max(20, Math.round(150 / cell));
+        const open = Math.max(6, Math.round(TERRAIN_OPENING_PX / cell));
+        // Thick enough to read as a solid jamb (and to be hit), not a thin sliver.
+        const frame = Math.max(4, Math.round(8 / cell));
+        const slot = Math.floor(row / period);
+        if (slot < 1) return null;
+        const prof = this.terrainProfile();
+        if ((this.terrainHash(slot, 613 + prof.seed % 211) < 0.5 ? 0 : 1) !== side) return null;
+        const t = row - slot * period - Math.floor(period * 0.3);
+        const len = open + frame * 2;
+        if (t < 0 || t >= len) return null;
+        return { kind: t >= frame && t < frame + open ? 'gap' : 'frame', t: t, len: len, frame: frame };
+    },
+    /**
+     * How far the frame juts out per faction: tech = flat blast-door jambs,
+     * spike = fangs, organic = swollen rounded lips, scrap = welded junk,
+     * plain rock = a ragged cave rim.
+     */
+    terrainOpeningLip(style, hatch, row) {
+        const below = hatch.t >= hatch.len / 2;
+        const k = below ? hatch.len - 1 - hatch.t : hatch.t; // 0 = outer row of the frame
+        const near = k + 1; // grows towards the slot
+        switch (style) {
+            case 'tech': return 3;
+            case 'spike': return 1 + near * 2;
+            case 'organic': return 2 + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
+            // One width per hatch (seeded by its first row), not re-rolled per row.
+            case 'scrap': return 2 + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
+            default: return 1 + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
+        }
     },
     /** World row of the wall layer at screen y. */
     terrainRowAtY(y) {
@@ -33520,36 +35091,45 @@ extendClass(ObstacleManager, {
         };
     },
     /**
-     * A shot hit the wall on `side` at screen y: carve into it. Damage is
-     * stored per carve-block band so the crater is voxel slabs, not 1-row
-     * needles. Returns how many cells broke off (0 = only chipped).
+     * A shot hit the wall on `side` at screen y: carve a round, slightly
+     * ragged crater into it (deepest on the hit row, falling off over
+     * `radius` rows). Cells take `hp` points each, so tough material needs
+     * several hits and shows cracks in between, like obstacles.
+     * Returns how many cells broke off (0 = only chipped).
      */
     damageTerrain(y, side, profile) {
         if (!this.terrainDamage) this.terrainDamage = new Map();
+        if (!this.terrainCut) this.terrainCut = new Map();
         const pr = profile || { power: 3, radius: 2, vsMetal: 2 };
-        const block = typeof TERRAIN_CARVE_BLOCK !== 'undefined' ? TERRAIN_CARVE_BLOCK : 3;
         const wr = this.terrainRowAtY(y);
-        const hitBand = Math.floor(wr / block);
-        // Radius in block bands (at least the hit band).
-        const bandR = Math.max(0, Math.ceil(Math.max(1, pr.radius || 1) / block));
+        const R = Math.max(1, pr.radius || 1) + 1;
+        const W = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const k0 = side ? 'right' : 'left';
+        // Crater is anchored at the lip of the row that was hit: rows that stick out further are cut
+        // back to the bowl, rows already behind it stay as they are.
+        const lip = this.terrainWallCells(wr, W)[k0];
         let broken = 0;
-        for (let bd = -bandR; bd <= bandR; bd++) {
-            const band = hitBand + bd;
-            const mid = band * block + (block >> 1);
-            const mat = this.terrainMaterial(mid, side) || { id: 'rock', hp: 1 };
+        for (let d = -R; d <= R; d++) {
+            const row = wr + d;
+            const fall = Math.sqrt(Math.max(0, 1 - (d / (R + 0.5)) * (d / (R + 0.5))));
+            const mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
             const hp = Math.max(1, mat.hp || 1);
-            const fall = 1 - Math.abs(bd) / (bandR + 1);
-            // Uniform points for the whole band → flat block face.
-            let pts = Math.floor(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1));
-            // Hit band always loses at least one cell; neighbours need a full step.
-            pts = Math.max(bd === 0 ? hp : (fall > 0.35 ? hp : 0), pts);
+            let pts = Math.round(pr.power * fall * (mat.id === 'metal' ? (pr.vsMetal || 2) : 1)
+                * (0.7 + Math.random() * 0.6));
+            if (d === 0) pts = Math.max(1, pts);
             if (pts <= 0) continue;
-            const k = side + ':' + band;
-            const before = this.terrainDamage.get(k) || 0;
-            this.terrainDamage.set(k, before + pts);
-            // Count cells for the whole slab height (block rows × depth broken).
-            const depthBroke = Math.floor((before + pts) / hp) - Math.floor(before / hp);
-            broken += depthBroke * block;
+            const k = side + ':' + row;
+            // Points below one cell's toughness stay as cracks; every full `hp` digs one cell deeper.
+            const acc = (this.terrainDamage.get(k) || 0) + pts;
+            const depth = Math.floor(acc / hp);
+            this.terrainDamage.set(k, acc - depth * hp);
+            if (depth <= 0) continue;
+            const cur = this.terrainWallCells(row, W)[k0];
+            const target = Math.max(0, lip - depth);
+            if (target < cur) {
+                this.terrainCut.set(k, target);
+                broken += cur - target;
+            }
         }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
@@ -33557,10 +35137,20 @@ extendClass(ObstacleManager, {
             renderManager._terrainLayerKey = null;
         }
         if (this.terrainDamage.size > 4000) {
-            const cutoff = Math.floor(wr / block) - 400;
+            const cutoff = wr - 1200;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
+        if (this.terrainCut.size > 4000) {
+            const cutoff = wr - 1200;
+            this.terrainCut.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainCut.delete(k); });
+        }
         return broken;
+    },
+    /** Chunk colours for wall debris of a material (painted palette when available). */
+    terrainDebrisColors(mat) {
+        const mp = typeof renderManager !== 'undefined' && renderManager._terrainMats
+            ? renderManager._terrainMats[(mat && mat.id) || 'rock'] : null;
+        return mp ? mp.body.concat([mp.crack, '#05060a']) : ['#9aa0a8', '#6e737b', '#c8ccd2', '#05060a'];
     },
     /** Wall extents in px at screen y: { left, right } = inner edges. */
     terrainWallsAtY(y, W) {
@@ -33916,6 +35506,32 @@ extendClass(ObstacleManager, {
         if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
     },
 
+    /**
+     * Directed burst out of the wall at (x, y): `dir` = +1 into the corridor
+     * from the left rim, -1 from the right. Used for the compressed-air puff
+     * of a launching craft and for rock breaking out of the wall.
+     */
+    spawnWallBurst(x, y, dir, colors, n, spread, speed) {
+        if (!this.debris) this.debris = [];
+        const cell = this.terrainCell ? this.terrainCell() : 2.5;
+        const count = n || 24;
+        for (let i = 0; i < count; i++) {
+            const a = (Math.random() - 0.5) * (spread || 0.9);
+            const sp = (speed || 2.6) * (0.45 + Math.random() * 0.9);
+            this.debris.push({
+                x: x,
+                y: y + (Math.random() - 0.5) * 6,
+                vx: Math.cos(a) * sp * dir,
+                vy: Math.sin(a) * sp,
+                s: Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell,
+                c: colors[Math.floor(Math.random() * colors.length)],
+                life: 0,
+                ttl: 260 + Math.random() * 420
+            });
+        }
+        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+    },
+
     /** Opaque, non-outline colours from the rock's baked art (fallback grey). */
     debrisColors(o) {
         const img = o && o._hiRes;
@@ -34112,6 +35728,86 @@ extendClass(ObstacleManager, {
         this.scrollDistance = 0;
         this.terrainOffset = 0;
         this.crateTimer = null;
+    },
+    /**
+     * Scrolling stages: a rock crossing in from a rim must come from somewhere
+     * in the environment. Called once, the moment it reaches the field:
+     * - 'void': slides out of a hangar opening on its side (moved to its row);
+     * - 'breakout': bursts out of the wall at its own row, cratering it;
+     * - 'growth': an organic pod clinging to the wall lip, scrolling with it.
+     */
+    emergeFromTerrain(o, W, H) {
+        if (o.isFog || o._origin || !this.hasTerrain || !this.hasTerrain() || !this.terrainWallsOver) return;
+        const hs = o.horizontalSpeed || 0;
+        if (Math.abs(hs) < Math.abs(o.verticalSpeed || 0)) return; // falls in from the top
+        const side = hs > 0 ? 0 : 1;
+        const dir = side ? -1 : 1;
+        const env = this.getEnvironment();
+        const organic = env.style === 'organic';
+        const roll = Math.random();
+        let kind = roll < (organic ? 0.45 : 0.15) ? 'growth' : (roll < (organic ? 0.7 : 0.55) ? 'void' : 'breakout');
+        if (kind === 'void') {
+            const y = this.nearestOpeningY(o, side, W, H);
+            if (y == null) kind = 'breakout';
+            else {
+                o.y = y;
+                o.x = side ? W : -o.width;
+                this.spawnWallBurst(side ? W - 1 : 1, y + o.height / 2, dir,
+                    ['#3a3f48', '#5a606a', '#20242a'], 12, 0.7, 1.6);
+            }
+        }
+        o._origin = kind;
+        if (kind === 'void') return;
+        const walls = this.terrainWallsOver(o.y, o.y + o.height, W);
+        if (!walls) return;
+        const lip = side ? walls.right : walls.left;
+        const cy = o.y + o.height / 2;
+        if (kind === 'growth') {
+            o.wallAnchor = side;
+            o.horizontalSpeed = 0;
+            o.verticalSpeed = 0;
+            o.rotationSpeed = (o.rotationSpeed || 0) * 0.15;
+            o._anchorOff = this.terrainOffset || 0;
+            this.followWallAnchor(o, W);
+            return;
+        }
+        // Breakout: start half buried in the rock and blow a crater around it.
+        o.x = side ? lip - o.width * 0.5 : lip - o.width * 0.5;
+        if (this.damageTerrain) this.damageTerrain(cy, side, { power: 6, radius: Math.max(2, Math.round(o.height / 4)), vsMetal: 2 });
+        this.spawnWallBurst(lip, cy, dir, [env.base || '#7a7f88', env.accent || '#8B6914', '#05060a', '#c8ccd2'],
+            Math.min(40, 14 + Math.round(o.width)), 1.4, 2.4);
+    },
+
+    /** First on-screen y (upper half preferred) where a hangar opening on `side` fits the rock. */
+    nearestOpeningY(o, side, W, H) {
+        if (!this.terrainOpeningAt) return null;
+        const cell = this.terrainCell();
+        let best = null;
+        for (let y = 8; y < H * 0.75; y += cell) {
+            if (this.terrainOpeningAt(this.terrainRowAtY(y + o.height / 2), side) !== 'gap') continue;
+            const c = this.terrainWallCells(this.terrainRowAtY(y + o.height / 2), W);
+            if ((side ? c.right : c.left) > 1) continue;
+            if (best == null || Math.abs(y - o.y) < Math.abs(best - o.y)) best = y;
+        }
+        return best;
+    },
+
+    /** Organic pod stuck to the wall: rides the scroll and hugs the lip contour. */
+    followWallAnchor(o, W) {
+        const off = this.terrainOffset || 0;
+        o.y += off - (o._anchorOff != null ? o._anchorOff : off);
+        o._anchorOff = off;
+        const walls = this.terrainWallsOver(o.y + o.height * 0.3, o.y + o.height * 0.7, W);
+        if (!walls) return;
+        // Wall shot away under it → it drifts free into the corridor.
+        const lip = o.wallAnchor ? walls.right : walls.left;
+        if (o.wallAnchor ? lip >= W - 1 : lip <= 1) {
+            o.horizontalSpeed = o.wallAnchor ? -0.3 : 0.3;
+            o.wallAnchor = null;
+            o.verticalSpeed = 0.3;
+            return;
+        }
+        o.x = o.wallAnchor ? lip - o.width * 0.6 : lip - o.width * 0.4;
     },
 });
 
@@ -34436,6 +36132,7 @@ var PickupManager = class PickupManager {
         this._saveDirty = false;
         this._saveTimer = 0;
         this.lootPhase = false;
+        this.popups = [];
     }
 
     resourceColor(id) {
@@ -34456,6 +36153,7 @@ var PickupManager = class PickupManager {
 
     reset(clearCollected) {
         this.pickups.length = 0;
+        this.popups = [];
         this._saveDirty = false;
         this._saveTimer = 0;
         this.lootPhase = false;
@@ -34490,7 +36188,9 @@ var PickupManager = class PickupManager {
             radius *= 1.35;
             magnet = Math.max(magnet, 1) + 1.5;
         }
-        return { radius, magnet, yieldMul };
+        const stats = { radius, magnet, yieldMul };
+        // MAGNET / DOUBLE LOOT power-ups (power-crates.js).
+        return this.applyCollectPerks ? this.applyCollectPerks(stats) : stats;
     }
 
     /** Keep drops alive through the post-victory scoop window. */
@@ -34511,6 +36211,7 @@ var PickupManager = class PickupManager {
         const planetId = (typeof enemyManager !== 'undefined' && enemyManager.levelMods)
             ? (enemyManager.levelMods.planetId || null)
             : null;
+        this.maybeDropFakeCrate(info);
         const stats = this.getCollectStats();
         const drops = economyConfig.rollEnemyKillDrops(info, planetId, stats.yieldMul);
         if (!drops || !drops.length) return;
@@ -34536,6 +36237,23 @@ var PickupManager = class PickupManager {
                 size: 7 + Math.min(4, drop.amount)
             });
         });
+    }
+
+    /**
+     * Wrecks sometimes shed a fake supply crate: rarely for small craft,
+     * more often for elite / capital ships and the champion, most for bosses.
+     */
+    maybeDropFakeCrate(info) {
+        if (this.lootPhase || typeof obstacleManager === 'undefined' || !obstacleManager.spawnFakeCrate) return;
+        const cls = String(info.enemyClass || '').toLowerCase();
+        const boss = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.isBoss;
+        let chance = 0.03;
+        if (cls === 'elite' || cls === 'capital' || info.champion) chance = 0.12;
+        if (boss && info.champion) chance = 0.35;
+        if (Math.random() >= chance) return;
+        const x = Number(info.x);
+        const y = Number(info.y);
+        if (isFinite(x) && isFinite(y)) obstacleManager.spawnFakeCrate(x, y);
     }
 
     /**
@@ -34607,8 +36325,9 @@ var PickupManager = class PickupManager {
     }
 
     update(deltaTime) {
-        if (!this.pickups.length && !this._saveDirty) return;
         const dt = Math.max(1, Number(deltaTime) || 16);
+        this.updatePopups(dt);
+        if (!this.pickups.length && !this._saveDirty) return;
         if (typeof objectiveManager !== 'undefined' && objectiveManager.awaitingFieldClear) {
             this.pickups.forEach((p) => {
                 p.life = Math.max(p.life, p.age + 6000);
@@ -34716,6 +36435,8 @@ var PickupManager = class PickupManager {
                 graphicsManager.createHitEffect(pickup.x, pickup.y, 4, this.resourceColor(pickup.id));
             }
         }
+        // Always confirm the pickup over the ship; 0 granted = cargo full for this resource.
+        this.addPopup(pickup.id, Math.max(0, granted || 0));
     }
 
     /** Vacuum remaining pickups into cargo (victory / end of run). */
@@ -34733,6 +36454,64 @@ var PickupManager = class PickupManager {
         if (typeof profileManager !== 'undefined' && profileManager.save) {
             profileManager.save();
         }
+    }
+
+    /** "+N" above the player on pickup; a fresh popup of the same resource sums up instead of stacking. */
+    addPopup(id, amount) {
+        if (this.lootPhase) return;
+        const recent = this.popups.find((p) => p.id === id && p.age < 250);
+        if (recent) {
+            recent.amount += amount;
+            recent.age = 0;
+            return;
+        }
+        this.popups.push({ id: id, amount: amount, age: 0, life: 1100 });
+    }
+
+    updatePopups(dt) {
+        for (let i = this.popups.length - 1; i >= 0; i--) {
+            this.popups[i].age += dt;
+            if (this.popups[i].age >= this.popups[i].life) this.popups.splice(i, 1);
+        }
+    }
+
+    /** Popups follow the player: hold briefly over the ship, then drift up and fade. */
+    renderPopups(ctx) {
+        if (!this.popups.length) return;
+        const player = (typeof playerManager !== 'undefined' && playerManager.getPosition)
+            ? playerManager.getPosition()
+            : null;
+        if (!player) return;
+        // The combat canvas is tiny and scaled down, so size in playfield units must be generous to read.
+        const fontPx = 12;
+        const icon = 11;
+        const o = 2;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.font = fontPx + "px 'Silkscreen', monospace";
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        this.popups.forEach((p, i) => {
+            const k = p.age / p.life;
+            const rise = k < 0.3 ? 0 : (k - 0.3) / 0.7;
+            const text = p.amount > 0 ? String(p.amount) : 'MAX';
+            const w = icon + 3 + ctx.measureText(text).width;
+            const x = Math.round(player.x + player.width / 2 - w / 2);
+            const y = Math.round(player.y - 12 - i * (fontPx + 2) - rise * 28);
+            ctx.globalAlpha = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
+                iconRenderer.drawKey(ctx, this.resourceIconKey(p.id), x, y - icon / 2, icon, this.resourceColor(p.id));
+            }
+            const tx = x + icon + 3;
+            ctx.fillStyle = '#05060a';
+            ctx.fillText(text, tx - o, y);
+            ctx.fillText(text, tx + o, y);
+            ctx.fillText(text, tx, y - o);
+            ctx.fillText(text, tx, y + o);
+            ctx.fillStyle = this.resourceColor(p.id);
+            ctx.fillText(text, tx, y);
+        });
+        ctx.restore();
     }
 
     render(ctx) {
@@ -34796,17 +36575,41 @@ var POWER_SHOT_DAMAGE = 1.6;
 var POWER_SHOT_SIZE = 1.3;
 var RAPID_FIRE_MUL = 0.6;      // cooldown × (fires ~1.7× as fast)
 var BARRIER_DAMAGE_MUL = 0.5;  // damage taken ×
+var SPEED_BOOST_MUL = 1.45;    // move speed ×
+var MAGNET_RADIUS_MUL = 1.8;   // collect radius ×
+var MAGNET_BONUS = 3;          // extra magnet strength
+var DOUBLE_LOOT_MUL = 2;       // resource yield ×
+var REPAIR_PER_SEC = 0.04;     // share of max hull healed per second
 
 /**
  * Temporary power-ups a crate can drop. Each has its own colour, silhouette
- * (diamond / hexagon / circle) and glyph so they read apart at a glance.
+ * (diamond / hexagon / circle / square) and glyph so they read apart at a glance.
  */
 var POWER_UPS = {
-    power_shot: { label: 'POWER SHOT', ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
-    rapid_fire: { label: 'RAPID FIRE', ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
-    barrier:    { label: 'BARRIER',    ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' }
+    power_shot:  { label: 'POWER SHOT',  ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
+    rapid_fire:  { label: 'RAPID FIRE',  ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
+    barrier:     { label: 'BARRIER',     ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' },
+    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'diamond', glyph: 'chevrons' },
+    magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
+    double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'cross' }
 };
 var POWER_UP_IDS = Object.keys(POWER_UPS);
+
+/**
+ * Fake crates / perks. Look like the real thing except for a flickering red
+ * warning pixel. BOMB blasts nearby hull, FREEZE locks the ship briefly.
+ */
+var FAKE_CRATE_CHANCE = 0.25;  // share of drifting supply crates that are fake
+var TRAP_BLAST_RADIUS = 36;
+var TRAP_BLAST_DAMAGE = 0.2;   // share of max hull at the centre
+var TRAP_FREEZE_MS = 1600;
+var TRAP_IDS = ['bomb', 'freeze'];
+var TRAP_WARN = '#ff2a2a';
+
+function pickTrap() {
+    return TRAP_IDS[Math.floor(Math.random() * TRAP_IDS.length)];
+}
 
 extendClass(ObstacleManager, {
     /** Called every frame from update(): spawn a crate on a timer. */
@@ -34817,23 +36620,31 @@ extendClass(ObstacleManager, {
         this.crateTimer -= Math.max(0, Number(deltaTime) || 16.67);
         if (this.crateTimer > 0) return;
         this.crateTimer = this.nextCrateDelay();
-        this.spawnCrate(gameState);
+        this.spawnCrate(gameState, Math.random() < FAKE_CRATE_CHANCE ? { trap: pickTrap() } : null);
+    },
+
+    /** Enemy wreck sheds a fake crate at (x, y) that drifts with the field. */
+    spawnFakeCrate(x, y) {
+        this.spawnCrate(null, { trap: pickTrap(), x: x - CRATE_SIZE / 2, y: y - CRATE_SIZE / 2 });
     },
 
     nextCrateDelay() {
         return CRATE_INTERVAL_MIN + Math.random() * (CRATE_INTERVAL_MAX - CRATE_INTERVAL_MIN);
     },
 
-    spawnCrate(gameState) {
+    spawnCrate(gameState, opts) {
+        const o = opts || {};
         const W = (gameState && gameState.width) || 240;
         let x = W * (0.25 + Math.random() * 0.5);
         // Keep it inside the canyon passage.
         const walls = this.terrainWallsAtY ? this.terrainWallsAtY(0, W) : null;
         if (walls) x = walls.left + 6 + Math.random() * Math.max(1, walls.right - walls.left - 12 - CRATE_SIZE);
         const scroll = this.isScrollStage();
+        const placed = o.x != null && o.y != null;
         this.obstacles.push({
-            x: scroll ? x : -CRATE_SIZE - 2,
-            y: scroll ? -CRATE_SIZE - 2 : ((gameState && gameState.height) || 300) * (0.3 + Math.random() * 0.3),
+            trap: o.trap || null,
+            x: placed ? o.x : (scroll ? x : -CRATE_SIZE - 2),
+            y: placed ? o.y : (scroll ? -CRATE_SIZE - 2 : ((gameState && gameState.height) || 300) * (0.3 + Math.random() * 0.3)),
             width: CRATE_SIZE,
             height: CRATE_SIZE,
             horizontalSpeed: scroll ? (Math.random() - 0.5) * 0.15 : 0.6,
@@ -34857,7 +36668,7 @@ extendClass(ObstacleManager, {
             explosionId: 'small_pop',
             sprite: 'obstacle',
             opacity: 1,
-            entering: true,
+            entering: !placed,
             age: 0
         });
     },
@@ -34917,17 +36728,34 @@ extendClass(ObstacleManager, {
             ctx.globalAlpha = 1;
         }
         ctx.drawImage(this.crateImage(), x, y, w, h);
+        // Fake crate tell: a red pixel in the top-right corner flickers.
+        if (o.trap && Math.floor(t / 220) % 2) {
+            const px = cell || Math.max(1, Math.round(w / 10));
+            if (cv && cv.fill) cv.fill(ctx, x + w - 2 * px, y + px, px, px, TRAP_WARN, 1);
+            else {
+                ctx.fillStyle = TRAP_WARN;
+                ctx.fillRect(x + w - 2 * px, y + px, px, px);
+            }
+        }
         ctx.restore();
     },
 });
 
 extendClass(PickupManager, {
-    /** Crate broke open: drop a random power-up at its centre. */
+    /**
+     * Crate broke open: drop a random power-up at its centre. A BOMB crate
+     * blows up instead; a FREEZE crate drops a disguised freeze perk.
+     */
     spawnPowerUp(o) {
+        if (o && o.trap === 'bomb') {
+            this.trapBlast(o.x + o.width / 2, o.y + o.height / 2);
+            return;
+        }
         const id = POWER_UP_IDS[Math.floor(Math.random() * POWER_UP_IDS.length)];
         this.pickups.push({
             id: id,
             powerUp: id,
+            trap: (o && o.trap) || null,
             amount: 0,
             x: o.x + o.width / 2,
             y: o.y + o.height / 2,
@@ -34942,6 +36770,10 @@ extendClass(PickupManager, {
     /** Returns true if the pickup was a power-up (handled here). */
     collectPowerUp(p) {
         if (!p || !p.powerUp) return false;
+        if (p.trap) {
+            this.triggerTrap(p);
+            return true;
+        }
         const def = POWER_UPS[p.powerUp] || POWER_UPS.power_shot;
         const id = POWER_UPS[p.powerUp] ? p.powerUp : 'power_shot';
         if (!this.powerUntil) this.powerUntil = {};
@@ -34961,12 +36793,78 @@ extendClass(PickupManager, {
         return true;
     },
 
+    /** Fake perk picked up: spring its trap on the player. */
+    triggerTrap(p) {
+        if (p.trap === 'bomb') {
+            this.trapBlast(p.x, p.y);
+            return;
+        }
+        if (!this.powerUntil) this.powerUntil = {};
+        this.powerUntil.freeze = Date.now() + TRAP_FREEZE_MS;
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('FAKE! FROZEN');
+        }
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
+            graphicsManager.createHitEffect(p.x, p.y, 8, '#9fdcff');
+        }
+        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
+    },
+
+    /** Trap explosion: hull damage falls off with distance to the player. */
+    trapBlast(x, y) {
+        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
+            try { explosionSystem.play('small_pop', x, y, { width: TRAP_BLAST_RADIUS, height: TRAP_BLAST_RADIUS }); } catch (err) { /* optional fx */ }
+        }
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
+            graphicsManager.createHitEffect(x, y, 10, TRAP_WARN);
+        }
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('FAKE! BOOM');
+        }
+        if (typeof playerManager === 'undefined' || !playerManager.getPosition) return;
+        const pl = playerManager.getPosition();
+        if (!pl) return;
+        const dx = pl.x + pl.width / 2 - x;
+        const dy = pl.y + pl.height / 2 - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > TRAP_BLAST_RADIUS) return;
+        const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth() : 100;
+        const dmg = maxHp * TRAP_BLAST_DAMAGE * (1 - 0.6 * dist / TRAP_BLAST_RADIUS);
+        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
+        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+    },
+
     /** Active power-up state { left, total } or null. */
     getPowerUp(id) {
         const until = id === 'power_shot' ? this.powerShotUntil : (this.powerUntil && this.powerUntil[id]);
         const left = (until || 0) - Date.now();
         if (left <= 0) return null;
-        return { left, total: POWER_UPS[id].ms };
+        return { left, total: id === 'freeze' ? TRAP_FREEZE_MS : POWER_UPS[id].ms };
+    },
+
+    /** FREEZE trap: ship can neither move nor fire. */
+    isFrozen() {
+        return !!this.getPowerUp('freeze');
+    },
+
+    /** Move speed multiplier (AFTERBURNER). */
+    getMoveSpeedMul() {
+        return this.getPowerUp('speed_boost') ? SPEED_BOOST_MUL : 1;
+    },
+
+    /** Hull healed per second (REPAIR). */
+    getRepairPerSec(maxHealth) {
+        return this.getPowerUp('repair') ? (Number(maxHealth) || 0) * REPAIR_PER_SEC : 0;
+    },
+
+    /** Applies MAGNET / DOUBLE LOOT to collect stats in place. */
+    applyCollectPerks(stats) {
+        if (this.getPowerUp('magnet')) {
+            stats.radius *= MAGNET_RADIUS_MUL;
+            stats.magnet += MAGNET_BONUS;
+        }
+        if (this.getPowerUp('double_loot')) stats.yieldMul *= DOUBLE_LOOT_MUL;
+        return stats;
     },
 
     /** Current shot multipliers from active power-ups. */
@@ -35005,6 +36903,7 @@ extendClass(PickupManager, {
             const a = Math.abs(dy);
             if (def.shape === 'diamond') return rr - a;
             if (def.shape === 'hex') return Math.min(rr - step, (rr - a) * 2);
+            if (def.shape === 'square') return rr - step;
             return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
         };
         const shape = (rr, color, alpha) => {
@@ -35051,9 +36950,24 @@ extendClass(PickupManager, {
                 mark(x - 2 * step, yy + 2 * step, step, step);
                 mark(x + 2 * step, yy + 2 * step, step, step);
             }
+        } else if (def.glyph === 'magnet') {
+            mark(x - 2 * step, y - 2 * step, step, 4 * step);
+            mark(x + 2 * step, y - 2 * step, step, 4 * step);
+            mark(x - step, y + step, 3 * step, step);
+        } else if (def.glyph === 'dots') {
+            mark(x - 2 * step, y - step, 2 * step, 2 * step);
+            mark(x + step, y - step, 2 * step, 2 * step);
         } else {
             mark(x, y - 2 * step, step, 5 * step);
             mark(x - 2 * step, y, 5 * step, step);
+        }
+        // Fake perk tell: flickering red warning pixel, top right.
+        if (p.trap && Math.floor(t / 220) % 2) {
+            if (cv && cv.fill) cv.fill(ctx, x + r - step, y - r, step, step, TRAP_WARN, 1);
+            else {
+                ctx.fillStyle = TRAP_WARN;
+                ctx.fillRect(x + r - step, y - r, step, step);
+            }
         }
         ctx.restore();
     },
@@ -35067,10 +36981,10 @@ extendClass(PickupManager, {
         const x = Math.round(pl.x + (pl.width || 16) / 2 - w / 2);
         let y = Math.round(pl.y + (pl.height || 16) + 3);
         ctx.save();
-        POWER_UP_IDS.forEach((id) => {
+        POWER_UP_IDS.concat('freeze').forEach((id) => {
             const ps = this.getPowerUp(id);
             if (!ps) return;
-            const def = POWER_UPS[id];
+            const def = POWER_UPS[id] || { color: '#9fdcff', light: '#ffffff' };
             ctx.fillStyle = '#05060a';
             ctx.fillRect(x - 1, y - 1, w + 2, 4);
             ctx.fillStyle = ps.left < 2500 && Math.floor(ps.left / 150) % 2 ? def.light : def.color;
@@ -35109,6 +37023,38 @@ var CollisionManager = class CollisionManager {
         run(this.checkObstacleEnemyCollisions);
         run(this.checkBulletObstacleCollisions);
         run(this.checkTerrainCollisions);
+        run(this.checkGateCollisions);
+    }
+
+    /**
+     * Transit gate: its bulkhead stops every shot (nothing flies on past the level's end),
+     * and player shots crack the sluice's hatch dome until it bursts open.
+     */
+    checkGateCollisions() {
+        if (typeof objectiveManager === 'undefined' || !objectiveManager.goal) return;
+        const g = objectiveManager.goal;
+        const sweep = (list, remove, byPlayer) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const b = list[i];
+                if (!b) continue;
+                const cx = b.x + (b.width || 0) / 2;
+                const cy = b.y + (b.height || 0) / 2;
+                if (objectiveManager.isInGateDome(cx, cy)) {
+                    remove(i);
+                    this.createDetailedHitEffect(cx, cy, 'impact');
+                    if (byPlayer) objectiveManager.hitGateDome(b.damage != null ? b.damage : 10, cx, cy);
+                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    continue;
+                }
+                const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
+                if (cy <= g.y + g.h && (!inOpening || cy <= g.y)) {
+                    remove(i);
+                    if (cy >= g.y - 4) this.createDetailedHitEffect(cx, g.y + g.h, 'impact');
+                }
+            }
+        };
+        sweep(bulletManager.getBullets(), (i) => bulletManager.removeBullet(i), true);
+        sweep(bulletManager.getEnemyBullets(), (i) => bulletManager.removeEnemyBullet(i), false);
     }
 
     /**
@@ -35164,6 +37110,7 @@ var CollisionManager = class CollisionManager {
                 }
             }
         }
+        this.checkEnemyTerrainCollisions(W);
         // Shots chip the wall they hit; player shots that break a cell score.
         // Also carve when a shot is within one cell of the wall lip (VOXEL
         // stepping often lands on the corridor edge without entering the rock).
@@ -35171,30 +37118,48 @@ var CollisionManager = class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const cx = b.x + (b.width || 0) / 2;
-                const cy = b.y + (b.height || 0) / 2;
-                const w = obstacleManager.terrainWallsAtY(cy, W);
-                if (!w) continue;
+                const ex = b.x + (b.width || 0) / 2;
+                const ey = b.y + (b.height || 0) / 2;
+                // Sweep the path travelled this frame in half-cell steps: fast
+                // shots otherwise jump over 1–2 row thin ledges and hatch lips.
+                const sdx = b._sweepDx || 0;
+                const sdy = b._sweepDy || 0;
+                const steps = Math.max(1, Math.min(32, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
                 let side = -1;
-                if (cx <= w.left + cell) side = 0;
-                else if (cx >= w.right - cell) side = 1;
-                else continue;
-                // Skip if that side is already fully carved away.
-                const wrCheck = obstacleManager.terrainRowAtY(cy);
-                const cells = obstacleManager.terrainWallCells
-                    ? obstacleManager.terrainWallCells(wrCheck, W) : null;
-                if (cells && ((side === 0 && cells.left <= 0) || (side === 1 && cells.right <= 0))) {
-                    continue;
+                let cx = ex, cy = ey, w = null, wrCheck = 0;
+                for (let s = steps - 1; s >= 0 && side < 0; s--) {
+                    const f = s / steps;
+                    cx = ex - sdx * f;
+                    cy = ey - sdy * f;
+                    w = obstacleManager.terrainWallsAtY(cy, W);
+                    if (!w) continue;
+                    if (cx <= w.left + cell) side = 0;
+                    else if (cx >= w.right - cell) side = 1;
+                    else continue;
+                    // Skip if that side is already fully carved away.
+                    wrCheck = obstacleManager.terrainRowAtY(cy);
+                    const cells = obstacleManager.terrainWallCells
+                        ? obstacleManager.terrainWallCells(wrCheck, W) : null;
+                    if (cells && ((side === 0 && cells.left <= 0) || (side === 1 && cells.right <= 0))) {
+                        side = -1;
+                    }
                 }
+                if (side < 0) continue;
                 const profile = obstacleManager.terrainWeaponProfile(b);
                 const row = wrCheck;
                 if (profile.pierce && b._terrainRow === row) continue;
                 b._terrainRow = row;
                 if (!profile.pierce) remove(i);
                 const broke = obstacleManager.damageTerrain(cy, side, profile);
-                this.createDetailedHitEffect(side ? w.right : w.left, cy, broke ? 'destroy' : 'impact');
+                const lipX = side ? w.right : w.left;
+                this.createDetailedHitEffect(lipX, cy, broke ? 'destroy' : 'impact');
+                const mat = obstacleManager.terrainMaterial(row, side);
+                // Chunks fly off into the corridor, like a rock breaking up.
+                if (obstacleManager.spawnWallBurst) {
+                    obstacleManager.spawnWallBurst(lipX, cy, side ? -1 : 1, obstacleManager.terrainDebrisColors(mat),
+                        broke ? Math.min(28, 6 + broke * 3) : 3, broke ? 2.2 : 1.4, broke ? 2 : 1.1);
+                }
                 if (broke && byPlayer && typeof game !== 'undefined') {
-                    const mat = obstacleManager.terrainMaterial(row, side);
                     game.score += (mat.score || 1) * broke;
                 }
                 if (typeof soundManager !== 'undefined') soundManager.playHit();
@@ -35262,35 +37227,88 @@ var CollisionManager = class CollisionManager {
                     if (typeof graphicsManager !== 'undefined') {
                         graphicsManager.createHitEffect(sx, sy, 4);
                     }
-                    if (killedByHit) {
-                        const killed = sides[j];
-                        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
-                            explosionSystem.play('small_pop', sx, sy, {
-                                width: killed.width,
-                                height: killed.height,
-                                silent: true,
-                                ship: killed,
-                                voxelPower: 0.85,
-                                scale: 0.75
-                            });
-                        }
-                        sides.splice(j, 1);
-                        if (typeof enemyManager !== 'undefined' && enemyManager.notifyKill) {
-                            enemyManager.notifyKill({
-                                type: killed.type,
-                                entryId: killed.entryId,
-                                faction: killed.faction,
-                                enemyClass: killed.enemyClass,
-                                cluster: killed.cluster,
-                                champion: false,
-                                x: sx,
-                                y: sy
-                            });
-                        }
-                    }
+                    if (killedByHit) this.destroySideEnemy(sides, j);
                     return;
                 }
             }
+        }
+    }
+
+    /** Remove side craft `j` with a pop and count the kill. */
+    destroySideEnemy(sides, j) {
+        const killed = sides[j];
+        if (!killed) return;
+        const sx = killed.x + killed.width / 2;
+        const sy = killed.y + killed.height / 2;
+        if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
+            explosionSystem.play('small_pop', sx, sy, {
+                width: killed.width,
+                height: killed.height,
+                silent: true,
+                ship: killed,
+                voxelPower: 0.85,
+                scale: 0.75
+            });
+        }
+        sides.splice(j, 1);
+        if (typeof enemyManager !== 'undefined' && enemyManager.notifyKill) {
+            enemyManager.notifyKill({
+                type: killed.type,
+                entryId: killed.entryId,
+                faction: killed.faction,
+                enemyClass: killed.enemyClass,
+                cluster: killed.cluster,
+                champion: false,
+                x: sx,
+                y: sy
+            });
+        }
+    }
+
+    /**
+     * Enemies scrape the canyon walls like the player: pushed back into the
+     * corridor and damaged (per-ship grace period). Craft still sliding in
+     * through a hangar opening or fleeing out are exempt.
+     */
+    checkEnemyTerrainCollisions(W) {
+        if (typeof enemyManager === 'undefined') return;
+        const now = Date.now();
+        const scrape = (e) => {
+            const walls = obstacleManager.terrainWallsOver(e.y + 2, e.y + e.height - 2, W);
+            if (!walls) return 0;
+            let hitSide = -1;
+            if (e.x < walls.left) {
+                hitSide = 0;
+                e.x = walls.left + 1;
+            } else if (e.x + e.width > walls.right) {
+                hitSide = 1;
+                e.x = walls.right - e.width - 1;
+            }
+            if (hitSide < 0 || now - (e._terrainHitAt || 0) < 600) return 0;
+            const hy = e.y + e.height / 2;
+            const cells = obstacleManager.terrainWallCells(obstacleManager.terrainRowAtY(hy), W);
+            const thick = cells ? (hitSide ? cells.right : cells.left) : 2;
+            if (thick <= 0) return 0;
+            e._terrainHitAt = now;
+            this.createDetailedHitEffect(hitSide ? walls.right : walls.left, hy, 'impact');
+            if (obstacleManager.damageTerrain) {
+                obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
+            }
+            return thick <= 1 ? 3 : 8;
+        };
+        const sides = enemyManager.getSideEnemies ? enemyManager.getSideEnemies() : [];
+        for (let j = sides.length - 1; j >= 0; j--) {
+            const e = sides[j];
+            if (!e || e.entering || e.fleeing) continue;
+            const dmg = scrape(e);
+            if (!dmg) continue;
+            e.health -= dmg;
+            if (e.health <= 0) this.destroySideEnemy(sides, j);
+        }
+        const champ = enemyManager.getEnemy ? enemyManager.getEnemy() : null;
+        if (champ && !(enemyManager.isExploding && enemyManager.isExploding())) {
+            const dmg = scrape(champ);
+            if (dmg) enemyManager.takeDamage(dmg);
         }
     }
 
@@ -35539,6 +37557,23 @@ extendClass(CollisionManager, {
         if (typeof soundManager !== 'undefined') soundManager.playReflect();
     },
 
+    /**
+     * A ship touched a bulwark: knock the block away from the ship's centre.
+     * Returns false while the block is still on its post-hit cooldown (no repeat damage per frame).
+     */
+    bounceBulwark(obs, sx, sy) {
+        const now = Date.now();
+        if (obs._bumpUntil && now < obs._bumpUntil) return false;
+        obs._bumpUntil = now + 500;
+        const ox = obs.x + obs.width / 2, oy = obs.y + obs.height / 2;
+        const dx = ox - sx, dy = oy - sy;
+        const len = Math.hypot(dx, dy) || 1;
+        obs.pushVx = (dx / len) * 2.2;
+        obs.pushVy = (dy / len) * 2.2;
+        this.createDetailedHitEffect((ox + sx) / 2, (oy + sy) / 2, 'impact');
+        return true;
+    },
+
     checkObstaclePlayerCollisions(gameState) {
         const obstacles = obstacleManager.getObstacles();
         const player = playerManager.getPosition();
@@ -35554,6 +37589,14 @@ extendClass(CollisionManager, {
                 const obs = obstacles[i];
                 const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 15);
                 const explosionId = obs.explosionId || 'asteroid_burst';
+
+                if (obs.pushable) {
+                    // Indestructible bulwark: ram damage, then it bounces off instead of breaking.
+                    if (!this.bounceBulwark(obs, playerX, playerY)) continue;
+                    if (playerManager.takeDamage(dmg)) game.gameOver();
+                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                    break;
+                }
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
@@ -35593,6 +37636,14 @@ extendClass(CollisionManager, {
                 const obs = obstacles[i];
                 const dmg = Math.max(1, obs.collisionDamage != null ? obs.collisionDamage : 20);
                 const explosionId = obs.explosionId || 'asteroid_burst';
+
+                if (obs.pushable) {
+                    // Shoving a bulwark into the enemy hurts it; the block itself bounces off.
+                    if (!this.bounceBulwark(obs, enemyX, enemyY)) continue;
+                    enemyManager.takeDamage(dmg);
+                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    break;
+                }
 
                 // Remove obstacle
                 obstacleManager.removeObstacle(i);
@@ -35862,6 +37913,33 @@ extendClass(CollisionManager, {
         }
     },
 
+    /**
+     * Bulwark hit: no damage, the shot shoves the block along its flight
+     * direction (heavier blocks move less, stronger shots more).
+     */
+    pushObstacleByBullet(obstacle, bullet) {
+        let dx = bullet._sweepDx || 0;
+        let dy = bullet._sweepDy || 0;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.001) {
+            dx = 0;
+            dy = -1;
+        } else {
+            dx /= len;
+            dy /= len;
+        }
+        const mass = Math.max(0.5, (obstacle.width * obstacle.height) / 196);
+        const power = Math.max(0.5, Math.min(3, (bullet.damage != null ? bullet.damage : 10) / 10));
+        const k = 0.35 * power / mass;
+        obstacle.pushVx = Math.max(-2.5, Math.min(2.5, (obstacle.pushVx || 0) + dx * k));
+        obstacle.pushVy = Math.max(-2.5, Math.min(2.5, (obstacle.pushVy || 0) + dy * k));
+        obstacle.pushFlashMs = 120;
+        const hx = bullet.x + (bullet.width || 0) / 2;
+        const hy = bullet.y + (bullet.height || 0) / 2;
+        this.createDetailedHitEffect(hx, hy, 'impact');
+        if (typeof soundManager !== 'undefined') soundManager.playHit();
+    },
+
     checkBulletObstacleCollisions(gameState) {
         const bullets = bulletManager.getBullets();
         const enemyBullets = bulletManager.getEnemyBullets();
@@ -35872,7 +37950,7 @@ extendClass(CollisionManager, {
             for (let j = obstacles.length - 1; j >= 0; j--) {
                 if (this.isColliding(bullets[i], obstacles[j])) {
                     const obstacle = obstacles[j];
-                    if (obstacle.isFog) continue;
+                    if (obstacle.isFog || bullets[i]._ignoreObstacle === obstacle) continue;
                     const bullet = bullets[i];
                     const bulletX = bullet.x;
                     const bulletY = bullet.y;
@@ -35882,6 +37960,12 @@ extendClass(CollisionManager, {
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'player', i, j);
                         if (handled) break;
+                    }
+
+                    if (obstacle.pushable) {
+                        this.pushObstacleByBullet(obstacle, bullet);
+                        bulletManager.removeBullet(i);
+                        break;
                     }
 
                     if (obstacle.reflectsShots) {
@@ -35947,7 +38031,7 @@ extendClass(CollisionManager, {
             for (let j = obstacles.length - 1; j >= 0; j--) {
                 if (this.isColliding(enemyBullets[i], obstacles[j])) {
                     const obstacle = obstacles[j];
-                    if (obstacle.isFog) continue;
+                    if (obstacle.isFog || enemyBullets[i]._ignoreObstacle === obstacle) continue;
                     const bullet = enemyBullets[i];
                     const bulletX = bullet.x;
                     const bulletY = bullet.y;
@@ -35957,6 +38041,12 @@ extendClass(CollisionManager, {
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'enemy', i, j);
                         if (handled) break;
+                    }
+
+                    if (obstacle.pushable) {
+                        this.pushObstacleByBullet(obstacle, bullet);
+                        bulletManager.removeEnemyBullet(i);
+                        break;
                     }
 
                     if (obstacle.reflectsShots) {
@@ -36071,8 +38161,9 @@ extendClass(CollisionManager, {
         if (sourceSide === 'player') bulletManager.removeBullet(bulletIndex);
         else bulletManager.removeEnemyBullet(bulletIndex);
 
-        // Mirror team for reflected shards (player hit → enemy shards, and vice versa)
-        const toEnemy = sourceSide === 'player';
+        // Crystals turn the shards against the shooter (player hit → enemy shards, and vice versa);
+        // prism obstacles (prismKeepTeam) fan them out forward on the shooter's own side.
+        const toEnemy = obstacle.prismKeepTeam ? sourceSide !== 'player' : sourceSide === 'player';
         for (let s = 0; s < splitCount; s++) {
             const t = splitCount === 1 ? 0 : (s / (splitCount - 1)) - 0.5;
             const ang = baseAngle + t * angleSpread * 2;
@@ -36089,7 +38180,9 @@ extendClass(CollisionManager, {
                 reflected: true,
                 lightRadius: bullet.lightRadius || 50,
                 lightIntensity: 1.2,
-                lightColor: bullet.lightColor || 'var(--color-highlight)'
+                lightColor: bullet.lightColor || 'var(--color-highlight)',
+                // Born inside this obstacle: never split on it again.
+                _ignoreObstacle: obstacle
             };
             // Use angled movement: ensure angle is set and speed is magnitude
             shard.speed = baseSpeed;
@@ -38637,6 +40730,11 @@ Object.assign(IconSprites, {
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ]
+});
+
+// The hand-drawn resource art replaces the old abstract 16x16 symbols everywhere (all sizes, all renderers).
+['resScrap', 'resOre', 'resCrystal', 'resVoltex'].forEach((k) => {
+    if (IconSprites[k + 'Hi']) IconSprites[k] = IconSprites[k + 'Hi'];
 });
 
 
@@ -47708,7 +49806,9 @@ var UIAppearanceManager = class UIAppearanceManager {
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
         // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
-        this.sizePx = { player: 17, 'enemy:scout': 49, 'enemy:assault': 46, 'enemy:heavy': 49, 'enemy:elite': 50, 'enemy:capital': 49 };
+        this.sizePx = { player: 18, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
+            // Boss / side craft are derived from the class footprint (boss x1.6, side x0.68-0.78); these scale that in % (SIZES tab).
+            'boss:pct': 80, 'side:pct': 80 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };
@@ -47765,7 +49865,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
         // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
-        this.pixelSize = 'OFF';
+        this.pixelSize = '3';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -47828,6 +49928,25 @@ var UIAppearanceManager = class UIAppearanceManager {
         const step = this.getShotSize(kind);
         const mul = this.shotSizeScaleSteps[step];
         return Number.isFinite(mul) ? mul : 1;
+    }
+    /** Boss footprint multiplier over its class size (was a fixed 1.6). */
+    getBossSizeMul() {
+        return 1.6 * (this.getSizePct('boss') / 100);
+    }
+    /** Extra scale for side craft on top of their 0.68-0.78 footprint. */
+    getSideSizeMul() {
+        return this.getSizePct('side') / 100;
+    }
+    getSizePct(kind) {
+        const v = Number(this.sizePx[String(kind) + ':pct']);
+        return v > 0 ? v : 80;
+    }
+    setSizePct(kind, pct) {
+        const v = Math.max(30, Math.min(150, Math.round(Number(pct))));
+        if (!(v > 0)) return;
+        this.sizePx[String(kind) + ':pct'] = v;
+        this.persist();
+        if (typeof enemyManager !== 'undefined' && enemyManager.refreshEnemySizes) enemyManager.refreshEnemySizes();
     }
     getPlayerSizeOptions() {
         return Object.keys(this.playerSizeScaleSteps);
@@ -55003,8 +57122,9 @@ var SpriteLoader = class SpriteLoader {
                 this.loadOverrideSprites()
             ]);
 
-            // Ship sprites are enough for UI previews; do not block on weapons
-            this.loaded = !!shipsLoaded;
+            // "loaded" = the load attempt finished. PNG sprites are optional overrides (the sprite folders are
+            // not shipped with e.g. the itch build); without it the start-screen ship waits forever and boot polls.
+            this.loaded = true;
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('vf-sprites-loaded', {
                     detail: { loaded: this.loaded, count: this.sprites.size }
@@ -55675,7 +57795,31 @@ var RenderManager = class RenderManager {
 
         // Player + HUD on top (always visible)
         if (player) {
-            graphicsManager.renderPlayerShip(ctx, player, 1);
+            // Flying into the sluice / warp ring: the ship shrinks and fades into the chamber.
+            const enterFx = (typeof objectiveManager !== 'undefined' && objectiveManager.getEnterFx) ? objectiveManager.getEnterFx() : null;
+            // Leaving the arrival hatch: the hatch rock hides the ship until it is out of the tube mouth.
+            const occ = (typeof objectiveManager !== 'undefined' && objectiveManager.getArrivalOcclusion)
+                ? objectiveManager.getArrivalOcclusion() : null;
+            if (occ) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(-10000, -10000, 20000, 10000 + occ.top);
+                ctx.rect(occ.l, occ.top, occ.r - occ.l, occ.bottom - occ.top);
+                ctx.clip();
+            }
+            if (enterFx) {
+                const pcx = player.x + player.width / 2, pcy = player.y + player.height / 2;
+                ctx.save();
+                ctx.globalAlpha = enterFx.alpha;
+                ctx.translate(pcx, pcy);
+                ctx.scale(enterFx.scale, enterFx.scale);
+                ctx.translate(-pcx, -pcy);
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+                ctx.restore();
+            } else {
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+            }
+            if (occ) ctx.restore();
             if (bulletManager.drawMuzzleFlashes) bulletManager.drawMuzzleFlashes(ctx, player);
             if (playerManager.shieldMax > 0 && playerManager.shield > 0
                 && graphicsManager.drawShieldHull) {
@@ -55700,7 +57844,10 @@ var RenderManager = class RenderManager {
                 }
             }
         }
-        this.drawShotTypeIcon(ctx);
+        // Pickup "+N" popups above the ship (drawn after it so the hull never covers them).
+        if (typeof pickupManager !== 'undefined' && pickupManager.renderPopups) {
+            pickupManager.renderPopups(ctx);
+        }
 
         if (typeof graphicsManager !== 'undefined' && graphicsManager.renderParticles) {
             graphicsManager.renderParticles(ctx);
@@ -55736,6 +57883,11 @@ extendClass(RenderManager, {
         if (!obstacle || typeof graphicsManager === 'undefined') return;
         if (obstacle.isCrate && obstacleManager.drawCrate) {
             obstacleManager.drawCrate(ctx, obstacle);
+            return;
+        }
+        // Functional obstacles get their own baked look (see bakeObstacleImage).
+        if (obstacle.kind === 'prism' || obstacle.kind === 'bulwark') {
+            this.drawHiResObstacle(ctx, obstacle, false);
             return;
         }
         const spriteName = obstacle.sprite
@@ -56285,7 +58437,9 @@ extendClass(RenderManager, {
         const env = this.getCombatEnvironment();
         // Each rock draws its own shape family, hue variant, material and
         // surface from the level's environment, so a field is never uniform.
-        const style = isShield ? 'shield' : this.pickWeighted(env.styles || [{ id: env.style || 'asteroid', weight: 1 }], rnd);
+        const functional = obstacle.kind === 'prism' || obstacle.kind === 'bulwark' ? obstacle.kind : null;
+        const style = isShield ? 'shield' : functional
+            || this.pickWeighted(env.styles || [{ id: env.style || 'asteroid', weight: 1 }], rnd);
         const material = this.pickWeighted(env.resources || [{ id: 'scrap', weight: 1 }], rnd);
         const surface = env.surface || 'plain';
         const tint = this.hueShift(env.base, (rnd() - 0.5) * 50, 0.7 + rnd() * 0.6);
@@ -56312,6 +58466,10 @@ extendClass(RenderManager, {
             const a = Math.atan2(ny, nx);
             const r = Math.hypot(nx, ny);
             switch (style) {
+                case 'prism': // upright glass triangle
+                    return ny > -0.92 && ny < 0.9 && Math.abs(nx) < (ny + 0.92) * 0.55;
+                case 'bulwark': // heavy armour block with chamfered corners
+                    return Math.abs(nx) < 0.95 && Math.abs(ny) < 0.95 && Math.abs(nx) + Math.abs(ny) < 1.55;
                 case 'shield': {
                     const seg = Math.PI / 3;
                     const t = ((a % seg) + seg) % seg - seg / 2;
@@ -56358,6 +58516,8 @@ extendClass(RenderManager, {
                 // nothing but a dark box.
                 if (gw >= 7 && gh >= 7 && (!inside(px - 1, py) || !inside(px + 1, py) || !inside(px, py - 1) || !inside(px, py + 1))) {
                     col = outline;
+                } else if (functional) {
+                    col = this.functionalObstacleCell(functional, px, py, gw, gh, inside, accent);
                 } else {
                     const nx = ((px + 0.5) / gw) * 2 - 1;
                     const ny = ((py + 0.5) / gh) * 2 - 1;
@@ -56421,6 +58581,45 @@ extendClass(RenderManager, {
         c._w = obstacle.width;
         c._h = obstacle.height;
         return c;
+    },
+    /**
+     * One pixel of a functional obstacle; the look tells what it does.
+     * prism: clear glass with a rainbow band fanning out to the right side,
+     * bright facet edges — it splits light (and shots).
+     * bulwark: dark gunmetal slab with a lit bevel, rivets and accent push
+     * chevrons, no cracks — it can't be broken, only shoved.
+     */
+    functionalObstacleCell(kind, px, py, gw, gh, inside, accent) {
+        const nx = ((px + 0.5) / gw) * 2 - 1;
+        const ny = ((py + 0.5) / gh) * 2 - 1;
+        // Distance (in pixels) to the outline, for bevels / rims.
+        const rim = !inside(px - 2, py) || !inside(px + 2, py) || !inside(px, py - 2) || !inside(px, py + 2);
+        if (kind === 'prism') {
+            const glass = ['#f2fdff', '#b8ecff', '#6cc8ec', '#2f7fae'];
+            const rainbow = ['#ff4d6d', '#ffa24a', '#fff06a', '#6dff8a', '#4dd2ff', '#a77bff'];
+            // Lit facet on the left, shade on the right.
+            if (rim) return nx < 0 ? glass[0] : glass[2];
+            // White light enters from below, the spectrum fans out towards the upper right.
+            const t = (nx * 0.9 - ny * 0.45 + 0.55);
+            if (nx > -0.1 && t > 0.15 && t < 1.05) {
+                const i = Math.max(0, Math.min(rainbow.length - 1, Math.floor((t - 0.15) / 0.9 * rainbow.length)));
+                return rainbow[i];
+            }
+            if (Math.abs(nx + 0.25 - ny * 0.1) < 0.08) return '#ffffff'; // inner light ray
+            return ny < -0.2 ? glass[1] : glass[2];
+        }
+        // bulwark
+        const metal = ['#9aa3b0', '#5c6470', '#3a404a', '#23272e'];
+        if (rim) return (nx + ny) < 0 ? metal[0] : metal[3]; // bevel: lit top-left, dark bottom-right
+        const ax = Math.abs(nx), ay = Math.abs(ny);
+        // Rivets in the four corners of the face.
+        if (Math.abs(ax - 0.6) < 0.1 && Math.abs(ay - 0.6) < 0.1) return metal[0];
+        // Push chevrons (^ ^) in the accent colour: arrows that say "shove me".
+        const cy = ny + 0.1;
+        const chevron = (o) => Math.abs(cy - o - (ax * 0.9 - 0.25)) < 0.11 && ax < 0.45;
+        if (chevron(-0.05) || chevron(0.35)) return accent;
+        // Brushed plate: faint horizontal grain.
+        return py % 3 === 0 ? metal[2] : metal[1];
     },
     /** Deterministic 0..1 hash of an integer cell. */
     envHash(ix, iy) {
@@ -56596,15 +58795,24 @@ extendClass(RenderManager, {
                     ? obstacleManager.terrainFloorAt(baseRow - r, 0) : 'craters';
                 const rc = this.terrainRowCache(wr, cols);
                 for (let cx = 0; cx < cols; cx++) {
-                    const n = rc.n[cx];
+                    // Large lighter / darker patches (macro noise) shift the fine noise, so the floor
+                    // reads as terrain with plains and hollows instead of one even carpet.
+                    const n = Math.max(0, Math.min(1, rc.n[cx] + (rc.m[cx] - 0.5) * 0.7));
                     let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
-                    if (pal.special && Math.abs(n - 0.5) < (env.planetStyle ? 0.055 : 0.022) * pal.veinMul) col = pal.special;
+                    // Surface veins (ice / lava / …) follow coarse noise: connected seams, not confetti specks.
+                    if (pal.special && Math.abs(rc.v[cx] - 0.5) < (env.planetStyle ? 0.035 : 0.018) * pal.veinMul) col = pal.special;
                     if (floor === 'craters') {
                         let c = rc.hits[cx];
                         if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
                         if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
                     } else {
                         col = this.terrainFloorCell(floor, pal, cx, wr, n) || col;
+                        // Now and then a crater on the other floors too (sparser than on crater fields).
+                        if (rc.m[cx] < 0.42) {
+                            let c = rc.hits[cx];
+                            if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
+                            if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
+                        }
                     }
                     // Faction doctrine speckles the planet crust (organic / mechanical).
                     col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
@@ -56635,22 +58843,6 @@ extendClass(RenderManager, {
                     }
                 }
             }
-            // Area threshold on the floor
-            if (obstacleManager.terrainGateRow) {
-                for (let r = -1; r * cell + phase < H; r++) {
-                    const gd = obstacleManager.terrainGateRow(baseRow - r);
-                    if (gd == null || Math.abs(gd) > 1) continue;
-                    const y = r * cell + phase;
-                    for (let cx = 0; cx < cols; cx++) {
-                        let col;
-                        if (gd === 0) col = (cx % 6 === 3) ? pal.accent : '#05060a';
-                        else if (gd === 1) col = pal.craterLit;
-                        else col = pal.ground[3];
-                        rowCols[cx] = col;
-                    }
-                    flushRow(rowCols, y);
-                }
-            }
             // Walls (own batch → drawn after under-wall obstacles)
             batch = wallBatch;
             curPhase = phase;
@@ -56673,12 +58865,28 @@ extendClass(RenderManager, {
                         runCol = null;
                         runW = 0;
                     };
+                    const hatch = walls[k + 'Hatch'];
+                    if (hatch === 'gap' && walls[k + 'Tunnel'] > 0) {
+                        // Open hangar slot: dark recess on the floor layer so craft fly out over it.
+                        batch = overlayBatch;
+                        this.drawHatchRecess(pushRun, env, pal, mp, side, cols, walls[k + 'Tunnel'], wr, y, cell,
+                            obstacleManager.terrainOpeningInfo(wr, side));
+                        batch = wallBatch;
+                    }
+                    const lip = hatch === 'frame' ? walls[k + 'Lip'] : 0;
+                    // Jamb row right against the slot: one bright accent rim so the door reads at a glance.
+                    const doorRim = hatch === 'frame' && (obstacleManager.terrainOpeningAt(wr + 1, side) === 'gap'
+                        || obstacleManager.terrainOpeningAt(wr - 1, side) === 'gap');
+                    // Rim structure: row inside its 36-row slot (outlined block, see terrainWallCells).
+                    const stT = ((wr % 36) + 36) % 36 - 10;
                     /* edge starts at 0 — no corridor-side rgba shadow column
                        (that read as semi-transparent "frame contours" over the playfield). */
                     for (let edge = 0; edge < width; edge++) {
                         const cx = side ? cols - width + edge : width - 1 - edge;
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
+                        else if (doorRim) col = edge === width - 1 ? '#05060a' : pal.accent;
+                        else if (edge <= lip) col = this.hatchLipCell(env.style, pal, mp, cx, wr, edge);
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
                             /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
@@ -56686,14 +58894,7 @@ extendClass(RenderManager, {
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            // Structure band: faction silhouette as blotches, not row stripes.
-                            const st = env.style || 'asteroid';
-                            const sh = this.envHash(cx * 3 + edge, wr * 2 + 11);
-                            if (st === 'tech') col = sh < 0.55 ? pal.accent : mp.lit[1];
-                            else if (st === 'organic') col = sh < 0.5 ? pal.accent : mp.lit[0];
-                            else if (st === 'spike') col = sh < 0.45 ? pal.accent : pal.wall[0];
-                            else if (st === 'scrap') col = sh < 0.4 ? (mp.crack || pal.accent) : pal.wall[1];
-                            else col = pal.wall[1];
+                            col = this.structureCell(env.style || 'asteroid', pal, mp, edge, width - base, stT, wr);
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
                         const px = cx * cell;
@@ -56749,7 +58950,7 @@ extendClass(RenderManager, {
         ctx.fillStyle = '#0a0c10';
         ctx.fillRect(0, 0, W, H);
         [groundLayer, overlayLayer].forEach((l) => {
-            if (l) ctx.drawImage(l.canvas, 0, l.y, cols * cell, rowsN * cell);
+            if (l) ctx.drawImage(l.canvas, 0, this.snapToDevicePx(ctx, l.y), cols * cell, rowsN * cell);
         });
         ctx.restore();
         // Wall layer stays separate so under-wall obstacles show through the
@@ -56759,6 +58960,63 @@ extendClass(RenderManager, {
         this._terrainWallDims = { w: cols * cell, h: rowsN * cell };
     },
     /** '#rgb' / '#rrggbb' / opaque rgb(a) → packed little-endian RGBA, or null when not exactly representable. */
+    /** Faction look of a hangar frame cell (the lip around the opening). */
+    hatchLipCell(style, pal, mp, cx, wr, edge) {
+        const h = this.envHash(cx * 5 + edge, wr * 3 + 17);
+        switch (style) {
+            case 'tech': return ((edge + wr) & 3) < 2 ? pal.accent : '#1a1c22'; // hazard stripes
+            case 'spike': return edge === 1 ? pal.accent : pal.wall[0];          // bone fangs, lit tips
+            case 'organic': return h < 0.55 ? pal.accent : mp.lit[0];            // swollen flesh lips
+            case 'scrap': return h < 0.35 ? (mp.crack || pal.accent) : (h < 0.7 ? pal.wall[1] : mp.lit[1]);
+            default: return h < 0.5 ? mp.lit[0] : pal.wall[1];                  // ragged cave rim
+        }
+    },
+
+    /**
+     * One cell of a faction structure on the canyon rim, as a solid outlined
+     * block (bunker, pod, fang, junk pile) instead of colour noise.
+     * `edge` 1..band-1 from the corridor, `t` = row inside the 14-row block.
+     */
+    structureCell(style, pal, mp, edge, band, t, wr) {
+        if (t <= 0 || t >= 13 || edge === band - 1) return '#05060a';
+        const top = t === 1;
+        switch (style) {
+            case 'tech': // bunker: lit roof strip, dark hull, a column of accent windows
+                if (top) return mp.lit[0];
+                return edge % 3 === 1 && t % 3 === 0 ? pal.accent : pal.wall[2];
+            case 'organic': // pod: glowing core in a fleshy shell
+                if (top || edge === 1) return mp.lit[0];
+                return Math.abs(t - 6.5) < 3 && edge > 2 && edge < band - 2 ? pal.accent : pal.wall[1];
+            case 'spike': // bone fang: pale body, accent tip at the corridor
+                if (edge === 1) return pal.accent;
+                return top ? '#e6e2d6' : pal.wall[0];
+            case 'scrap': // welded junk: plates with rivets and a weld seam
+                if (top) return mp.lit[1];
+                if (t === 7) return mp.crack || pal.accent;
+                return (edge + t) % 5 === 0 ? pal.accent : pal.wall[1];
+            default: // boulder ridge
+                return top ? pal.wall[0] : (this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1]);
+        }
+    },
+
+    /**
+     * Recess behind an open hangar slot, drawn on the floor layer: dark bay
+     * with accent chevrons pointing into the corridor, so it reads as a launch door.
+     */
+    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info) {
+        const style = env.style || 'asteroid';
+        const inner = { tech: '#07090d', organic: '#14060b', spike: '#0b0507', scrap: '#0b0a08' }[style] || '#06070a';
+        const mid = info ? info.frame + (info.len - 2 * info.frame - 1) / 2 : 0;
+        const dy = info ? Math.abs(info.t - mid) : 99;
+        for (let edge = 0; edge < depth; edge++) {
+            const cx = side ? cols - 1 - edge : edge;
+            let col = inner;
+            if (dy <= 2.5 && ((edge + Math.round(dy)) % 5) === 0 && edge < depth - 1) col = pal.accent;
+            else if (edge === depth - 1) col = '#05060a';
+            push(col, cx * cell, y, cell, cell);
+        }
+    },
+
     packOpaqueColor(css) {
         const cache = this._packedColors || (this._packedColors = new Map());
         let v = cache.get(css);
@@ -56814,8 +59072,14 @@ extendClass(RenderManager, {
         let rc = c.rows.get(wr);
         if (!rc) {
             const n = new Float64Array(cols);
-            for (let cx = 0; cx < cols; cx++) n[cx] = this.envNoise(cx, wr);
-            rc = { n, hits: new Array(cols) };
+            const v = new Float64Array(cols);
+            const m = new Float64Array(cols);
+            for (let cx = 0; cx < cols; cx++) {
+                n[cx] = this.envNoise(cx, wr);
+                v[cx] = this.envNoise(cx * 0.22 + 31, wr * 0.22 + 17);
+                m[cx] = this.envNoise(cx * 0.16 + 311, wr * 0.16 + 709); // macro patches (~60 cells)
+            }
+            rc = { n, v, m, hits: new Array(cols) };
             c.rows.set(wr, rc);
         }
         return rc;
@@ -56826,9 +59090,18 @@ extendClass(RenderManager, {
         if (!this._terrainWallReady || !wl) return;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(wl.canvas, 0, wl.y, this._terrainWallDims.w, this._terrainWallDims.h);
+        ctx.drawImage(wl.canvas, 0, this.snapToDevicePx(ctx, wl.y), this._terrainWallDims.w, this._terrainWallDims.h);
         ctx.restore();
         this._terrainWallReady = false;
+    },
+    /**
+     * Round a logical y to the canvas' device-pixel grid. A fractional blit
+     * offset with nearest-neighbour scaling makes voxel rows flicker between
+     * heights while scrolling; snapped, every row keeps its size.
+     */
+    snapToDevicePx(ctx, y) {
+        const s = ctx.getTransform ? Math.abs(ctx.getTransform().d) || 1 : 1;
+        return Math.round(y * s) / s;
     },
     /** Floor patterns for the canyon areas (null = keep the noise colour). */
     terrainFloorCell(floor, pal, cx, wr, n) {
@@ -57702,6 +59975,17 @@ var ParallaxManager = class ParallaxManager {
         this.starSpawnInterval = 2000;
     }
 
+    /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
+    envVar(name) {
+        const now = performance.now();
+        const c = this._envCache || (this._envCache = {});
+        const hit = c[name];
+        if (hit && now - hit.t < 250) return hit.v;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        c[name] = { v: v, t: now };
+        return v;
+    }
+
     getPlanetLayers(planet) {
         if (typeof planetConfigManager !== 'undefined') {
             return planetConfigManager.getResolvedLayers(planet);
@@ -57755,8 +60039,12 @@ var ParallaxManager = class ParallaxManager {
         const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
             || obstacleManager.isScrollStage();
         if (scrolling) {
+            // Transit backtrack runs the background in reverse (obstacleManager.levelScrollMul).
+            const mul = typeof obstacleManager !== 'undefined' && obstacleManager.levelScrollMul
+                ? obstacleManager.levelScrollMul() : 1;
             this.layers.forEach(layer => {
-                layer.y += layer.speed * frameScale;
+                // Kept >= 0: the pattern draws wrap with %, which breaks on negatives.
+                layer.y = Math.max(0, layer.y + layer.speed * frameScale * mul);
             });
         }
         this.horizontalOffset += this.horizontalSpeed * frameScale;
@@ -57778,7 +60066,7 @@ var ParallaxManager = class ParallaxManager {
         ctx.msImageSmoothingEnabled = false;
 
         // Fill base background with theme color
-        const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--env-background').trim();
+        const backgroundColor = this.envVar('--env-background');
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;
@@ -58040,7 +60328,7 @@ extendClass(ParallaxManager, {
     drawFlyingStars(ctx) {
         ctx.save();
         ctx.globalAlpha = this.starsOpacity != null ? this.starsOpacity : 0.35;
-        const starColor = getComputedStyle(document.documentElement).getPropertyValue('--env-primary').trim() || '#808080';
+        const starColor = this.envVar('--env-primary') || '#808080';
         ctx.fillStyle = starColor;
         this.flyingStars.forEach(star => {
             ctx.fillRect(Math.floor(star.x), Math.floor(star.y), Math.floor(star.size), Math.floor(star.size));
@@ -71794,9 +74082,15 @@ extendClass(LevelInfoManager, {
         const weaponId = (typeof bulletManager !== 'undefined' && bulletManager.currentWeapon)
             ? bulletManager.currentWeapon
             : (d.currentWeapon || 'laser');
-        const weaponName = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
-            ? iconRenderer.weaponIconInfo(weaponId).name
-            : String(weaponId).toUpperCase();
+        const nameOf = (id) => ((typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
+            ? iconRenderer.weaponIconInfo(id).name
+            : String(id).toUpperCase());
+        // Every weapon fitted in the hangar, not just the one currently selected.
+        const sm = typeof bulletManager !== 'undefined' ? bulletManager.currentShipModel : null;
+        const fitted = (sm && sm.loadout && Array.isArray(sm.loadout.weapons) && sm.loadout.weapons.length)
+            ? sm.loadout.weapons.filter((w, i, a) => w && a.indexOf(w) === i)
+            : [weaponId];
+        const weaponName = fitted.map(nameOf).join(' · ');
 
         const session = this.clusterHtml('SESSION',
             `<div class="gi-metrics gi-metrics-session">` +
@@ -72166,6 +74460,8 @@ var MissionStartManager = class MissionStartManager {
         this.goTimer = 0;
         this.flyInElapsed = 0;
         this.flyInDuration = 1400;
+        this.enemyInElapsed = 0;
+        this.enemyInDuration = 900;
         this.overlay = null;
         this.textEl = null;
         this.subEl = null;
@@ -72198,6 +74494,7 @@ var MissionStartManager = class MissionStartManager {
         this.countdownTimer = 0;
         this.goTimer = 0;
         this.flyInElapsed = 0;
+        this.enemyEntry = false;
         this.playerFrom = null;
         this.playerTo = null;
         this.enemyFrom = null;
@@ -72501,11 +74798,32 @@ var MissionStartManager = class MissionStartManager {
             this.flyInElapsed += deltaTime;
             const t = Math.min(1, this.flyInElapsed / this.flyInDuration);
             const ease = 1 - Math.pow(1 - t, 3);
-            this.applyFlyIn(ease);
+            // Enemies wait off screen until the player is out of the hatch and in control.
+            this.applyPlayerFlyIn(ease);
+            this.applyEnemyFlyIn(0);
             if (t >= 1) {
                 this.complete();
             }
         }
+    }
+
+    /**
+     * After the intro: champion and side craft glide in from off screen while the player already flies.
+     * Called from the game loop after enemyManager.update so the entry path wins over AI movement.
+     */
+    updateEnemyEntry(deltaTime) {
+        if (!this.enemyEntry) return;
+        this.enemyInElapsed += deltaTime;
+        const t = Math.min(1, this.enemyInElapsed / this.enemyInDuration);
+        this.applyEnemyFlyIn(1 - Math.pow(1 - t, 3));
+        if (t >= 1) this.endEnemyEntry();
+    }
+
+    endEnemyEntry() {
+        this.enemyEntry = false;
+        if (typeof enemyManager === 'undefined') return;
+        if (enemyManager.enemy) enemyManager.enemy.introEntry = false;
+        (enemyManager.sideEnemies || []).forEach((s) => { s.introEntry = false; });
     }
 
     startFlyIn() {
@@ -72629,11 +74947,20 @@ extendClass(MissionStartManager, {
     },
 
     applyFlyIn(ease) {
+        this.applyPlayerFlyIn(ease);
+        this.applyEnemyFlyIn(ease);
+    },
+
+    applyPlayerFlyIn(ease) {
         if (this.playerFrom && this.playerTo && typeof playerManager !== 'undefined') {
             const p = playerManager.player;
             p.x = this.playerFrom.x + (this.playerTo.x - this.playerFrom.x) * ease;
             p.y = this.playerFrom.y + (this.playerTo.y - this.playerFrom.y) * ease;
         }
+    },
+
+    /** Champion and side craft fly in from off screen (0 = still outside). */
+    applyEnemyFlyIn(ease) {
         if (this.enemyFrom && this.enemyTo && typeof enemyManager !== 'undefined' && enemyManager.enemy) {
             const e = enemyManager.enemy;
             e.x = this.enemyFrom.x + (this.enemyTo.x - this.enemyFrom.x) * ease;
@@ -72651,7 +74978,14 @@ extendClass(MissionStartManager, {
     },
 
     complete() {
-        this.applyFlyIn(1);
+        this.applyPlayerFlyIn(1);
+        // Enemies enter only once the player can fly (see updateEnemyEntry).
+        this.enemyInElapsed = 0;
+        this.enemyEntry = true;
+        if (typeof enemyManager !== 'undefined') {
+            if (enemyManager.enemy && this.enemyFrom) enemyManager.enemy.introEntry = true;
+            (enemyManager.sideEnemies || []).forEach((s, i) => { if (this.sideFrom && this.sideFrom[i]) s.introEntry = true; });
+        }
         this.active = false;
         this.phase = null;
         this._armed = false;
@@ -72670,6 +75004,7 @@ extendClass(MissionStartManager, {
     },
 
     cancel() {
+        this.endEnemyEntry();
         this.active = false;
         this.phase = null;
         this._armed = false;
@@ -74787,7 +77122,8 @@ var GalaxyMapManager = class GalaxyMapManager {
         // Embedded map (PLAY tab): the keyboard stays with the station until
         // ENTER / SPACE enters the map (armInput). Mouse clicks work anyway.
         // The standalone map overlay takes the keyboard right away.
-        this._inputActive = !this._mountEl;
+        // Left while armed (mission start, dock, re-render): stay in the map.
+        this._inputActive = !this._mountEl || !!this._keepArmed;
         this.statusMsg = '';
         const reuse = !!(this._mountEl && this.overlay && this._parkedGalaxyId === this.galaxyId);
         // Parked map already has live zoom/pan — restoreGalaxyView from LS fought it and forced art swaps.
@@ -74878,6 +77214,7 @@ var GalaxyMapManager = class GalaxyMapManager {
     }
     setInputActive(active) {
         this._inputActive = !!active;
+        if (this._mountEl) this._keepArmed = this._inputActive;
         if (this.overlay) {
             this.overlay.classList.toggle('is-input-active', this._inputActive);
         }
@@ -75040,6 +77377,25 @@ var GalaxyMapManager = class GalaxyMapManager {
         });
         return `<g class="gm-boss-icon" shape-rendering="crispEdges" transform="translate(${x - 4.5 * s},${y - 4 * s}) scale(${s})"><path d="${d}"/></g>`;
     }
+    /** Pixel mid-boss crown (SVG path, 9×7 px) for champion stages. */
+    midBossIconSvg() {
+        const rows = [
+            '#...#...#',
+            '##..#..##',
+            '##.###.##',
+            '#########',
+            '#########',
+            '.........',
+            '#########'
+        ];
+        let d = '';
+        rows.forEach((row, ry) => {
+            for (let rx = 0; rx < row.length; rx++) {
+                if (row[rx] === '#') d += `M${rx} ${ry}h1v1h-1z`;
+            }
+        });
+        return `<path d="${d}"/>`;
+    }
     /**
      * Stage stepper in the planet card: stages 1..N plus the boss.
      * Cleared stages get a check, the next stage to fight shows the player
@@ -75139,13 +77495,16 @@ var GalaxyMapManager = class GalaxyMapManager {
             const isBoss = i === total;
             const done = pick ? (cleared || i < (cleared ? total + 1 : (p.boss ? total : p.done + 1))) : (cleared || i < current);
             const here = i === current;
+            // What the stage holds: champion fight (mid-boss), transit run (corridor) or the planet boss.
+            const transit = !isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i);
+            const kind = isBoss ? 'boss' : (transit ? 'transit' : 'champion');
             let inner = '';
             if (isBoss && !done) {
                 inner = `<svg viewBox="0 0 9 8">${this.bossIconSvg(4.5, 4, 1)}</svg>`;
             } else if (done) {
                 // Cleared: solid green tile with a dark pixel check.
                 inner = '<svg viewBox="0 0 10 10" shape-rendering="crispEdges"><rect class="gm-stage-done-bg" width="10" height="10"/><path class="gm-stage-check" d="M2 5h1v1h1v1h1V6h1V5h1V4h1V3H7v1H6v1H5v1H4V5H3V4H2z"/></svg>';
-            } else if (!isBoss && typeof isTransitStage === 'function' && isTransitStage(pid, i)) {
+            } else if (transit) {
                 // Transit stage: arrow flying up between two gate walls.
                 inner = '<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path class="gm-stage-open" d="M4 0h1v1h1v1h1v1H2V2h1V1h1zM4 3h1v3H4zM0 7h3v2H0zM6 7h3v2H6z"/></svg>';
             } else {
@@ -75154,11 +77513,16 @@ var GalaxyMapManager = class GalaxyMapManager {
             }
             // Player ship hovers above the stage it fights next.
             if (here && ship) inner += `<img src="${ship}" alt="" class="gm-stage-ship">`;
-            const tag = isBoss ? 'BOSS' : String(i);
-            html += `<span class="gm-sector-stage${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
+            // Boss and mid-boss steps show an icon under the tile, transit runs their number.
+            const tag = isBoss
+                ? `<svg class="gm-stage-tag-boss" viewBox="0 0 9 8" shape-rendering="crispEdges">${this.bossIconSvg(4.5, 4, 1)}</svg>`
+                : (kind === 'champion'
+                    ? `<svg class="gm-stage-tag-boss gm-stage-tag-mid" viewBox="0 0 9 7" shape-rendering="crispEdges">${this.midBossIconSvg()}</svg>`
+                    : String(i));
+            html += `<span class="gm-sector-stage is-kind-${kind}${done ? ' is-done' : ''}${here ? ' is-current' : ''}${isBoss ? ' is-boss' : ''}${dev ? ' is-dev-pick' : ''}${!dev && done && canReplay ? ' is-replay' : ''}"` +
                 (dev ? ` data-dev-stage="${i}" data-dev-planet="${pid}"` : '') +
                 (!dev && done && canReplay ? ` data-replay-stage="${i}" data-replay-planet="${pid}"` : '') +
-                ` title="${isBoss ? 'BOSS' : (typeof isTransitStage === 'function' && isTransitStage(pid, i) ? 'TRANSIT ' : 'STAGE ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
+                ` title="${isBoss ? 'BOSS' : (transit ? 'TRANSIT ' : 'MID-BOSS ') + i} ${i}/${total}${done ? ' · CLEARED' : ''}${dev ? ' · DEV: CLICK TO PLAY' : ''}${!dev && done && canReplay ? ' · CLICK TO PLAY AGAIN' : ''}">` +
                 `${inner}<span class="gm-stage-tag">${tag}</span></span>`;
             // Connector to the next step: solid once walked, dashed ahead.
             if (i < total) html += `<span class="gm-stage-link${cleared || i + 1 <= current ? ' is-walked' : ''}"></span>`;
@@ -76692,7 +79056,7 @@ extendClass(GalaxyMapManager, {
         if (at) {
             const x = W / 2 + (at.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (at.y - 0.5) * (H - pad * 2) * mapSpread;
-            // Ship centred on the location, nose down, gently hovering up and
+            // Ship centred on the location, nose up (never flipped), gently hovering up and
             // down instead of orbiting.
             const r = loc.kind === 'post' ? 18 : 32;
             const icon = this.getShipIconUrl(this.getMapDetail());
@@ -76704,8 +79068,8 @@ extendClass(GalaxyMapManager, {
             const gpOn = typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
                 && uiAppearanceManager.getGlobalPixelPx() > 0;
             const shipSvg = icon
-                ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img" transform="rotate(180)"/>`
-                : `<path d="M0 7 L6 -6 L0 -3 L-6 -6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
+                ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img"/>`
+                : `<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
             const view = this.getMapViewBox(W, H, pad);
             const centered = Math.hypot(
                 x - (view[0] + view[2] / 2),
@@ -77566,6 +79930,23 @@ extendClass(GalaxyMapManager, {
             }
             travelled += len;
         }
+        // A cell belongs to its innermost layer: skip it in outer ones.
+        const toPath = (map, ...skips) => {
+            let out = '';
+            map.forEach((row, gy) => {
+                const xs = Array.from(row)
+                    .filter((x) => !skips.some((sk) => sk.get(gy) && sk.get(gy).has(x)))
+                    .sort((m, q) => m - q);
+                for (let k = 0; k < xs.length;) {
+                    let e = k;
+                    while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
+                    const x = +(xs[k] * p).toFixed(3), y = +(gy * p).toFixed(3), w = +((e - k + 1) * p).toFixed(3);
+                    out += `M${x} ${y}h${w}v${+p.toFixed(3)}h${-w}z`;
+                    k = e + 1;
+                }
+            });
+            return out;
+        };
         // Row runs → one compact path per layer.
         // Data packets use two parallel lanes, one for each direction.
         // Pulse spacing is in map units so slices of one line stay in phase.
@@ -77586,36 +79967,63 @@ extendClass(GalaxyMapManager, {
             const laneOffset = o.traffic
                 ? Math.max(packetWidth * 1.2, p)
                 : Math.max(packetWidth * 1.4, p * 1.5);
-            const lanePath = (side) => `M${fp.map((q, i) => {
+            const lanePts = (side) => fp.map((q, i) => {
                 const prev = fp[Math.max(0, i - 1)];
                 const next = fp[Math.min(fp.length - 1, i + 1)];
                 const dx = next.x - prev.x;
                 const dy = next.y - prev.y;
                 const length = Math.hypot(dx, dy) || 1;
-                return `${(q.x - dy / length * laneOffset * side).toFixed(2)} ${(q.y + dx / length * laneOffset * side).toFixed(2)}`;
-            }).join('L')}`;
-            const flowStyle = `stroke-width:${packetWidth.toFixed(2)};stroke-dasharray:${dashes};--flow-len:${period.toFixed(2)}px;--flow-from:${(-(off % period)).toFixed(2)}px`;
+                return { x: q.x - dy / length * laneOffset * side, y: q.y + dx / length * laneOffset * side };
+            });
+            // Packets are cells on the line's own grid (not vector strokes), so they share
+            // its pixel size. The march is F pre-built frames shown one after another.
+            const F = 16;
+            const dur = o.traffic ? 5.4 : 3.2;
+            const on = [];
+            let acc = 0;
+            pattern.forEach((v, i) => { if (i % 2 === 0) on.push([acc * width, (acc + v) * width]); acc += v; });
+            const isOn = (s) => {
+                const m = ((s % period) + period) % period;
+                return on.some((iv) => m >= iv[0] && m < iv[1]);
+            };
+            const pr = Math.max(0.71, packetWidth / 2 / p);
+            const PR = Math.ceil(pr);
+            const laneCells = (pts, shift) => {
+                const cells = new Map();
+                let trav = off;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const a = pts[i], b = pts[i + 1];
+                    const len = Math.hypot(b.x - a.x, b.y - a.y);
+                    const n = Math.max(1, Math.ceil(len / (p * 0.5)));
+                    for (let s = 0; s <= n; s++) {
+                        if (!isOn(trav + len * s / n - shift)) continue;
+                        const cx = (a.x + (b.x - a.x) * s / n) / p;
+                        const cy = (a.y + (b.y - a.y) * s / n) / p;
+                        const bx = Math.floor(cx), by = Math.floor(cy);
+                        for (let yy = -PR; yy <= PR; yy++) {
+                            for (let xx = -PR; xx <= PR; xx++) {
+                                const gx = bx + xx, gy = by + yy;
+                                if (Math.hypot(gx + 0.5 - cx, gy + 0.5 - cy) > pr) continue;
+                                let row = cells.get(gy);
+                                if (!row) { row = new Set(); cells.set(gy, row); }
+                                row.add(gx);
+                            }
+                        }
+                    }
+                    trav += len;
+                }
+                return cells;
+            };
             const flowClass = o.traffic ? ' gm-post-traffic' : '';
-            flow = `<path class="gm-pxline-flow${flowClass}" fill="none" d="${lanePath(-1)}" style="${flowStyle}"/>` +
-                `<path class="gm-pxline-flow gm-pxline-flow-reverse${flowClass}" fill="none" d="${lanePath(1)}" style="${flowStyle}"/>`;
-        }
-        // A cell belongs to its innermost layer: skip it in outer ones.
-        const toPath = (map, ...skips) => {
-            let out = '';
-            map.forEach((row, gy) => {
-                const xs = Array.from(row)
-                    .filter((x) => !skips.some((sk) => sk.get(gy) && sk.get(gy).has(x)))
-                    .sort((m, q) => m - q);
-                for (let k = 0; k < xs.length;) {
-                    let e = k;
-                    while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
-                    const x = +(xs[k] * p).toFixed(3), y = +(gy * p).toFixed(3), w = +((e - k + 1) * p).toFixed(3);
-                    out += `M${x} ${y}h${w}v${+p.toFixed(3)}h${-w}z`;
-                    k = e + 1;
+            [[-1, 1, 0, ''], [1, -1, period / 2, ' gm-pxline-flow-reverse']].forEach(([side, dir, base, rev]) => {
+                const pts = lanePts(side);
+                for (let k = 0; k < F; k++) {
+                    const d = toPath(laneCells(pts, base + dir * k * period / F));
+                    if (!d) continue;
+                    flow += `<path class="gm-pxline-flow gm-pxflow-cells${k ? '' : ' gm-pxflow-f0'}${rev}${flowClass}" d="${d}" style="animation-duration:${dur}s;animation-delay:${((k / F - 1) * dur).toFixed(3)}s"/>`;
                 }
             });
-            return out;
-        };
+        }
         return `<g class="${cls} gm-pxline" shape-rendering="crispEdges">` +
             `<path class="gm-pxline-halo" d="${toPath(haloCells, glowCells, coreCells, hotCells)}"/>` +
             `<path class="gm-pxline-glow" d="${toPath(glowCells, coreCells, hotCells)}"/>` +
@@ -78500,6 +80908,77 @@ extendClass(GalaxyMapManager, {
         const show = !this.isShipOnScreen();
         btn.hidden = !show;
         btn.setAttribute('aria-hidden', show ? 'false' : 'true');
+
+        this.syncShipEdgeMarker(show);
+    },
+
+    /**
+     * Ship off screen: a marker sits on the map edge in the ship's direction.
+     * Clicking it glides the camera back to the ship (returnCameraToShip).
+     */
+    syncShipEdgeMarker(show) {
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!area || !svg) return;
+        let el = area.querySelector('.gm-ship-edge');
+        if (!show || this._flight) {
+            if (el && !el.hidden) el.hidden = true;
+            return;
+        }
+        const loc = profileManager.getShipLocation ? profileManager.getShipLocation(this.galaxyId) : null;
+        const p = loc && this.locationPoint ? this.locationPoint(loc) : null;
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        if (!p || !vb || !vb.width || !r.width || !ar.width) {
+            if (el) el.hidden = true;
+            return;
+        }
+        if (!el) {
+            el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'gm-ship-edge';
+            el.title = 'YOUR SHIP · center map on it';
+            el.setAttribute('aria-label', 'Center map on your ship');
+            const icon = this.getShipIconUrl ? this.getShipIconUrl() : '';
+            el.innerHTML = `<span class="gm-ship-edge-arrow"></span>${icon ? `<img class="gm-ship-edge-img" src="${icon}" alt="" draggable="false">` : ''}`;
+            el.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                this.returnCameraToShip();
+            });
+            ['pointerdown', 'mousedown', 'wheel'].forEach((t) => el.addEventListener(t, (ev) => ev.stopPropagation()));
+            area.appendChild(el);
+        }
+        if (el.hidden) el.hidden = false;
+        // Ship position in client px (preserveAspectRatio meet, same maths as isShipOnScreen).
+        const s = Math.min(r.width / vb.width, r.height / vb.height);
+        const visW = r.width / s;
+        const visH = r.height / s;
+        const left = vb.x + (vb.width - visW) / 2;
+        const top = vb.y + (vb.height - visH) / 2;
+        const shipX = r.left + (p.x - left) * s;
+        const shipY = r.top + (p.y - top) * s;
+        // Ray from the area centre to the ship, clamped to the inset edge.
+        const inset = 60; // room for the arrow that sticks out towards the edge
+        const cx = ar.left + ar.width / 2;
+        const cy = ar.top + ar.height / 2;
+        const dx = shipX - cx;
+        const dy = shipY - cy;
+        const hx = ar.width / 2 - inset;
+        const hy = ar.height / 2 - inset;
+        const k = Math.min(dx ? hx / Math.abs(dx) : Infinity, dy ? hy / Math.abs(dy) : Infinity);
+        // Layout px may differ from client px under the GUI's CSS zoom.
+        const z = area.offsetWidth ? ar.width / area.offsetWidth : 1;
+        const x = Math.round((ar.width / 2 + dx * k) / z);
+        const y = Math.round((ar.height / 2 + dy * k) / z);
+        // Write only on change: idle re-syncs must not dirty the (filtered) map layer.
+        const ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+        const key = x + '|' + y + '|' + ang;
+        if (el._edgeKey === key) return;
+        el._edgeKey = key;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.setProperty('--gm-edge-angle', ang + 'deg');
     },
 
     /** Glide the camera (current zoom) back to centre on the player ship. */
@@ -78646,6 +81125,8 @@ extendClass(GalaxyMapManager, {
             if (!cur) return;
             const v = this.getMapViewBox(GM_MAP_W, GM_MAP_H, GM_MAP_PAD);
             cur.setAttribute('viewBox', v.join(' '));
+            // Off-screen ship marker follows the pan live (cheap: one rect read, no re-render).
+            if (this.syncLocateShipButton) this.syncLocateShipButton();
         };
         let apply = (src) => {
             if (!mapLive()) return;
@@ -79010,7 +81491,19 @@ extendClass(GalaxyMapManager, {
             if (mapArea.clientWidth === lastW && mapArea.clientHeight === lastH) return;
             lastW = mapArea.clientWidth;
             lastH = mapArea.clientHeight;
-            if (!this._flight && !this._zoomAnim && !this._camAnim) this._mapApply('resize');
+            // A resize during a flight / zoom / camera glide (e.g. the map settling right after the intro)
+            // used to be dropped, leaving a stale view-box aspect: the first wheel zoom then jumped.
+            // Re-try until the animation is over instead.
+            const tryApply = () => {
+                if (!this.overlay || !this.overlay.isConnected || this._parkedGalaxyId || !this._mapApply) return;
+                if (this._flight || this._zoomAnim || this._camAnim) {
+                    clearTimeout(this._mapResizeRetry);
+                    this._mapResizeRetry = setTimeout(tryApply, 120);
+                    return;
+                }
+                this._mapApply('resize');
+            };
+            tryApply();
         });
         this._mapAreaRO.observe(mapArea);
     },
@@ -79322,11 +81815,13 @@ extendClass(GalaxyMapManager, {
         }
         let outline = '', fill = '';
         const r = (cx, cy, cls) => `<rect x="${(x0 + cx * F)}" y="${(y0 + cy * F)}" width="${Fw}" height="${Fw}" class="${cls}"/>`;
-        for (let cy = -1; cy <= gh; cy++) {
-            for (let cx = -1; cx <= cols; cx++) {
+        // Two-cell outline so the labels stay readable over bright planets and nebulae.
+        const OR = 2;
+        for (let cy = -OR; cy < gh + OR; cy++) {
+            for (let cx = -OR; cx < cols + OR; cx++) {
                 if (on.has(cx + ',' + cy)) { fill += r(cx, cy, 'gm-pixel-text'); continue; }
                 let edge = false;
-                for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1; dx++) if (on.has((cx + dx) + ',' + (cy + dy))) { edge = true; break; }
+                for (let dy = -OR; dy <= OR && !edge; dy++) for (let dx = -OR; dx <= OR; dx++) if (on.has((cx + dx) + ',' + (cy + dy))) { edge = true; break; }
                 if (edge) outline += r(cx, cy, 'gm-pixel-text-o');
             }
         }
@@ -87762,6 +90257,7 @@ var MENU_ORDER = {
         'layout',
         'assets',
         'components',
+        'portraits',
         'credits'
     ]
 };
@@ -87808,7 +90304,10 @@ var MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
             });
         }
         MENU_ORDER.main = main;
-        MENU_ORDER.esc = saved.esc.concat(MENU_ORDER.esc.filter(isNew)).filter((id) => id !== 'station');
+        const esc = saved.esc.slice();
+        // PORTRAITS (dev mode) belongs right before CREDITS, not at the row's end.
+        if (known.indexOf('portraits') === -1 && esc.indexOf('credits') !== -1) esc.splice(esc.indexOf('credits'), 0, 'portraits');
+        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1)).filter((id) => id !== 'station');
     } catch (e) { /* ignore */ }
 })();
 
@@ -88266,13 +90765,13 @@ var HomeStationUI = class HomeStationUI {
         this._tabs = main.concat(this._menuOnlyTabs);
     }
 
-    /** Developer-only tabs (COMPONENTS, LAYOUT) show only in dev mode (Shift+C). */
+    /** Developer-only tabs (COMPONENTS, LAYOUT, PORTRAITS) show only in dev mode (Shift+C). */
     isDevTabVisible(id) {
-        if (id !== 'components' && id !== 'layout') return true;
+        if (id !== 'components' && id !== 'layout' && id !== 'portraits') return true;
         // The dev tab that is open right now stays visible until you leave it.
         if (id === this.tab) return true;
-        if (id === 'layout' && this.tab === 'menu' && typeof startScreenManager !== 'undefined' &&
-            startScreenManager.embeddedMenuTab === 'layout') return true;
+        if ((id === 'layout' || id === 'portraits') && this.tab === 'menu' && typeof startScreenManager !== 'undefined' &&
+            startScreenManager.embeddedMenuTab === id) return true;
         return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
     }
 
@@ -90014,8 +92513,14 @@ extendClass(HomeStationUI, {
         this.unmountMenuTab();
         this.unmountPlayTab();
         this.unmountComponentsTab();
-        // Park leaving body DOM (keeps listeners) before wiping.
-        this._parkSoftBody(bodyEl, leavingTab);
+        // Same-tab rerender (e.g. hangar SHIPS/PARTS/SLOTS): never restore the stale
+        // parked DOM, rebuild the body so the new state shows.
+        if (leavingTab === this.tab) {
+            if (this._softBodyCache) delete this._softBodyCache[this.tab];
+        } else {
+            // Park leaving body DOM (keeps listeners) before wiping.
+            this._parkSoftBody(bodyEl, leavingTab);
+        }
 
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
         let hideTabsForTutorial = false;
@@ -90177,7 +92682,8 @@ extendClass(HomeStationUI, {
             const t = this.tab;
             if (!(opts && opts.bodyCached)) {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
-                if (t === 'station' || t === 'shop' || t === 'craft') this.bindStationEvents();
+                // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
+                if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
                 if (t === 'hangar') this.bindHangarTabEvents();
             }
             this.bindKeyNav();
@@ -90211,12 +92717,14 @@ extendClass(HomeStationUI, {
         if (this.tab === 'hangar') {
             this.setupHangarPanelResize();
             // Soft: hangar canvas draw was ~30–65ms on the click path.
+            // Left-panel tabs (SHIPS / PARTS / SLOTS) bind right away so they
+            // work even when the deferred frame is late or the draw throws.
             if (soft) {
+                this.bindHangarPartsGrid();
                 requestAnimationFrame(() => {
                     this.startHangarPreview();
                     this.drawHangarBay();
                     this.bindHangarSlotEvents();
-                    this.bindHangarPartsGrid();
                 });
             } else {
                 this.startHangarPreview();
@@ -90508,6 +93016,8 @@ extendClass(HomeStationUI, {
             onDock: (post) => this.openTradingPost(post)
         });
         this.mountTravelControls(mount);
+        // Back from a mission: keep the keyboard in the map on the selected planet.
+        if (galaxyMapManager.isInputActive()) this.enterPlayMap();
         this.syncPlayHint();
     },
 
@@ -92153,23 +94663,26 @@ var VXP = (() => {
 // Voxel pilot portraits, part 2/3: builds one portrait. Every pixel is a voxel column with a depth; head, hair, gear and
 // body are stacked into a depth buffer, lit from the upper left with a few flat tones and outlined. Facial details
 // (eyes, brows, mouth, scars) are flat "decals" on top. Returns RGBA bytes for a VXP.W x VXP.H canvas.
-VXP.build = (p, accent, blink, transparent) => {   // transparent: background pixels get alpha 0 (VXP.background draws them live)
-    const { W, H, hex, hash } = VXP, N = W * H, f = p.faction;
+VXP.build = (p, accent, blink, transparent, state, padTop) => {   // transparent: background pixels get alpha 0 (VXP.background draws them live)
+    // padTop: extra rows above row 0 so tall helmets / hats are not cut off (output is W x (H + padTop)).
+    const { W, H, hex, hash } = VXP, OY = padTop | 0, N = W * (H + OY), f = p.faction;
+    const hurt = state === 1, dead = state === 2, joy = state === 3, mad = state === 4;   // state: 0 healthy, 1 wounded, 2 dead (visor dark, never blinks), 3 joy, 4 anger
+    if (dead) blink = true;
     const vo = f === 'voidborn', ma = f === 'machine', kr = f === 'kronax';
     const full = true;                                                             // every pilot wears a closed helmet: no face is shown
     const Z = new Float32Array(N).fill(-99), C = new Float32Array(N * 3), K = new Uint8Array(N), D = new Float32Array(N * 4);
-    const skin = hex(p.skin), hair = hex(p.hair), eyeC = hex(p.eye), glow = hex(p.glow), cloth = hex(VXP.THEME[f].cloth), trim = ma ? hex(p.glow) : hex(VXP.THEME[f].trim);
+    const skin = hex(p.skin), hair = hex(p.hair), eyeC = hex(p.eye), glow = mad ? [255, 46, 30] : hex(p.glow).map((v) => (joy ? Math.min(255, v * 1.25 + 30) : v * (dead ? 0.12 : 1))), cloth = hex(VXP.THEME[f].cloth), trim = ma ? hex(p.glow) : hex(VXP.THEME[f].trim);
     const acc = hex(accent || VXP.THEME[f].trim);
     const sc = (c, k) => c.map((v) => v * k);
     const put = (x, y, z, c, k) => {
-        if (x < 0 || y < 0 || x >= W || y >= H) return;
-        const i = y * W + x;
+        if (x < 0 || y < -OY || x >= W || y >= H) return;
+        const i = (y + OY) * W + x;
         if (z < Z[i]) return;
         Z[i] = z; C[i * 3] = c[0]; C[i * 3 + 1] = c[1]; C[i * 3 + 2] = c[2]; K[i] = k; D[i * 4 + 3] = 0;
     };
     const dec = (x, y, c, a, skinOnly) => {
-        if (x < 0 || y < 0 || x >= W || y >= H) return;
-        const i = y * W + x;
+        if (x < 0 || y < -OY || x >= W || y >= H) return;
+        const i = (y + OY) * W + x;
         if (Z[i] < -50 || (skinOnly && K[i] !== 1)) return;
         D[i * 4] = c[0]; D[i * 4 + 1] = c[1]; D[i * 4 + 2] = c[2]; D[i * 4 + 3] = a == null ? 1 : a;
     };
@@ -92312,6 +94825,8 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         const hp = vo ? [[top - 3, 0.3], [top, 0.6], [top + 8, 0.9], [top + 0.5 * hh, 1], [top + 0.72 * hh, 0.85], [chin - 4, 0.6], [chin + 2, 0.3]]
             : f === 'pirate' ? [[top - 3, 0.55], [top - 1, 0.88], [top + 2, 1.04], [top + 7, 1.08], [yE + 1, 1.02], [yN - 1, 0.86], [yN + 3, 0.78], [yM + 1, 0.7], [chin - 1, 0.6], [chin + 2, 0.5]]   // skull: round cranium, cheek hollows, narrow jaw
             : [[top - 3, 0.5], [top - 1, 0.74], [top + 2, 0.92], [top + 5, 1], [yM, 1], [yM + 2, 0.86], [chin - 1, 0.62], [chin + 2, 0.58]];
+        // Round the crown off: the first profile point is already 30-90 % wide, which read as a flat cut.
+        { const [t0, w0] = hp[0]; hp.unshift([t0 - 3, 0], [t0 - 2, w0 * 0.45], [t0 - 1, w0 * 0.8]); }
         const hwH = (y) => {
             if (y <= hp[0][0]) return 0;
             for (let k = 1; k < hp.length; k++) if (y <= hp[k][0]) { const u = hp[k - 1], v = hp[k]; return R * (u[1] + (v[1] - u[1]) * (y - u[0]) / (v[0] - u[0])); }
@@ -92325,7 +94840,7 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
             if (!vo && Math.abs(dc) < 5.5 && y >= yN - 1 && y <= chin - 2) z += 3;     // respirator snout
             return z;
         };
-        for (let y = top - 3; y <= chin + 2; y++) for (let x = 0; x < W; x++) {
+        for (let y = hp[0][0]; y <= chin + 2; y++) for (let x = 0; x < W; x++) {
             const dx = x + 0.5 - 24, w = hwH(y);
             if (w <= 0 || (dx < 0 ? -dx > w * 0.9 : dx > w * 1.06)) continue;       // turned head: the left side is foreshortened
             put(x, y, zH(dx, y), sc(hm, 0.92 + 0.16 * rnd(x, y)), 3);
@@ -92358,7 +94873,7 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         seamLine(cf - hwH(yM), yM - 3, cf + hwH(yM) * 1.06, yM - 3);                                                           // jaw plate seam
         seamLine(cf - hwH(yE) * 0.6, yE + 3, cf - hwH(yE) * 0.6, yM - 3); seamLine(cf + hwH(yE) * 0.75, yE + 3, cf + hwH(yE) * 0.75, yM - 3);
         for (let y = top - 3; y <= chin + 2; y++) for (let x = 0; x < W; x++) {                                                // scuffs, dirt and worn edges
-            const i = y * W + x;
+            const i = (y + OY) * W + x;
             if (K[i] !== 3) continue;
             const r = rnd(x * 3 + 1, y * 5 + 2);
             if (r < 0.035) dec(x, y, sc(hm, 1.9), 0.55); else if (r > 0.97 && f !== 'terran') dec(x, y, [14, 12, 10], 0.5);
@@ -92718,12 +95233,67 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         else line(Math.round(sx - 3), yE + 6, Math.round(sx + 2), yE + 9, (x, y) => dec(x, y, [214, 150, 140].map((v, i) => v * 0.6 + skin[i] * 0.4), 1, true));
     }
     }
+    // ---- expression on the visor: happy arcs and warm cheeks (joy), scowling brow plates and a frown (anger) ----
+    if ((joy || mad) && !blink) {
+        const cf = 21, hot = mad ? [255, 70, 40] : glow.map((v) => Math.min(255, v + 60)), on = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50;
+        [-1, 1].forEach((sd) => {
+            const ox = cf + sd * ex;
+            if (joy) {
+                for (let d = -3; d <= 3; d++) { const y = yE + 1 - Math.round(1.6 * (1 - (d * d) / 9) + 0.2); if (on(ox + d, y)) dec(ox + d, y, hot, 1); if (on(ox + d, y + 1)) dec(ox + d, y + 1, [6, 8, 12], 1); }   // ^ ^ eyes
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) < 3 && on(ox + sd * 2 + dx, yN + dy)) dec(ox + sd * 2 + dx, yN + dy, [255, 120, 140], 0.45);   // blush
+            } else {
+                line(ox - sd * 4, yE - 1, ox + sd * 4, yE - 5, (x, y) => { if (on(x, y)) dec(x, y, [10, 6, 6], 1); if (on(x, y + 1)) dec(x, y + 1, [10, 6, 6], 1); });   // brows slanting to the nose
+                for (let d = -2; d <= 2; d++) if (on(ox + d, yE + 1)) dec(ox + d, yE + 1, hot, 1);
+            }
+        });
+        if (joy) for (let d = -5; d <= 5; d++) { const y = yM + 2 - Math.round(2 * (1 - (d * d) / 25)) + 2; if (on(cf + d, y)) dec(cf + d, y, hot, 0.95); }   // smile
+        else {
+            for (let d = -5; d <= 5; d++) { const y = yM + 1 + Math.round(2 * (1 - (d * d) / 25)); if (on(cf + d, y)) dec(cf + d, y, [255, 70, 40], 0.95); }   // frown
+            [[-1, -3], [1, -4]].forEach(([sd, k]) => { const vx = cf + sd * (ex + 8), vy = top + 3; [[0, 0], [1, 1], [-1, 1], [0, 2]].forEach(([a, b]) => { if (on(vx + a, vy + b + k + 3)) dec(vx + a, vy + b + k + 3, [255, 50, 40], 1); }); });   // anger veins
+        }
+    }
+    // ---- battle damage: cracks, scorch marks and blood on the helm (wounded), a shattered visor on top (dead) ----
+    if (hurt || dead) {
+        const rr = (a, b) => hash(p.idx * 31 + a, (f.length * 17 + b) | 0);
+        const onHelm = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50 && K[(y + OY) * W + x] !== 4;
+        const blood = [120, 8, 10], bloodD = [70, 4, 6], crackC = [6, 6, 8];
+        const crack = (x, y, n, seed) => {                                         // jagged random walk, with one side branch
+            let ang = rr(seed, 1) * 6.283;
+            for (let s = 0; s < n; s++) {
+                if (onHelm(Math.round(x), Math.round(y))) dec(Math.round(x), Math.round(y), crackC, 1);
+                if (s === (n >> 1)) crack(x, y, n >> 1, seed + 7);
+                ang += (rr(seed, s + 3) - 0.5) * 1.6; x += Math.cos(ang); y += Math.sin(ang);
+            }
+        };
+        const nCr = dead ? 4 : 2;
+        for (let k = 0; k < nCr; k++) crack(24 + (rr(k, 11) - 0.5) * 14, yE + (rr(k, 12) - 0.6) * 12, dead ? 12 : 8, k * 13 + 5);
+        for (let k = 0; k < (dead ? 3 : 2); k++) {                                // scorch patches
+            const sx = 24 + (rr(k, 21) - 0.5) * 18, sy = top + 4 + rr(k, 22) * (yM - top), r = 2 + rr(k, 23) * 2.5;
+            for (let y = Math.floor(sy - r); y <= sy + r; y++) for (let x = Math.floor(sx - r); x <= sx + r; x++) {
+                const d = Math.hypot(x + 0.5 - sx, y + 0.5 - sy) / r;
+                if (d <= 1 && onHelm(x, y) && hash(x, y) < 1.1 - d) dec(x, y, [18, 14, 12], 0.75 * (1 - d * 0.5));
+            }
+        }
+        for (let k = 0; k < (dead ? 3 : 1); k++) {                                // blood splash with drips running down
+            const bx = 24 + (rr(k, 31) - 0.5) * 16, by = yE - 3 + rr(k, 32) * 8, r = dead ? 2.6 : 1.8;
+            for (let y = Math.floor(by - r); y <= by + r; y++) for (let x = Math.floor(bx - r); x <= bx + r; x++) if (Math.hypot(x + 0.5 - bx, y + 0.5 - by) <= r && onHelm(x, y)) dec(x, y, hash(x, y) < 0.3 ? bloodD : blood, 0.95);
+            for (let d = 0; d < 3; d++) {
+                const dx = Math.round(bx + (d - 1) * 1.4), len = 2 + Math.floor(rr(k * 3 + d, 33) * (dead ? 9 : 5));
+                for (let y = Math.round(by); y < by + r + len; y++) if (onHelm(dx, y)) dec(dx, y, y > by + r + len - 2 ? bloodD : blood, 0.9);
+            }
+        }
+        if (dead) for (let y = yE - 3; y <= yE + 4; y++) for (let x = 24 - ex - 6; x <= 24 + ex + 6; x++) {   // shattered visor: dark hole with glass shards
+            if (!onHelm(x, y)) continue;
+            const h = hash(x * 7 + 3, y * 5 + 1);
+            if (h < 0.08) dec(x, y, [150, 160, 170], 0.9); else if (h < 0.5 && Math.abs(y - (yE + 0.5)) < 2.5) dec(x, y, [3, 3, 5], 1);
+        }
+    }
     // ---- light the depth buffer ----
     const out = new Uint8ClampedArray(N * 4), L = [-0.5, -0.6, 0.62], ll = Math.hypot(...L);
-    const zAt = (x, y, z0) => (x < 0 || y < 0 || x >= W || y >= H || Z[y * W + x] < -50 ? z0 - 7 : Z[y * W + x]);
-    const filled = (x, y) => x >= 0 && y >= 0 && x < W && y < H && Z[y * W + x] > -50;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const i = y * W + x, o = i * 4;
+    const zAt = (x, y, z0) => (x < 0 || y < -OY || x >= W || y >= H || Z[(y + OY) * W + x] < -50 ? z0 - 7 : Z[(y + OY) * W + x]);
+    const filled = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50;
+    for (let y = -OY; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y + OY) * W + x, o = i * 4;
         if (Z[i] < -50) {
             const edge = filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1);
             if (transparent && !edge) { out[o + 3] = 0; continue; }
@@ -92744,6 +95314,8 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         if (zAt(x - 1, y, z) > z + 5 || zAt(x, y - 1, z) > z + 5 || zAt(x + 1, y, z) > z + 5 || zAt(x, y + 1, z) > z + 5) c = c.map((v) => v * 0.45);   // contact shadow where a nearer part overlaps
         const a = D[i * 4 + 3];
         if (a > 0) c = c.map((v, k) => v * (1 - a) + D[i * 4 + k] * a * (0.55 + q * 0.5));
+        if (dead) { const gy = (c[0] + c[1] + c[2]) / 3; c = c.map((v) => (v * 0.35 + gy * 0.65) * 0.72); }   // lifeless: drained of colour, dimmed
+        else if (hurt) c = [c[0] * 1.04 + 6, c[1] * 0.92, c[2] * 0.9];
         out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2]; out[o + 3] = 255;
     }
     return out;
@@ -92954,7 +95526,8 @@ VXP.background = (() => {
 // at assets/factions/<faction>/portraits.png (16 equal cells, row by row) or single files .../portraits/01.png..16.png
 // (listed by factionPacks, so nothing is probed with 404s). canvasHtml(look, accent) returns a <canvas> that scan()/register()
 // fill with VXP.build; every portrait blinks now and then. A look is { faction, v } with v = 0..15 (the preset).
-var voxelPortrait = (() => {
+// opts.state (data-state): 0 healthy, 1 wounded, 2 dead, 3 joy, 4 anger; a dead pilot never blinks. setState() changes it live.
+const voxelPortrait = (() => {
     const entries = new Set();
     let timer = 0;
     const lookOf = (look) => (typeof look === 'string' ? { faction: look, v: 0 } : (look || { faction: 'terran', v: 0 }));
@@ -92977,8 +95550,11 @@ var voxelPortrait = (() => {
     }
     function drawPainted(e, a) {
         e.painted = true;
+        e.art = a;
+        e.ctx.filter = 'none';
         e.canvas.width = a.w; e.canvas.height = a.h;
         e.ctx.imageSmoothingEnabled = false;
+        if ((e.state === 1 || e.state === 2) && 'filter' in e.ctx) e.ctx.filter = e.state === 2 ? 'grayscale(0.7) brightness(0.65)' : 'sepia(0.35) saturate(1.4) hue-rotate(-20deg)';
         e.ctx.drawImage(a.img, a.sx, a.sy, a.w, a.h, 0, 0, a.w, a.h);
     }
     // The pilot (head layer, transparent background) is built once per blink state; the faction backdrop is repainted
@@ -93001,13 +95577,16 @@ var voxelPortrait = (() => {
         }
         e.ctx.putImageData(e.small, 0, 0);
     }
+    // Rows rendered above the 48x54 head buffer: at SC 0.74 the canvas top samples ~17 rows above it,
+    // so tall helmets / hats show in full instead of ending in a flat cut.
+    const HEAD_PAD = 18;
     function draw(e, blink) {
         if (e.painted) return;
         const k = blink ? 1 : 0;
         if (e.nobg && e.lastK === k) return;   // backdrop-free portrait: nothing animates except the blink, repaint only on change
         e.lastK = k;
         if (!e.head) e.head = [null, null];
-        if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true);
+        if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true, e.state, HEAD_PAD);
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
         const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
         const head = e.head[k], dst = e.img.data;
@@ -93024,7 +95603,7 @@ var voxelPortrait = (() => {
         const SC = 0.74, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1 - 6;
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const o = (y * W + x) * 4, sx = Math.round(cx + (x - cx) / SC), sy = Math.round(by + (y - by) / SC);
-            const ho = sx >= 0 && sy >= 0 && sx < W && sy < H ? (sy * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
+            const ho = sx >= 0 && sy >= -HEAD_PAD && sx < W && sy < H ? ((sy + HEAD_PAD) * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
             if (e.nobg) { dst[o] = ho < 0 ? 0 : head[ho]; dst[o + 1] = ho < 0 ? 0 : head[ho + 1]; dst[o + 2] = ho < 0 ? 0 : head[ho + 2]; dst[o + 3] = Math.round(a * 255); continue; }
             dst[o] = ho < 0 ? bg[o] : head[ho] * a + bg[o] * (1 - a);
             dst[o + 1] = ho < 0 ? bg[o + 1] : head[ho + 1] * a + bg[o + 1] * (1 - a);
@@ -93045,7 +95624,7 @@ var voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
-        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)), blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
@@ -93058,10 +95637,22 @@ var voxelPortrait = (() => {
         for (const e of entries) {
             if (!e.canvas.isConnected) { entries.delete(e); if (io) io.unobserve(e.canvas); continue; }
             if (e.painted || e.vis === false || document.hidden) continue;
-            if (now >= e.next) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
+            if (now >= e.next && e.state !== 2) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
             draw(e, now < e.blinkUntil);
         }
         if (!entries.size) { clearInterval(timer); timer = 0; }
+    }
+    /** Switch a live portrait's expression (0 healthy, 1 wounded/pain, 2 dead, 3 joy, 4 anger) and repaint at once. */
+    function setState(canvas, state) {
+        const e = canvas && canvas.__vx;
+        const s = Math.max(0, Math.min(4, state | 0));
+        if (!e || e.state === s) return;
+        e.state = s;
+        e.head = null;
+        e.lastK = null;
+        if (s === 2) e.blinkUntil = 0;
+        if (e.painted) { if (e.art) drawPainted(e, e.art); return; }
+        draw(e, false);
     }
     const scan = (root) => (root || document).querySelectorAll('canvas.vx-portrait').forEach(register);
     function observe() {
@@ -93078,12 +95669,12 @@ var voxelPortrait = (() => {
         scan(document);
     }
     function canvasHtml(look, accent, opts) {
-        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
+        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''}${opts && opts.state ? ` data-state="${opts.state | 0}"` : ''} role="img" aria-label="Pilot portrait"></canvas>`;
     }
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe); else observe();
     }
-    return { canvasHtml, register, scan, draw };
+    return { canvasHtml, register, scan, draw, setState };
 })();
 
 
@@ -106217,6 +108808,7 @@ var StartScreenManager = class StartScreenManager {
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
             { id: 'layout', label: 'LAYOUT', icon: 'menuSettings' },
+            { id: 'portraits', label: 'PORTRAITS', icon: 'menuProfiles' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
         ];
         this.title = "GLXEE";
@@ -106981,6 +109573,11 @@ extendClass(StartScreenManager, {
         if (this.visible) this.createStartScreenUI();
         // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
+            // A soft rebuild keeps the tab rows unless the area changes, so the dev tabs
+            // would only show after a reload: drop the soft shell and cached bodies first.
+            homeStationUI._hsShellReady = false;
+            homeStationUI._softBodyCache = null;
+            homeStationUI._softAreaId = null;
             homeStationUI.createUI();
         }
     },
@@ -107274,7 +109871,7 @@ extendClass(StartScreenManager, {
     },
 
     cycleEmbeddedMenuTab(dir) {
-        const ids = this.embeddedMenuTabs.map((t) => t.id);
+        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => id !== 'portraits' || this.devMode);
         const idx = ids.indexOf(this.embeddedMenuTab);
         const next = (idx + dir + ids.length) % ids.length;
         this.setEmbeddedMenuTab(ids[next]);
@@ -107677,6 +110274,7 @@ extendClass(StartScreenManager, {
         const tabs = document.createElement('div');
         tabs.className = 'hs-menu-panel-tabs';
         this.embeddedMenuTabs.forEach((tab) => {
+            if (tab.id === 'portraits' && !this.devMode && this.embeddedMenuTab !== 'portraits') return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'hs-menu-panel-tab' + (tab.id === this.embeddedMenuTab ? ' active' : '');
@@ -107709,6 +110307,8 @@ extendClass(StartScreenManager, {
             this.fillEmbeddedAssets(body);
         } else if (this.embeddedMenuTab === 'layout' && this.fillEmbeddedLayout) {
             this.fillEmbeddedLayout(body);
+        } else if (this.embeddedMenuTab === 'portraits' && this.fillEmbeddedPortraits) {
+            this.fillEmbeddedPortraits(body);
         } else {
             body.classList.add('hs-menu-panel-body-credits');
             this.fillEmbeddedCredits(body);
@@ -109370,6 +111970,50 @@ extendClass(StartScreenManager, {
             to.tabs.push(tab);
             apply();
         });
+    }
+});
+
+
+/* --- js/ui/start-screen/fill-embedded-portraits.js --- */
+"use strict";
+
+// Menu → PORTRAITS (dev mode): every pilot face of every faction in all five
+// states side by side — normal, wounded, dead, joy, anger (VXP.build state 0..4).
+extendClass(StartScreenManager, {
+    fillEmbeddedPortraits(body) {
+        const panel = document.createElement('div');
+        panel.className = 'hs-menu-panel-section hs-portrait-states';
+        body.appendChild(panel);
+        if (typeof VXP === 'undefined' || !VXP.build) {
+            panel.innerHTML = '<p class="hs-menu-panel-copy">Portrait generator not loaded.</p>';
+            return;
+        }
+        const STATES = ['NORMAL', 'WOUNDED', 'DEAD', 'JOY', 'ANGER'];
+        const FACTIONS = ['terran', 'pirate', 'kronax', 'voidborn', 'machine'];
+        panel.innerHTML =
+            '<h2 class="hs-menu-panel-section-title">PILOT PORTRAITS</h2>' +
+            `<p class="hs-menu-panel-copy">Each pilot: ${STATES.join(' · ')}.</p>` +
+            FACTIONS.map((f) => `<section class="hs-portrait-faction"><h3 class="hs-menu-panel-section-title">${f.toUpperCase()}</h3><div class="hs-portrait-grid" data-faction="${f}"></div></section>`).join('');
+        // Built a faction per frame so opening the tab never stalls on 400 portraits at once.
+        let fi = 0;
+        const next = () => {
+            if (fi >= FACTIONS.length || !panel.isConnected) return;
+            const f = FACTIONS[fi++], grid = panel.querySelector(`.hs-portrait-grid[data-faction="${f}"]`);
+            for (let v = 0; v < VXP.COUNT; v++) {
+                const card = document.createElement('div');
+                card.className = 'hs-portrait-card';
+                const preset = VXP.preset(f, v);
+                STATES.forEach((label, s) => {
+                    const c = document.createElement('canvas');
+                    c.width = VXP.W; c.height = VXP.H; c.title = `${f} #${v + 1} · ${label}`;
+                    c.getContext('2d').putImageData(new ImageData(VXP.build(preset, null, false, false, s), VXP.W, VXP.H), 0, 0);
+                    card.appendChild(c);
+                });
+                grid.appendChild(card);
+            }
+            requestAnimationFrame(next);
+        };
+        requestAnimationFrame(next);
     }
 });
 
@@ -113852,10 +116496,18 @@ extendClass(PlanetSVGManager, {
             }
             // Combat owns the main thread (runtime: spin tick spikes >200ms while
             // GameLoop JS stayed cheap). Decorative planet spin waits outside fights.
-            if (root.classList.contains('vf-game-shown')) return false;
+            // Victory / defeat screens sit on top of the (finished) game: their planet still turns.
+            if (root.classList.contains('vf-game-shown') && !this.isOutcomeScreenOpen()) return false;
             // Map spin is allowed again — round-robin budget in startPlanetSpin caps cost.
         } catch (e) { /* allow */ }
         return true;
+    },
+
+    /** Victory or defeat overlay is showing (combat is over, spin is cheap again). */
+    isOutcomeScreenOpen() {
+        const vo = document.getElementById('victoryOverlay');
+        const go = document.getElementById('gameOver');
+        return !!((vo && !vo.classList.contains('hidden')) || (go && !go.classList.contains('hidden')));
     },
 
     /** Keep spin detail aligned with map node art (same grid as planetIconHtml). */
@@ -113897,26 +116549,37 @@ extendClass(PlanetSVGManager, {
             if (document.hidden) return;
             // Round-robin with a short frame budget: same detail/quality as before,
             // but never rebuild every planet in one tick (that froze the shell).
-            const n = els.length;
+            // Featured planets (card backdrops, outcome screens — not map nodes) are few
+            // and big: they step every tick so their turn reads smooth. Sharing the
+            // round-robin made them wait many ticks and jump several frames at once.
+            const featured = [];
+            const mapEls = [];
+            els.forEach((e) => (e.closest('.galaxy-map-svg') ? mapEls : featured).push(e));
+            const n = mapEls.length;
             // Placeholders (data-spin-frame=-1) get extra budget so coarse first paints upgrade fast.
             let pendingUpgrade = 0;
             for (let i = 0; i < n; i++) {
-                if (els[i] && els[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
+                if (mapEls[i] && mapEls[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
             const budgetMs = pendingUpgrade ? 10 : 4;
             const maxUpdates = pendingUpgrade ? 2 : 1;
-            const t0 = performance.now();
+            let t0 = performance.now();
             let updated = 0;
-            for (let tried = 0; tried < n && updated < maxUpdates && performance.now() - t0 < budgetMs; tried++) {
+            const nf = featured.length;
+            for (let tried = 0; tried < nf + n && (tried <= nf || (updated < maxUpdates && performance.now() - t0 < budgetMs)); tried++) {
+                const isFeatured = tried < nf;
+                // Map nodes get their own budget: big featured frames must not starve them.
+                if (tried === nf) t0 = performance.now();
+                const rr = tried - nf;
                 // Prefer placeholders so zoomed map nodes leave detail-1 ASAP.
-                let el = null;
-                if (pendingUpgrade > 0) {
+                let el = isFeatured ? featured[tried] : null;
+                if (!el && pendingUpgrade > 0) {
                     for (let j = 0; j < n; j++) {
-                        const cand = els[(this._spinCursor + tried + j) % n];
+                        const cand = mapEls[(this._spinCursor + rr + j) % n];
                         if (cand && cand.getAttribute('data-spin-frame') === '-1') { el = cand; break; }
                     }
                 }
-                if (!el) el = els[(this._spinCursor + tried) % n];
+                if (!el) el = mapEls[(this._spinCursor + rr) % n];
                 if (!el || !el.isConnected) continue;
                 // Inside the galaxy-map SVG, getBoundingClientRect is unreliable
                 // (viewBox / foreignObject often reports planets far off-screen
@@ -113941,7 +116604,7 @@ extendClass(PlanetSVGManager, {
                 const fk = model.uid + ':' + f;
                 // Fine grids advance slowly; coarse map icons stay on the shared period.
                 // Upgrades from the placeholder always go through immediately.
-                if (!upgrading && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
+                if (!upgrading && !isFeatured && model.n > 72 && el._spinFrame != null && el._spinFrame !== fk) {
                     const nowT = performance.now();
                     if (el._lastSpinT && nowT - el._lastSpinT < 900) continue;
                     el._lastSpinT = nowT;
@@ -113970,7 +116633,7 @@ extendClass(PlanetSVGManager, {
                     imgEl.style.left = off + 'px';
                     imgEl.style.top = off + 'px';
                     if (conv.scale) model.frameScale = conv.scale;
-                    updated++;
+                    if (!isFeatured) updated++;
                     continue;
                 }
                 const svgEl = el.querySelector('svg');
@@ -113980,7 +116643,7 @@ extendClass(PlanetSVGManager, {
                 if (w) svg = svg.replace(/width="[^"]*"/, `width="${w}"`);
                 if (h) svg = svg.replace(/height="[^"]*"/, `height="${h}"`);
                 el.innerHTML = svg;
-                updated++;
+                if (!isFeatured) updated++;
             }
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
@@ -114295,6 +116958,7 @@ var StartStationBackdrop = class StartStationBackdrop {
         // resolution is handled by scaling the 2D context to match.
         const w = Math.round(this.el.clientWidth), h = Math.round(this.el.clientHeight);
         if (w < 10 || h < 10 || (w === this.W && h === this.H)) return;
+        if (window.vfResizing) { this._deferSync(); return; }
         this.W = w;
         this.H = h;
         // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
@@ -114305,6 +116969,13 @@ var StartStationBackdrop = class StartStationBackdrop {
         this.canvas.height = Math.round(h * dpr);
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
+    }
+
+    /** Resize in progress: apply the new backing-store size once, after the drag ends. */
+    _deferSync() {
+        if (this._rsBound) return;
+        this._rsBound = true;
+        window.addEventListener('vf-resize-end', () => { this._rsBound = false; this._syncSize(); }, { once: true });
     }
 
     _startLoop() {
@@ -114322,7 +116993,7 @@ var StartStationBackdrop = class StartStationBackdrop {
                 const st = getComputedStyle(host);
                 if (st.display === 'none' || st.visibility === 'hidden') return;
             } catch (e) { /* draw anyway */ }
-            if (document.hidden) return;
+            if (document.hidden || window.vfResizing) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
@@ -114455,25 +117126,33 @@ var StartStationBackdrop = class StartStationBackdrop {
         const model = this._planetSpinModel;
         const id = this._planetSpinId;
         if (!model || !id || typeof planetSVGManager === 'undefined') return this._planetCurFrame;
-        const f = planetSVGManager.getPlanetSpinIndex(id, model);
+        // A rotation can be ~500 frames of 300KB SVG each: rasterising a new one every ~120ms (and re-rasterising
+        // the SVG on every drawImage) was the idle CPU cost of this screen. Step the spin so one rotation is at most
+        // 128 frames, and keep every frame as a bitmap — after the first lap nothing is regenerated.
+        const step = Math.max(1, Math.ceil(model.count / 128));
+        const f = (Math.floor(planetSVGManager.getPlanetSpinIndex(id, model) / step) * step) % model.count;
         const cached = this._planetFrameCache[f];
         if (cached) {
             this._planetCurFrame = cached;
             return cached;
         }
         if (!this._planetFrameLoading[f]) {
-            this._planetFrameLoading[f] = true;
+            const cache = this._planetFrameCache, loading = this._planetFrameLoading;
+            loading[f] = true;
             try {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg);
                 const img = new Image();
-                img.onload = () => {
-                    // A full rotation can be a few hundred frames; keep the cache from
-                    // growing without bound over a long-idle start screen.
-                    if (Object.keys(this._planetFrameCache).length > 90) this._planetFrameCache = {};
-                    this._planetFrameCache[f] = { img: img, scale: conv.scale };
-                    this._planetFrameLoading[f] = false;
+                const store = (src) => {
+                    loading[f] = false;
+                    if (this._planetFrameCache !== cache) return;   // faction / planet changed while decoding
+                    cache[f] = { img: src, scale: conv.scale };
                     this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
+                };
+                img.onload = () => {
+                    if (typeof createImageBitmap === 'function') {
+                        createImageBitmap(img).then(store, () => store(img));
+                    } else store(img);
                 };
                 img.src = conv.url;
             } catch (err) { this._planetFrameLoading[f] = false; }
@@ -114976,7 +117655,8 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
             this._frameCache = {};
             this._frameLoading = {};
             this._frameIdx = 0;
-            // keep _curFrame (last drawn) until the new planet's first raster lands, so it doesn't blank
+            // Drop the previous faction's frame: showing it until the new raster lands read as "wrong planet".
+            this._curFrame = null;
         } catch (err) { /* keep whatever was already showing */ }
         if (this._reduceMotion) this.draw();
     }
@@ -115042,25 +117722,35 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
         const cached = this._frameCache[f];
         if (cached) { this._curFrame = cached; return cached; }
         if (!this._frameLoading[f]) {
-            this._frameLoading[f] = true;
+            const loading = this._frameLoading;
+            const cache = this._frameCache;
+            loading[f] = true;
             try {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg, 0.45);
                 const img = new Image();
-                img.onload = () => {
-                    if (Object.keys(this._frameCache).length > 90) this._frameCache = {};
-                    const entry = { img: img, scale: conv.scale };
+                // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
+                // and step the spin so one rotation is at most 128 frames: after the first lap nothing is rebuilt.
+                const step = Math.max(1, Math.ceil(model.count / 128));
+                const store = (src) => {
+                    loading[f] = false;
+                    // A faction switch swapped the model while this frame decoded: it belongs to the old planet.
+                    if (this._spinModel !== model || this._frameCache !== cache) return;
+                    const entry = { img: src, scale: conv.scale };
                     this._frameCache[f] = entry;
-                    this._frameLoading[f] = false;
                     // Show it the moment it's ready — the next draw() tick would otherwise have
                     // already moved _frameIdx past `f` before ever reading this cache entry.
                     this._curFrame = entry;
                     // Only advance to the next frame once this one is actually ready to show.
-                    if (this._frameIdx === f) this._frameIdx = (f + 1) % model.count;
+                    if (this._frameIdx === f) this._frameIdx = (f + step) % model.count;
                     this.draw();
                 };
+                img.onload = () => {
+                    if (typeof createImageBitmap === 'function') createImageBitmap(img).then(store, () => store(img));
+                    else store(img);
+                };
                 img.src = conv.url;
-            } catch (err) { this._frameLoading[f] = false; }
+            } catch (err) { loading[f] = false; }
         }
         return this._curFrame;
     }

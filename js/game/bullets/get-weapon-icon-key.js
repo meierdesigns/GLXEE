@@ -118,6 +118,96 @@ extendClass(BulletManager, {
             ? profileManager.getActiveProfile() : null;
         return (p && p.faction) || null;
     },
+    /**
+     * Side-view pixel art of a weapon on a 48×16 grid: the barrel comes from the weapon type,
+     * the receiver shape and paint from the faction, glowing parts in the weapon's UI colour.
+     */
+    renderWeaponArt(weaponId, canvas, factionId) {
+        if (!canvas || !canvas.getContext) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        canvas.width = 48;
+        canvas.height = 16;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, 48, 16);
+        const id = String(weaponId || 'laser').toLowerCase();
+        const kind = ({ claw_beam: 'ion', spike_burst: 'spread', laser_twin: 'burst', railgun: 'pierce', normal: 'laser' })[id] || id;
+        const faction = String(factionId || 'terran').toLowerCase();
+        // body dark / mid / light, trim
+        const pal = ({
+            terran: ['#2a3442', '#53657c', '#9fb3c8', '#e0c060'],
+            kronax: ['#3a1612', '#7a2e1e', '#c0643a', '#e8b040'],
+            voidborn: ['#1c1230', '#45306e', '#8a6cc8', '#5ff0d0'],
+            pirate: ['#2e1d10', '#6a4424', '#a8743e', '#d8b048'],
+            machine: ['#1a2020', '#3d4a4a', '#7c8e8a', '#7cff6a']
+        })[faction] || ['#2a3442', '#53657c', '#9fb3c8', '#e0c060'];
+        const [dk, md, lt, trim] = pal;
+        const glow = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor
+            && weaponConfigManager.getWeaponUiColor(weaponId)) || '#7fe8ff';
+        const r = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+        // Barrel helper: a shaded horizontal tube.
+        const tube = (x, y, w, h) => { r(x, y, w, h, md); r(x, y, w, 1, lt); r(x, y + h - 1, w, 1, dk); };
+
+        // Receiver per faction.
+        if (faction === 'kronax') {
+            r(3, 4, 18, 9, dk); r(4, 5, 16, 7, md); r(4, 5, 16, 1, lt);
+            r(6, 12, 4, 3, dk); r(14, 12, 6, 2, trim);           // grip + blade under the barrel
+            r(2, 3, 2, 2, trim); r(20, 3, 2, 2, trim);           // spikes
+        } else if (faction === 'voidborn') {
+            r(5, 5, 15, 7, dk); r(4, 6, 17, 5, md); r(6, 5, 12, 1, lt);
+            r(3, 7, 1, 3, md); r(8, 12, 3, 2, md);
+            r(9, 7, 3, 3, trim);                                  // organic core
+        } else if (faction === 'pirate') {
+            r(1, 8, 8, 4, md); r(1, 8, 8, 1, lt); r(0, 9, 1, 3, dk); // wooden stock
+            r(8, 5, 13, 7, dk); r(9, 6, 11, 5, md); r(9, 6, 11, 1, lt);
+            r(11, 12, 3, 3, dk); r(12, 5, 1, 7, trim); r(17, 5, 1, 7, trim);
+        } else if (faction === 'machine') {
+            for (let i = 0; i < 3; i++) { r(3 + i * 6, 4, 5, 9, dk); r(4 + i * 6, 5, 3, 7, md); r(4 + i * 6, 5, 3, 1, lt); }
+            r(5, 7, 1, 1, trim); r(11, 7, 1, 1, trim); r(17, 7, 1, 1, trim); // status LEDs
+            r(9, 13, 4, 2, dk);
+        } else {
+            r(2, 7, 6, 4, md); r(2, 7, 6, 1, lt);                // stock
+            r(7, 4, 15, 9, dk); r(8, 5, 13, 7, md); r(8, 5, 13, 1, lt);
+            r(10, 12, 3, 3, dk); r(15, 7, 4, 2, trim);
+        }
+
+        // Barrel per weapon type, from x = 21 to the muzzle.
+        if (kind === 'rapid') {
+            r(21, 4, 4, 9, dk); r(22, 5, 2, 7, trim);            // drum
+            [5, 8, 11].forEach((y) => { tube(25, y - 1, 18, 2); r(43, y - 1, 1, 2, glow); });
+        } else if (kind === 'spread') {
+            tube(21, 6, 10, 5);
+            r(31, 4, 11, 2, md); r(31, 7, 13, 3, md); r(31, 11, 11, 2, md);
+            r(42, 4, 2, 2, glow); r(44, 7, 2, 3, glow); r(42, 11, 2, 2, glow);
+        } else if (kind === 'plasma') {
+            tube(21, 4, 20, 9);
+            for (let x = 24; x < 38; x += 3) r(x, 5, 1, 7, glow); // coil
+            r(41, 5, 3, 7, dk); r(44, 6, 2, 5, glow);
+        } else if (kind === 'missile') {
+            r(21, 3, 20, 11, dk); r(22, 4, 18, 9, md); r(22, 4, 18, 1, lt);
+            [5, 9].forEach((y) => { r(40, y, 4, 3, dk); r(44, y, 2, 3, glow); r(36, y + 1, 4, 1, trim); });
+        } else if (kind === 'ion') {
+            tube(21, 6, 14, 5);
+            r(35, 3, 9, 2, md); r(35, 12, 9, 2, md); r(35, 5, 2, 7, dk); // prongs
+            r(38, 6, 1, 1, glow); r(40, 8, 1, 1, glow); r(42, 9, 1, 1, glow); r(39, 10, 1, 1, glow); r(44, 7, 1, 3, glow);
+        } else if (kind === 'wave') {
+            tube(21, 6, 13, 5);
+            r(34, 3, 2, 11, md); r(36, 2, 2, 13, lt); r(38, 4, 1, 9, glow); r(40, 6, 1, 5, glow); r(42, 7, 1, 3, glow);
+        } else if (kind === 'burst') {
+            tube(21, 4, 21, 3); tube(21, 9, 21, 3); r(28, 7, 3, 2, dk);
+            r(42, 4, 2, 3, glow); r(42, 9, 2, 3, glow);
+        } else if (kind === 'pierce') {
+            r(21, 4, 25, 2, lt); r(21, 11, 25, 2, lt); r(21, 6, 25, 1, dk); r(21, 10, 25, 1, dk);
+            r(22, 7, 23, 3, glow); for (let x = 25; x < 44; x += 5) r(x, 4, 1, 9, trim);
+        } else if (kind === 'nova') {
+            tube(21, 6, 9, 5);
+            r(31, 3, 11, 11, dk); r(32, 4, 9, 9, md); r(34, 5, 5, 7, glow); r(33, 7, 7, 3, glow); r(35, 6, 2, 2, '#ffffff');
+            r(42, 7, 3, 3, md);
+        } else {
+            tube(21, 6, 22, 4); r(30, 5, 6, 6, dk); r(31, 6, 4, 4, trim);
+            r(43, 6, 2, 4, md); r(45, 7, 2, 2, glow);
+        }
+    },
     getWeaponIconKey(weaponType) {
         const map = {
             normal: 'shotLaser',
@@ -273,9 +363,19 @@ extendClass(BulletManager, {
             if (card._vfHudNoE !== st.noEnergy) { card._vfHudNoE = st.noEnergy; card.classList.toggle('is-no-energy', st.noEnergy); }
             if (card._vfHudPct !== pct) { card._vfHudPct = pct; card.style.setProperty('--reload-pct', pct); }
             if (card._vfHudTitle !== title) { card._vfHudTitle = title; card.title = title; }
+            // Charge cells: reload progress, or the hold-to-charge level on the active weapon.
+            const charging = !!(this.isCharging && card.classList.contains('is-active'));
+            const lvl = charging ? Math.max(0, Math.min(1, this.chargeLevel || 0)) : st.ready;
+            const lit = Math.floor(lvl * 5 + 1e-6);
+            if (card._vfHudChg !== charging) { card._vfHudChg = charging; card.classList.toggle('is-charging', charging); }
+            if (card._vfHudPips !== lit) {
+                card._vfHudPips = lit;
+                const cells = card.querySelectorAll('.weapon-card-pips > i');
+                for (let i = 0; i < cells.length; i++) cells[i].classList.toggle('is-on', i < lit);
+            }
         });
     },
-    /** Vertical list of equipped weapons as unified cards (icon + name + stats). */
+    /** Vertical list of equipped weapons as cards (name + side-view weapon art; stats on hover). */
     renderWeaponList() {
         const list = document.getElementById('weaponList');
         if (!list) return;
@@ -293,7 +393,7 @@ extendClass(BulletManager, {
         ids = ids.filter((id) => id && !seen[id] && (seen[id] = true));
         const active = String(this.currentWeapon || ids[0] || '').toLowerCase();
         const mode = this.getFireMode ? this.getFireMode() : 'auto';
-        const idSig = ids.join('|') + '@' + mode;
+        const idSig = ids.join('|') + '@' + mode + '@' + (this.getShipFactionId() || '');
         if (idSig === this._weaponListIdSig && list.childElementCount === ids.length) {
             list.querySelectorAll('.weapon-card').forEach((card) => {
                 const on = String(card.dataset.weapon || '').toLowerCase() === active;
@@ -324,9 +424,9 @@ extendClass(BulletManager, {
             fill.setAttribute('aria-hidden', 'true');
 
             const canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            canvas.className = 'weapon-card-icon';
+            canvas.width = 48;
+            canvas.height = 16;
+            canvas.className = 'weapon-card-art';
             canvas.setAttribute('aria-hidden', 'true');
 
             const body = document.createElement('div');
@@ -339,13 +439,23 @@ extendClass(BulletManager, {
             if (on) stats.id = 'weaponInfo';
             stats.innerHTML = this.weaponStatsHtml(id);
 
+            const art = document.createElement('div');
+            art.className = 'weapon-card-artbox';
+            art.appendChild(canvas);
+            // Charge cells on the receiver: they light up one by one as the weapon reloads / charges.
+            const pips = document.createElement('div');
+            pips.className = 'weapon-card-pips';
+            for (let p = 0; p < 5; p++) pips.appendChild(document.createElement('i'));
+            art.appendChild(pips);
+
+            // Name, then the weapon art; stats only on hover.
             body.appendChild(label);
+            body.appendChild(art);
             body.appendChild(stats);
             card.appendChild(fill);
-            card.appendChild(canvas);
             card.appendChild(body);
             list.appendChild(card);
-            this.renderWeaponIcon(id, canvas);
+            this.renderWeaponArt(id, canvas, this.getShipFactionId());
         });
         this.updateWeaponHudState();
     },
@@ -370,6 +480,8 @@ extendClass(BulletManager, {
         infoElement.textContent = `CHARGE ${pct}% [${'#'.repeat(bars)}${'-'.repeat(10 - bars)}] ×${this.getChargeMultiplier().toFixed(1)}`;
     },
     shoot(playerPosition, options) {
+        // FREEZE trap (power-crates.js): guns are locked too.
+        if (typeof pickupManager !== 'undefined' && pickupManager.isFrozen && pickupManager.isFrozen()) return false;
         const opts = Object.assign({}, options || {});
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
             const beatOpts = beatSyncManager.getShotOptions();

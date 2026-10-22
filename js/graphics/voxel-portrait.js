@@ -4,6 +4,7 @@
 // at assets/factions/<faction>/portraits.png (16 equal cells, row by row) or single files .../portraits/01.png..16.png
 // (listed by factionPacks, so nothing is probed with 404s). canvasHtml(look, accent) returns a <canvas> that scan()/register()
 // fill with VXP.build; every portrait blinks now and then. A look is { faction, v } with v = 0..15 (the preset).
+// opts.state (data-state): 0 healthy, 1 wounded, 2 dead, 3 joy, 4 anger; a dead pilot never blinks. setState() changes it live.
 const voxelPortrait = (() => {
     const entries = new Set();
     let timer = 0;
@@ -27,8 +28,11 @@ const voxelPortrait = (() => {
     }
     function drawPainted(e, a) {
         e.painted = true;
+        e.art = a;
+        e.ctx.filter = 'none';
         e.canvas.width = a.w; e.canvas.height = a.h;
         e.ctx.imageSmoothingEnabled = false;
+        if ((e.state === 1 || e.state === 2) && 'filter' in e.ctx) e.ctx.filter = e.state === 2 ? 'grayscale(0.7) brightness(0.65)' : 'sepia(0.35) saturate(1.4) hue-rotate(-20deg)';
         e.ctx.drawImage(a.img, a.sx, a.sy, a.w, a.h, 0, 0, a.w, a.h);
     }
     // The pilot (head layer, transparent background) is built once per blink state; the faction backdrop is repainted
@@ -51,13 +55,16 @@ const voxelPortrait = (() => {
         }
         e.ctx.putImageData(e.small, 0, 0);
     }
+    // Rows rendered above the 48x54 head buffer: at SC 0.74 the canvas top samples ~17 rows above it,
+    // so tall helmets / hats show in full instead of ending in a flat cut.
+    const HEAD_PAD = 18;
     function draw(e, blink) {
         if (e.painted) return;
         const k = blink ? 1 : 0;
         if (e.nobg && e.lastK === k) return;   // backdrop-free portrait: nothing animates except the blink, repaint only on change
         e.lastK = k;
         if (!e.head) e.head = [null, null];
-        if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true);
+        if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true, e.state, HEAD_PAD);
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
         const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
         const head = e.head[k], dst = e.img.data;
@@ -74,7 +81,7 @@ const voxelPortrait = (() => {
         const SC = 0.74, W = VXP.W, H = VXP.H, cx = W / 2, by = H - 1 - 6;
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const o = (y * W + x) * 4, sx = Math.round(cx + (x - cx) / SC), sy = Math.round(by + (y - by) / SC);
-            const ho = sx >= 0 && sy >= 0 && sx < W && sy < H ? (sy * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
+            const ho = sx >= 0 && sy >= -HEAD_PAD && sx < W && sy < H ? ((sy + HEAD_PAD) * W + sx) * 4 : -1, a = ho < 0 ? 0 : head[ho + 3] / 255;
             if (e.nobg) { dst[o] = ho < 0 ? 0 : head[ho]; dst[o + 1] = ho < 0 ? 0 : head[ho + 1]; dst[o + 2] = ho < 0 ? 0 : head[ho + 2]; dst[o + 3] = Math.round(a * 255); continue; }
             dst[o] = ho < 0 ? bg[o] : head[ho] * a + bg[o] * (1 - a);
             dst[o + 1] = ho < 0 ? bg[o + 1] : head[ho + 1] * a + bg[o + 1] * (1 - a);
@@ -95,7 +102,7 @@ const voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
-        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)), blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
@@ -108,10 +115,22 @@ const voxelPortrait = (() => {
         for (const e of entries) {
             if (!e.canvas.isConnected) { entries.delete(e); if (io) io.unobserve(e.canvas); continue; }
             if (e.painted || e.vis === false || document.hidden) continue;
-            if (now >= e.next) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
+            if (now >= e.next && e.state !== 2) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
             draw(e, now < e.blinkUntil);
         }
         if (!entries.size) { clearInterval(timer); timer = 0; }
+    }
+    /** Switch a live portrait's expression (0 healthy, 1 wounded/pain, 2 dead, 3 joy, 4 anger) and repaint at once. */
+    function setState(canvas, state) {
+        const e = canvas && canvas.__vx;
+        const s = Math.max(0, Math.min(4, state | 0));
+        if (!e || e.state === s) return;
+        e.state = s;
+        e.head = null;
+        e.lastK = null;
+        if (s === 2) e.blinkUntil = 0;
+        if (e.painted) { if (e.art) drawPainted(e, e.art); return; }
+        draw(e, false);
     }
     const scan = (root) => (root || document).querySelectorAll('canvas.vx-portrait').forEach(register);
     function observe() {
@@ -128,10 +147,10 @@ const voxelPortrait = (() => {
         scan(document);
     }
     function canvasHtml(look, accent, opts) {
-        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''} role="img" aria-label="Pilot portrait"></canvas>`;
+        return `<canvas class="hero-portrait vx-portrait" width="${VXP.W}" height="${VXP.H}" data-look='${esc(JSON.stringify(lookOf(look)))}'${accent ? ` data-accent="${esc(accent)}"` : ''}${opts && opts.coarse ? ' data-coarse="1"' : ''}${opts && opts.nobg ? ' data-nobg="1"' : ''}${opts && opts.state ? ` data-state="${opts.state | 0}"` : ''} role="img" aria-label="Pilot portrait"></canvas>`;
     }
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe); else observe();
     }
-    return { canvasHtml, register, scan, draw };
+    return { canvasHtml, register, scan, draw, setState };
 })();

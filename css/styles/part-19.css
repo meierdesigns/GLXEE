@@ -135,10 +135,10 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
     /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before). */
-    --bz-extra: 22;
+    --bz-extra: 50;
     --fr-open-side: calc(44 * var(--bz-u));
     --fr-open-bottom: calc(44 * var(--bz-u));
-    --fr-open-top: calc((44 + var(--bz-extra, 22)) * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 50)) * var(--bz-u));
     --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
     --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
 }
@@ -620,7 +620,7 @@ html body .profile-selection-content.profile-selection-floating:not(.profile-sel
 
 /* Taller top strip only (bezel ~44 layout px; top = 44 + extra) */
 .vf-bezel {
-    --bz-extra: 22;
+    --bz-extra: 50;
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
 /* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */
@@ -653,85 +653,40 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
 @keyframes vf-bz-pulse { from { opacity: 0.45; } to { opacity: 1; } }
 .vf-bezel .vf-bezel-deco { z-index: 3; }
 
-/* Crest silhouettes: coarse 4·bz-u voxel stairs (beats bezel faction rules). */
+/* Pilot thumbnail frame: a plain picture frame cut in each faction's shape language
+   (same vocabulary as the panel clips in part-23), coarse 4·bz-u steps. */
 .vf-bezel .vf-pilot-crest[data-f="terran"] {
-    --shape: polygon(
-        0 0, 100% 0,
-        100% calc(28 * var(--bz-u)),
-        calc(100% - 4 * var(--bz-u)) calc(28 * var(--bz-u)),
-        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(100% - 8 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(100% - 8 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(100% - 12 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(100% - 12 * var(--bz-u)) calc(52 * var(--bz-u)),
-        calc(50% + 4 * var(--bz-u)) calc(52 * var(--bz-u)),
-        calc(50% + 4 * var(--bz-u)) 100%,
-        calc(50% - 4 * var(--bz-u)) 100%,
-        calc(50% - 4 * var(--bz-u)) calc(52 * var(--bz-u)),
-        calc(12 * var(--bz-u)) calc(52 * var(--bz-u)),
-        calc(12 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(8 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(8 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(4 * var(--bz-u)) calc(28 * var(--bz-u)),
-        0 calc(28 * var(--bz-u))
-    );
+    /* clean symmetric chamfers */
+    --c: calc(12 * var(--bz-u));
+    --shape: polygon(var(--c) 0, calc(100% - var(--c)) 0, 100% var(--c), 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, var(--c) 100%, 0 calc(100% - var(--c)), 0 var(--c));
 }
 .vf-bezel .vf-pilot-crest[data-f="kronax"] {
-    --shape: polygon(
-        0 calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) calc(8 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
-        calc(50% - 4 * var(--bz-u)) 0, calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u)),
-        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) 0,
-        calc(100% - 8 * var(--bz-u)) 0, calc(100% - 8 * var(--bz-u)) calc(8 * var(--bz-u)), 100% calc(8 * var(--bz-u)),
-        100% calc(36 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(100% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)),
-        calc(100% - 12 * var(--bz-u)) 100%, calc(12 * var(--bz-u)) 100%,
-        calc(12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(4 * var(--bz-u)) calc(48 * var(--bz-u)),
-        calc(4 * var(--bz-u)) calc(36 * var(--bz-u)), 0 calc(36 * var(--bz-u))
-    );
+    /* blade cuts on opposite corners */
+    --c: calc(20 * var(--bz-u));
+    --shape: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
 }
 .vf-bezel .vf-pilot-crest[data-f="voidborn"] {
+    /* grown lobe corners as 4·bz-u staircases */
+    --s: calc(4 * var(--bz-u));
     --shape: polygon(
-        calc(50% - 4 * var(--bz-u)) 0, calc(50% + 4 * var(--bz-u)) 0,
-        calc(50% + 4 * var(--bz-u)) calc(4 * var(--bz-u)), calc(100% - 8 * var(--bz-u)) calc(4 * var(--bz-u)),
-        calc(100% - 8 * var(--bz-u)) calc(12 * var(--bz-u)), 100% calc(12 * var(--bz-u)),
-        100% calc(32 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(32 * var(--bz-u)),
-        calc(100% - 4 * var(--bz-u)) calc(44 * var(--bz-u)), calc(50% + 8 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(50% + 8 * var(--bz-u)) 100%, calc(50% - 8 * var(--bz-u)) 100%,
-        calc(50% - 8 * var(--bz-u)) calc(44 * var(--bz-u)), calc(4 * var(--bz-u)) calc(44 * var(--bz-u)),
-        calc(4 * var(--bz-u)) calc(32 * var(--bz-u)), 0 calc(32 * var(--bz-u)),
-        0 calc(12 * var(--bz-u)), calc(8 * var(--bz-u)) calc(12 * var(--bz-u)),
-        calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(50% - 4 * var(--bz-u)) calc(4 * var(--bz-u))
+        0 calc(3 * var(--s)), var(--s) calc(3 * var(--s)), var(--s) var(--s), calc(3 * var(--s)) var(--s), calc(3 * var(--s)) 0,
+        calc(100% - 2 * var(--s)) 0, calc(100% - 2 * var(--s)) var(--s), calc(100% - var(--s)) var(--s), calc(100% - var(--s)) calc(2 * var(--s)), 100% calc(2 * var(--s)),
+        100% calc(100% - 3 * var(--s)), calc(100% - var(--s)) calc(100% - 3 * var(--s)), calc(100% - var(--s)) calc(100% - var(--s)), calc(100% - 3 * var(--s)) calc(100% - var(--s)), calc(100% - 3 * var(--s)) 100%,
+        calc(2 * var(--s)) 100%, calc(2 * var(--s)) calc(100% - var(--s)), var(--s) calc(100% - var(--s)), var(--s) calc(100% - 2 * var(--s)), 0 calc(100% - 2 * var(--s))
     );
     filter: none;
 }
 .vf-bezel .vf-pilot-crest[data-f="pirate"] {
+    /* welded scrap: notched, no two corners alike */
+    --p: var(--bz-u);
     --shape: polygon(
-        0 calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) calc(4 * var(--bz-u)), calc(8 * var(--bz-u)) 0,
-        calc(16 * var(--bz-u)) 0, calc(16 * var(--bz-u)) calc(4 * var(--bz-u)),
-        calc(24 * var(--bz-u)) calc(4 * var(--bz-u)), calc(24 * var(--bz-u)) 0,
-        calc(32 * var(--bz-u)) 0, calc(32 * var(--bz-u)) calc(4 * var(--bz-u)),
-        calc(40 * var(--bz-u)) calc(4 * var(--bz-u)), calc(40 * var(--bz-u)) 0,
-        calc(48 * var(--bz-u)) 0, calc(48 * var(--bz-u)) calc(4 * var(--bz-u)), 100% calc(4 * var(--bz-u)),
-        100% calc(24 * var(--bz-u)), calc(100% - 4 * var(--bz-u)) calc(24 * var(--bz-u)),
-        calc(100% - 4 * var(--bz-u)) calc(36 * var(--bz-u)), calc(100% - 12 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(100% - 12 * var(--bz-u)) calc(48 * var(--bz-u)), calc(50% + 4 * var(--bz-u)) calc(48 * var(--bz-u)),
-        calc(50% + 4 * var(--bz-u)) 100%, calc(50% - 4 * var(--bz-u)) 100%,
-        calc(50% - 4 * var(--bz-u)) calc(48 * var(--bz-u)), calc(12 * var(--bz-u)) calc(48 * var(--bz-u)),
-        calc(12 * var(--bz-u)) calc(36 * var(--bz-u)), calc(4 * var(--bz-u)) calc(36 * var(--bz-u)),
-        calc(4 * var(--bz-u)) calc(24 * var(--bz-u)), 0 calc(24 * var(--bz-u))
+        calc(4 * var(--p)) 0, 40% 0, calc(40% + 4 * var(--p)) calc(4 * var(--p)), calc(100% - 12 * var(--p)) calc(2 * var(--p)), 100% calc(8 * var(--p)),
+        calc(100% - 2 * var(--p)) 50%, 100% calc(50% + 8 * var(--p)), 100% calc(100% - 4 * var(--p)), calc(100% - 8 * var(--p)) 100%,
+        60% 100%, calc(60% - 4 * var(--p)) calc(100% - 4 * var(--p)), calc(12 * var(--p)) calc(100% - 2 * var(--p)), 0 calc(100% - 12 * var(--p)),
+        calc(2 * var(--p)) 30%, 0 calc(30% - 8 * var(--p))
     );
 }
-.vf-bezel .vf-pilot-crest[data-f="machine"] {
-    --shape: polygon(
-        calc(50% - 6 * var(--bz-u)) 0, calc(50% + 6 * var(--bz-u)) 0,
-        calc(50% + 6 * var(--bz-u)) calc(6 * var(--bz-u)), 100% calc(6 * var(--bz-u)),
-        100% calc(48 * var(--bz-u)), calc(50% + 6 * var(--bz-u)) calc(48 * var(--bz-u)),
-        calc(50% + 6 * var(--bz-u)) 100%, calc(50% - 6 * var(--bz-u)) 100%,
-        calc(50% - 6 * var(--bz-u)) calc(48 * var(--bz-u)), 0 calc(48 * var(--bz-u)),
-        0 calc(6 * var(--bz-u)), calc(50% - 6 * var(--bz-u)) calc(6 * var(--bz-u))
-    );
-}
+/* machine: stepped pixel corner, the pilot-hud.css default */
 
 /* Voidborn: the frame and the GUI breathe and wobble like living tissue */
 @keyframes vf-void-wobble {
@@ -935,7 +890,7 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
     left: var(--fr-ol, var(--fr-open-side, calc(44 * var(--u))));
     right: var(--fr-or, var(--fr-open-side, calc(44 * var(--u))));
     bottom: var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u))));
-    top: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 22)) * var(--u))));
+    top: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u))));
     z-index: 0;
     pointer-events: none;
     background: transparent;

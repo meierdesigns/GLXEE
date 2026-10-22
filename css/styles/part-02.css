@@ -1527,12 +1527,12 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     overflow-y: auto;
 }
 
-/* One cohesive card per weapon: icon | name + stats + reload fill */
+/* One card per weapon: name + side-view weapon art over a left-to-right reload fill; stats on hover */
 .game-left-cluster .weapon-card {
     --reload-pct: 100%;
     position: relative;
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 8px;
     padding: 6px 7px;
@@ -1547,22 +1547,22 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 .game-left-cluster .weapon-card-reload {
     position: absolute;
     left: 0;
-    right: 0;
+    top: 0;
     bottom: 0;
-    height: var(--reload-pct);
+    width: var(--reload-pct);
     background: linear-gradient(
-        180deg,
+        90deg,
         color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent),
         color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent)
     );
     pointer-events: none;
     z-index: 0;
-    transition: height 0.05s linear;
+    transition: width 0.05s linear;
 }
 
 .game-left-cluster .weapon-card.is-reloading .weapon-card-reload {
     background: linear-gradient(
-        180deg,
+        90deg,
         color-mix(in srgb, var(--res-ore, #c49a4a) 10%, transparent),
         color-mix(in srgb, var(--res-ore, #c49a4a) 34%, transparent)
     );
@@ -1570,7 +1570,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 
 .game-left-cluster .weapon-card.is-no-energy .weapon-card-reload {
     background: linear-gradient(
-        180deg,
+        90deg,
         color-mix(in srgb, var(--res-voltex, #c86ef0) 6%, transparent),
         color-mix(in srgb, var(--res-voltex, #c86ef0) 18%, transparent)
     );
@@ -1620,6 +1620,64 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     min-width: 0;
 }
 
+/* Static so the hover stats overlay the whole card. */
+.game-left-cluster .weapon-card > .weapon-card-body { position: static; }
+
+.game-left-cluster .weapon-card-art {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 1;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* dark outline first, then the glow (same treatment as other glowing icons) */
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+
+/* The weapon always shows in full; only its charge cells (below) show the reload / charge. */
+.game-left-cluster .weapon-card-reload { display: none; }
+.game-left-cluster .weapon-card-artbox {
+    position: relative;
+    z-index: 1;
+    line-height: 0;
+}
+
+/* Charge cells sit on the receiver (art grid: x 5–19, y 7–9) and light up in the weapon's accent. */
+.game-left-cluster .weapon-card-pips {
+    position: absolute;
+    left: 10.4%;
+    width: 29.2%;
+    top: 43.75%;
+    height: 12.5%;
+    display: flex;
+    gap: 4%;
+    z-index: 2;
+    pointer-events: none;
+}
+.game-left-cluster .weapon-card-pips > i {
+    flex: 1 1 0;
+    background: #05060a;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, #05060a);
+}
+.game-left-cluster .weapon-card-pips > i.is-on {
+    background: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 0 1px #05060a, 0 0 3px var(--faction-accent, var(--color-primary));
+}
+.game-left-cluster .weapon-card.is-reloading .weapon-card-pips > i.is-on { background: var(--res-ore, #c49a4a); box-shadow: 0 0 0 1px #05060a, 0 0 3px var(--res-ore, #c49a4a); }
+.game-left-cluster .weapon-card.is-charging .weapon-card-pips > i.is-on { background: #fff; box-shadow: 0 0 0 1px #05060a, 0 0 4px var(--faction-accent, var(--color-primary)); }
+.game-left-cluster .weapon-card.is-no-energy .weapon-card-pips > i.is-on { background: var(--res-voltex, #c86ef0); box-shadow: 0 0 0 1px #05060a; }
+
+/* The weapon art carries the state now, so the card itself barely dims. */
+.game-left-cluster .weapon-card.is-dim,
+.game-left-cluster .weapon-card.is-dim.is-active { opacity: 1; filter: none; }
+
+.game-left-cluster .weapon-card.is-active .weapon-card-art {
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a)
+        drop-shadow(0 0 3px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent));
+}
+
 .game-left-cluster .weapon-card-name {
     font-weight: bold;
     font-size: var(--font-md);
@@ -1635,6 +1693,15 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 
 .game-left-cluster .weapon-card-stats {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    justify-content: center;
+    padding: 4px;
+    background: color-mix(in srgb, #05060a 88%, var(--faction-accent, var(--color-primary)));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s linear;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1644,6 +1711,8 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     color: color-mix(in srgb, var(--color-text, #fff) 78%, var(--faction-accent, var(--color-primary)));
     min-width: 0;
 }
+
+.game-left-cluster .weapon-card:hover .weapon-card-stats { opacity: 1; }
 
 .game-left-cluster .weapon-card-stats .wi-part {
     display: inline-flex;
@@ -1932,3 +2001,133 @@ html[data-ui-controls="off"] .game-canvas-container > .ui-controls-show-btn {
     -webkit-appearance: none;
     appearance: none;
 }
+
+/* Enemy sidebar card (elite / capital / boss): portrait with the faction crest in its lower-right
+   corner, vertical hull + shield bars to its right, the name below both. */
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "portrait bars" "name name";
+    align-content: start;
+    align-items: stretch;
+    padding: 4px;
+    gap: 4px;
+    flex: 1 1 0;
+    max-height: clamp(180px, calc(40 * var(--sv-h)), 320px);
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait {
+    grid-area: portrait;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
+    overflow: hidden;
+    background: #05060a;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    box-sizing: border-box;
+    image-rendering: pixelated;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait > canvas,
+.enemy-vitals-side .enemy-card-v .enemy-portrait > svg,
+.enemy-vitals-side .enemy-card-v .enemy-portrait > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+/* Pilot reactions (ui-manager updateEnemyFace): red flash + shake on a hit, drained and dimmed when dead. */
+.enemy-vitals-side .enemy-card-v .enemy-portrait::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: #ff2a1e;
+    opacity: 0;
+    mix-blend-mode: screen;
+}
+.enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait {
+    animation: enemy-face-shake 0.18s steps(2) 3;
+    border-color: #ff3a2a;
+}
+.enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait::after {
+    animation: enemy-face-flash 0.5s steps(4) forwards;
+}
+.enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait {
+    border-color: #3a3a42;
+}
+.enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait > canvas {
+    filter: grayscale(0.8) brightness(0.6) contrast(1.2);
+}
+.enemy-vitals-side .enemy-card-v.face-dead .enemy-name {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+@keyframes enemy-face-shake {
+    0% { transform: translate(-2px, 1px); }
+    50% { transform: translate(2px, -1px); }
+    100% { transform: translate(0, 0); }
+}
+@keyframes enemy-face-flash {
+    0% { opacity: 0.55; }
+    100% { opacity: 0; }
+}
+.enemy-vitals-side .enemy-card-v .enemy-crest {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    width: 24px;
+    height: 24px;
+    line-height: 0;
+    /* dark outline first, then the glow (same treatment as other glowing icons) */
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a);
+}
+.enemy-vitals-side .enemy-card-v .enemy-crest img { width: 100%; height: 100%; image-rendering: pixelated; }
+.enemy-vitals-side .enemy-card-v .enemy-name {
+    grid-area: name;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.enemy-vitals-side .enemy-card-v.is-boss .enemy-name { color: #ff6a5a; }
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbars {
+    grid-area: bars;
+    display: flex;
+    flex-direction: row;
+    gap: 3px;
+    flex: 0 0 auto;
+}
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar { display: flex; width: 12px; min-height: 0; }
+.enemy-vitals-side .enemy-card-v .enemy-vbar.is-hull { --vital-color: var(--vital-hull); }
+.enemy-vitals-side .enemy-card-v .enemy-vbar.is-shield { --vital-color: var(--vital-shield, #4fd8ff); }
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill,
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: max(2px, var(--ui-border-width-thin, 2px)) solid color-mix(in srgb, var(--vital-color) 70%, transparent);
+    background: color-mix(in srgb, var(--vital-color) 12%, #05060a);
+    box-sizing: border-box;
+    image-rendering: pixelated;
+}
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before,
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill::before {
+    content: '';
+    position: absolute;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--vital-color);
+    background-image: repeating-linear-gradient(to top, transparent 0 2px, rgba(0, 0, 0, 0.35) 2px 4px);
+    opacity: 1;
+}
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before { height: var(--health-width, 100%); transition: height 0.12s steps(8, end); }
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill::before { height: var(--shield-width, 100%); transition: height 0.25s steps(8, end); }
+.enemy-vitals-side .enemy-card-v .enemy-shield-fill.is-none { opacity: 0.35; }
+.enemy-vitals-side .enemy-card-v .enemy-shield-fill.is-down { border-color: #ff4f4f; }
+/* The bars speak for themselves (values are in the tooltip). */
+.enemy-vitals-side .enemy-card-v .enemy-hp-text,
+.enemy-vitals-side .enemy-card-v .enemy-shield-text { display: none; }

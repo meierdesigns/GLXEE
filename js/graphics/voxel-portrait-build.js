@@ -3,23 +3,26 @@
 // Voxel pilot portraits, part 2/3: builds one portrait. Every pixel is a voxel column with a depth; head, hair, gear and
 // body are stacked into a depth buffer, lit from the upper left with a few flat tones and outlined. Facial details
 // (eyes, brows, mouth, scars) are flat "decals" on top. Returns RGBA bytes for a VXP.W x VXP.H canvas.
-VXP.build = (p, accent, blink, transparent) => {   // transparent: background pixels get alpha 0 (VXP.background draws them live)
-    const { W, H, hex, hash } = VXP, N = W * H, f = p.faction;
+VXP.build = (p, accent, blink, transparent, state, padTop) => {   // transparent: background pixels get alpha 0 (VXP.background draws them live)
+    // padTop: extra rows above row 0 so tall helmets / hats are not cut off (output is W x (H + padTop)).
+    const { W, H, hex, hash } = VXP, OY = padTop | 0, N = W * (H + OY), f = p.faction;
+    const hurt = state === 1, dead = state === 2, joy = state === 3, mad = state === 4;   // state: 0 healthy, 1 wounded, 2 dead (visor dark, never blinks), 3 joy, 4 anger
+    if (dead) blink = true;
     const vo = f === 'voidborn', ma = f === 'machine', kr = f === 'kronax';
     const full = true;                                                             // every pilot wears a closed helmet: no face is shown
     const Z = new Float32Array(N).fill(-99), C = new Float32Array(N * 3), K = new Uint8Array(N), D = new Float32Array(N * 4);
-    const skin = hex(p.skin), hair = hex(p.hair), eyeC = hex(p.eye), glow = hex(p.glow), cloth = hex(VXP.THEME[f].cloth), trim = ma ? hex(p.glow) : hex(VXP.THEME[f].trim);
+    const skin = hex(p.skin), hair = hex(p.hair), eyeC = hex(p.eye), glow = mad ? [255, 46, 30] : hex(p.glow).map((v) => (joy ? Math.min(255, v * 1.25 + 30) : v * (dead ? 0.12 : 1))), cloth = hex(VXP.THEME[f].cloth), trim = ma ? hex(p.glow) : hex(VXP.THEME[f].trim);
     const acc = hex(accent || VXP.THEME[f].trim);
     const sc = (c, k) => c.map((v) => v * k);
     const put = (x, y, z, c, k) => {
-        if (x < 0 || y < 0 || x >= W || y >= H) return;
-        const i = y * W + x;
+        if (x < 0 || y < -OY || x >= W || y >= H) return;
+        const i = (y + OY) * W + x;
         if (z < Z[i]) return;
         Z[i] = z; C[i * 3] = c[0]; C[i * 3 + 1] = c[1]; C[i * 3 + 2] = c[2]; K[i] = k; D[i * 4 + 3] = 0;
     };
     const dec = (x, y, c, a, skinOnly) => {
-        if (x < 0 || y < 0 || x >= W || y >= H) return;
-        const i = y * W + x;
+        if (x < 0 || y < -OY || x >= W || y >= H) return;
+        const i = (y + OY) * W + x;
         if (Z[i] < -50 || (skinOnly && K[i] !== 1)) return;
         D[i * 4] = c[0]; D[i * 4 + 1] = c[1]; D[i * 4 + 2] = c[2]; D[i * 4 + 3] = a == null ? 1 : a;
     };
@@ -162,6 +165,8 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         const hp = vo ? [[top - 3, 0.3], [top, 0.6], [top + 8, 0.9], [top + 0.5 * hh, 1], [top + 0.72 * hh, 0.85], [chin - 4, 0.6], [chin + 2, 0.3]]
             : f === 'pirate' ? [[top - 3, 0.55], [top - 1, 0.88], [top + 2, 1.04], [top + 7, 1.08], [yE + 1, 1.02], [yN - 1, 0.86], [yN + 3, 0.78], [yM + 1, 0.7], [chin - 1, 0.6], [chin + 2, 0.5]]   // skull: round cranium, cheek hollows, narrow jaw
             : [[top - 3, 0.5], [top - 1, 0.74], [top + 2, 0.92], [top + 5, 1], [yM, 1], [yM + 2, 0.86], [chin - 1, 0.62], [chin + 2, 0.58]];
+        // Round the crown off: the first profile point is already 30-90 % wide, which read as a flat cut.
+        { const [t0, w0] = hp[0]; hp.unshift([t0 - 3, 0], [t0 - 2, w0 * 0.45], [t0 - 1, w0 * 0.8]); }
         const hwH = (y) => {
             if (y <= hp[0][0]) return 0;
             for (let k = 1; k < hp.length; k++) if (y <= hp[k][0]) { const u = hp[k - 1], v = hp[k]; return R * (u[1] + (v[1] - u[1]) * (y - u[0]) / (v[0] - u[0])); }
@@ -175,7 +180,7 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
             if (!vo && Math.abs(dc) < 5.5 && y >= yN - 1 && y <= chin - 2) z += 3;     // respirator snout
             return z;
         };
-        for (let y = top - 3; y <= chin + 2; y++) for (let x = 0; x < W; x++) {
+        for (let y = hp[0][0]; y <= chin + 2; y++) for (let x = 0; x < W; x++) {
             const dx = x + 0.5 - 24, w = hwH(y);
             if (w <= 0 || (dx < 0 ? -dx > w * 0.9 : dx > w * 1.06)) continue;       // turned head: the left side is foreshortened
             put(x, y, zH(dx, y), sc(hm, 0.92 + 0.16 * rnd(x, y)), 3);
@@ -208,7 +213,7 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         seamLine(cf - hwH(yM), yM - 3, cf + hwH(yM) * 1.06, yM - 3);                                                           // jaw plate seam
         seamLine(cf - hwH(yE) * 0.6, yE + 3, cf - hwH(yE) * 0.6, yM - 3); seamLine(cf + hwH(yE) * 0.75, yE + 3, cf + hwH(yE) * 0.75, yM - 3);
         for (let y = top - 3; y <= chin + 2; y++) for (let x = 0; x < W; x++) {                                                // scuffs, dirt and worn edges
-            const i = y * W + x;
+            const i = (y + OY) * W + x;
             if (K[i] !== 3) continue;
             const r = rnd(x * 3 + 1, y * 5 + 2);
             if (r < 0.035) dec(x, y, sc(hm, 1.9), 0.55); else if (r > 0.97 && f !== 'terran') dec(x, y, [14, 12, 10], 0.5);
@@ -568,12 +573,67 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         else line(Math.round(sx - 3), yE + 6, Math.round(sx + 2), yE + 9, (x, y) => dec(x, y, [214, 150, 140].map((v, i) => v * 0.6 + skin[i] * 0.4), 1, true));
     }
     }
+    // ---- expression on the visor: happy arcs and warm cheeks (joy), scowling brow plates and a frown (anger) ----
+    if ((joy || mad) && !blink) {
+        const cf = 21, hot = mad ? [255, 70, 40] : glow.map((v) => Math.min(255, v + 60)), on = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50;
+        [-1, 1].forEach((sd) => {
+            const ox = cf + sd * ex;
+            if (joy) {
+                for (let d = -3; d <= 3; d++) { const y = yE + 1 - Math.round(1.6 * (1 - (d * d) / 9) + 0.2); if (on(ox + d, y)) dec(ox + d, y, hot, 1); if (on(ox + d, y + 1)) dec(ox + d, y + 1, [6, 8, 12], 1); }   // ^ ^ eyes
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) < 3 && on(ox + sd * 2 + dx, yN + dy)) dec(ox + sd * 2 + dx, yN + dy, [255, 120, 140], 0.45);   // blush
+            } else {
+                line(ox - sd * 4, yE - 1, ox + sd * 4, yE - 5, (x, y) => { if (on(x, y)) dec(x, y, [10, 6, 6], 1); if (on(x, y + 1)) dec(x, y + 1, [10, 6, 6], 1); });   // brows slanting to the nose
+                for (let d = -2; d <= 2; d++) if (on(ox + d, yE + 1)) dec(ox + d, yE + 1, hot, 1);
+            }
+        });
+        if (joy) for (let d = -5; d <= 5; d++) { const y = yM + 2 - Math.round(2 * (1 - (d * d) / 25)) + 2; if (on(cf + d, y)) dec(cf + d, y, hot, 0.95); }   // smile
+        else {
+            for (let d = -5; d <= 5; d++) { const y = yM + 1 + Math.round(2 * (1 - (d * d) / 25)); if (on(cf + d, y)) dec(cf + d, y, [255, 70, 40], 0.95); }   // frown
+            [[-1, -3], [1, -4]].forEach(([sd, k]) => { const vx = cf + sd * (ex + 8), vy = top + 3; [[0, 0], [1, 1], [-1, 1], [0, 2]].forEach(([a, b]) => { if (on(vx + a, vy + b + k + 3)) dec(vx + a, vy + b + k + 3, [255, 50, 40], 1); }); });   // anger veins
+        }
+    }
+    // ---- battle damage: cracks, scorch marks and blood on the helm (wounded), a shattered visor on top (dead) ----
+    if (hurt || dead) {
+        const rr = (a, b) => hash(p.idx * 31 + a, (f.length * 17 + b) | 0);
+        const onHelm = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50 && K[(y + OY) * W + x] !== 4;
+        const blood = [120, 8, 10], bloodD = [70, 4, 6], crackC = [6, 6, 8];
+        const crack = (x, y, n, seed) => {                                         // jagged random walk, with one side branch
+            let ang = rr(seed, 1) * 6.283;
+            for (let s = 0; s < n; s++) {
+                if (onHelm(Math.round(x), Math.round(y))) dec(Math.round(x), Math.round(y), crackC, 1);
+                if (s === (n >> 1)) crack(x, y, n >> 1, seed + 7);
+                ang += (rr(seed, s + 3) - 0.5) * 1.6; x += Math.cos(ang); y += Math.sin(ang);
+            }
+        };
+        const nCr = dead ? 4 : 2;
+        for (let k = 0; k < nCr; k++) crack(24 + (rr(k, 11) - 0.5) * 14, yE + (rr(k, 12) - 0.6) * 12, dead ? 12 : 8, k * 13 + 5);
+        for (let k = 0; k < (dead ? 3 : 2); k++) {                                // scorch patches
+            const sx = 24 + (rr(k, 21) - 0.5) * 18, sy = top + 4 + rr(k, 22) * (yM - top), r = 2 + rr(k, 23) * 2.5;
+            for (let y = Math.floor(sy - r); y <= sy + r; y++) for (let x = Math.floor(sx - r); x <= sx + r; x++) {
+                const d = Math.hypot(x + 0.5 - sx, y + 0.5 - sy) / r;
+                if (d <= 1 && onHelm(x, y) && hash(x, y) < 1.1 - d) dec(x, y, [18, 14, 12], 0.75 * (1 - d * 0.5));
+            }
+        }
+        for (let k = 0; k < (dead ? 3 : 1); k++) {                                // blood splash with drips running down
+            const bx = 24 + (rr(k, 31) - 0.5) * 16, by = yE - 3 + rr(k, 32) * 8, r = dead ? 2.6 : 1.8;
+            for (let y = Math.floor(by - r); y <= by + r; y++) for (let x = Math.floor(bx - r); x <= bx + r; x++) if (Math.hypot(x + 0.5 - bx, y + 0.5 - by) <= r && onHelm(x, y)) dec(x, y, hash(x, y) < 0.3 ? bloodD : blood, 0.95);
+            for (let d = 0; d < 3; d++) {
+                const dx = Math.round(bx + (d - 1) * 1.4), len = 2 + Math.floor(rr(k * 3 + d, 33) * (dead ? 9 : 5));
+                for (let y = Math.round(by); y < by + r + len; y++) if (onHelm(dx, y)) dec(dx, y, y > by + r + len - 2 ? bloodD : blood, 0.9);
+            }
+        }
+        if (dead) for (let y = yE - 3; y <= yE + 4; y++) for (let x = 24 - ex - 6; x <= 24 + ex + 6; x++) {   // shattered visor: dark hole with glass shards
+            if (!onHelm(x, y)) continue;
+            const h = hash(x * 7 + 3, y * 5 + 1);
+            if (h < 0.08) dec(x, y, [150, 160, 170], 0.9); else if (h < 0.5 && Math.abs(y - (yE + 0.5)) < 2.5) dec(x, y, [3, 3, 5], 1);
+        }
+    }
     // ---- light the depth buffer ----
     const out = new Uint8ClampedArray(N * 4), L = [-0.5, -0.6, 0.62], ll = Math.hypot(...L);
-    const zAt = (x, y, z0) => (x < 0 || y < 0 || x >= W || y >= H || Z[y * W + x] < -50 ? z0 - 7 : Z[y * W + x]);
-    const filled = (x, y) => x >= 0 && y >= 0 && x < W && y < H && Z[y * W + x] > -50;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const i = y * W + x, o = i * 4;
+    const zAt = (x, y, z0) => (x < 0 || y < -OY || x >= W || y >= H || Z[(y + OY) * W + x] < -50 ? z0 - 7 : Z[(y + OY) * W + x]);
+    const filled = (x, y) => x >= 0 && y >= -OY && x < W && y < H && Z[(y + OY) * W + x] > -50;
+    for (let y = -OY; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y + OY) * W + x, o = i * 4;
         if (Z[i] < -50) {
             const edge = filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1);
             if (transparent && !edge) { out[o + 3] = 0; continue; }
@@ -594,6 +654,8 @@ VXP.build = (p, accent, blink, transparent) => {   // transparent: background pi
         if (zAt(x - 1, y, z) > z + 5 || zAt(x, y - 1, z) > z + 5 || zAt(x + 1, y, z) > z + 5 || zAt(x, y + 1, z) > z + 5) c = c.map((v) => v * 0.45);   // contact shadow where a nearer part overlaps
         const a = D[i * 4 + 3];
         if (a > 0) c = c.map((v, k) => v * (1 - a) + D[i * 4 + k] * a * (0.55 + q * 0.5));
+        if (dead) { const gy = (c[0] + c[1] + c[2]) / 3; c = c.map((v) => (v * 0.35 + gy * 0.65) * 0.72); }   // lifeless: drained of colour, dimmed
+        else if (hurt) c = [c[0] * 1.04 + 6, c[1] * 0.92, c[2] * 0.9];
         out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2]; out[o + 3] = 255;
     }
     return out;

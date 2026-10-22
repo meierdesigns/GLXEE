@@ -1501,3 +1501,8 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
     height: 32px !important;
     flex: 0 0 32px;
 }
+
+/* Menu → PORTRAITS (dev mode): all pilot faces in their five states. */
+.hs-portrait-states .hs-portrait-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.hs-portrait-states .hs-portrait-card { display: flex; gap: 2px; padding: 3px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(200, 160, 64, 0.35); }
+.hs-portrait-states .hs-portrait-card canvas { width: 72px; height: 81px; image-rendering: pixelated; }

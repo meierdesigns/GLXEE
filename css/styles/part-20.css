@@ -292,9 +292,10 @@ html[data-vf-frame-px="on"] .vf-bezel[data-faction] {
     --glass-r: var(--fr-rad, 0px);
 }
 
-/* Pixel frame: the backing box (its 60u shadow fills the frame area under the hull) would show as
-   a square dark corner outside the stepped silhouette, so it is off; the plates themselves fill the band. */
-html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-back { display: none !important; }
+/* Pixel/stepped silhouette: clip the band fill to the same mask as the plates. */
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-bezel-back {
+    clip-path: url(#vfStageClip) !important;
+}
 
 /* Pixel frame: outer corners follow FRAME ROUND too. The inner plate (hullB) is cut to a rounded
    rect; it sits inside hullA (faction silhouette), so the visible shape is the intersection. */
@@ -303,8 +304,61 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-fr-hullB { clip-path: inset(0 round va
 /* Pixel frame: only the frame plates take the stepped silhouette (built by viewport-fit.js); the stage and the
    bezel's children (pilot thumbnail, screens, tools) are never cut. .vf-fr-p drops its smooth clip so the step shows. */
 html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr,
-html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-bezel-deco { clip-path: url(#vfStageClip) !important; }
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-bezel-deco,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel::after { clip-path: url(#vfStageClip) !important; }
 html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr-p { clip-path: none; }
+/* Voidborn vines keep --fr-shape (not #vfStageClip) so top and side stay on one outline. */
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"]::before {
+    clip-path: var(--fr-shape) !important;
+}
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr {
+    clip-path: var(--fr-shape) !important;
+}
+
+/* Voxel frame: viewport-fit.js shades the plate per cell into one small bitmap on .vf-fr (hull, outer
+   bevel, opening lip, all on the --fr-px grid). It replaces the smooth offset plates entirely. */
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr {
+    background-position: 0 0;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+}
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr-p { visibility: hidden; }
+/* The bitmap is already transparent outside the outline; the stepped clip on top only added anti-aliased
+   (soft) edges where cell borders fall between device pixels. */
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr { clip-path: none !important; }
+/* The stage (body) is a plain rectangle: its fill showed as black squares at the frame's notches and
+   rounded corners (smooth and pixel frame alike). The frame plates are opaque over the whole band, so the
+   stage only needs its fill behind the opening and the background art shows around the silhouette.
+   !important: the palette code writes body.style.background inline. */
+html:has(#vf-bezel) body,
+html.vf-game-shown:has(#vf-bezel) body {
+    background: linear-gradient(var(--color-background) 0 0) var(--fr-open-side) var(--fr-open-top) / var(--fr-open-w) var(--fr-open-h) no-repeat !important;
+}
+/* Full-stage screens (station, profiles, galaxy map, pause, …) and tint / glow layers fill the whole stage
+   rectangle with their own dark background, which showed as black squares outside the frame's notches and
+   rounded corners. Cut them to the frame outline: the stepped one in pixel mode, the faction silhouette otherwise. */
+/* Outside-screen dressing stays clipped hard to the glass opening. Screen UI sizes itself
+   to --fr-open-*; the bezel (z above) covers the band. One fill knob: --fr-bg-crop on .vf-bezel-back. */
+html:has(#vf-bezel) {
+    --vf-stage-shape: inset(
+        var(--fr-open-top)
+        var(--fr-open-side)
+        var(--fr-open-bottom)
+        var(--fr-open-side)
+        round calc(24 * var(--bz-u))
+    );
+}
+html[data-vf-frame-px="on"][data-vf-frame-sil] {
+    --vf-stage-shape: inset(
+        var(--fr-open-top)
+        var(--fr-open-side)
+        var(--fr-open-bottom)
+        var(--fr-open-side)
+        round calc(24 * var(--bz-u))
+    );
+}
+html:has(#vf-bezel) :is(#colorOverlay, .vf-bg-parallax-glow) { clip-path: var(--vf-stage-shape, none) !important; }
 
 /* Empty sub-nav (PROFILES): same bar and frame as the other tabs, nothing inside. */
 .home-station-content .hs-subnav.hs-subnav-empty { pointer-events: none; }
@@ -951,8 +1005,8 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
 /* The fight screen (.game-container, z 9992) must never hide the end-of-fight overlays. */
 html body .victory-screen,
 html body .game-over,
-html body .pause-overlay { z-index: 9993 !important; }
-html body .settings-overlay { z-index: 9994 !important; }
+html body .pause-overlay { z-index: 9994 !important; }
+html body .settings-overlay { z-index: 9995 !important; }
 
 /* Pause screen: larger title, wider menu, bigger buttons. */
 html body .pause-overlay h2 { font-size: calc(var(--font-h1) * 1.8); letter-spacing: 0.3em; margin-bottom: 28px; }
@@ -1767,3 +1821,43 @@ html body .home-station-overlay .home-station-content .hs-factions .hs-faction-t
 .vf-bezel-fx .vf-fx-row > span:first-child em { font-style: normal; font-size: 9px; line-height: 1.1; min-width: 0; overflow-wrap: anywhere; }
 .vf-bezel-fx .vf-fx-row:has(.vf-fx-ico) input[type="range"] { min-width: 40px; }
 .vf-bezel-fx .vf-fx-row:has(.vf-fx-ico) output { flex: 0 0 auto; min-width: 3em; color: #fff; }
+
+/* Planets a cleared run just unlocked: drawn locked until the camera arrives, then a scan lights them up. */
+.gm-unlock-fx { pointer-events: none; }
+.gm-unlock-flash { fill: #fff; opacity: 0; animation: gm-unlock-flash 0.9s ease-out; }
+.gm-unlock-ring { fill: none; stroke: #7fe8ff; stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; animation: gm-unlock-ring 1.2s ease-out; }
+.gm-unlock-scan { fill: #7fe8ff; opacity: 0; animation: gm-unlock-scan 0.8s linear; }
+.gm-locked-icon.is-breaking { animation: gm-lock-break 0.45s ease-in forwards; }
+@keyframes gm-unlock-flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+@keyframes gm-unlock-ring { 0% { opacity: 1; transform: scale(0.7); } 100% { opacity: 0; transform: scale(2); } }
+@keyframes gm-unlock-scan { 0% { opacity: 0.9; transform: translateY(0); } 90% { opacity: 0.9; } 100% { opacity: 0; transform: translateY(var(--scan, 48px)); } }
+@keyframes gm-lock-break { to { opacity: 0; } }
+
+/* Scan tooltip with the new planet's stats. */
+.gm-unlock-tip {
+    position: fixed; z-index: 9000; transform: translateY(-50%);
+    min-width: 150px; padding: 6px 8px 7px;
+    background: rgba(5, 6, 10, 0.92); border: 2px solid #7fe8ff;
+    box-shadow: 0 0 0 2px #05060a, 0 0 12px rgba(127, 232, 255, 0.35);
+    color: #cfefff; font: 10px/1.35 monospace; letter-spacing: 1px;
+    pointer-events: none; overflow: hidden;
+    animation: gm-tip-in 0.5s steps(10, end) both;
+}
+.gm-unlock-tip.is-leaving { animation: gm-tip-out 0.25s ease-in forwards; }
+.gm-unlock-tip-head { color: #7fe8ff; font-size: 8px; opacity: 0.85; }
+.gm-unlock-tip-name { color: #fff; font-weight: bold; font-size: 12px; margin: 1px 0 4px; }
+.gm-unlock-tip-row { display: flex; justify-content: space-between; gap: 12px; opacity: 0; animation: gm-tip-row 0.2s steps(2, end) forwards; animation-delay: calc(0.45s + var(--i, 0) * 0.16s); }
+.gm-unlock-tip-row b { color: #fff; }
+.gm-unlock-tip-scan {
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: #7fe8ff; box-shadow: 0 0 6px #7fe8ff;
+    animation: gm-tip-scan 1.1s linear 0.1s both;
+}
+@keyframes gm-tip-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes gm-tip-out { to { opacity: 0; } }
+@keyframes gm-tip-row { to { opacity: 1; } }
+@keyframes gm-tip-scan { 0% { top: 0; opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .gm-unlock-flash, .gm-unlock-ring, .gm-unlock-scan, .gm-unlock-tip, .gm-unlock-tip-scan { animation: none; }
+    .gm-unlock-tip-row { animation: none; opacity: 1; }
+}

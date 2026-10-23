@@ -209,6 +209,35 @@ button.hs-faction-card.nav-focused {
     flex: 1 1 0;
     min-height: 0;
     overscroll-behavior: contain;
+    overflow-x: hidden;
+}
+/* Rows shrink to the panel width instead of scrolling sideways:
+   name column may shrink, stats and the section header wrap. */
+.hs-hangar-parts-section,
+.hs-hangar-parts-grid,
+.hs-hangar-part {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.hs-hangar-part-name {
+    min-width: 0;
+}
+.hs-hangar-part-name .hs-hangar-weapon-stats:not(.is-desc) {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    column-gap: 8px;
+    white-space: normal;
+}
+.hs-hangar-parts-section .hs-hangar-parts-title {
+    flex-wrap: wrap;
+    min-width: 0;
+}
+/* Empty section: drop the full-tab empty state's margin/height (part-20). */
+.hs-hangar-parts-grid > .hs-empty-state {
+    width: 100%;
+    height: auto;
+    margin: 0;
 }
 .hs-hangar-part {
     min-height: 44px;
@@ -342,8 +371,8 @@ button.hs-faction-card.nav-focused {
 }
 .hs-hangar-view-btn img,
 .hs-hangar-view-btn .hs-pixel {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     flex: none;
     image-rendering: pixelated;
 }

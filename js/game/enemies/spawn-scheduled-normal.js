@@ -381,6 +381,7 @@ extendClass(EnemyManager, {
                 objectiveManager.awaitingFieldClear
                 || objectiveManager.won
                 || objectiveManager.completed
+                || objectiveManager.exitGate
             ));
 
         // Cluster wave times: earliest spawnAt per cluster

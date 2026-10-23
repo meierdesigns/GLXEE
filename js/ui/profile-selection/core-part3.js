@@ -256,6 +256,9 @@ extendClass(ProfileSelectionManager, {
         const loadoutEl = this.overlay.querySelector('.profile-loadout');
         // Hovering the ship preview outlines its weapon mounts.
         this.overlay.addEventListener('mouseover', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship')) this.highlightPreviewWeapon(true); });
+        // WEAPONS slots in the sidebar: hovering one lights up its mount on the ship.
+        this.overlay.addEventListener('mouseover', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w) this.highlightPreviewWeapon(true, Number(w.dataset.slot)); });
+        this.overlay.addEventListener('mouseout', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w && !(e.relatedTarget && w.contains(e.relatedTarget))) this.highlightPreviewWeapon(false); });
         this.overlay.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.profile-faction-ship'))) this.highlightPreviewWeapon(false); });
         if (loadoutEl) loadoutEl.addEventListener('click', (e) => {
             const b = e.target.closest('[data-area]');

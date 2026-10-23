@@ -143,7 +143,7 @@ extendClass(HomeStationUI, {
             return profileManager.purchaseModuleUpgrade(act.cat, act.track);
         }
         if (act.type === 'craft') {
-            return profileManager.craftShip(act.id);
+            return profileManager.craftBlueprint(act.id);
         }
         return { ok: false, reason: 'UNKNOWN' };
     },
@@ -211,7 +211,7 @@ extendClass(HomeStationUI, {
                             : null;
                         msg = 'UPGRADED: ' + (node ? node.label : String(act.id).toUpperCase()) + ' L' + res.level;
                     } else if (act && act.type === 'craft') {
-                        msg = 'CRAFTED: ' + this.shipName(act.id);
+                        msg = 'CRAFTED: ' + profileManager.getBlueprintName(act.id);
                     } else if (act && act.type === 'frame-upgrade') {
                         msg = 'FRAME UPGRADED: ' + this.shipName(act.id) + ' L' + res.level;
                     } else if (act && act.type === 'module-upgrade') {

@@ -91,9 +91,21 @@
     pointer-events: none;
     border: calc(var(--ph-line) * var(--bz-u)) solid var(--ph-accent);
     border-bottom-color: transparent;
-    border-radius: calc(var(--ph-tab-round) * var(--bz-u)) calc(var(--ph-tab-round) * var(--bz-u)) 0 0;
+    /* Corner is cut (--ph-tab-cut, straight 45°) or rounded (--ph-tab-round). A CSS
+       border-radius arc through the hard pixel-dither checker (conic-gradient below)
+       anti-aliases across the tile grid and reads as broken/muddy pixels at the corner —
+       same issue the voidborn vine corner had (screen-frame.css --fr-shape-voidborn
+       comment). Fixed the same way: a stepped polygon staircase instead of a curve, so
+       every edge is axis-aligned and lands crisp against the checker tiles. */
     --c: calc(var(--ph-tab-cut) * var(--bz-u));
-    clip-path: polygon(var(--c) 0, calc(100% - var(--c)) 0, 100% var(--c), 100% 100%, 0 100%, 0 var(--c));
+    --r: calc(var(--ph-tab-round) * var(--bz-u));
+    --r2: calc(var(--r) * 0.5);
+    clip-path: polygon(
+        var(--c) 0, calc(100% - var(--c)) 0,
+        calc(100% - var(--r)) 0, calc(100% - var(--r2)) var(--r2), 100% var(--r),
+        100% 100%, 0 100%,
+        0 var(--r), var(--r2) var(--r2), var(--r) 0
+    );
     background:
         linear-gradient(var(--ph-hull) 0 0) padding-box,
         conic-gradient(var(--ph-tab-a) 25%, var(--ph-tab-b) 0 50%, var(--ph-tab-a) 0 75%, var(--ph-tab-b) 0) 0 0 / calc(8 * var(--bz-u)) calc(8 * var(--bz-u));
@@ -176,24 +188,30 @@ html[data-vf-gui-voxel="on"] .vf-pilot-crest {
 }
 
 /* ---- Dev Mode tuner (js/core/viewport-fit-part3.js) ------------------- */
-.vf-ph-tune-btn {
-    position: fixed; top: 4px; right: 4px; z-index: 100001;
-    font: 11px 'Silkscreen', monospace; color: #fff; background: #05060a;
-    border: 2px solid var(--retro-ink, #7ec8ff); padding: 2px 6px; cursor: pointer;
+/* Second remote: same hull as .vf-bezel-fx, docked left (FX stays right).
+   Opened from .vf-bezel-tools [data-tool="hud"] (Dev Mode). */
+.vf-bezel-fx.vf-ph-remote {
+    left: 12px;
+    right: auto;
+    z-index: 10002;
+    transform-origin: 0 100%;
+    translate: -100vw 0;
+    rotate: -5deg;
+    box-shadow:
+        inset 4px 4px 0 var(--rc-lit),
+        inset -4px -4px 0 var(--rc-dark),
+        inset 0 0 0 8px color-mix(in srgb, var(--rc-hull) 85%, #000),
+        8px 8px 0 rgba(0, 0, 0, 0.5);
 }
-.vf-ph-tune {
-    position: fixed; top: 30px; right: 4px; z-index: 100001; width: 280px;
-    max-height: calc(100vh - 40px); overflow: auto; padding: 8px;
-    font: 11px 'Silkscreen', monospace; color: #fff; background: rgba(5, 6, 10, 0.94);
-    border: 2px solid var(--retro-ink, #7ec8ff);
+.vf-bezel-fx.vf-ph-remote.is-in { translate: 0 0; rotate: 0deg; }
+.vf-bezel-fx.vf-ph-remote[hidden] { display: none !important; }
+.vf-bezel-fx.vf-ph-remote .vf-fx-tabs { flex-wrap: wrap; }
+.vf-bezel-fx.vf-ph-remote .vf-fx-cluster { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vf-bezel-fx.vf-ph-remote .vf-fx-cluster-cap {
+    font-size: 9px; letter-spacing: 0.12em; opacity: 0.7; color: var(--rc-acc);
 }
-.vf-ph-tune[hidden], .vf-ph-tune-btn[hidden] { display: none; }
-.vf-ph-tune-h { margin: 10px 0 4px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--retro-ink, #7ec8ff) 35%, transparent); color: var(--retro-ink, #7ec8ff); }
-.vf-ph-tune-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.vf-ph-tune-row { display: grid; grid-template-columns: 84px 1fr 40px; align-items: center; gap: 6px; }
-.vf-ph-tune-row b { font-weight: normal; text-align: right; }
-.vf-ph-tune-btns { display: flex; justify-content: space-between; margin-top: 8px; }
-.vf-ph-tune-btns button { font: inherit; color: #fff; background: #1a1f2a; border: 1px solid #556; padding: 2px 8px; cursor: pointer; }
+.vf-bezel-fx.vf-ph-remote .vf-fx-cluster-keys { display: flex; gap: 5px; }
+.vf-bezel-fx.vf-ph-remote .vf-fx-cluster-keys button { flex: 1 1 0; min-width: 0; }
 .vf-pilot-res { display: inline-flex; align-items: center; gap: calc(6 * var(--bz-u)); flex: none; }
 .vf-pilot-res img { width: calc(var(--ph-res-icon) * var(--bz-u)) !important; height: calc(var(--ph-res-icon) * var(--bz-u)) !important; image-rendering: pixelated; }
 .vf-pilot-res b { font-weight: normal; }

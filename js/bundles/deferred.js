@@ -1516,17 +1516,6 @@ extendClass(EconomyConfig, {
         return craft;
     },
 
-    /** Blueprint listing — CREDITS, cheaper than the finished ship. */
-    getBlueprintCost(shipConfig) {
-        const mat = this.getShopMaterialCost(shipConfig);
-        const bpMat = {};
-        Object.keys(mat).forEach((id) => {
-            bpMat[id] = Math.max(20, Math.ceil(mat[id] * 0.45));
-        });
-        if (!bpMat.scrap) bpMat.scrap = 60;
-        return { credits: this.materialCostToCredits(bpMat) };
-    },
-
     /**
      * Part shop price in CREDITS.
      * kind: 'weapon' | 'defense' | 'ability' | 'energy'
@@ -1560,31 +1549,32 @@ extendClass(EconomyConfig, {
         return { credits: this.materialCostToCredits(this.getPartMaterialCost(kind, item)) };
     },
 
+    /** Part blueprint listing — CREDITS, cheaper than the finished part. */
+    getBlueprintCost(kind, item) {
+        const mat = this.getPartMaterialCost(kind, item);
+        const bpMat = {};
+        Object.keys(mat).forEach((id) => {
+            bpMat[id] = Math.ceil(mat[id] * 0.45);
+        });
+        return { credits: this.materialCostToCredits(bpMat) };
+    },
+
+    /** Resources to build a part from its blueprint. */
+    getBlueprintCraftCost(kind, item) {
+        const mat = this.getPartMaterialCost(kind, item);
+        const out = {};
+        Object.keys(mat).forEach((id) => {
+            out[id] = Math.max(1, Math.ceil(mat[id] * 0.6));
+        });
+        return out;
+    },
+
     getBlueprintDropChance(info) {
         if (!info) return this.blueprintDropChance.default;
         if (info.champion) return this.blueprintDropChance.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.blueprintDropChance[cls] != null) return this.blueprintDropChance[cls];
         return this.blueprintDropChance.default;
-    },
-
-    pickBlueprintShipId(excludeOwned) {
-        const exclude = new Set(Array.isArray(excludeOwned) ? excludeOwned : []);
-        exclude.add(this.starterShipId);
-        let pool = [];
-        if (typeof shipConfigManager !== 'undefined') {
-            pool = shipConfigManager.getTypeIds().filter((id) => {
-                if (exclude.has(id)) return false;
-                if (id === this.starterShipId) return false;
-                const cfg = shipConfigManager.getConfig(id);
-                return cfg && !cfg.custom;
-            });
-        }
-        if (!pool.length) {
-            pool = ['player', 'player_interceptor', 'player_assault', 'player_heavy'].filter((id) => !exclude.has(id));
-        }
-        if (!pool.length) return null;
-        return pool[Math.floor(Math.random() * pool.length)];
     },
 
     rollAmount(min, max) {
@@ -5359,6 +5349,12 @@ var ProfileManager = class ProfileManager {
         if (!profile.cargo.blueprints || typeof profile.cargo.blueprints !== 'object') {
             profile.cargo.blueprints = {};
         }
+        // Blueprints are for parts now (`kind:partId`); drop old ship-id blueprints.
+        [profile.blueprints, profile.cargo.blueprints].forEach((map) => {
+            Object.keys(map).forEach((k) => {
+                if (k.indexOf(':') === -1) delete map[k];
+            });
+        });
         if (!profile.shipLoadouts || typeof profile.shipLoadouts !== 'object') {
             profile.shipLoadouts = {};
         }
@@ -6009,16 +6005,6 @@ extendClass(ProfileManager, {
             profile.discovered._v = 2;
             this.save();
         }
-        // Blueprints already found count as "seen" ships.
-        const bpSources = [profile.blueprints, profile.cargo && profile.cargo.blueprints];
-        bpSources.forEach((map) => {
-            if (!map || typeof map !== 'object') return;
-            Object.keys(map).forEach((id) => {
-                if ((map[id] || 0) > 0 && profile.discovered.ships.indexOf(id) === -1) {
-                    profile.discovered.ships.push(id);
-                }
-            });
-        });
         (profile.unlockedShopIds || []).forEach((id) => {
             if (profile.discovered.ships.indexOf(id) === -1) {
                 profile.discovered.ships.push(id);
@@ -6537,15 +6523,14 @@ extendClass(ProfileManager, {
         return applied.granted;
     },
 
-    addCargoBlueprint(shipId, amount) {
+    addCargoBlueprint(key, amount) {
         const profile = this.getActiveProfile();
         if (!profile) return false;
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
+        const bp = this.parseBlueprintKey(key);
         const n = Math.round(Number(amount) || 1);
-        if (!id || n <= 0) return false;
-        profile.cargo.blueprints[id] = (profile.cargo.blueprints[id] || 0) + n;
-        this.discover('ships', id);
+        if (!bp || n <= 0) return false;
+        profile.cargo.blueprints[bp.key] = (profile.cargo.blueprints[bp.key] || 0) + n;
         this.save();
         return true;
     },
@@ -6596,10 +6581,11 @@ extendClass(ProfileManager, {
         const stats = this.getStationStats(profile);
         const chance = Math.min(0.5, economyConfig.getBlueprintDropChance(killInfo) + (stats.dropBonus || 0));
         if (Math.random() > chance) return null;
-        const shipId = economyConfig.pickBlueprintShipId(profile.ownedShipIds);
-        if (!shipId) return null;
-        this.addCargoBlueprint(shipId, 1);
-        return shipId;
+        const pool = this.getBlueprintPool();
+        if (!pool.length) return null;
+        const key = pool[Math.floor(Math.random() * pool.length)];
+        this.addCargoBlueprint(key, 1);
+        return key;
     },
 
     hasCargo() {
@@ -6791,27 +6777,6 @@ extendClass(ProfileManager, {
         return profile.unlockedShopIds.indexOf(String(shipId || '')) !== -1;
     },
 
-    unlockShopItem(shipId) {
-        const profile = this.getActiveProfile();
-        if (!profile) return { ok: false, reason: 'NO PROFILE' };
-        this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (profile.unlockedShopIds.indexOf(id) !== -1) {
-            return { ok: false, reason: 'ALREADY UNLOCKED' };
-        }
-        const count = profile.blueprints[id] || 0;
-        if (count < 1) return { ok: false, reason: 'NO BLUEPRINT' };
-        profile.blueprints[id] = count - 1;
-        if (profile.blueprints[id] <= 0) delete profile.blueprints[id];
-        profile.unlockedShopIds.push(id);
-        this.discover('ships', id);
-        this.save();
-        return { ok: true };
-    },
-
     buyShip(shipId) {
         const profile = this.getActiveProfile();
         if (!profile || typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') {
@@ -6860,34 +6825,63 @@ extendClass(ProfileManager, {
 
 // ProfileManager methods, split from profile-manager.js.
 extendClass(ProfileManager, {
-    buyBlueprint(shipId) {
+    /**
+     * Blueprints are for parts, keyed `kind:partId` (kind: weapon | defense |
+     * ability | energy). Returns null for unknown or legacy ship keys.
+     */
+    parseBlueprintKey(key) {
+        const raw = String(key || '');
+        const sep = raw.indexOf(':');
+        if (sep === -1) return null;
+        const kind = raw.slice(0, sep);
+        const id = raw.slice(sep + 1);
+        if (!id || (kind !== 'weapon' && kind !== 'defense' && kind !== 'ability' && kind !== 'energy')) {
+            return null;
+        }
+        const item = this.getPartItem(kind, id);
+        if (!item) return null;
+        return { key: kind + ':' + id, kind: kind, id: id, item: item };
+    },
+
+    getBlueprintName(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return String(key || '').toUpperCase();
+        const name = (bp.kind !== 'weapon' && typeof abilityConfigManager !== 'undefined' && abilityConfigManager.getDisplayName)
+            ? abilityConfigManager.getDisplayName(bp.id)
+            : bp.item.name;
+        return String(name || bp.id).toUpperCase();
+    },
+
+    /** Parts a blueprint can drop for: every weapon, defense, shop ability and the energy core. */
+    getBlueprintPool() {
+        const keys = [];
+        if (typeof weaponConfigManager !== 'undefined') {
+            weaponConfigManager.getIds().forEach((id) => keys.push('weapon:' + id));
+        }
+        if (typeof abilityConfigManager !== 'undefined') {
+            const byCluster = abilityConfigManager.getIdsByCluster();
+            (byCluster.defense || []).forEach((id) => keys.push('defense:' + id));
+            TRADING_POST_ABILITY_IDS.forEach((id) => {
+                if (abilityConfigManager.getAbility(id)) keys.push('ability:' + id);
+            });
+            if (abilityConfigManager.getAbility('energy_core')) keys.push('energy:energy_core');
+        }
+        return keys.filter((k) => this.parseBlueprintKey(k));
+    },
+
+    buyBlueprint(key) {
         const profile = this.getActiveProfile();
-        if (!profile || typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') {
+        if (!profile || typeof economyConfig === 'undefined') {
             return { ok: false, reason: 'NO PROFILE' };
         }
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const cost = economyConfig.getBlueprintCost(bp.kind, bp.item);
+        if (!this.spendCredits(cost.credits)) {
+            return { ok: false, reason: 'CREDITS' };
         }
-        const cfg = shipConfigManager.getConfig(id);
-        if (!cfg || cfg.custom) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (!this.isShipAvailableInShop(id, profile)) {
-            return { ok: false, reason: 'WRONG GALAXY' };
-        }
-        const cost = economyConfig.getBlueprintCost(cfg);
-        const creditCost = Math.max(0, Math.round(Number(cost.credits) || 0));
-        if (creditCost > 0) {
-            if (!this.spendCredits(creditCost)) {
-                return { ok: false, reason: 'CREDITS' };
-            }
-        } else if (!this.spendResources(cost)) {
-            return { ok: false, reason: 'RESOURCES' };
-        }
-        profile.blueprints[id] = (profile.blueprints[id] || 0) + 1;
-        this.discover('ships', id);
+        profile.blueprints[bp.key] = (profile.blueprints[bp.key] || 0) + 1;
         this.save();
         return { ok: true };
     },
@@ -6992,36 +6986,43 @@ extendClass(ProfileManager, {
         return 0;
     },
 
-    craftShip(shipId) {
+    getBlueprintCraftCost(key, profile) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return null;
+        const base = economyConfig.getBlueprintCraftCost(bp.kind, bp.item);
+        const stats = this.getStationStats(profile);
+        const discount = Math.max(0, Math.min(0.5, Number(stats.craftDiscount) || 0));
+        if (discount <= 0) return base;
+        const out = {};
+        Object.keys(base).forEach((id) => {
+            out[id] = Math.max(1, Math.ceil(base[id] * (1 - discount)));
+        });
+        return out;
+    },
+
+    /** Uses one blueprint plus resources to build its part into station storage. */
+    craftBlueprint(key) {
         const profile = this.getActiveProfile();
-        if (!profile || typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') {
+        if (!profile || typeof economyConfig === 'undefined') {
             return { ok: false, reason: 'NO PROFILE' };
         }
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (profile.ownedShipIds.indexOf(id) !== -1) {
-            return { ok: false, reason: 'OWNED' };
-        }
-        if (this.getFreeShipSlots(profile) < 1) {
-            return { ok: false, reason: 'NO SHIP SLOTS' };
-        }
-        const bp = profile.blueprints[id] || 0;
-        if (bp < 1) return { ok: false, reason: 'NO BLUEPRINT' };
-        const cfg = shipConfigManager.getConfig(id);
-        const cost = this.getDiscountedCraftCost(cfg, profile);
-        if (!economyConfig.canAfford(profile.resources, cost)) {
-            return { ok: false, reason: 'RESOURCES' };
-        }
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const count = profile.blueprints[bp.key] || 0;
+        if (count < 1) return { ok: false, reason: 'NO BLUEPRINT' };
+        const cost = this.getBlueprintCraftCost(bp.key, profile);
         if (!this.spendResources(cost)) {
             return { ok: false, reason: 'RESOURCES' };
         }
-        profile.blueprints[id] = bp - 1;
-        if (profile.blueprints[id] <= 0) delete profile.blueprints[id];
-        profile.ownedShipIds.push(id);
-        this.discoverShipContents(id);
+        profile.blueprints[bp.key] = count - 1;
+        if (profile.blueprints[bp.key] <= 0) delete profile.blueprints[bp.key];
+        const bag = bp.kind === 'weapon' ? profile.parts.weapons
+            : (bp.kind === 'defense' ? profile.parts.defenses
+                : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+        bag[bp.id] = (bag[bp.id] || 0) + 1;
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        this.discover(discoverCat, bp.id);
         this.save();
         return { ok: true };
     },
@@ -8428,17 +8429,18 @@ extendClass(ProfileManager, {
         return { ok: true, credits: credits };
     },
 
-    getBlueprintSellValue(shipId) {
-        if (typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') return 0;
-        return this.getSellValue(economyConfig.getBlueprintCost(shipConfigManager.getConfig(shipId)));
+    getBlueprintSellValue(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return 0;
+        return this.getSellValue(economyConfig.getBlueprintCost(bp.kind, bp.item));
     },
 
-    /** Sells one station blueprint that has not been crafted into a ship. */
-    sellBlueprint(shipId) {
+    /** Sells one station blueprint that has not been crafted into a part. */
+    sellBlueprint(key) {
         const profile = this.getActiveProfile();
         if (!profile) return { ok: false, reason: 'NO PROFILE' };
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
+        const id = String(key || '');
         if (!((profile.blueprints[id] || 0) > 0)) return { ok: false, reason: 'NONE LEFT' };
         const credits = this.getBlueprintSellValue(id);
         profile.blueprints[id] -= 1;
@@ -14805,8 +14807,9 @@ extendClass(ShipLoadoutManager, {
         if (model.factionPreview && model.previewDisabledAreas) loadout.disabledAreas = Object.assign({ front: false, back: false, wing: false }, model.previewDisabledAreas);
         if (model.factionPreview && model.previewSingleGun) {
             const gun = (loadout.weaponSlots || []).find(Boolean) || (loadout.weapons && loadout.weapons[0]) || 'laser';
-            loadout.weaponSlots = [gun];
-            loadout.weapons = [gun];
+            // The kit's second weapon sits in the first wing slot.
+            loadout.weaponSlots = model.previewWeapon2 ? [gun, model.previewWeapon2] : [gun];
+            loadout.weapons = loadout.weaponSlots.slice();
             loadout.defenses = (loadout.defenses || []).slice(0, 1);
             loadout.abilities = (loadout.abilities || []).slice(0, 1);
             loadout.energy = (loadout.energy || []).slice(0, 1);
@@ -14822,7 +14825,7 @@ extendClass(ShipLoadoutManager, {
         // Same wing rows as the hangar markers (see buildHangarSlots).
         const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign(
             this.withWeaponSlotScales ? this.withWeaponSlotScales(id, loadout) : Object.assign({}, loadout),
-            { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
+            { wingSlotRows: model.factionPreview && model.previewWingRows != null ? model.previewWingRows : Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const hullBonus = this.getFrameHullBonus(id);
 
         model.coreWidth = coreSize.width;
@@ -17271,7 +17274,7 @@ window.shipLoadoutManager = shipLoadoutManager;
 /**
  * Level objective progress — hunt / killCount / surviveCount / surviveTime.
  */
-class ObjectiveManager {
+var ObjectiveManager = class ObjectiveManager {
     constructor() {
         this.objective = null;
         this.enemies = [];
@@ -17605,9 +17608,18 @@ class ObjectiveManager {
         if (g.dome) {
             g.dome.flashMs = Math.max(0, g.dome.flashMs - deltaTime);
             // Shot open: the halves fold back like the arrival hatch instead of bursting.
-            if (g.dome.hp <= 0) {
-                g.dome.burstMs += deltaTime;
-                g.dome.split = Math.min(1, g.dome.burstMs / 500);
+            if (g.dome.hp <= 0 && g.dome.closing) {
+                // Auto-opened hatch closing again: the halves fold back in, then it is sealed.
+                g.dome.burstMs = Math.max(0, g.dome.burstMs - deltaTime);
+                g.dome.split = g.dome.burstMs / 500;
+                if (g.dome.burstMs <= 0) {
+                    g.dome.hp = g.dome.max;
+                    g.dome.closing = false;
+                    g.dome.split = 0;
+                }
+            } else if (g.dome.hp <= 0) {
+                g.dome.burstMs = Math.min(500, g.dome.burstMs + deltaTime);
+                g.dome.split = g.dome.burstMs / 500;
             }
         }
         const pm = typeof playerManager !== 'undefined' ? playerManager : null;
@@ -17627,10 +17639,19 @@ class ObjectiveManager {
             return;
         }
         const inOpening = Math.abs(px - g.cx) <= g.open / 2;
-        // Approaching the sealed hatch below its opening makes it fold open on its own.
-        if (this.isGateSealed() && Math.abs(px - g.cx) <= g.open / 2 + 24
-            && p.y - (g.y + g.h + g.dome.depth) <= 48) {
-            this.openGateDome();
+        // Approaching the sealed hatch below its opening makes it fold open on its own,
+        // but only once the field is clear (status lamp green); until then it has to be shot open.
+        // An auto-opened hatch closes again once the ship moves away; a shot-open one stays open.
+        if (g.dome) {
+            const d = g.dome;
+            const dx = Math.abs(px - g.cx) - g.open / 2;
+            const dy = p.y - (g.y + g.h + d.depth);
+            if (dx <= 24 && dy <= 48 && this.isFieldClear()) {
+                if (this.isGateSealed()) this.openGateDome();
+                else if (d.closing) d.closing = false;
+            } else if (d.auto && d.hp <= 0 && !d.closing && (dx > 40 || dy > 80)) {
+                d.closing = true;
+            }
         }
         // Sealed hatch: the dome is as solid as the walls.
         if (this.isGateSealed()) {
@@ -17672,6 +17693,8 @@ class ObjectiveManager {
         const d = this.goal && this.goal.dome;
         if (!d || d.hp <= 0) return;
         d.hp = 0;
+        d.auto = true;
+        d.closing = false;
         d.burstMs = 0;
         d.split = 0;
     }
@@ -17682,6 +17705,7 @@ class ObjectiveManager {
         if (!d || d.hp <= 0) return false;
         d.hp = Math.max(0, d.hp - Math.max(1, Number(amount) || 10));
         d.flashMs = 90;
+        d.auto = false;
         if (d.hp > 0) return false;
         d.burstMs = 0;
         d.split = 0;
@@ -17841,7 +17865,31 @@ class ObjectiveManager {
             ctx.fillStyle = 'rgba(' + th.edge + ',' + (0.35 + pulse * 0.45) + ')';
             ctx.fillRect(l - 2, g.y, 3, g.h);
             ctx.fillRect(r - 1, g.y, 3, g.h);
+            if (g === this.goal && g.dome) this.renderGateLamps(ctx, g, l, r);
         }
+    }
+
+    /** Status lamps beside the sluice opening: blinking red while enemies remain, green once it opens on approach. */
+    renderGateLamps(ctx, g, l, r) {
+        const free = !this.isGateSealed() || this.isFieldClear();
+        const on = free || Math.sin(Date.now() / 140) > -0.3;
+        const y = g.y + Math.round(g.h / 2) - 3;
+        [l - 10, r + 4].forEach((x) => {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 1, y - 1, 8, 8);
+            if (on) {
+                ctx.fillStyle = free ? 'rgba(93,255,122,0.35)' : 'rgba(255,64,64,0.35)';
+                ctx.fillRect(x - 3, y - 3, 12, 12);
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(x - 1, y - 1, 8, 8);
+            }
+            ctx.fillStyle = on ? (free ? '#5dff7a' : '#ff4040') : '#3a1414';
+            ctx.fillRect(x, y, 6, 6);
+            if (on) {
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillRect(x + 1, y + 1, 2, 2);
+            }
+        });
     }
 
     /**
@@ -18343,7 +18391,7 @@ class ObjectiveManager {
     }
 }
 
-const objectiveManager = new ObjectiveManager();
+var objectiveManager = new ObjectiveManager();
 
 
 /* --- js/core/daily-tracker.js --- */
@@ -20610,6 +20658,20 @@ extendClass(GameControlSystem, {
             startScreen.classList.add('hidden');
         }
 
+        // Planets this run unlocked; they render locked until the map's reveal tour lights them up.
+        let freshUnlocked = [];
+        const pre = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager._preRunUnlocked : null;
+        if (pre) {
+            galaxyMapManager._preRunUnlocked = null;
+            if (pre.galaxyId === galaxyMapManager.galaxyId && galaxyMapManager.map && galaxyMapManager.revealUnlockedPlanets) {
+                freshUnlocked = (galaxyMapManager.map.nodes || [])
+                    .filter((n) => galaxyMapManager.isUnlocked(n.planetId) && pre.ids.indexOf(n.planetId) === -1)
+                    .map((n) => n.planetId);
+                galaxyMapManager._revealPending = {};
+                freshUnlocked.forEach((id) => { galaxyMapManager._revealPending[id] = true; });
+            }
+        }
+
         if (typeof homeStationUI !== 'undefined') {
             homeStationUI.show({
                 tab: 'play',
@@ -20630,6 +20692,17 @@ extendClass(GameControlSystem, {
                     return false;
                 };
                 if (!selectFought()) requestAnimationFrame(selectFought);
+            }
+            // Back from a run the keyboard steers the planet map, not the nav bar
+            // (again after the deferred focus restore, which can land on the tabs).
+            const enterMap = () => {
+                if (homeStationUI.tab === 'play' && homeStationUI.enterPlayMap) homeStationUI.enterPlayMap();
+            };
+            enterMap();
+            requestAnimationFrame(() => requestAnimationFrame(enterMap));
+            // Planets the run unlocked: the camera zooms over and lights them up.
+            if (freshUnlocked.length) {
+                requestAnimationFrame(() => requestAnimationFrame(() => galaxyMapManager.revealUnlockedPlanets(freshUnlocked)));
             }
             // Ambush lost: show the flight back to the last station.
             if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._ambushLost
@@ -21438,6 +21511,14 @@ var InputHandler = class InputHandler {
         // The profile overlay has its own key handler; menus underneath
         // (start screen / embedded main menu) must not react as well.
         if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+            // Shift+C (dev mode) still works here: the start screen and the global
+            // toggle in hud-layout-editor.js both skip it while this overlay is up.
+            const tag = event.target && event.target.tagName;
+            if (event.shiftKey && (event.key === 'c' || event.key === 'C') &&
+                tag !== 'INPUT' && tag !== 'TEXTAREA' && typeof startScreenManager !== 'undefined') {
+                event.preventDefault();
+                startScreenManager.toggleDevMode();
+            }
             return;
         }
 
@@ -21767,11 +21848,11 @@ extendClass(InputHandler, {
 "use strict";
 
 // UI management and menu handling
-const ENEMY_CARD_MAX = 2; // hero cards in the enemy sidebar (champion + toughest side craft)
-const ENEMY_HIT_FACE_MS = 900; // pain / anger face after a hit
-const ENEMY_DEAD_FACE_MS = 3000; // a defeated enemy's card lingers this long with the dead face
+var ENEMY_CARD_MAX = 2; // hero cards in the enemy sidebar (champion + toughest side craft)
+var ENEMY_HIT_FACE_MS = 900; // pain / anger face after a hit
+var ENEMY_DEAD_FACE_MS = 3000; // a defeated enemy's card lingers this long with the dead face
 
-class UIManager {
+var UIManager = class UIManager {
     constructor(gameState) {
         this.gameState = gameState;
         this.pauseMenuIndex = 0;
@@ -22100,10 +22181,30 @@ class UIManager {
      * Sidebar card for a big enemy: portrait on top with the faction crest in its lower-right corner,
      * the name, then vertical hull + shield bars like the player's own vitals.
      */
+    /** Hero = boss or elite / capital craft; everything else on a card is a plain line ship. */
+    isHeroEnemy(enemy) {
+        return !!(enemy && (enemy.isBoss || this.isCardClass(enemy.enemyClass)));
+    }
+
+    /** Faction rank of a hero: title + chevron count (elite 2, capital 3, boss 4). */
+    enemyFactionRank(enemy, faction) {
+        const tier = enemy.isBoss ? 2 : (String(enemy.enemyClass || '').toLowerCase() === 'capital' ? 1 : 0);
+        const titles = {
+            terran: ['LIEUTENANT', 'COMMANDER', 'ADMIRAL'],
+            kronax: ['PACKLEADER', 'WARCHIEF', 'CLAWMASTER'],
+            voidborn: ['HOLLOW', 'RINGWARDEN', 'ECHO'],
+            pirate: ['FIRST MATE', 'CAPTAIN', 'WARLORD'],
+            machine: ['NODE', 'OVERSEER', 'PRIME']
+        };
+        const list = titles[faction] || ['OFFICER', 'COMMANDER', 'WARLORD'];
+        return { title: list[tier], pips: tier + 2 };
+    }
+
     buildEnemyCard(enemy) {
         const isChampion = enemy.key === 'champion';
+        const isHero = this.isHeroEnemy(enemy);
         const card = document.createElement('div');
-        card.className = 'health-bar enemy-health enemy-card-v' + (isChampion ? ' is-champion' : ' is-side') + (enemy.isBoss ? ' is-boss' : '');
+        card.className = 'health-bar enemy-health enemy-card-v' + (isChampion ? ' is-champion' : ' is-side') + (enemy.isBoss ? ' is-boss' : '') + (isHero ? ' is-hero' : ' is-line');
         card.dataset.enemyKey = enemy.key;
         card.dataset.faction = enemy.factionId || '';
 
@@ -22122,7 +22223,8 @@ class UIManager {
         portrait.setAttribute('data-ui-tip', name);
         let face = '';
         try {
-            if (typeof heroPortrait !== 'undefined' && heroPortrait.html) {
+            // Line ships have no pilot portrait: their card shows the hull, so they never pass for a hero.
+            if (isHero && typeof heroPortrait !== 'undefined' && heroPortrait.html) {
                 face = heroPortrait.html({ faction: faction, v: this.enemyFaceVariant(enemy.key, faction) }, accent);
             }
         } catch (err) { face = ''; }
@@ -22145,10 +22247,21 @@ class UIManager {
             crest.innerHTML = crestHtml;
             portrait.appendChild(crest);
         }
+        if (accent) card.style.setProperty('--enemy-accent', accent);
+        if (isHero) {
+            const rank = this.enemyFactionRank(enemy, faction);
+            const rankEl = document.createElement('span');
+            rankEl.className = 'enemy-rank';
+            rankEl.innerHTML = '<span class="enemy-rank-pips">' + '<i></i>'.repeat(rank.pips) + '</span>' +
+                '<span class="enemy-rank-title"></span>';
+            rankEl.lastChild.textContent = rank.title;
+            portrait.appendChild(rankEl);
+        }
 
         const nameEl = document.createElement('div');
         nameEl.className = 'enemy-name';
-        nameEl.textContent = (enemy.isBoss ? 'BOSS · ' : '') + name;
+        const lineClass = String(enemy.enemyClass || 'line').toUpperCase();
+        nameEl.textContent = (enemy.isBoss ? 'BOSS · ' : '') + (isHero ? '' : lineClass + ' · ') + name;
 
         const bars = document.createElement('div');
         bars.className = 'enemy-vbars';
@@ -23159,7 +23272,7 @@ var CoreRenderManager = class CoreRenderManager {
     }
 }
 
-/* --- js/core/viewport-fit.js?v=scan-2 --- */
+/* --- js/core/viewport-fit.js?v=vox-frame-5 --- */
 "use strict";
 
 /**
@@ -23358,11 +23471,15 @@ var CoreRenderManager = class CoreRenderManager {
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
     const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    // HUD remote: pilot plate + crest (second fernbedienung).
+    const HUD_ICON = svg16('<rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/>');
     const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
     // Shown on the layout key itself in place of LAYOUT_ICON while editing — clicking it again
     // exits the edit (it's the same toggle either way), so the icon reads as "cancel/close" rather
     // than still offering to "open" something that's already open.
     const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
+    // Frame edit: crosshair/target, for the on-screen BEZEL FILL / VINE INSET grips.
+    const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     vfs.resOpen = false;
@@ -23381,8 +23498,13 @@ var CoreRenderManager = class CoreRenderManager {
     function applyFrameStyle() {
         const frame = document.getElementById('vf-bezel');
         if (!frame) return;
+        const root = document.documentElement;
         FRAME_PROPS.forEach(function (p) { frame.style.removeProperty(p); });
         frame.style.removeProperty('--fr-deco');
+        frame.style.removeProperty('--fr-bg-crop');
+        frame.style.removeProperty('--fr-vine-inset');
+        // Screen stays behind the bezel: no peek into the band.
+        root.style.removeProperty('--fr-stage-inset');
         const st = vfs.frameStyles[frame.getAttribute('data-faction')];
         if (!st) return;
         if (st.bevel != null) {
@@ -23394,6 +23516,9 @@ var CoreRenderManager = class CoreRenderManager {
         if (st.lit) frame.style.setProperty('--hull-lit', st.lit);
         if (st.dark) frame.style.setProperty('--hull-dark', st.dark);
         if (st.deco != null) frame.style.setProperty('--fr-deco', String(st.deco / 100));
+        // Single band-fill knob → .vf-bezel-back (stage peek / dual crop removed).
+        if (st.bgCrop != null) frame.style.setProperty('--fr-bg-crop', String(st.bgCrop / 100));
+        if (st.vineInset != null) frame.style.setProperty('--fr-vine-inset', String(st.vineInset));
     }
     (function watchFrame() {
         const frame = document.getElementById('vf-bezel');
@@ -23419,6 +23544,125 @@ var CoreRenderManager = class CoreRenderManager {
     let silhouetteRaf = 0, silKey = '';
     function clearSilhouette() {
         document.documentElement.removeAttribute('data-vf-frame-sil');
+        document.documentElement.removeAttribute('data-vf-frame-vox');
+        const plates = document.querySelector('#vf-bezel .vf-fr');
+        if (plates) { plates.style.removeProperty('background-image'); plates.style.removeProperty('background-size'); }
+    }
+    // Voxel frame: the whole plate is shaded per cell into a cw×ch bitmap and shown upscaled with
+    // image-rendering: pixelated, so every edge, corner and rounding lands on the shared --fr-px lattice.
+    // Relief: a distance transform turns the band into a height field (rounded ridge towards the outer
+    // edge and the screen opening), normals from that field are lit from the top-left and mapped onto a
+    // faction colour ramp. Costs one small PNG per resize / faction /
+    // style change instead of a live SVG filter (which dropped the game to ~3 FPS).
+    // Pixel rounding of the outline itself: a morphological opening (erode, then dilate with a disk of
+    // r cells) steps every convex corner of the actual silhouette — tabs, notches, the frame corners —
+    // instead of intersecting with a box-sized rounded rect, which ate thin corner tabs and left the
+    // real frame edge with a hard square corner. Works in place on the RGBA alpha channel.
+    function roundCellMask(data, cw, ch, r) {
+        const disk = [];
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r + r * 0.8) disk.push([dx, dy]);
+        const src = new Uint8Array(cw * ch);
+        for (let i = 0; i < src.length; i++) src[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+        const pass = function (a, keep) {
+            const out = new Uint8Array(a.length);
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                let v = keep;
+                for (let k = 0; k < disk.length && v === keep; k++) {
+                    const xx = x + disk[k][0], yy = y + disk[k][1];
+                    const s = xx < 0 || yy < 0 || xx >= cw || yy >= ch ? 0 : a[yy * cw + xx];
+                    if (s !== keep) v = s;
+                }
+                out[y * cw + x] = v;
+            }
+            return out;
+        };
+        const opened = pass(pass(src, 1), 0);
+        for (let i = 0; i < opened.length; i++) data[i * 4 + 3] = opened[i] ? 255 : 0;
+    }
+    function paintVoxelFrame(plates, sil, holeData, cw, ch, cell, o, W, H) {
+        const n = cw * ch;
+        const solid = new Uint8Array(n), nearHole = new Uint8Array(n);
+        for (let i = 0; i < n; i++) solid[i] = sil[i * 4 + 3] >= 128 && !(holeData && holeData[i * 4 + 3] >= 128) ? 1 : 0;
+        // Chamfer distance (1 / √2) to the nearest empty cell; the canvas border counts as empty.
+        const dist = new Float32Array(n);
+        for (let i = 0; i < n; i++) dist[i] = solid[i] ? 1e9 : 0;
+        const at = function (x, y) { return x < 0 || y < 0 || x >= cw || y >= ch ? 0 : dist[y * cw + x]; };
+        const D = Math.SQRT2;
+        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+            const i = y * cw + x; if (!solid[i]) continue;
+            dist[i] = Math.min(dist[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + D, at(x + 1, y - 1) + D);
+        }
+        for (let y = ch - 1; y >= 0; y--) for (let x = cw - 1; x >= 0; x--) {
+            const i = y * cw + x; if (!solid[i]) continue;
+            dist[i] = Math.min(dist[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + D, at(x - 1, y + 1) + D);
+        }
+        if (holeData) {
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                if (!solid[y * cw + x]) continue;
+                for (let dy = -1; dy <= 1 && !nearHole[y * cw + x]; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    const xx = x + dx, yy = y + dy;
+                    if (xx >= 0 && yy >= 0 && xx < cw && yy < ch && holeData[(yy * cw + xx) * 4 + 3] >= 128) { nearHole[y * cw + x] = 1; break; }
+                }
+            }
+        }
+        // Rounded bevel: height rises over R cells (quarter sine), then a flat plateau.
+        const R = Math.max(3, o.bevel + 2);
+        const height = function (x, y) {
+            const d = at(x, y);
+            return d <= 0 ? 0 : R * Math.sin(Math.min(1, (d - 0.5) / R) * Math.PI / 2);
+        };
+        const mix = function (a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
+        const white = [255, 255, 255], black = [0, 0, 0];
+        // Shadow → hull → highlight, from the faction tokens (FACTIONS tab overrides follow).
+        const ramp = [
+            mix(black, o.dark, 0.6), o.dark, mix(o.dark, o.hull, 0.5), o.hull,
+            mix(o.hull, o.lit, 0.5), o.lit, mix(o.lit, white, 0.4), mix(o.lit, white, 0.7)
+        ];
+        const flatIdx = 3;
+        const L = [-0.62, -0.62, 0.48];
+        const img = new ImageData(cw, ch);
+        const px = img.data;
+        for (let y = 0; y < ch; y++) {
+            for (let x = 0; x < cw; x++) {
+                const i = y * cw + x;
+                if (!solid[i]) continue;
+                // Central-difference normal of the height field, lit from the top-left.
+                const gx = (height(x + 1, y) - height(x - 1, y)) * 0.9, gy = (height(x, y + 1) - height(x, y - 1)) * 0.9;
+                const len = Math.hypot(gx, gy, 1);
+                const lambert = (-gx * L[0] - gy * L[1] + L[2]) / len;
+                // Relative to a flat face (= hull), stretched over the ramp and posterised to clean steps.
+                let t = flatIdx + (lambert - L[2]) * 10;
+                // Each edge gets a one-cell rim: highlight where the slope faces the light, deep shade where not.
+                if (dist[i] < 1.5 && Math.abs(gx) + Math.abs(gy) > 0.05) t += -gx - gy > 0 ? 2 : -2;
+                // The screen sits in a recess: the cells touching the opening fall into a dark groove.
+                if (nearHole[i]) t = Math.min(t, 0);
+                const c = ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(t)))];
+                px[i * 4] = c[0]; px[i * 4 + 1] = c[1]; px[i * 4 + 2] = c[2]; px[i * 4 + 3] = 255;
+            }
+        }
+        // The stage is scaled (--stage-scale × devicePixelRatio), so a cw×ch bitmap would be resampled at a
+        // non-integer factor and the cells go soft. Bake it at device resolution instead: every cell edge
+        // lands on a whole device pixel and the browser only has to map the image 1:1.
+        const dev = o.devScale > 0 ? o.devScale : 1;
+        const out = document.createElement('canvas');
+        out.width = Math.max(1, Math.round(cw * cell * dev)); out.height = Math.max(1, Math.round(ch * cell * dev));
+        const ox = out.getContext('2d');
+        const edge = function (i) { return Math.round(i * cell * dev); };
+        for (let y = 0; y < ch; y++) {
+            const y0 = edge(y), y1 = edge(y + 1);
+            for (let x = 0; x < cw; x++) {
+                const i = (y * cw + x) * 4;
+                if (!px[i + 3]) continue;
+                ox.fillStyle = 'rgb(' + Math.round(px[i]) + ',' + Math.round(px[i + 1]) + ',' + Math.round(px[i + 2]) + ')';
+                ox.fillRect(edge(x), y0, edge(x + 1) - edge(x), y1 - y0);
+            }
+        }
+        plates.style.backgroundImage = 'url(' + out.toDataURL('image/png') + ')';
+        // Must stay cw*cell/ch*cell (the bitmap's own grid), not the frame's live W/H: pinning it to W/H
+        // stretches each baked cell non-uniformly whenever W isn't itself a whole multiple of cell, which
+        // is what made the pixels look squashed/sheared on the corners.
+        plates.style.backgroundSize = (cw * cell) + 'px ' + (ch * cell) + 'px';
+        document.documentElement.setAttribute('data-vf-frame-vox', '');
     }
     function updateSilhouette() {
         silhouetteRaf = 0;
@@ -23439,8 +23683,17 @@ var CoreRenderManager = class CoreRenderManager {
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
-        const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow;
-        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')) return;
+        const fcs = getComputedStyle(frame);
+        const plates = frame.querySelector('.vf-fr');
+        const hole = frame.querySelector('.vf-fr-hullB .vf-fr-hole');
+        const hcs = hole ? getComputedStyle(hole) : null;
+        const voxKeyNow = ['--hull', '--hull-lit', '--hull-dark', '--fr-bevel', '--fr-bv'].map(function (p) { return fcs.getPropertyValue(p).trim(); }).join(',')
+            + (hole ? '|' + [hole.offsetLeft, hole.offsetTop, hole.offsetWidth, hole.offsetHeight, hcs.borderTopLeftRadius, hcs.borderTopRightRadius, hcs.borderBottomRightRadius, hcs.borderBottomLeftRadius].join(',') : '');
+        // Device pixels per stage pixel: the voxel bitmap is baked at this resolution (see paintVoxelFrame).
+        const devScale = (frame.getBoundingClientRect().width / W) * (window.devicePixelRatio || 1);
+        const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow + '|' + voxKeyNow + '|' + devScale.toFixed(4);
+        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')
+            && plates && plates.style.backgroundImage) return;
         const probe = document.createElement('div');
         probe.id = 'vfSilProbe';
         probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;width:' + W + 'px;height:' + H + 'px';
@@ -23461,9 +23714,8 @@ var CoreRenderManager = class CoreRenderManager {
         sx.scale(1 / cell, 1 / cell);
         sx.fillStyle = '#000';
         let ok = true;
-        // FRAME ROUND also rounds the outer corners: intersect the faction shape with a rounded rect.
+        // FRAME ROUND also rounds the outer corners (see roundCellMask below, done on the cell mask).
         const outR = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fr-out')) || 0;
-        if (outR > 0) { sx.beginPath(); sx.roundRect(0, 0, W, H, outR); sx.clip(); }
         try {
             if (shape.indexOf('polygon(') === 0) {
                 const pts = splitTop(shape.slice(8, -1), ',').map(function (pt) {
@@ -23484,9 +23736,36 @@ var CoreRenderManager = class CoreRenderManager {
                 sx.beginPath(); sx.roundRect(0, 0, W, H, rad); sx.fill();
             } else ok = false;
         } catch (e) { ok = false; }
+        // Voxel pass inputs, resolved while the probe still sits in the frame: plate colours, bevel
+        // depths (in whole cells) and the screen opening rasterised on the same cell grid.
+        const rgbOf = function (expr) {
+            dot.style.color = expr;
+            const m = /([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(getComputedStyle(dot).color);
+            dot.style.color = '';
+            return m ? [+m[1], +m[2], +m[3]] : [0, 0, 0];
+        };
+        const cHull = rgbOf('var(--hull)'), cLit = rgbOf('var(--hull-lit)'), cDark = rgbOf('var(--hull-dark)');
+        const bevelCells = Math.max(1, Math.round(px('var(--fr-bevel)', 'width') / cell));
+        const edgeCells = Math.max(1, Math.round(px('var(--fr-bv, calc(3 * var(--u)))', 'width') / cell));
+        let holeData = null;
+        if (ok && hole && hole.offsetWidth > 0 && hole.offsetHeight > 0) {
+            const hc = document.createElement('canvas');
+            hc.width = cw; hc.height = ch;
+            const hx = hc.getContext('2d', { willReadFrequently: true });
+            hx.scale(1 / cell, 1 / cell);
+            const rr = [hcs.borderTopLeftRadius, hcs.borderTopRightRadius, hcs.borderBottomRightRadius, hcs.borderBottomLeftRadius].map(function (r) {
+                const p = r.split(' ');
+                return { x: parseFloat(p[0]) || 0, y: parseFloat(p[1] || p[0]) || 0 };
+            });
+            hx.beginPath(); hx.roundRect(hole.offsetLeft, hole.offsetTop, hole.offsetWidth, hole.offsetHeight, rr); hx.fill();
+            holeData = hx.getImageData(0, 0, cw, ch).data;
+        }
         probe.remove();
         if (!ok) { clearSilhouette(); silKey = ''; return; }
         const data = sx.getImageData(0, 0, cw, ch).data;
+        // A third of --fr-out keeps tabs and notches of the faction shape (a few cells wide) intact.
+        if (outR > 0) roundCellMask(data, cw, ch, Math.max(1, Math.round(outR / cell / 3)));
+        if (plates) paintVoxelFrame(plates, data, holeData, cw, ch, cell, { hull: cHull, lit: cLit, dark: cDark, bevel: bevelCells, edge: edgeCells, devScale: devScale }, W, H);
         // One path of merged runs of whole cells (square staircase), in 0..1 box units.
         const nx = function (x) { return Math.min(1, x * cell / W).toFixed(6); };
         const ny = function (y) { return Math.min(1, y * cell / H).toFixed(6); };
@@ -23538,8 +23817,18 @@ var CoreRenderManager = class CoreRenderManager {
             if (silhouetteRaf) { cancelAnimationFrame(silhouetteRaf); silhouetteRaf = 0; }
             updateSilhouette();
         }).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
+        // Colour / bevel overrides (FACTIONS tab) land as inline styles on the frame: re-shade the voxels.
+        new MutationObserver(scheduleSilhouette).observe(frame, { attributes: true, attributeFilter: ['style'] });
         new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
-        if (window.ResizeObserver) new ResizeObserver(scheduleSilhouette).observe(document.body);
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(scheduleSilhouette);
+            ro.observe(document.body);
+            // The settle pass in viewport-fit-part4.js resizes #vf-bezel itself (CSS vars / canvas size)
+            // without necessarily changing <body>'s own box, so watch the frame directly too — otherwise
+            // the bake from before that pass stays in place forever (not just for one frame) once the
+            // frame's real W/H has moved on, and the objectBoundingBox clip path silently stretches to fit.
+            ro.observe(frame);
+        }
         // The rebuild itself adds / removes its own probe on <body>: ignoring that stops it re-triggering itself every frame.
         new MutationObserver(function (recs) {
             const other = recs.some(function (r) {
@@ -23681,7 +23970,7 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -24336,6 +24625,7 @@ var CoreRenderManager = class CoreRenderManager {
             h += fxSlider('SCAN SIZE', 'fx:scanSize', 25, 400, 5, ui.getFxPercent('scanSize'), '%');
             h += fxSlider('SCAN SPEED', 'fx:scanSpeed', 0, 300, 5, ui.getFxPercent('scanSpeed'), '%');
             h += fxSlider('SCAN WARP', 'fx:scanWarp', 0, 100, 5, ui.getFxPercent('scanWarp'), '%');
+            h += fxSlider('VINE MOTION', 'fx:vineMotion', 0, 300, 10, ui.getFxPercent('vineMotion'), '%');
             h += fxSlider('FX SCALE', 'fx:fxScale', 25, 400, 5, ui.getFxPercent('fxScale'), '%');
             h += '<div class="vf-fx-row"><span>SEL. PULSE</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.arcade, 'fx-arcade') + '</div>';
             (function () {
@@ -24345,6 +24635,10 @@ var CoreRenderManager = class CoreRenderManager {
                 h += '<div class="vf-fx-title">FRAME · ' + cur.toUpperCase() + '</div>' +
                     fxSlider('BEVEL', 'fr:bevel', 0, 14, 1, st.bevel != null ? st.bevel : 5, '') +
                     fxSlider('DECO', 'fr:deco', 0, 100, 10, st.deco != null ? st.deco : 100, '%');
+                if (cur === 'voidborn') {
+                    h += fxSlider('BEZEL FILL', 'fr:bgCrop', 0, 100, 5, st.bgCrop != null ? st.bgCrop : 50, '%') +
+                        fxSlider('VINE INSET', 'fr:vineInset', 0, 8, 1, st.vineInset != null ? st.vineInset : 2, '');
+                }
             })();
         } else if (vfs.fxTab === 'voxel') {
             h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +
@@ -24568,8 +24862,22 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
+    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
+
+    // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
+    // scale, …) directly rather than tracking down each factor by name — same technique as
+    // hud-layout-editor.js's measureScale(). Used by the frame-edit grips to convert a pointer
+    // delta in real screen px back into authored CSS px.
+    function measureFrameScale(referenceEl) {
+        const parent = referenceEl && referenceEl.nodeType === 1 ? referenceEl : document.body;
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;width:2000px;height:2000px;margin:0;border:0;padding:0;visibility:hidden;pointer-events:none;';
+        parent.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w > 0 ? w / 2000 : 1;
+    }
 
     function swayLoop(now) {
         const plate = document.getElementById('vf-fx');
@@ -24710,6 +25018,11 @@ var CoreRenderManager = class CoreRenderManager {
                 hudLayoutEditor.toggleEdit();
                 btn.classList.toggle('is-open', hudLayoutEditor.isEditing());
             },
+            hud: function () { setPhOpen(!vfs.phOpen); },
+            frameEdit: function (btn) {
+                toggleFrameEdit();
+                btn.classList.toggle('is-open', !!vfs.frameEditOn);
+            },
             save: function (btn) {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.save();
@@ -24723,6 +25036,7 @@ var CoreRenderManager = class CoreRenderManager {
         };
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
+            hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
             res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -24737,16 +25051,46 @@ var CoreRenderManager = class CoreRenderManager {
                 btn.title = meta[key][0];
                 btn.setAttribute('aria-label', meta[key][0]);
                 btn.innerHTML = meta[key][1];
+                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit') btn.hidden = true;
                 tools.appendChild(btn);
             });
             frame.appendChild(tools);
+        }
+        // Older saves / markup without the HUD key: inject it after layout.
+        if (!tools.querySelector('[data-tool="hud"]') && meta.hud) {
+            const hudBtn = document.createElement('button');
+            hudBtn.type = 'button';
+            hudBtn.dataset.tool = 'hud';
+            hudBtn.title = meta.hud[0];
+            hudBtn.setAttribute('aria-label', meta.hud[0]);
+            hudBtn.innerHTML = meta.hud[1];
+            hudBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="layout"]');
+            if (after && after.nextSibling) tools.insertBefore(hudBtn, after.nextSibling);
+            else tools.appendChild(hudBtn);
+            tools.dataset.wired = '0'; // re-bind so the new key gets a click handler
+        }
+        // Older saves / markup without the frame-edit key: inject it after HUD.
+        if (!tools.querySelector('[data-tool="frameEdit"]') && meta.frameEdit) {
+            const feBtn = document.createElement('button');
+            feBtn.type = 'button';
+            feBtn.dataset.tool = 'frameEdit';
+            feBtn.title = meta.frameEdit[0];
+            feBtn.setAttribute('aria-label', meta.frameEdit[0]);
+            feBtn.innerHTML = meta.frameEdit[1];
+            feBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="hud"]');
+            if (after && after.nextSibling) tools.insertBefore(feBtn, after.nextSibling);
+            else tools.appendChild(feBtn);
+            tools.dataset.wired = '0';
         }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
             Object.keys(handlers).forEach(function (key) {
                 const btn = tools.querySelector('[data-tool="' + key + '"]');
-                if (!btn) return;
+                if (!btn || btn.dataset.phBound === '1') return;
+                btn.dataset.phBound = '1';
                 btn.addEventListener('click', function (e) { e.stopPropagation(); handlers[key](btn); });
             });
             const fxb = tools.querySelector('[data-tool="fx"]');
@@ -24798,6 +25142,19 @@ var CoreRenderManager = class CoreRenderManager {
                 layoutBtn.setAttribute('aria-label', layoutBtn.title);
             }
         }
+        const hudBtn = q('hud');
+        if (hudBtn) {
+            hudBtn.hidden = !devOn;
+            hudBtn.classList.toggle('is-open', !!vfs.phOpen);
+        }
+        if (!devOn && vfs.phOpen) setPhOpen(false);
+        const frameEditBtn = q('frameEdit');
+        if (frameEditBtn) {
+            frameEditBtn.hidden = !devOn;
+            frameEditBtn.classList.toggle('is-open', !!vfs.frameEditOn);
+        }
+        if (!devOn && vfs.frameEditOn) toggleFrameEdit(false);
+        if (vfs.frameEditOn) renderFrameEditGrips();
         const saveBtn = q('save');
         if (saveBtn) saveBtn.hidden = !nowEditing;
         const resetBtn = q('reset');
@@ -24929,38 +25286,194 @@ var CoreRenderManager = class CoreRenderManager {
     }
     setInterval(syncPilotPlate, 700);
 
-    // Dev Mode: sliders for the pilot plate / resources screen sizes (--ph-* on the bezel), saved in localStorage.
+    // Dev Mode HUD remote (second fernbedienung): tabs for outside-screen chrome + pilot/res screens.
     const PH_TUNE_KEY = 'vf_pilot_hud_tune_v1';
-    const PH_TUNE = [
-        ['PILOT SCREEN · POSITION'],
-        ['--ph-top', 'TOP', 0, 70, 1],
-        ['--ph-left', 'LEFT', 40, 400, 2],
-        ['--ph-plate-w', 'WIDTH', 200, 600, 2],
-        ['--ph-height', 'HEIGHT', 20, 70, 1],
-        ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
-        ['PILOT FRAME'],
-        ['--ph-crest-top', 'TOP', -120, 20, 1],
-        ['--ph-crest-left', 'LEFT', -60, 40, 1],
-        ['--ph-crest-w', 'WIDTH', 30, 140, 1],
-        ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
-        ['PILOT IMAGE'],
-        ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
-        ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1],
-        ['RESOURCE SCREEN · POSITION'],
-        ['--ph-gap', 'GAP', 0, 120, 2],
-        ['--ph-res-height', 'HEIGHT', 20, 70, 1],
-        ['--ph-res-pad', 'PADDING', 0, 60, 1],
-        ['RESOURCES'],
-        ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
-        ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
-        ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+    const PH_TAB_KEY = 'vf_pilot_hud_tab';
+    const PH_TABS = [['outside', 'OUTSIDE'], ['pilot', 'PILOT'], ['res', 'RES']];
+    const PH_CLUSTERS = [['FRAME', ['outside']], ['SCREENS', ['pilot', 'res']]];
+    const PH_TAB_ICONS = {
+        outside: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/></svg>',
+        pilot: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><circle cx="8" cy="5" r="2"/><path d="M3 14c1-3 3-4 5-4s4 1 5 4"/></svg>',
+        res: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 12h3V6H2zM7 12h3V4H7zM12 12h2V8h-2z"/></svg>'
+    };
+    // Per-tab rows: header (len<2) or [key, label, min, max, step].
+    const PH_SECTIONS = {
+        outside: [
+            ['FRAME'],
+            ['fr:bgCrop', 'BEZEL FILL', 0, 100, 5],
+            ['fr:vineInset', 'VINE INSET', 0, 8, 1],
+            ['TAB'],
+            ['--ph-tab-up', 'TAB UP', 0, 24, 1],
+            ['--ph-tab-side', 'TAB SIDE', 0, 40, 1],
+            ['--ph-tab-down', 'TAB DOWN', 0, 16, 1],
+            ['--ph-tab-cut', 'TAB CUT', 0, 20, 1],
+            ['--ph-tab-round', 'TAB ROUND', 0, 24, 1],
+            ['RIM'],
+            ['--ph-rim-top', 'RIM TOP', 0, 16, 1],
+            ['--ph-rim-side', 'RIM SIDE', 0, 12, 1],
+            ['--ph-line', 'LINE', 1, 8, 1],
+            ['--ph-crest-rim', 'CREST RIM', 0, 12, 1]
+        ],
+        pilot: [
+            ['POSITION'],
+            ['--ph-top', 'TOP', 0, 70, 1],
+            ['--ph-left', 'LEFT', 40, 400, 2],
+            ['--ph-plate-w', 'WIDTH', 200, 600, 2],
+            ['--ph-height', 'HEIGHT', 20, 70, 1],
+            ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
+            ['CREST'],
+            ['--ph-crest-top', 'TOP', -120, 20, 1],
+            ['--ph-crest-left', 'LEFT', -60, 40, 1],
+            ['--ph-crest-w', 'WIDTH', 30, 140, 1],
+            ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
+            ['IMAGE'],
+            ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
+            ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1]
+        ],
+        res: [
+            ['POSITION'],
+            ['--ph-gap', 'GAP', 0, 120, 2],
+            ['--ph-res-height', 'HEIGHT', 20, 70, 1],
+            ['--ph-res-pad', 'PADDING', 0, 60, 1],
+            ['RESOURCES'],
+            ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
+            ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
+            ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+        ]
+    };
+    const PH_ALL = PH_TABS.reduce(function (a, t) { return a.concat(PH_SECTIONS[t[0]] || []); }, []);
+    const PH_FR_DEFAULTS = { bgCrop: 50, vineInset: 2 };
+
+    // Frame edit (Devmode): draggable on-screen grips for bezel fill / vine inset.
+    // Lives on #vf-bezel so the grip sits in the band. Writes via phSetFr (same keys as HUD).
+    const FRAME_EDIT_HANDLES = [
+        { key: 'bgCrop', min: 0, max: 100, step: 5, label: 'BEZEL FILL', lenExpr: 'var(--fr-open-side, calc(44 * var(--bz-u)))', topPct: 36 },
+        { key: 'vineInset', min: 0, max: 8, step: 1, label: 'VINE INSET', lenExpr: 'calc(8 * var(--bz-u))', topPct: 58 }
     ];
+    // Renders the probe in the frame itself so its measured width already reflects every scale
+    // layer the frame sits under (getBoundingClientRect/clientX share that same viewport space —
+    // no separate scale-factor math needed, unlike the FX/HUD remotes which float outside the
+    // scaled stage).
+    function frameEditProbePx(frame, lenExpr) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;height:0;visibility:hidden;pointer-events:none;width:' + lenExpr + ';';
+        frame.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w;
+    }
+    function frameEditOverlay(frame) {
+        let ov = frame.querySelector('.vf-frame-edit-overlay');
+        if (ov) return ov;
+        ov = document.createElement('div');
+        ov.className = 'vf-frame-edit-overlay';
+        FRAME_EDIT_HANDLES.forEach(function (h) {
+            const row = document.createElement('div');
+            row.className = 'vf-frame-edit-row';
+            row.style.top = h.topPct + '%';
+            row.innerHTML = '<span class="vf-frame-edit-label">' + h.label + '</span><i class="vf-frame-edit-grip" data-fe="' + h.key + '"></i>';
+            ov.appendChild(row);
+        });
+        ov.addEventListener('pointerdown', onFrameEditGripDown);
+        frame.appendChild(ov);
+        return ov;
+    }
+    function renderFrameEditGrips() {
+        const frame = document.getElementById('vf-bezel');
+        if (!frame || !vfs.frameEditOn) return;
+        const ov = frameEditOverlay(frame);
+        ov.hidden = false;
+        FRAME_EDIT_HANDLES.forEach(function (h) {
+            const grip = ov.querySelector('[data-fe="' + h.key + '"]');
+            if (!grip || grip.classList.contains('is-dragging')) return;
+            const lenPx = frameEditProbePx(frame, h.lenExpr);
+            const v = phFrValue(h.key);
+            const frac = lenPx > 0 ? clamp((v - h.min) / (h.max - h.min), 0, 1) : 0;
+            grip.style.left = (frac * lenPx) + 'px';
+            grip.title = h.label + ': ' + v;
+        });
+    }
+    function onFrameEditGripDown(e) {
+        const grip = e.target.closest('.vf-frame-edit-grip');
+        if (!grip) return;
+        const key = grip.getAttribute('data-fe');
+        const h = FRAME_EDIT_HANDLES.filter(function (x) { return x.key === key; })[0];
+        const frame = document.getElementById('vf-bezel');
+        if (!h || !frame) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const frameRect = frame.getBoundingClientRect();
+        const lenPx = frameEditProbePx(frame, h.lenExpr);
+        grip.classList.add('is-dragging');
+        const apply = function (clientX) {
+            const frac = lenPx > 0 ? clamp((clientX - frameRect.left) / lenPx, 0, 1) : 0;
+            const raw = h.min + frac * (h.max - h.min);
+            const v = Math.round(raw / h.step) * h.step;
+            grip.style.left = (clamp((v - h.min) / (h.max - h.min), 0, 1) * lenPx) + 'px';
+            grip.title = h.label + ': ' + v;
+            phSetFr(key, v);
+            if (vfs.phOpen) buildPilotTunePanel(frame);
+        };
+        apply(e.clientX);
+        const move = function (ev) { apply(ev.clientX); };
+        const up = function () {
+            grip.classList.remove('is-dragging');
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+    }
+    function toggleFrameEdit(force) {
+        vfs.frameEditOn = force != null ? !!force : !vfs.frameEditOn;
+        const frame = document.getElementById('vf-bezel');
+        if (!frame) return;
+        if (!vfs.frameEditOn) {
+            const ov = frame.querySelector('.vf-frame-edit-overlay');
+            if (ov) ov.hidden = true;
+            return;
+        }
+        renderFrameEditGrips();
+    }
+    window.addEventListener('resize', renderFrameEditGrips);
     let phTune = {};
     try { phTune = JSON.parse(localStorage.getItem(PH_TUNE_KEY) || '{}') || {}; } catch (e) { phTune = {}; }
-    let phPanel = null, phBtn = null;
+    let phTab = 'outside';
+    try {
+        const saved = localStorage.getItem(PH_TAB_KEY);
+        if (PH_TABS.some(function (t) { return t[0] === saved; })) phTab = saved;
+    } catch (e) { /* ignore */ }
+    let phPanel = null, phWired = false;
+    if (vfs.phOpen == null) vfs.phOpen = false;
+    // Move / resize / scale — same behaviour as the FX remote, own storage keys.
+    const PHGEOM_KEY = 'vf-ph-geom';
+    const PHZOOM_KEY = 'vf-ph-zoom';
+    let phGeom = null;
+    try { phGeom = JSON.parse(localStorage.getItem(PHGEOM_KEY) || 'null'); } catch (e) { phGeom = null; }
+    try {
+        const z = Number(localStorage.getItem(PHZOOM_KEY));
+        if (z >= 50 && z <= 150) vfs.phZoom = z / 100;
+    } catch (e) { /* ignore */ }
+    if (vfs.phZoom == null) vfs.phZoom = 1;
+    function phFaction() {
+        const frame = document.getElementById('vf-bezel');
+        return (frame && frame.getAttribute('data-faction')) || 'terran';
+    }
+    function phFrValue(key) {
+        const st = (vfs.frameStyles && vfs.frameStyles[phFaction()]) || {};
+        if (st[key] != null) return st[key];
+        return PH_FR_DEFAULTS[key];
+    }
+    function phSetFr(key, v) {
+        const fac = phFaction();
+        (vfs.frameStyles[fac] = vfs.frameStyles[fac] || {})[key] = v;
+        saveFrameStyles();
+        applyFrameStyle();
+    }
     function applyPilotTune(frame) {
-        PH_TUNE.forEach(function (t) {
+        PH_ALL.forEach(function (t) {
             if (t.length < 2) return;
+            if (t[0].indexOf('fr:') === 0) return;
             if (phTune[t[0]] != null) frame.style.setProperty(t[0], String(phTune[t[0]]));
             else frame.style.removeProperty(t[0]);
         });
@@ -24968,55 +25481,187 @@ var CoreRenderManager = class CoreRenderManager {
     function savePilotTune() {
         try { localStorage.setItem(PH_TUNE_KEY, JSON.stringify(phTune)); } catch (e) { /* ignore */ }
     }
-    function buildPilotTunePanel(frame) {
-        const cs = getComputedStyle(frame);
-        const rows = PH_TUNE.map(function (t) {
-            if (t.length < 2) return '<div class="vf-ph-tune-h">' + t[0] + '</div>';
-            const v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
-            return '<label class="vf-ph-tune-row"><span>' + t[1] + '</span>'
-                + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4] + '" value="' + v + '">'
-                + '<b>' + v + '</b></label>';
-        }).join('');
-        phPanel.innerHTML = rows + '<div class="vf-ph-tune-btns"><button type="button" data-ph-reset>RESET</button><button type="button" data-ph-close>CLOSE</button></div>';
+    function phRowHtml(t, cs) {
+        if (t.length < 2) return '<div class="vf-fx-title">' + t[0] + '</div>';
+        let v;
+        if (t[0].indexOf('fr:') === 0) v = phFrValue(t[0].slice(3));
+        else v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
+        const fill = ((v - t[2]) / (t[3] - t[2]) * 100);
+        return '<label class="vf-fx-row"><span>' + t[1] + '</span>'
+            + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4]
+            + '" value="' + v + '" style="--look-fill:' + fill + '%"><output>' + v + '</output></label>';
     }
-    function syncPilotTuner(frame) {
-        applyPilotTune(frame);
-        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
-        if (!phBtn) {
-            phBtn = document.createElement('button');
-            phBtn.type = 'button';
-            phBtn.className = 'vf-ph-tune-btn';
-            phBtn.title = 'Pilot HUD size (Dev Mode)';
-            phBtn.textContent = 'HUD';
-            document.body.appendChild(phBtn);
-            phPanel = document.createElement('div');
-            phPanel.className = 'vf-ph-tune';
-            phPanel.hidden = true;
-            document.body.appendChild(phPanel);
-            phBtn.addEventListener('click', function () {
-                phPanel.hidden = !phPanel.hidden;
-                if (!phPanel.hidden) buildPilotTunePanel(frame);
+    // Pivot = centre of the scale slider (same layout as FX remote).
+    function setPhOrigin(plate, w, h) {
+        plate.style.transformOrigin = (w / 2 + 78) + 'px ' + (h - 43) + 'px';
+    }
+    function applyPhZoom(plate, pct) {
+        const k = Math.max(50, Math.min(150, pct)) / 100;
+        vfs.phZoom = k;
+        setPhOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        plate.style.scale = String(k);
+    }
+    function applyPhGeom() {
+        const plate = phPanel || document.getElementById('vf-ph');
+        if (plate && !phGeom) setPhOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        if (!plate || !phGeom) return;
+        const W = window.innerWidth, H = window.innerHeight;
+        const k = vfs.phZoom || 1;
+        const w = Math.max(260, Math.min(phGeom.w, W)), h = Math.max(300, Math.min(phGeom.h, H));
+        setPhOrigin(plate, w, h);
+        const dxo = (w / 2 + 78) * (1 - k), dyo = (h - 43) * (1 - k);
+        const l = Math.max(-dxo, Math.min(phGeom.l, W - w * k - dxo)), t = Math.max(-dyo, Math.min(phGeom.t, H - h * k - dyo));
+        plate.style.width = w + 'px'; plate.style.height = h + 'px';
+        plate.style.left = l + 'px'; plate.style.top = t + 'px';
+        plate.style.right = 'auto'; plate.style.bottom = 'auto';
+    }
+    function startPhDrag(e, mode) {
+        const plate = ensurePhPanel();
+        const sx = e.clientX, sy = e.clientY;
+        const k = vfs.phZoom || 1;
+        const g0 = { l: plate.offsetLeft, t: plate.offsetTop, w: plate.offsetWidth, h: plate.offsetHeight };
+        e.preventDefault();
+        plate.classList.add('is-dragging');
+        const move = function (ev) {
+            const dx = (ev.clientX - sx) / k, dy = (ev.clientY - sy) / k;
+            if (mode === 'move') {
+                phGeom = { l: g0.l + ev.clientX - sx, t: g0.t + ev.clientY - sy, w: g0.w, h: g0.h };
+            } else {
+                const west = mode.indexOf('w') >= 0, north = mode.indexOf('n') >= 0;
+                const w = Math.max(260, g0.w + (west ? -dx : dx)), h = Math.max(300, g0.h + (north ? -dy : dy));
+                phGeom = { l: west ? g0.l + g0.w - w : g0.l, t: north ? g0.t + g0.h - h : g0.t, w: w, h: h };
+            }
+            applyPhGeom();
+        };
+        const up = function () {
+            plate.classList.remove('is-dragging');
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            try { localStorage.setItem(PHGEOM_KEY, JSON.stringify(phGeom)); } catch (err) { /* ignore */ }
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+    }
+    window.addEventListener('resize', applyPhGeom);
+    document.addEventListener('change', function (e) {
+        if (e.target.classList && e.target.classList.contains('vf-ph-zoom-in')) applyPhGeom();
+    });
+    function ensurePhPanel() {
+        if (phPanel) return phPanel;
+        phPanel = document.createElement('div');
+        phPanel.id = 'vf-ph';
+        phPanel.className = 'vf-bezel-fx vf-ph-remote';
+        phPanel.style.display = 'none';
+        phPanel.hidden = true;
+        phPanel.style.scale = String(vfs.phZoom || 1);
+        document.documentElement.appendChild(phPanel);
+        if (!phWired) {
+            phWired = true;
+            ['keydown', 'keyup'].forEach(function (t) {
+                phPanel.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+            phPanel.addEventListener('pointerdown', function (e) {
+                if (e.target.closest('.vf-fx-grip')) startPhDrag(e, e.target.closest('.vf-fx-grip').getAttribute('data-corner') || 'se');
+                else if (e.target.closest('.vf-fx-head') && !e.target.closest('button')) startPhDrag(e, 'move');
             });
             phPanel.addEventListener('input', function (e) {
-                const k = e.target && e.target.getAttribute('data-ph');
-                if (!k) return;
-                phTune[k] = Number(e.target.value);
-                e.target.nextElementSibling.textContent = e.target.value;
+                const inp = e.target;
+                if (inp.classList && inp.classList.contains('vf-ph-zoom-in')) {
+                    applyPhZoom(phPanel, Number(inp.value));
+                    try { localStorage.setItem(PHZOOM_KEY, String(inp.value)); } catch (err) { /* ignore */ }
+                    return;
+                }
+                const frame = document.getElementById('vf-bezel');
+                const k = inp && inp.getAttribute('data-ph');
+                if (!k || !frame) return;
+                const v = Number(inp.value);
+                const min = Number(inp.min), max = Number(inp.max);
+                inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
+                if (inp.nextElementSibling) inp.nextElementSibling.textContent = inp.value;
+                if (k.indexOf('fr:') === 0) { phSetFr(k.slice(3), v); return; }
+                phTune[k] = v;
                 applyPilotTune(frame);
                 savePilotTune();
             });
             phPanel.addEventListener('click', function (e) {
-                if (e.target.closest('[data-ph-close]')) phPanel.hidden = true;
+                const frame = document.getElementById('vf-bezel');
+                const tabBtn = e.target.closest('[data-ph-tab]');
+                if (tabBtn) {
+                    phTab = tabBtn.getAttribute('data-ph-tab');
+                    try { localStorage.setItem(PH_TAB_KEY, phTab); } catch (err) { /* ignore */ }
+                    buildPilotTunePanel(frame);
+                    return;
+                }
+                if (e.target.closest('[data-ph-close]')) setPhOpen(false);
                 else if (e.target.closest('[data-ph-reset]')) {
                     phTune = {};
                     savePilotTune();
-                    applyPilotTune(frame);
+                    const fac = phFaction();
+                    const st = vfs.frameStyles[fac];
+                    if (st) {
+                        delete st.stageInset;
+                        delete st.bgCrop;
+                        delete st.vineInset;
+                        saveFrameStyles();
+                        applyFrameStyle();
+                    }
+                    if (frame) applyPilotTune(frame);
                     buildPilotTunePanel(frame);
                 }
             });
         }
-        phBtn.hidden = !dev;
-        if (!dev) phPanel.hidden = true;
+        return phPanel;
+    }
+    function setPhOpen(open) {
+        vfs.phOpen = !!open;
+        ensurePhPanel();
+        phPanel.hidden = !vfs.phOpen;
+        phPanel.classList.toggle('is-in', vfs.phOpen);
+        const hudBtn = document.querySelector('.vf-bezel-tools [data-tool="hud"]');
+        if (hudBtn) hudBtn.classList.toggle('is-open', vfs.phOpen);
+        if (vfs.phOpen) {
+            phPanel.style.display = 'flex';
+            buildPilotTunePanel(document.getElementById('vf-bezel'));
+            applyPhGeom();
+        } else {
+            clearTimeout(vfs.phHideTimer);
+            vfs.phHideTimer = setTimeout(function () {
+                if (!vfs.phOpen && phPanel) phPanel.style.display = 'none';
+            }, 420);
+        }
+    }
+    function buildPilotTunePanel(frame) {
+        ensurePhPanel();
+        if (!frame) return;
+        const cs = getComputedStyle(frame);
+        const fac = phFaction();
+        const tabLabel = (PH_TABS.filter(function (t) { return t[0] === phTab; })[0] || ['', 'HUD'])[1];
+        let h = '<div class="vf-fx-head"><span>HUD · ' + fac.toUpperCase() + ' · ' + tabLabel + '</span>'
+            + '<button type="button" data-ph-close aria-label="Close">X</button></div>';
+        h += '<div class="vf-fx-tabs">' + PH_CLUSTERS.map(function (c) {
+            const keys = c[1].map(function (id) {
+                const t = PH_TABS.filter(function (x) { return x[0] === id; })[0];
+                return '<button type="button" data-ph-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1]
+                    + '" class="' + (phTab === t[0] ? 'on' : '') + '">' + (PH_TAB_ICONS[t[0]] || '')
+                    + '<span>' + t[1] + '</span></button>';
+            }).join('');
+            return '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length
+                + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
+        }).join('') + '</div>';
+        h += '<div class="vf-fx-body">' + (PH_SECTIONS[phTab] || []).map(function (t) { return phRowHtml(t, cs); }).join('')
+            + '<div class="vf-fx-row vf-fx-actions"><button type="button" class="vf-fx-reset" data-ph-reset>RESET</button></div></div>';
+        phPanel.innerHTML = h;
+        phPanel.insertAdjacentHTML('beforeend',
+            '<div class="vf-fx-zoom" title="Scale"><input type="range" class="vf-ph-zoom-in" min="50" max="150" step="5" value="'
+            + Math.round((vfs.phZoom || 1) * 100) + '" aria-label="Remote scale"></div>'
+            + ['nw', 'ne', 'sw', 'se'].map(function (c) {
+                return '<i class="vf-fx-grip" data-corner="' + c + '" title="Resize" aria-hidden="true"></i>';
+            }).join(''));
+        applyPhGeom();
+    }
+    function syncPilotTuner(frame) {
+        applyPilotTune(frame);
+        ensurePhPanel();
     }
 
     function guiZoom() {
@@ -25149,6 +25794,7 @@ var CoreRenderManager = class CoreRenderManager {
             machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 2, hiDash: true, hiW: 1 }
         };
         const S = STY[fac] || STY.terran;
+        const wiggle = fac === 'voidborn';
         // Each faction plugs its cables in at its own spots: h = [left, right], v = [top, bottom].
         const LAY = {
             terran:   { h: [[0.2, 0.55, 0.8], [0.3, 0.7]], v: [[0.25, 0.75], [0.5]] },
@@ -25295,7 +25941,7 @@ var CoreRenderManager = class CoreRenderManager {
                 plug(xin, y, true, dir);
                 const xp = snap(xin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[xp, y], [xm, y], [xm, y + dy], [xe, y + dy]], 'h');
-                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 'l' : 'r') + '" style="--dur:' + cableDur() + 's">' + out.slice(o0) + '</g>';
+                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 'l' : 'r') + '" style="--dur:' + cableDur() + 's"' + (wiggle ? ' filter="url(#vf-cable-wiggle)"' : '') + '>' + out.slice(o0) + '</g>';
             });
         });
         L.v.forEach(function (fr, i) {
@@ -25313,10 +25959,19 @@ var CoreRenderManager = class CoreRenderManager {
                 plug(x, yin, false, dir);
                 const yp = snap(yin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[x, yp], [x, ym], [x + dx, ym], [x + dx, ye]], 'v');
-                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 't' : 'b') + '" style="--dur:' + cableDur() + 's">' + out.slice(o0) + '</g>';
+                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 't' : 'b') + '" style="--dur:' + cableDur() + 's"' + (wiggle ? ' filter="url(#vf-cable-wiggle)"' : '') + '>' + out.slice(o0) + '</g>';
             });
         });
         cableFac = fac;
+        // Voidborn only: bend the crisp lattice routes into something organic/tentacle-like.
+        // Low-frequency turbulence displacement, not a smooth wiggle, so it still reads as a
+        // blocky pixel-art creature vein rather than a soft rubber hose.
+        if (wiggle) {
+            out = '<filter id="vf-cable-wiggle" x="-20%" y="-20%" width="140%" height="140%">' +
+                '<feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="7" result="n"/>' +
+                '<feDisplacementMap in="SourceGraphic" in2="n" scale="' + Math.max(4, tt * 2.2) + '" xChannelSelector="R" yChannelSelector="G"/>' +
+                '</filter>' + out;
+        }
         svg.innerHTML = out;
     }
 })(window.vfFitScope || (window.vfFitScope = {}));
@@ -25421,6 +26076,16 @@ var CoreRenderManager = class CoreRenderManager {
     }
     function morphBezelShape(fromName, toName, ms) {
         const bz = document.getElementById('vf-bezel');
+        // Every call first finalises whatever the PREVIOUS call left behind — cancelling its rAF loop
+        // only stops it from drawing more frames; it does not clear a half-interpolated --fr-shape it
+        // already wrote. A rapid run of calls (cycling factions in the wizard) could cancel call N
+        // before it ever reached its own cleanup line, then have call N+1 bail out early below (no
+        // --fr-shape change, no prefers-reduced-motion, pixel-frame mode, a 0-size bezel mid-layout…)
+        // — leaving that half-morphed polygon permanently in place with nothing left to animate it
+        // away. Clearing it unconditionally up front means an early return at worst snaps straight to
+        // the correct CSS shape instead of freezing on a stuck blend of two unrelated factions.
+        cancelAnimationFrame(raf);
+        if (bz) { bz.style.removeProperty('--fr-shape'); document.body.style.clipPath = ''; }
         if (!bz || !fromName || fromName === toName) return;
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         // Pixel frame: the stepped mask (updateSilhouette) owns the inline clip-path of body and frame. A smooth polygon
@@ -25431,7 +26096,6 @@ var CoreRenderManager = class CoreRenderManager {
         const A = outline(bz, fromName), B = outline(bz, toName);
         if (!A || !B) return;
         const W = B.W, H = B.H, a = resample(A.pts, A.W, A.H), b = resample(B.pts, W, H);
-        cancelAnimationFrame(raf);
         const t0 = performance.now();
         const step = function (now) {
             const p = Math.min(1, (now - t0) / ms);
@@ -31282,6 +31946,7 @@ extendClass(EnemyManager, {
                 objectiveManager.awaitingFieldClear
                 || objectiveManager.won
                 || objectiveManager.completed
+                || objectiveManager.exitGate
             ));
 
         // Cluster wave times: earliest spawnAt per cluster
@@ -31669,7 +32334,7 @@ extendClass(EnemyManager, {
         if (this.sideEnemies && this.sideEnemies.length > 0) return false;
         // Entries parked at 999999 never spawn, and once the objective is done
         // updateSchedule holds back all normals — neither may block the win.
-        const objectiveDone = typeof objectiveManager !== 'undefined' && objectiveManager.completed;
+        const objectiveDone = typeof objectiveManager !== 'undefined' && (objectiveManager.completed || objectiveManager.exitGate);
         if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999
             && (e.champion || !objectiveDone))) return false;
         return true;
@@ -31711,10 +32376,7 @@ extendClass(EnemyManager, {
         if (typeof profileManager !== 'undefined' && profileManager.tryBlueprintDrop) {
             const dropped = profileManager.tryBlueprintDrop(info);
             if (dropped && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                const name = (typeof shipConfigManager !== 'undefined')
-                    ? shipConfigManager.getDisplayName(dropped)
-                    : String(dropped).toUpperCase();
-                levelInfoManager.showLootNotice('BLUEPRINT: ' + name);
+                levelInfoManager.showLootNotice('BLUEPRINT: ' + profileManager.getBlueprintName(dropped));
             }
         }
         if (!(info && info.pickupsSpawned) && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {
@@ -46365,20 +47027,37 @@ var AssetGenClient = class AssetGenClient {
     }
 
     setBaseUrl(url) {
-        if (url) this.baseUrl = String(url).replace(/\/$/, "");
+        if (!url) return;
+        const next = String(url).replace(/\/$/, "");
+        if (next !== this.baseUrl) this._offlineUntil = 0;
+        this.baseUrl = next;
     }
 
-    async health() {
+    // Callers fire this from several menu paths; share one in-flight request and
+    // remember an unreachable bridge for 30s so the console isn't flooded.
+    health(force) {
+        if (!force && this._healthPending) return this._healthPending;
+        if (!force && this._offlineResult && Date.now() < (this._offlineUntil || 0)) {
+            return Promise.resolve(this._offlineResult);
+        }
+        this._healthPending = this._fetchHealth().finally(() => { this._healthPending = null; });
+        return this._healthPending;
+    }
+
+    async _fetchHealth() {
         try {
             const res = await fetch(this.baseUrl + "/api/health", { method: "GET" });
             if (!res.ok) return { ok: false, error: "HTTP " + res.status };
+            this._offlineUntil = 0;
             return await res.json();
         } catch (e) {
-            return {
+            this._offlineResult = {
                 ok: false,
                 error: "Bridge unreachable. Run: npm run assets",
                 detail: String(e && e.message || e)
             };
+            this._offlineUntil = Date.now() + 30000;
+            return this._offlineResult;
         }
     }
 
@@ -49854,6 +50533,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         // Scanline line pitch (%) and drift speed (%, 0 = static, no distortion).
         this.scanSize = 100;
         this.scanSpeed = 100;
+        this.vineMotion = 100;
         // Scanline warp: horizontal row-wise wobble of the picture (%, 0 = off).
         this.scanWarp = 0;
         // Where the FX overlay shows: inside the screen, on the frame outside it, or both.
@@ -50058,6 +50738,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         if (fxKey === 'fxScale') return this.fxScale;
         if (fxKey === 'scanSize') return this.scanSize;
         if (fxKey === 'scanSpeed') return this.scanSpeed;
+        if (fxKey === 'vineMotion') return this.vineMotion;
         if (fxKey === 'scanWarp') return this.scanWarp;
         const m = /^(\d+)%$/.exec(String(this[fxKey] || ''));
         return m ? Math.max(0, Math.min(100, Number(m[1]))) : 0;
@@ -50156,6 +50837,9 @@ var UIAppearanceManager = class UIAppearanceManager {
                     this[key] = legacy[val] || 'OFF';
                 }
             });
+            if (data.vineMotion != null && Number.isFinite(Number(data.vineMotion))) {
+                this.vineMotion = Math.max(0, Math.min(300, Math.round(Number(data.vineMotion))));
+            }
             ['scanSize', 'scanSpeed', 'scanWarp'].forEach((k) => {
                 if (data[k] != null && Number.isFinite(Number(data[k]))) {
                     this[k] = k === 'scanSize' ? Math.max(25, Math.min(400, Math.round(Number(data[k])))) : Math.max(0, Math.min(k === 'scanWarp' ? 100 : 300, Math.round(Number(data[k]))));
@@ -50230,6 +50914,7 @@ extendClass(UIAppearanceManager, {
                 fxScale: this.fxScale,
                 scanSize: this.scanSize,
                 scanSpeed: this.scanSpeed,
+                vineMotion: this.vineMotion,
                 scanWarp: this.scanWarp,
                 fxArea: this.fxArea,
                 guiVoxel: this.guiVoxel,
@@ -50463,6 +51148,14 @@ extendClass(UIAppearanceManager, {
             const n = Number(String(val).replace('%', ''));
             if (!Number.isFinite(n)) return;
             this.fxScale = Math.max(25, Math.min(400, Math.round(n)));
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (key === 'vineMotion') {
+            const n = Number(String(val).replace('%', ''));
+            if (!Number.isFinite(n)) return;
+            this.vineMotion = Math.max(0, Math.min(300, Math.round(n)));
             this.persist();
             this.apply();
             return;
@@ -50773,6 +51466,9 @@ extendClass(UIAppearanceManager, {
         root.style.setProperty('--vf-scan-size', String(this.scanSize / 100));
         root.style.setProperty('--vf-scan-dur', (2 * 100 / Math.max(1, this.scanSpeed)) + 's');
         root.setAttribute('data-vf-scan-drift', this.scanSpeed > 0 ? 'on' : 'off');
+        // Voidborn vine creep: 100% = one 24s loop; 0 freezes it.
+        root.style.setProperty('--vf-vine-dur', (24 * 100 / Math.max(1, this.vineMotion)) + 's');
+        root.setAttribute('data-vf-vine', this.vineMotion > 0 ? 'on' : 'off');
         root.setAttribute('data-vf-scanwarp', this.scanWarp > 0 ? 'on' : 'off');
         this.applyScanWarp();
         root.style.setProperty('--vf-hdr', String(this.fxLevel('hdr')));
@@ -78608,7 +79304,7 @@ var GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-var NEB_VERSION = 21;
+var NEB_VERSION = 30;
 var NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 var NEB_PIXEL_BUDGET = 160000;
@@ -78969,7 +79665,8 @@ extendClass(GalaxyMapManager, {
         nodes.forEach(n => {
             const x = W / 2 + (n.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (n.y - 0.5) * (H - pad * 2) * mapSpread;
-            const unlocked = this.isUnlocked(n.planetId);
+            // Freshly unlocked planets stay drawn locked until the reveal tour lights them up.
+            const unlocked = this.isUnlocked(n.planetId) && !(this._revealPending && this._revealPending[n.planetId]);
             const cleared = this.isCleared(n.planetId);
             const selected = !this.selectedPostId && n.planetId === this.selectedPlanetId;
             const hovered = n.planetId === this.hoveredPlanetId;
@@ -78993,9 +79690,21 @@ extendClass(GalaxyMapManager, {
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
-                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true)}
-                        </div>
+                        ${(() => {
+                            const icon = this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true);
+                            // Reachable planets wear their atmosphere (haze tone of the planet art).
+                            // Map icons are <img>s: read the tone from the raw planet SVG, once per planet.
+                            this._atmoTone = this._atmoTone || {};
+                            const sid = String(n.planetId).toLowerCase();
+                            if (unlocked && this._atmoTone[sid] === undefined) {
+                                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
+                                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+                            }
+                            const atmo = unlocked ? (this._atmoTone[sid] || '#9fd8ff') : '';
+                            return `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}${atmo ? ' has-atmo' : ''}"${atmo ? ` style="--atmo:${atmo}"` : ''}>
+                            ${icon}
+                        </div>`;
+                        })()}
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `
@@ -79300,6 +80009,18 @@ extendClass(GalaxyMapManager, {
             for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); }
             return (h >>> 0).toString(36);
         })();
+        // The fine patch is translucent: cut its rect out of the coarse field, or the 8-unit blocks show
+        // through underneath and the nebula looks blurrier than the other map pixels.
+        const holeSvg = (x, y, w, h) => `<clipPath id="gmNebHole" clipPathUnits="userSpaceOnUse"><path clip-rule="evenodd" d="M${nx0} ${ny0}h${W * 6}v${H * 6}h${-W * 6}zM${x} ${y}h${w}v${h}h${-w}z"/></clipPath>`;
+        const holeCoarse = (neb, img) => {
+            const coarseG = neb.querySelector('.gm-neb-layer:not(.gm-neb-fine)');
+            if (!coarseG || !img) return;
+            const old = neb.querySelector('#gmNebHole');
+            if (old) old.remove();
+            const n = (k) => +img.getAttribute(k);
+            coarseG.insertAdjacentHTML('beforebegin', holeSvg(n('x'), n('y'), n('width'), n('height')));
+            coarseG.setAttribute('clip-path', 'url(#gmNebHole)');
+        };
         const paint = (jobKey, cell, bx, by, cols, rows, oct, opaque) => {
             // Empty href stays opacity:0 — an opaque fine patch with no pixels was
             // painting as a black rectangle over the coarse nebula on some engines.
@@ -79381,6 +80102,8 @@ extendClass(GalaxyMapManager, {
                 const mounted = document.querySelectorAll(`image[data-neb-key="${jobKey}"]`);
                 if (mounted.length) {
                     mounted.forEach(applyUrl);
+                    const neb = opaque && document.querySelector('.galaxy-map-svg .gm-nebula');
+                    if (neb) holeCoarse(neb, mounted[0]);
                 } else if (opaque) {
                     // Job finished after we skipped mounting an empty placeholder —
                     // inject the finished patch so the nebula actually appears.
@@ -79399,6 +80122,7 @@ extendClass(GalaxyMapManager, {
                             else neb.appendChild(g);
                         }
                         g.insertAdjacentHTML('beforeend', tag(url));
+                        holeCoarse(neb, g.lastElementChild);
                     }
                 }
             };
@@ -79434,7 +80158,7 @@ extendClass(GalaxyMapManager, {
                     free: sstep(0.35, 0.58, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
                     // Softer banks so voids don't wipe the whole planet field.
-                    bank: 0.35 + 0.65 * sstep(0.28, 0.55, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    bank: 0.08 + 0.92 * sstep(0.32, 0.6, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
                     gm: sstep(0.55, 0.72, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
                     veil: layers.map((_, li) => sstep(0.25, 0.65, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
@@ -79457,7 +80181,7 @@ extendClass(GalaxyMapManager, {
                 const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 // Ambient floor so the planet field keeps a veil even between suns.
-                lw.envNear = mix('envBase') * Math.max(sunFade, 0.45);
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.22);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -79506,7 +80230,7 @@ extendClass(GalaxyMapManager, {
                         };
                         let cv = grain < 0.02 ? cloudV(0.45) : grain > 0.98 ? cloudV(1.5) : cloudV(0.45) * (1 - grain) + cloudV(1.5) * grain;
                         // Big dark voids and bright banks: contrast + a very low-frequency density mask.
-                        cv = 0.5 + (cv - 0.5) * 1.5;
+                        cv = 0.5 + (cv - 0.5) * 1.9;
                         const bank = lw.bank;
                         const v = (cv - (1 - L.cover) * 1.05 * (1 - wispK * 0.7)) * env * bank + sl.k * 0.12;
                         // Many soft tone steps (dithered at the edges) instead of four flat plateaus with hard contours.
@@ -79526,20 +80250,42 @@ extendClass(GalaxyMapManager, {
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
                         // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.35 + 0.65 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
+                        const shine = 0.22 + 0.78 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.7 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.38 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
+                    }
+                    // Density cap: even the thickest cloud stays see-through so planets read.
+                    // Nebula look after real gas clouds: billowy edges cut sharply by noise, lit rims,
+                    // a brighter hot core, dark dust lanes and torn filaments (no even veil).
+                    if (A > 0) {
+                        const nx = x * NEB_SCALE * 3, ny = y * NEB_SCALE * 3;
+                        const wx = fbm(nx * 0.5 + 3.7, ny * 0.5 - 8.2, 2) - 0.5, wy = fbm(nx * 0.5 - 11.4, ny * 0.5 + 2.9, 2) - 0.5;
+                        const billow = fbm(nx * 1.2 + wx * 4, ny * 1.2 + wy * 4, 3);
+                        const rid = 1 - Math.abs(2 * fbm(nx * 1.6 + wx * 5, ny * 0.6 + wy * 5, 2) - 1);
+                        // Broad soft dust patches (thin ridged lanes read as dark contour lines).
+                        const dq = fbm(nx * 0.8 + wy * 3 + 40, ny * 0.8 + wx * 3, 3);
+                        const lane = Math.min(1, Math.max(0, (dq - 0.58) * 4)) * 0.7;
+                        const dens = 1 - Math.exp(-A / 0.5);
+                        const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
+                        const rim = edge * (1 - edge) * 4;
+                        let cov = edge * (0.16 + 0.2 * dens) + 0.14 * rid * rid * rid * dens;
+                        cov = Math.min(0.45, cov + 0.15 * lane * edge);
+                        let cr = R / A, cg = G / A, cb = B / A;
+                        const lift = (1 + 0.7 * rim) * (1 - 0.8 * lane);
+                        const hot = 0.3 * dens * dens * (1 - lane);
+                        cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
+                        R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
                     const o = (r * cols + c) * 4;
                     // Soft cap: overlapping layers + suns must never wash out to white.
                     if (A > 0) {
                         const mx = Math.max(R, G, B) / A;
-                        if (mx > 150) { const k = 150 / mx; R *= k; G *= k; B *= k; }
+                        if (mx > 170) { const k = 170 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
                         // Fine patch used to write every pixel at alpha 255 over black.
@@ -79563,6 +80309,7 @@ extendClass(GalaxyMapManager, {
         };
         const coarse = paint(gid + '|coarse', 8, nx0, ny0, Math.ceil(W * 6 / 8), Math.ceil(H * 6 / 8), 5, false);
         let out = `<g class="gm-neb-layer">${coarse}</g>`;
+        let hole = null;
         if (fine) {
             // Finer pixels + extra octaves over the view, opaque over black,
             // so it simply covers the coarse field (no clip / mask needed).
@@ -79579,7 +80326,15 @@ extendClass(GalaxyMapManager, {
             const want = gpOn ? unit : Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
             // Cell = 8 / 2^k: nests exactly in the coarse 8-unit grid (patch
             // origin is a multiple of 8), so pixels never shift between patches.
-            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
+            // Global Pixel Size: exact map unit (power-of-two rounding made cells up to 2× the planet pixels).
+            const cell = gpOn && unit > 0 ? +unit.toFixed(4)
+                : 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
+            if (gpOn && unit > 0) {
+                // Seat the patch on the cell lattice so nebula pixels line up with the other layers.
+                const sx = Math.floor(fine.x / cell) * cell, sy = Math.floor(fine.y / cell) * cell;
+                fine.w += fine.x - sx; fine.h += fine.y - sy;
+                fine.x = +sx.toFixed(3); fine.y = +sy.toFixed(3);
+            }
             // Same base octaves as the coarse field; finer cells add detail on top.
             const oct = Math.min(7, 5 + Math.max(0, Math.round(Math.log2(8 / cell)) - 1));
             const fk = `${gid}|f${cell}|${fine.x}|${fine.y}|${fine.w}|${fine.h}`;
@@ -79593,8 +80348,10 @@ extendClass(GalaxyMapManager, {
             const readyFine = this._nebUrls[fk] ? fineTag : '';
             const prevTag = !readyFine && prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
             if (this._nebUrls[fk]) this._nebLastFine = { key: fk, tag: fineTag };
+            if (readyFine) hole = [fine.x, fine.y, Math.ceil(fine.w / cell) * cell, Math.ceil(fine.h / cell) * cell];
             if (prevTag || readyFine) out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${readyFine}</g>`;
         }
+        if (hole) out = holeSvg(hole[0], hole[1], hole[2], hole[3]) + out.replace('<g class="gm-neb-layer">', '<g class="gm-neb-layer" clip-path="url(#gmNebHole)">');
         const W5 = 6;
         // Distant pixel galaxies: tilted ellipse of pixels, bright core.
         let far = '';
@@ -79872,11 +80629,59 @@ extendClass(GalaxyMapManager, {
         const haloRad = uL > 0 ? Math.max(rad + 1, rad * 2.35) : rad + 3.6;
         // Route preview: thin dashes with wide gaps, marching towards the target.
         if (o.run) {
-            const dash = width * 5, gap = width * 4.4, period = dash + gap;
-            const d = 'M' + points.map((q) => q.x.toFixed(2) + ' ' + q.y.toFixed(2)).join('L');
-            return `<g class="${cls} gm-pxline gm-pxline-run">` +
-                `<path class="gm-run-glow" fill="none" d="${d}" style="stroke-width:${(width * 2.4).toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/>` +
-                `<path class="gm-run-core" fill="none" d="${d}" style="stroke-width:${width.toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/></g>`;
+            // Dashes are cells on the line's grid (like the packets), marched by F frames.
+            const dash = width * 5, period = dash + width * 8;
+            const F = 16, dur = 1.2;
+            const cRad = Math.max(0.71, rad), gRad = Math.max(cRad + 0.71, rad * 2.4);
+            const G = Math.ceil(gRad);
+            const frame = (shift) => {
+                const core = new Map(), glow = new Map();
+                const put = (map, gx, gy) => { let row = map.get(gy); if (!row) { row = new Set(); map.set(gy, row); } row.add(gx); };
+                let trav = 0;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const a = points[i], b = points[i + 1];
+                    const len = Math.hypot(b.x - a.x, b.y - a.y);
+                    const n = Math.max(1, Math.ceil(len / (p * 0.5)));
+                    for (let s = 0; s <= n; s++) {
+                        const m = (((trav + len * s / n - shift) % period) + period) % period;
+                        if (m >= dash) continue;
+                        const cx = (a.x + (b.x - a.x) * s / n) / p, cy = (a.y + (b.y - a.y) * s / n) / p;
+                        const bx = Math.floor(cx), by = Math.floor(cy);
+                        for (let yy = -G; yy <= G; yy++) {
+                            for (let xx = -G; xx <= G; xx++) {
+                                const gx = bx + xx, gy = by + yy;
+                                const dd = Math.hypot(gx + 0.5 - cx, gy + 0.5 - cy);
+                                if (dd <= cRad) put(core, gx, gy);
+                                else if (dd <= gRad) put(glow, gx, gy);
+                            }
+                        }
+                    }
+                    trav += len;
+                }
+                return { core, glow };
+            };
+            const cellPath = (map, skip) => {
+                let out = '';
+                map.forEach((row, gy) => {
+                    const xs = Array.from(row).filter((x) => !(skip && skip.get(gy) && skip.get(gy).has(x))).sort((m, q) => m - q);
+                    for (let k = 0; k < xs.length;) {
+                        let e = k;
+                        while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
+                        out += `M${+(xs[k] * p).toFixed(3)} ${+(gy * p).toFixed(3)}h${+((e - k + 1) * p).toFixed(3)}v${+p.toFixed(3)}h${-+((e - k + 1) * p).toFixed(3)}z`;
+                        k = e + 1;
+                    }
+                });
+                return out;
+            };
+            let frames = '';
+            for (let k = 0; k < F; k++) {
+                const fr = frame(k * period / F);
+                const st = `animation-duration:${dur}s;animation-delay:${((k / F - 1) * dur).toFixed(3)}s`;
+                const f0 = k ? '' : ' gm-pxflow-f0';
+                frames += `<path class="gm-run-glow gm-run-cells${f0}" d="${cellPath(fr.glow, fr.core)}" style="${st}"/>` +
+                    `<path class="gm-run-core gm-run-cells${f0}" d="${cellPath(fr.core)}" style="${st}"/>`;
+            }
+            return `<g class="${cls} gm-pxline gm-pxline-run" shape-rendering="crispEdges">${frames}</g>`;
         }
         const hotCells = new Map();
         const coreCells = new Map();
@@ -80879,6 +81684,204 @@ extendClass(GalaxyMapManager, {
         };
         requestAnimationFrame(step);
     },
+    /** Glide the camera (viewBox) to `to` = [x, y, w, h], panning linearly and zooming in log space; resolves false if interrupted. */
+    glideViewBox(to, dur) {
+        return new Promise((resolve) => {
+            const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!to || this._flight || !svg || !svg.viewBox || !svg.viewBox.baseVal) {
+                resolve(false);
+                return;
+            }
+            const cur = svg.viewBox.baseVal;
+            const aspect = cur.width / Math.max(1, cur.height);
+            const fcx = cur.x + cur.width / 2, fcy = cur.y + cur.height / 2;
+            const tcx = to[0] + to[2] / 2, tcy = to[1] + to[3] / 2;
+            const lw0 = Math.log(cur.width), lw1 = Math.log(to[2]);
+            const ms = dur || 650;
+            const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+            const start = performance.now();
+            const token = (this._camAnim = {});
+            const step = (now) => {
+                if (this._camAnim !== token || !svg.isConnected || this._flight) {
+                    resolve(false);
+                    return;
+                }
+                const t = Math.min(1, (now - start) / ms);
+                const k = ease(t);
+                const vw = Math.exp(lw0 + (lw1 - lw0) * k);
+                const vh = vw / aspect;
+                const vcx = fcx + (tcx - fcx) * k, vcy = fcy + (tcy - fcy) * k;
+                svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
+                this.updateSelectionFrames();
+                if (t < 1) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+                this._panAnchor = { x: tcx, y: tcy };
+                this.mapPan = { x: 0, y: 0 };
+                this._camAnim = null;
+                resolve(true);
+            };
+            requestAnimationFrame(step);
+        });
+    },
+    /** Close-up viewBox on a planet (never further out than now), planet left of centre so the scan tip fits beside it. */
+    planetCloseUpBox(id) {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        const pt = this.locationPoint ? this.locationPoint({ kind: 'planet', id: id }) : null;
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal || !pt) return null;
+        const cur = svg.viewBox.baseVal;
+        const aspect = cur.width / Math.max(1, cur.height);
+        const node = this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        const size = (node && Number(node.getAttribute('data-size'))) || 48;
+        const w = Math.min(cur.width, Math.max(size * 7, 180));
+        const h = w / aspect;
+        const cx = pt.x + w * 0.14;
+        return [cx - w / 2, pt.y - h / 2, w, h];
+    },
+    /** Switch a planet rendered as locked (reveal pending) to its active look, with scan ring and sweep. */
+    lightUpPlanetNode(id) {
+        if (this._revealPending) delete this._revealPending[id];
+        const node = this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        if (!node || !node.classList.contains('locked')) return;
+        node.classList.remove('locked');
+        node.classList.add('unlocked', 'gm-unlock-reveal');
+        const lit = node.querySelector('.gm-planet-lit');
+        if (lit) {
+            lit.classList.remove('is-locked');
+            lit.classList.add('is-active');
+        }
+        const wrap = node.querySelector('.gm-node-icon-wrap');
+        if (wrap) {
+            const sid = String(id).toLowerCase();
+            this._atmoTone = this._atmoTone || {};
+            if (this._atmoTone[sid] === undefined) {
+                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
+                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+            }
+            wrap.classList.remove('dimmed');
+            wrap.classList.add('has-atmo');
+            wrap.style.setProperty('--atmo', this._atmoTone[sid] || '#9fd8ff');
+        }
+        const lock = node.querySelector('.gm-locked-icon');
+        if (lock) {
+            lock.classList.add('is-breaking');
+            setTimeout(() => lock.remove(), 500);
+        }
+        const title = node.querySelector(':scope > title');
+        if (title) title.textContent = String(id).toUpperCase();
+        const r = (Number(node.getAttribute('data-size')) || 48) / 2;
+        const fx = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        fx.setAttribute('class', 'gm-unlock-fx');
+        fx.innerHTML = `<circle class="gm-unlock-flash" r="${r}"/>`
+            + `<circle class="gm-unlock-ring" r="${r + 3}"/>`
+            + `<rect class="gm-unlock-scan" x="${-r - 4}" y="${-r - 4}" width="${2 * r + 8}" height="2" style="--scan:${2 * r + 8}px"/>`;
+        node.appendChild(fx);
+        setTimeout(() => {
+            fx.remove();
+            node.classList.remove('gm-unlock-reveal');
+        }, 1400);
+    },
+    /** Stats tooltip beside a freshly unlocked planet, built up by a scan line. */
+    showUnlockScanTip(id) {
+        const node = this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        if (!node) return null;
+        const anchor = node.querySelector('.gm-planet-lit') || node;
+        const nr = anchor.getBoundingClientRect();
+        const info = this.getPlanetInfo(id);
+        const prog = this.getPlanetStageProgress ? this.getPlanetStageProgress(id) : null;
+        const rows = [
+            ['STATUS', 'REACHABLE'],
+            ['THREAT', String(info.difficulty || '—').toUpperCase()],
+            ['HOSTILES', String(info.enemyCount)],
+            ['STAGES', prog ? (prog.total - 1) + ' + BOSS' : '3 + BOSS']
+        ];
+        const tip = document.createElement('div');
+        tip.className = 'gm-unlock-tip';
+        const head = document.createElement('div');
+        head.className = 'gm-unlock-tip-head';
+        head.textContent = 'NEW SECTOR · SCAN';
+        const name = document.createElement('div');
+        name.className = 'gm-unlock-tip-name';
+        name.textContent = String(info.name || id).toUpperCase();
+        tip.append(head, name);
+        rows.forEach(([k, v], i) => {
+            const row = document.createElement('div');
+            row.className = 'gm-unlock-tip-row';
+            row.style.setProperty('--i', String(i));
+            const a = document.createElement('span');
+            a.textContent = k;
+            const b = document.createElement('b');
+            b.textContent = v;
+            row.append(a, b);
+            tip.appendChild(row);
+        });
+        const scan = document.createElement('i');
+        scan.className = 'gm-unlock-tip-scan';
+        tip.appendChild(scan);
+        tip.style.left = Math.round(nr.right + 14) + 'px';
+        tip.style.top = Math.round(nr.top + nr.height / 2) + 'px';
+        document.body.appendChild(tip);
+        // Keep it on screen: flip to the planet's left side when it would overflow.
+        const tr = tip.getBoundingClientRect();
+        if (tr.right > window.innerWidth - 8) tip.style.left = Math.max(8, Math.round(nr.left - 14 - tr.width)) + 'px';
+        return tip;
+    },
+    hideUnlockScanTip(tip) {
+        if (!tip) return;
+        tip.classList.add('is-leaving');
+        setTimeout(() => tip.remove(), 260);
+    },
+    /**
+     * After a cleared planet: the camera zooms in on each newly reachable planet,
+     * which switches from locked to active while a scan tip lists its stats,
+     * then glides back to where it was. A player camera move cuts the tour short
+     * and lights the rest up at once.
+     */
+    revealUnlockedPlanets(ids) {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        const list = (ids || []).filter((id) => this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`));
+        const lightAll = () => (ids || []).forEach((id) => this.lightUpPlanetNode(id));
+        if (!list.length || !svg || !svg.viewBox || !svg.viewBox.baseVal) {
+            lightAll();
+            return;
+        }
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const token = (this._revealRun = {});
+        let home = null;
+        let tip = null;
+        let cut = false;
+        let chain = wait(500).then(() => {
+            const vb = svg.viewBox.baseVal;
+            home = [vb.x, vb.y, vb.width, vb.height];
+        });
+        list.forEach((id) => {
+            chain = chain.then(() => {
+                if (cut || this._revealRun !== token) return null;
+                return this.glideViewBox(this.planetCloseUpBox(id), 750).then((ok) => {
+                    if (!ok) {
+                        cut = true;
+                        return null;
+                    }
+                    this.lightUpPlanetNode(id);
+                    tip = this.showUnlockScanTip(id);
+                    return wait(2300).then(() => {
+                        this.hideUnlockScanTip(tip);
+                        tip = null;
+                        // The player took the camera meanwhile: stop the tour.
+                        if (this._camAnim) cut = true;
+                    });
+                });
+            });
+        });
+        chain.then(() => {
+            this.hideUnlockScanTip(tip);
+            lightAll();
+            if (this._revealRun !== token) return;
+            this._revealRun = null;
+            if (!cut && home) this.glideViewBox(home, 700);
+        });
+    },
     /** True when the player ship marker lies in the visible map viewport. */
     isShipOnScreen() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
@@ -81164,6 +82167,22 @@ extendClass(GalaxyMapManager, {
             if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
+            // Global Pixel Size: the pixel unit follows the live zoom, but the detail steps are coarse.
+            // Once the zoom settles, rebuild lines + nebula if their baked cell size drifted, so all
+            // layers share one on-screen pixel size again.
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0) {
+                clearTimeout(this._pxSyncTimer);
+                this._pxSyncTimer = setTimeout(() => {
+                    if (!mapLive()) return;
+                    const pu = this.mapPixelUnit();
+                    if (this._pxSyncUnit && Math.abs(pu / this._pxSyncUnit - 1) < 0.06) return;
+                    this._pxSyncUnit = pu;
+                    this._mapArtSKey = null;
+                    swapDetail();
+                    if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
+                }, 140);
+            }
             if (this._mapArtDetail === this.getMapDetail() && this._mapArtSKey === this.getMapScaleKey()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
@@ -81532,6 +82551,60 @@ extendClass(GalaxyMapManager, {
         if (this.hoveredPlanetId === next) return;
         this.hoveredPlanetId = next;
         this.syncNodeHighlight();
+        this.syncHoverRoute();
+    },
+    /**
+     * Hovered planet ↔ ship: a pixel data strand when the planet is reachable,
+     * a grey line with a lock icon when it is not. Planet lanes are hidden otherwise.
+     */
+    syncHoverRoute() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        let layer = svg.querySelector(':scope > .gm-hover-route-layer');
+        if (!layer) {
+            layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            layer.setAttribute('class', 'gm-hover-route-layer');
+            const anchor = svg.querySelector(':scope > .gm-route-layer');
+            if (anchor) anchor.before(layer);
+            else svg.appendChild(layer);
+        }
+        const pid = this.hoveredPlanetId;
+        const current = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
+            ? profileManager.getShipLocation(this.galaxyId) : null;
+        // The selected target already shows the running route preview.
+        if (!pid || !current || this._flight || pid === this.selectedPlanetId
+            || (current.kind === 'planet' && current.id === pid) || !this.routePath) {
+            layer.innerHTML = '';
+            return;
+        }
+        const target = { kind: 'planet', id: pid };
+        const pts = this.routePath(current, target);
+        if (!pts || pts.length < 2) { layer.innerHTML = ''; return; }
+        const surf = (loc) => (loc && loc.kind === 'planet' && this.planetSurfaceRadius)
+            ? this.planetSurfaceRadius(loc.id) * (this.nodeObjScale ? this.nodeObjScale() : 1) * 0.88 : 0;
+        const line = this.trimPolyline(pts, surf(current), surf(target));
+        const devLit = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const open = devLit || this.isUnlocked(pid);
+        let html = this.pixelLineSvg(line, 'gm-edge gm-hover-route ' + (open ? 'lit' : 'dim locked'), open ? null : { noFlow: true });
+        if (!open) {
+            // Pixel padlock (7×7 cells) on the middle of the line, seated on the map lattice.
+            const u = this.mapPixelUnit();
+            const mid = this.pointOnPath(line, 0.5);
+            const ox = Math.round(mid.x / u - 3.5) * u, oy = Math.round(mid.y / u - 3.5) * u;
+            const rows = ['..###..', '.#...#.', '.#...#.', '#######', '###.###', '###.###', '#######'];
+            let d = '', bg = '';
+            rows.forEach((row, ry) => {
+                for (let rx = 0; rx < row.length; rx++) {
+                    const x = +(ox + rx * u).toFixed(3), y = +(oy + ry * u).toFixed(3), w = +u.toFixed(3);
+                    if (row[rx] === '#') d += `M${x} ${y}h${w}v${w}h${-w}z`;
+                }
+            });
+            // Dark one-cell outline so the lock reads over nebulae.
+            bg = `M${+(ox - u).toFixed(3)} ${+(oy + 2 * u).toFixed(3)}h${+(9 * u).toFixed(3)}v${+(6 * u).toFixed(3)}h${-(9 * u).toFixed(3)}z` +
+                `M${+(ox).toFixed(3)} ${+(oy - u).toFixed(3)}h${+(7 * u).toFixed(3)}v${+(3 * u).toFixed(3)}h${-(7 * u).toFixed(3)}z`;
+            html += `<g class="gm-hover-lock" shape-rendering="crispEdges"><path class="gm-hover-lock-bg" d="${bg}"/><path class="gm-hover-lock-fg" d="${d}"/></g>`;
+        }
+        layer.innerHTML = html;
     },
     /** Large station picture for the sector card when a post is selected. */
     postIconSvg(open, post) {
@@ -83335,6 +84408,8 @@ extendClass(GalaxyMapManager, {
             if (ids) this.overlay.querySelectorAll('.gm-edge.gm-e-' + ids[0] + '.gm-e-' + ids[1]).forEach((el) => el.classList.add('on-route'));
         }
         if (layer) layer.innerHTML = this._flight ? '' : this.routePreviewSvg();
+        // Rebuilt with the route so its cells follow the current pixel size.
+        if (this.syncHoverRoute) this.syncHoverRoute();
     },
     /** Animate the ship to a planet / post, then commit the new location. */
     flyTo(kind, id) {
@@ -83964,7 +85039,9 @@ extendClass(ProfileSelectionManager, {
             bz.setAttribute('data-preview', '1');
             const applyBezel = () => {
                 paint();
-                delete bz.dataset.pendingFaction;
+                // A newer pick is still queued behind this swap: keep its early tint and pending mark.
+                const newer = bz.dataset.pendingFaction && bz.dataset.pendingFaction !== id;
+                if (!newer) delete bz.dataset.pendingFaction;
                 bz.setAttribute('data-faction', id);
                 // The whole GUI (window background, cables, palette) follows the pick, not only the bezel. data-preview keeps it out of the saved snapshot.
                 if (typeof factionShipStyles !== 'undefined' && factionShipStyles.stampDocumentTheme) {
@@ -83972,8 +85049,12 @@ extendClass(ProfileSelectionManager, {
                     factionShipStyles.stampDocumentTheme(id);
                     if (typeof factionGui !== 'undefined') factionGui.sync(id);
                 }
-                bz.style.setProperty('--retro-ink', accent);
-                bz.style.setProperty('--color-primary', accent);
+                if (!newer) {
+                    bz.style.setProperty('--retro-ink', accent);
+                    bz.style.setProperty('--color-primary', accent);
+                    // data-faction now supplies the hull tones: drop the early tint.
+                    ['--hull', '--hull-lit', '--hull-dark'].forEach((k) => bz.style.removeProperty(k));
+                }
                 const crest = bz.querySelector('.vf-pilot-crest');
                 if (crest) crest.setAttribute('data-f', id);
                 if (after) after();
@@ -83981,8 +85062,29 @@ extendClass(ProfileSelectionManager, {
             if (bz.getAttribute('data-faction') !== id && typeof factionGui !== 'undefined') {
                 // Cables are swapped first; the bezel recolours after the new ones are in.
                 bz.dataset.pendingFaction = id;
+                // The swap waits for the faction art (up to 500 ms) and any running swap; tint the bezel right away
+                // so its colour follows the click. Read the hull tones off a probe so screen-frame.css stays the source.
+                try {
+                    const probe = document.createElement('div');
+                    probe.className = 'vf-bezel';
+                    probe.setAttribute('data-faction', id);
+                    probe.style.cssText = 'position:absolute;width:0;height:0;visibility:hidden;pointer-events:none';
+                    bz.parentNode.appendChild(probe);
+                    const cs = getComputedStyle(probe);
+                    ['--hull', '--hull-lit', '--hull-dark'].forEach((k) => {
+                        const v = cs.getPropertyValue(k).trim();
+                        if (v) bz.style.setProperty(k, v);
+                    });
+                    probe.remove();
+                } catch (e) { /* the swap recolours it */ }
+                bz.style.setProperty('--retro-ink', accent);
+                bz.style.setProperty('--color-primary', accent);
                 factionGui.swap(id, applyBezel);
-            } else applyBezel();
+            } else {
+                // Back on the shown faction: this pick is the newest, so it clears any earlier tint.
+                bz.dataset.pendingFaction = id;
+                applyBezel();
+            }
         } else { paint(); if (after) after(); }
     },
     /** Default player hull drawn in the faction's silhouette and colours. */
@@ -84014,6 +85116,8 @@ extendClass(ProfileSelectionManager, {
                 model.previewDisabledAreas = dis;
                 model.previewCoreGun = this.currentKit().coreGun || null;
                 model.previewSingleGun = true;
+                model.previewWeapon2 = (this.currentKit().bonus || {}).weapon2 || null;
+                model.previewWingRows = this.startWingRows();
             }
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(model, shipId);
@@ -84072,9 +85176,9 @@ extendClass(ProfileSelectionManager, {
             ctx.drawImage(tmp, 0, 0);
             // The outline hugs each gun as it is drawn now.
             const boxes = [];
-            gunMods.forEach((m) => { try { const bx = measure(m); if (bx) boxes.push(bx); } catch (e2) { /* keep the other boxes */ } });
+            gunMods.forEach((m) => { try { const bx = measure(m); if (bx) boxes.push(Object.assign(bx, { slot: Number(m.slotIndex) || 0 })); } catch (e2) { /* keep the other boxes */ } });
             // Empty wing slots have nothing to measure: estimated boxes, converted to canvas px.
-            this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale }));
+            this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale, slot: b.slot }));
             this._previewDraw = { boxes };
         } catch (e) {
             /* preview is cosmetic, but assets may still be arriving */
@@ -84093,34 +85197,30 @@ extendClass(ProfileSelectionManager, {
         // A fresh pilot has no wing guns unless the kit opens a wing level (same rule as the HULL AREAS list).
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         const kit = this.currentKit ? this.currentKit() : null;
-        const wingLv = Math.min(2, Number(((kit && kit.bonus && kit.bonus.areas) || {}).wing) || 0);
-        const off = (kit && kit.off) || [];
-        const wingSlots = off.indexOf('wing') >= 0 || !slm || !slm.getAreaSlotBonus ? 0
-            : slm.getAreaSlotBonus('wing', wingLv).filter((k) => k === 'weapons').length;
+        const rows = kit && slm && this.startWingRows ? this.startWingRows(kit) : 0;
         if (wl && wr) {
-            const rows = Math.max(1, Math.ceil(wingSlots / 2));
-            for (let i = 1; i <= rows && wingSlots; i++) {
+            for (let i = 1; i <= rows; i++) {
                 if (mods.some((m) => m.slotIndex === i && m.wing)) continue;
                 const w = 8, h = 8;
                 const cy = wl.y + wl.height * (i - 0.5) / rows;
                 const x = Math.round(wl.x + wl.width * (1 - 0.36) - w / 2);
-                boxes.push({ x, y: Math.round(cy - h / 2), width: w, height: h, empty: true });
-                boxes.push({ x: Math.round(mw - x - w), y: Math.round(cy - h / 2), width: w, height: h, empty: true });
+                boxes.push({ x, y: Math.round(cy - h / 2), width: w, height: h, empty: true, slot: i });
+                boxes.push({ x: Math.round(mw - x - w), y: Math.round(cy - h / 2), width: w, height: h, empty: true, slot: i });
             }
         }
         // Drop duplicates (same box twice after mirroring).
         const uniq = {};
         return boxes.filter((b) => { const k = [b.x, b.y, b.width, b.height].join(','); if (uniq[k]) return false; uniq[k] = 1; return true; });
     },
-    /** Hovering the ship preview: outline every weapon mount on the ship with a soft pulse. on=false clears it. */
-    highlightPreviewWeapon(on) {
+    /** Hovering the ship preview: outline every weapon mount on the ship with a soft pulse; `slot` limits it to one weapon slot. on=false clears it. */
+    highlightPreviewWeapon(on, slot) {
         const canvas = this.overlay && this.overlay.querySelector('.profile-faction-ship');
         if (this._fxRaf) { cancelAnimationFrame(this._fxRaf); this._fxRaf = 0; }
         let fx = this.overlay && this.overlay.querySelector('.profile-faction-ship-fx');
         if (!on || !canvas || !this._previewDraw) { if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height); return; }
         const d = this._previewDraw;
-        const mods = d.boxes || [];
-        if (!mods.length) return;
+        const mods = (d.boxes || []).filter((b) => slot == null || b.slot === slot);
+        if (!mods.length) { if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height); return; }
         if (!fx) {
             fx = document.createElement('canvas');
             fx.className = 'profile-faction-ship-fx';
@@ -84170,6 +85270,11 @@ extendClass(ProfileSelectionManager, {
 // ProfileSelectionManager members, continued from core.js: show / hide and the dialog markup.
 extendClass(ProfileSelectionManager, {
     show(options) {
+        // Capture before remount flags flip — DevMode / UI rebuilds re-call show()
+        // and must not wipe the faction the player already picked.
+        const seed = this._restoreSeed; this._restoreSeed = null;
+        const resume = (seed && seed.pmode === 'create') ? seed : null;
+
         this.isVisible = true;
         this.onClose = options && options.onClose;
         // Optional host element: render inline (e.g. inside the start-screen
@@ -84193,19 +85298,20 @@ extendClass(ProfileSelectionManager, {
         // No pilots yet: skip the empty list and open profile creation.
         if (!profiles.length || this._createOnly) {
             this.mode = 'create';
-            this.createStep = 'faction';
-            this._heroDefaultName = '';
-            this._pilotName = '';
-            this.pendingFaction = this.getFactionIds()[0];
+            if (!resume) {
+                this.createStep = 'faction';
+                this._heroDefaultName = '';
+                this._pilotName = '';
+                this.pendingFaction = this.getFactionIds()[0];
+            }
         }
         // Refresh inside the pilot flow: the very first build already is the saved step and faction (no default flash, no rebuild).
-        const seed = this._restoreSeed; this._restoreSeed = null;
-        if (seed && seed.pmode === 'create') {
-            this.mode = 'create'; this._createOnly = !!seed.pcreateOnly;
-            this.createStep = seed.pstep || 'faction';
-            if (seed.pfaction && this.getFactionIds().indexOf(seed.pfaction) >= 0) this.pendingFaction = seed.pfaction;
-            this._pilotName = seed.pname || '';
-            if (seed.pstart) this._startOpts = seed.pstart;
+        if (resume) {
+            this.mode = 'create'; this._createOnly = !!resume.pcreateOnly;
+            this.createStep = resume.pstep || 'faction';
+            if (resume.pfaction && this.getFactionIds().indexOf(resume.pfaction) >= 0) this.pendingFaction = resume.pfaction;
+            this._pilotName = resume.pname || '';
+            if (resume.pstart) this._startOpts = resume.pstart;
         }
         this.createUI();
         // Embedded in the station menu, the station persists its own tab.
@@ -84385,7 +85491,7 @@ extendClass(ProfileSelectionManager, {
         const DOCTRINE = {
             terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold
             kronax: { invCols: -1, invGrowth: -0.15, areas: { center: 1 }, second: { player_assault: 'plasma', player_interceptor: 'spike_burst' } },                       // brutes: armoured core, cramped hold
-            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'nova', player_interceptor: 'ion' } },                                // wanderers: wing level, crystal shards
+            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'ion', player_interceptor: 'pierce' } },                              // wanderers: wing level, crystal shards
             pirate: { invCols: 2, invGrowth: 0.25, res: { scrap: 20 }, second: { player_assault: 'burst', player_interceptor: 'rapid' } },                           // smugglers: wide hold that fills fast
             machine: { invCols: -1, invRows: 1, invGrowth: 0.25, res: { ore: 20 }, areas: { front: 1 }, second: { player_assault: 'pierce' } }   // drones: tall modular hold, nose module
         };
@@ -84426,13 +85532,35 @@ extendClass(ProfileSelectionManager, {
             defs[f].forEach((kit) => {
                 const b = kit.bonus;
                 // Some hulls also start with a second weapon type, owned in the inventory.
-                if (d.second && d.second[kit.ship]) b.weapon2 = d.second[kit.ship];
+                if (d.second && d.second[kit.ship] && this.startPartFits('weapon', d.second[kit.ship])) b.weapon2 = d.second[kit.ship];
                 ['credits', 'invRows', 'invCols', 'invGrowth'].forEach((n) => { if (d[n]) b[n] = (Number(b[n]) || 0) + d[n]; });
                 if (d.res) { b.res = Object.assign({}, b.res); Object.keys(d.res).forEach((r) => { b.res[r] = (b.res[r] || 0) + d.res[r]; }); }
                 if (d.areas) { b.areas = Object.assign({}, b.areas); Object.keys(d.areas).forEach((a) => { const t = (kit.off || []).indexOf(a) < 0 ? a : 'center'; b.areas[t] = (b.areas[t] || 0) + d.areas[a]; }); }   // a hull without that area levels its core instead
             });
         });
         return defs;
+    },
+    /** Does a start part fit a fresh hull's slots? Every start slot is at most M (slot-sizes.js), so L parts never do. */
+    startPartFits(kind, id) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        return !id || !slm || !slm.getPartSizeLevel || slm.getPartSizeLevel(kind, id) <= 1;
+    },
+    /** Wing slot rows of the start ship: the kit's wing level (a pair per row), its bought slots, and room for the second weapon. */
+    startWingRows(kit) {
+        const k = kit || this.currentKit();
+        if ((k.off || []).indexOf('wing') >= 0) return 0;
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const b = k.bonus || {};
+        const lv = Math.min(2, Number((b.areas || {}).wing) || 0);
+        const pairs = slm && slm.getAreaSlotBonus ? Math.ceil(slm.getAreaSlotBonus('wing', lv).filter((x) => x === 'weapons').length / 2) : 0;
+        return Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+    },
+    /** Weapon slots of the start ship in slot order (nose / core gun, then the wing rows): part id or null when empty. */
+    startWeaponSlots(gun) {
+        const k = this.currentKit();
+        const out = [gun, (k.bonus || {}).weapon2 || null];
+        out.length = 1 + this.startWingRows(k);
+        return Array.from(out, (x) => x || null);
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -84672,7 +85800,9 @@ extendClass(ProfileSelectionManager, {
         let dl = {};
         try { dl = (slm && slm.defaultLoadoutFromShip && slm.defaultLoadoutFromShip(this.startShipId(), this.pendingFaction)) || {}; } catch (e) { /* show empty slots */ }
         // Start profiles: one part per type (weapon, defense, energy core, ability).
-        dl.defenses = (dl.defenses || []).slice(0, 1); dl.abilities = (dl.abilities || []).slice(0, 1); dl.energy = (dl.energy || []).slice(0, 1);
+        // Only parts that fit the start slots are handed out.
+        const fit = (kind, l) => (l || []).filter((id) => this.startPartFits(kind, id)).slice(0, 1);
+        dl.defenses = fit('defense', dl.defenses); dl.abilities = fit('ability', dl.abilities); dl.energy = fit('energy', dl.energy);
         const pname = (id) => String(id).replace(/_/g, ' ').toUpperCase();
                 const filled = (kind, id, lvl, hoverKey) => slot(kind, id, lvl, hoverKey);   // name + stats only as hover tooltip
         const cls = (typeof homeStationUI !== 'undefined' && homeStationUI.shipModelClass && homeStationUI.shipModelClass(this.startShipId(), cfg)) || cfg.modelClass || 'starfighter';
@@ -84683,6 +85813,9 @@ extendClass(ProfileSelectionManager, {
         // Areas only carry weapon slots: the nose gun, then the wing guns as mirrored pairs.
         const lvOf = (id) => Math.min(max, Number(base[id]) || 0);
         list.forEach((a) => { (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; }); });
+        // The kit's second weapon is equipped in slot 1 (the pilot gets that slot with the kit).
+        const w2 = kitObj.bonus && kitObj.bonus.weapon2;
+        if (w2) caps.weapons = Math.max(caps.weapons, 2);
         const wslots = { front: Math.min(1, caps.weapons), wing: Math.max(0, caps.weapons - 1), center: 0, back: 0 };
         // Core gun (nose-less hulls): slot 0 moves into the core, as one gun or a left / right pair.
         if (kitObj.coreGun && caps.weapons > 0) { wslots.front = 0; wslots.center = kitObj.coreGun === 'split' ? 2 : 1; }
@@ -84692,18 +85825,18 @@ extendClass(ProfileSelectionManager, {
                 return `<div class="pl-row is-off">${areaIco(a.id, a.label)}<span class="pl-slots"><em>OFF</em></span></div>`;
             }
             const n = wslots[a.id] || 0;
-            // Start profiles hold one weapon only: it sits in the nose (or the core); every other weapon slot is empty.
+            // The start gun sits in the nose (or the core), the kit's second weapon in the first wing slot; the rest stay empty.
             const gun0 = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
-            const ws = [gun0];
+            const ws = [gun0, w2 || null];
             const dmg = cfg.weaponDamage || cfg.damage;
-            const txt = n ? Array.from({ length: n }, (_, i) => (a.id === 'front' ? filled('weapon', ws[0] || startWeaponId, wLv(a.id), 'front') : (a.id === 'center' ? filled('weapon', ws[0] || (dl.weapons && dl.weapons[0]) || startWeaponId, wLv(a.id), 'center') : filled('weapon', ws[1 + i] || null, wLv(a.id), 'wing:' + i)))).join('') : '<em>NO WEAPON SLOT</em>';
+            const txt = n ? Array.from({ length: n }, (_, i) => (a.id === 'front' ? filled('weapon', ws[0] || startWeaponId, wLv(a.id), 'front') : (a.id === 'center' ? filled('weapon', ws[0] || (dl.weapons && dl.weapons[0]) || startWeaponId, wLv(a.id), 'center') : filled('weapon', ws[1 + i] || null, i === 0 && w2 && slm && slm.getPartSizeLevel ? Math.max(wLv(a.id), slm.getPartSizeLevel('weapon', w2)) : wLv(a.id), 'wing:' + i)))).join('') : '<em>NO WEAPON SLOT</em>';
             return `<div class="pl-row">${areaIco(a.id, a.label)}<span class="pl-slots">${txt}</span></div>`;
         }).join('');
         const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null)).join('') || '<em>–</em>';
         const parts = `<div class="pl-parts">` +
             [['defense', caps.defenses, dl.defenses], ['energy', caps.energy, dl.energy], ['ability', caps.abilities, dl.abilities]].map(([k, n, l]) => `<div class="pl-row">${kindIco(k, k.toUpperCase())}<span class="pl-slots">${many(k, n || 0, l)}</span></div>`).join('') + `</div>`;
         const invHtml = this.renderStartInvHtml(kitObj, [['weapon', (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId],
-            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', kitObj.bonus && kitObj.bonus.weapon2, false]], kindColor, tipOf);
+            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', w2]], kindColor, tipOf);
         // Ship stats take the sidebar's top (the inventory below already shows every part).
         const ir2 = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         const stat = (l, v, key, cls) => {
@@ -84715,24 +85848,28 @@ extendClass(ProfileSelectionManager, {
         };
         const stats = stat('SPEED', cfg.speed, 'statSpeed', 'speed') + stat('HULL', cfg.maxHealth, 'statHealth', 'hull') +
             stat('ARMOR', cfg.armor, 'statArmor', 'armor') + stat('DAMAGE', cfg.weaponDamage || cfg.damage, 'statDamage', 'damage');
-        // Weapon types of the profile: the faction's weapon in focus, plus the hull's start weapon when it differs (1-2 types).
+        // Equipped weapons in slot order, each with a slot / fire-key badge (several guns: A / S / D, one gun: SPACE).
         const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
         const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
-        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
-        const facW = (fss && fss.getFactionDefaultWeapons ? fss.getFactionDefaultWeapons(this.pendingFaction) : null)
-            || (wcm && wcm.getFactionWeaponAffinity ? wcm.getFactionWeaponAffinity(this.pendingFaction) : []);
-        const focusId = (facW && facW[0]) || gunId;
-        const second = (kitObj.bonus || {}).weapon2 || (gunId !== focusId ? gunId : null);
-        const fam = second ? [focusId, second] : [focusId];
+        const fam = this.startWeaponSlots(gunId);
+        const keyOf = (i) => (fam.length > 1 ? ['A', 'S', 'D'][i] || 'SPACE' : 'SPACE');
+        // Slot size: the nose / core gun is a single M mount (a split core S), wing pairs S; the kit's gun gets a slot grown to fit it.
+        const partLv = (id) => (id && slm && slm.getPartSizeLevel ? slm.getPartSizeLevel('weapon', id) : 0);
+        const slotLv = (i, id) => Math.max(i === 0 ? (kitObj.coreGun === 'split' ? 0 : 1) : 0, partLv(id));
+        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i, id)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
         const weapons = fam.map((wid, wi) => {
+            if (!wid) {
+                return `<span class="pk-weapon is-empty" data-slot="${wi}" style="--pk-c:#8a84a8" data-ui-tip-instant data-ui-tip-head="EMPTY WEAPON SLOT" data-ui-tip="SLOT ${wi + 1} · KEY ${keyOf(wi)}&#10;${sizeTip(wi)}">` +
+                    `<span class="hs-slot-glyph" data-slot-kind="weapon"></span><span class="pk-wslot">${wi + 1}</span><span class="pk-wkey">${keyOf(wi) === 'SPACE' ? 'SPC' : keyOf(wi)}</span></span>`;
+            }
             const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
             const wname = String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
             const ico = ir && ir.weaponImgHtml ? String(ir.weaponImgHtml(wid, 32, 'hs-pixel', false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
             const facBonus = wcm && wcm.getFactionWeaponMul && wcm.getFactionWeaponMul(this.pendingFaction, wid) > 1;
             const hullBonus = wcm && wcm.getShipClassWeaponMul && wcm.getShipClassWeaponMul(cls, wid) > 1;
-            const tip = [wi === 0 ? 'FACTION WEAPON' : 'SECOND WEAPON (IN INVENTORY)', facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
+            const tip = ['SLOT ' + (wi + 1) + ' · KEY ' + keyOf(wi), sizeTip(wi, wid), facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
             const col = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(wid) : '#ff6a4a';
-            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}</span>`;
+            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" data-slot="${wi}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}<span class="pk-wslot">${wi + 1}</span><span class="pk-wkey">${keyOf(wi) === 'SPACE' ? 'SPC' : keyOf(wi)}</span></span>`;
         }).join('');
         return `<div class="profile-loadout-title">WEAPONS</div>
             <div class="profile-side-weapons" data-tip-side="left">${weapons}</div>
@@ -85792,6 +86929,9 @@ extendClass(ProfileSelectionManager, {
         const loadoutEl = this.overlay.querySelector('.profile-loadout');
         // Hovering the ship preview outlines its weapon mounts.
         this.overlay.addEventListener('mouseover', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship')) this.highlightPreviewWeapon(true); });
+        // WEAPONS slots in the sidebar: hovering one lights up its mount on the ship.
+        this.overlay.addEventListener('mouseover', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w) this.highlightPreviewWeapon(true, Number(w.dataset.slot)); });
+        this.overlay.addEventListener('mouseout', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w && !(e.relatedTarget && w.contains(e.relatedTarget))) this.highlightPreviewWeapon(false); });
         this.overlay.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.profile-faction-ship'))) this.highlightPreviewWeapon(false); });
         if (loadoutEl) loadoutEl.addEventListener('click', (e) => {
             const b = e.target.closest('[data-area]');
@@ -87828,6 +88968,11 @@ extendClass(ProfileSelectionManager, {
             // Own-faction galaxy: a few nearby planets are already travelable.
             if (profileManager.unlockOwnFactionStartCluster) profileManager.unlockOwnFactionStartCluster(p, gid);
             if (profileManager.discoverGalaxy) profileManager.discoverGalaxy(gid);
+            // Foreign galaxy: only the start planet is open. The map's default start (ensureGalaxyProgress)
+            // and an ally-defense target (discoverGalaxy) would otherwise add more.
+            const ownGalaxy = profileManager.isOwnFactionGalaxy && profileManager.isOwnFactionGalaxy(p, gid);
+            const gpStart = startId && profileManager.ensureGalaxyProgress ? profileManager.ensureGalaxyProgress(p, gid) : null;
+            if (gpStart && !ownGalaxy) gpStart.unlockedPlanetIds = [String(startId).toLowerCase()];
             // Home galaxy: UNDER ATTACK waits until the first stage is cleared.
             const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(p.faction) : null;
             if (meta && meta.homeGalaxy === gid && profileManager.scheduleHomeInvasion) {
@@ -87947,6 +89092,41 @@ extendClass(ProfileSelectionManager, {
                 L.weaponSlots = ws;
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
+        }
+        // The kit's second weapon is equipped too: slot 1, opened and sized for it when the hull lacks one.
+        if (bonus.weapon2 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const slm = shipLoadoutManager;
+                const ship = p.activeShipId;
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const e = p.shipUpgrades[ship];
+                const mounts = () => { const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship)); return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons; };
+                if (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
+                const fit = slm.partFitsSlot ? slm.partFitsSlot(ship, 'weapon', bonus.weapon2, 1) : { ok: true };
+                if (!fit.ok) { e.slotLevels = Object.assign({}, e.slotLevels); e.slotLevels['weapon:1'] = (Number(e.slotLevels['weapon:1']) || 0) + (fit.need - fit.have); }
+                const L = slm.getLoadout(ship);
+                const ws = (L.weaponSlots || []).slice();
+                ws[0] = ws[0] || (L.weapons && L.weapons[0]) || 'laser';
+                ws[1] = bonus.weapon2;
+                L.weaponSlots = ws;
+                L.weapons = ws.filter(Boolean);
+                slm.setLoadout(ship, L);
+            } catch (e) { /* stays in the inventory */ }
+        }
+        // Several weapons: slot 1 / 2 / 3 fire on A / S / D (SPACE still fires all).
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                const slm = shipLoadoutManager;
+                const caps = slm.getSlotCaps(p.activeShipId, slm.resolveModelClass(p.activeShipId));
+                const n = Math.max((L.weaponSlots || []).length, slm.weaponMountSlots ? slm.weaponMountSlots(caps.weapons) : caps.weapons);
+                // Empty slots get their key too, ready for the next gun.
+                if (n > 1) {
+                    L.weaponKeys = {}; L.weaponKeySets = {};
+                    ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
+                    shipLoadoutManager.setLoadout(p.activeShipId, L);
+                }
+            } catch (e) { /* keys stay on SPACE */ }
         }
         // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.
         if (p.activeShipId && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.inventoryGrowth) {
@@ -91841,7 +93021,7 @@ extendClass(HomeStationUI, {
             return profileManager.purchaseModuleUpgrade(act.cat, act.track);
         }
         if (act.type === 'craft') {
-            return profileManager.craftShip(act.id);
+            return profileManager.craftBlueprint(act.id);
         }
         return { ok: false, reason: 'UNKNOWN' };
     },
@@ -91909,7 +93089,7 @@ extendClass(HomeStationUI, {
                             : null;
                         msg = 'UPGRADED: ' + (node ? node.label : String(act.id).toUpperCase()) + ' L' + res.level;
                     } else if (act && act.type === 'craft') {
-                        msg = 'CRAFTED: ' + this.shipName(act.id);
+                        msg = 'CRAFTED: ' + profileManager.getBlueprintName(act.id);
                     } else if (act && act.type === 'frame-upgrade') {
                         msg = 'FRAME UPGRADED: ' + this.shipName(act.id) + ' L' + res.level;
                     } else if (act && act.type === 'module-upgrade') {
@@ -92001,7 +93181,7 @@ extendClass(HomeStationUI, {
     },
 
     renderShopToolbar() {
-        const isParts = this.shopCategory === 'parts';
+        const isParts = this.shopCategory === 'parts' || this.shopCategory === 'blueprints';
         const isPortals = this.shopCategory === 'portals';
         const isResources = this.shopCategory === 'resources';
         const isStyles = this.shopCategory === 'styles';
@@ -92349,7 +93529,7 @@ extendClass(HomeStationUI, {
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
         const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const stationBpHtml = this.renderBlueprintList(profile.blueprints);
+        const stationBpHtml = this.renderBlueprintList(profile);
         const stats = (typeof profileManager !== 'undefined')
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
@@ -92415,7 +93595,6 @@ extendClass(HomeStationUI, {
                     <div class="hs-panel hs-panel-bp">
                         ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
                         <div class="hs-row hs-bp">${stationBpHtml}</div>
-                        ${this.renderUnlockList(profile)}
                     </div>
                     <div class="hs-panel-stack">
                         <div class="hs-panel hs-panel-ships">
@@ -92625,6 +93804,14 @@ extendClass(HomeStationUI, {
                 this._navLevel = 'tabs';
                 this.persistTab();
                 this.createUI();
+            });
+        });
+        // Menu sub-nav (SETTINGS / LAYOUT / CREDITS …) is rebuilt on a soft switch too.
+        scope.querySelectorAll('[data-menu-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                this.openMainMenuOverlay({ tab: btn.getAttribute('data-menu-tab') });
             });
         });
     },
@@ -93136,6 +94323,16 @@ extendClass(HomeStationUI, {
         }
         if (typeof graphicsManager !== 'undefined') {
             graphicsManager.setPlayerShipModel(ship);
+        }
+
+        // Remember which planets were reachable, so the map can reveal newly unlocked ones after the run.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.map) {
+            galaxyMapManager._preRunUnlocked = {
+                galaxyId: galaxyMapManager.galaxyId,
+                ids: (galaxyMapManager.map.nodes || [])
+                    .filter((n) => galaxyMapManager.isUnlocked(n.planetId))
+                    .map((n) => n.planetId)
+            };
         }
 
         this.hide();
@@ -95527,7 +96724,7 @@ VXP.background = (() => {
 // (listed by factionPacks, so nothing is probed with 404s). canvasHtml(look, accent) returns a <canvas> that scan()/register()
 // fill with VXP.build; every portrait blinks now and then. A look is { faction, v } with v = 0..15 (the preset).
 // opts.state (data-state): 0 healthy, 1 wounded, 2 dead, 3 joy, 4 anger; a dead pilot never blinks. setState() changes it live.
-const voxelPortrait = (() => {
+var voxelPortrait = (() => {
     const entries = new Set();
     let timer = 0;
     const lookOf = (look) => (typeof look === 'string' ? { faction: look, v: 0 } : (look || { faction: 'terran', v: 0 }));
@@ -95612,7 +96809,15 @@ const voxelPortrait = (() => {
         }
         present(e);
     }
+    // Body stage-scale transforms make IntersectionObserver false-negative in Safari /
+    // Firefox; treat IO as a hint and confirm with a viewport rect before skipping.
     const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((list) => list.forEach((r) => { if (r.target.__vx) r.target.__vx.vis = r.isIntersecting; })) : null;
+    function onScreen(el) {
+        const r = el.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+    }
     function register(canvas) {
         if (canvas.__vx || !canvas.getContext) return;
         const nobg = canvas.dataset.nobg === '1';
@@ -95624,23 +96829,35 @@ const voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
+        if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
         const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)), blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
         draw(e, false);
         (nobg ? Promise.resolve(null) : painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT)).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
-        if (!timer) timer = setInterval(tick, 90);
+        if (!timer) timer = requestAnimationFrame(loop);
     }
-    function tick() {
-        const now = performance.now();
+    // rAF (not setInterval): stays in sync with the compositor across Chrome / Firefox / Safari / Edge.
+    let lastTick = 0;
+    function loop(now) {
+        timer = 0;
+        if (!entries.size) return;
+        if (now - lastTick >= 90) {
+            lastTick = now;
+            tick(now);
+        }
+        if (entries.size) timer = requestAnimationFrame(loop);
+    }
+    function tick(now) {
+        now = now || performance.now();
         for (const e of entries) {
             if (!e.canvas.isConnected) { entries.delete(e); if (io) io.unobserve(e.canvas); continue; }
-            if (e.painted || e.vis === false || document.hidden) continue;
+            if (e.painted || document.hidden) continue;
+            if (e.vis === false && !onScreen(e.canvas)) continue;
             if (now >= e.next && e.state !== 2) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
             draw(e, now < e.blinkUntil);
         }
-        if (!entries.size) { clearInterval(timer); timer = 0; }
     }
     /** Switch a live portrait's expression (0 healthy, 1 wounded/pain, 2 dead, 3 joy, 4 anger) and repaint at once. */
     function setState(canvas, state) {
@@ -95660,10 +96877,14 @@ const voxelPortrait = (() => {
             for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches('canvas.vx-portrait')) register(n); else if (n.querySelectorAll) scan(n); } });
         }).observe(document.documentElement, { childList: true, subtree: true });
         const st = document.createElement('style');
+        // image-rendering stack: Firefox (-moz-crisp-edges), Safari (-webkit-optimize-contrast),
+        // Chrome/Edge (pixelated), legacy IE (nearest-neighbor). Avoid CSS filter on canvas ancestors —
+        // Safari freezes putImageData updates under filter.
         st.textContent = [
-            'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:pixelated;-ms-interpolation-mode:nearest-neighbor;object-fit:cover;object-position:50% 0}',
+            'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:-moz-crisp-edges;image-rendering:-webkit-optimize-contrast;image-rendering:pixelated;image-rendering:crisp-edges;-ms-interpolation-mode:nearest-neighbor;object-fit:cover;object-position:50% 0}',
             '.pp-pick canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:contain!important;object-position:50% 50%!important}',
-            '.profile-pilot-portrait canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 0!important}'
+            '.profile-pilot-portrait canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 0!important}',
+            '.pp-pick.selected{filter:none!important}'
         ].join('');
         document.head.appendChild(st);
         scan(document);
@@ -96176,11 +97397,27 @@ extendClass(HomeStationUI, {
             `</div>`;
     },
 
-    renderBlueprintList(map) {
-        const keys = Object.keys(map || {}).filter((k) => (map[k] || 0) > 0);
+    renderBlueprintList(profile) {
+        const map = profile.blueprints || {};
+        const keys = Object.keys(map).filter((k) => (map[k] || 0) > 0 && profileManager.parseBlueprintKey(k));
         if (!keys.length) return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS YET');
-        const rows = keys.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-bp', 'BLUEPRINT ×' + map[id])).join('');
-        return this.shipTableHtml(rows);
+        return keys.map((key) => this.renderBlueprintRow(key, profile)).join('');
+    },
+
+    /** One part blueprint: part icon, name, count, craft cost and craft button. */
+    renderBlueprintRow(key, profile) {
+        const bp = profileManager.parseBlueprintKey(key);
+        const name = profileManager.getBlueprintName(key);
+        const cost = profileManager.getBlueprintCraftCost(key, profile);
+        const afford = this.canAffordCost(profile.resources, cost);
+        const kindLabel = { weapon: 'WEAPON', defense: 'DEFENSE', ability: 'ABILITY', energy: 'ENERGY' }[bp.kind];
+        return `<div class="hs-line hs-shop-line hs-craft-line">` +
+            `<span class="hs-line-name"><span class="hs-chip-icon">${this.moduleIconHtml(bp.kind, bp.id, 32, 'hs-pixel')}</span>` +
+            `<span class="hs-line-text"><strong>${name}</strong>` +
+            `<span class="hs-line-meta">${kindLabel} · BLUEPRINT ×${profile.blueprints[key]}</span></span></span>` +
+            `${this.renderCostGrid(cost, profile.resources)}` +
+            `<button class="action-button hs-line-action hs-craft-go" data-craft="${key}" title="Craft ${name}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
+            `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
     },
 
     /** Header + body for a ship table (thumb, name/class, core stats). */
@@ -96308,26 +97545,6 @@ extendClass(HomeStationUI, {
             );
         });
         return chips.join('');
-    },
-
-    renderUnlockList(profile) {
-        const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
-        if (!keys.length) {
-            return '<p class="hs-muted hs-hint">Buy blueprints in the shop or collect drops.</p>';
-        }
-        return `<div class="hs-actions-col">${keys.map((id) => {
-            const unlocked = profile.unlockedShopIds.indexOf(id) !== -1;
-            if (unlocked) {
-                return `<div class="hs-line hs-line-ok">` +
-                    `<span class="hs-chip-icon">${this.iconHtml('hsShop', 32, 'hs-pixel')}</span>` +
-                    `<span>${this.shipName(id)} — SHOP UNLOCKED</span>` +
-                    `</div>`;
-            }
-            return `<button class="action-button" data-unlock="${id}">` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-                `<span>UNLOCK LISTING: ${this.shipName(id)}</span>` +
-                `</button>`;
-        }).join('')}</div>`;
     },
 
     renderShopCategoryTabs() {
@@ -96488,45 +97705,40 @@ extendClass(HomeStationUI, {
     },
 
     renderShopBlueprintRows(profile) {
-        const wallet = profile.resources || {};
-        let entries = this.catalogShipIds().map((id) => {
-            const cfg = (typeof shipConfigManager !== 'undefined')
-                ? shipConfigManager.getConfig(id)
-                : null;
-            const modelClass = this.shipModelClass(id, cfg);
-            const cost = (typeof economyConfig !== 'undefined')
-                ? economyConfig.getBlueprintCost(cfg)
-                : { scrap: 60 };
-            const count = profile.blueprints[id] || 0;
+        let entries = this.catalogPartListings().map((e) => {
+            const key = e.kind + ':' + e.id;
+            const cost = economyConfig.getBlueprintCost(e.kind, e.item);
             return {
-                id: id,
-                name: this.shipName(id),
-                modelClass: modelClass,
-                tier: (cfg && cfg.tier != null) ? Number(cfg.tier) : 1,
+                key: key,
+                kind: e.kind,
+                id: e.id,
+                name: profileManager.getBlueprintName(key),
+                faction: e.faction || (e.item && e.item.faction),
                 cost: cost,
                 costTotal: this.costTotal(cost),
-                count: count
+                count: profile.blueprints[key] || 0
             };
-        });
+        }).filter((e) => profileManager.parseBlueprintKey(e.key));
         if (this.shopFilter && this.shopFilter !== 'all') {
-            entries = entries.filter((e) => e.modelClass === this.shopFilter);
+            entries = entries.filter((e) => e.kind === this.shopFilter);
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
             return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS MATCH FILTER');
         }
+        const wallet = profile.resources || {};
         return entries.map((e) => {
             const stock = e.count > 0 ? ` ×${e.count}` : '';
             const afford = this.canAffordCost(wallet, e.cost, profile);
             return `<div class="hs-line hs-shop-line">` +
                 `<span class="hs-line-name">` +
-                `<span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
+                `<span class="hs-chip-icon">${this.moduleIconHtml(e.kind, e.id, 32, 'hs-pixel')}</span>` +
                 `<span class="hs-line-text">` +
                 `<strong>BP: ${e.name}${stock}</strong>` +
-                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier} · ${this.factionTagHtml(this.shipFaction(e.id))}</span>` +
+                `<span class="hs-line-meta">${e.kind.toUpperCase()} · ${this.factionTagHtml(e.faction)}</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}` +
-                `<button class="action-button hs-line-action" data-buy-bp="${e.id}" ${afford ? '' : 'disabled'}>BUY</button></div>`;
+                `<button class="action-button hs-line-action" data-buy-bp="${e.key}" ${afford ? '' : 'disabled'}>BUY</button></div>`;
         }).join('');
     },
 });
@@ -96911,40 +98123,21 @@ extendClass(HomeStationUI, {
     },
 
     renderCraftTab(profile) {
-        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
+        const keys = Object.keys(profile.blueprints || {})
+            .filter((k) => (profile.blueprints[k] || 0) > 0 && profileManager.parseBlueprintKey(k));
         if (!keys.length) {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT')}` +
                 `<div class="hs-tab-fill"><div class="hs-empty-state">` +
                 `<span class="hs-empty-icon">${this.iconHtml('hsBlueprint@d', 64, 'hs-pixel')}</span>` +
                 `<strong class="hs-empty-title">NO BLUEPRINTS YET</strong>` +
-                `<p class="hs-empty-text">Blueprints unlock new ships for the forge.</p>` +
+                `<p class="hs-empty-text">Blueprints let you build ship parts in the forge.</p>` +
                 `<ul class="hs-empty-steps">` +
-                `<li><b>1</b><span>Fly missions and defeat bosses - they drop blueprints.</span></li>` +
+                `<li><b>1</b><span>Fly missions and defeat enemies - they can drop part blueprints.</span></li>` +
                 `<li><b>2</b><span>Teleport cargo to the station to keep them.</span></li>` +
-                `<li><b>3</b><span>Come back here and craft the ship.</span></li>` +
+                `<li><b>3</b><span>Come back here and craft the part.</span></li>` +
                 `</ul></div></div></div>`;
         }
-        const rows = keys.map((id) => {
-            if (profile.ownedShipIds.indexOf(id) !== -1) {
-                return `<div class="hs-line hs-shop-line">` +
-                    `<span class="hs-line-name"><span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-                    `<strong>${this.shipName(id)}</strong></span>` +
-                    `<span class="hs-muted">OWNED</span></div>`;
-            }
-            const cfg = shipConfigManager.getConfig(id);
-            const cost = (typeof profileManager !== 'undefined' && profileManager.getDiscountedCraftCost)
-                ? profileManager.getDiscountedCraftCost(cfg, profile)
-                : economyConfig.getCraftCost(cfg);
-            const afford = this.canAffordCost(profile.resources, cost);
-            const thumb = this.shipThumbSrc(id, 96);
-            return `<div class="hs-line hs-shop-line hs-craft-line">` +
-                `<span class="hs-line-name"><span class="hs-craft-ship">${thumb ? `<img src="${thumb}" alt="">` : this.iconHtml('hsBlueprint', 56, 'hs-pixel')}</span>` +
-                `<strong>${this.shipName(id)}</strong><em class="hs-craft-count">×${profile.blueprints[id]}</em></span>` +
-                `${this.renderCostGrid(cost, profile.resources)}` +
-                `<button class="action-button hs-line-action hs-craft-go" data-craft="${id}" title="Craft ${esc(this.shipName(id))}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
-        });
+        const rows = keys.map((key) => this.renderBlueprintRow(key, profile));
         return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT FROM BLUEPRINT')}` +
             `<div class="hs-tab-fill">${rows.join('')}</div></div>`;
     },
@@ -97557,10 +98750,11 @@ extendClass(HomeStationUI, {
             });
         } else if (this.shopCategory === 'blueprints') {
             rows = Object.keys(profile.blueprints || {}).filter((id) => profile.blueprints[id] > 0).map((id) => {
-                const cls = this.shipModelClass(id, shipConfigManager.getConfig(id));
-                if (this.shopFilter && this.shopFilter !== 'all' && cls !== this.shopFilter) return '';
-                return this.renderSellLine(chip('hsBlueprint'), `BP: ${this.shipName(id)} ×${profile.blueprints[id]}`,
-                    `${this.shipClassLabel(cls)} · ${this.factionTagHtml(this.shipFaction(id))} · NOT CRAFTED`,
+                const bp = pm.parseBlueprintKey(id);
+                if (!bp) return '';
+                if (this.shopFilter && this.shopFilter !== 'all' && bp.kind !== this.shopFilter) return '';
+                return this.renderSellLine(chip('hsBlueprint'), `BP: ${pm.getBlueprintName(id)} ×${profile.blueprints[id]}`,
+                    `${bp.kind.toUpperCase()} · ${this.factionTagHtml(bp.item.faction)} · NOT CRAFTED`,
                     pm.getBlueprintSellValue(id), `data-sell-bp="${id}"`, '');
             });
         } else if (this.shopCategory === 'parts') {
@@ -102878,8 +104072,8 @@ extendClass(HomeStationUI, {
         const view = (this._hangarLeftView === 'parts' || this._hangarLeftView === 'slots') ? this._hangarLeftView : 'ships';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
-            `${this.iconHtml(icon, 32, 'hs-pixel hs-pixel-32', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('parts', 'PARTS', 'hsCraft')}${btn('slots', 'SLOTS', 'hsUpgrade')}</div>`;
+            `${this.iconHtml(icon, 40, 'hs-pixel hs-pixel-40', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
     /** SLOTS view: the ship's slot layout per hull area (same idea as the start profile's HULL AREAS list). */
     renderHangarSlotsView(slots, layout) {
@@ -102998,16 +104192,19 @@ extendClass(HomeStationUI, {
             if (chk.ok || chk.removing || chk.reason === 'FULL' || chk.reason === 'TOO_BIG') return null;
             return String(chk.reason || 'BLOCKED').replace(/_/g, ' ');
         };
+        const invPos = typeof physicalItem !== 'undefined' && physicalItem.invPositions ? physicalItem.invPositions(shipId) : {};
+        const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : { cols: 4, rows: 2 };
         const modal = document.createElement('div');
         modal.className = 'hs-res-buy-modal hs-slot-picker';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.innerHTML = `<div class="hs-res-buy-dialog hs-pick-dialog">` +
-            `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT</h3>` +
+            `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT ${index + 1}</h3>` +
             `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(slm.getSlotSizeLevel(shipId, kind, index))}</p></div>` +
             `<div class="hs-pick-sort" role="group" aria-label="Sort"></div>` +
             `<div class="hs-pick-body">` +
-            `<div class="hs-pick-grid" style="--pk-c:${color}"></div>` +
+            // Same cols × rows as the ship's inventory (bay inventory / start profile).
+            `<div class="hs-pick-grid" style="--pk-c:${color}; grid-template-columns: repeat(${invGrid.cols}, 64px); grid-template-rows: repeat(${invGrid.rows}, 64px); width: calc(${invGrid.cols} * 64px + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * 64px + ${invGrid.rows - 1} * 4px); min-height: 0; max-height: none; overflow: hidden"></div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
             `</div>` +
             `<div class="hs-res-buy-actions">${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}<button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button></div></div>`;
@@ -103027,7 +104224,7 @@ extendClass(HomeStationUI, {
             }).join('');
         };
         const draw = () => {
-            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="action-button hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
+            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
             const sorted = items.slice().sort((a, b) => {
                 const bySlot = (blockedOf(a) ? 1 : 0) - (blockedOf(b) ? 1 : 0);   // placeable parts first
                 if (bySlot) return bySlot;
@@ -103044,12 +104241,14 @@ extendClass(HomeStationUI, {
                 // Diablo-style footprint: S = 1x1, M = 1 wide x 2 tall, L = 2x2 cells.
                 const lv = Math.max(0, Math.min(2, sizeOf(it)));
                 const span = [[1, 1], [1, 2], [2, 2]][lv];
+                // Same tile as in the ship's inventory (bay inventory positions).
+                const pp = invPos[it.kind + ':' + id];
                 const here = it.kind === kind;
                 const usedElsewhere = here && equipped[id] && id !== current;
                 const assignedBadge = usedElsewhere
                     ? `<span class="hs-pick-assigned" data-ui-tip="ALREADY ASSIGNED TO ANOTHER SLOT"><svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5l2 2 5-5-1-1-4 4-1-1z"/></svg></span>`
                     : '';
-                return `<button type="button" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
+                return `<button type="button" style="grid-column: ${pp ? pp[0] + ' / ' : ''}span ${span[0]}; grid-row: ${pp ? pp[1] + ' / ' : ''}span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
                     `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
                     assignedBadge +
                     `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
@@ -103078,12 +104277,17 @@ extendClass(HomeStationUI, {
         }
         this._pickKeys = (e) => { if (e.key === 'Escape' || e.key === 'Backspace') { close(); e.preventDefault(); e.stopImmediatePropagation(); } };
         document.addEventListener('keydown', this._pickKeys, true);
+        // The slot being edited stays highlighted in the SLOTS list while the picker is open.
+        const slotEl = this.overlay.querySelector(`[data-slot-pick="${kind}"][data-slot-index="${index}"]`);
+        if (slotEl) slotEl.classList.add('is-picking');
         this.overlay.appendChild(modal);
     },
     closeHangarSlotPicker() {
         if (this._pickKeys) { document.removeEventListener('keydown', this._pickKeys, true); this._pickKeys = null; }
-        const m = this.overlay && this.overlay.querySelector('.hs-slot-picker');
+        // Only the modal: the bay inventory sidebar is also a .hs-slot-picker.
+        const m = this.overlay && this.overlay.querySelector('.hs-res-buy-modal.hs-slot-picker');
         if (m) m.remove();
+        this.overlay && this.overlay.querySelectorAll('.hs-slotview-cell.is-picking').forEach((el) => el.classList.remove('is-picking'));
     },
     /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */
     hangarStatColor(type) {
@@ -103222,8 +104426,9 @@ extendClass(HomeStationUI, {
     },
     renderHangarPartsGrid(inventory, loadout) {
         return `<div class="hs-hangar-parts">` + HANGAR_PART_SECTIONS.map((sec) => {
-            const ids = (inventory && inventory[sec.key]) || [];
             const equipped = (loadout && loadout[sec.key]) || [];
+            // PARTS view lists only what's fitted on the ship; the slot modal handles picking.
+            const ids = ((inventory && inventory[sec.key]) || []).filter((id) => equipped.indexOf(id) !== -1);
             const slm = shipLoadoutManager;
             // One slot of this kind → picking a part replaces the other: radio.
             // Several slots → each part is independently on/off: switch.
@@ -103243,8 +104448,7 @@ extendClass(HomeStationUI, {
                     ` data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
                     ` data-ui-tip="${String(this.hangarModuleTip(sec.kind, id)).replace(/"/g, '&quot;')}\nSIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
                     // No slot-type glyph per row: the section header already names the type.
-                    // Weapons: the icon is the drag handle (into a slot); a click elsewhere on the row opens it.
-                    `<span class="hs-hangar-part-icon${sec.kind === 'weapon' ? ' is-drag-handle' : ''}"${sec.kind === 'weapon' ? ' data-ui-tip="DRAG INTO A SLOT"' : ''}>` +
+                    `<span class="hs-hangar-part-icon">` +
                     `${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
                     `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
                     `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
@@ -103266,7 +104470,7 @@ extendClass(HomeStationUI, {
                 this.hangarSectionSlotStripHtml(sec, sec.kind === 'weapon' && loadout && loadout.weaponSlots && loadout.weaponSlots.length
                     ? loadout.weaponSlots : equipped, caps) +
                 `<span class="hs-hangar-parts-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span></h4>` +
-                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE OWNED')}</div>` +
+                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE EQUIPPED')}</div>` +
                 `</section>`;
         }).join('') + `</div>`;
     },
@@ -103409,14 +104613,8 @@ extendClass(HomeStationUI, {
                 });
                 return;
             }
-            cell.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0 || !e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
-                e.preventDefault();
-                this.startHangarPartDrag(cell, e);
-            });
+            // No drag & drop from the PARTS list: slots are filled via the SLOTS view.
             cell.addEventListener('click', (e) => {
-                // The icon's own click is handled when its drag finishes.
-                if (e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
                 e.preventDefault();
                 if (cell.classList.contains('is-equipped')) this.toggleHangarPartDetails(cell);
                 else this.equipHangarPart(cell, null);
@@ -106978,14 +108176,6 @@ extendClass(HomeStationUI, {
             });
         });
 
-        this.overlay.querySelectorAll('[data-unlock]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const id = btn.getAttribute('data-unlock');
-                const res = profileManager.unlockShopItem(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('UNLOCKED: ' + this.shipName(id)) : (res.reason || 'FAILED'));
-            });
-        });
-
         this.overlay.querySelectorAll('[data-buy]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-buy');
@@ -106998,7 +108188,7 @@ extendClass(HomeStationUI, {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-buy-bp');
                 const res = profileManager.buyBlueprint(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('BLUEPRINT: ' + this.shipName(id)) : (res.reason || 'FAILED'));
+                this.playButtonResult(btn, !!res.ok, res.ok ? ('BLUEPRINT: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
             });
         });
 
@@ -107031,8 +108221,8 @@ extendClass(HomeStationUI, {
         this.overlay.querySelectorAll('[data-craft]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-craft');
-                const res = profileManager.craftShip(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + this.shipName(id)) : (res.reason || 'FAILED'));
+                const res = profileManager.craftBlueprint(id);
+                this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
             });
         });
     },
@@ -109580,6 +110770,16 @@ extendClass(StartScreenManager, {
             homeStationUI._softAreaId = null;
             homeStationUI.createUI();
         }
+        // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
+        // refresh so later steps pick up / drop the DevMode faction swatches without
+        // resetting pendingFaction.
+        if (typeof profileSelectionManager !== 'undefined'
+            && profileSelectionManager.isVisible
+            && profileSelectionManager.mode === 'create'
+            && !this.showProfiles
+            && profileSelectionManager.createUI) {
+            profileSelectionManager.createUI();
+        }
     },
 
     isMenuItemVisible(itemId) {
@@ -110588,6 +111788,19 @@ extendClass(StartScreenManager, {
         // The profile dialog itself, rendered inside the terminal screen.
         const createNew = !!this._profilesCreate;
         this._profilesCreate = false;
+        // Remount (e.g. DevMode toggle → createStartScreenUI) must keep the picked
+        // faction / step; show() would otherwise reset to the first faction.
+        const psm = profileSelectionManager;
+        if (!createNew && psm.isVisible && psm.mode === 'create' && psm.pendingFaction) {
+            psm._restoreSeed = {
+                pmode: 'create',
+                pstep: psm.createStep || 'faction',
+                pfaction: psm.pendingFaction,
+                pcreateOnly: !!psm._createOnly,
+                pname: psm._pilotName || '',
+                pstart: psm._startOpts || null
+            };
+        }
         profileSelectionManager.show({
             host,
             create: createNew,
@@ -117693,7 +118906,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
             } catch (e) { /* draw */ }
             if (now - this._lastT < this._frameInterval) return;
             this._lastT = now;
-            this.draw();
+            this.draw(true);
         };
         this._raf = requestAnimationFrame(tick);
     }
@@ -117713,14 +118926,26 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
      * current one has actually finished loading (one in-flight load at a time, always in order), so
      * playback is paced to whatever this backdrop can actually keep loaded rather than the wall clock.
      */
-    _currentFrame() {
+    _currentFrame(advance) {
         const model = this._spinModel;
         const id = this._spinId;
         if (!model || !id || typeof planetSVGManager === 'undefined') return this._curFrame;
         if (this._frameIdx == null) this._frameIdx = 0;
-        const f = this._frameIdx;
+        // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
+        // and step the spin so one rotation is at most 128 slots: after the first lap nothing is rebuilt.
+        // _frameIdx counts slots, not model frames, so the wrap always lands back on slot 0.
+        const step = Math.max(1, Math.ceil(model.count / 128));
+        const slots = Math.max(1, Math.ceil(model.count / step));
+        const slot = this._frameIdx % slots;
+        const f = slot * step;
         const cached = this._frameCache[f];
-        if (cached) { this._curFrame = cached; return cached; }
+        if (cached) {
+            // Cached: show it and move on at the loop's draw rate (previously it never advanced, so the spin froze after lap one).
+            // Resize/faction redraws and reduced motion only repaint.
+            this._curFrame = cached;
+            if (advance) this._frameIdx = (slot + 1) % slots;
+            return cached;
+        }
         if (!this._frameLoading[f]) {
             const loading = this._frameLoading;
             const cache = this._frameCache;
@@ -117729,21 +118954,14 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg, 0.45);
                 const img = new Image();
-                // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
-                // and step the spin so one rotation is at most 128 frames: after the first lap nothing is rebuilt.
-                const step = Math.max(1, Math.ceil(model.count / 128));
                 const store = (src) => {
                     loading[f] = false;
                     // A faction switch swapped the model while this frame decoded: it belongs to the old planet.
                     if (this._spinModel !== model || this._frameCache !== cache) return;
-                    const entry = { img: src, scale: conv.scale };
-                    this._frameCache[f] = entry;
-                    // Show it the moment it's ready — the next draw() tick would otherwise have
-                    // already moved _frameIdx past `f` before ever reading this cache entry.
-                    this._curFrame = entry;
-                    // Only advance to the next frame once this one is actually ready to show.
-                    if (this._frameIdx === f) this._frameIdx = (f + step) % model.count;
-                    this.draw();
+                    // The next tick finds it cached, shows it and advances, so the first lap is paced by loading.
+                    this._frameCache[f] = { img: src, scale: conv.scale };
+                    // No loop running (reduced motion, not yet mounted): paint it now.
+                    if (!this._raf) this.draw();
                 };
                 img.onload = () => {
                     if (typeof createImageBitmap === 'function') createImageBitmap(img).then(store, () => store(img));
@@ -117755,7 +118973,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
         return this._curFrame;
     }
 
-    draw() {
+    draw(advance) {
         const c = this.ctx;
         if (!this.W || !this.H) return;
         c.clearRect(0, 0, this.W, this.H);
@@ -117772,7 +118990,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
         g.addColorStop(1, accent + '00');
         c.fillStyle = g;
         c.fillRect(0, 0, this.W, this.H);
-        const frame = this._currentFrame();
+        const frame = this._currentFrame(advance);
         if (frame) {
             const dr = r * frame.scale;
             c.save();

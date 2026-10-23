@@ -11,6 +11,19 @@ extendClass(StartScreenManager, {
         // The profile dialog itself, rendered inside the terminal screen.
         const createNew = !!this._profilesCreate;
         this._profilesCreate = false;
+        // Remount (e.g. DevMode toggle → createStartScreenUI) must keep the picked
+        // faction / step; show() would otherwise reset to the first faction.
+        const psm = profileSelectionManager;
+        if (!createNew && psm.isVisible && psm.mode === 'create' && psm.pendingFaction) {
+            psm._restoreSeed = {
+                pmode: 'create',
+                pstep: psm.createStep || 'faction',
+                pfaction: psm.pendingFaction,
+                pcreateOnly: !!psm._createOnly,
+                pname: psm._pilotName || '',
+                pstart: psm._startOpts || null
+            };
+        }
         profileSelectionManager.show({
             host,
             create: createNew,

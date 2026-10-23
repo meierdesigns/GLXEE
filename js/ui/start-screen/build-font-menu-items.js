@@ -111,6 +111,16 @@ extendClass(StartScreenManager, {
             homeStationUI._softAreaId = null;
             homeStationUI.createUI();
         }
+        // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
+        // refresh so later steps pick up / drop the DevMode faction swatches without
+        // resetting pendingFaction.
+        if (typeof profileSelectionManager !== 'undefined'
+            && profileSelectionManager.isVisible
+            && profileSelectionManager.mode === 'create'
+            && !this.showProfiles
+            && profileSelectionManager.createUI) {
+            profileSelectionManager.createUI();
+        }
     },
 
     isMenuItemVisible(itemId) {

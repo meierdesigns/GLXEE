@@ -34,6 +34,7 @@ extendClass(UIAppearanceManager, {
                 fxScale: this.fxScale,
                 scanSize: this.scanSize,
                 scanSpeed: this.scanSpeed,
+                vineMotion: this.vineMotion,
                 scanWarp: this.scanWarp,
                 fxArea: this.fxArea,
                 guiVoxel: this.guiVoxel,
@@ -267,6 +268,14 @@ extendClass(UIAppearanceManager, {
             const n = Number(String(val).replace('%', ''));
             if (!Number.isFinite(n)) return;
             this.fxScale = Math.max(25, Math.min(400, Math.round(n)));
+            this.persist();
+            this.apply();
+            return;
+        }
+        if (key === 'vineMotion') {
+            const n = Number(String(val).replace('%', ''));
+            if (!Number.isFinite(n)) return;
+            this.vineMotion = Math.max(0, Math.min(300, Math.round(n)));
             this.persist();
             this.apply();
             return;

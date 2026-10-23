@@ -429,11 +429,11 @@ html body .galaxy-map-panel-select .gm-detail .stat-row {
 .galaxy-map-panel-select .gm-detail .stat-row:nth-child(4) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l7 14H1z'/%3E%3C/svg%3E"); }
 .galaxy-map-panel-select .gm-detail .stat-row:nth-child(5) { --gm-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3C/svg%3E"); }
 
-/* Route preview: dashes run from the ship towards the target. */
-.gm-pxline-run .gm-run-core { stroke: color-mix(in srgb, currentColor 30%, #fff); stroke-linecap: butt; animation: gm-run-march 1.2s linear infinite; }
-.gm-pxline-run .gm-run-glow { stroke: currentColor; opacity: 0.45; stroke-linecap: butt; animation: gm-run-march 1.2s linear infinite; }
-@keyframes gm-run-march { to { stroke-dashoffset: calc(var(--flow-len) * -1); } }
-@media (prefers-reduced-motion: reduce) { .gm-pxline-run path { animation: none; } }
+/* Route preview: pixel-cell dashes run from the ship towards the target (one path per march frame). */
+.gm-pxline-run .gm-run-cells { stroke: none; visibility: hidden; animation-name: gm-pxflow-frame; animation-timing-function: linear; animation-iteration-count: infinite; }
+.gm-pxline-run .gm-run-core { fill: color-mix(in srgb, currentColor 30%, #fff); }
+.gm-pxline-run .gm-run-glow { fill: currentColor; opacity: 0.45; }
+@media (prefers-reduced-motion: reduce) { .gm-pxline-run .gm-run-cells { animation: none; } .gm-pxline-run .gm-pxflow-f0 { visibility: visible; } }
 .gm-edge.on-route { display: none; }
 
 /* --- Faction picker: lore + facts as one tabbed card. */
@@ -588,7 +588,7 @@ html body .profile-selection-name-mode .profile-faction-preview .profile-faction
 /* Pilot creator: generated portrait + feature pickers (solid dark panel so it reads over the busy background). */
 html body .profile-pilot-card { display: flex; gap: 20px; align-items: flex-start; padding: 14px; box-sizing: border-box; width: 100%; background: rgba(5, 6, 10, 0.92); border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, #000); }
 html body .profile-pilot-portrait { flex: 0 0 auto; width: 200px; border: 2px solid var(--faction-accent, var(--color-primary)); background: #05060a; }
-.profile-pilot-portrait .hero-portrait { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.profile-pilot-portrait .hero-portrait { display: block; width: 100%; height: auto; image-rendering: -moz-crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; image-rendering: crisp-edges; }
 html body .profile-pilot-controls { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 html body .pp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
 html body .pp-ctl { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; gap: 2px 8px; padding: 4px 6px; border: 1px solid transparent; background: rgba(255, 255, 255, 0.05); }
@@ -1057,7 +1057,9 @@ html body .pp-pick, html body .profile-pilot-portrait {
 html body .pp-pick { cursor: pointer; aspect-ratio: 48 / 54; }
 html body .profile-pilot-portrait { --pk: 4px; }
 html body .pp-pick:hover { border-color: color-mix(in srgb, var(--pk-c) 85%, #fff); }
-html body .pp-pick.selected { border-color: var(--pk-c); filter: drop-shadow(0 0 4px var(--pk-c)) brightness(1.15); box-shadow: inset 0 0 0 var(--pk) #fff, inset var(--pk) var(--pk) 0 calc(var(--pk) * 1.5) #fff; }
+/* No CSS filter on .pp-pick — Safari freezes live canvas descendants under filter.
+   Glow via box-shadow; selected backdrop brightness is handled in voxel-portrait.js. */
+html body .pp-pick.selected { border-color: var(--pk-c); filter: none; box-shadow: 0 0 8px color-mix(in srgb, var(--pk-c) 70%, transparent), inset 0 0 0 var(--pk) #fff, inset var(--pk) var(--pk) 0 calc(var(--pk) * 1.5) #fff; }
 html body .pp-pick canvas { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* Pilot step: wider card, larger portrait thumbnails. */
@@ -1348,7 +1350,7 @@ html body .pp-picks > .pp-pick { flex-basis: calc((100% - 5 * 8px) / 6); width: 
 
 /* Smaller picker tiles. */
 html body .profile-selection-name-mode.is-pilot-step .pp-picks { max-width: 78%; }
-html body .pp-pick canvas { image-rendering: pixelated; }
+html body .pp-pick canvas { image-rendering: -moz-crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; image-rendering: crisp-edges; }
 
 /* Pilot step: the portrait card is centred vertically in the free space between the name row and the bottom bar. */
 html body .profile-selection-name-mode.is-pilot-step .profile-start-options { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
@@ -1532,3 +1534,13 @@ html[data-vf-frame-px="on"] #vf-cables-old { filter: none !important; }
 .pfx-bar-ico :is(img, canvas) { width: 44px; height: 44px; image-rendering: pixelated; }
 .pfx-bar-ico .pfx-ico { display: block; width: 44px; height: 44px; background: var(--pfx-c, var(--color-primary)); -webkit-mask: var(--pfx-img) center / contain no-repeat; mask: var(--pfx-img) center / contain no-repeat; image-rendering: pixelated; filter: drop-shadow(1px 1px 0 #05060a); }
 html body .profile-start-main .profile-area-row { grid-template-columns: 90px 44px 1fr; }
+/* The cell glow replaces the soft drop-shadow, which blurred the pixel dashes. */
+.gm-route.gm-pxline.gm-pxline-run { filter: none; }
+/* Planet lanes only show on hover (ship ↔ hovered planet); post lanes stay. */
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline:not(.gm-post-lane) { display: none; }
+.gm-hover-route-layer { pointer-events: none; }
+.gm-hover-route.locked { color: #6b6f7a; opacity: 0.85; }
+.gm-hover-route.locked .gm-pxline-hot, .gm-hover-route.locked .gm-pxline-core { fill: #8a8f9a; }
+.gm-hover-route.locked .gm-pxline-glow, .gm-hover-route.locked .gm-pxline-halo { fill: #4a4e58; }
+.gm-hover-lock-bg { fill: #05060a; }
+.gm-hover-lock-fg { fill: #b8bcc6; }

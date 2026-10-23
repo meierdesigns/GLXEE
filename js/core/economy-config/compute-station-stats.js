@@ -162,17 +162,6 @@ extendClass(EconomyConfig, {
         return craft;
     },
 
-    /** Blueprint listing — CREDITS, cheaper than the finished ship. */
-    getBlueprintCost(shipConfig) {
-        const mat = this.getShopMaterialCost(shipConfig);
-        const bpMat = {};
-        Object.keys(mat).forEach((id) => {
-            bpMat[id] = Math.max(20, Math.ceil(mat[id] * 0.45));
-        });
-        if (!bpMat.scrap) bpMat.scrap = 60;
-        return { credits: this.materialCostToCredits(bpMat) };
-    },
-
     /**
      * Part shop price in CREDITS.
      * kind: 'weapon' | 'defense' | 'ability' | 'energy'
@@ -206,31 +195,32 @@ extendClass(EconomyConfig, {
         return { credits: this.materialCostToCredits(this.getPartMaterialCost(kind, item)) };
     },
 
+    /** Part blueprint listing — CREDITS, cheaper than the finished part. */
+    getBlueprintCost(kind, item) {
+        const mat = this.getPartMaterialCost(kind, item);
+        const bpMat = {};
+        Object.keys(mat).forEach((id) => {
+            bpMat[id] = Math.ceil(mat[id] * 0.45);
+        });
+        return { credits: this.materialCostToCredits(bpMat) };
+    },
+
+    /** Resources to build a part from its blueprint. */
+    getBlueprintCraftCost(kind, item) {
+        const mat = this.getPartMaterialCost(kind, item);
+        const out = {};
+        Object.keys(mat).forEach((id) => {
+            out[id] = Math.max(1, Math.ceil(mat[id] * 0.6));
+        });
+        return out;
+    },
+
     getBlueprintDropChance(info) {
         if (!info) return this.blueprintDropChance.default;
         if (info.champion) return this.blueprintDropChance.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.blueprintDropChance[cls] != null) return this.blueprintDropChance[cls];
         return this.blueprintDropChance.default;
-    },
-
-    pickBlueprintShipId(excludeOwned) {
-        const exclude = new Set(Array.isArray(excludeOwned) ? excludeOwned : []);
-        exclude.add(this.starterShipId);
-        let pool = [];
-        if (typeof shipConfigManager !== 'undefined') {
-            pool = shipConfigManager.getTypeIds().filter((id) => {
-                if (exclude.has(id)) return false;
-                if (id === this.starterShipId) return false;
-                const cfg = shipConfigManager.getConfig(id);
-                return cfg && !cfg.custom;
-            });
-        }
-        if (!pool.length) {
-            pool = ['player', 'player_interceptor', 'player_assault', 'player_heavy'].filter((id) => !exclude.has(id));
-        }
-        if (!pool.length) return null;
-        return pool[Math.floor(Math.random() * pool.length)];
     },
 
     rollAmount(min, max) {

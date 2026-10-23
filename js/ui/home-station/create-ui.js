@@ -146,7 +146,7 @@ extendClass(HomeStationUI, {
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
         const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const stationBpHtml = this.renderBlueprintList(profile.blueprints);
+        const stationBpHtml = this.renderBlueprintList(profile);
         const stats = (typeof profileManager !== 'undefined')
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
@@ -212,7 +212,6 @@ extendClass(HomeStationUI, {
                     <div class="hs-panel hs-panel-bp">
                         ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
                         <div class="hs-row hs-bp">${stationBpHtml}</div>
-                        ${this.renderUnlockList(profile)}
                     </div>
                     <div class="hs-panel-stack">
                         <div class="hs-panel hs-panel-ships">
@@ -422,6 +421,14 @@ extendClass(HomeStationUI, {
                 this._navLevel = 'tabs';
                 this.persistTab();
                 this.createUI();
+            });
+        });
+        // Menu sub-nav (SETTINGS / LAYOUT / CREDITS …) is rebuilt on a soft switch too.
+        scope.querySelectorAll('[data-menu-tab]').forEach((btn) => {
+            if (btn.dataset.vfSoftBound === '1') return;
+            btn.dataset.vfSoftBound = '1';
+            btn.addEventListener('click', () => {
+                this.openMainMenuOverlay({ tab: btn.getAttribute('data-menu-tab') });
             });
         });
     },

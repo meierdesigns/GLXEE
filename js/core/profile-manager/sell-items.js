@@ -44,17 +44,18 @@ extendClass(ProfileManager, {
         return { ok: true, credits: credits };
     },
 
-    getBlueprintSellValue(shipId) {
-        if (typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') return 0;
-        return this.getSellValue(economyConfig.getBlueprintCost(shipConfigManager.getConfig(shipId)));
+    getBlueprintSellValue(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return 0;
+        return this.getSellValue(economyConfig.getBlueprintCost(bp.kind, bp.item));
     },
 
-    /** Sells one station blueprint that has not been crafted into a ship. */
-    sellBlueprint(shipId) {
+    /** Sells one station blueprint that has not been crafted into a part. */
+    sellBlueprint(key) {
         const profile = this.getActiveProfile();
         if (!profile) return { ok: false, reason: 'NO PROFILE' };
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
+        const id = String(key || '');
         if (!((profile.blueprints[id] || 0) > 0)) return { ok: false, reason: 'NONE LEFT' };
         const credits = this.getBlueprintSellValue(id);
         profile.blueprints[id] -= 1;

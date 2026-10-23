@@ -90,7 +90,15 @@ const voxelPortrait = (() => {
         }
         present(e);
     }
+    // Body stage-scale transforms make IntersectionObserver false-negative in Safari /
+    // Firefox; treat IO as a hint and confirm with a viewport rect before skipping.
     const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((list) => list.forEach((r) => { if (r.target.__vx) r.target.__vx.vis = r.isIntersecting; })) : null;
+    function onScreen(el) {
+        const r = el.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+    }
     function register(canvas) {
         if (canvas.__vx || !canvas.getContext) return;
         const nobg = canvas.dataset.nobg === '1';
@@ -102,23 +110,35 @@ const voxelPortrait = (() => {
         ctx.imageSmoothingEnabled = false;
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
+        if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
         const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)), blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
         draw(e, false);
         (nobg ? Promise.resolve(null) : painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT)).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
-        if (!timer) timer = setInterval(tick, 90);
+        if (!timer) timer = requestAnimationFrame(loop);
     }
-    function tick() {
-        const now = performance.now();
+    // rAF (not setInterval): stays in sync with the compositor across Chrome / Firefox / Safari / Edge.
+    let lastTick = 0;
+    function loop(now) {
+        timer = 0;
+        if (!entries.size) return;
+        if (now - lastTick >= 90) {
+            lastTick = now;
+            tick(now);
+        }
+        if (entries.size) timer = requestAnimationFrame(loop);
+    }
+    function tick(now) {
+        now = now || performance.now();
         for (const e of entries) {
             if (!e.canvas.isConnected) { entries.delete(e); if (io) io.unobserve(e.canvas); continue; }
-            if (e.painted || e.vis === false || document.hidden) continue;
+            if (e.painted || document.hidden) continue;
+            if (e.vis === false && !onScreen(e.canvas)) continue;
             if (now >= e.next && e.state !== 2) { e.blinkUntil = now + 130; e.next = now + 3000 + Math.random() * 4000; }
             draw(e, now < e.blinkUntil);
         }
-        if (!entries.size) { clearInterval(timer); timer = 0; }
     }
     /** Switch a live portrait's expression (0 healthy, 1 wounded/pain, 2 dead, 3 joy, 4 anger) and repaint at once. */
     function setState(canvas, state) {
@@ -138,10 +158,14 @@ const voxelPortrait = (() => {
             for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches('canvas.vx-portrait')) register(n); else if (n.querySelectorAll) scan(n); } });
         }).observe(document.documentElement, { childList: true, subtree: true });
         const st = document.createElement('style');
+        // image-rendering stack: Firefox (-moz-crisp-edges), Safari (-webkit-optimize-contrast),
+        // Chrome/Edge (pixelated), legacy IE (nearest-neighbor). Avoid CSS filter on canvas ancestors —
+        // Safari freezes putImageData updates under filter.
         st.textContent = [
-            'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:pixelated;-ms-interpolation-mode:nearest-neighbor;object-fit:cover;object-position:50% 0}',
+            'canvas.hero-portrait.vx-portrait{display:block;width:100%;height:auto;image-rendering:-moz-crisp-edges;image-rendering:-webkit-optimize-contrast;image-rendering:pixelated;image-rendering:crisp-edges;-ms-interpolation-mode:nearest-neighbor;object-fit:cover;object-position:50% 0}',
             '.pp-pick canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:contain!important;object-position:50% 50%!important}',
-            '.profile-pilot-portrait canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 0!important}'
+            '.profile-pilot-portrait canvas.hero-portrait.vx-portrait{width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 0!important}',
+            '.pp-pick.selected{filter:none!important}'
         ].join('');
         document.head.appendChild(st);
         scan(document);

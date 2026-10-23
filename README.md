@@ -851,6 +851,8 @@ be reviewed or reverted independently.
 | 68D | Shell and map polish | Viewport-fit fixed map aspect, resize hold, pilot thumbnail, galaxy map controls, start screen portraits |
 | 68E | Deferred bundle rebuild | Rebuild deferred.js and index cache keys for waves 68A–68D |
 | 68F | README stage archive | Live `-68a` shots: pilot wizard, mission start, launch hatch, combat hero card |
+| 68G | HUD remote move/scale | Second fernbedienung (HUD · OUTSIDE): drag header, corner resize, zoom slider; geom/zoom persisted |
+| 68H | Voidborn vine bezel | Continuous rim 9-slice tentacle corners; top mid thickener only; vine SVG assets |
 
 The wave commit convention is:
 

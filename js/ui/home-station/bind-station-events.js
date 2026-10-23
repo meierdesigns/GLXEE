@@ -93,14 +93,6 @@ extendClass(HomeStationUI, {
             });
         });
 
-        this.overlay.querySelectorAll('[data-unlock]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const id = btn.getAttribute('data-unlock');
-                const res = profileManager.unlockShopItem(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('UNLOCKED: ' + this.shipName(id)) : (res.reason || 'FAILED'));
-            });
-        });
-
         this.overlay.querySelectorAll('[data-buy]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-buy');
@@ -113,7 +105,7 @@ extendClass(HomeStationUI, {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-buy-bp');
                 const res = profileManager.buyBlueprint(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('BLUEPRINT: ' + this.shipName(id)) : (res.reason || 'FAILED'));
+                this.playButtonResult(btn, !!res.ok, res.ok ? ('BLUEPRINT: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
             });
         });
 
@@ -146,8 +138,8 @@ extendClass(HomeStationUI, {
         this.overlay.querySelectorAll('[data-craft]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-craft');
-                const res = profileManager.craftShip(id);
-                this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + this.shipName(id)) : (res.reason || 'FAILED'));
+                const res = profileManager.craftBlueprint(id);
+                this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
             });
         });
     },

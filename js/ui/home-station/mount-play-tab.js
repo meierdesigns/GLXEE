@@ -149,6 +149,16 @@ extendClass(HomeStationUI, {
             graphicsManager.setPlayerShipModel(ship);
         }
 
+        // Remember which planets were reachable, so the map can reveal newly unlocked ones after the run.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.map) {
+            galaxyMapManager._preRunUnlocked = {
+                galaxyId: galaxyMapManager.galaxyId,
+                ids: (galaxyMapManager.map.nodes || [])
+                    .filter((n) => galaxyMapManager.isUnlocked(n.planetId))
+                    .map((n) => n.planetId)
+            };
+        }
+
         this.hide();
 
         if (typeof startScreenManager !== 'undefined') {

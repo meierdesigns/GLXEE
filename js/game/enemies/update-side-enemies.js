@@ -332,7 +332,7 @@ extendClass(EnemyManager, {
         if (this.sideEnemies && this.sideEnemies.length > 0) return false;
         // Entries parked at 999999 never spawn, and once the objective is done
         // updateSchedule holds back all normals — neither may block the win.
-        const objectiveDone = typeof objectiveManager !== 'undefined' && objectiveManager.completed;
+        const objectiveDone = typeof objectiveManager !== 'undefined' && (objectiveManager.completed || objectiveManager.exitGate);
         if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999
             && (e.champion || !objectiveDone))) return false;
         return true;
@@ -374,10 +374,7 @@ extendClass(EnemyManager, {
         if (typeof profileManager !== 'undefined' && profileManager.tryBlueprintDrop) {
             const dropped = profileManager.tryBlueprintDrop(info);
             if (dropped && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                const name = (typeof shipConfigManager !== 'undefined')
-                    ? shipConfigManager.getDisplayName(dropped)
-                    : String(dropped).toUpperCase();
-                levelInfoManager.showLootNotice('BLUEPRINT: ' + name);
+                levelInfoManager.showLootNotice('BLUEPRINT: ' + profileManager.getBlueprintName(dropped));
             }
         }
         if (!(info && info.pickupsSpawned) && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {

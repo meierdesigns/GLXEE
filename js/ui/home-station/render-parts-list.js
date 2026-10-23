@@ -55,26 +55,6 @@ extendClass(HomeStationUI, {
         return chips.join('');
     },
 
-    renderUnlockList(profile) {
-        const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
-        if (!keys.length) {
-            return '<p class="hs-muted hs-hint">Buy blueprints in the shop or collect drops.</p>';
-        }
-        return `<div class="hs-actions-col">${keys.map((id) => {
-            const unlocked = profile.unlockedShopIds.indexOf(id) !== -1;
-            if (unlocked) {
-                return `<div class="hs-line hs-line-ok">` +
-                    `<span class="hs-chip-icon">${this.iconHtml('hsShop', 32, 'hs-pixel')}</span>` +
-                    `<span>${this.shipName(id)} — SHOP UNLOCKED</span>` +
-                    `</div>`;
-            }
-            return `<button class="action-button" data-unlock="${id}">` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-                `<span>UNLOCK LISTING: ${this.shipName(id)}</span>` +
-                `</button>`;
-        }).join('')}</div>`;
-    },
-
     renderShopCategoryTabs() {
         return this.getAvailableShopCategories().map((id) => {
             const meta = this._shopCatMeta[id] || { label: id.toUpperCase() };
@@ -233,45 +213,40 @@ extendClass(HomeStationUI, {
     },
 
     renderShopBlueprintRows(profile) {
-        const wallet = profile.resources || {};
-        let entries = this.catalogShipIds().map((id) => {
-            const cfg = (typeof shipConfigManager !== 'undefined')
-                ? shipConfigManager.getConfig(id)
-                : null;
-            const modelClass = this.shipModelClass(id, cfg);
-            const cost = (typeof economyConfig !== 'undefined')
-                ? economyConfig.getBlueprintCost(cfg)
-                : { scrap: 60 };
-            const count = profile.blueprints[id] || 0;
+        let entries = this.catalogPartListings().map((e) => {
+            const key = e.kind + ':' + e.id;
+            const cost = economyConfig.getBlueprintCost(e.kind, e.item);
             return {
-                id: id,
-                name: this.shipName(id),
-                modelClass: modelClass,
-                tier: (cfg && cfg.tier != null) ? Number(cfg.tier) : 1,
+                key: key,
+                kind: e.kind,
+                id: e.id,
+                name: profileManager.getBlueprintName(key),
+                faction: e.faction || (e.item && e.item.faction),
                 cost: cost,
                 costTotal: this.costTotal(cost),
-                count: count
+                count: profile.blueprints[key] || 0
             };
-        });
+        }).filter((e) => profileManager.parseBlueprintKey(e.key));
         if (this.shopFilter && this.shopFilter !== 'all') {
-            entries = entries.filter((e) => e.modelClass === this.shopFilter);
+            entries = entries.filter((e) => e.kind === this.shopFilter);
         }
         entries = this.sortShopEntries(entries);
         if (!entries.length) {
             return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS MATCH FILTER');
         }
+        const wallet = profile.resources || {};
         return entries.map((e) => {
             const stock = e.count > 0 ? ` ×${e.count}` : '';
             const afford = this.canAffordCost(wallet, e.cost, profile);
             return `<div class="hs-line hs-shop-line">` +
                 `<span class="hs-line-name">` +
-                `<span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
+                `<span class="hs-chip-icon">${this.moduleIconHtml(e.kind, e.id, 32, 'hs-pixel')}</span>` +
                 `<span class="hs-line-text">` +
                 `<strong>BP: ${e.name}${stock}</strong>` +
-                `<span class="hs-line-meta">${this.shipClassLabel(e.modelClass)} · T${e.tier} · ${this.factionTagHtml(this.shipFaction(e.id))}</span>` +
+                `<span class="hs-line-meta">${e.kind.toUpperCase()} · ${this.factionTagHtml(e.faction)}</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}` +
-                `<button class="action-button hs-line-action" data-buy-bp="${e.id}" ${afford ? '' : 'disabled'}>BUY</button></div>`;
+                `<button class="action-button hs-line-action" data-buy-bp="${e.key}" ${afford ? '' : 'disabled'}>BUY</button></div>`;
         }).join('');
     },
 });

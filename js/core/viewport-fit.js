@@ -196,11 +196,15 @@
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
     const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    // HUD remote: pilot plate + crest (second fernbedienung).
+    const HUD_ICON = svg16('<rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/>');
     const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
     // Shown on the layout key itself in place of LAYOUT_ICON while editing — clicking it again
     // exits the edit (it's the same toggle either way), so the icon reads as "cancel/close" rather
     // than still offering to "open" something that's already open.
     const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
+    // Frame edit: crosshair/target, for the on-screen BEZEL FILL / VINE INSET grips.
+    const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     vfs.resOpen = false;
@@ -219,8 +223,13 @@
     function applyFrameStyle() {
         const frame = document.getElementById('vf-bezel');
         if (!frame) return;
+        const root = document.documentElement;
         FRAME_PROPS.forEach(function (p) { frame.style.removeProperty(p); });
         frame.style.removeProperty('--fr-deco');
+        frame.style.removeProperty('--fr-bg-crop');
+        frame.style.removeProperty('--fr-vine-inset');
+        // Screen stays behind the bezel: no peek into the band.
+        root.style.removeProperty('--fr-stage-inset');
         const st = vfs.frameStyles[frame.getAttribute('data-faction')];
         if (!st) return;
         if (st.bevel != null) {
@@ -232,6 +241,9 @@
         if (st.lit) frame.style.setProperty('--hull-lit', st.lit);
         if (st.dark) frame.style.setProperty('--hull-dark', st.dark);
         if (st.deco != null) frame.style.setProperty('--fr-deco', String(st.deco / 100));
+        // Single band-fill knob → .vf-bezel-back (stage peek / dual crop removed).
+        if (st.bgCrop != null) frame.style.setProperty('--fr-bg-crop', String(st.bgCrop / 100));
+        if (st.vineInset != null) frame.style.setProperty('--fr-vine-inset', String(st.vineInset));
     }
     (function watchFrame() {
         const frame = document.getElementById('vf-bezel');
@@ -257,6 +269,125 @@
     let silhouetteRaf = 0, silKey = '';
     function clearSilhouette() {
         document.documentElement.removeAttribute('data-vf-frame-sil');
+        document.documentElement.removeAttribute('data-vf-frame-vox');
+        const plates = document.querySelector('#vf-bezel .vf-fr');
+        if (plates) { plates.style.removeProperty('background-image'); plates.style.removeProperty('background-size'); }
+    }
+    // Voxel frame: the whole plate is shaded per cell into a cw×ch bitmap and shown upscaled with
+    // image-rendering: pixelated, so every edge, corner and rounding lands on the shared --fr-px lattice.
+    // Relief: a distance transform turns the band into a height field (rounded ridge towards the outer
+    // edge and the screen opening), normals from that field are lit from the top-left and mapped onto a
+    // faction colour ramp. Costs one small PNG per resize / faction /
+    // style change instead of a live SVG filter (which dropped the game to ~3 FPS).
+    // Pixel rounding of the outline itself: a morphological opening (erode, then dilate with a disk of
+    // r cells) steps every convex corner of the actual silhouette — tabs, notches, the frame corners —
+    // instead of intersecting with a box-sized rounded rect, which ate thin corner tabs and left the
+    // real frame edge with a hard square corner. Works in place on the RGBA alpha channel.
+    function roundCellMask(data, cw, ch, r) {
+        const disk = [];
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r + r * 0.8) disk.push([dx, dy]);
+        const src = new Uint8Array(cw * ch);
+        for (let i = 0; i < src.length; i++) src[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+        const pass = function (a, keep) {
+            const out = new Uint8Array(a.length);
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                let v = keep;
+                for (let k = 0; k < disk.length && v === keep; k++) {
+                    const xx = x + disk[k][0], yy = y + disk[k][1];
+                    const s = xx < 0 || yy < 0 || xx >= cw || yy >= ch ? 0 : a[yy * cw + xx];
+                    if (s !== keep) v = s;
+                }
+                out[y * cw + x] = v;
+            }
+            return out;
+        };
+        const opened = pass(pass(src, 1), 0);
+        for (let i = 0; i < opened.length; i++) data[i * 4 + 3] = opened[i] ? 255 : 0;
+    }
+    function paintVoxelFrame(plates, sil, holeData, cw, ch, cell, o, W, H) {
+        const n = cw * ch;
+        const solid = new Uint8Array(n), nearHole = new Uint8Array(n);
+        for (let i = 0; i < n; i++) solid[i] = sil[i * 4 + 3] >= 128 && !(holeData && holeData[i * 4 + 3] >= 128) ? 1 : 0;
+        // Chamfer distance (1 / √2) to the nearest empty cell; the canvas border counts as empty.
+        const dist = new Float32Array(n);
+        for (let i = 0; i < n; i++) dist[i] = solid[i] ? 1e9 : 0;
+        const at = function (x, y) { return x < 0 || y < 0 || x >= cw || y >= ch ? 0 : dist[y * cw + x]; };
+        const D = Math.SQRT2;
+        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+            const i = y * cw + x; if (!solid[i]) continue;
+            dist[i] = Math.min(dist[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + D, at(x + 1, y - 1) + D);
+        }
+        for (let y = ch - 1; y >= 0; y--) for (let x = cw - 1; x >= 0; x--) {
+            const i = y * cw + x; if (!solid[i]) continue;
+            dist[i] = Math.min(dist[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + D, at(x - 1, y + 1) + D);
+        }
+        if (holeData) {
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                if (!solid[y * cw + x]) continue;
+                for (let dy = -1; dy <= 1 && !nearHole[y * cw + x]; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    const xx = x + dx, yy = y + dy;
+                    if (xx >= 0 && yy >= 0 && xx < cw && yy < ch && holeData[(yy * cw + xx) * 4 + 3] >= 128) { nearHole[y * cw + x] = 1; break; }
+                }
+            }
+        }
+        // Rounded bevel: height rises over R cells (quarter sine), then a flat plateau.
+        const R = Math.max(3, o.bevel + 2);
+        const height = function (x, y) {
+            const d = at(x, y);
+            return d <= 0 ? 0 : R * Math.sin(Math.min(1, (d - 0.5) / R) * Math.PI / 2);
+        };
+        const mix = function (a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
+        const white = [255, 255, 255], black = [0, 0, 0];
+        // Shadow → hull → highlight, from the faction tokens (FACTIONS tab overrides follow).
+        const ramp = [
+            mix(black, o.dark, 0.6), o.dark, mix(o.dark, o.hull, 0.5), o.hull,
+            mix(o.hull, o.lit, 0.5), o.lit, mix(o.lit, white, 0.4), mix(o.lit, white, 0.7)
+        ];
+        const flatIdx = 3;
+        const L = [-0.62, -0.62, 0.48];
+        const img = new ImageData(cw, ch);
+        const px = img.data;
+        for (let y = 0; y < ch; y++) {
+            for (let x = 0; x < cw; x++) {
+                const i = y * cw + x;
+                if (!solid[i]) continue;
+                // Central-difference normal of the height field, lit from the top-left.
+                const gx = (height(x + 1, y) - height(x - 1, y)) * 0.9, gy = (height(x, y + 1) - height(x, y - 1)) * 0.9;
+                const len = Math.hypot(gx, gy, 1);
+                const lambert = (-gx * L[0] - gy * L[1] + L[2]) / len;
+                // Relative to a flat face (= hull), stretched over the ramp and posterised to clean steps.
+                let t = flatIdx + (lambert - L[2]) * 10;
+                // Each edge gets a one-cell rim: highlight where the slope faces the light, deep shade where not.
+                if (dist[i] < 1.5 && Math.abs(gx) + Math.abs(gy) > 0.05) t += -gx - gy > 0 ? 2 : -2;
+                // The screen sits in a recess: the cells touching the opening fall into a dark groove.
+                if (nearHole[i]) t = Math.min(t, 0);
+                const c = ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(t)))];
+                px[i * 4] = c[0]; px[i * 4 + 1] = c[1]; px[i * 4 + 2] = c[2]; px[i * 4 + 3] = 255;
+            }
+        }
+        // The stage is scaled (--stage-scale × devicePixelRatio), so a cw×ch bitmap would be resampled at a
+        // non-integer factor and the cells go soft. Bake it at device resolution instead: every cell edge
+        // lands on a whole device pixel and the browser only has to map the image 1:1.
+        const dev = o.devScale > 0 ? o.devScale : 1;
+        const out = document.createElement('canvas');
+        out.width = Math.max(1, Math.round(cw * cell * dev)); out.height = Math.max(1, Math.round(ch * cell * dev));
+        const ox = out.getContext('2d');
+        const edge = function (i) { return Math.round(i * cell * dev); };
+        for (let y = 0; y < ch; y++) {
+            const y0 = edge(y), y1 = edge(y + 1);
+            for (let x = 0; x < cw; x++) {
+                const i = (y * cw + x) * 4;
+                if (!px[i + 3]) continue;
+                ox.fillStyle = 'rgb(' + Math.round(px[i]) + ',' + Math.round(px[i + 1]) + ',' + Math.round(px[i + 2]) + ')';
+                ox.fillRect(edge(x), y0, edge(x + 1) - edge(x), y1 - y0);
+            }
+        }
+        plates.style.backgroundImage = 'url(' + out.toDataURL('image/png') + ')';
+        // Must stay cw*cell/ch*cell (the bitmap's own grid), not the frame's live W/H: pinning it to W/H
+        // stretches each baked cell non-uniformly whenever W isn't itself a whole multiple of cell, which
+        // is what made the pixels look squashed/sheared on the corners.
+        plates.style.backgroundSize = (cw * cell) + 'px ' + (ch * cell) + 'px';
+        document.documentElement.setAttribute('data-vf-frame-vox', '');
     }
     function updateSilhouette() {
         silhouetteRaf = 0;
@@ -277,8 +408,17 @@
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
-        const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow;
-        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')) return;
+        const fcs = getComputedStyle(frame);
+        const plates = frame.querySelector('.vf-fr');
+        const hole = frame.querySelector('.vf-fr-hullB .vf-fr-hole');
+        const hcs = hole ? getComputedStyle(hole) : null;
+        const voxKeyNow = ['--hull', '--hull-lit', '--hull-dark', '--fr-bevel', '--fr-bv'].map(function (p) { return fcs.getPropertyValue(p).trim(); }).join(',')
+            + (hole ? '|' + [hole.offsetLeft, hole.offsetTop, hole.offsetWidth, hole.offsetHeight, hcs.borderTopLeftRadius, hcs.borderTopRightRadius, hcs.borderBottomRightRadius, hcs.borderBottomLeftRadius].join(',') : '');
+        // Device pixels per stage pixel: the voxel bitmap is baked at this resolution (see paintVoxelFrame).
+        const devScale = (frame.getBoundingClientRect().width / W) * (window.devicePixelRatio || 1);
+        const silKeyNow = shape + '|' + W + 'x' + H + '|' + cell + '|' + outRNow + '|' + voxKeyNow + '|' + devScale.toFixed(4);
+        if (silKeyNow === silKey && document.getElementById('vfStageClipPath') && document.documentElement.hasAttribute('data-vf-frame-sil')
+            && plates && plates.style.backgroundImage) return;
         const probe = document.createElement('div');
         probe.id = 'vfSilProbe';
         probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;width:' + W + 'px;height:' + H + 'px';
@@ -299,9 +439,8 @@
         sx.scale(1 / cell, 1 / cell);
         sx.fillStyle = '#000';
         let ok = true;
-        // FRAME ROUND also rounds the outer corners: intersect the faction shape with a rounded rect.
+        // FRAME ROUND also rounds the outer corners (see roundCellMask below, done on the cell mask).
         const outR = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fr-out')) || 0;
-        if (outR > 0) { sx.beginPath(); sx.roundRect(0, 0, W, H, outR); sx.clip(); }
         try {
             if (shape.indexOf('polygon(') === 0) {
                 const pts = splitTop(shape.slice(8, -1), ',').map(function (pt) {
@@ -322,9 +461,36 @@
                 sx.beginPath(); sx.roundRect(0, 0, W, H, rad); sx.fill();
             } else ok = false;
         } catch (e) { ok = false; }
+        // Voxel pass inputs, resolved while the probe still sits in the frame: plate colours, bevel
+        // depths (in whole cells) and the screen opening rasterised on the same cell grid.
+        const rgbOf = function (expr) {
+            dot.style.color = expr;
+            const m = /([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(getComputedStyle(dot).color);
+            dot.style.color = '';
+            return m ? [+m[1], +m[2], +m[3]] : [0, 0, 0];
+        };
+        const cHull = rgbOf('var(--hull)'), cLit = rgbOf('var(--hull-lit)'), cDark = rgbOf('var(--hull-dark)');
+        const bevelCells = Math.max(1, Math.round(px('var(--fr-bevel)', 'width') / cell));
+        const edgeCells = Math.max(1, Math.round(px('var(--fr-bv, calc(3 * var(--u)))', 'width') / cell));
+        let holeData = null;
+        if (ok && hole && hole.offsetWidth > 0 && hole.offsetHeight > 0) {
+            const hc = document.createElement('canvas');
+            hc.width = cw; hc.height = ch;
+            const hx = hc.getContext('2d', { willReadFrequently: true });
+            hx.scale(1 / cell, 1 / cell);
+            const rr = [hcs.borderTopLeftRadius, hcs.borderTopRightRadius, hcs.borderBottomRightRadius, hcs.borderBottomLeftRadius].map(function (r) {
+                const p = r.split(' ');
+                return { x: parseFloat(p[0]) || 0, y: parseFloat(p[1] || p[0]) || 0 };
+            });
+            hx.beginPath(); hx.roundRect(hole.offsetLeft, hole.offsetTop, hole.offsetWidth, hole.offsetHeight, rr); hx.fill();
+            holeData = hx.getImageData(0, 0, cw, ch).data;
+        }
         probe.remove();
         if (!ok) { clearSilhouette(); silKey = ''; return; }
         const data = sx.getImageData(0, 0, cw, ch).data;
+        // A third of --fr-out keeps tabs and notches of the faction shape (a few cells wide) intact.
+        if (outR > 0) roundCellMask(data, cw, ch, Math.max(1, Math.round(outR / cell / 3)));
+        if (plates) paintVoxelFrame(plates, data, holeData, cw, ch, cell, { hull: cHull, lit: cLit, dark: cDark, bevel: bevelCells, edge: edgeCells, devScale: devScale }, W, H);
         // One path of merged runs of whole cells (square staircase), in 0..1 box units.
         const nx = function (x) { return Math.min(1, x * cell / W).toFixed(6); };
         const ny = function (y) { return Math.min(1, y * cell / H).toFixed(6); };
@@ -376,8 +542,18 @@
             if (silhouetteRaf) { cancelAnimationFrame(silhouetteRaf); silhouetteRaf = 0; }
             updateSilhouette();
         }).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
+        // Colour / bevel overrides (FACTIONS tab) land as inline styles on the frame: re-shade the voxels.
+        new MutationObserver(scheduleSilhouette).observe(frame, { attributes: true, attributeFilter: ['style'] });
         new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
-        if (window.ResizeObserver) new ResizeObserver(scheduleSilhouette).observe(document.body);
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(scheduleSilhouette);
+            ro.observe(document.body);
+            // The settle pass in viewport-fit-part4.js resizes #vf-bezel itself (CSS vars / canvas size)
+            // without necessarily changing <body>'s own box, so watch the frame directly too — otherwise
+            // the bake from before that pass stays in place forever (not just for one frame) once the
+            // frame's real W/H has moved on, and the objectBoundingBox clip path silently stretches to fit.
+            ro.observe(frame);
+        }
         // The rebuild itself adds / removes its own probe on <body>: ignoring that stops it re-triggering itself every frame.
         new MutationObserver(function (recs) {
             const other = recs.some(function (r) {
@@ -519,5 +695,5 @@
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));

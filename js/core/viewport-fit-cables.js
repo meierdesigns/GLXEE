@@ -117,6 +117,7 @@
             machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 2, hiDash: true, hiW: 1 }
         };
         const S = STY[fac] || STY.terran;
+        const wiggle = fac === 'voidborn';
         // Each faction plugs its cables in at its own spots: h = [left, right], v = [top, bottom].
         const LAY = {
             terran:   { h: [[0.2, 0.55, 0.8], [0.3, 0.7]], v: [[0.25, 0.75], [0.5]] },
@@ -263,7 +264,7 @@
                 plug(xin, y, true, dir);
                 const xp = snap(xin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[xp, y], [xm, y], [xm, y + dy], [xe, y + dy]], 'h');
-                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 'l' : 'r') + '" style="--dur:' + cableDur() + 's">' + out.slice(o0) + '</g>';
+                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 'l' : 'r') + '" style="--dur:' + cableDur() + 's"' + (wiggle ? ' filter="url(#vf-cable-wiggle)"' : '') + '>' + out.slice(o0) + '</g>';
             });
         });
         L.v.forEach(function (fr, i) {
@@ -281,10 +282,19 @@
                 plug(x, yin, false, dir);
                 const yp = snap(yin + dir * Math.max(cell * 3, snap(20 * k + 8)));
                 cable([[x, yp], [x, ym], [x + dx, ym], [x + dx, ye]], 'v');
-                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 't' : 'b') + '" style="--dur:' + cableDur() + 's">' + out.slice(o0) + '</g>';
+                out = out.slice(0, o0) + '<g class="vfc" data-side="' + (i === 0 ? 't' : 'b') + '" style="--dur:' + cableDur() + 's"' + (wiggle ? ' filter="url(#vf-cable-wiggle)"' : '') + '>' + out.slice(o0) + '</g>';
             });
         });
         cableFac = fac;
+        // Voidborn only: bend the crisp lattice routes into something organic/tentacle-like.
+        // Low-frequency turbulence displacement, not a smooth wiggle, so it still reads as a
+        // blocky pixel-art creature vein rather than a soft rubber hose.
+        if (wiggle) {
+            out = '<filter id="vf-cable-wiggle" x="-20%" y="-20%" width="140%" height="140%">' +
+                '<feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="7" result="n"/>' +
+                '<feDisplacementMap in="SourceGraphic" in2="n" scale="' + Math.max(4, tt * 2.2) + '" xChannelSelector="R" yChannelSelector="G"/>' +
+                '</filter>' + out;
+        }
         svg.innerHTML = out;
     }
 })(window.vfFitScope || (window.vfFitScope = {}));

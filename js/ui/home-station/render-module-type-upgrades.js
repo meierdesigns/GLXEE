@@ -377,11 +377,27 @@ extendClass(HomeStationUI, {
             `</div>`;
     },
 
-    renderBlueprintList(map) {
-        const keys = Object.keys(map || {}).filter((k) => (map[k] || 0) > 0);
+    renderBlueprintList(profile) {
+        const map = profile.blueprints || {};
+        const keys = Object.keys(map).filter((k) => (map[k] || 0) > 0 && profileManager.parseBlueprintKey(k));
         if (!keys.length) return this.emptyHtml('hsBlueprint', 'NO BLUEPRINTS YET');
-        const rows = keys.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-bp', 'BLUEPRINT ×' + map[id])).join('');
-        return this.shipTableHtml(rows);
+        return keys.map((key) => this.renderBlueprintRow(key, profile)).join('');
+    },
+
+    /** One part blueprint: part icon, name, count, craft cost and craft button. */
+    renderBlueprintRow(key, profile) {
+        const bp = profileManager.parseBlueprintKey(key);
+        const name = profileManager.getBlueprintName(key);
+        const cost = profileManager.getBlueprintCraftCost(key, profile);
+        const afford = this.canAffordCost(profile.resources, cost);
+        const kindLabel = { weapon: 'WEAPON', defense: 'DEFENSE', ability: 'ABILITY', energy: 'ENERGY' }[bp.kind];
+        return `<div class="hs-line hs-shop-line hs-craft-line">` +
+            `<span class="hs-line-name"><span class="hs-chip-icon">${this.moduleIconHtml(bp.kind, bp.id, 32, 'hs-pixel')}</span>` +
+            `<span class="hs-line-text"><strong>${name}</strong>` +
+            `<span class="hs-line-meta">${kindLabel} · BLUEPRINT ×${profile.blueprints[key]}</span></span></span>` +
+            `${this.renderCostGrid(cost, profile.resources)}` +
+            `<button class="action-button hs-line-action hs-craft-go" data-craft="${key}" title="Craft ${name}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
+            `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
     },
 
     /** Header + body for a ship table (thumb, name/class, core stats). */

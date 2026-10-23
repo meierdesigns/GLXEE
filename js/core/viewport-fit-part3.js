@@ -3,8 +3,22 @@
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, clamp, getUi, perf, readCssNumber, reduceMotion, setFxOpen } = NS; // from earlier parts
+    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
+
+    // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
+    // scale, …) directly rather than tracking down each factor by name — same technique as
+    // hud-layout-editor.js's measureScale(). Used by the frame-edit grips to convert a pointer
+    // delta in real screen px back into authored CSS px.
+    function measureFrameScale(referenceEl) {
+        const parent = referenceEl && referenceEl.nodeType === 1 ? referenceEl : document.body;
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;width:2000px;height:2000px;margin:0;border:0;padding:0;visibility:hidden;pointer-events:none;';
+        parent.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w > 0 ? w / 2000 : 1;
+    }
 
     function swayLoop(now) {
         const plate = document.getElementById('vf-fx');
@@ -145,6 +159,11 @@
                 hudLayoutEditor.toggleEdit();
                 btn.classList.toggle('is-open', hudLayoutEditor.isEditing());
             },
+            hud: function () { setPhOpen(!vfs.phOpen); },
+            frameEdit: function (btn) {
+                toggleFrameEdit();
+                btn.classList.toggle('is-open', !!vfs.frameEditOn);
+            },
             save: function (btn) {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.save();
@@ -158,6 +177,7 @@
         };
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
+            hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
             res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -172,16 +192,46 @@
                 btn.title = meta[key][0];
                 btn.setAttribute('aria-label', meta[key][0]);
                 btn.innerHTML = meta[key][1];
+                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit') btn.hidden = true;
                 tools.appendChild(btn);
             });
             frame.appendChild(tools);
+        }
+        // Older saves / markup without the HUD key: inject it after layout.
+        if (!tools.querySelector('[data-tool="hud"]') && meta.hud) {
+            const hudBtn = document.createElement('button');
+            hudBtn.type = 'button';
+            hudBtn.dataset.tool = 'hud';
+            hudBtn.title = meta.hud[0];
+            hudBtn.setAttribute('aria-label', meta.hud[0]);
+            hudBtn.innerHTML = meta.hud[1];
+            hudBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="layout"]');
+            if (after && after.nextSibling) tools.insertBefore(hudBtn, after.nextSibling);
+            else tools.appendChild(hudBtn);
+            tools.dataset.wired = '0'; // re-bind so the new key gets a click handler
+        }
+        // Older saves / markup without the frame-edit key: inject it after HUD.
+        if (!tools.querySelector('[data-tool="frameEdit"]') && meta.frameEdit) {
+            const feBtn = document.createElement('button');
+            feBtn.type = 'button';
+            feBtn.dataset.tool = 'frameEdit';
+            feBtn.title = meta.frameEdit[0];
+            feBtn.setAttribute('aria-label', meta.frameEdit[0]);
+            feBtn.innerHTML = meta.frameEdit[1];
+            feBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="hud"]');
+            if (after && after.nextSibling) tools.insertBefore(feBtn, after.nextSibling);
+            else tools.appendChild(feBtn);
+            tools.dataset.wired = '0';
         }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
             Object.keys(handlers).forEach(function (key) {
                 const btn = tools.querySelector('[data-tool="' + key + '"]');
-                if (!btn) return;
+                if (!btn || btn.dataset.phBound === '1') return;
+                btn.dataset.phBound = '1';
                 btn.addEventListener('click', function (e) { e.stopPropagation(); handlers[key](btn); });
             });
             const fxb = tools.querySelector('[data-tool="fx"]');
@@ -233,6 +283,19 @@
                 layoutBtn.setAttribute('aria-label', layoutBtn.title);
             }
         }
+        const hudBtn = q('hud');
+        if (hudBtn) {
+            hudBtn.hidden = !devOn;
+            hudBtn.classList.toggle('is-open', !!vfs.phOpen);
+        }
+        if (!devOn && vfs.phOpen) setPhOpen(false);
+        const frameEditBtn = q('frameEdit');
+        if (frameEditBtn) {
+            frameEditBtn.hidden = !devOn;
+            frameEditBtn.classList.toggle('is-open', !!vfs.frameEditOn);
+        }
+        if (!devOn && vfs.frameEditOn) toggleFrameEdit(false);
+        if (vfs.frameEditOn) renderFrameEditGrips();
         const saveBtn = q('save');
         if (saveBtn) saveBtn.hidden = !nowEditing;
         const resetBtn = q('reset');
@@ -364,38 +427,194 @@
     }
     setInterval(syncPilotPlate, 700);
 
-    // Dev Mode: sliders for the pilot plate / resources screen sizes (--ph-* on the bezel), saved in localStorage.
+    // Dev Mode HUD remote (second fernbedienung): tabs for outside-screen chrome + pilot/res screens.
     const PH_TUNE_KEY = 'vf_pilot_hud_tune_v1';
-    const PH_TUNE = [
-        ['PILOT SCREEN · POSITION'],
-        ['--ph-top', 'TOP', 0, 70, 1],
-        ['--ph-left', 'LEFT', 40, 400, 2],
-        ['--ph-plate-w', 'WIDTH', 200, 600, 2],
-        ['--ph-height', 'HEIGHT', 20, 70, 1],
-        ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
-        ['PILOT FRAME'],
-        ['--ph-crest-top', 'TOP', -120, 20, 1],
-        ['--ph-crest-left', 'LEFT', -60, 40, 1],
-        ['--ph-crest-w', 'WIDTH', 30, 140, 1],
-        ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
-        ['PILOT IMAGE'],
-        ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
-        ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1],
-        ['RESOURCE SCREEN · POSITION'],
-        ['--ph-gap', 'GAP', 0, 120, 2],
-        ['--ph-res-height', 'HEIGHT', 20, 70, 1],
-        ['--ph-res-pad', 'PADDING', 0, 60, 1],
-        ['RESOURCES'],
-        ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
-        ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
-        ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+    const PH_TAB_KEY = 'vf_pilot_hud_tab';
+    const PH_TABS = [['outside', 'OUTSIDE'], ['pilot', 'PILOT'], ['res', 'RES']];
+    const PH_CLUSTERS = [['FRAME', ['outside']], ['SCREENS', ['pilot', 'res']]];
+    const PH_TAB_ICONS = {
+        outside: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/></svg>',
+        pilot: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><circle cx="8" cy="5" r="2"/><path d="M3 14c1-3 3-4 5-4s4 1 5 4"/></svg>',
+        res: '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 12h3V6H2zM7 12h3V4H7zM12 12h2V8h-2z"/></svg>'
+    };
+    // Per-tab rows: header (len<2) or [key, label, min, max, step].
+    const PH_SECTIONS = {
+        outside: [
+            ['FRAME'],
+            ['fr:bgCrop', 'BEZEL FILL', 0, 100, 5],
+            ['fr:vineInset', 'VINE INSET', 0, 8, 1],
+            ['TAB'],
+            ['--ph-tab-up', 'TAB UP', 0, 24, 1],
+            ['--ph-tab-side', 'TAB SIDE', 0, 40, 1],
+            ['--ph-tab-down', 'TAB DOWN', 0, 16, 1],
+            ['--ph-tab-cut', 'TAB CUT', 0, 20, 1],
+            ['--ph-tab-round', 'TAB ROUND', 0, 24, 1],
+            ['RIM'],
+            ['--ph-rim-top', 'RIM TOP', 0, 16, 1],
+            ['--ph-rim-side', 'RIM SIDE', 0, 12, 1],
+            ['--ph-line', 'LINE', 1, 8, 1],
+            ['--ph-crest-rim', 'CREST RIM', 0, 12, 1]
+        ],
+        pilot: [
+            ['POSITION'],
+            ['--ph-top', 'TOP', 0, 70, 1],
+            ['--ph-left', 'LEFT', 40, 400, 2],
+            ['--ph-plate-w', 'WIDTH', 200, 600, 2],
+            ['--ph-height', 'HEIGHT', 20, 70, 1],
+            ['--ph-name-size', 'NAME SIZE', 10, 36, 1],
+            ['CREST'],
+            ['--ph-crest-top', 'TOP', -120, 20, 1],
+            ['--ph-crest-left', 'LEFT', -60, 40, 1],
+            ['--ph-crest-w', 'WIDTH', 30, 140, 1],
+            ['--ph-crest-h', 'HEIGHT', 30, 160, 1],
+            ['IMAGE'],
+            ['--ph-pilot-zoom', 'ZOOM', 0.8, 3, 0.05],
+            ['--ph-pilot-y', 'OFFSET Y', -40, 40, 1]
+        ],
+        res: [
+            ['POSITION'],
+            ['--ph-gap', 'GAP', 0, 120, 2],
+            ['--ph-res-height', 'HEIGHT', 20, 70, 1],
+            ['--ph-res-pad', 'PADDING', 0, 60, 1],
+            ['RESOURCES'],
+            ['--ph-res-icon', 'ICON SIZE', 12, 48, 1],
+            ['--ph-res-font', 'FONT SIZE', 10, 36, 1],
+            ['--ph-res-spacing', 'SPACING', 4, 60, 1]
+        ]
+    };
+    const PH_ALL = PH_TABS.reduce(function (a, t) { return a.concat(PH_SECTIONS[t[0]] || []); }, []);
+    const PH_FR_DEFAULTS = { bgCrop: 50, vineInset: 2 };
+
+    // Frame edit (Devmode): draggable on-screen grips for bezel fill / vine inset.
+    // Lives on #vf-bezel so the grip sits in the band. Writes via phSetFr (same keys as HUD).
+    const FRAME_EDIT_HANDLES = [
+        { key: 'bgCrop', min: 0, max: 100, step: 5, label: 'BEZEL FILL', lenExpr: 'var(--fr-open-side, calc(44 * var(--bz-u)))', topPct: 36 },
+        { key: 'vineInset', min: 0, max: 8, step: 1, label: 'VINE INSET', lenExpr: 'calc(8 * var(--bz-u))', topPct: 58 }
     ];
+    // Renders the probe in the frame itself so its measured width already reflects every scale
+    // layer the frame sits under (getBoundingClientRect/clientX share that same viewport space —
+    // no separate scale-factor math needed, unlike the FX/HUD remotes which float outside the
+    // scaled stage).
+    function frameEditProbePx(frame, lenExpr) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;height:0;visibility:hidden;pointer-events:none;width:' + lenExpr + ';';
+        frame.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w;
+    }
+    function frameEditOverlay(frame) {
+        let ov = frame.querySelector('.vf-frame-edit-overlay');
+        if (ov) return ov;
+        ov = document.createElement('div');
+        ov.className = 'vf-frame-edit-overlay';
+        FRAME_EDIT_HANDLES.forEach(function (h) {
+            const row = document.createElement('div');
+            row.className = 'vf-frame-edit-row';
+            row.style.top = h.topPct + '%';
+            row.innerHTML = '<span class="vf-frame-edit-label">' + h.label + '</span><i class="vf-frame-edit-grip" data-fe="' + h.key + '"></i>';
+            ov.appendChild(row);
+        });
+        ov.addEventListener('pointerdown', onFrameEditGripDown);
+        frame.appendChild(ov);
+        return ov;
+    }
+    function renderFrameEditGrips() {
+        const frame = document.getElementById('vf-bezel');
+        if (!frame || !vfs.frameEditOn) return;
+        const ov = frameEditOverlay(frame);
+        ov.hidden = false;
+        FRAME_EDIT_HANDLES.forEach(function (h) {
+            const grip = ov.querySelector('[data-fe="' + h.key + '"]');
+            if (!grip || grip.classList.contains('is-dragging')) return;
+            const lenPx = frameEditProbePx(frame, h.lenExpr);
+            const v = phFrValue(h.key);
+            const frac = lenPx > 0 ? clamp((v - h.min) / (h.max - h.min), 0, 1) : 0;
+            grip.style.left = (frac * lenPx) + 'px';
+            grip.title = h.label + ': ' + v;
+        });
+    }
+    function onFrameEditGripDown(e) {
+        const grip = e.target.closest('.vf-frame-edit-grip');
+        if (!grip) return;
+        const key = grip.getAttribute('data-fe');
+        const h = FRAME_EDIT_HANDLES.filter(function (x) { return x.key === key; })[0];
+        const frame = document.getElementById('vf-bezel');
+        if (!h || !frame) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const frameRect = frame.getBoundingClientRect();
+        const lenPx = frameEditProbePx(frame, h.lenExpr);
+        grip.classList.add('is-dragging');
+        const apply = function (clientX) {
+            const frac = lenPx > 0 ? clamp((clientX - frameRect.left) / lenPx, 0, 1) : 0;
+            const raw = h.min + frac * (h.max - h.min);
+            const v = Math.round(raw / h.step) * h.step;
+            grip.style.left = (clamp((v - h.min) / (h.max - h.min), 0, 1) * lenPx) + 'px';
+            grip.title = h.label + ': ' + v;
+            phSetFr(key, v);
+            if (vfs.phOpen) buildPilotTunePanel(frame);
+        };
+        apply(e.clientX);
+        const move = function (ev) { apply(ev.clientX); };
+        const up = function () {
+            grip.classList.remove('is-dragging');
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+    }
+    function toggleFrameEdit(force) {
+        vfs.frameEditOn = force != null ? !!force : !vfs.frameEditOn;
+        const frame = document.getElementById('vf-bezel');
+        if (!frame) return;
+        if (!vfs.frameEditOn) {
+            const ov = frame.querySelector('.vf-frame-edit-overlay');
+            if (ov) ov.hidden = true;
+            return;
+        }
+        renderFrameEditGrips();
+    }
+    window.addEventListener('resize', renderFrameEditGrips);
     let phTune = {};
     try { phTune = JSON.parse(localStorage.getItem(PH_TUNE_KEY) || '{}') || {}; } catch (e) { phTune = {}; }
-    let phPanel = null, phBtn = null;
+    let phTab = 'outside';
+    try {
+        const saved = localStorage.getItem(PH_TAB_KEY);
+        if (PH_TABS.some(function (t) { return t[0] === saved; })) phTab = saved;
+    } catch (e) { /* ignore */ }
+    let phPanel = null, phWired = false;
+    if (vfs.phOpen == null) vfs.phOpen = false;
+    // Move / resize / scale — same behaviour as the FX remote, own storage keys.
+    const PHGEOM_KEY = 'vf-ph-geom';
+    const PHZOOM_KEY = 'vf-ph-zoom';
+    let phGeom = null;
+    try { phGeom = JSON.parse(localStorage.getItem(PHGEOM_KEY) || 'null'); } catch (e) { phGeom = null; }
+    try {
+        const z = Number(localStorage.getItem(PHZOOM_KEY));
+        if (z >= 50 && z <= 150) vfs.phZoom = z / 100;
+    } catch (e) { /* ignore */ }
+    if (vfs.phZoom == null) vfs.phZoom = 1;
+    function phFaction() {
+        const frame = document.getElementById('vf-bezel');
+        return (frame && frame.getAttribute('data-faction')) || 'terran';
+    }
+    function phFrValue(key) {
+        const st = (vfs.frameStyles && vfs.frameStyles[phFaction()]) || {};
+        if (st[key] != null) return st[key];
+        return PH_FR_DEFAULTS[key];
+    }
+    function phSetFr(key, v) {
+        const fac = phFaction();
+        (vfs.frameStyles[fac] = vfs.frameStyles[fac] || {})[key] = v;
+        saveFrameStyles();
+        applyFrameStyle();
+    }
     function applyPilotTune(frame) {
-        PH_TUNE.forEach(function (t) {
+        PH_ALL.forEach(function (t) {
             if (t.length < 2) return;
+            if (t[0].indexOf('fr:') === 0) return;
             if (phTune[t[0]] != null) frame.style.setProperty(t[0], String(phTune[t[0]]));
             else frame.style.removeProperty(t[0]);
         });
@@ -403,55 +622,187 @@
     function savePilotTune() {
         try { localStorage.setItem(PH_TUNE_KEY, JSON.stringify(phTune)); } catch (e) { /* ignore */ }
     }
-    function buildPilotTunePanel(frame) {
-        const cs = getComputedStyle(frame);
-        const rows = PH_TUNE.map(function (t) {
-            if (t.length < 2) return '<div class="vf-ph-tune-h">' + t[0] + '</div>';
-            const v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
-            return '<label class="vf-ph-tune-row"><span>' + t[1] + '</span>'
-                + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4] + '" value="' + v + '">'
-                + '<b>' + v + '</b></label>';
-        }).join('');
-        phPanel.innerHTML = rows + '<div class="vf-ph-tune-btns"><button type="button" data-ph-reset>RESET</button><button type="button" data-ph-close>CLOSE</button></div>';
+    function phRowHtml(t, cs) {
+        if (t.length < 2) return '<div class="vf-fx-title">' + t[0] + '</div>';
+        let v;
+        if (t[0].indexOf('fr:') === 0) v = phFrValue(t[0].slice(3));
+        else v = phTune[t[0]] != null ? phTune[t[0]] : (parseFloat(cs.getPropertyValue(t[0])) || t[2]);
+        const fill = ((v - t[2]) / (t[3] - t[2]) * 100);
+        return '<label class="vf-fx-row"><span>' + t[1] + '</span>'
+            + '<input type="range" data-ph="' + t[0] + '" min="' + t[2] + '" max="' + t[3] + '" step="' + t[4]
+            + '" value="' + v + '" style="--look-fill:' + fill + '%"><output>' + v + '</output></label>';
     }
-    function syncPilotTuner(frame) {
-        applyPilotTune(frame);
-        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
-        if (!phBtn) {
-            phBtn = document.createElement('button');
-            phBtn.type = 'button';
-            phBtn.className = 'vf-ph-tune-btn';
-            phBtn.title = 'Pilot HUD size (Dev Mode)';
-            phBtn.textContent = 'HUD';
-            document.body.appendChild(phBtn);
-            phPanel = document.createElement('div');
-            phPanel.className = 'vf-ph-tune';
-            phPanel.hidden = true;
-            document.body.appendChild(phPanel);
-            phBtn.addEventListener('click', function () {
-                phPanel.hidden = !phPanel.hidden;
-                if (!phPanel.hidden) buildPilotTunePanel(frame);
+    // Pivot = centre of the scale slider (same layout as FX remote).
+    function setPhOrigin(plate, w, h) {
+        plate.style.transformOrigin = (w / 2 + 78) + 'px ' + (h - 43) + 'px';
+    }
+    function applyPhZoom(plate, pct) {
+        const k = Math.max(50, Math.min(150, pct)) / 100;
+        vfs.phZoom = k;
+        setPhOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        plate.style.scale = String(k);
+    }
+    function applyPhGeom() {
+        const plate = phPanel || document.getElementById('vf-ph');
+        if (plate && !phGeom) setPhOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        if (!plate || !phGeom) return;
+        const W = window.innerWidth, H = window.innerHeight;
+        const k = vfs.phZoom || 1;
+        const w = Math.max(260, Math.min(phGeom.w, W)), h = Math.max(300, Math.min(phGeom.h, H));
+        setPhOrigin(plate, w, h);
+        const dxo = (w / 2 + 78) * (1 - k), dyo = (h - 43) * (1 - k);
+        const l = Math.max(-dxo, Math.min(phGeom.l, W - w * k - dxo)), t = Math.max(-dyo, Math.min(phGeom.t, H - h * k - dyo));
+        plate.style.width = w + 'px'; plate.style.height = h + 'px';
+        plate.style.left = l + 'px'; plate.style.top = t + 'px';
+        plate.style.right = 'auto'; plate.style.bottom = 'auto';
+    }
+    function startPhDrag(e, mode) {
+        const plate = ensurePhPanel();
+        const sx = e.clientX, sy = e.clientY;
+        const k = vfs.phZoom || 1;
+        const g0 = { l: plate.offsetLeft, t: plate.offsetTop, w: plate.offsetWidth, h: plate.offsetHeight };
+        e.preventDefault();
+        plate.classList.add('is-dragging');
+        const move = function (ev) {
+            const dx = (ev.clientX - sx) / k, dy = (ev.clientY - sy) / k;
+            if (mode === 'move') {
+                phGeom = { l: g0.l + ev.clientX - sx, t: g0.t + ev.clientY - sy, w: g0.w, h: g0.h };
+            } else {
+                const west = mode.indexOf('w') >= 0, north = mode.indexOf('n') >= 0;
+                const w = Math.max(260, g0.w + (west ? -dx : dx)), h = Math.max(300, g0.h + (north ? -dy : dy));
+                phGeom = { l: west ? g0.l + g0.w - w : g0.l, t: north ? g0.t + g0.h - h : g0.t, w: w, h: h };
+            }
+            applyPhGeom();
+        };
+        const up = function () {
+            plate.classList.remove('is-dragging');
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            try { localStorage.setItem(PHGEOM_KEY, JSON.stringify(phGeom)); } catch (err) { /* ignore */ }
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+    }
+    window.addEventListener('resize', applyPhGeom);
+    document.addEventListener('change', function (e) {
+        if (e.target.classList && e.target.classList.contains('vf-ph-zoom-in')) applyPhGeom();
+    });
+    function ensurePhPanel() {
+        if (phPanel) return phPanel;
+        phPanel = document.createElement('div');
+        phPanel.id = 'vf-ph';
+        phPanel.className = 'vf-bezel-fx vf-ph-remote';
+        phPanel.style.display = 'none';
+        phPanel.hidden = true;
+        phPanel.style.scale = String(vfs.phZoom || 1);
+        document.documentElement.appendChild(phPanel);
+        if (!phWired) {
+            phWired = true;
+            ['keydown', 'keyup'].forEach(function (t) {
+                phPanel.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+            phPanel.addEventListener('pointerdown', function (e) {
+                if (e.target.closest('.vf-fx-grip')) startPhDrag(e, e.target.closest('.vf-fx-grip').getAttribute('data-corner') || 'se');
+                else if (e.target.closest('.vf-fx-head') && !e.target.closest('button')) startPhDrag(e, 'move');
             });
             phPanel.addEventListener('input', function (e) {
-                const k = e.target && e.target.getAttribute('data-ph');
-                if (!k) return;
-                phTune[k] = Number(e.target.value);
-                e.target.nextElementSibling.textContent = e.target.value;
+                const inp = e.target;
+                if (inp.classList && inp.classList.contains('vf-ph-zoom-in')) {
+                    applyPhZoom(phPanel, Number(inp.value));
+                    try { localStorage.setItem(PHZOOM_KEY, String(inp.value)); } catch (err) { /* ignore */ }
+                    return;
+                }
+                const frame = document.getElementById('vf-bezel');
+                const k = inp && inp.getAttribute('data-ph');
+                if (!k || !frame) return;
+                const v = Number(inp.value);
+                const min = Number(inp.min), max = Number(inp.max);
+                inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
+                if (inp.nextElementSibling) inp.nextElementSibling.textContent = inp.value;
+                if (k.indexOf('fr:') === 0) { phSetFr(k.slice(3), v); return; }
+                phTune[k] = v;
                 applyPilotTune(frame);
                 savePilotTune();
             });
             phPanel.addEventListener('click', function (e) {
-                if (e.target.closest('[data-ph-close]')) phPanel.hidden = true;
+                const frame = document.getElementById('vf-bezel');
+                const tabBtn = e.target.closest('[data-ph-tab]');
+                if (tabBtn) {
+                    phTab = tabBtn.getAttribute('data-ph-tab');
+                    try { localStorage.setItem(PH_TAB_KEY, phTab); } catch (err) { /* ignore */ }
+                    buildPilotTunePanel(frame);
+                    return;
+                }
+                if (e.target.closest('[data-ph-close]')) setPhOpen(false);
                 else if (e.target.closest('[data-ph-reset]')) {
                     phTune = {};
                     savePilotTune();
-                    applyPilotTune(frame);
+                    const fac = phFaction();
+                    const st = vfs.frameStyles[fac];
+                    if (st) {
+                        delete st.stageInset;
+                        delete st.bgCrop;
+                        delete st.vineInset;
+                        saveFrameStyles();
+                        applyFrameStyle();
+                    }
+                    if (frame) applyPilotTune(frame);
                     buildPilotTunePanel(frame);
                 }
             });
         }
-        phBtn.hidden = !dev;
-        if (!dev) phPanel.hidden = true;
+        return phPanel;
+    }
+    function setPhOpen(open) {
+        vfs.phOpen = !!open;
+        ensurePhPanel();
+        phPanel.hidden = !vfs.phOpen;
+        phPanel.classList.toggle('is-in', vfs.phOpen);
+        const hudBtn = document.querySelector('.vf-bezel-tools [data-tool="hud"]');
+        if (hudBtn) hudBtn.classList.toggle('is-open', vfs.phOpen);
+        if (vfs.phOpen) {
+            phPanel.style.display = 'flex';
+            buildPilotTunePanel(document.getElementById('vf-bezel'));
+            applyPhGeom();
+        } else {
+            clearTimeout(vfs.phHideTimer);
+            vfs.phHideTimer = setTimeout(function () {
+                if (!vfs.phOpen && phPanel) phPanel.style.display = 'none';
+            }, 420);
+        }
+    }
+    function buildPilotTunePanel(frame) {
+        ensurePhPanel();
+        if (!frame) return;
+        const cs = getComputedStyle(frame);
+        const fac = phFaction();
+        const tabLabel = (PH_TABS.filter(function (t) { return t[0] === phTab; })[0] || ['', 'HUD'])[1];
+        let h = '<div class="vf-fx-head"><span>HUD · ' + fac.toUpperCase() + ' · ' + tabLabel + '</span>'
+            + '<button type="button" data-ph-close aria-label="Close">X</button></div>';
+        h += '<div class="vf-fx-tabs">' + PH_CLUSTERS.map(function (c) {
+            const keys = c[1].map(function (id) {
+                const t = PH_TABS.filter(function (x) { return x[0] === id; })[0];
+                return '<button type="button" data-ph-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1]
+                    + '" class="' + (phTab === t[0] ? 'on' : '') + '">' + (PH_TAB_ICONS[t[0]] || '')
+                    + '<span>' + t[1] + '</span></button>';
+            }).join('');
+            return '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length
+                + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
+        }).join('') + '</div>';
+        h += '<div class="vf-fx-body">' + (PH_SECTIONS[phTab] || []).map(function (t) { return phRowHtml(t, cs); }).join('')
+            + '<div class="vf-fx-row vf-fx-actions"><button type="button" class="vf-fx-reset" data-ph-reset>RESET</button></div></div>';
+        phPanel.innerHTML = h;
+        phPanel.insertAdjacentHTML('beforeend',
+            '<div class="vf-fx-zoom" title="Scale"><input type="range" class="vf-ph-zoom-in" min="50" max="150" step="5" value="'
+            + Math.round((vfs.phZoom || 1) * 100) + '" aria-label="Remote scale"></div>'
+            + ['nw', 'ne', 'sw', 'se'].map(function (c) {
+                return '<i class="vf-fx-grip" data-corner="' + c + '" title="Resize" aria-hidden="true"></i>';
+            }).join(''));
+        applyPhGeom();
+    }
+    function syncPilotTuner(frame) {
+        applyPilotTune(frame);
+        ensurePhPanel();
     }
 
     function guiZoom() {

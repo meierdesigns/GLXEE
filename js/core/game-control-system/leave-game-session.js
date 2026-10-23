@@ -91,6 +91,20 @@ extendClass(GameControlSystem, {
             startScreen.classList.add('hidden');
         }
 
+        // Planets this run unlocked; they render locked until the map's reveal tour lights them up.
+        let freshUnlocked = [];
+        const pre = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager._preRunUnlocked : null;
+        if (pre) {
+            galaxyMapManager._preRunUnlocked = null;
+            if (pre.galaxyId === galaxyMapManager.galaxyId && galaxyMapManager.map && galaxyMapManager.revealUnlockedPlanets) {
+                freshUnlocked = (galaxyMapManager.map.nodes || [])
+                    .filter((n) => galaxyMapManager.isUnlocked(n.planetId) && pre.ids.indexOf(n.planetId) === -1)
+                    .map((n) => n.planetId);
+                galaxyMapManager._revealPending = {};
+                freshUnlocked.forEach((id) => { galaxyMapManager._revealPending[id] = true; });
+            }
+        }
+
         if (typeof homeStationUI !== 'undefined') {
             homeStationUI.show({
                 tab: 'play',
@@ -111,6 +125,17 @@ extendClass(GameControlSystem, {
                     return false;
                 };
                 if (!selectFought()) requestAnimationFrame(selectFought);
+            }
+            // Back from a run the keyboard steers the planet map, not the nav bar
+            // (again after the deferred focus restore, which can land on the tabs).
+            const enterMap = () => {
+                if (homeStationUI.tab === 'play' && homeStationUI.enterPlayMap) homeStationUI.enterPlayMap();
+            };
+            enterMap();
+            requestAnimationFrame(() => requestAnimationFrame(enterMap));
+            // Planets the run unlocked: the camera zooms over and lights them up.
+            if (freshUnlocked.length) {
+                requestAnimationFrame(() => requestAnimationFrame(() => galaxyMapManager.revealUnlockedPlanets(freshUnlocked)));
             }
             // Ambush lost: show the flight back to the last station.
             if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager._ambushLost

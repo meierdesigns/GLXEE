@@ -3,6 +3,11 @@
 // ProfileSelectionManager members, continued from core.js: show / hide and the dialog markup.
 extendClass(ProfileSelectionManager, {
     show(options) {
+        // Capture before remount flags flip — DevMode / UI rebuilds re-call show()
+        // and must not wipe the faction the player already picked.
+        const seed = this._restoreSeed; this._restoreSeed = null;
+        const resume = (seed && seed.pmode === 'create') ? seed : null;
+
         this.isVisible = true;
         this.onClose = options && options.onClose;
         // Optional host element: render inline (e.g. inside the start-screen
@@ -26,19 +31,20 @@ extendClass(ProfileSelectionManager, {
         // No pilots yet: skip the empty list and open profile creation.
         if (!profiles.length || this._createOnly) {
             this.mode = 'create';
-            this.createStep = 'faction';
-            this._heroDefaultName = '';
-            this._pilotName = '';
-            this.pendingFaction = this.getFactionIds()[0];
+            if (!resume) {
+                this.createStep = 'faction';
+                this._heroDefaultName = '';
+                this._pilotName = '';
+                this.pendingFaction = this.getFactionIds()[0];
+            }
         }
         // Refresh inside the pilot flow: the very first build already is the saved step and faction (no default flash, no rebuild).
-        const seed = this._restoreSeed; this._restoreSeed = null;
-        if (seed && seed.pmode === 'create') {
-            this.mode = 'create'; this._createOnly = !!seed.pcreateOnly;
-            this.createStep = seed.pstep || 'faction';
-            if (seed.pfaction && this.getFactionIds().indexOf(seed.pfaction) >= 0) this.pendingFaction = seed.pfaction;
-            this._pilotName = seed.pname || '';
-            if (seed.pstart) this._startOpts = seed.pstart;
+        if (resume) {
+            this.mode = 'create'; this._createOnly = !!resume.pcreateOnly;
+            this.createStep = resume.pstep || 'faction';
+            if (resume.pfaction && this.getFactionIds().indexOf(resume.pfaction) >= 0) this.pendingFaction = resume.pfaction;
+            this._pilotName = resume.pname || '';
+            if (resume.pstart) this._startOpts = resume.pstart;
         }
         this.createUI();
         // Embedded in the station menu, the station persists its own tab.

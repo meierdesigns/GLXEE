@@ -258,6 +258,8 @@ extendClass(GalaxyMapManager, {
             if (ids) this.overlay.querySelectorAll('.gm-edge.gm-e-' + ids[0] + '.gm-e-' + ids[1]).forEach((el) => el.classList.add('on-route'));
         }
         if (layer) layer.innerHTML = this._flight ? '' : this.routePreviewSvg();
+        // Rebuilt with the route so its cells follow the current pixel size.
+        if (this.syncHoverRoute) this.syncHoverRoute();
     },
     /** Animate the ship to a planet / post, then commit the new location. */
     flyTo(kind, id) {

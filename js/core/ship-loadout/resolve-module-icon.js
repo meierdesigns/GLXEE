@@ -87,8 +87,9 @@ extendClass(ShipLoadoutManager, {
         if (model.factionPreview && model.previewDisabledAreas) loadout.disabledAreas = Object.assign({ front: false, back: false, wing: false }, model.previewDisabledAreas);
         if (model.factionPreview && model.previewSingleGun) {
             const gun = (loadout.weaponSlots || []).find(Boolean) || (loadout.weapons && loadout.weapons[0]) || 'laser';
-            loadout.weaponSlots = [gun];
-            loadout.weapons = [gun];
+            // The kit's second weapon sits in the first wing slot.
+            loadout.weaponSlots = model.previewWeapon2 ? [gun, model.previewWeapon2] : [gun];
+            loadout.weapons = loadout.weaponSlots.slice();
             loadout.defenses = (loadout.defenses || []).slice(0, 1);
             loadout.abilities = (loadout.abilities || []).slice(0, 1);
             loadout.energy = (loadout.energy || []).slice(0, 1);
@@ -104,7 +105,7 @@ extendClass(ShipLoadoutManager, {
         // Same wing rows as the hangar markers (see buildHangarSlots).
         const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign(
             this.withWeaponSlotScales ? this.withWeaponSlotScales(id, loadout) : Object.assign({}, loadout),
-            { wingSlotRows: Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
+            { wingSlotRows: model.factionPreview && model.previewWingRows != null ? model.previewWingRows : Math.max(0, this.weaponMountSlots(caps.weapons) - 1) }));
         const hullBonus = this.getFrameHullBonus(id);
 
         model.coreWidth = coreSize.width;

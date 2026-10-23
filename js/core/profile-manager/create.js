@@ -230,15 +230,14 @@ extendClass(ProfileManager, {
         return applied.granted;
     },
 
-    addCargoBlueprint(shipId, amount) {
+    addCargoBlueprint(key, amount) {
         const profile = this.getActiveProfile();
         if (!profile) return false;
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
+        const bp = this.parseBlueprintKey(key);
         const n = Math.round(Number(amount) || 1);
-        if (!id || n <= 0) return false;
-        profile.cargo.blueprints[id] = (profile.cargo.blueprints[id] || 0) + n;
-        this.discover('ships', id);
+        if (!bp || n <= 0) return false;
+        profile.cargo.blueprints[bp.key] = (profile.cargo.blueprints[bp.key] || 0) + n;
         this.save();
         return true;
     },

@@ -121,6 +121,12 @@ class ProfileManager {
         if (!profile.cargo.blueprints || typeof profile.cargo.blueprints !== 'object') {
             profile.cargo.blueprints = {};
         }
+        // Blueprints are for parts now (`kind:partId`); drop old ship-id blueprints.
+        [profile.blueprints, profile.cargo.blueprints].forEach((map) => {
+            Object.keys(map).forEach((k) => {
+                if (k.indexOf(':') === -1) delete map[k];
+            });
+        });
         if (!profile.shipLoadouts || typeof profile.shipLoadouts !== 'object') {
             profile.shipLoadouts = {};
         }

@@ -225,16 +225,6 @@ extendClass(ProfileManager, {
             profile.discovered._v = 2;
             this.save();
         }
-        // Blueprints already found count as "seen" ships.
-        const bpSources = [profile.blueprints, profile.cargo && profile.cargo.blueprints];
-        bpSources.forEach((map) => {
-            if (!map || typeof map !== 'object') return;
-            Object.keys(map).forEach((id) => {
-                if ((map[id] || 0) > 0 && profile.discovered.ships.indexOf(id) === -1) {
-                    profile.discovered.ships.push(id);
-                }
-            });
-        });
         (profile.unlockedShopIds || []).forEach((id) => {
             if (profile.discovered.ships.indexOf(id) === -1) {
                 profile.discovered.ships.push(id);

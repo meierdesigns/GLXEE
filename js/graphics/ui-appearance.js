@@ -155,6 +155,7 @@ class UIAppearanceManager {
         // Scanline line pitch (%) and drift speed (%, 0 = static, no distortion).
         this.scanSize = 100;
         this.scanSpeed = 100;
+        this.vineMotion = 100;
         // Scanline warp: horizontal row-wise wobble of the picture (%, 0 = off).
         this.scanWarp = 0;
         // Where the FX overlay shows: inside the screen, on the frame outside it, or both.
@@ -359,6 +360,7 @@ class UIAppearanceManager {
         if (fxKey === 'fxScale') return this.fxScale;
         if (fxKey === 'scanSize') return this.scanSize;
         if (fxKey === 'scanSpeed') return this.scanSpeed;
+        if (fxKey === 'vineMotion') return this.vineMotion;
         if (fxKey === 'scanWarp') return this.scanWarp;
         const m = /^(\d+)%$/.exec(String(this[fxKey] || ''));
         return m ? Math.max(0, Math.min(100, Number(m[1]))) : 0;
@@ -457,6 +459,9 @@ class UIAppearanceManager {
                     this[key] = legacy[val] || 'OFF';
                 }
             });
+            if (data.vineMotion != null && Number.isFinite(Number(data.vineMotion))) {
+                this.vineMotion = Math.max(0, Math.min(300, Math.round(Number(data.vineMotion))));
+            }
             ['scanSize', 'scanSpeed', 'scanWarp'].forEach((k) => {
                 if (data[k] != null && Number.isFinite(Number(data[k]))) {
                     this[k] = k === 'scanSize' ? Math.max(25, Math.min(400, Math.round(Number(data[k])))) : Math.max(0, Math.min(k === 'scanWarp' ? 100 : 300, Math.round(Number(data[k]))));

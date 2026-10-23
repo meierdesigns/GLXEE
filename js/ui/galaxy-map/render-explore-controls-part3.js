@@ -115,6 +115,18 @@ extendClass(GalaxyMapManager, {
             for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); }
             return (h >>> 0).toString(36);
         })();
+        // The fine patch is translucent: cut its rect out of the coarse field, or the 8-unit blocks show
+        // through underneath and the nebula looks blurrier than the other map pixels.
+        const holeSvg = (x, y, w, h) => `<clipPath id="gmNebHole" clipPathUnits="userSpaceOnUse"><path clip-rule="evenodd" d="M${nx0} ${ny0}h${W * 6}v${H * 6}h${-W * 6}zM${x} ${y}h${w}v${h}h${-w}z"/></clipPath>`;
+        const holeCoarse = (neb, img) => {
+            const coarseG = neb.querySelector('.gm-neb-layer:not(.gm-neb-fine)');
+            if (!coarseG || !img) return;
+            const old = neb.querySelector('#gmNebHole');
+            if (old) old.remove();
+            const n = (k) => +img.getAttribute(k);
+            coarseG.insertAdjacentHTML('beforebegin', holeSvg(n('x'), n('y'), n('width'), n('height')));
+            coarseG.setAttribute('clip-path', 'url(#gmNebHole)');
+        };
         const paint = (jobKey, cell, bx, by, cols, rows, oct, opaque) => {
             // Empty href stays opacity:0 — an opaque fine patch with no pixels was
             // painting as a black rectangle over the coarse nebula on some engines.
@@ -196,6 +208,8 @@ extendClass(GalaxyMapManager, {
                 const mounted = document.querySelectorAll(`image[data-neb-key="${jobKey}"]`);
                 if (mounted.length) {
                     mounted.forEach(applyUrl);
+                    const neb = opaque && document.querySelector('.galaxy-map-svg .gm-nebula');
+                    if (neb) holeCoarse(neb, mounted[0]);
                 } else if (opaque) {
                     // Job finished after we skipped mounting an empty placeholder —
                     // inject the finished patch so the nebula actually appears.
@@ -214,6 +228,7 @@ extendClass(GalaxyMapManager, {
                             else neb.appendChild(g);
                         }
                         g.insertAdjacentHTML('beforeend', tag(url));
+                        holeCoarse(neb, g.lastElementChild);
                     }
                 }
             };
@@ -249,7 +264,7 @@ extendClass(GalaxyMapManager, {
                     free: sstep(0.35, 0.58, fbm(x * 0.0011 + 500, y * 0.0011 + 320, 2)),
                     grain: sstep(0.4, 0.6, fbm(x * 0.0009 + 900, y * 0.0009 + 700, 2)),
                     // Softer banks so voids don't wipe the whole planet field.
-                    bank: 0.35 + 0.65 * sstep(0.28, 0.55, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
+                    bank: 0.08 + 0.92 * sstep(0.32, 0.6, fbm(x * 0.0005 + 1300, y * 0.0005 + 800, 2)),
                     gm: sstep(0.55, 0.72, fbm(x * 0.0016 + 210, y * 0.0016 + 90, 2)),
                     veil: layers.map((_, li) => sstep(0.25, 0.65, fbm(x * 0.0026 + 60 * li, y * 0.0026 + 20, 2)))
                 };
@@ -272,7 +287,7 @@ extendClass(GalaxyMapManager, {
                 const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 // Ambient floor so the planet field keeps a veil even between suns.
-                lw.envNear = mix('envBase') * Math.max(sunFade, 0.45);
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.22);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -321,7 +336,7 @@ extendClass(GalaxyMapManager, {
                         };
                         let cv = grain < 0.02 ? cloudV(0.45) : grain > 0.98 ? cloudV(1.5) : cloudV(0.45) * (1 - grain) + cloudV(1.5) * grain;
                         // Big dark voids and bright banks: contrast + a very low-frequency density mask.
-                        cv = 0.5 + (cv - 0.5) * 1.5;
+                        cv = 0.5 + (cv - 0.5) * 1.9;
                         const bank = lw.bank;
                         const v = (cv - (1 - L.cover) * 1.05 * (1 - wispK * 0.7)) * env * bank + sl.k * 0.12;
                         // Many soft tone steps (dithered at the edges) instead of four flat plateaus with hard contours.
@@ -341,20 +356,42 @@ extendClass(GalaxyMapManager, {
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
                         // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.35 + 0.65 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
+                        const shine = 0.22 + 0.78 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.7 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.38 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
+                    }
+                    // Density cap: even the thickest cloud stays see-through so planets read.
+                    // Nebula look after real gas clouds: billowy edges cut sharply by noise, lit rims,
+                    // a brighter hot core, dark dust lanes and torn filaments (no even veil).
+                    if (A > 0) {
+                        const nx = x * NEB_SCALE * 3, ny = y * NEB_SCALE * 3;
+                        const wx = fbm(nx * 0.5 + 3.7, ny * 0.5 - 8.2, 2) - 0.5, wy = fbm(nx * 0.5 - 11.4, ny * 0.5 + 2.9, 2) - 0.5;
+                        const billow = fbm(nx * 1.2 + wx * 4, ny * 1.2 + wy * 4, 3);
+                        const rid = 1 - Math.abs(2 * fbm(nx * 1.6 + wx * 5, ny * 0.6 + wy * 5, 2) - 1);
+                        // Broad soft dust patches (thin ridged lanes read as dark contour lines).
+                        const dq = fbm(nx * 0.8 + wy * 3 + 40, ny * 0.8 + wx * 3, 3);
+                        const lane = Math.min(1, Math.max(0, (dq - 0.58) * 4)) * 0.7;
+                        const dens = 1 - Math.exp(-A / 0.5);
+                        const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
+                        const rim = edge * (1 - edge) * 4;
+                        let cov = edge * (0.16 + 0.2 * dens) + 0.14 * rid * rid * rid * dens;
+                        cov = Math.min(0.45, cov + 0.15 * lane * edge);
+                        let cr = R / A, cg = G / A, cb = B / A;
+                        const lift = (1 + 0.7 * rim) * (1 - 0.8 * lane);
+                        const hot = 0.3 * dens * dens * (1 - lane);
+                        cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
+                        R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
                     const o = (r * cols + c) * 4;
                     // Soft cap: overlapping layers + suns must never wash out to white.
                     if (A > 0) {
                         const mx = Math.max(R, G, B) / A;
-                        if (mx > 150) { const k = 150 / mx; R *= k; G *= k; B *= k; }
+                        if (mx > 170) { const k = 170 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
                         // Fine patch used to write every pixel at alpha 255 over black.
@@ -378,6 +415,7 @@ extendClass(GalaxyMapManager, {
         };
         const coarse = paint(gid + '|coarse', 8, nx0, ny0, Math.ceil(W * 6 / 8), Math.ceil(H * 6 / 8), 5, false);
         let out = `<g class="gm-neb-layer">${coarse}</g>`;
+        let hole = null;
         if (fine) {
             // Finer pixels + extra octaves over the view, opaque over black,
             // so it simply covers the coarse field (no clip / mask needed).
@@ -394,7 +432,15 @@ extendClass(GalaxyMapManager, {
             const want = gpOn ? unit : Math.max(unit, Math.sqrt(fine.w * fine.h / NEB_PIXEL_BUDGET));
             // Cell = 8 / 2^k: nests exactly in the coarse 8-unit grid (patch
             // origin is a multiple of 8), so pixels never shift between patches.
-            const cell = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
+            // Global Pixel Size: exact map unit (power-of-two rounding made cells up to 2× the planet pixels).
+            const cell = gpOn && unit > 0 ? +unit.toFixed(4)
+                : 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / Math.max(1e-6, want)))));
+            if (gpOn && unit > 0) {
+                // Seat the patch on the cell lattice so nebula pixels line up with the other layers.
+                const sx = Math.floor(fine.x / cell) * cell, sy = Math.floor(fine.y / cell) * cell;
+                fine.w += fine.x - sx; fine.h += fine.y - sy;
+                fine.x = +sx.toFixed(3); fine.y = +sy.toFixed(3);
+            }
             // Same base octaves as the coarse field; finer cells add detail on top.
             const oct = Math.min(7, 5 + Math.max(0, Math.round(Math.log2(8 / cell)) - 1));
             const fk = `${gid}|f${cell}|${fine.x}|${fine.y}|${fine.w}|${fine.h}`;
@@ -408,8 +454,10 @@ extendClass(GalaxyMapManager, {
             const readyFine = this._nebUrls[fk] ? fineTag : '';
             const prevTag = !readyFine && prev && prev.key !== fk && this._nebUrls[prev.key] ? prev.tag : '';
             if (this._nebUrls[fk]) this._nebLastFine = { key: fk, tag: fineTag };
+            if (readyFine) hole = [fine.x, fine.y, Math.ceil(fine.w / cell) * cell, Math.ceil(fine.h / cell) * cell];
             if (prevTag || readyFine) out += `<g class="gm-neb-layer gm-neb-fine">${prevTag}${readyFine}</g>`;
         }
+        if (hole) out = holeSvg(hole[0], hole[1], hole[2], hole[3]) + out.replace('<g class="gm-neb-layer">', '<g class="gm-neb-layer" clip-path="url(#gmNebHole)">');
         const W5 = 6;
         // Distant pixel galaxies: tilted ellipse of pixels, bright core.
         let far = '';

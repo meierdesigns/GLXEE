@@ -9,20 +9,37 @@ class AssetGenClient {
     }
 
     setBaseUrl(url) {
-        if (url) this.baseUrl = String(url).replace(/\/$/, "");
+        if (!url) return;
+        const next = String(url).replace(/\/$/, "");
+        if (next !== this.baseUrl) this._offlineUntil = 0;
+        this.baseUrl = next;
     }
 
-    async health() {
+    // Callers fire this from several menu paths; share one in-flight request and
+    // remember an unreachable bridge for 30s so the console isn't flooded.
+    health(force) {
+        if (!force && this._healthPending) return this._healthPending;
+        if (!force && this._offlineResult && Date.now() < (this._offlineUntil || 0)) {
+            return Promise.resolve(this._offlineResult);
+        }
+        this._healthPending = this._fetchHealth().finally(() => { this._healthPending = null; });
+        return this._healthPending;
+    }
+
+    async _fetchHealth() {
         try {
             const res = await fetch(this.baseUrl + "/api/health", { method: "GET" });
             if (!res.ok) return { ok: false, error: "HTTP " + res.status };
+            this._offlineUntil = 0;
             return await res.json();
         } catch (e) {
-            return {
+            this._offlineResult = {
                 ok: false,
                 error: "Bridge unreachable. Run: npm run assets",
                 detail: String(e && e.message || e)
             };
+            this._offlineUntil = Date.now() + 30000;
+            return this._offlineResult;
         }
     }
 

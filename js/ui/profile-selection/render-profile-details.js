@@ -348,6 +348,11 @@ extendClass(ProfileSelectionManager, {
             // Own-faction galaxy: a few nearby planets are already travelable.
             if (profileManager.unlockOwnFactionStartCluster) profileManager.unlockOwnFactionStartCluster(p, gid);
             if (profileManager.discoverGalaxy) profileManager.discoverGalaxy(gid);
+            // Foreign galaxy: only the start planet is open. The map's default start (ensureGalaxyProgress)
+            // and an ally-defense target (discoverGalaxy) would otherwise add more.
+            const ownGalaxy = profileManager.isOwnFactionGalaxy && profileManager.isOwnFactionGalaxy(p, gid);
+            const gpStart = startId && profileManager.ensureGalaxyProgress ? profileManager.ensureGalaxyProgress(p, gid) : null;
+            if (gpStart && !ownGalaxy) gpStart.unlockedPlanetIds = [String(startId).toLowerCase()];
             // Home galaxy: UNDER ATTACK waits until the first stage is cleared.
             const meta = planetConfigManager.getFactionMeta ? planetConfigManager.getFactionMeta(p.faction) : null;
             if (meta && meta.homeGalaxy === gid && profileManager.scheduleHomeInvasion) {
@@ -467,6 +472,41 @@ extendClass(ProfileSelectionManager, {
                 L.weaponSlots = ws;
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
+        }
+        // The kit's second weapon is equipped too: slot 1, opened and sized for it when the hull lacks one.
+        if (bonus.weapon2 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const slm = shipLoadoutManager;
+                const ship = p.activeShipId;
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const e = p.shipUpgrades[ship];
+                const mounts = () => { const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship)); return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons; };
+                if (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
+                const fit = slm.partFitsSlot ? slm.partFitsSlot(ship, 'weapon', bonus.weapon2, 1) : { ok: true };
+                if (!fit.ok) { e.slotLevels = Object.assign({}, e.slotLevels); e.slotLevels['weapon:1'] = (Number(e.slotLevels['weapon:1']) || 0) + (fit.need - fit.have); }
+                const L = slm.getLoadout(ship);
+                const ws = (L.weaponSlots || []).slice();
+                ws[0] = ws[0] || (L.weapons && L.weapons[0]) || 'laser';
+                ws[1] = bonus.weapon2;
+                L.weaponSlots = ws;
+                L.weapons = ws.filter(Boolean);
+                slm.setLoadout(ship, L);
+            } catch (e) { /* stays in the inventory */ }
+        }
+        // Several weapons: slot 1 / 2 / 3 fire on A / S / D (SPACE still fires all).
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
+            try {
+                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                const slm = shipLoadoutManager;
+                const caps = slm.getSlotCaps(p.activeShipId, slm.resolveModelClass(p.activeShipId));
+                const n = Math.max((L.weaponSlots || []).length, slm.weaponMountSlots ? slm.weaponMountSlots(caps.weapons) : caps.weapons);
+                // Empty slots get their key too, ready for the next gun.
+                if (n > 1) {
+                    L.weaponKeys = {}; L.weaponKeySets = {};
+                    ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
+                    shipLoadoutManager.setLoadout(p.activeShipId, L);
+                }
+            } catch (e) { /* keys stay on SPACE */ }
         }
         // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.
         if (p.activeShipId && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.inventoryGrowth) {

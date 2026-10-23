@@ -334,10 +334,30 @@ class UIManager {
      * Sidebar card for a big enemy: portrait on top with the faction crest in its lower-right corner,
      * the name, then vertical hull + shield bars like the player's own vitals.
      */
+    /** Hero = boss or elite / capital craft; everything else on a card is a plain line ship. */
+    isHeroEnemy(enemy) {
+        return !!(enemy && (enemy.isBoss || this.isCardClass(enemy.enemyClass)));
+    }
+
+    /** Faction rank of a hero: title + chevron count (elite 2, capital 3, boss 4). */
+    enemyFactionRank(enemy, faction) {
+        const tier = enemy.isBoss ? 2 : (String(enemy.enemyClass || '').toLowerCase() === 'capital' ? 1 : 0);
+        const titles = {
+            terran: ['LIEUTENANT', 'COMMANDER', 'ADMIRAL'],
+            kronax: ['PACKLEADER', 'WARCHIEF', 'CLAWMASTER'],
+            voidborn: ['HOLLOW', 'RINGWARDEN', 'ECHO'],
+            pirate: ['FIRST MATE', 'CAPTAIN', 'WARLORD'],
+            machine: ['NODE', 'OVERSEER', 'PRIME']
+        };
+        const list = titles[faction] || ['OFFICER', 'COMMANDER', 'WARLORD'];
+        return { title: list[tier], pips: tier + 2 };
+    }
+
     buildEnemyCard(enemy) {
         const isChampion = enemy.key === 'champion';
+        const isHero = this.isHeroEnemy(enemy);
         const card = document.createElement('div');
-        card.className = 'health-bar enemy-health enemy-card-v' + (isChampion ? ' is-champion' : ' is-side') + (enemy.isBoss ? ' is-boss' : '');
+        card.className = 'health-bar enemy-health enemy-card-v' + (isChampion ? ' is-champion' : ' is-side') + (enemy.isBoss ? ' is-boss' : '') + (isHero ? ' is-hero' : ' is-line');
         card.dataset.enemyKey = enemy.key;
         card.dataset.faction = enemy.factionId || '';
 
@@ -356,7 +376,8 @@ class UIManager {
         portrait.setAttribute('data-ui-tip', name);
         let face = '';
         try {
-            if (typeof heroPortrait !== 'undefined' && heroPortrait.html) {
+            // Line ships have no pilot portrait: their card shows the hull, so they never pass for a hero.
+            if (isHero && typeof heroPortrait !== 'undefined' && heroPortrait.html) {
                 face = heroPortrait.html({ faction: faction, v: this.enemyFaceVariant(enemy.key, faction) }, accent);
             }
         } catch (err) { face = ''; }
@@ -379,10 +400,21 @@ class UIManager {
             crest.innerHTML = crestHtml;
             portrait.appendChild(crest);
         }
+        if (accent) card.style.setProperty('--enemy-accent', accent);
+        if (isHero) {
+            const rank = this.enemyFactionRank(enemy, faction);
+            const rankEl = document.createElement('span');
+            rankEl.className = 'enemy-rank';
+            rankEl.innerHTML = '<span class="enemy-rank-pips">' + '<i></i>'.repeat(rank.pips) + '</span>' +
+                '<span class="enemy-rank-title"></span>';
+            rankEl.lastChild.textContent = rank.title;
+            portrait.appendChild(rankEl);
+        }
 
         const nameEl = document.createElement('div');
         nameEl.className = 'enemy-name';
-        nameEl.textContent = (enemy.isBoss ? 'BOSS · ' : '') + name;
+        const lineClass = String(enemy.enemyClass || 'line').toUpperCase();
+        nameEl.textContent = (enemy.isBoss ? 'BOSS · ' : '') + (isHero ? '' : lineClass + ' · ') + name;
 
         const bars = document.createElement('div');
         bars.className = 'enemy-vbars';

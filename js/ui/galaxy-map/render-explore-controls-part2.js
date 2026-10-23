@@ -35,7 +35,8 @@ extendClass(GalaxyMapManager, {
         nodes.forEach(n => {
             const x = W / 2 + (n.x - 0.5) * (W - pad * 2) * mapSpread;
             const y = H / 2 + (n.y - 0.5) * (H - pad * 2) * mapSpread;
-            const unlocked = this.isUnlocked(n.planetId);
+            // Freshly unlocked planets stay drawn locked until the reveal tour lights them up.
+            const unlocked = this.isUnlocked(n.planetId) && !(this._revealPending && this._revealPending[n.planetId]);
             const cleared = this.isCleared(n.planetId);
             const selected = !this.selectedPostId && n.planetId === this.selectedPlanetId;
             const hovered = n.planetId === this.hoveredPlanetId;
@@ -59,9 +60,21 @@ extendClass(GalaxyMapManager, {
                     <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}">
-                            ${this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true)}
-                        </div>
+                        ${(() => {
+                            const icon = this.planetIconHtml(n.planetId, size, true, this.planetLightDir(npt.x, npt.y), true);
+                            // Reachable planets wear their atmosphere (haze tone of the planet art).
+                            // Map icons are <img>s: read the tone from the raw planet SVG, once per planet.
+                            this._atmoTone = this._atmoTone || {};
+                            const sid = String(n.planetId).toLowerCase();
+                            if (unlocked && this._atmoTone[sid] === undefined) {
+                                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
+                                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+                            }
+                            const atmo = unlocked ? (this._atmoTone[sid] || '#9fd8ff') : '';
+                            return `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}${atmo ? ' has-atmo' : ''}"${atmo ? ` style="--atmo:${atmo}"` : ''}>
+                            ${icon}
+                        </div>`;
+                        })()}
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `

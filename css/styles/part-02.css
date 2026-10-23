@@ -2131,3 +2131,43 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill
 /* The bars speak for themselves (values are in the tooltip). */
 .enemy-vitals-side .enemy-card-v .enemy-hp-text,
 .enemy-vitals-side .enemy-card-v .enemy-shield-text { display: none; }
+
+/* Hero vs line ships on the enemy cards: heroes get a thick faction frame with glow and their faction
+   rank on the portrait; line ships show their hull on a flat grey card without a pilot. */
+.enemy-vitals-side .enemy-card-v.is-hero .enemy-portrait {
+    border: 3px solid var(--enemy-accent, var(--color-primary));
+    box-shadow: 0 0 0 1px #05060a, 0 0 10px color-mix(in srgb, var(--enemy-accent, var(--color-primary)) 70%, transparent);
+}
+.enemy-vitals-side .enemy-card-v.is-hero .enemy-name { color: var(--enemy-accent, var(--color-primary)); font-weight: 700; }
+.enemy-vitals-side .enemy-card-v.is-boss .enemy-portrait { border-color: #ff6a5a; }
+.enemy-vitals-side .enemy-card-v .enemy-rank {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    background: rgba(5, 6, 10, .85);
+    font-size: 9px;
+    letter-spacing: 1px;
+    line-height: 1.2;
+    color: #fff;
+    z-index: 1;
+    pointer-events: none;
+}
+.enemy-vitals-side .enemy-card-v .enemy-rank-pips { display: flex; gap: 1px; }
+.enemy-vitals-side .enemy-card-v .enemy-rank-pips i {
+    width: 5px;
+    height: 4px;
+    background: var(--enemy-accent, var(--color-primary));
+    clip-path: polygon(0 0, 50% 60%, 100% 0, 100% 40%, 50% 100%, 0 40%);
+}
+.enemy-vitals-side .enemy-card-v .enemy-rank-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enemy-vitals-side .enemy-card-v.is-line { opacity: .85; }
+.enemy-vitals-side .enemy-card-v.is-line .enemy-portrait {
+    border: 1px dashed #4a4e58;
+    background: repeating-linear-gradient(0deg, #0b0c12 0 2px, #07080c 2px 4px);
+}
+.enemy-vitals-side .enemy-card-v.is-line .enemy-name { color: #8a8f9a; }

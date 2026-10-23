@@ -67,10 +67,11 @@ extendClass(HomeStationUI, {
             });
         } else if (this.shopCategory === 'blueprints') {
             rows = Object.keys(profile.blueprints || {}).filter((id) => profile.blueprints[id] > 0).map((id) => {
-                const cls = this.shipModelClass(id, shipConfigManager.getConfig(id));
-                if (this.shopFilter && this.shopFilter !== 'all' && cls !== this.shopFilter) return '';
-                return this.renderSellLine(chip('hsBlueprint'), `BP: ${this.shipName(id)} ×${profile.blueprints[id]}`,
-                    `${this.shipClassLabel(cls)} · ${this.factionTagHtml(this.shipFaction(id))} · NOT CRAFTED`,
+                const bp = pm.parseBlueprintKey(id);
+                if (!bp) return '';
+                if (this.shopFilter && this.shopFilter !== 'all' && bp.kind !== this.shopFilter) return '';
+                return this.renderSellLine(chip('hsBlueprint'), `BP: ${pm.getBlueprintName(id)} ×${profile.blueprints[id]}`,
+                    `${bp.kind.toUpperCase()} · ${this.factionTagHtml(bp.item.faction)} · NOT CRAFTED`,
                     pm.getBlueprintSellValue(id), `data-sell-bp="${id}"`, '');
             });
         } else if (this.shopCategory === 'parts') {

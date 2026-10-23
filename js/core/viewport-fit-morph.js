@@ -96,6 +96,16 @@
     }
     function morphBezelShape(fromName, toName, ms) {
         const bz = document.getElementById('vf-bezel');
+        // Every call first finalises whatever the PREVIOUS call left behind — cancelling its rAF loop
+        // only stops it from drawing more frames; it does not clear a half-interpolated --fr-shape it
+        // already wrote. A rapid run of calls (cycling factions in the wizard) could cancel call N
+        // before it ever reached its own cleanup line, then have call N+1 bail out early below (no
+        // --fr-shape change, no prefers-reduced-motion, pixel-frame mode, a 0-size bezel mid-layout…)
+        // — leaving that half-morphed polygon permanently in place with nothing left to animate it
+        // away. Clearing it unconditionally up front means an early return at worst snaps straight to
+        // the correct CSS shape instead of freezing on a stuck blend of two unrelated factions.
+        cancelAnimationFrame(raf);
+        if (bz) { bz.style.removeProperty('--fr-shape'); document.body.style.clipPath = ''; }
         if (!bz || !fromName || fromName === toName) return;
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         // Pixel frame: the stepped mask (updateSilhouette) owns the inline clip-path of body and frame. A smooth polygon
@@ -106,7 +116,6 @@
         const A = outline(bz, fromName), B = outline(bz, toName);
         if (!A || !B) return;
         const W = B.W, H = B.H, a = resample(A.pts, A.W, A.H), b = resample(B.pts, W, H);
-        cancelAnimationFrame(raf);
         const t0 = performance.now();
         const step = function (now) {
             const p = Math.min(1, (now - t0) / ms);

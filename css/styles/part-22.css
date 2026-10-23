@@ -1020,6 +1020,12 @@ html body .profile-start-main .profile-side-stats .pk-stat small { grid-area: l;
 /* Start sidebar: the profile's 1-2 weapon types as icons only (name in the tooltip); the faction weapon is the big focus tile. */
 html body .profile-start-main .profile-side-weapons { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0 14px; }
 html body .profile-start-main .profile-side-weapons .pk-weapon { display: grid; place-items: center; width: 56px; height: 56px; box-sizing: border-box; background: #05060a; border: 1px solid color-mix(in srgb, var(--pk-c) 40%, transparent); opacity: .8; cursor: help; }
+html body .profile-start-main .profile-side-weapons .pk-weapon { position: relative; }
+html body .profile-start-main .profile-side-weapons .pk-weapon.is-empty { border-style: dashed; opacity: .6; }
+html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wslot,
+html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wkey { position: absolute; min-width: 14px; padding: 1px 3px; box-sizing: border-box; font-size: 10px; line-height: 12px; text-align: center; letter-spacing: 1px; background: #05060a; pointer-events: none; }
+html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wslot { top: -6px; left: -6px; color: #c8c4d8; border: 1px solid #3a3550; }
+html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wkey { bottom: -6px; right: -6px; color: var(--pk-c); border: 1px solid var(--pk-c); }
 html body .profile-start-main .profile-side-weapons .pk-weapon img { width: 36px; height: 36px; image-rendering: pixelated; }
 html body .profile-start-main .profile-side-weapons .pk-weapon:hover { opacity: 1; }
 html body .profile-start-main .profile-side-weapons .pk-weapon.is-focus { width: 76px; height: 76px; opacity: 1; border: 2px solid var(--pk-c); box-shadow: 0 0 0 2px #05060a, 0 0 12px color-mix(in srgb, var(--pk-c) 45%, transparent); }
@@ -1221,7 +1227,10 @@ html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .
     max-height: 100%;
     object-fit: contain !important;
     object-position: 50% 50% !important;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
     image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }
 html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-pick.selected {
     box-shadow: inset 0 0 0 2px #fff, inset 2px 2px 0 2px #fff;
@@ -1438,4 +1447,37 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
 @media (prefers-reduced-motion: reduce) {
     .gm-sector-planet-bg.has-atmo::before,
     .gm-sector-planet-bg.has-atmo::after { animation: none; }
+}
+
+/* Sort buttons: plain flat chips — the action-button hatch texture made the active label unreadable. */
+html body .hs-slot-picker .hs-pick-sortbtn { background-image: none !important; clip-path: none !important; box-shadow: none !important; text-shadow: none !important; filter: none !important; }
+html body .hs-slot-picker .hs-pick-sortbtn::before, html body .hs-slot-picker .hs-pick-sortbtn::after { display: none !important; }
+html body .hs-slot-picker .hs-pick-sortbtn { background: #05060a !important; color: color-mix(in srgb, #fff 75%, transparent) !important; font-weight: 400 !important; }
+html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: color-mix(in srgb, var(--color-primary) 55%, #05060a) !important; color: #fff !important; border-color: var(--color-primary) !important; font-weight: 700 !important; }
+
+/* Slot picker shortcuts: compact chips instead of tall bars. */
+.hs-pick-keys { flex-basis: 96px; gap: 4px; padding-left: 10px; }
+.hs-pick-keyopt { gap: 8px; min-height: 28px; padding: 0 8px; border-width: 1px !important; }
+.hs-pick-keybox { flex-basis: 14px; width: 14px; height: 14px; border-width: 1px; }
+.hs-pick-keyopt.is-on .hs-pick-keybox { box-shadow: inset 0 0 0 2px #05060a; }
+.hs-pick-keyname { font-size: 12px; letter-spacing: 2px; }
+/* Slot whose picker is open: marked in the SLOTS list (visible beside the modal). */
+html body .hs-slotview-cell.is-picking { position: relative; z-index: 1001; outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 12px var(--pk-c, var(--color-primary)); }
+/* Shortcut sidebar only as wide as its widest chip (SPACE). */
+.hs-pick-keys { flex: 0 0 auto; width: max-content; }
+.hs-pick-keyopt { width: 100%; padding: 0 8px 0 6px; }
+/* Slot picker dialog hugs grid + shortcut sidebar: no empty strip on the right. */
+html body .hs-slot-picker .hs-pick-dialog { width: max-content; max-width: 92vw; }
+/* Sort chips no longer carry .action-button: own base so they still look like buttons. */
+html body .hs-slot-picker .hs-pick-sortbtn { appearance: none; font: inherit; font-size: 12px; letter-spacing: 1px; cursor: pointer; }
+html body .hs-slot-picker .hs-pick-sortbtn:hover:not(.is-active) { border-color: var(--color-primary) !important; color: #fff !important; }
+
+/* Start step: the ship / hull container fills its row exactly; a top margin pushed its bottom border under the clipped content edge. */
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { margin-top: 0 !important; margin-bottom: 0 !important; }
+
+/* Galaxy map: locked planets stay opaque (only darker); reachable ones wear their atmosphere
+   as a glow in the planet's haze tone. */
+.gm-planet-lit.is-locked { opacity: 1; }
+html body .gm-node .gm-node-icon-wrap.has-atmo {
+    filter: drop-shadow(0 0 2px var(--atmo)) drop-shadow(0 0 7px color-mix(in srgb, var(--atmo) 55%, transparent)) !important;
 }

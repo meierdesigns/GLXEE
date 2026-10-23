@@ -15,7 +15,7 @@ extendClass(ProfileSelectionManager, {
         const DOCTRINE = {
             terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold
             kronax: { invCols: -1, invGrowth: -0.15, areas: { center: 1 }, second: { player_assault: 'plasma', player_interceptor: 'spike_burst' } },                       // brutes: armoured core, cramped hold
-            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'nova', player_interceptor: 'ion' } },                                // wanderers: wing level, crystal shards
+            voidborn: { res: { crystal: 12 }, areas: { wing: 1 }, second: { player_assault: 'ion', player_interceptor: 'pierce' } },                              // wanderers: wing level, crystal shards
             pirate: { invCols: 2, invGrowth: 0.25, res: { scrap: 20 }, second: { player_assault: 'burst', player_interceptor: 'rapid' } },                           // smugglers: wide hold that fills fast
             machine: { invCols: -1, invRows: 1, invGrowth: 0.25, res: { ore: 20 }, areas: { front: 1 }, second: { player_assault: 'pierce' } }   // drones: tall modular hold, nose module
         };
@@ -56,13 +56,35 @@ extendClass(ProfileSelectionManager, {
             defs[f].forEach((kit) => {
                 const b = kit.bonus;
                 // Some hulls also start with a second weapon type, owned in the inventory.
-                if (d.second && d.second[kit.ship]) b.weapon2 = d.second[kit.ship];
+                if (d.second && d.second[kit.ship] && this.startPartFits('weapon', d.second[kit.ship])) b.weapon2 = d.second[kit.ship];
                 ['credits', 'invRows', 'invCols', 'invGrowth'].forEach((n) => { if (d[n]) b[n] = (Number(b[n]) || 0) + d[n]; });
                 if (d.res) { b.res = Object.assign({}, b.res); Object.keys(d.res).forEach((r) => { b.res[r] = (b.res[r] || 0) + d.res[r]; }); }
                 if (d.areas) { b.areas = Object.assign({}, b.areas); Object.keys(d.areas).forEach((a) => { const t = (kit.off || []).indexOf(a) < 0 ? a : 'center'; b.areas[t] = (b.areas[t] || 0) + d.areas[a]; }); }   // a hull without that area levels its core instead
             });
         });
         return defs;
+    },
+    /** Does a start part fit a fresh hull's slots? Every start slot is at most M (slot-sizes.js), so L parts never do. */
+    startPartFits(kind, id) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        return !id || !slm || !slm.getPartSizeLevel || slm.getPartSizeLevel(kind, id) <= 1;
+    },
+    /** Wing slot rows of the start ship: the kit's wing level (a pair per row), its bought slots, and room for the second weapon. */
+    startWingRows(kit) {
+        const k = kit || this.currentKit();
+        if ((k.off || []).indexOf('wing') >= 0) return 0;
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const b = k.bonus || {};
+        const lv = Math.min(2, Number((b.areas || {}).wing) || 0);
+        const pairs = slm && slm.getAreaSlotBonus ? Math.ceil(slm.getAreaSlotBonus('wing', lv).filter((x) => x === 'weapons').length / 2) : 0;
+        return Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+    },
+    /** Weapon slots of the start ship in slot order (nose / core gun, then the wing rows): part id or null when empty. */
+    startWeaponSlots(gun) {
+        const k = this.currentKit();
+        const out = [gun, (k.bonus || {}).weapon2 || null];
+        out.length = 1 + this.startWingRows(k);
+        return Array.from(out, (x) => x || null);
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -302,7 +324,9 @@ extendClass(ProfileSelectionManager, {
         let dl = {};
         try { dl = (slm && slm.defaultLoadoutFromShip && slm.defaultLoadoutFromShip(this.startShipId(), this.pendingFaction)) || {}; } catch (e) { /* show empty slots */ }
         // Start profiles: one part per type (weapon, defense, energy core, ability).
-        dl.defenses = (dl.defenses || []).slice(0, 1); dl.abilities = (dl.abilities || []).slice(0, 1); dl.energy = (dl.energy || []).slice(0, 1);
+        // Only parts that fit the start slots are handed out.
+        const fit = (kind, l) => (l || []).filter((id) => this.startPartFits(kind, id)).slice(0, 1);
+        dl.defenses = fit('defense', dl.defenses); dl.abilities = fit('ability', dl.abilities); dl.energy = fit('energy', dl.energy);
         const pname = (id) => String(id).replace(/_/g, ' ').toUpperCase();
                 const filled = (kind, id, lvl, hoverKey) => slot(kind, id, lvl, hoverKey);   // name + stats only as hover tooltip
         const cls = (typeof homeStationUI !== 'undefined' && homeStationUI.shipModelClass && homeStationUI.shipModelClass(this.startShipId(), cfg)) || cfg.modelClass || 'starfighter';
@@ -313,6 +337,9 @@ extendClass(ProfileSelectionManager, {
         // Areas only carry weapon slots: the nose gun, then the wing guns as mirrored pairs.
         const lvOf = (id) => Math.min(max, Number(base[id]) || 0);
         list.forEach((a) => { (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; }); });
+        // The kit's second weapon is equipped in slot 1 (the pilot gets that slot with the kit).
+        const w2 = kitObj.bonus && kitObj.bonus.weapon2;
+        if (w2) caps.weapons = Math.max(caps.weapons, 2);
         const wslots = { front: Math.min(1, caps.weapons), wing: Math.max(0, caps.weapons - 1), center: 0, back: 0 };
         // Core gun (nose-less hulls): slot 0 moves into the core, as one gun or a left / right pair.
         if (kitObj.coreGun && caps.weapons > 0) { wslots.front = 0; wslots.center = kitObj.coreGun === 'split' ? 2 : 1; }
@@ -322,18 +349,18 @@ extendClass(ProfileSelectionManager, {
                 return `<div class="pl-row is-off">${areaIco(a.id, a.label)}<span class="pl-slots"><em>OFF</em></span></div>`;
             }
             const n = wslots[a.id] || 0;
-            // Start profiles hold one weapon only: it sits in the nose (or the core); every other weapon slot is empty.
+            // The start gun sits in the nose (or the core), the kit's second weapon in the first wing slot; the rest stay empty.
             const gun0 = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
-            const ws = [gun0];
+            const ws = [gun0, w2 || null];
             const dmg = cfg.weaponDamage || cfg.damage;
-            const txt = n ? Array.from({ length: n }, (_, i) => (a.id === 'front' ? filled('weapon', ws[0] || startWeaponId, wLv(a.id), 'front') : (a.id === 'center' ? filled('weapon', ws[0] || (dl.weapons && dl.weapons[0]) || startWeaponId, wLv(a.id), 'center') : filled('weapon', ws[1 + i] || null, wLv(a.id), 'wing:' + i)))).join('') : '<em>NO WEAPON SLOT</em>';
+            const txt = n ? Array.from({ length: n }, (_, i) => (a.id === 'front' ? filled('weapon', ws[0] || startWeaponId, wLv(a.id), 'front') : (a.id === 'center' ? filled('weapon', ws[0] || (dl.weapons && dl.weapons[0]) || startWeaponId, wLv(a.id), 'center') : filled('weapon', ws[1 + i] || null, i === 0 && w2 && slm && slm.getPartSizeLevel ? Math.max(wLv(a.id), slm.getPartSizeLevel('weapon', w2)) : wLv(a.id), 'wing:' + i)))).join('') : '<em>NO WEAPON SLOT</em>';
             return `<div class="pl-row">${areaIco(a.id, a.label)}<span class="pl-slots">${txt}</span></div>`;
         }).join('');
         const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null)).join('') || '<em>–</em>';
         const parts = `<div class="pl-parts">` +
             [['defense', caps.defenses, dl.defenses], ['energy', caps.energy, dl.energy], ['ability', caps.abilities, dl.abilities]].map(([k, n, l]) => `<div class="pl-row">${kindIco(k, k.toUpperCase())}<span class="pl-slots">${many(k, n || 0, l)}</span></div>`).join('') + `</div>`;
         const invHtml = this.renderStartInvHtml(kitObj, [['weapon', (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId],
-            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', kitObj.bonus && kitObj.bonus.weapon2, false]], kindColor, tipOf);
+            ['defense', dl.defenses[0]], ['energy', dl.energy[0]], ['ability', dl.abilities[0]], ['weapon', w2]], kindColor, tipOf);
         // Ship stats take the sidebar's top (the inventory below already shows every part).
         const ir2 = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         const stat = (l, v, key, cls) => {
@@ -345,24 +372,28 @@ extendClass(ProfileSelectionManager, {
         };
         const stats = stat('SPEED', cfg.speed, 'statSpeed', 'speed') + stat('HULL', cfg.maxHealth, 'statHealth', 'hull') +
             stat('ARMOR', cfg.armor, 'statArmor', 'armor') + stat('DAMAGE', cfg.weaponDamage || cfg.damage, 'statDamage', 'damage');
-        // Weapon types of the profile: the faction's weapon in focus, plus the hull's start weapon when it differs (1-2 types).
+        // Equipped weapons in slot order, each with a slot / fire-key badge (several guns: A / S / D, one gun: SPACE).
         const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
         const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
-        const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
-        const facW = (fss && fss.getFactionDefaultWeapons ? fss.getFactionDefaultWeapons(this.pendingFaction) : null)
-            || (wcm && wcm.getFactionWeaponAffinity ? wcm.getFactionWeaponAffinity(this.pendingFaction) : []);
-        const focusId = (facW && facW[0]) || gunId;
-        const second = (kitObj.bonus || {}).weapon2 || (gunId !== focusId ? gunId : null);
-        const fam = second ? [focusId, second] : [focusId];
+        const fam = this.startWeaponSlots(gunId);
+        const keyOf = (i) => (fam.length > 1 ? ['A', 'S', 'D'][i] || 'SPACE' : 'SPACE');
+        // Slot size: the nose / core gun is a single M mount (a split core S), wing pairs S; the kit's gun gets a slot grown to fit it.
+        const partLv = (id) => (id && slm && slm.getPartSizeLevel ? slm.getPartSizeLevel('weapon', id) : 0);
+        const slotLv = (i, id) => Math.max(i === 0 ? (kitObj.coreGun === 'split' ? 0 : 1) : 0, partLv(id));
+        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i, id)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
         const weapons = fam.map((wid, wi) => {
+            if (!wid) {
+                return `<span class="pk-weapon is-empty" data-slot="${wi}" style="--pk-c:#8a84a8" data-ui-tip-instant data-ui-tip-head="EMPTY WEAPON SLOT" data-ui-tip="SLOT ${wi + 1} · KEY ${keyOf(wi)}&#10;${sizeTip(wi)}">` +
+                    `<span class="hs-slot-glyph" data-slot-kind="weapon"></span><span class="pk-wslot">${wi + 1}</span><span class="pk-wkey">${keyOf(wi) === 'SPACE' ? 'SPC' : keyOf(wi)}</span></span>`;
+            }
             const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
             const wname = String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
             const ico = ir && ir.weaponImgHtml ? String(ir.weaponImgHtml(wid, 32, 'hs-pixel', false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
             const facBonus = wcm && wcm.getFactionWeaponMul && wcm.getFactionWeaponMul(this.pendingFaction, wid) > 1;
             const hullBonus = wcm && wcm.getShipClassWeaponMul && wcm.getShipClassWeaponMul(cls, wid) > 1;
-            const tip = [wi === 0 ? 'FACTION WEAPON' : 'SECOND WEAPON (IN INVENTORY)', facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
+            const tip = ['SLOT ' + (wi + 1) + ' · KEY ' + keyOf(wi), sizeTip(wi, wid), facBonus ? '+20% DAMAGE (FACTION)' : '', hullBonus ? '+20% DAMAGE (HULL)' : ''].filter(Boolean).join('&#10;');
             const col = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(wid) : '#ff6a4a';
-            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}</span>`;
+            return `<span class="pk-weapon${wi === 0 ? ' is-focus' : ''}" data-slot="${wi}" style="--pk-c:${col}" data-ui-tip-instant data-ui-tip-head="${wname}" data-ui-tip="${tip}">${ico}<span class="pk-wslot">${wi + 1}</span><span class="pk-wkey">${keyOf(wi) === 'SPACE' ? 'SPC' : keyOf(wi)}</span></span>`;
         }).join('');
         return `<div class="profile-loadout-title">WEAPONS</div>
             <div class="profile-side-weapons" data-tip-side="left">${weapons}</div>

@@ -109,40 +109,21 @@ extendClass(HomeStationUI, {
     },
 
     renderCraftTab(profile) {
-        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        const keys = Object.keys(profile.blueprints || {}).filter((k) => (profile.blueprints[k] || 0) > 0);
+        const keys = Object.keys(profile.blueprints || {})
+            .filter((k) => (profile.blueprints[k] || 0) > 0 && profileManager.parseBlueprintKey(k));
         if (!keys.length) {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT')}` +
                 `<div class="hs-tab-fill"><div class="hs-empty-state">` +
                 `<span class="hs-empty-icon">${this.iconHtml('hsBlueprint@d', 64, 'hs-pixel')}</span>` +
                 `<strong class="hs-empty-title">NO BLUEPRINTS YET</strong>` +
-                `<p class="hs-empty-text">Blueprints unlock new ships for the forge.</p>` +
+                `<p class="hs-empty-text">Blueprints let you build ship parts in the forge.</p>` +
                 `<ul class="hs-empty-steps">` +
-                `<li><b>1</b><span>Fly missions and defeat bosses - they drop blueprints.</span></li>` +
+                `<li><b>1</b><span>Fly missions and defeat enemies - they can drop part blueprints.</span></li>` +
                 `<li><b>2</b><span>Teleport cargo to the station to keep them.</span></li>` +
-                `<li><b>3</b><span>Come back here and craft the ship.</span></li>` +
+                `<li><b>3</b><span>Come back here and craft the part.</span></li>` +
                 `</ul></div></div></div>`;
         }
-        const rows = keys.map((id) => {
-            if (profile.ownedShipIds.indexOf(id) !== -1) {
-                return `<div class="hs-line hs-shop-line">` +
-                    `<span class="hs-line-name"><span class="hs-chip-icon">${this.iconHtml('hsBlueprint', 32, 'hs-pixel')}</span>` +
-                    `<strong>${this.shipName(id)}</strong></span>` +
-                    `<span class="hs-muted">OWNED</span></div>`;
-            }
-            const cfg = shipConfigManager.getConfig(id);
-            const cost = (typeof profileManager !== 'undefined' && profileManager.getDiscountedCraftCost)
-                ? profileManager.getDiscountedCraftCost(cfg, profile)
-                : economyConfig.getCraftCost(cfg);
-            const afford = this.canAffordCost(profile.resources, cost);
-            const thumb = this.shipThumbSrc(id, 96);
-            return `<div class="hs-line hs-shop-line hs-craft-line">` +
-                `<span class="hs-line-name"><span class="hs-craft-ship">${thumb ? `<img src="${thumb}" alt="">` : this.iconHtml('hsBlueprint', 56, 'hs-pixel')}</span>` +
-                `<strong>${this.shipName(id)}</strong><em class="hs-craft-count">×${profile.blueprints[id]}</em></span>` +
-                `${this.renderCostGrid(cost, profile.resources)}` +
-                `<button class="action-button hs-line-action hs-craft-go" data-craft="${id}" title="Craft ${esc(this.shipName(id))}" aria-label="Craft" ${afford ? '' : 'disabled'}>` +
-                `<span class="hs-btn-icon">${this.iconHtml('hsCraft', 32, 'hs-pixel')}</span></button></div>`;
-        });
+        const rows = keys.map((key) => this.renderBlueprintRow(key, profile));
         return `<div class="hs-section hs-panel">${this.panelTitle('hsCraft', 'CRAFT FROM BLUEPRINT')}` +
             `<div class="hs-tab-fill">${rows.join('')}</div></div>`;
     },

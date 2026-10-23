@@ -265,7 +265,9 @@ extendClass(ProfileSelectionManager, {
             bz.setAttribute('data-preview', '1');
             const applyBezel = () => {
                 paint();
-                delete bz.dataset.pendingFaction;
+                // A newer pick is still queued behind this swap: keep its early tint and pending mark.
+                const newer = bz.dataset.pendingFaction && bz.dataset.pendingFaction !== id;
+                if (!newer) delete bz.dataset.pendingFaction;
                 bz.setAttribute('data-faction', id);
                 // The whole GUI (window background, cables, palette) follows the pick, not only the bezel. data-preview keeps it out of the saved snapshot.
                 if (typeof factionShipStyles !== 'undefined' && factionShipStyles.stampDocumentTheme) {
@@ -273,8 +275,12 @@ extendClass(ProfileSelectionManager, {
                     factionShipStyles.stampDocumentTheme(id);
                     if (typeof factionGui !== 'undefined') factionGui.sync(id);
                 }
-                bz.style.setProperty('--retro-ink', accent);
-                bz.style.setProperty('--color-primary', accent);
+                if (!newer) {
+                    bz.style.setProperty('--retro-ink', accent);
+                    bz.style.setProperty('--color-primary', accent);
+                    // data-faction now supplies the hull tones: drop the early tint.
+                    ['--hull', '--hull-lit', '--hull-dark'].forEach((k) => bz.style.removeProperty(k));
+                }
                 const crest = bz.querySelector('.vf-pilot-crest');
                 if (crest) crest.setAttribute('data-f', id);
                 if (after) after();
@@ -282,8 +288,29 @@ extendClass(ProfileSelectionManager, {
             if (bz.getAttribute('data-faction') !== id && typeof factionGui !== 'undefined') {
                 // Cables are swapped first; the bezel recolours after the new ones are in.
                 bz.dataset.pendingFaction = id;
+                // The swap waits for the faction art (up to 500 ms) and any running swap; tint the bezel right away
+                // so its colour follows the click. Read the hull tones off a probe so screen-frame.css stays the source.
+                try {
+                    const probe = document.createElement('div');
+                    probe.className = 'vf-bezel';
+                    probe.setAttribute('data-faction', id);
+                    probe.style.cssText = 'position:absolute;width:0;height:0;visibility:hidden;pointer-events:none';
+                    bz.parentNode.appendChild(probe);
+                    const cs = getComputedStyle(probe);
+                    ['--hull', '--hull-lit', '--hull-dark'].forEach((k) => {
+                        const v = cs.getPropertyValue(k).trim();
+                        if (v) bz.style.setProperty(k, v);
+                    });
+                    probe.remove();
+                } catch (e) { /* the swap recolours it */ }
+                bz.style.setProperty('--retro-ink', accent);
+                bz.style.setProperty('--color-primary', accent);
                 factionGui.swap(id, applyBezel);
-            } else applyBezel();
+            } else {
+                // Back on the shown faction: this pick is the newest, so it clears any earlier tint.
+                bz.dataset.pendingFaction = id;
+                applyBezel();
+            }
         } else { paint(); if (after) after(); }
     },
     /** Default player hull drawn in the faction's silhouette and colours. */
@@ -315,6 +342,8 @@ extendClass(ProfileSelectionManager, {
                 model.previewDisabledAreas = dis;
                 model.previewCoreGun = this.currentKit().coreGun || null;
                 model.previewSingleGun = true;
+                model.previewWeapon2 = (this.currentKit().bonus || {}).weapon2 || null;
+                model.previewWingRows = this.startWingRows();
             }
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(model, shipId);
@@ -373,9 +402,9 @@ extendClass(ProfileSelectionManager, {
             ctx.drawImage(tmp, 0, 0);
             // The outline hugs each gun as it is drawn now.
             const boxes = [];
-            gunMods.forEach((m) => { try { const bx = measure(m); if (bx) boxes.push(bx); } catch (e2) { /* keep the other boxes */ } });
+            gunMods.forEach((m) => { try { const bx = measure(m); if (bx) boxes.push(Object.assign(bx, { slot: Number(m.slotIndex) || 0 })); } catch (e2) { /* keep the other boxes */ } });
             // Empty wing slots have nothing to measure: estimated boxes, converted to canvas px.
-            this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale }));
+            this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale, slot: b.slot }));
             this._previewDraw = { boxes };
         } catch (e) {
             /* preview is cosmetic, but assets may still be arriving */
@@ -394,34 +423,30 @@ extendClass(ProfileSelectionManager, {
         // A fresh pilot has no wing guns unless the kit opens a wing level (same rule as the HULL AREAS list).
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         const kit = this.currentKit ? this.currentKit() : null;
-        const wingLv = Math.min(2, Number(((kit && kit.bonus && kit.bonus.areas) || {}).wing) || 0);
-        const off = (kit && kit.off) || [];
-        const wingSlots = off.indexOf('wing') >= 0 || !slm || !slm.getAreaSlotBonus ? 0
-            : slm.getAreaSlotBonus('wing', wingLv).filter((k) => k === 'weapons').length;
+        const rows = kit && slm && this.startWingRows ? this.startWingRows(kit) : 0;
         if (wl && wr) {
-            const rows = Math.max(1, Math.ceil(wingSlots / 2));
-            for (let i = 1; i <= rows && wingSlots; i++) {
+            for (let i = 1; i <= rows; i++) {
                 if (mods.some((m) => m.slotIndex === i && m.wing)) continue;
                 const w = 8, h = 8;
                 const cy = wl.y + wl.height * (i - 0.5) / rows;
                 const x = Math.round(wl.x + wl.width * (1 - 0.36) - w / 2);
-                boxes.push({ x, y: Math.round(cy - h / 2), width: w, height: h, empty: true });
-                boxes.push({ x: Math.round(mw - x - w), y: Math.round(cy - h / 2), width: w, height: h, empty: true });
+                boxes.push({ x, y: Math.round(cy - h / 2), width: w, height: h, empty: true, slot: i });
+                boxes.push({ x: Math.round(mw - x - w), y: Math.round(cy - h / 2), width: w, height: h, empty: true, slot: i });
             }
         }
         // Drop duplicates (same box twice after mirroring).
         const uniq = {};
         return boxes.filter((b) => { const k = [b.x, b.y, b.width, b.height].join(','); if (uniq[k]) return false; uniq[k] = 1; return true; });
     },
-    /** Hovering the ship preview: outline every weapon mount on the ship with a soft pulse. on=false clears it. */
-    highlightPreviewWeapon(on) {
+    /** Hovering the ship preview: outline every weapon mount on the ship with a soft pulse; `slot` limits it to one weapon slot. on=false clears it. */
+    highlightPreviewWeapon(on, slot) {
         const canvas = this.overlay && this.overlay.querySelector('.profile-faction-ship');
         if (this._fxRaf) { cancelAnimationFrame(this._fxRaf); this._fxRaf = 0; }
         let fx = this.overlay && this.overlay.querySelector('.profile-faction-ship-fx');
         if (!on || !canvas || !this._previewDraw) { if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height); return; }
         const d = this._previewDraw;
-        const mods = d.boxes || [];
-        if (!mods.length) return;
+        const mods = (d.boxes || []).filter((b) => slot == null || b.slot === slot);
+        if (!mods.length) { if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height); return; }
         if (!fx) {
             fx = document.createElement('canvas');
             fx.className = 'profile-faction-ship-fx';

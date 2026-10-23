@@ -9,10 +9,11 @@ extendClass(ProfileManager, {
         const stats = this.getStationStats(profile);
         const chance = Math.min(0.5, economyConfig.getBlueprintDropChance(killInfo) + (stats.dropBonus || 0));
         if (Math.random() > chance) return null;
-        const shipId = economyConfig.pickBlueprintShipId(profile.ownedShipIds);
-        if (!shipId) return null;
-        this.addCargoBlueprint(shipId, 1);
-        return shipId;
+        const pool = this.getBlueprintPool();
+        if (!pool.length) return null;
+        const key = pool[Math.floor(Math.random() * pool.length)];
+        this.addCargoBlueprint(key, 1);
+        return key;
     },
 
     hasCargo() {
@@ -202,27 +203,6 @@ extendClass(ProfileManager, {
         if (!profile) return false;
         this.ensureEconomyDefaults(profile);
         return profile.unlockedShopIds.indexOf(String(shipId || '')) !== -1;
-    },
-
-    unlockShopItem(shipId) {
-        const profile = this.getActiveProfile();
-        if (!profile) return { ok: false, reason: 'NO PROFILE' };
-        this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (profile.unlockedShopIds.indexOf(id) !== -1) {
-            return { ok: false, reason: 'ALREADY UNLOCKED' };
-        }
-        const count = profile.blueprints[id] || 0;
-        if (count < 1) return { ok: false, reason: 'NO BLUEPRINT' };
-        profile.blueprints[id] = count - 1;
-        if (profile.blueprints[id] <= 0) delete profile.blueprints[id];
-        profile.unlockedShopIds.push(id);
-        this.discover('ships', id);
-        this.save();
-        return { ok: true };
     },
 
     buyShip(shipId) {

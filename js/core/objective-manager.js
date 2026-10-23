@@ -337,9 +337,18 @@ class ObjectiveManager {
         if (g.dome) {
             g.dome.flashMs = Math.max(0, g.dome.flashMs - deltaTime);
             // Shot open: the halves fold back like the arrival hatch instead of bursting.
-            if (g.dome.hp <= 0) {
-                g.dome.burstMs += deltaTime;
-                g.dome.split = Math.min(1, g.dome.burstMs / 500);
+            if (g.dome.hp <= 0 && g.dome.closing) {
+                // Auto-opened hatch closing again: the halves fold back in, then it is sealed.
+                g.dome.burstMs = Math.max(0, g.dome.burstMs - deltaTime);
+                g.dome.split = g.dome.burstMs / 500;
+                if (g.dome.burstMs <= 0) {
+                    g.dome.hp = g.dome.max;
+                    g.dome.closing = false;
+                    g.dome.split = 0;
+                }
+            } else if (g.dome.hp <= 0) {
+                g.dome.burstMs = Math.min(500, g.dome.burstMs + deltaTime);
+                g.dome.split = g.dome.burstMs / 500;
             }
         }
         const pm = typeof playerManager !== 'undefined' ? playerManager : null;
@@ -359,10 +368,19 @@ class ObjectiveManager {
             return;
         }
         const inOpening = Math.abs(px - g.cx) <= g.open / 2;
-        // Approaching the sealed hatch below its opening makes it fold open on its own.
-        if (this.isGateSealed() && Math.abs(px - g.cx) <= g.open / 2 + 24
-            && p.y - (g.y + g.h + g.dome.depth) <= 48) {
-            this.openGateDome();
+        // Approaching the sealed hatch below its opening makes it fold open on its own,
+        // but only once the field is clear (status lamp green); until then it has to be shot open.
+        // An auto-opened hatch closes again once the ship moves away; a shot-open one stays open.
+        if (g.dome) {
+            const d = g.dome;
+            const dx = Math.abs(px - g.cx) - g.open / 2;
+            const dy = p.y - (g.y + g.h + d.depth);
+            if (dx <= 24 && dy <= 48 && this.isFieldClear()) {
+                if (this.isGateSealed()) this.openGateDome();
+                else if (d.closing) d.closing = false;
+            } else if (d.auto && d.hp <= 0 && !d.closing && (dx > 40 || dy > 80)) {
+                d.closing = true;
+            }
         }
         // Sealed hatch: the dome is as solid as the walls.
         if (this.isGateSealed()) {
@@ -404,6 +422,8 @@ class ObjectiveManager {
         const d = this.goal && this.goal.dome;
         if (!d || d.hp <= 0) return;
         d.hp = 0;
+        d.auto = true;
+        d.closing = false;
         d.burstMs = 0;
         d.split = 0;
     }
@@ -414,6 +434,7 @@ class ObjectiveManager {
         if (!d || d.hp <= 0) return false;
         d.hp = Math.max(0, d.hp - Math.max(1, Number(amount) || 10));
         d.flashMs = 90;
+        d.auto = false;
         if (d.hp > 0) return false;
         d.burstMs = 0;
         d.split = 0;
@@ -573,7 +594,31 @@ class ObjectiveManager {
             ctx.fillStyle = 'rgba(' + th.edge + ',' + (0.35 + pulse * 0.45) + ')';
             ctx.fillRect(l - 2, g.y, 3, g.h);
             ctx.fillRect(r - 1, g.y, 3, g.h);
+            if (g === this.goal && g.dome) this.renderGateLamps(ctx, g, l, r);
         }
+    }
+
+    /** Status lamps beside the sluice opening: blinking red while enemies remain, green once it opens on approach. */
+    renderGateLamps(ctx, g, l, r) {
+        const free = !this.isGateSealed() || this.isFieldClear();
+        const on = free || Math.sin(Date.now() / 140) > -0.3;
+        const y = g.y + Math.round(g.h / 2) - 3;
+        [l - 10, r + 4].forEach((x) => {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 1, y - 1, 8, 8);
+            if (on) {
+                ctx.fillStyle = free ? 'rgba(93,255,122,0.35)' : 'rgba(255,64,64,0.35)';
+                ctx.fillRect(x - 3, y - 3, 12, 12);
+                ctx.fillStyle = '#05060a';
+                ctx.fillRect(x - 1, y - 1, 8, 8);
+            }
+            ctx.fillStyle = on ? (free ? '#5dff7a' : '#ff4040') : '#3a1414';
+            ctx.fillRect(x, y, 6, 6);
+            if (on) {
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillRect(x + 1, y + 1, 2, 2);
+            }
+        });
     }
 
     /**

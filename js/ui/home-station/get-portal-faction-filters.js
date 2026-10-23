@@ -36,7 +36,7 @@ extendClass(HomeStationUI, {
     },
 
     renderShopToolbar() {
-        const isParts = this.shopCategory === 'parts';
+        const isParts = this.shopCategory === 'parts' || this.shopCategory === 'blueprints';
         const isPortals = this.shopCategory === 'portals';
         const isResources = this.shopCategory === 'resources';
         const isStyles = this.shopCategory === 'styles';

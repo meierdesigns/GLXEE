@@ -54,3 +54,7 @@ assets/weapons/sprites/
 
 # Local archive of unused assets (not shipped)
 archive/
+
+# Local itch upload zips and scratch shots (not shipped in the repo download)
+.claude/
+shot-probe.png

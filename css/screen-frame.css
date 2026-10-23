@@ -1,5 +1,12 @@
 /* ==========================================================================
-   SCREEN FRAME (bezel) — one mechanic, factions only set tokens.
+   SCREEN FRAME (bezel) — three layers, back to front:
+
+     1. BG image          (window / parallax, behind everything)
+     2. Screen content    (station, fight, … sized to --fr-open-*)
+     3. #vf-bezel         (frame on top; pointer-events:none except tools)
+          .vf-bezel-back  opaque band fill (--fr-bg-crop 0..1 = how far the
+                          fill reaches from the outer edge toward the glass)
+          .vf-fr          hull plates / faction art in the band
 
    A faction supplies (on .vf-bezel[data-faction="…"]):
      --fr-shape    clip-path of the OUTER silhouette (polygon / inset round …)
@@ -18,7 +25,6 @@
        hull  : silhouette shifted down-right AND shifted up-left (the middle)
      The uncovered bands ARE the bevel; they follow every corner and notch of
      --fr-shape by construction, so a new faction shape needs no bevel code.
-     The opening's own edge bevel is drawn on ::before (follows --fr-hole-r).
    ========================================================================== */
 
 .vf-bezel {
@@ -40,7 +46,12 @@
     --u: var(--bz-u);
     --fr-shape-terran: polygon(calc(30 * var(--u)) calc(14 * var(--u)), 36% calc(14 * var(--u)), 42% calc(8 * var(--u)), 46% calc(8 * var(--u)), 50% 0, 54% calc(8 * var(--u)), 58% calc(8 * var(--u)), 64% calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) calc(14 * var(--u)), calc(100% - calc(30 * var(--u))) 0, 100% 0, 100% calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(30 * var(--u)), calc(100% - calc(14 * var(--u))) calc(100% - calc(30 * var(--u))), 100% calc(100% - calc(30 * var(--u))), 100% 100%, calc(100% - calc(30 * var(--u))) 100%, calc(100% - calc(30 * var(--u))) calc(100% - calc(14 * var(--u))), 64% calc(100% - calc(14 * var(--u))), 58% calc(100% - calc(8 * var(--u))), 42% calc(100% - calc(8 * var(--u))), 36% calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) calc(100% - calc(14 * var(--u))), calc(30 * var(--u)) 100%, 0 100%, 0 calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(100% - calc(30 * var(--u))), calc(14 * var(--u)) calc(30 * var(--u)), 0 calc(30 * var(--u)), 0 0, calc(30 * var(--u)) 0);
     --fr-shape-kronax: polygon(0.0% calc(0 * var(--u)), 4.2% calc(16 * var(--u)), 8.3% calc(0 * var(--u)), 12.5% calc(16 * var(--u)), 16.7% calc(0 * var(--u)), 20.8% calc(16 * var(--u)), 25.0% calc(0 * var(--u)), 29.2% calc(16 * var(--u)), 33.3% calc(0 * var(--u)), 37.5% calc(16 * var(--u)), 41.7% calc(0 * var(--u)), 45.8% calc(16 * var(--u)), 50.0% calc(0 * var(--u)), 54.2% calc(16 * var(--u)), 58.3% calc(0 * var(--u)), 62.5% calc(16 * var(--u)), 66.7% calc(0 * var(--u)), 70.8% calc(16 * var(--u)), 75.0% calc(0 * var(--u)), 79.2% calc(16 * var(--u)), 83.3% calc(0 * var(--u)), 87.5% calc(16 * var(--u)), 91.7% calc(0 * var(--u)), 95.8% calc(16 * var(--u)), 100.0% calc(0 * var(--u)), 100% calc(40 * var(--u)), calc(100% - calc(10 * var(--u))) 30%, 100% 50%, calc(100% - calc(10 * var(--u))) 70%, 100% calc(100% - calc(40 * var(--u))), 100.0% calc(100% - calc(0 * var(--u))), 95.8% calc(100% - calc(16 * var(--u))), 91.7% calc(100% - calc(0 * var(--u))), 87.5% calc(100% - calc(16 * var(--u))), 83.3% calc(100% - calc(0 * var(--u))), 79.2% calc(100% - calc(16 * var(--u))), 75.0% calc(100% - calc(0 * var(--u))), 70.8% calc(100% - calc(16 * var(--u))), 66.7% calc(100% - calc(0 * var(--u))), 62.5% calc(100% - calc(16 * var(--u))), 58.3% calc(100% - calc(0 * var(--u))), 54.2% calc(100% - calc(16 * var(--u))), 50.0% calc(100% - calc(0 * var(--u))), 45.8% calc(100% - calc(16 * var(--u))), 41.7% calc(100% - calc(0 * var(--u))), 37.5% calc(100% - calc(16 * var(--u))), 33.3% calc(100% - calc(0 * var(--u))), 29.2% calc(100% - calc(16 * var(--u))), 25.0% calc(100% - calc(0 * var(--u))), 20.8% calc(100% - calc(16 * var(--u))), 16.7% calc(100% - calc(0 * var(--u))), 12.5% calc(100% - calc(16 * var(--u))), 8.3% calc(100% - calc(0 * var(--u))), 4.2% calc(100% - calc(16 * var(--u))), 0.0% calc(100% - calc(0 * var(--u))), 0 calc(100% - calc(40 * var(--u))), calc(10 * var(--u)) 70%, 0 50%, calc(10 * var(--u)) 30%, 0 calc(40 * var(--u)));
-    --fr-shape-voidborn: inset(0 round calc(56 * var(--u)));
+    /* A smooth circular round() clip cut through the vine's blocky pixel-art corner at an
+       angle that never lines up with the art's own steps, leaving a visibly uneven seam.
+       The vine corner tile is itself drawn as a straight 45° chamfer (flat, diagonal,
+       flat), so clip to that same chamfer instead of a circle — it tracks the pixel art
+       exactly, the same way terran/kronax/pirate/machine clip to their own drawn shape. */
+    --fr-shape-voidborn: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
     --fr-shape-pirate: polygon(0.0% calc(6 * var(--u)), 3.3% calc(10 * var(--u)), 6.7% calc(0 * var(--u)), 10.0% calc(0 * var(--u)), 13.3% calc(4 * var(--u)), 16.7% calc(4 * var(--u)), 20.0% calc(6 * var(--u)), 23.3% calc(0 * var(--u)), 26.7% calc(3 * var(--u)), 30.0% calc(0 * var(--u)), 33.3% calc(4 * var(--u)), 36.7% calc(0 * var(--u)), 40.0% calc(0 * var(--u)), 43.3% calc(4 * var(--u)), 46.7% calc(3 * var(--u)), 50.0% calc(4 * var(--u)), 53.3% calc(0 * var(--u)), 56.7% calc(0 * var(--u)), 60.0% calc(4 * var(--u)), 63.3% calc(3 * var(--u)), 66.7% calc(0 * var(--u)), 70.0% calc(0 * var(--u)), 73.3% calc(0 * var(--u)), 76.7% calc(3 * var(--u)), 80.0% calc(0 * var(--u)), 83.3% calc(10 * var(--u)), 86.7% calc(14 * var(--u)), 90.0% calc(0 * var(--u)), 93.3% calc(10 * var(--u)), 96.7% calc(4 * var(--u)), 100.0% calc(14 * var(--u)), calc(100% - calc(12 * var(--u))) 8%, calc(100% - calc(0 * var(--u))) 16%, calc(100% - calc(0 * var(--u))) 24%, calc(100% - calc(3 * var(--u))) 32%, calc(100% - calc(12 * var(--u))) 40%, calc(100% - calc(0 * var(--u))) 48%, calc(100% - calc(0 * var(--u))) 56%, calc(100% - calc(3 * var(--u))) 64%, calc(100% - calc(5 * var(--u))) 72%, calc(100% - calc(12 * var(--u))) 80%, calc(100% - calc(3 * var(--u))) 88%, 100.0% calc(100% - calc(10 * var(--u))), 96.7% calc(100% - calc(12 * var(--u))), 93.3% calc(100% - calc(7 * var(--u))), 90.0% calc(100% - calc(12 * var(--u))), 86.7% calc(100% - calc(2 * var(--u))), 83.3% calc(100% - calc(5 * var(--u))), 80.0% calc(100% - calc(5 * var(--u))), 76.7% calc(100% - calc(16 * var(--u))), 73.3% calc(100% - calc(10 * var(--u))), 70.0% calc(100% - calc(7 * var(--u))), 66.7% calc(100% - calc(10 * var(--u))), 63.3% calc(100% - calc(16 * var(--u))), 60.0% calc(100% - calc(5 * var(--u))), 56.7% calc(100% - calc(3 * var(--u))), 53.3% calc(100% - calc(12 * var(--u))), 50.0% calc(100% - calc(3 * var(--u))), 46.7% calc(100% - calc(16 * var(--u))), 43.3% calc(100% - calc(7 * var(--u))), 40.0% calc(100% - calc(10 * var(--u))), 36.7% calc(100% - calc(10 * var(--u))), 33.3% calc(100% - calc(7 * var(--u))), 30.0% calc(100% - calc(2 * var(--u))), 26.7% calc(100% - calc(10 * var(--u))), 23.3% calc(100% - calc(3 * var(--u))), 20.0% calc(100% - calc(0 * var(--u))), 16.7% calc(100% - calc(5 * var(--u))), 13.3% calc(100% - calc(5 * var(--u))), 10.0% calc(100% - calc(7 * var(--u))), 6.7% calc(100% - calc(3 * var(--u))), 3.3% calc(100% - calc(5 * var(--u))), 0.0% calc(100% - calc(12 * var(--u))), calc(12 * var(--u)) 92%, calc(0 * var(--u)) 84%, calc(0 * var(--u)) 76%, calc(4 * var(--u)) 68%, calc(4 * var(--u)) 60%, calc(2 * var(--u)) 52%, calc(2 * var(--u)) 44%, calc(2 * var(--u)) 36%, calc(4 * var(--u)) 28%, calc(12 * var(--u)) 20%, calc(4 * var(--u)) 12%);
     --fr-shape-machine: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
 }
@@ -51,6 +62,105 @@
 .vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; --fr-shape: var(--fr-shape-pirate); }
 .vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; --fr-shape: var(--fr-shape-machine); }
 .vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)); }
+
+/* Voidborn: the hull is nothing but vine. Plates take the vine's outline colour (no
+   lit/dark bevel bands, no screen-edge bevel), and bolts, vents and hazard strips are
+   gone — whatever shows between the vines reads as vine outline, not as a panel.
+   --fr-bg-crop: 0 also makes .vf-bezel-back's hull fill fully transparent (part-19.css):
+   a smooth CSS round clip cutting through blocky pixel-art vine can never align to the
+   art's own pixel steps, so some gap between vine and the true silhouette is unavoidable.
+   With the fill transparent, that gap shows the parallax BG — already sitting behind
+   everything — instead of a flat hull-dark patch that reads as a rendering error. */
+.vf-bezel[data-faction="voidborn"] {
+    --hull: #14041c;
+    --hull-lit: #14041c;
+    --hull-dark: #14041c;
+    --fr-bv: 0px;
+    --_vi: var(--fr-vine-inset, 2);
+    --_vine-ov: 16;
+    /* One stroke width for the rim vine (sides + bottom + the organic TL/TR/BL/BR
+       tentacle corners). Shared so the top mid thickener can clear those corner squares. */
+    --_vine-th: calc(var(--fr-ol) - var(--_vi) * var(--u) + var(--_vine-ov) * var(--u));
+    --fr-bg-crop: 0;
+}
+.vf-bezel[data-faction="voidborn"] .vf-fr-lit { --fr-c: #14041c; }
+/* Voidborn: no metal hull texture — vines + .vf-bezel-back fill only. */
+.vf-bezel[data-faction="voidborn"]::after {
+    background: none !important;
+    box-shadow: none !important;
+}
+/* The metal hull must not show at all: saved frame colours (inline --hull) and the pixel
+   frame's baked voxel bitmap (inline background on .vf-fr) would bring it back, and the
+   deco layer adds light strips and service panels. So the plates and deco are off and
+   .vf-fr is fully transparent — .vf-bezel-back + vines paint the band. */
+#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr > .vf-fr-p,
+#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { display: none !important; }
+#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr {
+    background: none !important;
+}
+/* Thick top mid only — no end caps. Caps butted against the side vine made a flat
+   shelf, not a tentacle bend. Corners come from the continuous 9-slice on .vf-fr::after;
+   this layer only fattens the top band between the corner squares. */
+.vf-bezel[data-faction="voidborn"]::before {
+    content: '' !important;
+    display: block !important;
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    /* Clear the TL/TR 9-slice corner squares so the rim vine's tentacle bend stays visible. */
+    left: calc(var(--_vi) * var(--u) + var(--_vine-th));
+    right: calc(var(--_vi) * var(--u) + var(--_vine-th));
+    top: 0;
+    height: var(--fr-ot);
+    border-radius: 0 !important;
+    clip-path: var(--fr-shape);
+    box-sizing: border-box;
+    border: none;
+    background: url('../assets/ui/voidborn-vine-top-mid.svg') repeat-x 0 0 / calc(32 * 5 * var(--u)) var(--fr-ot);
+    image-rendering: pixelated;
+}
+/* Rim vine: full 9-slice including top. One asset wraps TL→top→TR→… so the corners are
+   a continuous tentacle bend instead of two vines meeting at a hard step. top:0 keeps the
+   outer top flush; side/bottom keep --_vi inset. */
+.vf-bezel[data-faction="voidborn"] .vf-fr::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    box-sizing: border-box;
+    clip-path: var(--fr-shape);
+    border: var(--_vine-th) solid transparent;
+    border-image: url('../assets/ui/voidborn-bezel-vine.svg') 16 round;
+    image-rendering: pixelated;
+    animation: vf-void-vine-creep var(--vf-vine-dur, 48s) steps(1, end) infinite;
+    left: calc(var(--_vi) * var(--u));
+    right: calc(var(--_vi) * var(--u));
+    bottom: calc(var(--_vi) * var(--u));
+    top: 0;
+}
+/* Occasional twitch, not a steady flow: frames are visited out of order (no consistent
+   "direction" to read) and held for long, uneven spans, so the vine mostly sits still and
+   only occasionally shifts somewhere — never a continuous wave around the whole band.
+   Speed from VINE MOTION (urls resolve against this sheet). */
+@keyframes vf-void-vine-creep {
+    0%      { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg'); }
+    4%      { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg'); }
+    18%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg'); }
+    21%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-9.svg'); }
+    23%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-9.svg'); }
+    40%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-2.svg'); }
+    41%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-2.svg'); }
+    60%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-7.svg'); }
+    62%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-7.svg'); }
+    64%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-10.svg'); }
+    80%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-10.svg'); }
+    83%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg'); }
+    97%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg'); }
+}
+html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    .vf-bezel[data-faction="voidborn"] .vf-fr::after { animation: none; }
+}
 
 /* ── Plates ───────────────────────────────────────────────────────────── */
 .vf-fr {
@@ -73,6 +183,49 @@
     bottom: var(--fr-ob);
     border-radius: var(--fr-hole-r);
     box-shadow: 0 0 0 200vmax var(--fr-c);
+}
+
+/* ── Frame edit (Devmode): draggable grips for STAGE INSET / BG CROP / VINE INSET ───────── */
+.vf-frame-edit-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+}
+.vf-frame-edit-row {
+    position: absolute;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: calc(6 * var(--u));
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+.vf-frame-edit-label {
+    font: 10px/1 var(--font-mono, monospace);
+    letter-spacing: 0.05em;
+    color: #fff;
+    text-shadow: 0 0 3px #000, 0 0 6px #000;
+    white-space: nowrap;
+    transform: translateX(calc(-100% - 8px));
+}
+.vf-frame-edit-grip {
+    position: absolute;
+    width: calc(12 * var(--u));
+    height: calc(12 * var(--u));
+    margin-left: calc(-6 * var(--u));
+    border-radius: 999px;
+    background: #ff2fd6;
+    border: 2px solid #fff;
+    box-shadow: 0 0 6px #000, 0 0 10px #ff2fd6aa;
+    pointer-events: auto;
+    cursor: ew-resize;
+    touch-action: none;
+}
+.vf-frame-edit-grip.is-dragging,
+.vf-frame-edit-grip:hover {
+    background: #fff;
+    box-shadow: 0 0 8px #000, 0 0 14px #ff2fd6;
 }
 .vf-fr-dark { --fr-c: var(--hull-dark); }
 .vf-fr-lit  { --fr-c: color-mix(in srgb, var(--hull-lit) 40%, #fff); transform: translate(calc(-1 * var(--fr-bevel)), calc(-1 * var(--fr-bevel))); }
@@ -111,9 +264,8 @@
         repeating-linear-gradient(0deg, #ffffff08 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(3 * var(--u))) !important;
 }
 
-/* ── Screen opening: rounded glass edge + bevel that follows --fr-hole-r ── */
-.vf-bezel::before,
-.vf-bezel-back { border-radius: var(--fr-hole-r) !important; }
+/* ── Screen opening: ::before retired in smooth mode (voidborn reuses it for vines).
+   Band fill lives on .vf-bezel-back only — see part-19.css. ── */
 .vf-bezel::before {
     content: none !important;
     display: none !important;
@@ -187,3 +339,22 @@ html body .game-container .game-canvas-container > .game-stage #gameCanvas {
         0 0 0 var(--fight-frame) #05060a !important;
 }
 html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas { border-radius: 10px; }
+/* Voidborn: the flat fight-frame bevel is vine too, not a painted band. The canvas itself
+   can't take a border-image (replaced element), so the vine sits on the padding box that
+   wraps it (.game-stage), using the thin panel vine at the fight-frame's own 12px width. */
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
+    border: var(--fight-frame) solid transparent;
+    border-image: url('../assets/ui/voidborn-vine-frame.svg') 16 round;
+    image-rendering: pixelated;
+    padding: 0;
+}
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas { box-shadow: 0 0 0 2px #05060a !important; }
+/* The pilot crest badge is a flat --ph-accent fill by default (pilot-hud.css); for
+   voidborn it gets the same dithered checker as the bezel hull instead of a solid blob. */
+.vf-bezel[data-faction="voidborn"] .vf-pilot-crest {
+    background: none;
+}
+/* The pilot screens' grey frame tab (pilot-hud.css ::after) is a metal dither from the
+   hull tokens; for voidborn those are flattened to one dark tone (above), so swap its
+   two dither colours for the vine's own palette instead, same mechanism, organic tones. */
+.vf-bezel[data-faction="voidborn"] { --ph-tab-a: #d45cc0; --ph-tab-b: #4e1446; }

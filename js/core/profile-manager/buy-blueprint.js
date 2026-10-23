@@ -2,34 +2,63 @@
 
 // ProfileManager methods, split from profile-manager.js.
 extendClass(ProfileManager, {
-    buyBlueprint(shipId) {
+    /**
+     * Blueprints are for parts, keyed `kind:partId` (kind: weapon | defense |
+     * ability | energy). Returns null for unknown or legacy ship keys.
+     */
+    parseBlueprintKey(key) {
+        const raw = String(key || '');
+        const sep = raw.indexOf(':');
+        if (sep === -1) return null;
+        const kind = raw.slice(0, sep);
+        const id = raw.slice(sep + 1);
+        if (!id || (kind !== 'weapon' && kind !== 'defense' && kind !== 'ability' && kind !== 'energy')) {
+            return null;
+        }
+        const item = this.getPartItem(kind, id);
+        if (!item) return null;
+        return { key: kind + ':' + id, kind: kind, id: id, item: item };
+    },
+
+    getBlueprintName(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return String(key || '').toUpperCase();
+        const name = (bp.kind !== 'weapon' && typeof abilityConfigManager !== 'undefined' && abilityConfigManager.getDisplayName)
+            ? abilityConfigManager.getDisplayName(bp.id)
+            : bp.item.name;
+        return String(name || bp.id).toUpperCase();
+    },
+
+    /** Parts a blueprint can drop for: every weapon, defense, shop ability and the energy core. */
+    getBlueprintPool() {
+        const keys = [];
+        if (typeof weaponConfigManager !== 'undefined') {
+            weaponConfigManager.getIds().forEach((id) => keys.push('weapon:' + id));
+        }
+        if (typeof abilityConfigManager !== 'undefined') {
+            const byCluster = abilityConfigManager.getIdsByCluster();
+            (byCluster.defense || []).forEach((id) => keys.push('defense:' + id));
+            TRADING_POST_ABILITY_IDS.forEach((id) => {
+                if (abilityConfigManager.getAbility(id)) keys.push('ability:' + id);
+            });
+            if (abilityConfigManager.getAbility('energy_core')) keys.push('energy:energy_core');
+        }
+        return keys.filter((k) => this.parseBlueprintKey(k));
+    },
+
+    buyBlueprint(key) {
         const profile = this.getActiveProfile();
-        if (!profile || typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') {
+        if (!profile || typeof economyConfig === 'undefined') {
             return { ok: false, reason: 'NO PROFILE' };
         }
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const cost = economyConfig.getBlueprintCost(bp.kind, bp.item);
+        if (!this.spendCredits(cost.credits)) {
+            return { ok: false, reason: 'CREDITS' };
         }
-        const cfg = shipConfigManager.getConfig(id);
-        if (!cfg || cfg.custom) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (!this.isShipAvailableInShop(id, profile)) {
-            return { ok: false, reason: 'WRONG GALAXY' };
-        }
-        const cost = economyConfig.getBlueprintCost(cfg);
-        const creditCost = Math.max(0, Math.round(Number(cost.credits) || 0));
-        if (creditCost > 0) {
-            if (!this.spendCredits(creditCost)) {
-                return { ok: false, reason: 'CREDITS' };
-            }
-        } else if (!this.spendResources(cost)) {
-            return { ok: false, reason: 'RESOURCES' };
-        }
-        profile.blueprints[id] = (profile.blueprints[id] || 0) + 1;
-        this.discover('ships', id);
+        profile.blueprints[bp.key] = (profile.blueprints[bp.key] || 0) + 1;
         this.save();
         return { ok: true };
     },
@@ -134,36 +163,43 @@ extendClass(ProfileManager, {
         return 0;
     },
 
-    craftShip(shipId) {
+    getBlueprintCraftCost(key, profile) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return null;
+        const base = economyConfig.getBlueprintCraftCost(bp.kind, bp.item);
+        const stats = this.getStationStats(profile);
+        const discount = Math.max(0, Math.min(0.5, Number(stats.craftDiscount) || 0));
+        if (discount <= 0) return base;
+        const out = {};
+        Object.keys(base).forEach((id) => {
+            out[id] = Math.max(1, Math.ceil(base[id] * (1 - discount)));
+        });
+        return out;
+    },
+
+    /** Uses one blueprint plus resources to build its part into station storage. */
+    craftBlueprint(key) {
         const profile = this.getActiveProfile();
-        if (!profile || typeof economyConfig === 'undefined' || typeof shipConfigManager === 'undefined') {
+        if (!profile || typeof economyConfig === 'undefined') {
             return { ok: false, reason: 'NO PROFILE' };
         }
         this.ensureEconomyDefaults(profile);
-        const id = String(shipId || '');
-        if (!id || id === this.getStarterShipId()) {
-            return { ok: false, reason: 'INVALID' };
-        }
-        if (profile.ownedShipIds.indexOf(id) !== -1) {
-            return { ok: false, reason: 'OWNED' };
-        }
-        if (this.getFreeShipSlots(profile) < 1) {
-            return { ok: false, reason: 'NO SHIP SLOTS' };
-        }
-        const bp = profile.blueprints[id] || 0;
-        if (bp < 1) return { ok: false, reason: 'NO BLUEPRINT' };
-        const cfg = shipConfigManager.getConfig(id);
-        const cost = this.getDiscountedCraftCost(cfg, profile);
-        if (!economyConfig.canAfford(profile.resources, cost)) {
-            return { ok: false, reason: 'RESOURCES' };
-        }
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const count = profile.blueprints[bp.key] || 0;
+        if (count < 1) return { ok: false, reason: 'NO BLUEPRINT' };
+        const cost = this.getBlueprintCraftCost(bp.key, profile);
         if (!this.spendResources(cost)) {
             return { ok: false, reason: 'RESOURCES' };
         }
-        profile.blueprints[id] = bp - 1;
-        if (profile.blueprints[id] <= 0) delete profile.blueprints[id];
-        profile.ownedShipIds.push(id);
-        this.discoverShipContents(id);
+        profile.blueprints[bp.key] = count - 1;
+        if (profile.blueprints[bp.key] <= 0) delete profile.blueprints[bp.key];
+        const bag = bp.kind === 'weapon' ? profile.parts.weapons
+            : (bp.kind === 'defense' ? profile.parts.defenses
+                : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+        bag[bp.id] = (bag[bp.id] || 0) + 1;
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        this.discover(discoverCat, bp.id);
         this.save();
         return { ok: true };
     },

@@ -84,6 +84,9 @@ extendClass(UIAppearanceManager, {
         root.style.setProperty('--vf-scan-size', String(this.scanSize / 100));
         root.style.setProperty('--vf-scan-dur', (2 * 100 / Math.max(1, this.scanSpeed)) + 's');
         root.setAttribute('data-vf-scan-drift', this.scanSpeed > 0 ? 'on' : 'off');
+        // Voidborn vine creep: 100% = one 24s loop; 0 freezes it.
+        root.style.setProperty('--vf-vine-dur', (24 * 100 / Math.max(1, this.vineMotion)) + 's');
+        root.setAttribute('data-vf-vine', this.vineMotion > 0 ? 'on' : 'off');
         root.setAttribute('data-vf-scanwarp', this.scanWarp > 0 ? 'on' : 'off');
         this.applyScanWarp();
         root.style.setProperty('--vf-hdr', String(this.fxLevel('hdr')));

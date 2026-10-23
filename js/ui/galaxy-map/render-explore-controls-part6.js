@@ -129,6 +129,22 @@ extendClass(GalaxyMapManager, {
             if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
+            // Global Pixel Size: the pixel unit follows the live zoom, but the detail steps are coarse.
+            // Once the zoom settles, rebuild lines + nebula if their baked cell size drifted, so all
+            // layers share one on-screen pixel size again.
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+                && uiAppearanceManager.getGlobalPixelPx() > 0) {
+                clearTimeout(this._pxSyncTimer);
+                this._pxSyncTimer = setTimeout(() => {
+                    if (!mapLive()) return;
+                    const pu = this.mapPixelUnit();
+                    if (this._pxSyncUnit && Math.abs(pu / this._pxSyncUnit - 1) < 0.06) return;
+                    this._pxSyncUnit = pu;
+                    this._mapArtSKey = null;
+                    swapDetail();
+                    if (this.refreshNebulaInPlace) this.refreshNebulaInPlace();
+                }, 140);
+            }
             if (this._mapArtDetail === this.getMapDetail() && this._mapArtSKey === this.getMapScaleKey()) {
                 if (this._mapLineDetail !== this.getLineDetail()) {
                     clearTimeout(this._lineTimer);
@@ -497,6 +513,60 @@ extendClass(GalaxyMapManager, {
         if (this.hoveredPlanetId === next) return;
         this.hoveredPlanetId = next;
         this.syncNodeHighlight();
+        this.syncHoverRoute();
+    },
+    /**
+     * Hovered planet ↔ ship: a pixel data strand when the planet is reachable,
+     * a grey line with a lock icon when it is not. Planet lanes are hidden otherwise.
+     */
+    syncHoverRoute() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg) return;
+        let layer = svg.querySelector(':scope > .gm-hover-route-layer');
+        if (!layer) {
+            layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            layer.setAttribute('class', 'gm-hover-route-layer');
+            const anchor = svg.querySelector(':scope > .gm-route-layer');
+            if (anchor) anchor.before(layer);
+            else svg.appendChild(layer);
+        }
+        const pid = this.hoveredPlanetId;
+        const current = (typeof profileManager !== 'undefined' && profileManager.getShipLocation)
+            ? profileManager.getShipLocation(this.galaxyId) : null;
+        // The selected target already shows the running route preview.
+        if (!pid || !current || this._flight || pid === this.selectedPlanetId
+            || (current.kind === 'planet' && current.id === pid) || !this.routePath) {
+            layer.innerHTML = '';
+            return;
+        }
+        const target = { kind: 'planet', id: pid };
+        const pts = this.routePath(current, target);
+        if (!pts || pts.length < 2) { layer.innerHTML = ''; return; }
+        const surf = (loc) => (loc && loc.kind === 'planet' && this.planetSurfaceRadius)
+            ? this.planetSurfaceRadius(loc.id) * (this.nodeObjScale ? this.nodeObjScale() : 1) * 0.88 : 0;
+        const line = this.trimPolyline(pts, surf(current), surf(target));
+        const devLit = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const open = devLit || this.isUnlocked(pid);
+        let html = this.pixelLineSvg(line, 'gm-edge gm-hover-route ' + (open ? 'lit' : 'dim locked'), open ? null : { noFlow: true });
+        if (!open) {
+            // Pixel padlock (7×7 cells) on the middle of the line, seated on the map lattice.
+            const u = this.mapPixelUnit();
+            const mid = this.pointOnPath(line, 0.5);
+            const ox = Math.round(mid.x / u - 3.5) * u, oy = Math.round(mid.y / u - 3.5) * u;
+            const rows = ['..###..', '.#...#.', '.#...#.', '#######', '###.###', '###.###', '#######'];
+            let d = '', bg = '';
+            rows.forEach((row, ry) => {
+                for (let rx = 0; rx < row.length; rx++) {
+                    const x = +(ox + rx * u).toFixed(3), y = +(oy + ry * u).toFixed(3), w = +u.toFixed(3);
+                    if (row[rx] === '#') d += `M${x} ${y}h${w}v${w}h${-w}z`;
+                }
+            });
+            // Dark one-cell outline so the lock reads over nebulae.
+            bg = `M${+(ox - u).toFixed(3)} ${+(oy + 2 * u).toFixed(3)}h${+(9 * u).toFixed(3)}v${+(6 * u).toFixed(3)}h${-(9 * u).toFixed(3)}z` +
+                `M${+(ox).toFixed(3)} ${+(oy - u).toFixed(3)}h${+(7 * u).toFixed(3)}v${+(3 * u).toFixed(3)}h${-(7 * u).toFixed(3)}z`;
+            html += `<g class="gm-hover-lock" shape-rendering="crispEdges"><path class="gm-hover-lock-bg" d="${bg}"/><path class="gm-hover-lock-fg" d="${d}"/></g>`;
+        }
+        layer.innerHTML = html;
     },
     /** Large station picture for the sector card when a post is selected. */
     postIconSvg(open, post) {

@@ -20,8 +20,8 @@ extendClass(HomeStationUI, {
         const view = (this._hangarLeftView === 'parts' || this._hangarLeftView === 'slots') ? this._hangarLeftView : 'ships';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
-            `${this.iconHtml(icon, 32, 'hs-pixel hs-pixel-32', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('parts', 'PARTS', 'hsCraft')}${btn('slots', 'SLOTS', 'hsUpgrade')}</div>`;
+            `${this.iconHtml(icon, 40, 'hs-pixel hs-pixel-40', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
     /** SLOTS view: the ship's slot layout per hull area (same idea as the start profile's HULL AREAS list). */
     renderHangarSlotsView(slots, layout) {
@@ -140,16 +140,19 @@ extendClass(HomeStationUI, {
             if (chk.ok || chk.removing || chk.reason === 'FULL' || chk.reason === 'TOO_BIG') return null;
             return String(chk.reason || 'BLOCKED').replace(/_/g, ' ');
         };
+        const invPos = typeof physicalItem !== 'undefined' && physicalItem.invPositions ? physicalItem.invPositions(shipId) : {};
+        const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : { cols: 4, rows: 2 };
         const modal = document.createElement('div');
         modal.className = 'hs-res-buy-modal hs-slot-picker';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.innerHTML = `<div class="hs-res-buy-dialog hs-pick-dialog">` +
-            `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT</h3>` +
+            `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT ${index + 1}</h3>` +
             `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(slm.getSlotSizeLevel(shipId, kind, index))}</p></div>` +
             `<div class="hs-pick-sort" role="group" aria-label="Sort"></div>` +
             `<div class="hs-pick-body">` +
-            `<div class="hs-pick-grid" style="--pk-c:${color}"></div>` +
+            // Same cols × rows as the ship's inventory (bay inventory / start profile).
+            `<div class="hs-pick-grid" style="--pk-c:${color}; grid-template-columns: repeat(${invGrid.cols}, 64px); grid-template-rows: repeat(${invGrid.rows}, 64px); width: calc(${invGrid.cols} * 64px + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * 64px + ${invGrid.rows - 1} * 4px); min-height: 0; max-height: none; overflow: hidden"></div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
             `</div>` +
             `<div class="hs-res-buy-actions">${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}<button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button></div></div>`;
@@ -169,7 +172,7 @@ extendClass(HomeStationUI, {
             }).join('');
         };
         const draw = () => {
-            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="action-button hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
+            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
             const sorted = items.slice().sort((a, b) => {
                 const bySlot = (blockedOf(a) ? 1 : 0) - (blockedOf(b) ? 1 : 0);   // placeable parts first
                 if (bySlot) return bySlot;
@@ -186,12 +189,14 @@ extendClass(HomeStationUI, {
                 // Diablo-style footprint: S = 1x1, M = 1 wide x 2 tall, L = 2x2 cells.
                 const lv = Math.max(0, Math.min(2, sizeOf(it)));
                 const span = [[1, 1], [1, 2], [2, 2]][lv];
+                // Same tile as in the ship's inventory (bay inventory positions).
+                const pp = invPos[it.kind + ':' + id];
                 const here = it.kind === kind;
                 const usedElsewhere = here && equipped[id] && id !== current;
                 const assignedBadge = usedElsewhere
                     ? `<span class="hs-pick-assigned" data-ui-tip="ALREADY ASSIGNED TO ANOTHER SLOT"><svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5l2 2 5-5-1-1-4 4-1-1z"/></svg></span>`
                     : '';
-                return `<button type="button" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
+                return `<button type="button" style="grid-column: ${pp ? pp[0] + ' / ' : ''}span ${span[0]}; grid-row: ${pp ? pp[1] + ' / ' : ''}span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
                     `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
                     assignedBadge +
                     `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
@@ -220,12 +225,17 @@ extendClass(HomeStationUI, {
         }
         this._pickKeys = (e) => { if (e.key === 'Escape' || e.key === 'Backspace') { close(); e.preventDefault(); e.stopImmediatePropagation(); } };
         document.addEventListener('keydown', this._pickKeys, true);
+        // The slot being edited stays highlighted in the SLOTS list while the picker is open.
+        const slotEl = this.overlay.querySelector(`[data-slot-pick="${kind}"][data-slot-index="${index}"]`);
+        if (slotEl) slotEl.classList.add('is-picking');
         this.overlay.appendChild(modal);
     },
     closeHangarSlotPicker() {
         if (this._pickKeys) { document.removeEventListener('keydown', this._pickKeys, true); this._pickKeys = null; }
-        const m = this.overlay && this.overlay.querySelector('.hs-slot-picker');
+        // Only the modal: the bay inventory sidebar is also a .hs-slot-picker.
+        const m = this.overlay && this.overlay.querySelector('.hs-res-buy-modal.hs-slot-picker');
         if (m) m.remove();
+        this.overlay && this.overlay.querySelectorAll('.hs-slotview-cell.is-picking').forEach((el) => el.classList.remove('is-picking'));
     },
     /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */
     hangarStatColor(type) {
@@ -364,8 +374,9 @@ extendClass(HomeStationUI, {
     },
     renderHangarPartsGrid(inventory, loadout) {
         return `<div class="hs-hangar-parts">` + HANGAR_PART_SECTIONS.map((sec) => {
-            const ids = (inventory && inventory[sec.key]) || [];
             const equipped = (loadout && loadout[sec.key]) || [];
+            // PARTS view lists only what's fitted on the ship; the slot modal handles picking.
+            const ids = ((inventory && inventory[sec.key]) || []).filter((id) => equipped.indexOf(id) !== -1);
             const slm = shipLoadoutManager;
             // One slot of this kind → picking a part replaces the other: radio.
             // Several slots → each part is independently on/off: switch.
@@ -385,8 +396,7 @@ extendClass(HomeStationUI, {
                     ` data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
                     ` data-ui-tip="${String(this.hangarModuleTip(sec.kind, id)).replace(/"/g, '&quot;')}\nSIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
                     // No slot-type glyph per row: the section header already names the type.
-                    // Weapons: the icon is the drag handle (into a slot); a click elsewhere on the row opens it.
-                    `<span class="hs-hangar-part-icon${sec.kind === 'weapon' ? ' is-drag-handle' : ''}"${sec.kind === 'weapon' ? ' data-ui-tip="DRAG INTO A SLOT"' : ''}>` +
+                    `<span class="hs-hangar-part-icon">` +
                     `${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
                     `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
                     `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
@@ -408,7 +418,7 @@ extendClass(HomeStationUI, {
                 this.hangarSectionSlotStripHtml(sec, sec.kind === 'weapon' && loadout && loadout.weaponSlots && loadout.weaponSlots.length
                     ? loadout.weaponSlots : equipped, caps) +
                 `<span class="hs-hangar-parts-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span></h4>` +
-                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE OWNED')}</div>` +
+                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE EQUIPPED')}</div>` +
                 `</section>`;
         }).join('') + `</div>`;
     },
@@ -551,14 +561,8 @@ extendClass(HomeStationUI, {
                 });
                 return;
             }
-            cell.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0 || !e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
-                e.preventDefault();
-                this.startHangarPartDrag(cell, e);
-            });
+            // No drag & drop from the PARTS list: slots are filled via the SLOTS view.
             cell.addEventListener('click', (e) => {
-                // The icon's own click is handled when its drag finishes.
-                if (e.target.closest('.hs-hangar-part-icon.is-drag-handle')) return;
                 e.preventDefault();
                 if (cell.classList.contains('is-equipped')) this.toggleHangarPartDetails(cell);
                 else this.equipHangarPart(cell, null);

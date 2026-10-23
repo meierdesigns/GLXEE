@@ -148,7 +148,8 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     top: 0;
     width: 100%;
     height: 100%;
-    z-index: 9990;
+    /* Above screen content (game 9992); below pause/settings/remotes. */
+    z-index: 9993;
     pointer-events: none;
     --u: var(--bz-u);
     --bezel: calc(38 * var(--u));
@@ -173,7 +174,7 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     /* Child of <html> (outside the scaled stage): fixed pixel size, positioned by viewport-fit.js.
        Styled like the in-game sliders on a hull plate. */
     position: fixed;
-    z-index: 9995;
+    z-index: 9996;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -532,21 +533,30 @@ html body .game-container .game-left-cluster > .player-vitals-side {
     max-height: none;
 }
 
-/* Fight screen: glass opening + 16px inset. Zoom divides geometry (CSS zoom quirk). */
+/* Fight screen: measured against the same --fr-open-* box every other bezel consumer
+   (vine frame, full-stage overlays) uses, so the screen edge tracks the frame edge in
+   every faction. --fight-gap is ONLY the breathing room between the canvas and the
+   side/rail panels inside the screen — it must never leak into the outer positioning.
+   The outer edge itself is tunable from the HUD remote's existing STAGE INSET slider
+   (same --fr-stage-inset the overlays use, part-20.css): 100% (default) = flush with
+   the opening, lower % pushes the edge out past the opening toward the frame, same
+   direction as "screen can peek past the vine" for overlays. --fight-peek is that
+   push distance, 0 at the default 100%. Zoom divides geometry (CSS zoom quirk). */
 html body .game-container {
     --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    --fight-inset: 16px;
+    --fight-gap: 16px;
+    --fight-peek: calc(16px * (1 - var(--fr-stage-inset, 1)));
     position: fixed !important;
     z-index: 9992 !important;
-    left: calc((var(--fr-open-side) + var(--fight-inset)) / var(--_z)) !important;
-    top: calc((var(--fr-open-top) + var(--fight-inset)) / var(--_z)) !important;
-    width: calc((var(--fr-open-w) - 2 * var(--fight-inset)) / var(--_z)) !important;
-    height: calc((var(--fr-open-h) - 2 * var(--fight-inset)) / var(--_z)) !important;
+    left: calc((var(--fr-open-side) - var(--fight-peek)) / var(--_z)) !important;
+    top: calc((var(--fr-open-top) - var(--fight-peek)) / var(--_z)) !important;
+    width: calc((var(--fr-open-w) + 2 * var(--fight-peek)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) + 2 * var(--fight-peek)) / var(--_z)) !important;
     min-height: 0 !important;
     max-height: none !important;
     box-sizing: border-box !important;
     padding: 0 !important;
-    gap: var(--fight-inset) !important;
+    gap: var(--fight-gap) !important;
     overflow: hidden !important;
     background-color: #05060a !important;
 }
@@ -880,23 +890,22 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
 }
 .hs-tree-branch .hs-tree-items { border-top: 0; }
 
-/* Backing under the whole bezel: a box exactly as big as the screen glass
-   (same corner radius), whose huge shadow fills everything around it. Under
-   the hull it is invisible; it only blocks the page / screen background that
-   would otherwise peek through at the rounded corners. */
+/* Layer 3 band fill: one container under the hull plates.
+   --fr-bg-crop 0 = transparent band (BG shows through), 1 = opaque to the glass.
+   Spotlight box + clip to --fr-shape so notches never sprout square shadow corners. */
 .vf-bezel { --glass-r: 0; }
 .vf-bezel-back {
     position: absolute;
-    left: var(--fr-ol, var(--fr-open-side, calc(44 * var(--u))));
-    right: var(--fr-or, var(--fr-open-side, calc(44 * var(--u))));
-    bottom: var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u))));
-    top: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u))));
+    left: calc(var(--fr-ol, var(--fr-open-side, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
+    right: calc(var(--fr-or, var(--fr-open-side, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
+    top: calc(var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)))) * var(--fr-bg-crop, 0.5));
+    bottom: calc(var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
     z-index: 0;
     pointer-events: none;
     background: transparent;
-    border-radius: var(--glass-r);
-    box-shadow: 0 0 0 calc(60 * var(--u)) #030307;
-    clip-path: inset(calc(-60 * var(--u)));
+    border-radius: var(--fr-hole-r, var(--glass-r, 0));
+    box-shadow: 0 0 0 200vmax var(--hull-dark, #030307);
+    clip-path: var(--fr-shape);
 }
 
 /* Hangar bay zoom buttons, top right of the stage. */

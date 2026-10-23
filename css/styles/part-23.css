@@ -97,6 +97,73 @@ html[data-faction="voidborn"] {
 html[data-faction="voidborn"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
     box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--faction-accent) 22%, transparent), inset 0 0 0 8px color-mix(in srgb, var(--faction-accent) 10%, transparent);
 }
+/* Panels are framed by a coarse pixel vine from a 9-slice SVG, centred on the panel
+   edge. Neighbouring panels touch (gap 0), so their vines land on the same line and
+   read as one shared vine instead of two frame edges. */
+html[data-faction="voidborn"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    clip-path: none;
+}
+html[data-faction="voidborn"] .home-station-overlay :has(> :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) + :is(.hs-panel, .hs-section)) {
+    gap: 0;
+}
+html[data-faction="voidborn"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    clip-path: none;
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+    background: none;
+    inset: -8px;
+    border: 16px solid transparent;
+    border-image: url('../../assets/ui/voidborn-vine-frame.svg') 16 round;
+    image-rendering: pixelated;
+    animation: void-vine-creep var(--vf-vine-dur, 24s) steps(1, end) infinite;
+}
+/* The vine slowly creeps: twelve pixel frames (every other one an in-between that only
+   moves the wave; grooves step on the rest). Speed from VINE MOTION (--vf-vine-dur, OFF at 0). */
+@keyframes void-vine-creep {
+    0%      { border-image-source: url('../../assets/ui/voidborn-vine-frame.svg'); }
+    8.333%  { border-image-source: url('../../assets/ui/voidborn-vine-frame-1.svg'); }
+    16.666% { border-image-source: url('../../assets/ui/voidborn-vine-frame-2.svg'); }
+    25%     { border-image-source: url('../../assets/ui/voidborn-vine-frame-3.svg'); }
+    33.333% { border-image-source: url('../../assets/ui/voidborn-vine-frame-4.svg'); }
+    41.666% { border-image-source: url('../../assets/ui/voidborn-vine-frame-5.svg'); }
+    50%     { border-image-source: url('../../assets/ui/voidborn-vine-frame-6.svg'); }
+    58.333% { border-image-source: url('../../assets/ui/voidborn-vine-frame-7.svg'); }
+    66.666% { border-image-source: url('../../assets/ui/voidborn-vine-frame-8.svg'); }
+    75%     { border-image-source: url('../../assets/ui/voidborn-vine-frame-9.svg'); }
+    83.333% { border-image-source: url('../../assets/ui/voidborn-vine-frame-10.svg'); }
+    91.666% { border-image-source: url('../../assets/ui/voidborn-vine-frame-11.svg'); }
+}
+html[data-vf-vine="off"][data-faction="voidborn"] body .home-station-overlay :is(.hs-panel, .hs-section)::before { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    html[data-faction="voidborn"] body .home-station-overlay :is(.hs-panel, .hs-section)::before { animation: none; }
+}
+html[data-faction="voidborn"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::after {
+    inset: 5px;
+    clip-path: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px));
+}
+html[data-faction="voidborn"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card) {
+    padding: 14px 18px;
+}
+/* Controls keep a slim grown outline: the frame plate (::before) is masked by a
+   9-slice pixel ring whose 2px line wanders, buds and drips, with stepped round corners. */
+@supports (-webkit-mask-box-image: none) {
+    html[data-faction="voidborn"] .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button) {
+        --void-ring: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72' shape-rendering='crispEdges'><path d='M24 3h1v1h-1zM35 3h1v1h-1zM10 4h1v1h-1zM12 4h1v1h-1zM21 4h8v1h-8zM32 4h7v1h-7zM42 4h1v1h-1zM48 4h1v1h-1zM61 4h1v1h-1zM9 5h35v1h-35zM46 5h17v1h-17zM7 6h4v1h-4zM12 6h9v1h-9zM29 6h3v1h-3zM39 6h21v1h-21zM61 6h4v1h-4zM6 7h3v1h-3zM17 7h1v1h-1zM44 7h3v1h-3zM63 7h3v1h-3zM5 8h3v1h-3zM64 8h3v1h-3zM4 9h3v1h-3zM65 9h3v1h-3zM5 10h2v1h-2zM65 10h2v1h-2zM5 11h2v1h-2zM65 11h2v1h-2zM5 12h2v1h-2zM64 12h3v1h-3zM5 13h2v1h-2zM65 13h2v1h-2zM5 14h2v1h-2zM65 14h2v1h-2zM5 15h2v1h-2zM65 15h2v1h-2zM5 16h2v1h-2zM65 16h2v1h-2zM5 17h2v1h-2zM65 17h3v1h-3zM4 18h2v1h-2zM65 18h2v1h-2zM4 19h2v1h-2zM65 19h3v1h-3zM4 20h2v1h-2zM66 20h3v1h-3zM3 21h3v1h-3zM66 21h2v1h-2zM3 22h3v1h-3zM66 22h3v1h-3zM4 23h2v1h-2zM66 23h2v1h-2zM4 24h2v1h-2zM66 24h2v1h-2zM4 25h2v1h-2zM66 25h2v1h-2zM4 26h2v1h-2zM65 26h2v1h-2zM4 27h2v1h-2zM65 27h2v1h-2zM4 28h2v1h-2zM65 28h2v1h-2zM4 29h2v1h-2zM65 29h2v1h-2zM4 30h2v1h-2zM65 30h2v1h-2zM4 31h2v1h-2zM65 31h3v1h-3zM5 32h2v1h-2zM65 32h2v1h-2zM5 33h3v1h-3zM65 33h3v1h-3zM5 34h3v1h-3zM66 34h2v1h-2zM5 35h2v1h-2zM66 35h2v1h-2zM5 36h2v1h-2zM66 36h2v1h-2zM5 37h2v1h-2zM66 37h2v1h-2zM4 38h3v1h-3zM65 38h2v1h-2zM5 39h2v1h-2zM65 39h2v1h-2zM5 40h2v1h-2zM65 40h2v1h-2zM5 41h2v1h-2zM65 41h2v1h-2zM5 42h2v1h-2zM65 42h2v1h-2zM4 43h2v1h-2zM65 43h2v1h-2zM3 44h3v1h-3zM64 44h3v1h-3zM4 45h2v1h-2zM65 45h3v1h-3zM4 46h2v1h-2zM64 46h2v1h-2zM3 47h3v1h-3zM64 47h2v1h-2zM5 48h2v1h-2zM64 48h2v1h-2zM5 49h3v1h-3zM64 49h2v1h-2zM5 50h2v1h-2zM64 50h2v1h-2zM4 51h2v1h-2zM64 51h2v1h-2zM4 52h2v1h-2zM64 52h2v1h-2zM4 53h2v1h-2zM65 53h2v1h-2zM4 54h2v1h-2zM65 54h2v1h-2zM3 55h3v1h-3zM65 55h2v1h-2zM5 56h2v1h-2zM65 56h2v1h-2zM5 57h2v1h-2zM65 57h2v1h-2zM4 58h3v1h-3zM65 58h2v1h-2zM5 59h2v1h-2zM65 59h2v1h-2zM5 60h2v1h-2zM65 60h2v1h-2zM5 61h2v1h-2zM65 61h2v1h-2zM4 62h3v1h-3zM65 62h3v1h-3zM5 63h3v1h-3zM43 63h1v1h-1zM64 63h3v1h-3zM6 64h3v1h-3zM19 64h6v1h-6zM37 64h9v1h-9zM56 64h1v1h-1zM63 64h3v1h-3zM7 65h4v1h-4zM12 65h17v1h-17zM33 65h27v1h-27zM61 65h4v1h-4zM9 66h10v1h-10zM21 66h2v1h-2zM25 66h12v1h-12zM41 66h1v1h-1zM46 66h17v1h-17zM10 67h1v1h-1zM29 67h4v1h-4zM61 67h1v1h-1z'/></svg>");
+        clip-path: none;
+    }
+    html[data-faction="voidborn"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+        clip-path: none;
+        padding: 0;
+        -webkit-mask: none;
+        mask: none;
+        -webkit-mask-box-image: var(--void-ring) 12 / 12px round;
+    }
+    html[data-faction="voidborn"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::after {
+        inset: 7px;
+        clip-path: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px));
+    }
+}
 
 /* End screens: the window is one stepped blob. The box itself is filled with the
    accent (that is the outline), ::before lays the body 4px inside the same shape. */
@@ -516,3 +583,144 @@ html body #gameOver.is-defeat .victory-content {
 }
 html body #gameOver.is-defeat .victory-subtitle { color: #ffb3ad !important; }
 html body #gameOver.is-defeat .outcome-planet-icon .gm-planet-icon { filter: brightness(0.35) saturate(0) contrast(1.1) !important; }
+
+/* Shipyard as cockpit dashboard: no frames at all. Areas separate by depth
+   (raised console plates vs. recessed screens); the faction shows through the
+   console material, not through outlines. */
+html body .home-station-overlay .hs-hangar-root,
+html body .home-station-overlay .hs-hangar-root :is(.hs-panel, .hs-hangar-detail, .hs-hangar-bay-stage, .hs-hangar-bay-canvas, .hs-hangar-preview-viewport) {
+  border: 0 !important; box-shadow: none !important; outline: 0 !important; clip-path: none !important;
+}
+html body .home-station-overlay .hs-hangar-root,
+html body .home-station-overlay .hs-hangar-root :is(.hs-panel, .hs-hangar-detail)::before,
+html body .home-station-overlay .hs-hangar-root :is(.hs-panel, .hs-hangar-detail)::after { content: none !important; }
+html body .home-station-overlay .hs-hangar-root::before,
+html body .home-station-overlay .hs-hangar-root::after { content: none !important; }
+
+.hs-hangar-root {
+  --dash-tint: var(--faction-accent, var(--color-primary));
+  --dash-plate: color-mix(in srgb, var(--dash-tint) 9%, #101118);
+  --dash-plate-hi: color-mix(in srgb, var(--dash-tint) 16%, #1b1c26);
+  --dash-screen: #05060a;
+  --dash-radius: 6px;
+  --dash-texture: none;
+  --dash-size: auto;
+  gap: 10px !important;
+  background: color-mix(in srgb, var(--dash-tint) 5%, #0a0b10) !important;
+}
+/* raised console plates: header strip, left console, right console */
+html body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  background: var(--dash-texture), linear-gradient(180deg, var(--dash-plate-hi), var(--dash-plate)) !important;
+  background-size: var(--dash-size), auto !important;
+  border-radius: var(--dash-radius) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), inset 0 -2px 0 color-mix(in srgb, #000 55%, transparent), 0 3px 8px color-mix(in srgb, #000 60%, transparent) !important;
+}
+/* recessed screens: hangar bay and preview viewport */
+html body .home-station-overlay .hs-hangar-root :is(.hs-hangar-bay, .hs-hangar-preview-viewport) {
+  background-color: var(--dash-screen) !important;
+  border-radius: calc(var(--dash-radius) + 4px) !important;
+  box-shadow: inset 0 3px 10px color-mix(in srgb, #000 85%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--dash-tint) 14%, transparent), inset 0 0 40px color-mix(in srgb, var(--dash-tint) 7%, transparent) !important;
+}
+html body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail, .hs-hangar-bay-stage, .hs-hangar-bay-canvas) { background-color: transparent !important; }
+html body .home-station-overlay .hs-hangar-root .pe-resize-handle { background: transparent !important; border: 0 !important; }
+
+/* faction console materials */
+html[data-faction="terran"] .hs-hangar-root { /* brushed steel, screw heads */
+  --dash-plate: #151a22; --dash-plate-hi: #232b37; --dash-radius: 4px;
+  --dash-texture: radial-gradient(circle at 8px 8px, #3a4656 1.5px, transparent 2px), repeating-linear-gradient(0deg, color-mix(in srgb, #fff 2%, transparent) 0 1px, transparent 1px 3px);
+  --dash-size: 100% 100%, auto;
+}
+html[data-faction="kronax"] .hs-hangar-root { /* heavy war console, hazard trim */
+  --dash-plate: #1c120d; --dash-plate-hi: #2b1a12; --dash-radius: 0;
+  --dash-texture: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--dash-tint) 18%, transparent) 0 6px, transparent 6px 12px);
+  --dash-size: 100% 4px;
+}
+html[data-faction="kronax"] .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  background-repeat: repeat-x, no-repeat !important;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px) !important;
+}
+html[data-faction="voidborn"] .hs-hangar-root { /* living tissue: chitin shell, cell blotches, membranes */
+  --dash-plate: #1a0c18; --dash-plate-hi: #2a1226; --dash-screen: #0a0309;
+  --dash-texture:
+    radial-gradient(38% 26% at 18% 22%, color-mix(in srgb, var(--dash-tint) 16%, transparent), transparent 70%),
+    radial-gradient(30% 34% at 78% 64%, color-mix(in srgb, #ff5a8a 10%, transparent), transparent 72%),
+    radial-gradient(22% 18% at 42% 88%, color-mix(in srgb, var(--dash-tint) 12%, transparent), transparent 70%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, #000 40%, transparent) 0 2px, transparent 9px);
+  --dash-size: 100% 100%, 100% 100%, 100% 100%, 23px 29px;
+}
+html[data-faction="voidborn"] .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  border-radius: 34px 16px 40px 22px / 22px 38px 18px 30px !important;
+  box-shadow: inset 0 2px 6px color-mix(in srgb, #ff9ad0 12%, transparent), inset 0 -6px 14px color-mix(in srgb, #000 70%, transparent), 0 4px 14px color-mix(in srgb, #000 70%, transparent) !important;
+}
+html[data-faction="voidborn"] .home-station-overlay .hs-hangar-root :is(.hs-hangar-bay, .hs-hangar-preview-viewport) {
+  border-radius: 48% 52% 46% 54% / 7% 9% 8% 6% !important;
+  background-image: radial-gradient(70% 60% at 50% 45%, color-mix(in srgb, var(--dash-tint) 9%, transparent), transparent 75%) !important;
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, #2a1226 90%, transparent), inset 0 0 26px color-mix(in srgb, #000 85%, transparent), inset 0 0 60px color-mix(in srgb, var(--dash-tint) 10%, transparent) !important;
+  animation: vb-membrane 6s ease-in-out infinite;
+}
+@keyframes vb-membrane { 50% { filter: brightness(1.12) saturate(1.15); } }
+/* oily sheen: iridescent film + wet specular streak drifting over the tissue */
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) { position: relative; }
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview)::after {
+  content: "" !important; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 0;
+  background:
+    radial-gradient(60% 14% at 30% 6%, color-mix(in srgb, #fff 22%, transparent), transparent 70%),
+    radial-gradient(18% 40% at 92% 40%, color-mix(in srgb, #fff 9%, transparent), transparent 70%),
+    linear-gradient(115deg, transparent 20%, color-mix(in srgb, #5affd8 9%, transparent) 34%, color-mix(in srgb, #ffd35a 8%, transparent) 42%, color-mix(in srgb, #ff5ad0 10%, transparent) 50%, color-mix(in srgb, #5a8aff 9%, transparent) 58%, transparent 72%);
+  background-size: 100% 100%, 100% 100%, 300% 100%;
+  mix-blend-mode: screen;
+  animation: vb-oil 14s ease-in-out infinite alternate;
+}
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) > * { position: relative; z-index: 1; }
+@keyframes vb-oil { from { background-position: 0 0, 0 0, 0% 0; } to { background-position: 0 0, 0 0, 100% 0; } }
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  border-radius: 46px 18px 52px 26px / 28px 50px 20px 38px !important;
+  box-shadow: inset 0 3px 4px color-mix(in srgb, #ffc4e8 22%, transparent), inset 6px 0 18px color-mix(in srgb, #ff4d8f 8%, transparent), inset 0 -10px 22px color-mix(in srgb, #000 80%, transparent), 0 6px 18px color-mix(in srgb, #000 75%, transparent) !important;
+}
+html[data-faction="voidborn"] .hs-hangar-root {
+  --dash-plate: #1d0a1a; --dash-plate-hi: #33102c;
+  --dash-texture:
+    radial-gradient(38% 26% at 18% 22%, color-mix(in srgb, var(--dash-tint) 18%, transparent), transparent 70%),
+    radial-gradient(30% 34% at 78% 64%, color-mix(in srgb, #ff5a8a 14%, transparent), transparent 72%),
+    radial-gradient(22% 18% at 42% 88%, color-mix(in srgb, var(--dash-tint) 14%, transparent), transparent 70%),
+    repeating-radial-gradient(ellipse 140% 90% at 10% 120%, transparent 0 18px, color-mix(in srgb, #ff4d8f 7%, transparent) 19px 20px, transparent 21px 34px),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, #000 45%, transparent) 0 2px, color-mix(in srgb, #ff7ab0 6%, transparent) 4px, transparent 10px);
+  --dash-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 19px 27px;
+}
+html[data-faction="pirate"] .hs-hangar-root { /* patched rusty plates, rivets */
+  --dash-plate: #1a140c; --dash-plate-hi: #2a2014; --dash-radius: 2px;
+  --dash-texture: radial-gradient(circle, #5a4526 1.5px, transparent 2px);
+  --dash-size: 22px 22px;
+}
+html[data-faction="pirate"] .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  background-repeat: repeat-x, no-repeat !important; background-position: 4px 2px, 0 0 !important;
+}
+html[data-faction="machine"] .hs-hangar-root { /* circuit board */
+  --dash-plate: #0b1612; --dash-plate-hi: #11211a; --dash-radius: 3px;
+  --dash-texture: linear-gradient(90deg, color-mix(in srgb, var(--dash-tint) 7%, transparent) 1px, transparent 1px), linear-gradient(0deg, color-mix(in srgb, var(--dash-tint) 7%, transparent) 1px, transparent 1px);
+  --dash-size: 16px 16px, 16px 16px;
+}
+
+/* Voidborn: procedural tissue — bumpy lit skin, branching veins, fleshy mottling */
+html[data-faction="voidborn"] .hs-hangar-root {
+  --dash-texture:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.09' numOctaves='2' seed='11'/%3E%3CfeDiffuseLighting lighting-color='%23ff9ad8' surfaceScale='3'%3E%3CfeDistantLight azimuth='235' elevation='55'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix values='0.5 0 0 0 0  0 0.2 0 0 0  0 0 0.45 0 0  1 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.012' numOctaves='3' seed='3'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 0.3  0 0 0 0 0.6  -3 0 0 0 0.32'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.018 0.026' numOctaves='5' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.12  0 0 0 0 0.42  0 0 0 1.6 -0.55'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"),
+    radial-gradient(38% 26% at 18% 22%, color-mix(in srgb, var(--dash-tint) 16%, transparent), transparent 70%),
+    radial-gradient(30% 34% at 78% 64%, color-mix(in srgb, #ff5a8a 12%, transparent), transparent 72%);
+  --dash-size: 160px 160px, 320px 320px, 240px 240px, 100% 100%, 100% 100%;
+}
+
+/* Voidborn: flesh comes from the surface, not the silhouette — plain soft corners,
+   nothing clipped. */
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-detail-head, .hs-hangar-list, .hs-hangar-preview) {
+  border-radius: 10px !important;
+  box-shadow: inset 0 2px 3px color-mix(in srgb, #ffc4e8 26%, transparent), inset 0 0 22px color-mix(in srgb, #ff3d7f 14%, transparent), inset 0 -8px 16px color-mix(in srgb, #000 75%, transparent), 0 5px 14px color-mix(in srgb, #000 70%, transparent) !important;
+}
+html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs-hangar-bay, .hs-hangar-preview-viewport) {
+  border-radius: 10px !important;
+}
+
+/* Start step: the ship / hull container clip-path chamfer cut the border off at the corners and the bottom edge sat under the clipped row; draw the outline inset instead. */
+html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { clip-path: none !important; border-color: transparent !important; box-shadow: inset 0 0 0 var(--faction-border-width, 1px) var(--ui-border, var(--color-primary)) !important; }

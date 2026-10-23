@@ -70,6 +70,14 @@ class InputHandler {
         // The profile overlay has its own key handler; menus underneath
         // (start screen / embedded main menu) must not react as well.
         if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+            // Shift+C (dev mode) still works here: the start screen and the global
+            // toggle in hud-layout-editor.js both skip it while this overlay is up.
+            const tag = event.target && event.target.tagName;
+            if (event.shiftKey && (event.key === 'c' || event.key === 'C') &&
+                tag !== 'INPUT' && tag !== 'TEXTAREA' && typeof startScreenManager !== 'undefined') {
+                event.preventDefault();
+                startScreenManager.toggleDevMode();
+            }
             return;
         }
 

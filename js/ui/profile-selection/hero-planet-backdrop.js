@@ -111,7 +111,7 @@ class HeroPlanetBackdrop {
             } catch (e) { /* draw */ }
             if (now - this._lastT < this._frameInterval) return;
             this._lastT = now;
-            this.draw();
+            this.draw(true);
         };
         this._raf = requestAnimationFrame(tick);
     }
@@ -131,14 +131,26 @@ class HeroPlanetBackdrop {
      * current one has actually finished loading (one in-flight load at a time, always in order), so
      * playback is paced to whatever this backdrop can actually keep loaded rather than the wall clock.
      */
-    _currentFrame() {
+    _currentFrame(advance) {
         const model = this._spinModel;
         const id = this._spinId;
         if (!model || !id || typeof planetSVGManager === 'undefined') return this._curFrame;
         if (this._frameIdx == null) this._frameIdx = 0;
-        const f = this._frameIdx;
+        // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
+        // and step the spin so one rotation is at most 128 slots: after the first lap nothing is rebuilt.
+        // _frameIdx counts slots, not model frames, so the wrap always lands back on slot 0.
+        const step = Math.max(1, Math.ceil(model.count / 128));
+        const slots = Math.max(1, Math.ceil(model.count / step));
+        const slot = this._frameIdx % slots;
+        const f = slot * step;
         const cached = this._frameCache[f];
-        if (cached) { this._curFrame = cached; return cached; }
+        if (cached) {
+            // Cached: show it and move on at the loop's draw rate (previously it never advanced, so the spin froze after lap one).
+            // Resize/faction redraws and reduced motion only repaint.
+            this._curFrame = cached;
+            if (advance) this._frameIdx = (slot + 1) % slots;
+            return cached;
+        }
         if (!this._frameLoading[f]) {
             const loading = this._frameLoading;
             const cache = this._frameCache;
@@ -147,21 +159,14 @@ class HeroPlanetBackdrop {
                 const svg = planetSVGManager.getPlanetSpinFrame(model, f);
                 const conv = planetSVGManager.planetSvgToImg(svg, 0.45);
                 const img = new Image();
-                // Keep each frame as a bitmap (re-rasterising the 300KB SVG on every drawImage was the idle cost),
-                // and step the spin so one rotation is at most 128 frames: after the first lap nothing is rebuilt.
-                const step = Math.max(1, Math.ceil(model.count / 128));
                 const store = (src) => {
                     loading[f] = false;
                     // A faction switch swapped the model while this frame decoded: it belongs to the old planet.
                     if (this._spinModel !== model || this._frameCache !== cache) return;
-                    const entry = { img: src, scale: conv.scale };
-                    this._frameCache[f] = entry;
-                    // Show it the moment it's ready — the next draw() tick would otherwise have
-                    // already moved _frameIdx past `f` before ever reading this cache entry.
-                    this._curFrame = entry;
-                    // Only advance to the next frame once this one is actually ready to show.
-                    if (this._frameIdx === f) this._frameIdx = (f + step) % model.count;
-                    this.draw();
+                    // The next tick finds it cached, shows it and advances, so the first lap is paced by loading.
+                    this._frameCache[f] = { img: src, scale: conv.scale };
+                    // No loop running (reduced motion, not yet mounted): paint it now.
+                    if (!this._raf) this.draw();
                 };
                 img.onload = () => {
                     if (typeof createImageBitmap === 'function') createImageBitmap(img).then(store, () => store(img));
@@ -173,7 +178,7 @@ class HeroPlanetBackdrop {
         return this._curFrame;
     }
 
-    draw() {
+    draw(advance) {
         const c = this.ctx;
         if (!this.W || !this.H) return;
         c.clearRect(0, 0, this.W, this.H);
@@ -190,7 +195,7 @@ class HeroPlanetBackdrop {
         g.addColorStop(1, accent + '00');
         c.fillStyle = g;
         c.fillRect(0, 0, this.W, this.H);
-        const frame = this._currentFrame();
+        const frame = this._currentFrame(advance);
         if (frame) {
             const dr = r * frame.scale;
             c.save();

@@ -218,11 +218,59 @@ extendClass(GalaxyMapManager, {
         const haloRad = uL > 0 ? Math.max(rad + 1, rad * 2.35) : rad + 3.6;
         // Route preview: thin dashes with wide gaps, marching towards the target.
         if (o.run) {
-            const dash = width * 5, gap = width * 4.4, period = dash + gap;
-            const d = 'M' + points.map((q) => q.x.toFixed(2) + ' ' + q.y.toFixed(2)).join('L');
-            return `<g class="${cls} gm-pxline gm-pxline-run">` +
-                `<path class="gm-run-glow" fill="none" d="${d}" style="stroke-width:${(width * 2.4).toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/>` +
-                `<path class="gm-run-core" fill="none" d="${d}" style="stroke-width:${width.toFixed(2)};stroke-dasharray:${dash.toFixed(2)} ${gap.toFixed(2)};--flow-len:${period.toFixed(2)}px"/></g>`;
+            // Dashes are cells on the line's grid (like the packets), marched by F frames.
+            const dash = width * 5, period = dash + width * 8;
+            const F = 16, dur = 1.2;
+            const cRad = Math.max(0.71, rad), gRad = Math.max(cRad + 0.71, rad * 2.4);
+            const G = Math.ceil(gRad);
+            const frame = (shift) => {
+                const core = new Map(), glow = new Map();
+                const put = (map, gx, gy) => { let row = map.get(gy); if (!row) { row = new Set(); map.set(gy, row); } row.add(gx); };
+                let trav = 0;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const a = points[i], b = points[i + 1];
+                    const len = Math.hypot(b.x - a.x, b.y - a.y);
+                    const n = Math.max(1, Math.ceil(len / (p * 0.5)));
+                    for (let s = 0; s <= n; s++) {
+                        const m = (((trav + len * s / n - shift) % period) + period) % period;
+                        if (m >= dash) continue;
+                        const cx = (a.x + (b.x - a.x) * s / n) / p, cy = (a.y + (b.y - a.y) * s / n) / p;
+                        const bx = Math.floor(cx), by = Math.floor(cy);
+                        for (let yy = -G; yy <= G; yy++) {
+                            for (let xx = -G; xx <= G; xx++) {
+                                const gx = bx + xx, gy = by + yy;
+                                const dd = Math.hypot(gx + 0.5 - cx, gy + 0.5 - cy);
+                                if (dd <= cRad) put(core, gx, gy);
+                                else if (dd <= gRad) put(glow, gx, gy);
+                            }
+                        }
+                    }
+                    trav += len;
+                }
+                return { core, glow };
+            };
+            const cellPath = (map, skip) => {
+                let out = '';
+                map.forEach((row, gy) => {
+                    const xs = Array.from(row).filter((x) => !(skip && skip.get(gy) && skip.get(gy).has(x))).sort((m, q) => m - q);
+                    for (let k = 0; k < xs.length;) {
+                        let e = k;
+                        while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
+                        out += `M${+(xs[k] * p).toFixed(3)} ${+(gy * p).toFixed(3)}h${+((e - k + 1) * p).toFixed(3)}v${+p.toFixed(3)}h${-+((e - k + 1) * p).toFixed(3)}z`;
+                        k = e + 1;
+                    }
+                });
+                return out;
+            };
+            let frames = '';
+            for (let k = 0; k < F; k++) {
+                const fr = frame(k * period / F);
+                const st = `animation-duration:${dur}s;animation-delay:${((k / F - 1) * dur).toFixed(3)}s`;
+                const f0 = k ? '' : ' gm-pxflow-f0';
+                frames += `<path class="gm-run-glow gm-run-cells${f0}" d="${cellPath(fr.glow, fr.core)}" style="${st}"/>` +
+                    `<path class="gm-run-core gm-run-cells${f0}" d="${cellPath(fr.core)}" style="${st}"/>`;
+            }
+            return `<g class="${cls} gm-pxline gm-pxline-run" shape-rendering="crispEdges">${frames}</g>`;
         }
         const hotCells = new Map();
         const coreCells = new Map();

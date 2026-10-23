@@ -112,6 +112,7 @@
             h += fxSlider('SCAN SIZE', 'fx:scanSize', 25, 400, 5, ui.getFxPercent('scanSize'), '%');
             h += fxSlider('SCAN SPEED', 'fx:scanSpeed', 0, 300, 5, ui.getFxPercent('scanSpeed'), '%');
             h += fxSlider('SCAN WARP', 'fx:scanWarp', 0, 100, 5, ui.getFxPercent('scanWarp'), '%');
+            h += fxSlider('VINE MOTION', 'fx:vineMotion', 0, 300, 10, ui.getFxPercent('vineMotion'), '%');
             h += fxSlider('FX SCALE', 'fx:fxScale', 25, 400, 5, ui.getFxPercent('fxScale'), '%');
             h += '<div class="vf-fx-row"><span>SEL. PULSE</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.arcade, 'fx-arcade') + '</div>';
             (function () {
@@ -121,6 +122,10 @@
                 h += '<div class="vf-fx-title">FRAME · ' + cur.toUpperCase() + '</div>' +
                     fxSlider('BEVEL', 'fr:bevel', 0, 14, 1, st.bevel != null ? st.bevel : 5, '') +
                     fxSlider('DECO', 'fr:deco', 0, 100, 10, st.deco != null ? st.deco : 100, '%');
+                if (cur === 'voidborn') {
+                    h += fxSlider('BEZEL FILL', 'fr:bgCrop', 0, 100, 5, st.bgCrop != null ? st.bgCrop : 50, '%') +
+                        fxSlider('VINE INSET', 'fr:vineInset', 0, 8, 1, st.vineInset != null ? st.vineInset : 2, '');
+                }
             })();
         } else if (vfs.fxTab === 'voxel') {
             h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +

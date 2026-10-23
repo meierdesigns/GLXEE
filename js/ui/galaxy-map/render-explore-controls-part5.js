@@ -510,6 +510,204 @@ extendClass(GalaxyMapManager, {
         };
         requestAnimationFrame(step);
     },
+    /** Glide the camera (viewBox) to `to` = [x, y, w, h], panning linearly and zooming in log space; resolves false if interrupted. */
+    glideViewBox(to, dur) {
+        return new Promise((resolve) => {
+            const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (!to || this._flight || !svg || !svg.viewBox || !svg.viewBox.baseVal) {
+                resolve(false);
+                return;
+            }
+            const cur = svg.viewBox.baseVal;
+            const aspect = cur.width / Math.max(1, cur.height);
+            const fcx = cur.x + cur.width / 2, fcy = cur.y + cur.height / 2;
+            const tcx = to[0] + to[2] / 2, tcy = to[1] + to[3] / 2;
+            const lw0 = Math.log(cur.width), lw1 = Math.log(to[2]);
+            const ms = dur || 650;
+            const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+            const start = performance.now();
+            const token = (this._camAnim = {});
+            const step = (now) => {
+                if (this._camAnim !== token || !svg.isConnected || this._flight) {
+                    resolve(false);
+                    return;
+                }
+                const t = Math.min(1, (now - start) / ms);
+                const k = ease(t);
+                const vw = Math.exp(lw0 + (lw1 - lw0) * k);
+                const vh = vw / aspect;
+                const vcx = fcx + (tcx - fcx) * k, vcy = fcy + (tcy - fcy) * k;
+                svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
+                this.updateSelectionFrames();
+                if (t < 1) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+                this._panAnchor = { x: tcx, y: tcy };
+                this.mapPan = { x: 0, y: 0 };
+                this._camAnim = null;
+                resolve(true);
+            };
+            requestAnimationFrame(step);
+        });
+    },
+    /** Close-up viewBox on a planet (never further out than now), planet left of centre so the scan tip fits beside it. */
+    planetCloseUpBox(id) {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        const pt = this.locationPoint ? this.locationPoint({ kind: 'planet', id: id }) : null;
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal || !pt) return null;
+        const cur = svg.viewBox.baseVal;
+        const aspect = cur.width / Math.max(1, cur.height);
+        const node = this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        const size = (node && Number(node.getAttribute('data-size'))) || 48;
+        const w = Math.min(cur.width, Math.max(size * 7, 180));
+        const h = w / aspect;
+        const cx = pt.x + w * 0.14;
+        return [cx - w / 2, pt.y - h / 2, w, h];
+    },
+    /** Switch a planet rendered as locked (reveal pending) to its active look, with scan ring and sweep. */
+    lightUpPlanetNode(id) {
+        if (this._revealPending) delete this._revealPending[id];
+        const node = this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        if (!node || !node.classList.contains('locked')) return;
+        node.classList.remove('locked');
+        node.classList.add('unlocked', 'gm-unlock-reveal');
+        const lit = node.querySelector('.gm-planet-lit');
+        if (lit) {
+            lit.classList.remove('is-locked');
+            lit.classList.add('is-active');
+        }
+        const wrap = node.querySelector('.gm-node-icon-wrap');
+        if (wrap) {
+            const sid = String(id).toLowerCase();
+            this._atmoTone = this._atmoTone || {};
+            if (this._atmoTone[sid] === undefined) {
+                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
+                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+            }
+            wrap.classList.remove('dimmed');
+            wrap.classList.add('has-atmo');
+            wrap.style.setProperty('--atmo', this._atmoTone[sid] || '#9fd8ff');
+        }
+        const lock = node.querySelector('.gm-locked-icon');
+        if (lock) {
+            lock.classList.add('is-breaking');
+            setTimeout(() => lock.remove(), 500);
+        }
+        const title = node.querySelector(':scope > title');
+        if (title) title.textContent = String(id).toUpperCase();
+        const r = (Number(node.getAttribute('data-size')) || 48) / 2;
+        const fx = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        fx.setAttribute('class', 'gm-unlock-fx');
+        fx.innerHTML = `<circle class="gm-unlock-flash" r="${r}"/>`
+            + `<circle class="gm-unlock-ring" r="${r + 3}"/>`
+            + `<rect class="gm-unlock-scan" x="${-r - 4}" y="${-r - 4}" width="${2 * r + 8}" height="2" style="--scan:${2 * r + 8}px"/>`;
+        node.appendChild(fx);
+        setTimeout(() => {
+            fx.remove();
+            node.classList.remove('gm-unlock-reveal');
+        }, 1400);
+    },
+    /** Stats tooltip beside a freshly unlocked planet, built up by a scan line. */
+    showUnlockScanTip(id) {
+        const node = this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`);
+        if (!node) return null;
+        const anchor = node.querySelector('.gm-planet-lit') || node;
+        const nr = anchor.getBoundingClientRect();
+        const info = this.getPlanetInfo(id);
+        const prog = this.getPlanetStageProgress ? this.getPlanetStageProgress(id) : null;
+        const rows = [
+            ['STATUS', 'REACHABLE'],
+            ['THREAT', String(info.difficulty || '—').toUpperCase()],
+            ['HOSTILES', String(info.enemyCount)],
+            ['STAGES', prog ? (prog.total - 1) + ' + BOSS' : '3 + BOSS']
+        ];
+        const tip = document.createElement('div');
+        tip.className = 'gm-unlock-tip';
+        const head = document.createElement('div');
+        head.className = 'gm-unlock-tip-head';
+        head.textContent = 'NEW SECTOR · SCAN';
+        const name = document.createElement('div');
+        name.className = 'gm-unlock-tip-name';
+        name.textContent = String(info.name || id).toUpperCase();
+        tip.append(head, name);
+        rows.forEach(([k, v], i) => {
+            const row = document.createElement('div');
+            row.className = 'gm-unlock-tip-row';
+            row.style.setProperty('--i', String(i));
+            const a = document.createElement('span');
+            a.textContent = k;
+            const b = document.createElement('b');
+            b.textContent = v;
+            row.append(a, b);
+            tip.appendChild(row);
+        });
+        const scan = document.createElement('i');
+        scan.className = 'gm-unlock-tip-scan';
+        tip.appendChild(scan);
+        tip.style.left = Math.round(nr.right + 14) + 'px';
+        tip.style.top = Math.round(nr.top + nr.height / 2) + 'px';
+        document.body.appendChild(tip);
+        // Keep it on screen: flip to the planet's left side when it would overflow.
+        const tr = tip.getBoundingClientRect();
+        if (tr.right > window.innerWidth - 8) tip.style.left = Math.max(8, Math.round(nr.left - 14 - tr.width)) + 'px';
+        return tip;
+    },
+    hideUnlockScanTip(tip) {
+        if (!tip) return;
+        tip.classList.add('is-leaving');
+        setTimeout(() => tip.remove(), 260);
+    },
+    /**
+     * After a cleared planet: the camera zooms in on each newly reachable planet,
+     * which switches from locked to active while a scan tip lists its stats,
+     * then glides back to where it was. A player camera move cuts the tour short
+     * and lights the rest up at once.
+     */
+    revealUnlockedPlanets(ids) {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        const list = (ids || []).filter((id) => this.overlay && this.overlay.querySelector(`.gm-node[data-planet="${id}"]`));
+        const lightAll = () => (ids || []).forEach((id) => this.lightUpPlanetNode(id));
+        if (!list.length || !svg || !svg.viewBox || !svg.viewBox.baseVal) {
+            lightAll();
+            return;
+        }
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const token = (this._revealRun = {});
+        let home = null;
+        let tip = null;
+        let cut = false;
+        let chain = wait(500).then(() => {
+            const vb = svg.viewBox.baseVal;
+            home = [vb.x, vb.y, vb.width, vb.height];
+        });
+        list.forEach((id) => {
+            chain = chain.then(() => {
+                if (cut || this._revealRun !== token) return null;
+                return this.glideViewBox(this.planetCloseUpBox(id), 750).then((ok) => {
+                    if (!ok) {
+                        cut = true;
+                        return null;
+                    }
+                    this.lightUpPlanetNode(id);
+                    tip = this.showUnlockScanTip(id);
+                    return wait(2300).then(() => {
+                        this.hideUnlockScanTip(tip);
+                        tip = null;
+                        // The player took the camera meanwhile: stop the tour.
+                        if (this._camAnim) cut = true;
+                    });
+                });
+            });
+        });
+        chain.then(() => {
+            this.hideUnlockScanTip(tip);
+            lightAll();
+            if (this._revealRun !== token) return;
+            this._revealRun = null;
+            if (!cut && home) this.glideViewBox(home, 700);
+        });
+    },
     /** True when the player ship marker lies in the visible map viewport. */
     isShipOnScreen() {
         const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');

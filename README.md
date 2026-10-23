@@ -853,6 +853,7 @@ be reviewed or reverted independently.
 | 68F | README stage archive | Live `-68a` shots: pilot wizard, mission start, launch hatch, combat hero card |
 | 68G | HUD remote move/scale | Second fernbedienung (HUD · OUTSIDE): drag header, corner resize, zoom slider; geom/zoom persisted |
 | 68H | Voidborn vine bezel | Continuous rim 9-slice tentacle corners; top mid thickener only; vine SVG assets |
+| 68I | Map lane whisper | Planet-to-planet lines always visible at very low opacity |
 
 The wave commit convention is:
 

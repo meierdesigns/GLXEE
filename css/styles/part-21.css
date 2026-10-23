@@ -1536,8 +1536,13 @@ html[data-vf-frame-px="on"] #vf-cables-old { filter: none !important; }
 html body .profile-start-main .profile-area-row { grid-template-columns: 90px 44px 1fr; }
 /* The cell glow replaces the soft drop-shadow, which blurred the pixel dashes. */
 .gm-route.gm-pxline.gm-pxline-run { filter: none; }
-/* Planet lanes only show on hover (ship ↔ hovered planet); post lanes stay. */
-.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline:not(.gm-post-lane) { display: none; }
+/* Planet lanes: always on, very faint (active next-jump barely above the rest). */
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline:not(.gm-post-lane) { opacity: 0.12; }
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline.lit.next:not(.gm-post-lane) { opacity: 0.18; }
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline.lit.next:not(.gm-post-lane) .gm-pxline-core { filter: none; }
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline.lit.next:not(.gm-post-lane) .gm-pxline-glow { opacity: 0.2; }
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline.lit.next:not(.gm-post-lane) .gm-pxline-halo { opacity: 0.08; }
+.galaxy-map-svg .gm-lines > .gm-edge.gm-pxline:not(.gm-post-lane) .gm-pxline-flow { display: none; }
 .gm-hover-route-layer { pointer-events: none; }
 .gm-hover-route.locked { color: #6b6f7a; opacity: 0.85; }
 .gm-hover-route.locked .gm-pxline-hot, .gm-hover-route.locked .gm-pxline-core { fill: #8a8f9a; }

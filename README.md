@@ -609,6 +609,7 @@ Short index — details live in the sections above.
 - Enemy hero cards with reacting pilot portraits; side-view weapon cards.
 - Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
+- Gamepad/controller support: combat and menu navigation, fire-to-start, victory/game-over confirm.
 
 ### Current build focus
 
@@ -855,6 +856,8 @@ be reviewed or reverted independently.
 | 68H | Voidborn vine bezel | Continuous rim 9-slice tentacle corners; top mid thickener only; vine SVG assets |
 | 68I | Map lane whisper | Planet-to-planet lines always visible at very low opacity |
 | 68J | Voidborn bezel stay | Vine rim no longer vanishes (border fallback, no pixel-frame cull, clip after voxel) |
+| 68K | In-stage shop kiosk | Shop beside sluice gates with procedural shopkeeper face, credits-only trades |
+| 68L | Controller support | Gamepad fire-to-start, victory/game-over menu navigation, planet-selection input routing |
 
 The wave commit convention is:
 

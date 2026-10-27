@@ -53,6 +53,15 @@ class GamepadManager {
         const g = (typeof window !== 'undefined') ? window.game : null;
         if (!g || !g.gameLoop || !g.gameState) return false;
         if (g.gameState.isPaused) return false;
+        // Victory/game-over sit on top of the combat surface without
+        // hiding it, so isCombatSurfaceActive() stays true there too;
+        // route those to menu-style arrow/enter navigation instead.
+        if (typeof document !== 'undefined') {
+            const victoryOverlay = document.getElementById('victoryOverlay');
+            if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) return false;
+            const gameOverOverlay = document.getElementById('gameOver');
+            if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) return false;
+        }
         try {
             return g.gameLoop.isCombatSurfaceActive();
         } catch (e) {
@@ -71,10 +80,27 @@ class GamepadManager {
             this.resetCombatKeys();
             return;
         }
+        // "FIRE TO START" lives inside the combat surface (isCombatMode()
+        // is already true there) but wants a discrete confirm press like a
+        // menu, not held-key combat state, so it's special-cased here.
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            const fireHeld = this.isButtonPressed(gamepad, 0); // A, same button combat uses for shoot
+            if (fireHeld && !this._menuState.a) missionStartManager.onFire();
+            this._menuState.a = fireHeld;
+            return;
+        }
         if (this.isCombatMode()) {
             this.updateCombat(gamepad);
         } else {
+            const wasCombat = !!this._combatState.any;
             this.resetCombatKeys();
+            if (wasCombat) {
+                // A may still be physically held from firing in combat; sync
+                // the menu edge-tracker so this frame isn't read as a fresh
+                // press (which would instantly confirm the first menu item,
+                // e.g. auto-restarting on the game-over screen).
+                this._menuState.a = this.isButtonPressed(gamepad, 0);
+            }
             this.updateMenu(gamepad);
         }
     }

@@ -16,6 +16,7 @@ class ObjectiveManager {
         this.label = '';
         this.goal = null;
         this.enter = null;
+        this.hasShop = false;
     }
 
     reset() {
@@ -311,6 +312,26 @@ class ObjectiveManager {
         }
     }
 
+    /** Shop station beside the sluice gate, on stages seeded with `hasShop`. Rides along with the gate's scroll. */
+    getShopStation() {
+        if (!this.hasShop || !this.goal || this.goal.kind !== 'sluice') return null;
+        if (this.completed || this.won || this.enter) return null;
+        const g = this.goal;
+        return { cx: g.cx + 70, y: g.y, h: g.h, range: 34 };
+    }
+
+    /** True while the player ship sits close enough to the shop station to interact. */
+    isNearShopStation() {
+        const s = this.getShopStation();
+        if (!s) return false;
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p) return false;
+        const px = p.x + p.width / 2;
+        const py = p.y + p.height / 2;
+        return Math.abs(px - s.cx) <= s.range && Math.abs(py - (s.y + s.h / 2)) <= s.range;
+    }
+
     /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
     updateGoal(deltaTime) {
         const o = this.objective;
@@ -486,6 +507,7 @@ class ObjectiveManager {
             this.renderGateFrame(oc, g, W, pulse);
             if (g.dome) this.renderGateDome(oc, g);
         });
+        this.renderShopStation(ctx, pulse);
         ctx.save();
         const l = g.cx - g.open / 2;
         // Entry animation: the opening lights up as the ship flies in, then a flash washes over the field.
@@ -619,6 +641,33 @@ class ObjectiveManager {
                 ctx.fillRect(x + 1, y + 1, 2, 2);
             }
         });
+    }
+
+    /** Small kiosk floating beside the sluice on stages that got a shop; shows a "press E" hint up close. */
+    renderShopStation(ctx, pulse) {
+        const s = this.getShopStation();
+        if (!s) return;
+        const w = 26, h = 20;
+        const x = Math.round(s.cx - w / 2), y = Math.round(s.y + s.h / 2 - h / 2);
+        ctx.save();
+        ctx.fillStyle = '#05060a';
+        ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+        ctx.fillStyle = '#2a3a4e';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(255,200,90,' + (0.5 + pulse * 0.4) + ')';
+        ctx.fillRect(x + 3, y + 3, w - 6, 4);
+        ctx.fillStyle = '#ffc85a';
+        ctx.fillRect(x + w / 2 - 1, y + 9, 2, 2);
+        ctx.fillRect(x + w / 2 - 5, y + 13, 10, 2);
+        if (this.isNearShopStation()) {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x + w / 2 - 7, y - 14, 14, 10);
+            ctx.fillStyle = '#ffe9a8';
+            ctx.font = '8px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('[E]', x + w / 2, y - 6);
+        }
+        ctx.restore();
     }
 
     /**

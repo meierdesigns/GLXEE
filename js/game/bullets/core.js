@@ -11,6 +11,7 @@ class BulletManager {
             : ['laser', 'spread', 'rapid', 'plasma', 'missile', 'ion', 'wave', 'burst', 'pierce', 'nova'];
         this.currentShipModel = null;
         this.currentWeapon = 'laser';
+        this.tempWeapon = null; // { shotsLeft, previousWeapon, previousShotType } while an in-stage shop weapon is equipped
         this.weaponCooldowns = {};
         this.lastShotTime = 0;
         this.maxEnemyBullets = 3; // Maximum enemy bullets on screen
@@ -26,6 +27,38 @@ class BulletManager {
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.syncFromShipModel(null);
         }
+    }
+
+    /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
+    equipTemporaryWeapon(weaponId, shots) {
+        if (!this.shotTypes.includes(weaponId)) return false;
+        if (!this.tempWeapon) {
+            this.tempWeapon = { previousWeapon: this.currentWeapon, previousShotType: this.shotType };
+        }
+        this.tempWeapon.shotsLeft = Math.max(1, Math.round(Number(shots) || 1));
+        this.currentWeapon = weaponId;
+        this.shotType = this.shotTypes.indexOf(weaponId);
+        return true;
+    }
+
+    /** One shot was just fired while a temporary weapon is active; reverts once shots run out. */
+    consumeTemporaryShot() {
+        const t = this.tempWeapon;
+        if (!t) return;
+        t.shotsLeft -= 1;
+        if (t.shotsLeft <= 0) {
+            this.currentWeapon = t.previousWeapon;
+            this.shotType = t.previousShotType;
+            this.tempWeapon = null;
+        }
+    }
+
+    clearTemporaryWeapon() {
+        const t = this.tempWeapon;
+        if (!t) return;
+        this.currentWeapon = t.previousWeapon;
+        this.shotType = t.previousShotType;
+        this.tempWeapon = null;
     }
 
     getFireMode() {

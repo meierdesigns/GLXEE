@@ -1659,15 +1659,17 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 .game-left-cluster .weapon-card-pips > i {
     flex: 1 1 0;
     background: #05060a;
+    opacity: .55;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, #05060a);
 }
 .game-left-cluster .weapon-card-pips > i.is-on {
     background: var(--faction-accent, var(--color-primary));
-    box-shadow: 0 0 0 1px #05060a, 0 0 3px var(--faction-accent, var(--color-primary));
+    opacity: 1;
+    box-shadow: 0 0 0 1px #05060a, 0 0 2px #fff, 0 0 6px var(--faction-accent, var(--color-primary)), 0 0 10px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
 }
-.game-left-cluster .weapon-card.is-reloading .weapon-card-pips > i.is-on { background: var(--res-ore, #c49a4a); box-shadow: 0 0 0 1px #05060a, 0 0 3px var(--res-ore, #c49a4a); }
-.game-left-cluster .weapon-card.is-charging .weapon-card-pips > i.is-on { background: #fff; box-shadow: 0 0 0 1px #05060a, 0 0 4px var(--faction-accent, var(--color-primary)); }
-.game-left-cluster .weapon-card.is-no-energy .weapon-card-pips > i.is-on { background: var(--res-voltex, #c86ef0); box-shadow: 0 0 0 1px #05060a; }
+.game-left-cluster .weapon-card.is-reloading .weapon-card-pips > i.is-on { background: var(--res-ore, #c49a4a); box-shadow: 0 0 0 1px #05060a, 0 0 2px #fff, 0 0 6px var(--res-ore, #c49a4a), 0 0 10px color-mix(in srgb, var(--res-ore, #c49a4a) 60%, transparent); }
+.game-left-cluster .weapon-card.is-charging .weapon-card-pips > i.is-on { background: #fff; box-shadow: 0 0 0 1px #05060a, 0 0 3px #fff, 0 0 8px var(--faction-accent, var(--color-primary)), 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent); }
+.game-left-cluster .weapon-card.is-no-energy .weapon-card-pips > i.is-on { background: var(--res-voltex, #c86ef0); opacity: 1; box-shadow: 0 0 0 1px #05060a, 0 0 4px var(--res-voltex, #c86ef0); }
 
 /* The weapon art carries the state now, so the card itself barely dims. */
 .game-left-cluster .weapon-card.is-dim,

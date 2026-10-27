@@ -143,7 +143,11 @@ class InputHandler {
 
         // Any other menu / archive / station overlay owns input (not ship)
         if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) {
-            if (typeof startScreenManager === 'undefined' || !startScreenManager.isVisible()) {
+            // planetSelectionManager has no document-level listener of its own
+            // (unlike most other overlays) - it relies on handleKeyDown below,
+            // so it must fall through here instead of being swallowed.
+            const planetSelectionOwnsInput = typeof planetSelectionManager !== 'undefined' && planetSelectionManager.isVisible;
+            if (!planetSelectionOwnsInput && (typeof startScreenManager === 'undefined' || !startScreenManager.isVisible())) {
                 const tag = event.target && event.target.tagName;
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
                     return;

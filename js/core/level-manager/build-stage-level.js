@@ -41,14 +41,25 @@ extendClass(CoreLevelManager, {
         const isTransit = !parsed.isBoss && isTransitStage(parsed.planetId, parsed.stageIndex);
         if (isTransit) {
             const seconds = 50 + parsed.stageIndex * 5;
+            const goalKind = parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp';
             resolved = {
                 enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex, base.difficulty),
                 objective: {
                     type: 'reachGoal',
                     seconds: seconds,
-                    goal: parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp'
+                    goal: goalKind
                 }
             };
+        }
+
+        // A random subset of sluice transit stages also get a shop station
+        // beside the gate (seeded on planet+stage so it's stable per replay).
+        let hasShop = false;
+        if (isTransit && resolved.objective && resolved.objective.goal === 'sluice') {
+            const key = `${parsed.planetId}:${parsed.stageIndex}:shop`;
+            let h = 2166136261;
+            for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+            hasShop = ((h >>> 0) % 100) < 35;
         }
 
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
@@ -78,6 +89,7 @@ extendClass(CoreLevelManager, {
             enemyCount: (resolved.enemies && resolved.enemies.length) || base.enemyCount || 3,
             enemies: resolved.enemies || [],
             objective: resolved.objective || null,
+            hasShop,
             dailies: base.dailies || null,
             obstacles: base.obstacles || [],
             obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult * tierMods.spawn)),
@@ -180,6 +192,7 @@ extendClass(CoreLevelManager, {
 
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.start(objective, enemies);
+            objectiveManager.hasShop = !!level.hasShop;
         }
 
         const champion = enemies.find(e => e.champion) || enemies[0];

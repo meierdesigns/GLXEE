@@ -171,12 +171,13 @@ class GameLoop {
             return;
         }
 
+        const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
+        const keys = inputHandler ? inputHandler.keys : null;
         if (typeof bulletManager !== 'undefined') {
-            const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
-            const keys = inputHandler ? inputHandler.keys : null;
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);
         if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
             missionStartManager.updateEnemyEntry(deltaTime);
         }

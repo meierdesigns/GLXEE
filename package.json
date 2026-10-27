@@ -1,6 +1,6 @@
 {
   "name": "glxee",
-  "version": "1.13.7",
+  "version": "1.13.8",
   "description": "GLXEE - Game Boy Style Space Shooter",
   "main": "index.html",
   "scripts": {

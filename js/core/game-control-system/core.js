@@ -137,6 +137,9 @@ class GameControlSystem {
         if (typeof pickupManager !== 'undefined' && pickupManager.reset) {
             pickupManager.reset(true);
         }
+        if (typeof inStageShop !== 'undefined' && inStageShop.close) {
+            inStageShop.close();
+        }
         if (typeof explosionSystem !== 'undefined' && explosionSystem.clear) {
             explosionSystem.clear();
         }

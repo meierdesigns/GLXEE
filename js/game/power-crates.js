@@ -202,6 +202,16 @@ extendClass(PickupManager, {
         });
     },
 
+    /** Grants `id` (one of POWER_UPS) for `ms` milliseconds, e.g. an in-stage shop purchase. */
+    grantPowerUp(id, ms) {
+        if (!POWER_UPS[id]) return false;
+        if (!this.powerUntil) this.powerUntil = {};
+        const until = Date.now() + Math.max(1000, Number(ms) || POWER_UPS[id].ms);
+        this.powerUntil[id] = Math.max(this.powerUntil[id] || 0, until);
+        if (id === 'power_shot') this.powerShotUntil = this.powerUntil[id];
+        return true;
+    },
+
     /** Returns true if the pickup was a power-up (handled here). */
     collectPowerUp(p) {
         if (!p || !p.powerUp) return false;

@@ -17303,6 +17303,7 @@ var ObjectiveManager = class ObjectiveManager {
         this.label = '';
         this.goal = null;
         this.enter = null;
+        this.hasShop = false;
     }
 
     reset() {
@@ -17598,6 +17599,26 @@ var ObjectiveManager = class ObjectiveManager {
         }
     }
 
+    /** Shop station beside the sluice gate, on stages seeded with `hasShop`. Rides along with the gate's scroll. */
+    getShopStation() {
+        if (!this.hasShop || !this.goal || this.goal.kind !== 'sluice') return null;
+        if (this.completed || this.won || this.enter) return null;
+        const g = this.goal;
+        return { cx: g.cx + 70, y: g.y, h: g.h, range: 34 };
+    }
+
+    /** True while the player ship sits close enough to the shop station to interact. */
+    isNearShopStation() {
+        const s = this.getShopStation();
+        if (!s) return false;
+        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
+        const p = pm && pm.player;
+        if (!p) return false;
+        const px = p.x + p.width / 2;
+        const py = p.y + p.height / 2;
+        return Math.abs(px - s.cx) <= s.range && Math.abs(py - (s.y + s.h / 2)) <= s.range;
+    }
+
     /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
     updateGoal(deltaTime) {
         const o = this.objective;
@@ -17773,6 +17794,7 @@ var ObjectiveManager = class ObjectiveManager {
             this.renderGateFrame(oc, g, W, pulse);
             if (g.dome) this.renderGateDome(oc, g);
         });
+        this.renderShopStation(ctx, pulse);
         ctx.save();
         const l = g.cx - g.open / 2;
         // Entry animation: the opening lights up as the ship flies in, then a flash washes over the field.
@@ -17906,6 +17928,33 @@ var ObjectiveManager = class ObjectiveManager {
                 ctx.fillRect(x + 1, y + 1, 2, 2);
             }
         });
+    }
+
+    /** Small kiosk floating beside the sluice on stages that got a shop; shows a "press E" hint up close. */
+    renderShopStation(ctx, pulse) {
+        const s = this.getShopStation();
+        if (!s) return;
+        const w = 26, h = 20;
+        const x = Math.round(s.cx - w / 2), y = Math.round(s.y + s.h / 2 - h / 2);
+        ctx.save();
+        ctx.fillStyle = '#05060a';
+        ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+        ctx.fillStyle = '#2a3a4e';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(255,200,90,' + (0.5 + pulse * 0.4) + ')';
+        ctx.fillRect(x + 3, y + 3, w - 6, 4);
+        ctx.fillStyle = '#ffc85a';
+        ctx.fillRect(x + w / 2 - 1, y + 9, 2, 2);
+        ctx.fillRect(x + w / 2 - 5, y + 13, 10, 2);
+        if (this.isNearShopStation()) {
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x + w / 2 - 7, y - 14, 14, 10);
+            ctx.fillStyle = '#ffe9a8';
+            ctx.font = '8px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('[E]', x + w / 2, y - 6);
+        }
+        ctx.restore();
     }
 
     /**
@@ -18897,14 +18946,25 @@ extendClass(CoreLevelManager, {
         const isTransit = !parsed.isBoss && isTransitStage(parsed.planetId, parsed.stageIndex);
         if (isTransit) {
             const seconds = 50 + parsed.stageIndex * 5;
+            const goalKind = parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp';
             resolved = {
                 enemies: this.buildTransitEnemies(resolved.enemies, seconds, parsed.stageIndex, base.difficulty),
                 objective: {
                     type: 'reachGoal',
                     seconds: seconds,
-                    goal: parsed.stageIndex % 4 === 2 ? 'sluice' : 'warp'
+                    goal: goalKind
                 }
             };
+        }
+
+        // A random subset of sluice transit stages also get a shop station
+        // beside the gate (seeded on planet+stage so it's stable per replay).
+        let hasShop = false;
+        if (isTransit && resolved.objective && resolved.objective.goal === 'sluice') {
+            const key = `${parsed.planetId}:${parsed.stageIndex}:shop`;
+            let h = 2166136261;
+            for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+            hasShop = ((h >>> 0) % 100) < 35;
         }
 
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
@@ -18934,6 +18994,7 @@ extendClass(CoreLevelManager, {
             enemyCount: (resolved.enemies && resolved.enemies.length) || base.enemyCount || 3,
             enemies: resolved.enemies || [],
             objective: resolved.objective || null,
+            hasShop,
             dailies: base.dailies || null,
             obstacles: base.obstacles || [],
             obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult * tierMods.spawn)),
@@ -19036,6 +19097,7 @@ extendClass(CoreLevelManager, {
 
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.start(objective, enemies);
+            objectiveManager.hasShop = !!level.hasShop;
         }
 
         const champion = enemies.find(e => e.champion) || enemies[0];
@@ -19476,6 +19538,9 @@ var GameControlSystem = class GameControlSystem {
         }
         if (typeof pickupManager !== 'undefined' && pickupManager.reset) {
             pickupManager.reset(true);
+        }
+        if (typeof inStageShop !== 'undefined' && inStageShop.close) {
+            inStageShop.close();
         }
         if (typeof explosionSystem !== 'undefined' && explosionSystem.clear) {
             explosionSystem.clear();
@@ -21043,12 +21108,13 @@ var GameLoop = class GameLoop {
             return;
         }
 
+        const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
+        const keys = inputHandler ? inputHandler.keys : null;
         if (typeof bulletManager !== 'undefined') {
-            const inputHandler = this.systemManager ? this.systemManager.getSubsystem('inputHandler') : null;
-            const keys = inputHandler ? inputHandler.keys : null;
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);
         if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
             missionStartManager.updateEnemyEntry(deltaTime);
         }
@@ -21600,7 +21666,11 @@ var InputHandler = class InputHandler {
 
         // Any other menu / archive / station overlay owns input (not ship)
         if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) {
-            if (typeof startScreenManager === 'undefined' || !startScreenManager.isVisible()) {
+            // planetSelectionManager has no document-level listener of its own
+            // (unlike most other overlays) - it relies on handleKeyDown below,
+            // so it must fall through here instead of being swallowed.
+            const planetSelectionOwnsInput = typeof planetSelectionManager !== 'undefined' && planetSelectionManager.isVisible;
+            if (!planetSelectionOwnsInput && (typeof startScreenManager === 'undefined' || !startScreenManager.isVisible())) {
                 const tag = event.target && event.target.tagName;
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
                     return;
@@ -29013,6 +29083,7 @@ var BulletManager = class BulletManager {
             : ['laser', 'spread', 'rapid', 'plasma', 'missile', 'ion', 'wave', 'burst', 'pierce', 'nova'];
         this.currentShipModel = null;
         this.currentWeapon = 'laser';
+        this.tempWeapon = null; // { shotsLeft, previousWeapon, previousShotType } while an in-stage shop weapon is equipped
         this.weaponCooldowns = {};
         this.lastShotTime = 0;
         this.maxEnemyBullets = 3; // Maximum enemy bullets on screen
@@ -29028,6 +29099,38 @@ var BulletManager = class BulletManager {
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.syncFromShipModel(null);
         }
+    }
+
+    /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
+    equipTemporaryWeapon(weaponId, shots) {
+        if (!this.shotTypes.includes(weaponId)) return false;
+        if (!this.tempWeapon) {
+            this.tempWeapon = { previousWeapon: this.currentWeapon, previousShotType: this.shotType };
+        }
+        this.tempWeapon.shotsLeft = Math.max(1, Math.round(Number(shots) || 1));
+        this.currentWeapon = weaponId;
+        this.shotType = this.shotTypes.indexOf(weaponId);
+        return true;
+    }
+
+    /** One shot was just fired while a temporary weapon is active; reverts once shots run out. */
+    consumeTemporaryShot() {
+        const t = this.tempWeapon;
+        if (!t) return;
+        t.shotsLeft -= 1;
+        if (t.shotsLeft <= 0) {
+            this.currentWeapon = t.previousWeapon;
+            this.shotType = t.previousShotType;
+            this.tempWeapon = null;
+        }
+    }
+
+    clearTemporaryWeapon() {
+        const t = this.tempWeapon;
+        if (!t) return;
+        this.currentWeapon = t.previousWeapon;
+        this.shotType = t.previousShotType;
+        this.tempWeapon = null;
     }
 
     getFireMode() {
@@ -30149,6 +30252,8 @@ extendClass(BulletManager, {
                 break;
         }
 
+        if (this.tempWeapon) this.consumeTemporaryShot();
+
         return true; // Shot was fired successfully
     },
 
@@ -30874,6 +30979,7 @@ extendClass(BulletManager, {
         this.bullets.length = 0;
         this.enemyBullets.length = 0;
         this.shotType = 0;
+        this.tempWeapon = null;
         this.resetCharge();
         // Reset weapon display
         this.updateWeaponDisplay();
@@ -37511,6 +37617,16 @@ extendClass(PickupManager, {
             life: 12000,
             size: 10
         });
+    },
+
+    /** Grants `id` (one of POWER_UPS) for `ms` milliseconds, e.g. an in-stage shop purchase. */
+    grantPowerUp(id, ms) {
+        if (!POWER_UPS[id]) return false;
+        if (!this.powerUntil) this.powerUntil = {};
+        const until = Date.now() + Math.max(1000, Number(ms) || POWER_UPS[id].ms);
+        this.powerUntil[id] = Math.max(this.powerUntil[id] || 0, until);
+        if (id === 'power_shot') this.powerShotUntil = this.powerUntil[id];
+        return true;
     },
 
     /** Returns true if the pickup was a power-up (handled here). */
@@ -116092,6 +116208,26 @@ var VFStartIntro = {
             root.addEventListener('pointerdown', onKey);
             // Stays until the player clicks / presses a key (only auto-leaves if a duration is passed)
             const timer = opts.duration ? setTimeout(finish, opts.duration) : 0;
+
+            // Poll the gamepad directly: the GamepadManager bridge isn't
+            // reliable this early (before the game/game-loop exists), so
+            // A/Start are checked here instead of relying on it.
+            let gpWasPressed = false;
+            const pollGamepad = () => {
+                if (finished) return;
+                if (typeof navigator !== 'undefined' && navigator.getGamepads) {
+                    const pads = navigator.getGamepads();
+                    for (const gp of pads) {
+                        if (!gp) continue;
+                        const pressed = (gp.buttons[0] && gp.buttons[0].pressed) || (gp.buttons[9] && gp.buttons[9].pressed);
+                        if (pressed && !gpWasPressed) { finish(); return; }
+                        gpWasPressed = pressed;
+                        break;
+                    }
+                }
+                requestAnimationFrame(pollGamepad);
+            };
+            requestAnimationFrame(pollGamepad);
         });
     }
 };
@@ -121759,6 +121895,15 @@ var GamepadManager = class GamepadManager {
         const g = (typeof window !== 'undefined') ? window.game : null;
         if (!g || !g.gameLoop || !g.gameState) return false;
         if (g.gameState.isPaused) return false;
+        // Victory/game-over sit on top of the combat surface without
+        // hiding it, so isCombatSurfaceActive() stays true there too;
+        // route those to menu-style arrow/enter navigation instead.
+        if (typeof document !== 'undefined') {
+            const victoryOverlay = document.getElementById('victoryOverlay');
+            if (victoryOverlay && !victoryOverlay.classList.contains('hidden')) return false;
+            const gameOverOverlay = document.getElementById('gameOver');
+            if (gameOverOverlay && !gameOverOverlay.classList.contains('hidden')) return false;
+        }
         try {
             return g.gameLoop.isCombatSurfaceActive();
         } catch (e) {
@@ -121777,10 +121922,27 @@ var GamepadManager = class GamepadManager {
             this.resetCombatKeys();
             return;
         }
+        // "FIRE TO START" lives inside the combat surface (isCombatMode()
+        // is already true there) but wants a discrete confirm press like a
+        // menu, not held-key combat state, so it's special-cased here.
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            const fireHeld = this.isButtonPressed(gamepad, 0); // A, same button combat uses for shoot
+            if (fireHeld && !this._menuState.a) missionStartManager.onFire();
+            this._menuState.a = fireHeld;
+            return;
+        }
         if (this.isCombatMode()) {
             this.updateCombat(gamepad);
         } else {
+            const wasCombat = !!this._combatState.any;
             this.resetCombatKeys();
+            if (wasCombat) {
+                // A may still be physically held from firing in combat; sync
+                // the menu edge-tracker so this frame isn't read as a fresh
+                // press (which would instantly confirm the first menu item,
+                // e.g. auto-restarting on the game-over screen).
+                this._menuState.a = this.isButtonPressed(gamepad, 0);
+            }
             this.updateMenu(gamepad);
         }
     }
@@ -121934,4 +122096,234 @@ extendClass(GamepadManager, {
         this._menuState.b = bHeld;
     }
 });
+
+
+/* --- js/graphics/shopkeeper-face.js --- */
+"use strict";
+
+/**
+ * Tiny procedural face for the in-stage shopkeeper: idle / happy (after a
+ * purchase) / sad (can't afford). No sprite sheet, just pixel rects on a canvas.
+ */
+var ShopkeeperFace = class ShopkeeperFace {
+    constructor() {
+        this.state = 'idle';
+        this.timer = 0;
+    }
+
+    setState(state, ms) {
+        this.state = state;
+        this.timer = Math.max(0, Number(ms) || 0);
+    }
+
+    update(deltaTime) {
+        if (this.timer > 0) {
+            this.timer -= deltaTime;
+            if (this.timer <= 0) this.state = 'idle';
+        }
+    }
+
+    /** Draws into a canvas 2D context, filling the whole canvas. */
+    render(ctx, w, h) {
+        if (!ctx) return;
+        const px = Math.max(2, Math.floor(Math.min(w, h) / 16));
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#e8b878';
+        ctx.fillRect(w * 0.2, h * 0.15, w * 0.6, h * 0.7);
+        const eyeY = this.state === 'happy' ? h * 0.42 : h * 0.4;
+        ctx.fillStyle = '#2a1c10';
+        if (this.state === 'happy') {
+            // Squinting, happy eyes: short horizontal dashes.
+            ctx.fillRect(w * 0.3, eyeY, px * 2, px);
+            ctx.fillRect(w * 0.62, eyeY, px * 2, px);
+        } else if (this.state === 'sad') {
+            ctx.fillRect(w * 0.3, eyeY, px, px * 2);
+            ctx.fillRect(w * 0.68, eyeY, px, px * 2);
+        } else {
+            ctx.fillRect(w * 0.3, eyeY, px, px);
+            ctx.fillRect(w * 0.68, eyeY, px, px);
+        }
+        ctx.fillStyle = '#7a3a28';
+        if (this.state === 'happy') {
+            ctx.fillRect(w * 0.36, h * 0.62, w * 0.28, px);
+            ctx.fillRect(w * 0.34, h * 0.58, px, px);
+            ctx.fillRect(w * 0.64, h * 0.58, px, px);
+        } else if (this.state === 'sad') {
+            ctx.fillRect(w * 0.36, h * 0.68, w * 0.28, px);
+            ctx.fillRect(w * 0.34, h * 0.64, px, px);
+            ctx.fillRect(w * 0.64, h * 0.64, px, px);
+        } else {
+            ctx.fillRect(w * 0.38, h * 0.64, w * 0.24, px);
+        }
+    }
+}
+
+var shopkeeperFace = new ShopkeeperFace();
+window.shopkeeperFace = shopkeeperFace;
+
+
+/* --- js/ui/in-stage-shop/core.js --- */
+"use strict";
+
+/**
+ * In-stage shop: a kiosk beside some sluice gates (see objective-manager.js
+ * getShopStation/isNearShopStation). Walk up, press E, buy a stage-only
+ * buff or a temporary weapon with a shot limit, paid in real credits.
+ */
+var InStageShop = class InStageShop {
+    constructor() {
+        this.isOpen = false;
+        this.prevInteract = false;
+        this.lastMsg = '';
+    }
+
+    catalog() {
+        return {
+            buffs: [
+                { id: 'barrier', label: 'SHIELD BARRIER', desc: 'Halves incoming damage', cost: 60, ms: 60000 },
+                { id: 'speed_boost', label: 'AFTERBURNER', desc: 'Faster movement', cost: 45, ms: 60000 },
+                { id: 'power_shot', label: 'POWER SHOT', desc: 'Bigger, stronger shots', cost: 70, ms: 60000 }
+            ],
+            weapons: [
+                { id: 'spread', label: 'SPREAD GUN', shots: 30, cost: 50 },
+                { id: 'missile', label: 'MISSILES', shots: 12, cost: 80 },
+                { id: 'plasma', label: 'PLASMA CANNON', shots: 20, cost: 90 }
+            ]
+        };
+    }
+
+    /** Called every frame while a stage is running and not paused. */
+    update(deltaTime, keys) {
+        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.update(deltaTime);
+        if (this.isOpen) return;
+        const near = typeof objectiveManager !== 'undefined' && objectiveManager.isNearShopStation
+            && objectiveManager.isNearShopStation();
+        if (!near) {
+            this.prevInteract = false;
+            return;
+        }
+        const interact = !!(keys && (keys['e'] || keys['E']));
+        if (interact && !this.prevInteract) this.show();
+        this.prevInteract = interact;
+    }
+
+    show() {
+        if (this.isOpen) return;
+        this.isOpen = true;
+        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.setState('idle', 0);
+        if (typeof game !== 'undefined' && game.gameState && game.gameState.pauseGame) game.gameState.pauseGame();
+        this.renderDom();
+    }
+
+    close() {
+        if (!this.isOpen) return;
+        this.isOpen = false;
+        if (this._faceRaf) cancelAnimationFrame(this._faceRaf);
+        const el = document.getElementById('vf-in-stage-shop');
+        if (el) el.remove();
+        if (typeof game !== 'undefined' && game.gameState && game.gameState.resumeGame) game.gameState.resumeGame();
+    }
+
+    getCredits() {
+        return (typeof profileManager !== 'undefined' && profileManager.getCredits) ? profileManager.getCredits() : 0;
+    }
+
+    buyBuff(item) {
+        if (typeof profileManager === 'undefined' || !profileManager.canAffordCredits(item.cost)) {
+            this.flashFace('sad');
+            return;
+        }
+        profileManager.spendCredits(item.cost);
+        if (typeof pickupManager !== 'undefined' && pickupManager.grantPowerUp) {
+            pickupManager.grantPowerUp(item.id, item.ms);
+        }
+        this.flashFace('happy');
+        this.renderDom();
+    }
+
+    buyWeapon(item) {
+        if (typeof profileManager === 'undefined' || !profileManager.canAffordCredits(item.cost)) {
+            this.flashFace('sad');
+            return;
+        }
+        profileManager.spendCredits(item.cost);
+        if (typeof bulletManager !== 'undefined' && bulletManager.equipTemporaryWeapon) {
+            bulletManager.equipTemporaryWeapon(item.id, item.shots);
+        }
+        this.flashFace('happy');
+        this.renderDom();
+    }
+
+    flashFace(state) {
+        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.setState(state, 1200);
+    }
+
+    rowHtml(item, kind) {
+        const afford = this.getCredits() >= item.cost;
+        const sub = kind === 'weapon' ? `${item.shots} shots` : item.desc;
+        return `<div class="vf-shop-row">` +
+            `<div class="vf-shop-row-text"><b>${item.label}</b><span>${sub}</span></div>` +
+            `<button type="button" data-shop-buy="${kind}:${item.id}" ${afford ? '' : 'disabled'}>${item.cost}c</button>` +
+            `</div>`;
+    }
+
+    renderDom() {
+        let el = document.getElementById('vf-in-stage-shop');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'vf-in-stage-shop';
+            el.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:rgba(5,6,10,0.72);font-family:monospace;color:#e8f0ff;';
+            document.body.appendChild(el);
+            el.addEventListener('click', (e) => {
+                const buyBtn = e.target.closest('[data-shop-buy]');
+                if (buyBtn) {
+                    const [kind, id] = buyBtn.getAttribute('data-shop-buy').split(':');
+                    const list = kind === 'weapon' ? this.catalog().weapons : this.catalog().buffs;
+                    const item = list.find((i) => i.id === id);
+                    if (item) kind === 'weapon' ? this.buyWeapon(item) : this.buyBuff(item);
+                    return;
+                }
+                if (e.target.closest('[data-shop-close]')) this.close();
+            });
+        }
+        const c = this.catalog();
+        el.innerHTML =
+            `<div style="background:#10141c;border:2px solid #3a4a64;border-radius:6px;padding:14px;width:260px;max-width:90vw;">` +
+            `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">` +
+            `<canvas id="vf-shop-face" width="40" height="40" style="image-rendering:pixelated;background:#05060a;border-radius:4px;"></canvas>` +
+            `<div><div style="font-weight:bold;">TRAVELING TRADER</div><div style="opacity:0.7;font-size:12px;">${this.getCredits()}c on hand</div></div>` +
+            `</div>` +
+            `<div style="font-size:11px;opacity:0.7;margin:6px 0 2px;">STAGE-ONLY BUFFS</div>` +
+            c.buffs.map((i) => this.rowHtml(i, 'buff')).join('') +
+            `<div style="font-size:11px;opacity:0.7;margin:10px 0 2px;">TEMPORARY WEAPONS</div>` +
+            c.weapons.map((i) => this.rowHtml(i, 'weapon')).join('') +
+            `<button type="button" data-shop-close style="margin-top:12px;width:100%;">CLOSE [E]</button>` +
+            `</div>`;
+        el.querySelectorAll('.vf-shop-row').forEach((row) => {
+            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;';
+        });
+        el.querySelectorAll('.vf-shop-row-text').forEach((d) => {
+            d.style.cssText = 'display:flex;flex-direction:column;font-size:12px;';
+        });
+        this.startFaceLoop();
+    }
+
+    startFaceLoop() {
+        const canvas = document.getElementById('vf-shop-face');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const tick = () => {
+            if (!this.isOpen) return;
+            if (typeof shopkeeperFace !== 'undefined') {
+                shopkeeperFace.update(16);
+                shopkeeperFace.render(ctx, canvas.width, canvas.height);
+            }
+            this._faceRaf = requestAnimationFrame(tick);
+        };
+        tick();
+    }
+}
+
+var inStageShop = new InStageShop();
+window.inStageShop = inStageShop;
 

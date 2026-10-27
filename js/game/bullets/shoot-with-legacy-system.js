@@ -40,6 +40,8 @@ extendClass(BulletManager, {
                 break;
         }
 
+        if (this.tempWeapon) this.consumeTemporaryShot();
+
         return true; // Shot was fired successfully
     },
 

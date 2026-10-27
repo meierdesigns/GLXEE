@@ -180,6 +180,26 @@ const VFStartIntro = {
             root.addEventListener('pointerdown', onKey);
             // Stays until the player clicks / presses a key (only auto-leaves if a duration is passed)
             const timer = opts.duration ? setTimeout(finish, opts.duration) : 0;
+
+            // Poll the gamepad directly: the GamepadManager bridge isn't
+            // reliable this early (before the game/game-loop exists), so
+            // A/Start are checked here instead of relying on it.
+            let gpWasPressed = false;
+            const pollGamepad = () => {
+                if (finished) return;
+                if (typeof navigator !== 'undefined' && navigator.getGamepads) {
+                    const pads = navigator.getGamepads();
+                    for (const gp of pads) {
+                        if (!gp) continue;
+                        const pressed = (gp.buttons[0] && gp.buttons[0].pressed) || (gp.buttons[9] && gp.buttons[9].pressed);
+                        if (pressed && !gpWasPressed) { finish(); return; }
+                        gpWasPressed = pressed;
+                        break;
+                    }
+                }
+                requestAnimationFrame(pollGamepad);
+            };
+            requestAnimationFrame(pollGamepad);
         });
     }
 };

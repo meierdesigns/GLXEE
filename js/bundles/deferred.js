@@ -23431,8 +23431,6 @@ var CoreRenderManager = class CoreRenderManager {
 
     // Global bezel around the stage with the resolution slider.
     function ensureBezel() {
-        let el = document.getElementById('vf-res');
-        if (el) return el;
         // The frame is static in index.html (painted with the first frame); create only as a fallback.
         if (!document.getElementById('vf-bezel')) {
             const frame = document.createElement('div');
@@ -23445,6 +23443,8 @@ var CoreRenderManager = class CoreRenderManager {
             frame.insertAdjacentHTML('beforeend', FRAME_PLATES_HTML);
             document.body.appendChild(frame);
         }
+        let el = document.getElementById('vf-res');
+        if (el) return el;
         el = document.createElement('label');
         el.id = 'vf-res';
         el.className = 'vf-bezel-res';
@@ -27128,21 +27128,6 @@ var SoundManager = class SoundManager {
         this.ambientPlanetId = null;
         this.ambientGain = null;
 
-        this.weaponFamilies = {
-            laser: 'laser',
-            pierce: 'laser',
-            claw_beam: 'laser',
-            spread: 'spread',
-            burst: 'spread',
-            spike_burst: 'spread',
-            rapid: 'rapid',
-            plasma: 'soft',
-            ion: 'soft',
-            wave: 'soft',
-            missile: 'punch',
-            nova: 'punch'
-        };
-
         this.planetAmbient = {
             mars: { base: 55, filter: 420, type: 'sawtooth', lfo: 0.08 },
             jupiter: { base: 40, filter: 280, type: 'triangle', lfo: 0.05 },
@@ -27329,25 +27314,64 @@ var SoundManager = class SoundManager {
     }
 
     playWeaponShoot(weaponId) {
-        const family = this.weaponFamilies[weaponId] || 'laser';
-        switch (family) {
+        const id = String(weaponId || 'laser').toLowerCase();
+        switch (id) {
+            case 'laser':
+                this.createSweep(1200, 600, 0.14, 'sine', 0.8);
+                break;
+            case 'pierce':
+                this.createSweep(1800, 300, 0.22, 'sine', 0.75);
+                this.createBeep(2200, 0.03, 'sine', 0.3);
+                break;
+            case 'claw_beam':
+                this.createDualTone(900, 1500, 0.12, 'sawtooth', 0.7);
+                this.createSweep(1100, 700, 0.1, 'sine', 0.4);
+                break;
+            case 'laser_twin':
+                this.createSweep(1200, 600, 0.14, 'sine', 0.65);
+                this.schedule(() => this.createSweep(1260, 630, 0.14, 'sine', 0.65), 18);
+                break;
             case 'spread':
                 this.createSweep(900, 500, 0.08, 'square', 0.7);
                 this.schedule(() => this.createSweep(750, 420, 0.06, 'square', 0.45), 30);
                 this.schedule(() => this.createSweep(820, 480, 0.06, 'square', 0.4), 55);
                 break;
+            case 'burst':
+                this.createSweep(1000, 600, 0.05, 'square', 0.65);
+                this.schedule(() => this.createSweep(950, 560, 0.05, 'square', 0.5), 20);
+                break;
+            case 'spike_burst':
+                this.createSweep(900, 500, 0.07, 'square', 0.7);
+                this.createNoiseBurst(0.05, 0.4, 1800);
+                this.schedule(() => this.createSweep(820, 460, 0.06, 'square', 0.4), 30);
+                break;
             case 'rapid':
                 this.createSweep(1600, 900, 0.06, 'sine', 0.55);
                 break;
-            case 'soft':
+            case 'plasma':
                 this.createSweep(480, 220, 0.18, 'triangle', 0.9);
                 this.createBeep(180, 0.12, 'sine', 0.35);
                 break;
-            case 'punch':
+            case 'ion':
+                this.createSweep(700, 1400, 0.1, 'triangle', 0.6);
+                this.createBeep(2000, 0.02, 'sine', 0.3);
+                break;
+            case 'wave':
+                this.createSweep(260, 420, 0.22, 'sine', 0.55);
+                this.schedule(() => this.createSweep(420, 260, 0.18, 'sine', 0.4), 60);
+                break;
+            case 'missile':
                 this.createNoiseBurst(0.08, 0.8, 500);
                 this.createSweep(220, 80, 0.2, 'sawtooth', 0.85);
                 break;
-            case 'laser':
+            case 'nova':
+                this.createNoiseBurst(0.1, 0.9, 650);
+                this.createDualTone(260, 400, 0.18, 'sawtooth', 0.7);
+                break;
+            case 'railgun':
+                this.createNoiseBurst(0.06, 0.6, 2500);
+                this.createSweep(2400, 200, 0.26, 'sawtooth', 0.95);
+                break;
             default:
                 this.createSweep(1200, 600, 0.14, 'sine', 0.8);
                 break;
@@ -27399,6 +27423,37 @@ var SoundManager = class SoundManager {
     playHurt() {
         this.createNoiseBurst(0.07, 0.7, 600);
         this.createSweep(260, 110, 0.16, 'triangle', 0.85);
+    }
+
+    // --- UI sounds ---
+
+    playUIClick() {
+        this.createBeep(720, 0.04, 'triangle', 0.8);
+    }
+
+    playUIHover() {
+        this.createBeep(900, 0.025, 'sine', 0.35);
+    }
+
+    playUIConfirm() {
+        this.createBeep(560, 0.05, 'sine', 0.9);
+        this.schedule(() => this.createBeep(880, 0.08, 'sine', 0.8), 50);
+    }
+
+    playUIDeny() {
+        this.createBeep(140, 0.12, 'square', 0.5);
+    }
+
+    playUIOpen() {
+        this.createSweep(400, 900, 0.12, 'sine', 0.8);
+    }
+
+    playUIClose() {
+        this.createSweep(700, 320, 0.1, 'sine', 0.7);
+    }
+
+    playUITab() {
+        this.createBeep(620, 0.035, 'square', 0.6);
     }
 }
 
@@ -27659,6 +27714,19 @@ function resumeSoundContext() {
 document.addEventListener('pointerdown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('keydown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('touchstart', resumeSoundContext, { once: true, capture: true });
+
+// Generic UI click sound: delegated so every clickable control, present or
+// future, gets one without each menu file wiring its own sound call. Covers
+// real <button>s as well as the div/row-based controls this codebase builds
+// its menus from (menu items, settings rows, pilot rows, tabs) — a plain
+// `button` selector misses those entirely, so menu clicks stayed silent.
+document.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest && e.target.closest(
+        'button, [role="button"], .menu-item, .settings-row, .start-menu-row .menu-item, .pilot-row, .hs-tab, .menu-cluster .menu-item'
+    );
+    if (!btn || btn.disabled || btn.classList.contains('locked') || btn.getAttribute('aria-disabled') === 'true') return;
+    if (typeof soundManager !== 'undefined' && soundManager.playUIClick) soundManager.playUIClick();
+}, true);
 
 
 /* --- js/game/youtube-soundtrack/core.js --- */
@@ -38287,7 +38355,10 @@ extendClass(CollisionManager, {
                     graphicsManager.createHitEffect(playerX, playerY, 10);
                 }
 
-                if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                if (typeof soundManager !== 'undefined') {
+                    soundManager.playExplosion(0.6);
+                    soundManager.playHurt();
+                }
 
                 if (playerDefeated) {
                     game.gameOver();
@@ -38335,6 +38406,7 @@ extendClass(CollisionManager, {
                 }
 
                 if (typeof soundManager !== 'undefined') {
+                    soundManager.playExplosion(0.6);
                     if (enemyDefeated) soundManager.playKill();
                     else soundManager.playHit();
                 }
@@ -92525,8 +92597,9 @@ extendClass(HomeStationUI, {
             && startScreenManager.embeddedMenuTabs.some((t) => t.id === savedMenuTab)) {
             this.openMainMenuOverlay({ tab: savedMenuTab, skipPersist: true });
         }
-        if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
-            soundManager.startMenuMusic();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
+            if (soundManager.playUIOpen) soundManager.playUIOpen();
         }
         if (typeof menuStateManager !== 'undefined' && !opts.skipPersist) {
             this.persistTab();
@@ -92611,6 +92684,7 @@ extendClass(HomeStationUI, {
     },
 
     hide() {
+        if (typeof soundManager !== 'undefined' && soundManager.playUIClose) soundManager.playUIClose();
         this.isVisible = false;
         this.hideUpgradeTip();
         if (this._upgTipHost) {
@@ -106998,6 +107072,13 @@ extendClass(HomeStationUI, {
             this._pendingFlash = target;
         }
         this.setStatus(msg);
+        if (typeof soundManager !== 'undefined') {
+            if (ok) {
+                if (soundManager.playUIConfirm) soundManager.playUIConfirm();
+            } else if (soundManager.playUIDeny) {
+                soundManager.playUIDeny();
+            }
+        }
     },
     /**
      * Two tab groups: game tabs (left) and menu tabs (right: profiles,
@@ -107030,6 +107111,7 @@ extendClass(HomeStationUI, {
         return this.tab;
     },
     switchTab(dir) {
+        if (typeof soundManager !== 'undefined' && soundManager.playUITab) soundManager.playUITab();
         const cycle = this.getTabCycle();
         let idx = cycle.indexOf(this.currentTabKey());
         if (idx < 0) idx = 0;
@@ -107121,8 +107203,9 @@ extendClass(HomeStationUI, {
             const toast = document.getElementById('hsStatusToast');
             if (toast) toast.classList.add('hs-status-fail');
         }
-        if (typeof soundManager !== 'undefined' && soundManager.createBeep) {
-            soundManager.createBeep(140, 0.12, 'square', 0.25);
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playUIDeny) soundManager.playUIDeny();
+            else if (soundManager.createBeep) soundManager.createBeep(140, 0.12, 'square', 0.25);
         }
     },
     isMainTabChrome(el) {
@@ -118394,7 +118477,12 @@ var StartStationBackdrop = class StartStationBackdrop {
         // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
         // below 1 intentionally under-samples the backing buffer (CSS still stretches it
         // to the same on-screen size) to preview lower-res/perf-constrained rendering.
-        const dpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
+        // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
+        // source pixels on every redraw under software/sub-pixel compositing (seen in
+        // embedded browsers such as VS Code's webview), which reads as the pixelated
+        // backdrop flickering even though nothing in the scene actually changed.
+        const rawDpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
+        const dpr = Math.max(1, Math.round(rawDpr));
         this.canvas.width = Math.round(w * dpr);
         this.canvas.height = Math.round(h * dpr);
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -118424,6 +118512,13 @@ var StartStationBackdrop = class StartStationBackdrop {
                 if (st.display === 'none' || st.visibility === 'hidden') return;
             } catch (e) { /* draw anyway */ }
             if (document.hidden || window.vfResizing) return;
+            // Settings → DEBUG → PERFORMANCE MODE, and OS-level reduced-motion: freeze the
+            // idle float/breathe/spin redraw. In some embedded/software-rendered webviews
+            // (e.g. VS Code's) clearing and repainting this canvas on every tick reads as
+            // the whole backdrop flickering even though the scene itself barely moves —
+            // this gives those setups a static (non-flickering) backdrop instead.
+            if (document.documentElement.hasAttribute('data-vf-performance') ||
+                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
@@ -119007,7 +119102,11 @@ extendClass(StartScreenManager, {
             if (!content.parentNode) return;
             content.parentNode.insertBefore(bd.el, content);
         });
-        bd.shownKey = null;
+        // Let show()'s own key comparison decide whether anything actually
+        // changed — forcing shownKey to null here replayed the opacity-0
+        // "is-swapping" fade on every re-mount (every menu rebuild), even
+        // when the same pilot/station was shown again, which read as the
+        // backdrop flickering to black.
         bd.setBase(base);
         return bd;
     }

@@ -132,7 +132,10 @@ extendClass(CollisionManager, {
                     graphicsManager.createHitEffect(playerX, playerY, 10);
                 }
 
-                if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                if (typeof soundManager !== 'undefined') {
+                    soundManager.playExplosion(0.6);
+                    soundManager.playHurt();
+                }
 
                 if (playerDefeated) {
                     game.gameOver();
@@ -180,6 +183,7 @@ extendClass(CollisionManager, {
                 }
 
                 if (typeof soundManager !== 'undefined') {
+                    soundManager.playExplosion(0.6);
                     if (enemyDefeated) soundManager.playKill();
                     else soundManager.playHit();
                 }

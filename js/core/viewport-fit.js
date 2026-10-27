@@ -140,8 +140,6 @@
 
     // Global bezel around the stage with the resolution slider.
     function ensureBezel() {
-        let el = document.getElementById('vf-res');
-        if (el) return el;
         // The frame is static in index.html (painted with the first frame); create only as a fallback.
         if (!document.getElementById('vf-bezel')) {
             const frame = document.createElement('div');
@@ -154,6 +152,8 @@
             frame.insertAdjacentHTML('beforeend', FRAME_PLATES_HTML);
             document.body.appendChild(frame);
         }
+        let el = document.getElementById('vf-res');
+        if (el) return el;
         el = document.createElement('label');
         el.id = 'vf-res';
         el.className = 'vf-bezel-res';

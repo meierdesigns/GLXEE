@@ -272,7 +272,12 @@ class StartStationBackdrop {
         // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
         // below 1 intentionally under-samples the backing buffer (CSS still stretches it
         // to the same on-screen size) to preview lower-res/perf-constrained rendering.
-        const dpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
+        // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
+        // source pixels on every redraw under software/sub-pixel compositing (seen in
+        // embedded browsers such as VS Code's webview), which reads as the pixelated
+        // backdrop flickering even though nothing in the scene actually changed.
+        const rawDpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
+        const dpr = Math.max(1, Math.round(rawDpr));
         this.canvas.width = Math.round(w * dpr);
         this.canvas.height = Math.round(h * dpr);
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -302,6 +307,13 @@ class StartStationBackdrop {
                 if (st.display === 'none' || st.visibility === 'hidden') return;
             } catch (e) { /* draw anyway */ }
             if (document.hidden || window.vfResizing) return;
+            // Settings → DEBUG → PERFORMANCE MODE, and OS-level reduced-motion: freeze the
+            // idle float/breathe/spin redraw. In some embedded/software-rendered webviews
+            // (e.g. VS Code's) clearing and repainting this canvas on every tick reads as
+            // the whole backdrop flickering even though the scene itself barely moves —
+            // this gives those setups a static (non-flickering) backdrop instead.
+            if (document.documentElement.hasAttribute('data-vf-performance') ||
+                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
             if (now - this._lastFrameT < this._frameInterval) return;
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
@@ -885,7 +897,11 @@ extendClass(StartScreenManager, {
             if (!content.parentNode) return;
             content.parentNode.insertBefore(bd.el, content);
         });
-        bd.shownKey = null;
+        // Let show()'s own key comparison decide whether anything actually
+        // changed — forcing shownKey to null here replayed the opacity-0
+        // "is-swapping" fade on every re-mount (every menu rebuild), even
+        // when the same pilot/station was shown again, which read as the
+        // backdrop flickering to black.
         bd.setBase(base);
         return bd;
     }

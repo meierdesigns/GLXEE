@@ -40,6 +40,13 @@ extendClass(HomeStationUI, {
             this._pendingFlash = target;
         }
         this.setStatus(msg);
+        if (typeof soundManager !== 'undefined') {
+            if (ok) {
+                if (soundManager.playUIConfirm) soundManager.playUIConfirm();
+            } else if (soundManager.playUIDeny) {
+                soundManager.playUIDeny();
+            }
+        }
     },
     /**
      * Two tab groups: game tabs (left) and menu tabs (right: profiles,
@@ -72,6 +79,7 @@ extendClass(HomeStationUI, {
         return this.tab;
     },
     switchTab(dir) {
+        if (typeof soundManager !== 'undefined' && soundManager.playUITab) soundManager.playUITab();
         const cycle = this.getTabCycle();
         let idx = cycle.indexOf(this.currentTabKey());
         if (idx < 0) idx = 0;
@@ -163,8 +171,9 @@ extendClass(HomeStationUI, {
             const toast = document.getElementById('hsStatusToast');
             if (toast) toast.classList.add('hs-status-fail');
         }
-        if (typeof soundManager !== 'undefined' && soundManager.createBeep) {
-            soundManager.createBeep(140, 0.12, 'square', 0.25);
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playUIDeny) soundManager.playUIDeny();
+            else if (soundManager.createBeep) soundManager.createBeep(140, 0.12, 'square', 0.25);
         }
     },
     isMainTabChrome(el) {

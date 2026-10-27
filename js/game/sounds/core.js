@@ -16,21 +16,6 @@ class SoundManager {
         this.ambientPlanetId = null;
         this.ambientGain = null;
 
-        this.weaponFamilies = {
-            laser: 'laser',
-            pierce: 'laser',
-            claw_beam: 'laser',
-            spread: 'spread',
-            burst: 'spread',
-            spike_burst: 'spread',
-            rapid: 'rapid',
-            plasma: 'soft',
-            ion: 'soft',
-            wave: 'soft',
-            missile: 'punch',
-            nova: 'punch'
-        };
-
         this.planetAmbient = {
             mars: { base: 55, filter: 420, type: 'sawtooth', lfo: 0.08 },
             jupiter: { base: 40, filter: 280, type: 'triangle', lfo: 0.05 },
@@ -217,25 +202,64 @@ class SoundManager {
     }
 
     playWeaponShoot(weaponId) {
-        const family = this.weaponFamilies[weaponId] || 'laser';
-        switch (family) {
+        const id = String(weaponId || 'laser').toLowerCase();
+        switch (id) {
+            case 'laser':
+                this.createSweep(1200, 600, 0.14, 'sine', 0.8);
+                break;
+            case 'pierce':
+                this.createSweep(1800, 300, 0.22, 'sine', 0.75);
+                this.createBeep(2200, 0.03, 'sine', 0.3);
+                break;
+            case 'claw_beam':
+                this.createDualTone(900, 1500, 0.12, 'sawtooth', 0.7);
+                this.createSweep(1100, 700, 0.1, 'sine', 0.4);
+                break;
+            case 'laser_twin':
+                this.createSweep(1200, 600, 0.14, 'sine', 0.65);
+                this.schedule(() => this.createSweep(1260, 630, 0.14, 'sine', 0.65), 18);
+                break;
             case 'spread':
                 this.createSweep(900, 500, 0.08, 'square', 0.7);
                 this.schedule(() => this.createSweep(750, 420, 0.06, 'square', 0.45), 30);
                 this.schedule(() => this.createSweep(820, 480, 0.06, 'square', 0.4), 55);
                 break;
+            case 'burst':
+                this.createSweep(1000, 600, 0.05, 'square', 0.65);
+                this.schedule(() => this.createSweep(950, 560, 0.05, 'square', 0.5), 20);
+                break;
+            case 'spike_burst':
+                this.createSweep(900, 500, 0.07, 'square', 0.7);
+                this.createNoiseBurst(0.05, 0.4, 1800);
+                this.schedule(() => this.createSweep(820, 460, 0.06, 'square', 0.4), 30);
+                break;
             case 'rapid':
                 this.createSweep(1600, 900, 0.06, 'sine', 0.55);
                 break;
-            case 'soft':
+            case 'plasma':
                 this.createSweep(480, 220, 0.18, 'triangle', 0.9);
                 this.createBeep(180, 0.12, 'sine', 0.35);
                 break;
-            case 'punch':
+            case 'ion':
+                this.createSweep(700, 1400, 0.1, 'triangle', 0.6);
+                this.createBeep(2000, 0.02, 'sine', 0.3);
+                break;
+            case 'wave':
+                this.createSweep(260, 420, 0.22, 'sine', 0.55);
+                this.schedule(() => this.createSweep(420, 260, 0.18, 'sine', 0.4), 60);
+                break;
+            case 'missile':
                 this.createNoiseBurst(0.08, 0.8, 500);
                 this.createSweep(220, 80, 0.2, 'sawtooth', 0.85);
                 break;
-            case 'laser':
+            case 'nova':
+                this.createNoiseBurst(0.1, 0.9, 650);
+                this.createDualTone(260, 400, 0.18, 'sawtooth', 0.7);
+                break;
+            case 'railgun':
+                this.createNoiseBurst(0.06, 0.6, 2500);
+                this.createSweep(2400, 200, 0.26, 'sawtooth', 0.95);
+                break;
             default:
                 this.createSweep(1200, 600, 0.14, 'sine', 0.8);
                 break;
@@ -287,5 +311,36 @@ class SoundManager {
     playHurt() {
         this.createNoiseBurst(0.07, 0.7, 600);
         this.createSweep(260, 110, 0.16, 'triangle', 0.85);
+    }
+
+    // --- UI sounds ---
+
+    playUIClick() {
+        this.createBeep(720, 0.04, 'triangle', 0.8);
+    }
+
+    playUIHover() {
+        this.createBeep(900, 0.025, 'sine', 0.35);
+    }
+
+    playUIConfirm() {
+        this.createBeep(560, 0.05, 'sine', 0.9);
+        this.schedule(() => this.createBeep(880, 0.08, 'sine', 0.8), 50);
+    }
+
+    playUIDeny() {
+        this.createBeep(140, 0.12, 'square', 0.5);
+    }
+
+    playUIOpen() {
+        this.createSweep(400, 900, 0.12, 'sine', 0.8);
+    }
+
+    playUIClose() {
+        this.createSweep(700, 320, 0.1, 'sine', 0.7);
+    }
+
+    playUITab() {
+        this.createBeep(620, 0.035, 'square', 0.6);
     }
 }

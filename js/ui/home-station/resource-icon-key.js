@@ -335,8 +335,9 @@ extendClass(HomeStationUI, {
             && startScreenManager.embeddedMenuTabs.some((t) => t.id === savedMenuTab)) {
             this.openMainMenuOverlay({ tab: savedMenuTab, skipPersist: true });
         }
-        if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
-            soundManager.startMenuMusic();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
+            if (soundManager.playUIOpen) soundManager.playUIOpen();
         }
         if (typeof menuStateManager !== 'undefined' && !opts.skipPersist) {
             this.persistTab();
@@ -421,6 +422,7 @@ extendClass(HomeStationUI, {
     },
 
     hide() {
+        if (typeof soundManager !== 'undefined' && soundManager.playUIClose) soundManager.playUIClose();
         this.isVisible = false;
         this.hideUpgradeTip();
         if (this._upgTipHost) {

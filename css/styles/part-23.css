@@ -83,6 +83,122 @@ html[data-faction="machine"] body :is(.victory-content, .game-over .game-over-co
 }
 
 /* ==========================================================================
+   Terran / Kronax / Pirate / Machine: the same parted-graphic pixel-art
+   border-image system as Voidborn's panel vine (below), reusing each
+   faction's own generated bezel art (tools/gen-bezel-art.py) and its
+   already-defined vf-bezel-art-creep-<faction> keyframes/duration var from
+   css/screen-frame.css, at the same 16px/slice-16 pixel size voidborn uses —
+   only the asset and accent color change per faction. Each faction's own
+   --faction-panel-clip / --faction-ctl-clip silhouette is left untouched
+   (the border-image sits on ::before, inside that same clipped box, so the
+   panel keeps its distinct shape and only gains the pixel-art frame). */
+html[data-faction="terran"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root),
+html[data-faction="kronax"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root),
+html[data-faction="pirate"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root),
+html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root) {
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--faction-accent) 22%, transparent), inset 0 0 0 8px color-mix(in srgb, var(--faction-accent) 10%, transparent);
+}
+/* z-index:2 + inset:0 override the base rule (part-11.css), which draws
+   this ::before at z-index:-1 with inset:-8px — meant for a flat tint ring
+   that's fine sitting behind the panel and bleeding past its edges. A real
+   border-image ring at z-index:-1 paints BELOW the panel's own background
+   (isolation:isolate on the panel confines it there) and is invisible
+   wherever the panel is opaque; the -8px bleed then let each panel's ring
+   overlap its neighbor's in a stacked list, reading as broken/segmented
+   gaps between list items. Bringing it to a positive z-index (still inside
+   the panel's own isolated stacking context, so it can't leak above
+   unrelated page content) and flush insets fixes both. */
+html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    background: none; inset: 0; z-index: 2; border: 16px solid transparent;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-terran var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
+}
+html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    background: none; inset: 0; z-index: 2; border: 16px solid transparent;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-kronax var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
+}
+html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    background: none; inset: 0; z-index: 2; border: 16px solid transparent;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-pirate var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
+}
+html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    background: none; inset: 0; z-index: 2; border: 16px solid transparent;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-machine var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
+}
+html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,
+html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,
+html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,
+html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section)::before,
+    html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section)::before,
+    html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section)::before,
+    html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section)::before { animation: none; }
+}
+html[data-faction="terran"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card),
+html[data-faction="kronax"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card),
+html[data-faction="pirate"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card),
+html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root, .hs-faction-card) {
+    padding: 14px 18px;
+}
+
+/* Buttons / tabs: a thin pixel-art ring, same border-image system as the
+   panels above and the bezel itself, just at a much thinner width — voidborn
+   achieves this with a dedicated mask-box-image ring asset; reusing the
+   already-generated plate art at 6px here reads the same way (a crisp pixel
+   frame) without needing a second asset family per faction. Each faction's
+   own --faction-ctl-clip silhouette is left in place. */
+html[data-faction="terran"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    background: none; z-index: 2; border: 6px solid transparent;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+}
+html[data-faction="kronax"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    background: none; z-index: 2; border: 6px solid transparent;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+}
+html[data-faction="pirate"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    background: none; z-index: 2; border: 6px solid transparent;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+}
+html[data-faction="machine"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    background: none; z-index: 2; border: 6px solid transparent;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 16 round;
+    image-rendering: pixelated;
+}
+/* Buttons/tabs: static frame, no creep — many small instances are on screen
+   at once, and each individually "twitching" on its own unsynced clock read
+   as constant flicker across the whole UI. Only the large, singular surfaces
+   (bezel, station panels, wizard preview cards) keep the slow creep. */
+html[data-faction="terran"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+html[data-faction="kronax"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+html[data-faction="pirate"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+html[data-faction="machine"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-faction="terran"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+    html[data-faction="kronax"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+    html[data-faction="pirate"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before,
+    html[data-faction="machine"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before { animation: none; }
+}
+
+/* ==========================================================================
    Voidborn: grown, not built — but still pixel art. Organic lobes are drawn as
    4px staircases (no smooth radii, no blur); glows are hard offset shadows,
    fills use hard colour bands instead of soft gradients.

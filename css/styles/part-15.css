@@ -1156,6 +1156,18 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
 html .home-station-overlay .home-station-content .hs-tabs.hs-tabs-hidden {
     display: none !important;
 }
+/* Nav unlock (first planet cleared): tabs slide/fade in instead of popping in instantly. */
+html .home-station-overlay .home-station-content .hs-tabs.hs-tabs-reveal {
+    animation: hs-tabs-reveal 0.5s cubic-bezier(.2, .8, .3, 1);
+}
+@keyframes hs-tabs-reveal {
+    0% { opacity: 0; transform: translateY(-10px) scaleX(0.92); filter: brightness(1.8); }
+    60% { opacity: 1; transform: translateY(0) scaleX(1.01); }
+    100% { opacity: 1; transform: translateY(0) scaleX(1); filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html .home-station-overlay .home-station-content .hs-tabs.hs-tabs-reveal { animation: none; }
+}
 html .home-station-overlay .home-station-content .hs-subnav,
 html .home-station-overlay .home-station-content .hs-tabs {
     border: 0 !important;

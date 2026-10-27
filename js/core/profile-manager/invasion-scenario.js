@@ -49,6 +49,22 @@ extendClass(ProfileManager, {
         return Object.keys(p.progress.galaxies).some((gid) => this.hasClearedAnyStageInGalaxy(p, gid));
     },
 
+    /** True once the pilot's starting planet (first planet) is fully cleared, boss included. */
+    hasClearedFirstPlanet(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof planetConfigManager === 'undefined' || !this.getPlanetStageState) return false;
+        const galaxyId = (p.homeStation && p.homeStation.currentGalaxyId) || 'milky_way';
+        const map = planetConfigManager.getGalaxyMap(galaxyId) || {};
+        const g = planetConfigManager.getGalaxy(galaxyId) || {};
+        const firstPlanetId = map.startPlanetId
+            || (map.nodes && map.nodes[0] && map.nodes[0].planetId)
+            || (g.planetIds && g.planetIds[0])
+            || null;
+        if (!firstPlanetId) return false;
+        const st = this.getPlanetStageState(galaxyId, firstPlanetId);
+        return !!(st && st.bossCleared);
+    },
+
     /**
      * Active (unresolved) invasion. With a galaxy id: the one in that galaxy;
      * without: the home invasion (opening scenario).

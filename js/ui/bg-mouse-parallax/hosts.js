@@ -221,11 +221,19 @@
         } finally {
             parallax.syncing = false;
             if (parallax.observer && document.body) {
+                // Must match bind()'s own .observe() filter in bg-mouse-parallax.js
+                // exactly (no 'style'): re-observing the same target replaces its
+                // options rather than merging them, so including 'style' here kept
+                // silently re-enabling the style-thrash watch that bind() explicitly
+                // turns off ("map/orbit/spin/UI thrash style constantly") right after
+                // every collectHosts() run — which in turn re-triggers collectHosts()
+                // on the next unrelated style mutation, in a self-feeding loop that
+                // flapped host visibility and read as the whole screen flickering.
                 parallax.observer.observe(document.body, {
                     childList: true,
                     subtree: true,
                     attributes: true,
-                    attributeFilter: ['class', 'style', 'data-hs-tab', 'hidden']
+                    attributeFilter: ['class', 'data-hs-tab', 'hidden']
                 });
             }
         }

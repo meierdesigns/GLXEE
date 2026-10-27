@@ -55,9 +55,6 @@ class LaunchCutsceneManager {
             this._planet.setFaction(this._faction);
             this._planet.mount(this.overlay);
             this._planet.el.classList.add('launch-cutscene-planet');
-            this.overlay.style.position = 'fixed';
-            this.overlay.style.inset = '0';
-            this.overlay.style.zIndex = '100090';
         }
         this._startT = 0;
         this._phaseStartT = 0;
@@ -123,6 +120,7 @@ class LaunchCutsceneManager {
         this.overlay = overlay;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        this.ctx.imageSmoothingEnabled = false;
         this._syncSize();
         this._resizeHandler = () => this._syncSize();
         window.addEventListener('resize', this._resizeHandler);
@@ -150,6 +148,7 @@ class LaunchCutsceneManager {
         this.canvas.style.width = w + 'px';
         this.canvas.style.height = h + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.ctx.imageSmoothingEnabled = false;
         this.W = w;
         this.H = h;
     }
@@ -361,39 +360,194 @@ class LaunchCutsceneManager {
             c.beginPath(); c.ellipse(cx, cy, rad * 0.9, rad * 0.35, 0, 0, Math.PI * 2); c.stroke();
             c.globalAlpha = 1;
         }
-        if (pose.extras === 'beam' || (st === 'salvage' && this.phase === 'act')) {
-            c.strokeStyle = accent;
-            c.globalAlpha = 0.35 + p * 0.4;
-            c.lineWidth = 2;
-            c.beginPath();
-            c.moveTo(pose.sx, pose.sy + 30);
-            c.lineTo(this.W * 0.5, this.H * 0.72);
-            c.stroke();
-            c.globalAlpha = 1;
-            // wreck block
-            c.fillStyle = '#2a2a32';
-            c.fillRect(this.W * 0.5 - 28, this.H * 0.7, 56, 18);
-            c.fillStyle = accent;
-            c.globalAlpha = 0.5;
-            c.fillRect(this.W * 0.5 - 10, this.H * 0.7 + 4, 8, 6);
-            c.globalAlpha = 1;
+        const wreckX = this.W * 0.5, wreckY = this.H * 0.72;
+        if (pose.extras === 'beam' || st === 'salvage') {
+            const sceneAlpha = this.phase === 'title' ? Math.min(1, p * 2) : 1;
+            this._drawDebris(c, accent, wreckX, wreckY - 6, 110, p, sceneAlpha * 0.8);
+            this._drawWreck(c, wreckX, wreckY, 1, sceneAlpha);
+            if (this.phase === 'act') {
+                c.strokeStyle = accent;
+                c.globalAlpha = 0.4 + Math.sin(p * Math.PI * 8) * 0.25;
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(pose.sx, pose.sy + 30);
+                c.lineTo(wreckX, wreckY - 4);
+                c.stroke();
+                c.globalAlpha = 1;
+            }
         }
-        if (pose.extras === 'shield' || (st === 'defend' && this.phase === 'act')) {
-            c.strokeStyle = accent;
-            c.globalAlpha = 0.35 + Math.sin(p * Math.PI * 4) * 0.2;
-            c.lineWidth = 2;
-            c.beginPath();
-            c.arc(pose.sx, pose.sy, 55 + p * 8, 0, Math.PI * 2);
-            c.stroke();
-            c.globalAlpha = 1;
+        if (pose.extras === 'shield' || st === 'defend') {
+            const stCx = this.W * 0.5, stCy = this.H * 0.5;
+            const sceneAlpha = this.phase === 'title' ? Math.min(1, p * 2) : 1;
+            this._drawStation(c, stCx, stCy, 1, sceneAlpha);
+            if (this.phase === 'act') {
+                this._drawThreats(c, accent, stCx, stCy, p);
+                c.strokeStyle = accent;
+                c.globalAlpha = 0.35 + Math.sin(p * Math.PI * 4) * 0.2;
+                c.lineWidth = 2;
+                c.beginPath();
+                c.arc(stCx, stCy, 60 + p * 6, 0, Math.PI * 2);
+                c.stroke();
+                c.globalAlpha = 1;
+            }
         }
         if (pose.extras === 'escort' || st === 'escort') {
-            this._drawShip(c, pose.sx - 70, pose.sy + 24, pose.scale * 0.55, pose.alpha * 0.7, pose.rot);
-            this._drawShip(c, pose.sx + 70, pose.sy + 28, pose.scale * 0.55, pose.alpha * 0.7, pose.rot);
+            this._drawConvoyShip(c, pose.sx - 80, pose.sy + 20, pose.scale * 0.7, pose.alpha * 0.85, pose.rot * 0.3);
+            this._drawConvoyShip(c, pose.sx + 80, pose.sy + 26, pose.scale * 0.7, pose.alpha * 0.85, pose.rot * 0.3);
+        }
+        if (st === 'hunt' || st === 'raid') {
+            const tx = this.phase === 'title' ? this.W * 0.72 : pose.sx + (this.W - pose.sx) * 0.45;
+            const ty = this.phase === 'title' ? this.H * 0.42 : pose.sy - (pose.sy - this.H * 0.4) * 0.3;
+            const sceneAlpha = this.phase === 'exit' ? Math.max(0, 1 - p * 1.4) : 1;
+            this._drawTarget(c, tx, ty, p, accent, sceneAlpha);
+        }
+        if (st === 'patrol' || st === 'clear') {
+            this._drawWaypoints(c, accent, this.phase === 'title' ? -1 : p);
         }
 
         this._drawGlow(c, pose.sx, pose.sy, pose.scale, accent, pose.glow);
         this._drawShip(c, pose.sx, pose.sy, pose.scale, pose.alpha, pose.rot);
+    }
+
+    /** Broken hull silhouette for salvage/hull-recovery stories: a jagged fuselage, a
+        torn-off panel hanging askew, and a couple of lit seam cracks. */
+    _drawWreck(c, cx, cy, scale, alpha) {
+        c.save();
+        c.globalAlpha = alpha;
+        c.translate(cx, cy);
+        c.scale(scale, scale);
+        c.fillStyle = '#23232b';
+        c.beginPath();
+        c.moveTo(-54, -10); c.lineTo(-20, -22); c.lineTo(18, -16); c.lineTo(50, -4);
+        c.lineTo(46, 12); c.lineTo(10, 18); c.lineTo(-30, 14); c.lineTo(-54, 6);
+        c.closePath();
+        c.fill();
+        c.save();
+        c.translate(38, -26);
+        c.rotate(0.5);
+        c.fillStyle = '#1b1b22';
+        c.fillRect(-14, -6, 28, 12);
+        c.restore();
+        c.strokeStyle = '#ffcf6a';
+        c.globalAlpha = alpha * 0.8;
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.moveTo(-20, -18); c.lineTo(-8, -4); c.lineTo(6, -10);
+        c.stroke();
+        c.restore();
+        c.globalAlpha = 1;
+    }
+
+    /** Scattered debris chunks drifting slowly around a salvage point, seeded from the
+        story's own RNG so the field is stable across the title/act phases. */
+    _drawDebris(c, accent, cx, cy, spread, p, alpha) {
+        const bits = this._bits || [];
+        c.globalAlpha = alpha;
+        for (let i = 0; i < 7; i++) {
+            const b = bits[i] || { x: 0.2 * i, y: 0.3, v: 1 };
+            const drift = (p * (0.15 + b.v * 0.1)) % 1;
+            const x = cx + (b.x - 0.5) * spread;
+            const y = cy + (b.y - 0.5) * spread * 0.6 - drift * 6;
+            c.fillStyle = i % 3 === 0 ? accent : '#4a4a55';
+            c.fillRect(x | 0, y | 0, 3 + (i % 2), 3 + (i % 2));
+        }
+        c.globalAlpha = 1;
+    }
+
+    /** Blocky outpost silhouette for defend stories: a central spire with a docking
+        collar and one pulsing beacon light. */
+    _drawStation(c, cx, cy, scale, alpha) {
+        c.save();
+        c.globalAlpha = alpha;
+        c.translate(cx, cy);
+        c.scale(scale, scale);
+        c.fillStyle = '#2c2f38';
+        c.fillRect(-10, -36, 20, 72);
+        c.fillRect(-34, -8, 68, 16);
+        c.fillStyle = '#1b1d24';
+        c.fillRect(-10, -36, 20, 10);
+        c.fillRect(-10, 26, 20, 10);
+        c.fillStyle = '#ffcf6a';
+        c.globalAlpha = alpha * (0.5 + Math.sin((this._startT || 0) * 0.01) * 0.3);
+        c.fillRect(-2, -2, 4, 4);
+        c.restore();
+        c.globalAlpha = 1;
+    }
+
+    /** Small hostile markers converging on the defended point, closing in as the act plays out. */
+    _drawThreats(c, accent, cx, cy, p) {
+        for (let i = 0; i < 3; i++) {
+            const a = (i / 3) * Math.PI * 2 + p * 1.5;
+            const r = 140 - p * 70;
+            const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.5;
+            c.fillStyle = '#ff5a4a';
+            c.globalAlpha = 0.7;
+            c.beginPath();
+            c.moveTo(x, y - 4); c.lineTo(x + 5, y + 4); c.lineTo(x - 5, y + 4);
+            c.closePath();
+            c.fill();
+        }
+        c.globalAlpha = 1;
+    }
+
+    /** Boxy freighter hull for escort stories — distinct from the player's own ship
+        silhouette so the convoy reads as separate craft, not clones. */
+    _drawConvoyShip(c, cx, cy, scale, alpha, tilt) {
+        c.save();
+        c.globalAlpha = alpha;
+        c.translate(cx, cy);
+        c.rotate(tilt || 0);
+        c.scale(scale, scale);
+        c.fillStyle = '#3a3f4c';
+        c.fillRect(-10, -22, 20, 44);
+        c.fillStyle = '#50566a';
+        c.fillRect(-10, -22, 20, 8);
+        c.fillStyle = '#ffcf6a';
+        c.globalAlpha = alpha * 0.8;
+        c.fillRect(-4, 18, 8, 6);
+        c.restore();
+        c.globalAlpha = 1;
+    }
+
+    /** Locked-on hostile marker with a closing reticle, for hunt/raid stories. */
+    _drawTarget(c, cx, cy, p, accent, alpha) {
+        c.save();
+        c.globalAlpha = alpha == null ? 1 : alpha;
+        c.translate(cx, cy);
+        c.fillStyle = '#ff5a4a';
+        c.beginPath();
+        c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(-7, 8);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = accent;
+        c.globalAlpha = (alpha == null ? 1 : alpha) * (0.6 + Math.sin(p * Math.PI * 6) * 0.3);
+        c.lineWidth = 1.5;
+        c.beginPath(); c.arc(0, 0, 16 + Math.sin(p * 10) * 2, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.moveTo(-22, 0); c.lineTo(-16, 0); c.moveTo(16, 0); c.lineTo(22, 0); c.stroke();
+        c.beginPath(); c.moveTo(0, -22); c.lineTo(0, -16); c.moveTo(0, 16); c.lineTo(0, 22); c.stroke();
+        c.restore();
+        c.globalAlpha = 1;
+    }
+
+    /** Route beacons for patrol/clear stories: a shallow arc of waypoint diamonds, the
+        current one picked out in the faction accent colour. p<0 (title phase) shows the
+        full route with none active yet. */
+    _drawWaypoints(c, accent, p) {
+        const cx = this.W * 0.5, cy = this.H * 0.56;
+        for (let i = 0; i < 3; i++) {
+            const t = i / 2;
+            const x = cx + (t - 0.5) * this.W * 0.55;
+            const y = cy - Math.sin(t * Math.PI) * 40;
+            const active = p >= 0 && Math.abs(p - t) < 0.18;
+            c.fillStyle = active ? accent : '#5a5a66';
+            c.globalAlpha = active ? 1 : 0.5;
+            c.save();
+            c.translate(x, y);
+            c.rotate(Math.PI / 4);
+            c.fillRect(-4, -4, 8, 8);
+            c.restore();
+        }
+        c.globalAlpha = 1;
     }
 
     _finish() {

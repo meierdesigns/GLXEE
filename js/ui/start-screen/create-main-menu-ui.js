@@ -101,11 +101,6 @@ extendClass(StartScreenManager, {
             menu.appendChild(group);
         });
 
-        const instructions = this.buildControlsHint([
-            'ARROW KEYS / MOUSE: Navigate',
-            'SPACEBAR / CLICK: Select'
-        ]);
-
         const footer = document.createElement('div');
         footer.className = 'start-screen-footer';
         if (this.devMode) {
@@ -134,10 +129,8 @@ extendClass(StartScreenManager, {
         const board = this.buildRecentPilotsBoard();
         if (board) menuRow.appendChild(board);
         content.appendChild(menuRow);
-        content.appendChild(instructions);
         const utilRow = document.createElement('div');
         utilRow.className = 'ui-menu-util-row';
-        utilRow.appendChild(this.buildControlsShowBtn());
         utilRow.appendChild(this.buildIntroBtn());
         content.appendChild(utilRow);
         // Dev hint lives in the hover row; the DEV MODE ON badge stays visible

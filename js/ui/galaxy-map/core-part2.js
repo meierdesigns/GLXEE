@@ -469,9 +469,9 @@ extendClass(GalaxyMapManager, {
         });
         (go || modal.querySelector('#gmMmClose')).focus();
     },
-    /** Atmosphere haze tone baked into a planet SVG (palette atmoHaze, alpha 66); '' for stations / no atmosphere. */
+    /** Atmosphere haze tone baked into a planet SVG (palette atmoHaze, alpha cc); '' for stations / no atmosphere. */
     planetAtmoColor(iconHtml) {
-        const m = /fill="(#[0-9a-f]{6})66"/i.exec(iconHtml || '');
+        const m = /fill="(#[0-9a-f]{6})(?:cc|80)"/i.exec(iconHtml || '');
         return m ? m[1] : '';
     },
     /** Disc size of a planet SVG relative to the 0.76 (haze starts at the limb) the haze rings were drawn for (ringed planets sit smaller in their grid). */

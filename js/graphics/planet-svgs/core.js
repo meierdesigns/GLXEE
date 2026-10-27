@@ -145,8 +145,8 @@ class PlanetSVGManager {
             atmoLight: this.mixHex(this.shadeHex(base, 0.38), '#CFE0F0', 0.14),
             atmo: this.mixHex(this.shadeHex(base, 0.22), '#A8C4E0', 0.1),
             atmoNight: this.mixHex(this.shadeHex(base, -0.35), '#2A3A60', 0.2),
-            atmoHaze: this.mixHex(this.shadeHex(base, 0.2), '#A8C4E0', 0.12) + '66',
-            atmoHazeFaint: this.mixHex(this.shadeHex(base, 0.05), '#8CA8D0', 0.12) + '33',
+            atmoHaze: this.mixHex(this.shadeHex(base, 0.2), '#A8C4E0', 0.12) + 'cc',
+            atmoHazeFaint: this.mixHex(this.shadeHex(base, 0.05), '#8CA8D0', 0.12) + '80',
             moon_0: this.mixHex(this.shadeHex(base, 0.35), '#C8C4BC', 0.7),
             moon_1: this.mixHex(base, '#8A867E', 0.7),
             moon_2: this.mixHex(this.shadeHex(base, -0.4), '#3E3C3A', 0.7)

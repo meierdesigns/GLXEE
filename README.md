@@ -854,6 +854,7 @@ be reviewed or reverted independently.
 | 68G | HUD remote move/scale | Second fernbedienung (HUD · OUTSIDE): drag header, corner resize, zoom slider; geom/zoom persisted |
 | 68H | Voidborn vine bezel | Continuous rim 9-slice tentacle corners; top mid thickener only; vine SVG assets |
 | 68I | Map lane whisper | Planet-to-planet lines always visible at very low opacity |
+| 68J | Voidborn bezel stay | Vine rim no longer vanishes (border fallback, no pixel-frame cull, clip after voxel) |
 
 The wave commit convention is:
 

@@ -234,14 +234,12 @@
 /* Resolution key is hidden (the slider plate stays in code, just unreachable from the strip). */
 .vf-bezel .vf-bezel-tools button[data-tool="res"] { display: none !important; }
 
-/* Logout key looks like an empty socket until a pilot is logged in (known from the first paint). */
+/* Logout key: fully invisible until a pilot is logged in, but still occupies its slot
+   (visibility, not display, so the fullscreen key to its left never shifts into its place). */
 html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"] {
-    background: var(--hull-dark, #05080e);
-    box-shadow: inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 #000, inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52);
-    transform: none; filter: none; pointer-events: none;
+    visibility: hidden;
+    pointer-events: none;
 }
-html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"] > svg,
-html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"]::after { opacity: 0; }
 
 /* Square screen opening whenever corners are pixel/voxel: the opening, the glass bevel and the
    backing all read the same radius tokens, so the frame never disagrees with the picture. */
@@ -307,15 +305,6 @@ html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr,
 html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-bezel-deco,
 html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel::after { clip-path: url(#vfStageClip) !important; }
 html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel .vf-fr-p { clip-path: none; }
-/* Voidborn vines keep --fr-shape (not #vfStageClip) so top and side stay on one outline. */
-html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr,
-html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"]::before {
-    clip-path: var(--fr-shape) !important;
-}
-html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr {
-    clip-path: var(--fr-shape) !important;
-}
-
 /* Voxel frame: viewport-fit.js shades the plate per cell into one small bitmap on .vf-fr (hull, outer
    bevel, opening lip, all on the --fr-px grid). It replaces the smooth offset plates entirely. */
 html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr {
@@ -327,6 +316,17 @@ html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr-p { visibility: 
 /* The bitmap is already transparent outside the outline; the stepped clip on top only added anti-aliased
    (soft) edges where cell borders fall between device pixels. */
 html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel .vf-fr { clip-path: none !important; }
+/* Voidborn vines keep --fr-shape (not #vfStageClip / not the voxel none) so the rim never
+   depends on a mask that is briefly empty during silhouette rebuild — that made the bezel vanish. */
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="voidborn"]::before {
+    clip-path: var(--fr-shape) !important;
+}
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr::after {
+    clip-path: var(--fr-shape) !important;
+}
 /* The stage (body) is a plain rectangle: its fill showed as black squares at the frame's notches and
    rounded corners (smooth and pixel frame alike). The frame plates are opaque over the whole band, so the
    stage only needs its fill behind the opening and the background art shows around the silhouette.

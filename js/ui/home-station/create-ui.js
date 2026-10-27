@@ -141,6 +141,23 @@ extendClass(HomeStationUI, {
         this._finishTabMount(scrollState, { bindChrome: true });
         this._hsShellReady = true;
         this._softBodyTab = this.tab;
+        this._syncTabsUnlockReveal(this.overlay.querySelector('.hs-tabs'), hideTabsForTutorial);
+    },
+
+    /** First-planet unlock: when the nav tabs flip from hidden to shown, play a reveal animation. */
+    _syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial) {
+        if (!tabsWrap) return;
+        if (!this._hsTabsRevealInit) {
+            this._hsTabsRevealInit = true;
+            this._hsTabsWereHidden = !!hideTabsForTutorial;
+            return;
+        }
+        if (!hideTabsForTutorial && this._hsTabsWereHidden) {
+            if (!tabsWrap.firstElementChild) tabsWrap.innerHTML = this.renderTabs();
+            tabsWrap.classList.add('hs-tabs-reveal');
+            tabsWrap.addEventListener('animationend', () => tabsWrap.classList.remove('hs-tabs-reveal'), { once: true });
+        }
+        this._hsTabsWereHidden = !!hideTabsForTutorial;
     },
 
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
@@ -227,8 +244,8 @@ extendClass(HomeStationUI, {
         }
 
         let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
-            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
+            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
         }
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
@@ -320,8 +337,8 @@ extendClass(HomeStationUI, {
 
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
         let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedAnyStage) {
-            hideTabsForTutorial = !profileManager.hasClearedAnyStage(profile);
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
+            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
         }
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
@@ -344,6 +361,7 @@ extendClass(HomeStationUI, {
 
         const tabsWrap = content.querySelector('.hs-tabs');
         if (tabsWrap) tabsWrap.classList.toggle('hs-tabs-hidden', !!hideTabsForTutorial);
+        this._syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial);
 
         // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
         const subRebound = this._syncSoftNavChrome(content, bodyEl, hideTabsForTutorial);

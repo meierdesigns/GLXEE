@@ -89,17 +89,8 @@ html[data-faction="machine"] .pause-overlay h2 { letter-spacing: 0.4em; }
     background-position: 0 50%, 100% 50%, 14px 50%, calc(100% - 14px) 50%, var(--fp-scan, -40%) 0;
 }
 
-.vf-bezel[data-faction="machine"] .vf-bezel-deco {
-    background:
-        repeating-linear-gradient(90deg, color-mix(in srgb, var(--retro-ink) 55%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(18 * var(--u))) 0 calc(14 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
-        repeating-linear-gradient(90deg, color-mix(in srgb, var(--retro-ink) 55%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(18 * var(--u))) 0 calc(100% - 16 * var(--u)) / 100% calc(2 * var(--u)) no-repeat,
-        repeating-linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 45%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(22 * var(--u))) calc(12 * var(--u)) 0 / calc(2 * var(--u)) 100% no-repeat,
-        repeating-linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 45%, transparent) 0 calc(2 * var(--u)), transparent calc(2 * var(--u)) calc(22 * var(--u))) calc(100% - 14 * var(--u)) 0 / calc(2 * var(--u)) 100% no-repeat;
-}
-
-.vf-bezel[data-faction="machine"]::after,
-.vf-bezel[data-faction="machine"] .vf-bezel-deco {
-}
+/* Retired: the bezel is now a parted-graphic border-image (css/screen-frame.css),
+   .vf-bezel-deco is suppressed there (display:none) in favor of the generated art. */
 
 html[data-vf-faction="machine"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
     clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%) !important;
@@ -213,4 +204,15 @@ html[data-pf="machine"] .profile-selection-overlay:not(.home-station-overlay) {
 
 html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="machine"]:not(.selected) {
     border-style: dashed; outline: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--fp-accent, currentColor) 55%, transparent); outline-offset: -7px;
+}
+
+/* Wizard preview/lore/fact cards: same sliced pixel-art frame as the bezel / station panels (tools/gen-bezel-art.py), layered onto the existing ::before ornament slot (border-image shares the box with the ::before background fine — one paints the edges, the other the interior). */
+.profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    border: 32px solid transparent;
+    border-image: url('../../ui/machine-bezel-art.svg?v=15') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-machine var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .profile-selection-content[data-faction="machine"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before { animation: none; }
 }

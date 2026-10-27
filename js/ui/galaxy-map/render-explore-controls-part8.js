@@ -358,6 +358,8 @@ extendClass(GalaxyMapManager, {
             this.syncLocateShipButton();
         }
 
+        this.bindShipBarMissionButton();
+
         // Situation card: a click opens the mission modal.
         const sitCard = this.overlay.querySelector('.galaxy-map-situation');
         if (sitCard) {

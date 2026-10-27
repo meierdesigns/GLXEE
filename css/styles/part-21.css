@@ -36,21 +36,22 @@ html body .home-station-overlay .home-station-content .hs-factions .hs-faction-t
 
 /* Voxel bezel perf: the #vfFramePx filter (tile + dilate + 4 offsets) is expensive on full-screen layers.
    Keep each filtered layer on its own compositor layer so the result is cached instead of re-run every frame,
-   and drop the looping deco animations while the pixel frame is on (they invalidate the filtered layer). */
-html[data-vf-frame-px="on"] #vf-bezel .vf-fr,
-html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco,
-html[data-vf-frame-px="on"] #vf-bezel::before,
-html[data-vf-frame-px="on"] #vf-bezel::after,
+   and drop the looping deco animations while the pixel frame is on (they invalidate the filtered layer).
+   Skip Voidborn: its bezel is border-image vines only — will-change/translateZ/contain culled them. */
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"]) .vf-fr,
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"]) .vf-bezel-deco,
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"])::before,
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"])::after,
 html[data-vf-frame-px="on"] #vf-cables {
     will-change: transform;
     transform: translateZ(0);
     backface-visibility: hidden;
 }
-html[data-vf-frame-px="on"] #vf-bezel,
-html[data-vf-frame-px="on"] .vf-bezel[data-faction] .vf-bezel-deco,
-html[data-vf-frame-px="on"] .vf-bezel[data-faction]::before,
-html[data-vf-frame-px="on"] .vf-bezel[data-faction]::after { animation: none !important; }
-html[data-vf-frame-px="on"] #vf-bezel { contain: layout style; }
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"]),
+html[data-vf-frame-px="on"] .vf-bezel[data-faction]:not([data-faction="voidborn"]) .vf-bezel-deco,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction]:not([data-faction="voidborn"])::before,
+html[data-vf-frame-px="on"] .vf-bezel[data-faction]:not([data-faction="voidborn"])::after { animation: none !important; }
+html[data-vf-frame-px="on"] #vf-bezel:not([data-faction="voidborn"]) { contain: layout style; }
 
 /* Faction detail uses the full height: chain of flex children down to the cards, rows spread evenly inside them. */
 html body .home-station-overlay .home-station-content .hs-factions.hs-faction-detail { height: 100%; min-height: 0; box-sizing: border-box; }
@@ -701,10 +702,15 @@ html body .profile-selection-name-mode .profile-start-chip.selected {
 }
 html body .profile-start-chip.selected :is(.profile-kit-icon, img) { filter: drop-shadow(0 0 3px var(--faction-accent, var(--color-primary))); }
 
-/* Faction picker card: ship left, text right, filling the card width. */
+/* Faction picker card: ship left, text right, filling the card width.
+   Horizontal padding must clear the 32px pixel-art border-image frame the per-faction
+   ::before ornament paints on this same card (assets/factions/<faction>/gui.css) — this is the
+   rule that actually wins here (outranks the other padding attempts on this class), and
+   its old 20px let the frame eat into the first/last characters of the centered trait
+   text ("DEBT SLAVERY..." read as "EBT SLAVERY..."). */
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview {
     flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center;
-    gap: clamp(12px, calc(2 * var(--sv-w)), 28px); width: 100%; box-sizing: border-box; padding: 12px 20px;
+    gap: clamp(12px, calc(2 * var(--sv-w)), 28px); width: 100%; box-sizing: border-box; padding: 12px 36px;
 }
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-ship {
     flex: 0 0 40%; width: 40% !important; max-width: 40%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
@@ -981,7 +987,7 @@ html body .profile-selection-name-mode .pp-ctl .pp-ico { width: clamp(34px, calc
     background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sweep) 35%, transparent) 70%, var(--sweep) 98%, transparent);
     animation: vf-fsweep 0.7s cubic-bezier(.5, 0, .2, 1) forwards; }
 @keyframes vf-fsweep { to { left: 100%; } }
-.vf-fswap { animation: none; }   /* content swap-in flashed the whole dialog on every faction pick */
+.vf-fswap { animation: vf-fswap 0.22s ease-out; }
 @keyframes vf-fswap { 0% { opacity: 0.55; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .vf-fswap { animation: none; } }
 
@@ -1230,8 +1236,24 @@ html body .profile-faction-info-row .profile-faction-preview-emblem img { width:
 html body .pfc { --pfc-crest-size: clamp(130px, calc(24 * var(--sv-h)), 210px); --pfc-gap: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pfc-gap); width: 100%; text-align: center; }
 html body .pfc .pfc-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pfc-gap); width: 100%; }
 html body .pfc .pfc-crest { display: flex; align-items: center; justify-content: center; width: var(--pfc-crest-size) !important; height: var(--pfc-crest-size) !important; margin: 0 auto !important; flex: 0 0 auto; }
-html body .pfc .pfc-crest .ui-icon-tip { display: flex; width: 100% !important; height: 100% !important; }
-html body .pfc .pfc-crest img { width: 100% !important; height: 100% !important; max-width: none !important; object-fit: contain; image-rendering: pixelated; }
+html body .pfc .pfc-crest .ui-icon-tip { display: flex; align-items: center; justify-content: center; width: 100% !important; height: 100% !important; }
+/* The img is now rendered (see renderEmblemAtSize, core-look.js) at .pfc-crest's own real measured
+   size, not a fixed 192px — stretching it with width/height:100% here afterward would just
+   reintroduce the exact non-integer CSS scale this was meant to avoid, so it keeps its own
+   intrinsic size and is only ever capped (never stretched) by max-width/max-height.
+   A readable outline comes from the sprite's own baked-in outline ring (most faction emblems
+   already have one — see emblems-hires.js), not a CSS filter: a multi-offset drop-shadow was
+   tried here, but at the sprite's actual pixel pitch the handful of offset copies land on top of
+   the icon's OWN internal shading edges too (not just the outer silhouette), and at this image's
+   now-exact 1:1 size that reads as a grid/moiré pattern over the whole icon instead of a clean
+   outer outline — reported as "nur geslized". Any faction emblem missing its own outline ring
+   gets one added directly to its pixel data instead (see addOutlineRing.py).
+   image-rendering is deliberately NOT pixelated here: the bitmap is rendered slightly oversized
+   on purpose (EMBLEM_OVERSAMPLE, core-look.js) so this max-width/max-height cap does a small
+   SMOOTH downscale — a forced-crisp 1:1 render beat visibly against the game's global horizontal
+   scanline overlay (moiré), reported as "das Gitter ist noch da"; this is the deliberate fix for
+   that, not an oversight. */
+html body .pfc .pfc-crest img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain; image-rendering: auto !important; }
 html body .pfc .pfc-name, html body .pfc .pfc-traits, html body .pfc .pfc-hero { margin-left: auto; margin-right: auto; text-align: center; }
 
 /* Start step: ship keeps its aspect (no flex squashing), crisp pixels like in game, readable stats. */
@@ -1398,8 +1420,12 @@ html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls { a
 html body .profile-selection-name-mode.is-pilot-step .pp-grid { overflow: visible !important; height: auto; }
 html body .profile-selection-name-mode.is-pilot-step .pp-picks { align-self: flex-start; margin-top: 0 !important; }
 
-/* Faction lore card: readable tabs (bigger, lower, solid dark faces) and a calm, high-contrast text panel. */
-html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabs { padding: 22px 14px 0; gap: 8px; }
+/* Faction lore card: readable tabs (bigger, lower, solid dark faces) and a calm, high-contrast text panel.
+   Padding must clear the 32px pixel-art border-image frame painted by the per-faction
+   ::before ornament (assets/factions/<faction>/gui.css) on this same card — the old 22px/14px
+   inset sat inside that band, so the frame visually overlapped/cut through the tab
+   labels ("GALAXY", "STYLE", etc.). */
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabs { padding: 36px 34px 0; gap: 8px; }
 html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tab {
     font-size: calc(var(--font-h2) * 1.1) !important; padding: 14px 8px; letter-spacing: 0.08em;
     background: #0a0c12; color: #fff; opacity: 1;
@@ -1411,7 +1437,9 @@ html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction
     box-shadow: inset 0 -4px 0 var(--faction-accent, var(--color-primary));
 }
 html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel {
-    background: #05060a; margin: 0 14px 14px; padding: 20px 26px; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+    /* Side/bottom margin must also clear the 32px border-image frame (see .profile-faction-tabs
+       above) — the old 14px let the hero-credit line at the bottom get cut by it. */
+    background: #05060a; margin: 0 34px 34px; padding: 20px 26px; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
     font-size: calc(var(--font-h2) * 1.15); line-height: 1.6; text-align: left; color: #fff;
 }
 html body .profile-faction-tabcard :is(.profile-faction-lore-text, .profile-faction-lore-text *, .profile-faction-fact-body, .profile-faction-fact-body *) {

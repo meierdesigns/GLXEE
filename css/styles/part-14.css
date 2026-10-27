@@ -298,7 +298,12 @@
 
 .profile-selection-name-mode:has(.profile-faction-info-row) .profile-faction-swatch-label { font-size: var(--font-h2); letter-spacing: 1px; }
 .profile-selection-name-mode .profile-faction-info-row { gap: 16px; margin: 16px 0; }
-.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview { padding: 16px 20px; gap: 24px; }
+/* Horizontal padding must clear the 32px pixel-art border-image frame the per-faction
+   ::before ornament paints on this same card (assets/factions/<faction>/gui.css) — this rule's
+   extra .profile-faction-info-row class outranks part-19.css's attempt at the same fix,
+   so the narrower 20px here was still the one winning and letting the frame eat into
+   the first/last characters of the centered trait text. */
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview { padding: 16px 36px; gap: 24px; }
 .profile-selection-name-mode .profile-faction-info-row .profile-faction-ship { width: 260px; height: 182px; }
 .profile-selection-name-mode .profile-faction-preview-emblem { width: 48px; height: 48px; }
 .profile-selection-name-mode .profile-faction-preview-name { font-size: 22px; }

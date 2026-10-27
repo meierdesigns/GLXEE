@@ -78,23 +78,8 @@ html[data-faction="terran"] .pause-overlay h2 {
         linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--fp-accent) 70%, transparent) 40% 60%, transparent 60%) 50% 0 / 80px 4px no-repeat;
 }
 
-/* ───── Darker, more distinct faction bezels ───── */
-
-.vf-bezel[data-faction="terran"]::after, .vf-bezel[data-faction="terran"] .vf-bezel-deco { }
-
-.vf-bezel[data-faction="terran"] .vf-bezel-deco {
-    background:
-        /* gold double rule along the top and bottom (the law is written in the walls) */
-        linear-gradient(var(--gold) 0 0) 50% calc(20 * var(--u)) / 62% calc(2 * var(--u)) no-repeat,
-        linear-gradient(var(--gold) 0 0) 50% calc(26 * var(--u)) / 54% calc(1 * var(--u)) no-repeat,
-        linear-gradient(var(--gold) 0 0) 50% calc(100% - calc(20 * var(--u))) / 62% calc(2 * var(--u)) no-repeat,
-        linear-gradient(var(--gold) 0 0) 50% calc(100% - calc(26 * var(--u))) / 54% calc(1 * var(--u)) no-repeat,
-        /* fluted columns left and right */
-        repeating-linear-gradient(90deg, #ffffff22 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(4 * var(--u)), var(--hull-dark) calc(4 * var(--u)) calc(5 * var(--u)), transparent calc(5 * var(--u)) calc(8 * var(--u))) calc(8 * var(--u)) 22% / calc(26 * var(--u)) 56% no-repeat,
-        repeating-linear-gradient(90deg, #ffffff22 0 calc(1 * var(--u)), transparent calc(1 * var(--u)) calc(4 * var(--u)), var(--hull-dark) calc(4 * var(--u)) calc(5 * var(--u)), transparent calc(5 * var(--u)) calc(8 * var(--u))) calc(100% - calc(8 * var(--u))) 22% / calc(26 * var(--u)) 56% no-repeat,
-        /* seal at the crown */
-        radial-gradient(circle, var(--gold) 0 calc(4 * var(--u)), var(--hull-dark) calc(4.5 * var(--u)) calc(8 * var(--u)), transparent calc(9 * var(--u))) 50% calc(24 * var(--u)) / calc(20 * var(--u)) calc(20 * var(--u)) no-repeat;
-}
+/* Retired: the bezel is now a parted-graphic border-image (css/screen-frame.css),
+   .vf-bezel-deco is suppressed there (display:none) in favor of the generated art. */
 
 /* ───── Faction-styled GUI: panels, tabs and buttons follow the pilot's faction ───── */
 
@@ -215,4 +200,15 @@ html[data-pf="terran"] .vf-boot-veil-start {
 
 html[data-pf="terran"] .profile-selection-overlay:not(.home-station-overlay) {
     background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.32) 40%, rgba(0, 0, 0, 0.58) 100%), url('../../../assets/factions/terran/ui/bg-profiles.png'), url('../../../assets/ui/profiles-bg.png');
+}
+
+/* Wizard preview/lore/fact cards: same sliced pixel-art frame as the bezel / station panels (tools/gen-bezel-art.py), layered onto the existing ::before ornament slot (border-image shares the box with the ::before background fine — one paints the edges, the other the interior). */
+.profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    border: 32px solid transparent;
+    border-image: url('../../ui/terran-bezel-art.svg?v=13') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-terran var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before { animation: none; }
 }

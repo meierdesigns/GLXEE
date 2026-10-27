@@ -1414,40 +1414,8 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-planet
 
 .ecl-modal { width: 92%; max-width: 92%; overflow-x: hidden; }
 
-/* Planet backdrop: animated atmosphere. Soft cloud patches in the planet's
-   haze tone drift sideways across the disc (clipped to it, like the planet
-   turning); the outer haze rings glow up and down. */
-.gm-sector-planet-bg.has-atmo::before {
-    animation: gm-atmo-breathe 5s ease-in-out infinite alternate;
-}
-.gm-sector-planet-bg.has-atmo::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    background:
-        radial-gradient(ellipse 34px 7px at 20% 30%, color-mix(in srgb, var(--atmo) 30%, transparent), transparent 100%),
-        radial-gradient(ellipse 46px 8px at 70% 52%, color-mix(in srgb, var(--atmo) 24%, transparent), transparent 100%),
-        radial-gradient(ellipse 28px 6px at 42% 74%, color-mix(in srgb, var(--atmo) 28%, transparent), transparent 100%);
-    background-size: 160px 100%;
-    background-repeat: repeat-x;
-    -webkit-mask-image: radial-gradient(circle closest-side, #000 calc(52% * var(--dk, 1)), transparent calc(61% * var(--dk, 1)));
-    mask-image: radial-gradient(circle closest-side, #000 calc(52% * var(--dk, 1)), transparent calc(61% * var(--dk, 1)));
-    animation: gm-atmo-drift 40s linear infinite;
-}
-@keyframes gm-atmo-drift {
-    from { background-position: 0 0; }
-    to { background-position: 160px 0; }
-}
-@keyframes gm-atmo-breathe {
-    from { opacity: .7; }
-    to { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .gm-sector-planet-bg.has-atmo::before,
-    .gm-sector-planet-bg.has-atmo::after { animation: none; }
-}
+/* Planet backdrop atmosphere: stepped haze rings only (css/styles/part-06.css) —
+   no soft cloud gradient / drift animation, so it stays pixel art at any size. */
 
 /* Sort buttons: plain flat chips — the action-button hatch texture made the active label unreadable. */
 html body .hs-slot-picker .hs-pick-sortbtn { background-image: none !important; clip-path: none !important; box-shadow: none !important; text-shadow: none !important; filter: none !important; }
@@ -1476,8 +1444,10 @@ html body .hs-slot-picker .hs-pick-sortbtn:hover:not(.is-active) { border-color:
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { margin-top: 0 !important; margin-bottom: 0 !important; }
 
 /* Galaxy map: locked planets stay opaque (only darker); reachable ones wear their atmosphere
-   as a glow in the planet's haze tone. */
+   as the real pixel-ring baked into the planet's own SVG sprite (js/graphics/planet-svgs/
+   apply-rings.js applyAtmosphere) — no CSS circle/gradient overlay, so it is exactly as
+   pixelated, and exactly the same scale, as the planet art itself. */
 .gm-planet-lit.is-locked { opacity: 1; }
 html body .gm-node .gm-node-icon-wrap.has-atmo {
-    filter: drop-shadow(0 0 2px var(--atmo)) drop-shadow(0 0 7px color-mix(in srgb, var(--atmo) 55%, transparent)) !important;
+    filter: none !important;
 }

@@ -111,7 +111,10 @@ class FactionShipStyles {
                 engine: this.sharedEngine,
                 silhouette: 'scrap',
                 // Salvage hauler: heavy engine block, short stubby wings.
-                anatomy: { front: { x: 1.1, y: 0.85 }, center: { x: 1.1, y: 1 }, back: { x: 1.35, y: 1.2 }, wing: { x: 0.85, y: 1 } },
+                // front.y kept close to 1: the nose-mounted gun draws 2.4x taller than its
+                // mount frame (WEAPON_DRAW_SCALE), so a much shorter nose here left the
+                // barrel floating above the hull with no plating to root into.
+                anatomy: { front: { x: 1.1, y: 1 }, center: { x: 1.1, y: 1 }, back: { x: 1.35, y: 1.2 }, wing: { x: 0.85, y: 1 } },
                 // Opportunist: wide salvage hauler with gun pods welded to the
                 // wing tips for a wide fan of fire.
                 focus: {

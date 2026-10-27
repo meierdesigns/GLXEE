@@ -268,32 +268,110 @@ extendClass(PlanetSVGManager, {
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         const isRing = (t) => t === 'ring' || t === 'ringDark';
         const rimW = Math.max(1, k * 0.55);
-        const haloW = Math.max(1, k * 0.9);
-        for (let y = 0; y < n; y++) {
-            for (let x = 0; x < n; x++) {
+        // Was widened (2.6 → 4.5, then 3.3) to give the stepped-dither bands more room to read,
+        // but any widening past the original kept reopening edge clipping on the hero planet
+        // backdrop (now reported on all 4 sides, not just top/bottom) — the margin math on that
+        // side (GLOW_OUTER) doesn't respond safely to tuning, so this stays at the original,
+        // known-safe width instead of continuing to chase it from here.
+        // Floor bumped 3 → 5: at k=1 (small UI icons, e.g. mission-bar planet chips) a 3-unit-wide
+        // halo was so thin the 4-ring banding (see below) had barely any room to alternate in —
+        // "die Atmosphäre ist auch nicht richtig pixelig" at that size. This only changes the
+        // floor, so already-fine larger planets (k > 1, where k*2.6 exceeds 5 anyway) are unaffected.
+        // Clamped to the grid's own edge: this path (icon planets — getPlanetSVG, used e.g. by the
+        // HUD mission bar) renders with NO margin around the grid (viewBox is exactly n×n), unlike
+        // hero-planet-backdrop's own path which pads the image specifically to give the halo room.
+        // Without this clamp the halo's requested width can exceed what's actually left between
+        // the disc and the grid's edge (n/2), so it gets hard-cut by the SVG's own boundary — not
+        // faded by anything here — which reads as "scharf abgeschnitten" no matter how the
+        // dithering itself is tuned.
+        const haloW = Math.min(Math.max(5, k * 2.6), Math.max(1, n / 2 - r));
+        const inner = r - rimW * 1.6;
+        const outer = r + haloW;
+        // The halo's dither PATTERN (not its extent — that stays a true per-pixel radial falloff,
+        // see below) is sampled at a coarser spatial frequency than 1 pixel: a fine per-pixel
+        // bayer dither is the textbook way to fake a smooth gradient out of discrete tones, which
+        // is the opposite of a "pixely" look. A first attempt also block-quantized the EXTENT
+        // itself, which made the outer edge step in hard circular rings instead of fading —
+        // reported as "zu pixelig und rund abgeschnitten". Keeping extent per-pixel but the
+        // pattern phase chunkier avoids both.
+        const haloBlock = Math.max(1, Math.round(k * 0.5));
+        const outer2 = outer * outer;
+        const inner2 = inner > 0 ? inner * inner : -1;
+        // Only pixels within this square can ever pass the ring/halo test below — this used to scan
+        // every (x, y) in the whole grid and reject most of them there instead. With up to 256 spin
+        // frames rasterized per planet (hero-planet-backdrop), that dead scanning of an n×n grid
+        // (n padded out for the halo margin itself, so mostly empty space) added up per frame.
+        const y0 = Math.max(0, Math.floor(cy - outer));
+        const y1 = Math.min(n - 1, Math.ceil(cy + outer));
+        const x0 = Math.max(0, Math.floor(cx - outer));
+        const x1 = Math.min(n - 1, Math.ceil(cx + outer));
+        for (let y = y0; y <= y1; y++) {
+            const row = grid[y];
+            const dy = y - cy;
+            for (let x = x0; x <= x1; x++) {
                 const dx = x - cx;
-                const dy = y - cy;
-                const d = Math.sqrt(dx * dx + dy * dy);
-                if (d > r + haloW || d < r - rimW * 1.6) continue;
+                const d2 = dx * dx + dy * dy;
+                if (d2 > outer2 || d2 < inner2) continue;
+                const d = Math.sqrt(d2);
                 // Light from upper-left: 1 = facing the sun, 0 = night side.
                 const lit = Math.max(0, Math.min(1, 0.5 - (dx + dy) / (d || 1) * 0.5));
                 const th = bayer[(y % 4) * 4 + (x % 4)] / 16;
-                const t = grid[y][x];
+                const t = row[x];
                 if (d <= r) {
                     if (t === null || isRing(t)) continue;
                     const edge = (d - (r - rimW * 1.6)) / (rimW * 1.6); // 0 inner → 1 limb
                     if (lit > 0.6) {
                         // Thin limb line, brightest only right at the sun point.
-                        if (edge > 0.72) grid[y][x] = lit > 0.88 ? 'atmoLight' : 'atmo';
-                        else if (edge * (lit - 0.4) > th * 0.7 + 0.1) grid[y][x] = 'atmo';
+                        if (edge > 0.72) row[x] = lit > 0.88 ? 'atmoLight' : 'atmo';
+                        else if (edge * (lit - 0.4) > th * 0.7 + 0.1) row[x] = 'atmo';
                     } else if (lit < 0.3 && k > 1 && edge > 0.7 && th < 0.5) {
-                        grid[y][x] = 'atmoNight';
+                        row[x] = 'atmoNight';
                     }
                 } else if (t === null) {
+                    // Extent (fall, from the true per-pixel d) is the SAME on every side regardless
+                    // of lit, and stays a real per-pixel radial falloff — only which tone fills it
+                    // varies with lighting, and only the dither PATTERN's spatial frequency is
+                    // chunkier (bix/biy, see haloBlock above), not the shape itself. Scaling the
+                    // threshold by lit (as this used to) made the halo visibly thinner on the night
+                    // side — "nicht gleich dick an allen Seiten"; block-sampling the extent itself
+                    // (an earlier attempt) made the outer edge step in hard circular rings instead
+                    // of fading — "rund abgeschnitten".
                     const fall = 1 - (d - r) / haloW; // 1 at the limb → 0 outside
-                    const glow = fall * (0.15 + lit * 0.7);
-                    if (glow > 0.7) grid[y][x] = 'atmoHaze';
-                    else if (glow > th * 0.8 + 0.2) grid[y][x] = 'atmoHazeFaint';
+                    // Chunky texture sampled by RING (distance from the limb), not by an (x, y)
+                    // grid: a cartesian checkerboard doesn't follow the circle at all — it reads as
+                    // a cropped square pattern laid over a round shape, not a round one itself
+                    // ("nicht rund pixelig"). Alternating concentric rings is the classic pixel-art
+                    // "glow"/"bullseye" look and is round by construction.
+                    // Ring width is a FRACTION of haloW (not the absolute haloBlock pixel count): at
+                    // small k (galaxy-map planet icons, haloW only a few units wide), dividing by a
+                    // fixed haloBlock left only 1-2 rings total, so half the already-thin halo was
+                    // simply the "off" ring — reported as pixels missing on several sides. A fixed
+                    // ring COUNT instead of a fixed ring WIDTH keeps a handful of visible bands
+                    // regardless of how wide the halo itself is.
+                    const ringIdx = Math.floor(((r + haloW - d) / haloW) * 4);
+                    const ringOn = ringIdx % 2 === 0;
+                    const bix = Math.floor(x / haloBlock);
+                    const biy = Math.floor(y / haloBlock);
+                    const bth = bayer[(biy % 4) * 4 + (bix % 4)] / 16;
+                    if (fall > 0.55) {
+                        // This inner part of the halo (closest to the disc) was a flat, untextured
+                        // solid fill — the smooth, perfectly round ring still visible even after
+                        // the outer fade was fixed to dither ("sehr runde Atmosphäre"). Alternating
+                        // concentric rings keeps it textured/pixely all the way to the disc.
+                        row[x] = ringOn === (lit > 0.5) ? 'atmoHaze' : 'atmoHazeFaint';
+                    } else if (fall > 0) {
+                        // Fading-out texture as discrete STEPPED density bands, each internally
+                        // uniform, instead of a continuous per-pixel formula: a smooth function
+                        // (fall, or fall²) reads as an anti-aliased/vector gradient no matter how
+                        // it's tuned — "vectormäßige Atmosphäre". Three bands of decreasing density
+                        // (now: fewer of the alternating rings actually show, sparsened further by
+                        // bth within the ones that do) also means it visibly thins out before the
+                        // true outer edge (d > outer) instead of staying dense right up to it
+                        // ("abgeschnitten"), while staying ring-shaped the whole way out.
+                        const band = fall > 0.55 * 2 / 3 ? 0 : fall > 0.55 / 3 ? 1 : 2;
+                        const densityCutoff = [0.85, 0.6, 0.3][band];
+                        if (ringOn && bth < densityCutoff) row[x] = 'atmoHazeFaint';
+                    }
                 }
             }
         }
@@ -378,8 +456,25 @@ extendClass(PlanetSVGManager, {
         built.moons = feat.moons;
         this.applyStyleDetails(built.grid, style, seedKey + '|' + style, built, feat);
         const palette = this.buildPalette(baseColor || this.namedPalettes[id] || '#808080', feat.altColor, feat);
+        if (k === 1) {
+            // Cache the resolved palette too: --atmo lookups need atmoHaze even when the
+            // 16px icon never actually paints a haze pixel (the glow dither can miss it).
+            this.planetPalettes = this.planetPalettes || {};
+            this.planetPalettes[id] = palette;
+        }
         const uid = 'px_' + id.replace(/[^a-z0-9]/g, '') + '_' + this.hashId(seedKey).toString(16) + (k > 1 ? '_d' + k : '');
         return this.gridToSvg(built.grid, uid, palette, built);
+    },
+    /** A planet's atmosphere haze tone straight from its palette — reliable even when the
+     *  cached 16px icon has no visible atmoHaze pixel to regex-scrape. '' if never built. */
+    getPlanetAtmoHaze(planetId) {
+        const id = String(planetId || '').toLowerCase();
+        const pal = this.planetPalettes && this.planetPalettes[id];
+        if (pal && pal.atmoHaze) return pal.atmoHaze.replace(/[0-9a-f]{2}$/i, '');
+        const spec = this.planetSpecs && this.planetSpecs[id];
+        if (!spec) return '';
+        const built = this.buildPalette(spec.baseColor || this.namedPalettes[id] || '#808080', spec.features && spec.features.altColor, spec.features);
+        return built.atmoHaze ? built.atmoHaze.replace(/[0-9a-f]{2}$/i, '') : '';
     },
     createNamedPixelPlanet(name, style, baseColor) {
         const id = String(name || 'gen').toLowerCase();

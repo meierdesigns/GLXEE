@@ -66,9 +66,9 @@ extendClass(GalaxyMapManager, {
                             // Map icons are <img>s: read the tone from the raw planet SVG, once per planet.
                             this._atmoTone = this._atmoTone || {};
                             const sid = String(n.planetId).toLowerCase();
-                            if (unlocked && this._atmoTone[sid] === undefined) {
-                                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
-                                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+                            if (unlocked && !this._atmoTone[sid]) {
+                                this._atmoTone[sid] = (typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetAtmoHaze)
+                                    ? planetSVGManager.getPlanetAtmoHaze(sid) : '';
                             }
                             const atmo = unlocked ? (this._atmoTone[sid] || '#9fd8ff') : '';
                             return `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-node-icon-wrap ${unlocked || devMode ? '' : 'dimmed'}${atmo ? ' has-atmo' : ''}"${atmo ? ` style="--atmo:${atmo}"` : ''}>

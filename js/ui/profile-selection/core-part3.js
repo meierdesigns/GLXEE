@@ -282,8 +282,9 @@ extendClass(ProfileSelectionManager, {
             });
             // Start step: the kit list belongs to the faction, so rebuild the whole step once (no half-updated frames).
             if (startStep) { this.createUI(); return; }
+            // Hero planet swap happens inside applyFactionContent (core-look.js), gated
+            // the same way as the emblem/colors/lore so it doesn't jump ahead of them.
             this.applyPendingFactionLook();
-            if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(this.pendingFaction);
         };
         const confirm = () => {
             if (pickFaction || pilotStep || startStep || galaxyStep) {

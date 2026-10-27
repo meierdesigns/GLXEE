@@ -88,34 +88,8 @@ html[data-faction="kronax"] .pause-overlay h2 { letter-spacing: 0.22em; font-wei
     padding-right: 22px;
 }
 
-.vf-bezel[data-faction="kronax"]::after,
-.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
-}
-
-.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
-    background:
-        repeating-linear-gradient(135deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) 50% calc(4 * var(--u)) / 70% calc(7 * var(--u)) no-repeat,
-        repeating-linear-gradient(135deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) 50% calc(100% - 4 * var(--u)) / 70% calc(7 * var(--u)) no-repeat,
-        linear-gradient(var(--hull-lit) 0 0) 0 50% / calc(6 * var(--u)) 50% no-repeat,
-        linear-gradient(var(--hull-lit) 0 0) 100% 50% / calc(6 * var(--u)) 50% no-repeat;
-}
-
-.vf-bezel[data-faction="kronax"]::after, .vf-bezel[data-faction="kronax"] .vf-bezel-deco { }
-
-.vf-bezel[data-faction="kronax"] .vf-bezel-deco {
-    background:
-        /* claw gashes raked across the plates */
-        linear-gradient(112deg, transparent 47%, #000 48% 50%, var(--retro-ink) 50.4% 51.4%, transparent 52%) 8% 0 / 22% 100% no-repeat,
-        linear-gradient(108deg, transparent 46%, #000 47% 49.5%, var(--retro-ink) 50% 51%, transparent 52%) 14% 0 / 22% 100% no-repeat,
-        linear-gradient(116deg, transparent 47%, #000 48% 50%, var(--retro-ink) 50.4% 51.4%, transparent 52%) 70% 0 / 22% 100% no-repeat,
-        linear-gradient(110deg, transparent 46%, #000 47% 49.5%, var(--retro-ink) 50% 51%, transparent 52%) 78% 0 / 22% 100% no-repeat,
-        /* crude iron straps with big rivets */
-        linear-gradient(#000 0 0) 30% calc(28 * var(--u)) / calc(70 * var(--u)) calc(8 * var(--u)) no-repeat,
-        linear-gradient(#000 0 0) 66% calc(100% - calc(30 * var(--u))) / calc(80 * var(--u)) calc(8 * var(--u)) no-repeat,
-        radial-gradient(circle, #8a3a24 0 calc(3 * var(--u)), transparent calc(3.5 * var(--u))) 0 0 / calc(46 * var(--u)) calc(46 * var(--u)) round no-repeat,
-        /* dried blood along the lower edge */
-        linear-gradient(0deg, color-mix(in srgb, var(--retro-ink) 50%, transparent), transparent) 0 100% / 100% calc(18 * var(--u)) no-repeat;
-}
+/* Retired: the bezel is now a parted-graphic border-image (css/screen-frame.css),
+   .vf-bezel-deco is suppressed there (display:none) in favor of the generated art. */
 
 html[data-vf-faction="kronax"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
     clip-path: polygon(0 0, calc(100% - 14px) 0, calc(100% - 14px) 2px, calc(100% - 12px) 2px, calc(100% - 12px) 4px, calc(100% - 10px) 4px, calc(100% - 10px) 6px, calc(100% - 8px) 6px, calc(100% - 8px) 8px, calc(100% - 6px) 8px, calc(100% - 6px) 10px, calc(100% - 4px) 10px, calc(100% - 4px) 12px, calc(100% - 2px) 12px, calc(100% - 2px) 14px, 100% 14px, 100% 100%, 14px 100%, 14px calc(100% - 2px), 12px calc(100% - 2px), 12px calc(100% - 4px), 10px calc(100% - 4px), 10px calc(100% - 6px), 8px calc(100% - 6px), 8px calc(100% - 8px), 6px calc(100% - 8px), 6px calc(100% - 10px), 4px calc(100% - 10px), 4px calc(100% - 12px), 2px calc(100% - 12px), 2px calc(100% - 14px), 0 calc(100% - 14px)) !important;
@@ -227,4 +201,15 @@ html[data-pf="kronax"] .profile-selection-overlay:not(.home-station-overlay) {
 
 html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="kronax"]:not(.selected) {
     clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%); border-width: var(--ui-border-width, 2px); padding-left: 22px; padding-right: 22px;
+}
+
+/* Wizard preview/lore/fact cards: same sliced pixel-art frame as the bezel / station panels (tools/gen-bezel-art.py), layered onto the existing ::before ornament slot (border-image shares the box with the ::before background fine — one paints the edges, the other the interior). */
+.profile-selection-content[data-faction="kronax"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    border: 32px solid transparent;
+    border-image: url('../../ui/kronax-bezel-art.svg?v=13') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-kronax var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .profile-selection-content[data-faction="kronax"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before { animation: none; }
 }

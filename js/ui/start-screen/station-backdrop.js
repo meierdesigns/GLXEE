@@ -29,10 +29,7 @@ class StartStationBackdrop {
         this.canvas.width = this.W;
         this.canvas.height = this.H;
         this.canvas.className = 'start-station-canvas';
-        this.caption = document.createElement('div');
-        this.caption.className = 'start-station-caption';
         this.el.appendChild(this.canvas);
-        this.el.appendChild(this.caption);
         this.ctx = this.canvas.getContext('2d');
         this.baseProfile = null;
         this.shownKey = null;
@@ -478,9 +475,6 @@ class StartStationBackdrop {
         const key = `${profile ? profile.id : '-'}|${faction}|${tier}|${planetId}`;
         if (key === this.shownKey) return;
         this.shownKey = key;
-        this.caption.textContent = profile
-            ? `${profile.name || 'PILOT'} · ${faction.toUpperCase()} STATION · LV ${sum}`
-            : 'NO PILOT · BASIC OUTPOST';
         this._faction = faction;
         this._tier = tier;
         this._planetId = planetId;
@@ -775,9 +769,17 @@ class StartStationBackdrop {
                 const y = cy + (rnd() - 0.5) * (30 + tier * 11) - h / 2;
                 block(x, y, w, h, rnd() < 0.5 ? pal.hull : pal.edge);
             }
+            // Drawn in the same scaled "station unit" space as everything else above,
+            // so these fine mast lines got multiplied by the full station zoom (up to
+            // 7.5x) just like the ship sprite used to (see the ship's own comment below) —
+            // at a big/wide window that turned two subtle ~20px antenna strokes into a
+            // single huge black X dominating the whole backdrop. mastScale keeps them
+            // capped to how they already looked at a normal, moderate zoom instead of
+            // ballooning further once the station itself gets drawn bigger.
+            const mastScale = Math.min(1, 2.5 / zoom);
             for (let i = 0; i < 2 + (tier >> 1); i++) {
-                const ax = cx + (rnd() - 0.5) * 40;
-                line(ax, cy - 14, ax + (rnd() - 0.5) * 20, cy - 34 - tier * 2, '#05060a', 2);
+                const ax = cx + (rnd() - 0.5) * 40 * mastScale;
+                line(ax, cy - 14 * mastScale, ax + (rnd() - 0.5) * 20 * mastScale, cy - (34 + tier * 2) * mastScale, '#05060a', 2 * mastScale);
             }
             r(cx - 2, cy - 2, 4, 4, '#ff4a4a');
         }

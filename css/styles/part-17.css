@@ -861,12 +861,24 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 }
 /* The grid texture still shows through as fine detail, but no longer dominates the card. */
 .profile-faction-preview.has-hero-planet::after { opacity: 0.06 !important; }
+/* .profile-faction-preview's own base rule (part-11.css) paints a
+   radial-gradient(circle at 35% 50%, …) card background — off-center,
+   tuned for the small horizontal preview-row variant of this same class.
+   The hero-planet canvas draws its own atmosphere glow dead-centered on
+   the planet disc (see hero-planet-backdrop.js draw()); layering the two
+   showed as a second, visibly off-center glow behind the correctly
+   centered one, reported as "die Atmosphären sind nicht zum Planeten
+   zentriert". Only the canvas's own glow should show here. */
+.profile-faction-preview.has-hero-planet { background-image: none !important; }
 
-/* Launch cutscene (js/ui/profile-selection/launch-cutscene.js): full-screen, plays once after profile creation. */
+/* Launch cutscene (js/ui/profile-selection/launch-cutscene.js): plays once after profile creation.
+   z-index below the bezel (#vf-bezel, 9993) so the pilot-hud frame stays on screen around it, the
+   same way the station and start-screen content sit behind the frame and show only through the
+   glass opening — it must not sit above tip floats/pause, only above the home-station (3600). */
 .launch-cutscene {
     position: fixed;
     inset: 0;
-    z-index: 100090; /* above home-station (3600) and tip floats (~100080) */
+    z-index: 9990;
     background: #02040a;
     overflow: hidden;
 }

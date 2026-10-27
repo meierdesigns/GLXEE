@@ -81,36 +81,8 @@ html[data-faction="pirate"] .pause-button { border-style: dashed; }
 
 .profile-selection-content[data-faction="pirate"] .action-button { transform: rotate(-1deg); }
 
-.vf-bezel[data-faction="pirate"]::after,
-.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
-}
-
-.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
-    background:
-        linear-gradient(#7a5a2b 0 0) 12% calc(6 * var(--u)) / calc(90 * var(--u)) calc(30 * var(--u)) no-repeat,
-        linear-gradient(#4a3418 0 0) 68% calc(100% - 36 * var(--u)) / calc(120 * var(--u)) calc(28 * var(--u)) no-repeat,
-        linear-gradient(#6b3a1c 0 0) calc(100% - 30 * var(--u)) 20% / calc(24 * var(--u)) calc(110 * var(--u)) no-repeat,
-        radial-gradient(circle, #d9b36a 0 calc(2 * var(--u)), transparent calc(2.5 * var(--u))) 0 0 / calc(34 * var(--u)) calc(34 * var(--u)) round no-repeat;
-}
-
-.vf-bezel[data-faction="pirate"]::after, .vf-bezel[data-faction="pirate"] .vf-bezel-deco { }
-
-.vf-bezel[data-faction="pirate"] .vf-bezel-deco {
-    background:
-        /* row of teeth along the bottom */
-        repeating-linear-gradient(90deg, var(--bone) 0 calc(9 * var(--u)), var(--hull-dark) calc(9 * var(--u)) calc(11 * var(--u))) 50% calc(100% - calc(6 * var(--u))) / 56% calc(10 * var(--u)) no-repeat,
-        /* ribs on the sides */
-        repeating-linear-gradient(0deg, var(--bone) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(11 * var(--u))) calc(10 * var(--u)) 26% / calc(22 * var(--u)) 48% no-repeat,
-        repeating-linear-gradient(0deg, var(--bone) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(11 * var(--u))) calc(100% - calc(10 * var(--u))) 26% / calc(22 * var(--u)) 48% no-repeat,
-        linear-gradient(var(--bone) 0 0) calc(19 * var(--u)) 22% / calc(4 * var(--u)) 56% no-repeat,
-        linear-gradient(var(--bone) 0 0) calc(100% - calc(19 * var(--u))) 22% / calc(4 * var(--u)) 56% no-repeat,
-        /* two ghost-lit eye sockets, top centre */
-        radial-gradient(circle, var(--retro-ink) 0 calc(3 * var(--u)), color-mix(in srgb, var(--retro-ink) 40%, transparent) calc(5 * var(--u)), transparent calc(9 * var(--u))) 43% calc(8 * var(--u)) / calc(24 * var(--u)) calc(24 * var(--u)) no-repeat,
-        radial-gradient(circle, var(--retro-ink) 0 calc(3 * var(--u)), color-mix(in srgb, var(--retro-ink) 40%, transparent) calc(5 * var(--u)), transparent calc(9 * var(--u))) 57% calc(8 * var(--u)) / calc(24 * var(--u)) calc(24 * var(--u)) no-repeat,
-        /* rotted green stains */
-        radial-gradient(ellipse calc(70 * var(--u)) calc(18 * var(--u)) at 22% 100%, #3b5a2a66, transparent 70%),
-        radial-gradient(ellipse calc(16 * var(--u)) calc(80 * var(--u)) at 100% 30%, #3b5a2a55, transparent 70%);
-}
+/* Retired: the bezel is now a parted-graphic border-image (css/screen-frame.css),
+   .vf-bezel-deco is suppressed there (display:none) in favor of the generated art. */
 
 html[data-vf-faction="pirate"][data-vf-faction] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item) {
     clip-path: polygon(0 3px, 7px 0, 22% 2px, 41% 0, 63% 3px, 82% 0, calc(100% - 6px) 2px, calc(100% - 6px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 6px, calc(100% - 2px) 6px, calc(100% - 2px) 8px, 100% 8px, calc(100% - 3px) 55%, 100% calc(100% - 7px), calc(100% - 9px) 100%, 70% calc(100% - 3px), 45% 100%, 20% calc(100% - 2px), 5px 100%, 0 calc(100% - 8px), 3px 45%) !important;
@@ -217,3 +189,14 @@ html[data-pf="pirate"] .profile-selection-overlay:not(.home-station-overlay) {
 }
 
 html body .profile-selection-content[data-faction] .profile-faction-swatch[data-faction="pirate"]:not(.selected) { border-style: solid; border-width: 3px 7px 5px 3px; transform: rotate(-1deg); }
+
+/* Wizard preview/lore/fact cards: same sliced pixel-art frame as the bezel / station panels (tools/gen-bezel-art.py), layered onto the existing ::before ornament slot (border-image shares the box with the ::before background fine — one paints the edges, the other the interior). */
+.profile-selection-content[data-faction="pirate"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before {
+    border: 32px solid transparent;
+    border-image: url('../../ui/pirate-bezel-art.svg?v=15') 16 round;
+    image-rendering: pixelated;
+    animation: vf-bezel-art-creep-pirate var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .profile-selection-content[data-faction="pirate"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before { animation: none; }
+}

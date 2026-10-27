@@ -447,7 +447,12 @@ html body .profile-selection-name-mode .profile-faction-swatch { padding: 14px 6
 html body .profile-selection-name-mode .profile-faction-swatch-emblem > * { width: 100% !important; height: 100% !important; }
 html body .profile-selection-name-mode .profile-faction-swatch-label { letter-spacing: 2px;}
 html body .profile-selection-name-mode .profile-faction-info-row { gap: 16px; margin: 0;}
-html body .profile-selection-name-mode .profile-faction-preview { padding: 16px 20px; gap: 24px; }
+/* Horizontal padding must clear the 32px pixel-art border-image frame painted by the
+   per-faction ::before ornament (assets/factions/<faction>/gui.css, "border: 32px solid
+   transparent; border-image: ...") — it sits in the outer 32px band of this same box,
+   so anything shorter than that lets the frame visually eat into the first/last
+   characters of the centered trait text ("DEBT SLAVERY..." read as "EBT SLAVERY..."). */
+html body .profile-selection-name-mode .profile-faction-preview { padding: 16px 36px; gap: 24px; }
 
 html body .profile-selection-name-mode .profile-faction-preview-trait,
 html body .profile-selection-name-mode .profile-faction-preview-hero { line-height: 1.4;}
@@ -542,16 +547,23 @@ html body .game-container .game-left-cluster > .player-vitals-side {
    the opening, lower % pushes the edge out past the opening toward the frame, same
    direction as "screen can peek past the vine" for overlays. --fight-peek is that
    push distance, 0 at the default 100%. Zoom divides geometry (CSS zoom quirk). */
+/* Voidborn rim vine bites --fr-vine-ov into the glass; keep fight HUD clear of that strip. */
+:root { --fr-hud-inset: 0px; --fr-vine-ov: 0; }
+html[data-faction="voidborn"] {
+    --fr-vine-ov: 16;
+    --fr-hud-inset: calc(var(--fr-vine-ov) * var(--bz-u));
+}
 html body .game-container {
     --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
     --fight-gap: 16px;
     --fight-peek: calc(16px * (1 - var(--fr-stage-inset, 1)));
+    --_hi: var(--fr-hud-inset, 0px);
     position: fixed !important;
     z-index: 9992 !important;
-    left: calc((var(--fr-open-side) - var(--fight-peek)) / var(--_z)) !important;
+    left: calc((var(--fr-open-side) + var(--_hi) - var(--fight-peek)) / var(--_z)) !important;
     top: calc((var(--fr-open-top) - var(--fight-peek)) / var(--_z)) !important;
-    width: calc((var(--fr-open-w) + 2 * var(--fight-peek)) / var(--_z)) !important;
-    height: calc((var(--fr-open-h) + 2 * var(--fight-peek)) / var(--_z)) !important;
+    width: calc((var(--fr-open-w) - 2 * var(--_hi) + 2 * var(--fight-peek)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - var(--_hi) + 2 * var(--fight-peek)) / var(--_z)) !important;
     min-height: 0 !important;
     max-height: none !important;
     box-sizing: border-box !important;
@@ -748,7 +760,8 @@ html.vf-loading *, html.vf-loading *::before, html.vf-loading *::after { animati
 
 /* ── Smoothness: no per-frame shape animation on big surfaces ── */
 .vf-bezel { transition: opacity 0.14s ease; }
-.vf-bezel.is-switching { opacity: 0; }
+/* Was .is-switching { opacity: 0 } — never cleared in JS, so a stuck class
+   (or any future toggle) blanked the whole bezel. Fade content, never the frame. */
 @keyframes vf-heartbeat { 0%, 100% { opacity: 0.55; } 12% { opacity: 1; } 22% { opacity: 0.6; } 34% { opacity: 0.95; } 50% { opacity: 0.55; } }
 @keyframes vf-void-crest { 0%, 50%, 100% { transform: scale(1); } 12% { transform: scale(1.1); } 34% { transform: scale(1.06); } }
 

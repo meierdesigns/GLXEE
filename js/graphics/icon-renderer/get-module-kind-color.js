@@ -121,7 +121,16 @@ extendClass(IconRenderer, {
         if (!Number.isFinite(dpr) || dpr < 1) dpr = 1;
         const scale = Math.max(2, Math.ceil(dpr));
         const canvasSize = logical * scale;
-        if (!png) {
+        // Faction emblems' CSS forces a responsive, often-fractional display size
+        // (--pfc-crest-size, a clamp() against viewport height) that overrides whatever cssSize
+        // this call asked for — the SVG path below has no equivalent to a bitmap's nearest-neighbor
+        // snap, so scaling its many individually-positioned <rect> cells to that fractional size
+        // leaves visible sub-pixel seams across the hand-drawn art, reported as "matschig". Routing
+        // these through the canvas/PNG rasterization path instead (same technique already used for
+        // PNG overrides below) and letting CSS image-rendering:pixelated scale THAT bitmap keeps it
+        // crisp; no other icon is sized this way, so this is scoped to just the emblem keys.
+        const isFactionEmblem = /^faction[A-Z]/.test(key.replace(/@[24]x$/, ''));
+        if (!png && !isFactionEmblem) {
             // Procedural sprites: emit SVG so the browser rasterizes at the final size (no blur).
             const svgKey = key + '|svg|' + (tint || '') + (raw ? '|raw' : ('|ic' + Math.round(ic) + '|ib' + Math.round(ib) + '|is' + Math.round(is)));
             if (this._cache[svgKey]) return { url: this._cache[svgKey], cssSize: logical };

@@ -175,6 +175,32 @@ extendClass(GalaxyMapManager, {
             `</button>`;
     },
 
+    /** Square mission button, mirrored from the navbar's hs-mission-btn, appended to the ship bar row. */
+    shipMissionButtonHtml() {
+        const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+        const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+        const sit = info && info.sit;
+        const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
+        const accent = info && info.accent ? info.accent : 'var(--color-primary)';
+        const icon = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
+            ? iconRenderer.imgHtml('navScroll', 28, 'hs-tab-pixel') : '';
+        return `<button type="button" class="hs-logout-btn hs-mission-btn gm-ship-bar-mission${calm ? ' is-calm' : ''}" ` +
+            `id="gmShipBarMissionBtn" style="--mission-accent:${accent}" title="Mission" aria-label="Mission">` +
+            `<span class="hs-logout-icon" aria-hidden="true">${icon}</span></button>`;
+    },
+
+    bindShipBarMissionButton() {
+        const btn = this.overlay && this.overlay.querySelector('#gmShipBarMissionBtn');
+        if (!btn) return;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+            const info = gm && gm.getSituationInfo ? gm.getSituationInfo() : null;
+            if (info && info.sit && gm.openSituationModal) gm.openSituationModal(info.sit);
+        });
+    },
+
     getActiveShipId() {
         if (typeof profileManager !== 'undefined' && profileManager.getActiveShipId) {
             const id = profileManager.getActiveShipId();
@@ -346,6 +372,7 @@ extendClass(GalaxyMapManager, {
                             <div><dt>Weapons</dt><dd class="gm-ship-loadout" id="gmShipLoadout">${this.weaponsHtml(ship)}</dd></div>
                             <div><dt>Modules</dt><dd id="gmShipModules">${this.loadoutModulesHtml(ship)}</dd></div>
                         </dl>
+                        ${this.shipMissionButtonHtml()}
                     </div>
                     ${this.shipLocatorButtonHtml()}
                 </div>
@@ -393,7 +420,7 @@ extendClass(GalaxyMapManager, {
                         <div class="gm-sector-heading">
                             <span class="gm-panel-value" id="gmSectorName">${info.name || '—'}</span>
                         </div>
-                        <div class="gm-sector-planet-bg${planetAtmo ? ' has-atmo' : ''}" style="--atmo:${planetAtmo || 'transparent'};--dk:${this.planetAtmoScale(planetIcon)}">${planetIcon}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
+                        <div class="gm-sector-planet-bg${(planetAtmo && info.unlocked) ? ' has-atmo' : ''}" style="--atmo:${(info.unlocked && planetAtmo) || 'transparent'};--dk:${this.planetAtmoScale(planetIcon)}">${planetIcon}${info.unlocked ? '' : this.lockBadgeHtml()}</div>
                     </div>
                     <div class="gm-detail">
                         <div class="stat-row"><span class="stat-label" id="gmFactionLabel">Faction</span><span class="stat-value gm-faction-value" id="gmFaction">${this.planetFactionsLabelHtml ? this.planetFactionsLabelHtml(info.id) : ''}</span></div>

@@ -581,9 +581,9 @@ extendClass(GalaxyMapManager, {
         if (wrap) {
             const sid = String(id).toLowerCase();
             this._atmoTone = this._atmoTone || {};
-            if (this._atmoTone[sid] === undefined) {
-                const raw = typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(sid) : '';
-                this._atmoTone[sid] = this.planetAtmoColor ? this.planetAtmoColor(raw) : '';
+            if (!this._atmoTone[sid]) {
+                this._atmoTone[sid] = (typeof planetSVGManager !== 'undefined' && planetSVGManager.getPlanetAtmoHaze)
+                    ? planetSVGManager.getPlanetAtmoHaze(sid) : '';
             }
             wrap.classList.remove('dimmed');
             wrap.classList.add('has-atmo');

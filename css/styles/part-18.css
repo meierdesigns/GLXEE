@@ -1129,6 +1129,9 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active .hs
     letter-spacing: 0.06em;
 }
 
+/* Mission button now lives in the ship bar row; hide the navbar copy wherever that row is present. */
+html body .home-station-overlay:has(.galaxy-map-embedded .gm-ship-bar) #hsMissionBtn { display: none !important; }
+
 /* Ship bar opens the hangar. */
 html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar { cursor: pointer; transition: background 0.15s ease; }
 html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar:is(:hover, :focus-visible) {

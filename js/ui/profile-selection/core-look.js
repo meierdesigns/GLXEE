@@ -51,6 +51,48 @@ extendClass(ProfileSelectionManager, {
         return iconRenderer.imgHtml(key, size, 'profile-faction-emblem-img', style && style.accent, this.getFactionLabel(id));
     },
     /**
+     * Renders the big crest at its ACTUAL on-screen size (crestEl's own measured width), not a
+     * fixed 192 stretched to fit by CSS afterward. .pfc-crest's width is a responsive
+     * clamp(130px, 24*--sv-h, 210px) — a fixed-size bitmap stretched to that with CSS width:100%
+     * is a non-integer scale ratio almost everywhere along that range, and even with
+     * image-rendering:pixelated, non-integer minification isn't reliably crisp in every engine
+     * (the spec only strongly guarantees the hint for magnification) — reported as the crest
+     * looking "matschig"/soft-contoured no matter how clean the generated sprite itself was.
+     * Rendering AT the real size instead means there's nothing left for CSS to scale.
+     *
+     * Rendered at a small OVERSAMPLE (not exactly 1:1) on purpose: at true 1:1 the sprite's own
+     * regular pixel-cell grid lines up with the game's global horizontal scanline overlay
+     * (.vf-fx-scanlines, screen-wide, can't be excluded per-element without risky stacking
+     * surgery) closely enough to beat against it — moiré, reported as "a grid" baked into the
+     * icon. A slight smooth downscale (CSS, not image-rendering:pixelated, see part-21.css)
+     * breaks that resonance; EMBLEM_OVERSAMPLE is deliberately small so this stays close to the
+     * crisp fix, not a return to the original ~2.5x-oversampled blur bug.
+     */
+    renderEmblemAtSize(crestEl, id) {
+        if (!crestEl) return;
+        const w = Math.round(crestEl.getBoundingClientRect().width);
+        if (!(w > 0) || (crestEl.dataset.emblemPx === String(w) && crestEl.dataset.emblemFaction === id)) return;
+        const renderW = Math.round(w * ProfileSelectionManager.EMBLEM_OVERSAMPLE);
+        crestEl.innerHTML = this.getFactionEmblemHtml(id, renderW, 1);
+        crestEl.dataset.emblemFaction = id;
+        crestEl.dataset.emblemPx = String(w);
+    },
+    /** One shared observer for every .pfc-crest currently on screen; re-renders each at its new size. */
+    _watchCrestSize(crestEl) {
+        if (crestEl._cleWatched) return;
+        crestEl._cleWatched = true;
+        if (!this._crestResizeObserver && typeof ResizeObserver !== 'undefined') {
+            this._crestResizeObserver = new ResizeObserver((entries) => {
+                entries.forEach((entry) => {
+                    const el = entry.target;
+                    const id = el.dataset.emblemFaction;
+                    if (id) this.renderEmblemAtSize(el, id);
+                });
+            });
+        }
+        if (this._crestResizeObserver) this._crestResizeObserver.observe(crestEl);
+    },
+    /**
      * Re-skin the dialog in the chosen faction's palette and show that
      * faction's ship, so picking a faction previews what the game becomes.
      */
@@ -77,7 +119,7 @@ extendClass(ProfileSelectionManager, {
             if (window.vfRepaintBackdrops) window.vfRepaintBackdrops();
         }
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
-        if (emblem && emblem.dataset.emblemFaction !== id) { emblem.innerHTML = this.getFactionEmblemHtml(id, 192, 4); emblem.dataset.emblemFaction = id; }
+        if (emblem) { this.renderEmblemAtSize(emblem, id); this._watchCrestSize(emblem); }
         const nameCrest = this.overlay.querySelector('.profile-name-crest');
         if (nameCrest && nameCrest.dataset.emblemFaction !== id) { nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48); nameCrest.dataset.emblemFaction = id; }
         const name = this.overlay.querySelector('.profile-faction-preview-name');
@@ -109,10 +151,13 @@ extendClass(ProfileSelectionManager, {
             input.placeholder = hero.name;
         }
         this.renderFactionShipPreview(id);
+        // Swap the hero planet here too, not the moment the faction is picked —
+        // otherwise it changes a beat before the cable-swap-gated content above.
+        if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(id);
         // Re-run the swap-in animation on everything that changed with the faction.
         const inStartStep = !!this.overlay.querySelector('.profile-kit-ship');
         if (!inStartStep && this._lastLookFaction && this._lastLookFaction !== id) {
-            const els = this.overlay.querySelectorAll('.profile-faction-ship, .profile-faction-preview-text, .profile-faction-lore-text, .profile-faction-facts, .profile-name-crest');
+            const els = this.overlay.querySelectorAll('.profile-faction-ship, .profile-faction-preview-text, .profile-faction-lore-text, .profile-faction-facts, .profile-name-crest, .hero-planet-canvas');
             els.forEach((el) => { el.classList.remove('vf-fswap'); void el.offsetWidth; el.classList.add('vf-fswap'); });
         }
         this._lastLookFaction = id;
@@ -488,3 +533,6 @@ extendClass(ProfileSelectionManager, {
         return '#888888';
     },
 });
+// See renderEmblemAtSize's own comment: how far off exact 1:1 the crest bitmap is rendered,
+// to just barely break the moiré against the global scanline overlay.
+ProfileSelectionManager.EMBLEM_OVERSAMPLE = 1.35;

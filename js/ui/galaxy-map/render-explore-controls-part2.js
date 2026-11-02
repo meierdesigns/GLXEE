@@ -157,8 +157,16 @@ extendClass(GalaxyMapManager, {
             const showShipLabel = (this.mapZoom || 1) < 1.1 &&
                 !centered &&
                 this._shipLabelReady;
-            // Under GP skip sub-pixel bob — it fights the shared screen lattice.
-            const bob = gpOn ? '' : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
+            // Under GP a plain sub-pixel tween fights the shared screen lattice (shimmers
+            // between lattice cells instead of looking like clean pixel steps), so snap the
+            // bob's amplitude to whole lattice cells and step between them (calcMode=discrete)
+            // instead of smoothly interpolating sub-cell positions.
+            const uLat = gpOn && this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            const bob = gpOn
+                ? (uLat > 0
+                    ? `<animateTransform attributeName="transform" type="translate" values="0 0; 0 -${uLat}; 0 0; 0 ${uLat}; 0 0" keyTimes="0;0.25;0.5;0.75;1" calcMode="discrete" dur="2.4s" repeatCount="indefinite"/>`
+                    : '')
+                : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
                     <title>YOUR SHIP</title>

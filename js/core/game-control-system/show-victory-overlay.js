@@ -300,16 +300,19 @@ extendClass(GameControlSystem, {
         }
 
         // Ambush is mid-flight combat — no planet to leave; only continue travel.
+        // Boss victory already routes "MAP SELECT" to leave the planet, so hide
+        // the separate "Leave Planet" button to avoid two buttons doing the same thing.
+        const hideLeaveBtn = ambushVictory || bossVictory;
         const leaveBtn = document.querySelector('#victoryOverlay .victory-button[data-action="levelSelection"]');
         if (leaveBtn) {
-            leaveBtn.hidden = !!ambushVictory;
-            leaveBtn.setAttribute('aria-hidden', ambushVictory ? 'true' : 'false');
+            leaveBtn.hidden = hideLeaveBtn;
+            leaveBtn.setAttribute('aria-hidden', hideLeaveBtn ? 'true' : 'false');
         }
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = ambushVictory
+            uiManager.victoryMenuItems = hideLeaveBtn
                 ? ['nextLevel']
                 : ['nextLevel', 'levelSelection'];
-            if (ambushVictory && uiManager.victoryMenuIndex > 0) {
+            if (hideLeaveBtn && uiManager.victoryMenuIndex > 0) {
                 uiManager.victoryMenuIndex = 0;
             }
         }

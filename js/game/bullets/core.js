@@ -228,7 +228,7 @@ class BulletManager {
             // Remove bullets that are off screen
             // Get canvas width from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            if (bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
+            if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
                 this.bullets.splice(i, 1);
             }
         }

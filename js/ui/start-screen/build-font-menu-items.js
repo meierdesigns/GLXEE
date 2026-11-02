@@ -102,14 +102,16 @@ extendClass(StartScreenManager, {
         // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
         // when it's actually on screen to look at.
         if (this.visible) this.createStartScreenUI();
-        // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
-        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
-            // A soft rebuild keeps the tab rows unless the area changes, so the dev tabs
-            // would only show after a reload: drop the soft shell and cached bodies first.
-            homeStationUI._hsShellReady = false;
-            homeStationUI._softBodyCache = null;
-            homeStationUI._softAreaId = null;
-            homeStationUI.createUI();
+        // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+            if (homeStationUI.syncDevModeChrome) {
+                homeStationUI.syncDevModeChrome();
+            } else if (homeStationUI.createUI) {
+                homeStationUI._hsShellReady = false;
+                homeStationUI._softBodyCache = null;
+                homeStationUI._softAreaId = null;
+                homeStationUI.createUI();
+            }
         }
         // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
         // refresh so later steps pick up / drop the DevMode faction swatches without

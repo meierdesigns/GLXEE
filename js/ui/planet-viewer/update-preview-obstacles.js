@@ -162,7 +162,7 @@ extendClass(PlanetViewerUI, {
                     btn.type = 'button';
                     btn.className = 'content-viewer-item' + (flatIndex === this.selectedIndex ? ' selected' : '');
                     btn.innerHTML =
-                        this.planetIconHtml(planet.id, 32) +
+                        this.planetIconHtmlStatic(planet.id, 32) +
                         `<span class="cv-item-label">${planet.name}` +
                         (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
                             ? devProfileToggles.badgesHtml(this.planetProgressFlags(planet))

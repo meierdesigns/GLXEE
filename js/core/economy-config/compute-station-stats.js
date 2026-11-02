@@ -168,12 +168,24 @@ extendClass(EconomyConfig, {
      */
     getPartMaterialCost(kind, item) {
         if (kind === 'weapon') {
-            const dmg = Math.max(1, Number((item && item.damage) || 10));
-            const cd = Math.max(50, Number((item && item.cooldown) || 300));
-            const score = Math.round(dmg * 2 + (400 / cd) * 8);
-            if (score <= 20) return { scrap: 85, ore: 35 };
-            if (score <= 35) return { scrap: 140, ore: 55, crystal: 25 };
-            return { scrap: 200, ore: 80, crystal: 45, voltex: 20 };
+            let power = 1;
+            if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
+                power = balanceConfigManager.computeWeaponPower(item, item && item.id);
+            } else {
+                const dmg = Math.max(1, Number((item && item.damage) || 10));
+                const count = Math.max(1, Math.round(Number((item && item.bulletCount) || 1)));
+                const cd = Math.max(50, Number((item && item.cooldown) || 300));
+                power = (dmg * count * (1000 / cd)) / 40;
+            }
+            if (item && (item.slotSize >= 3 || item.slotMode === 'expand')) power += 0.12;
+            if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.shopBucketForPower) {
+                return balanceConfigManager.shopBucketForPower(power).cost;
+            }
+            if (power <= 0.85) return { scrap: 70, ore: 28 };
+            if (power <= 1) return { scrap: 110, ore: 42, crystal: 12 };
+            if (power <= 1.15) return { scrap: 160, ore: 60, crystal: 28 };
+            if (power <= 1.35) return { scrap: 210, ore: 85, crystal: 40, voltex: 12 };
+            return { scrap: 260, ore: 100, crystal: 55, voltex: 22 };
         }
         const tier = Math.max(0, Math.round(Number((item && item.tier) || 1)));
         if (kind === 'energy') {

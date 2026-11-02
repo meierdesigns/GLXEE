@@ -131,20 +131,36 @@ class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
-            && uiAppearanceManager.getGlobalPixelPx() > 0) return 1 / this.getRenderScale();
-        const style = (typeof uiAppearanceManager !== 'undefined'
-            && uiAppearanceManager.shipRenderStyle)
-            ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
-            : 'FLAT';
-        if (style !== 'VOXEL') return null;
-        // Prefer the settings value so every draw path shares one lattice.
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getVoxelSize) {
-            const fromUi = Number(uiAppearanceManager.getVoxelSize());
-            if (Number.isFinite(fromUi) && fromUi > 0) return fromUi;
+        // Sticky within ~one frame, same pattern as getRenderScale() — this is called
+        // many times per frame (once per bullet/particle/debris cell fill).
+        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+        if (this._voxelCellStickyAt && (now - this._voxelCellStickyAt) < 12) {
+            return this._voxelCellFrameValue;
         }
-        const c = Number(window.PLAYFIELD_VOXEL_CELL);
-        return Number.isFinite(c) && c > 0 ? c : 1;
+        let result;
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) {
+            result = 1 / this.getRenderScale();
+        } else {
+            const style = (typeof uiAppearanceManager !== 'undefined'
+                && uiAppearanceManager.shipRenderStyle)
+                ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
+                : 'FLAT';
+            if (style !== 'VOXEL') {
+                result = null;
+            } else if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getVoxelSize
+                && Number.isFinite(Number(uiAppearanceManager.getVoxelSize()))
+                && Number(uiAppearanceManager.getVoxelSize()) > 0) {
+                // Prefer the settings value so every draw path shares one lattice.
+                result = Number(uiAppearanceManager.getVoxelSize());
+            } else {
+                const c = Number(window.PLAYFIELD_VOXEL_CELL);
+                result = Number.isFinite(c) && c > 0 ? c : 1;
+            }
+        }
+        this._voxelCellStickyAt = now;
+        this._voxelCellFrameValue = result;
+        return result;
     }
     isVoxelCombat() {
         return this.getCombatVoxelCell() != null;

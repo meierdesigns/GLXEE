@@ -11,9 +11,15 @@ extendClass(HomeStationUI, {
             const count = (typeof profileManager !== 'undefined')
                 ? profileManager.getPartCount(entry.kind, entry.id, profile)
                 : 0;
-            const tier = entry.kind === 'weapon'
-                ? Math.max(1, Math.round(Number((entry.item && entry.item.damage) || 10) / 12))
-                : Math.max(1, Math.round(Number((entry.item && entry.item.tier) || 1)));
+            let tier = Math.max(1, Math.round(Number((entry.item && entry.item.tier) || 1)));
+            if (entry.kind === 'weapon') {
+                if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.shopBucketForPower) {
+                    const power = balanceConfigManager.computeWeaponPower(entry.item, entry.id);
+                    tier = balanceConfigManager.shopBucketForPower(power).tier;
+                } else {
+                    tier = Math.max(1, Math.round(Number((entry.item && entry.item.damage) || 10) / 12));
+                }
+            }
             return {
                 kind: entry.kind,
                 id: entry.id,

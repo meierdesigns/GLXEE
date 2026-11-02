@@ -239,7 +239,7 @@ extendClass(HomeStationUI, {
     },
     /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */
     hangarStatColor(type) {
-        return { damage: '#ff6a4a', shotspeed: '#4ad8ff', firerate: '#ffa04a', speed: '#6dff8a', armor: '#7aa8ff', energy: '#ffd24a' }[type] || null;
+        return { damage: '#ff6a4a', shotspeed: '#4ad8ff', firerate: '#ffa04a', speed: '#6dff8a', armor: '#7aa8ff', energy: '#ffd24a', power: '#c9a0ff' }[type] || null;
     },
     /** Ability row stat line: its stat effects as icon + change (ability-stats.js). */
     hangarAbilityStatsHtml(id) {
@@ -326,10 +326,17 @@ extendClass(HomeStationUI, {
         if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
         const dmg = Math.round((w.damage || 0) * classMul * factionMul);
         const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
+        let powerHtml = '';
+        if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
+            const power = balanceConfigManager.computeWeaponPower(w, id);
+            const eDps = Math.round(balanceConfigManager.volleyDps(w) * balanceConfigManager.getHitRate(id, w));
+            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false);
+        }
         return `<span class="hs-hangar-weapon-stats">` +
             stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0) +
             stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed') +
             stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate') +
+            powerHtml +
             `</span>`;
     },
     /** The weapon's on-ship hardware sprite, shown on the row when it is slotted. */

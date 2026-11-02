@@ -62,12 +62,27 @@ window.combatVoxels = {
         if (!entity) return;
         const unit = c != null ? c : this.cell();
         if (unit == null || !(unit > 0)) return;
-        const x = entity.x || 0;
-        const y = entity.y || 0;
-        const sx = Math.round(x / unit) * unit;
-        const sy = Math.round(y / unit) * unit;
-        if (sx !== x) entity.x = sx;
-        if (sy !== y) entity.y = sy;
+        // Re-rounding entity.x cold every frame discards any movement smaller
+        // than one cell, permanently freezing slow movers (a side craft easing
+        // in at ~1px/frame never clears a wider cell — same failure mode the
+        // terrainOffset note above already calls out). Fold this frame's nudge
+        // (entity.x minus what we last snapped it to) into a running true
+        // position instead, so slow, steady movement still crosses cell
+        // boundaries over time rather than being rounded back to the same spot.
+        const lastX = entity._snapLastX;
+        const lastY = entity._snapLastY;
+        const deltaX = lastX != null ? (entity.x || 0) - lastX : 0;
+        const deltaY = lastY != null ? (entity.y || 0) - lastY : 0;
+        const trueX = (entity._snapTrueX != null ? entity._snapTrueX : (entity.x || 0)) + deltaX;
+        const trueY = (entity._snapTrueY != null ? entity._snapTrueY : (entity.y || 0)) + deltaY;
+        const sx = Math.round(trueX / unit) * unit;
+        const sy = Math.round(trueY / unit) * unit;
+        entity._snapTrueX = trueX;
+        entity._snapTrueY = trueY;
+        entity._snapLastX = sx;
+        entity._snapLastY = sy;
+        if (sx !== entity.x) entity.x = sx;
+        if (sy !== entity.y) entity.y = sy;
     },
     snapWorld() {
         const c = this.cell();

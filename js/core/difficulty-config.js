@@ -3,20 +3,21 @@
 /**
  * Runtime difficulty tuning. All values are multipliers unless noted.
  * Global preset + separate Champion / Side / Boss role scales.
+ * Presets track balance-config TTK bands (Easy ~−25% TTK, Hard ~+25%).
  */
 class DifficultyConfigManager {
     constructor() {
         this.storageKey = 'vf_difficulty_config_v2';
         this.profiles = {
             easy: {
-                enemyDamageMul: 0.7, playerDamageMul: 1.15, enemyHealthMul: 0.85,
-                enemySpeedMul: 0.9, enemyCountMul: 0.7, enemyMaxActive: 1,
+                enemyDamageMul: 0.7, playerDamageMul: 1.15, enemyHealthMul: 0.8,
+                enemySpeedMul: 0.9, enemyCountMul: 0.75, enemyMaxActive: 2,
                 evasionMul: 0.55, predictionMul: 0.35, obstacleSpawnMul: 1.5,
                 championDamageMul: 0.75, championHealthMul: 0.85, championSpeedMul: 0.9,
                 championEvasionMul: 0.7,
-                sideDamageMul: 0.55, sideHealthMul: 0.7, sideSpeedMul: 0.85,
-                sideCountMul: 0.65,
-                bossDamageMul: 0.8, bossHealthMul: 0.75, bossSpeedMul: 0.9,
+                sideDamageMul: 0.55, sideHealthMul: 0.75, sideSpeedMul: 0.85,
+                sideCountMul: 0.7,
+                bossDamageMul: 0.8, bossHealthMul: 0.8, bossSpeedMul: 0.9,
                 bossAttackRateMul: 0.85
             },
             normal: {
@@ -31,15 +32,15 @@ class DifficultyConfigManager {
                 bossAttackRateMul: 1
             },
             hard: {
-                enemyDamageMul: 1.3, playerDamageMul: 0.9, enemyHealthMul: 1.2,
-                enemySpeedMul: 1.12, enemyCountMul: 1.35, enemyMaxActive: 5,
+                enemyDamageMul: 1.3, playerDamageMul: 0.9, enemyHealthMul: 1.25,
+                enemySpeedMul: 1.12, enemyCountMul: 1.3, enemyMaxActive: 5,
                 evasionMul: 1.35, predictionMul: 1.3, obstacleSpawnMul: 0.65,
-                championDamageMul: 1.25, championHealthMul: 1.2, championSpeedMul: 1.15,
+                championDamageMul: 1.2, championHealthMul: 1.2, championSpeedMul: 1.12,
                 championEvasionMul: 1.25,
-                sideDamageMul: 1.2, sideHealthMul: 1.15, sideSpeedMul: 1.2,
-                sideCountMul: 1.4,
-                bossDamageMul: 1.45, bossHealthMul: 1.35, bossSpeedMul: 1.2,
-                bossAttackRateMul: 1.35
+                sideDamageMul: 1.2, sideHealthMul: 1.15, sideSpeedMul: 1.15,
+                sideCountMul: 1.35,
+                bossDamageMul: 1.35, bossHealthMul: 1.3, bossSpeedMul: 1.15,
+                bossAttackRateMul: 1.3
             }
         };
         this.factionProfiles = {

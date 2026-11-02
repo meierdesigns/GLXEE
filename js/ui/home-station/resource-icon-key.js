@@ -174,6 +174,7 @@ extendClass(HomeStationUI, {
      * so they can still return.
      */
     isPlayLaunchUnlocked() {
+        if (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()) return true;
         if (typeof profileManager === 'undefined' || !profileManager.hasClearedAnyStage) return true;
         return !!profileManager.hasClearedAnyStage();
     },

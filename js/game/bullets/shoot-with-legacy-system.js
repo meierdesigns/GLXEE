@@ -8,7 +8,7 @@ extendClass(BulletManager, {
         let maxBullets = 4;
 
         // Check for infinite ammo cheat
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
 

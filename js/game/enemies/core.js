@@ -228,9 +228,10 @@ class EnemyManager {
         if (typeof difficultyConfigManager !== 'undefined') {
             const profile = difficultyConfigManager.getProfile();
             const sideMul = profile.sideCountMul != null ? profile.sideCountMul : 1;
-            // Floor at 3 so combat events / director waves can actually land —
-            // enemyMaxActive:1 × sideCountMul left room < 2 forever and froze events.
-            this.sideEnemyCap = Math.max(3, Math.min(6,
+            // Soft floor: Easy (maxActive≤2) can sit at 2; Normal+ keeps ≥3 so
+            // combat events / director waves still have room to land.
+            const capFloor = (profile.enemyMaxActive <= 2) ? 2 : 3;
+            this.sideEnemyCap = Math.max(capFloor, Math.min(6,
                 Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
             if (this.levelMods && this.levelMods.transit) {
                 this.sideEnemyCap = Math.max(this.sideEnemyCap, 5);
@@ -284,15 +285,17 @@ class EnemyManager {
         return pool[0].type;
     }
 
+    // Escorts go immobile (formation lerp only) — capping how many of a
+    // cluster's side craft escort at once keeps most of a wave actually
+    // flying and attacking instead of parking around the champion.
     shouldEscortChampion(entry) {
         const cluster = (entry && entry.cluster) || 'alpha';
-        if (this.enemy && !this.exploding && (this.enemy.cluster || 'alpha') === cluster) {
-            return true;
-        }
-        if (this.pendingChampionEntry && (this.pendingChampionEntry.cluster || 'alpha') === cluster) {
-            return true;
-        }
-        return this.schedule.some((e) => e.champion && (e.cluster || 'alpha') === cluster);
+        const inChampionCluster = (this.enemy && !this.exploding && (this.enemy.cluster || 'alpha') === cluster)
+            || (this.pendingChampionEntry && (this.pendingChampionEntry.cluster || 'alpha') === cluster)
+            || this.schedule.some((e) => e.champion && (e.cluster || 'alpha') === cluster);
+        if (!inChampionCluster) return false;
+        const activeEscorts = (this.sideEnemies || []).filter((e) => e.isEscort).length;
+        return activeEscorts < 3;
     }
 
     nextEscortSlot() {

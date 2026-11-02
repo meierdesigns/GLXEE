@@ -92,7 +92,16 @@ class PickupManager {
             : null;
         this.maybeDropFakeCrate(info);
         const stats = this.getCollectStats();
-        const drops = economyConfig.rollEnemyKillDrops(info, planetId, stats.yieldMul);
+        let yieldMul = stats.yieldMul;
+        // stageScale from build-stage-level: later stages / bosses pay slightly more.
+        try {
+            const host = (typeof game !== 'undefined' && game) ? game : null;
+            const lm = host && (host.coreLevelManager || host.levelManager);
+            const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+            const ss = level && Number(level.stageScale);
+            if (ss > 0) yieldMul *= Math.max(0.75, Math.min(1.6, 0.85 + ss * 0.2));
+        } catch (e) { /* ignore */ }
+        const drops = economyConfig.rollEnemyKillDrops(info, planetId, yieldMul);
         if (!drops || !drops.length) return;
 
         const cx = Number(info.x);
@@ -113,7 +122,7 @@ class PickupManager {
                 vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
                 age: 0,
                 life: life,
-                size: 7 + Math.min(4, drop.amount)
+                size: 9 + Math.min(5, drop.amount)
             });
         });
     }
@@ -168,7 +177,7 @@ class PickupManager {
             vy: (obstacle.verticalSpeed || 0) * 0.4 + (Math.random() - 0.5) * 0.6,
             age: 0,
             life: 14000,
-            size: 7 + Math.min(4, amount)
+            size: 9 + Math.min(5, amount)
         });
     }
 
@@ -423,6 +432,17 @@ class PickupManager {
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;
             ctx.save();
             ctx.imageSmoothingEnabled = false;
+            // Dark outline then coloured glow halo so drops read against busy backgrounds.
+            const pulse = 0.4 + 0.15 * Math.sin((t + p.age) * 0.006);
+            ctx.globalAlpha = fade * pulse;
+            ctx.fillStyle = '#05060a';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = tint;
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.65, 0, Math.PI * 2);
+            ctx.fill();
             ctx.globalAlpha = fade;
             if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
                 iconRenderer.drawKey(ctx, key, x - size / 2, y - size / 2, size, tint);

@@ -144,6 +144,92 @@ extendClass(HomeStationUI, {
         this._syncTabsUnlockReveal(this.overlay.querySelector('.hs-tabs'), hideTabsForTutorial);
     },
 
+    /**
+     * Tutorial hides the area nav until the first planet is cleared.
+     * Dev mode (Shift+C) always shows every nav button.
+     */
+    shouldHideTabsForTutorial(profile) {
+        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return false;
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
+            return !profileManager.hasClearedFirstPlanet(profile);
+        }
+        return false;
+    },
+
+    /**
+     * Shift+C: refresh only nav chrome (area tabs + subnav). Keeps the shell
+     * and active body so toggling dev mode stays cheap (~DOM patch, no rebuild).
+     */
+    /** Insert/remove the header's LAUNCH button to match current tab + unlock state —
+     *  the soft-render paths below only patch chrome in place, so this must run after
+     *  anything that could change `isPlayLaunchUnlocked()` (tab switch, dev mode toggle). */
+    _syncPlayLaunchButton(content) {
+        let playBtn = content.querySelector('[data-play-launch]');
+        const shouldShowLaunch = !(this.tab === 'play' && !this.isPlayLaunchUnlocked());
+        if (!playBtn && shouldShowLaunch) {
+            const header = content.querySelector('.hs-header');
+            const headerMain = header && header.querySelector('.hs-header-main');
+            if (header && headerMain) {
+                const wrap = document.createElement('div');
+                wrap.innerHTML = this.renderPlayLaunch();
+                const el = wrap.firstElementChild;
+                if (el) {
+                    header.insertBefore(el, headerMain);
+                    playBtn = el;
+                }
+            }
+        } else if (playBtn && !shouldShowLaunch) {
+            // Dev mode (or a prior clear) made it show; if that got toggled off again
+            // while still unprogressed and on the play tab, it must hide once more.
+            playBtn.remove();
+            playBtn = null;
+        }
+        if (playBtn) {
+            playBtn.classList.toggle('active', this.tab === 'play');
+            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
+        }
+    },
+
+    syncDevModeChrome() {
+        if (!this.isVisible || !this.overlay) return;
+        const content = this.overlay.querySelector('.vf-browser-shell .home-station-content')
+            || this.overlay.querySelector('.home-station-content');
+        if (!content) return;
+        this._syncPlayLaunchButton(content);
+        const profile = this.getProfile();
+        const hide = this.shouldHideTabsForTutorial(profile);
+        const tabsWrap = content.querySelector('.hs-tabs');
+        if (tabsWrap) {
+            const needFill = !hide && !tabsWrap.firstElementChild;
+            tabsWrap.classList.toggle('hs-tabs-hidden', !!hide);
+            if (needFill) {
+                tabsWrap.innerHTML = this.renderTabs();
+                this._bindSoftTabButtons(tabsWrap);
+                tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+                    if (menuBtn.dataset.vfSoftBound === '1') return;
+                    menuBtn.dataset.vfSoftBound = '1';
+                    menuBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+                    });
+                });
+            }
+            this._syncTabsUnlockReveal(tabsWrap, hide);
+        }
+        const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
+        // Force subnav rebuild so COMPONENTS / LAYOUT appear or vanish.
+        this._softAreaId = null;
+        if (this._syncSoftNavChrome(content, bodyEl, hide)) {
+            const sub = content.querySelector(':scope > .hs-subnav');
+            if (sub) this._bindSoftTabButtons(sub);
+        }
+        if (this.statusMsg && this.showStatusToast) {
+            this.showStatusToast(this.statusMsg);
+            this.statusMsg = '';
+        }
+    },
+
     /** First-planet unlock: when the nav tabs flip from hidden to shown, play a reveal animation. */
     _syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial) {
         if (!tabsWrap) return;
@@ -162,21 +248,27 @@ extendClass(HomeStationUI, {
 
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
-        const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const stationBpHtml = this.renderBlueprintList(profile);
         const stats = (typeof profileManager !== 'undefined')
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
+        // Each owned ship gets its own card (own tbody): the ship row and its Ship Storage grid
+        // combined as one visual unit, action buttons top-right of the row.
         const ownedHtml = owned.length
-            ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                (id === profile.activeShipId
-                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
-                    : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
-                      `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
-                `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
-                `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
-            )).join(''), true)
+            ? `<table class="hs-ship-table">${owned.map((id) => {
+                const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
+                    (id === profile.activeShipId
+                        ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
+                        : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
+                          `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
+                    `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                    `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
+                const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
+                    `<div class="hs-ship-storage-caption">SHIP STORAGE</div>` +
+                    `<div class="hs-row">${this.renderShipStorage(profile, id)}</div>` +
+                    `</td></tr>`;
+                return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
+            }).join('')}</table>`
             : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
         const slotsLabel = `${owned.length}/${stats.shipSlots}`;
 
@@ -222,31 +314,24 @@ extendClass(HomeStationUI, {
                             <strong>STATION STORAGE</strong>
                         </div>
                     </div>
-                    <div class="hs-panel hs-panel-stores">
-                        ${this.panelTitle('hsStores', 'STATION STORES')}
-                        <div class="hs-row hs-res-grid">${walletHtml}</div>
-                    </div>
-                    <div class="hs-panel hs-panel-bp">
-                        ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
-                        <div class="hs-row hs-bp">${stationBpHtml}</div>
-                    </div>
                     <div class="hs-panel-stack">
                         <div class="hs-panel hs-panel-ships">
                             ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </div>
-                        <div class="hs-panel hs-panel-parts">
-                            ${this.panelTitle('hsCraft', 'PARTS')}
-                            <div class="hs-row">${this.renderPartsList(profile)}</div>
+                        <div class="hs-panel hs-panel-parts hs-panel-storage">
+                            ${this.panelTitle('hsCraft', 'STATION STORAGE')}
+                            <div class="hs-row">${this.renderStationStorage(profile)}</div>
                         </div>
+                    </div>
+                    <div class="hs-panel hs-panel-chambers">
+                        ${this.panelTitle('hsStores', 'STATION STORES')}
+                        <div class="hs-row">${this.renderResourceChambers(profile)}</div>
                     </div>
                 </div>`;
         }
 
-        let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
-        }
+        const hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const bodyClass = isPlay
@@ -336,10 +421,7 @@ extendClass(HomeStationUI, {
         }
 
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
-        let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
-        }
+        let hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const isComp = this.tab === 'components';
@@ -366,11 +448,7 @@ extendClass(HomeStationUI, {
         // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
         const subRebound = this._syncSoftNavChrome(content, bodyEl, hideTabsForTutorial);
 
-        const playBtn = content.querySelector('[data-play-launch]');
-        if (playBtn) {
-            playBtn.classList.toggle('active', this.tab === 'play');
-            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
-        }
+        this._syncPlayLaunchButton(content);
 
         // Fresh body needs binds; cache hit already has listeners on parked nodes.
         if (!cacheHit) this._bindSoftBodyChrome(bodyEl);

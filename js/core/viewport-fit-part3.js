@@ -265,7 +265,10 @@
                 else document.documentElement.removeAttribute('data-vf-logged');
             }
         }
-        setOff(q('logout'), !logged);
+        const logoutBtn = q('logout');
+        setOff(logoutBtn, !logged);
+        // Hide outright during a fight — a visible power/logout button over combat invites mis-taps.
+        logoutBtn.hidden = document.documentElement.classList.contains('vf-game-shown');
         const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
         const nowEditing = devOn && typeof hudLayoutEditor !== 'undefined' && hudLayoutEditor.isEditing();
         const layoutBtn = q('layout');

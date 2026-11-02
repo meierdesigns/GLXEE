@@ -467,8 +467,10 @@ Combat is a vertical shooter with a readable pixel hierarchy:
   is visual-only chip FX in the rock's own colours.
 - **Planet tiers** (Easy → Nightmare) scale enemy health, speed, damage, and spawn
   cadence so early theaters forgive and late ones punish.
+- **Balance:** weapons use a role-budget Power score (laser = 1.0); menu difficulty,
+  stage ramp, and shop prices track TTK bands (side ~2s / champion ~5s / boss ~22s).
 - **Stage count** varies by planet difficulty (roughly 2–5 stages + boss); later
-  stages raise terrain danger and harsh flight zones.
+  stages raise terrain danger, ambient pressure, and kill-drop yield.
 - Victory and defeat screens show an **outcome stepper** for the planet just
   fought (cleared / current WON·LOST / locked). A refresh restores the same
   end overlay (score / time / kills) instead of dumping back to the menu.
@@ -858,6 +860,11 @@ be reviewed or reverted independently.
 | 68J | Voidborn bezel stay | Vine rim no longer vanishes (border fallback, no pixel-frame cull, clip after voxel) |
 | 68K | In-stage shop kiosk | Shop beside sluice gates with procedural shopkeeper face, credits-only trades |
 | 68L | Controller support | Gamepad fire-to-start, victory/game-over menu navigation, planet-selection input routing |
+| 68M | Combat balance TTK | Role-budget weapons, difficulty/stage/shop curves, TTK enemy HP, balance-config module |
+| 68N | Soundtrack editor | Dev-mode overlay assigns a YouTube URL or local audio file per stage / enemy type, overriding the planet track with enemy > stage > planet priority |
+| 68O | Ship storage | Per-ship "on this ship vs at the station" filing overlay on owned parts/blueprints, independent of equip/ownership ledgers |
+| 68P | Physical item art | Seeded generative metal-casing render (bevel, rivets, vents, hazard stripes, scratches) for every inventory part icon |
+| 68Q | Station column resize fix | Hangar/blueprint/parts columns keep a readable minimum width and resize handles track correctly under GUI zoom |
 
 The wave commit convention is:
 

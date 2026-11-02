@@ -115,7 +115,8 @@ extendClass(EnemyManager, {
         let baseHp = 40;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.4));
+            // ~2s side TTK vs REF laser (balance-config); was 0.4.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.55));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {

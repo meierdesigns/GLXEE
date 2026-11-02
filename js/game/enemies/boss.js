@@ -5,12 +5,12 @@
 
 /** Per planet tier (EASY .. NIGHTMARE): early planets forgiving, late ones brutal. */
 const PLANET_TIER_MODS = [
-    // evasion: dodge chance / speed multiplier (early planets barely dodge).
-    { health: 0.65, speed: 0.85, damage: 0.65, spawn: 1.35, boss: 0.85, evasion: 0.25 },
-    { health: 0.9,  speed: 0.95, damage: 0.85, spawn: 1.1,  boss: 0.95, evasion: 0.45 },
-    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.05, evasion: 0.7 },
-    { health: 1.45, speed: 1.15, damage: 1.25, spawn: 0.82, boss: 1.15, evasion: 0.9 },
-    { health: 1.8,  speed: 1.25, damage: 1.45, spawn: 0.7,  boss: 1.25, evasion: 1 }
+    // ~±20–30% TTK steps Easy→Nightmare (balance-config). Evasion still ramps soft→hard.
+    { health: 0.75, speed: 0.88, damage: 0.75, spawn: 1.3,  boss: 0.9,  evasion: 0.3 },
+    { health: 0.95, speed: 0.96, damage: 0.9,  spawn: 1.1,  boss: 0.98, evasion: 0.5 },
+    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.08, evasion: 0.7 },
+    { health: 1.35, speed: 1.12, damage: 1.2,  spawn: 0.85, boss: 1.18, evasion: 0.88 },
+    { health: 1.55, speed: 1.2,  damage: 1.35, spawn: 0.75, boss: 1.28, evasion: 1 }
 ];
 const PLANET_TIERS = ['EASY', 'NORMAL', 'HARD', 'EXPERT', 'NIGHTMARE'];
 const BOSS_SIZE_MUL = 1.6;
@@ -85,7 +85,8 @@ extendClass(EnemyManager, {
         e.x = cx - e.width / 2;
         if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
         const mods = this.currentTierMods();
-        this.maxHealth = Math.round(this.maxHealth * mods.boss * 0.6);
+        // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
+        this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);
         this.health = this.maxHealth;
         e.bossTierMul = mods.boss;
         // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).

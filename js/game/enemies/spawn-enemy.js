@@ -52,7 +52,9 @@ extendClass(EnemyManager, {
         if (this.levelMods && this.levelMods.enemyHealth) {
             enemyMaxHealth = this.levelMods.enemyHealth;
         }
-        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * 0.55);
+        // TTK target ~5s champion vs REF laser eDPS (balance-config). Was 0.55.
+        const champHpFudge = 1;
+        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * champHpFudge);
         enemySpeed = enemySpeed * (1 + 0.1 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
         enemyVerticalSpeed = enemyVerticalSpeed * (1 + 0.08 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
 

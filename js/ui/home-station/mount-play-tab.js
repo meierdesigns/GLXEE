@@ -150,6 +150,14 @@ extendClass(HomeStationUI, {
         }
 
         // Remember which planets were reachable, so the map can reveal newly unlocked ones after the run.
+        // The map may not have been opened yet this session — load it so the snapshot isn't skipped.
+        if (typeof galaxyMapManager !== 'undefined' && !galaxyMapManager.map && galaxyMapManager.loadMap) {
+            galaxyMapManager.galaxyId = galaxyMapManager.galaxyId
+                || (typeof profileManager !== 'undefined' && profileManager.getCurrentGalaxyId
+                    ? profileManager.getCurrentGalaxyId(profileManager.getActiveProfile())
+                    : 'milky_way');
+            galaxyMapManager.loadMap();
+        }
         if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.map) {
             galaxyMapManager._preRunUnlocked = {
                 galaxyId: galaxyMapManager.galaxyId,

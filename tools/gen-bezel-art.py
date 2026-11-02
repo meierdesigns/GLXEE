@@ -645,29 +645,40 @@ def gen_spikes_motif(seed=0, variant=0):
     anything drawn "thick" here reads as a dense, busy repeat once tiled
     along a long border — a dropped claw-gash block here was exactly that
     (tiled into what looked like a continuous staircase)."""
-    profile = rescale_profile([15, 13, 10, 10, 10, 10, 6, 6, 6, 3, 3, 3, 0, 0, 0, 0], 16)
+    # Was [15,13,10,10,10,10,6,6,6,3,3,3,0,0,0,0]: three 3-4px flat plateaus
+    # separated by hard drops — after the 4x downsample that reads as a
+    # blocky, broken staircase instead of a single fang, and collides badly
+    # with the edge stripe's hard stop at the band boundary (reported as
+    # "corners cut off/choppy, don't flow into the sides"). Shorter, more
+    # frequent steps taper more evenly into a single diagonal silhouette.
+    profile = rescale_profile([15, 14, 12, 11, 9, 8, 7, 6, 5, 4, 3, 3, 2, 1, 1, 0], 16)
 
     def edge_stamp(g, n, band):
         mid = band // 2
         # Erratic/twitchy: fast-changing, uneven duty — unlike terran's
         # long synchronized hold or machine's clean clockwork tick.
         on = (lambda i: (i * 3 + variant * 7) % 9 < 3)
-        for x in range(band, n - band):
+        # Run the stripe a little past the straight-edge boundary (guarded by
+        # `if g[...]:` so it never bleeds past the carved silhouette) instead
+        # of stopping dead at `band` — a hard stop left the stripe and the
+        # corner glyph butting into each other with no transition, reading
+        # as a broken/stepped seam right where the two meet.
+        for x in range(max(0, band - 6), n - max(0, band - 6)):
             i = x - band
             col = 7 if on(i) else 6
             if i % 6 in (0, 1):
                 for dd in (0, 1):
-                    g[mid + dd][x] = col
-                    g[n - 1 - mid - dd][x] = col
-                    g[x][mid + dd] = col
-                    g[x][n - 1 - mid - dd] = col
+                    if g[mid + dd][x]: g[mid + dd][x] = col
+                    if g[n - 1 - mid - dd][x]: g[n - 1 - mid - dd][x] = col
+                    if g[x][mid + dd]: g[x][mid + dd] = col
+                    if g[x][n - 1 - mid - dd]: g[x][n - 1 - mid - dd] = col
             if i % 14 == 0:
-                g[mid - 2][x] = 1
-                g[n - 1 - mid + 2][x] = 1
-                g[x][mid - 2] = 1
-                g[x][n - 1 - mid + 2] = 1
+                if g[mid - 2][x]: g[mid - 2][x] = 1
+                if g[n - 1 - mid + 2][x]: g[n - 1 - mid + 2][x] = 1
+                if g[x][mid - 2]: g[x][mid - 2] = 1
+                if g[x][n - 1 - mid + 2]: g[x][n - 1 - mid + 2] = 1
 
-    g = build_frame_grid(profile, edge_stamp, seed=seed, bevel_style='rough', plate_density=32)
+    g = build_frame_grid(profile, edge_stamp, seed=seed, bevel_style='rough', plate_density=18)
     n = len(g)
     # Directional spike shading: the sawtooth profile already carves a jagged
     # tooth silhouette into the corner, but a chamfer edge with flat tone
@@ -724,9 +735,9 @@ def gen_spikes_motif(seed=0, variant=0):
     # pike-stumps are still dropped, no room below the jaw at this scale.
     # Placed where the single-fang profile is guaranteed solid.
     _stamp_glyph_corner(g, n, (
-        _block(14, 14, 6, 6, 1) +                             # brow ridge
-        _block(20, 8, 6, 6, 6) + _block(20, 20, 6, 6, 6) +    # eye sockets
-        _block(26, 14, 6, 6, 1)                               # jaw line
+        _block(11, 14, 6, 6, 1) +                             # brow ridge
+        _block(17, 8, 6, 6, 6) + _block(17, 20, 6, 6, 6) +    # eye sockets
+        _block(23, 14, 6, 6, 1)                               # jaw line
     ), require_filled=True)
     return g
 

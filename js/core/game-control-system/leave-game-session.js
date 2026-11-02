@@ -10,6 +10,7 @@ extendClass(GameControlSystem, {
         if (typeof soundManager !== 'undefined') {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
+            if (soundManager.clearMusicContext) soundManager.clearMusicContext();
         }
 
         if (typeof planetEditorUI !== 'undefined' && planetEditorUI.visible) {

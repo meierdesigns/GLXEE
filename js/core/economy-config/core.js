@@ -270,8 +270,8 @@ class EconomyConfig {
         if (lv > max) return null;
         const base = this.moduleUpgradeCatBase[category] || { scrap: 45, ore: 15 };
         const trackMul = Number(meta.costMul) || 1;
-        // Progressive curve: L1 cheap & distinct, later levels climb steeply.
-        const prog = Math.pow(lv, 1.55);
+        // Progressive curve: L1–3 affordable so shop weapons stay relevant; L4+ steep.
+        const prog = Math.pow(lv, 1.65);
         const cost = {
             scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
             ore: Math.max(0, Math.round(base.ore * trackMul * prog))

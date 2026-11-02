@@ -5,7 +5,7 @@ extendClass(BulletManager, {
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
         let maxBullets = 18; // Shared cap across all weapon mounts on the ship
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
 
@@ -123,13 +123,15 @@ extendClass(BulletManager, {
                 case 'spread':
                 case 'burst':
                 case 'nova':
+                case 'spike_burst':
                     this.enemyShootSpread(position, Object.assign({
-                        bulletCount: id === 'nova' ? 5 : (id === 'burst' ? 2 : 2),
-                        spreadAngle: id === 'nova' ? 0.5 : (id === 'burst' ? 0.4 : 0.3)
+                        bulletCount: id === 'nova' ? 5 : (id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2)),
+                        spreadAngle: id === 'nova' ? 0.5 : (id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3))
                     }, cfg));
                     break;
                 case 'rapid':
                 case 'ion':
+                case 'laser_twin':
                     this.enemyShootRapid(position, Object.assign({ bulletCount: 2 }, cfg));
                     break;
                 case 'plasma':
@@ -140,6 +142,8 @@ extendClass(BulletManager, {
                     this.enemyShootLaser(position, Object.assign({}, cfg, { typeHint: 'enemy_wave' }));
                     break;
                 case 'pierce':
+                case 'railgun':
+                case 'claw_beam':
                     this.enemyShootLaser(position, Object.assign({ width: 2, height: 10 }, cfg));
                     break;
                 default:
@@ -155,6 +159,7 @@ extendClass(BulletManager, {
                 this.shootSpreadWeapon(position, cfg);
                 break;
             case 'rapid':
+            case 'laser_twin':
                 this.shootRapidWeapon(position, cfg);
                 break;
             case 'plasma':
@@ -170,9 +175,11 @@ extendClass(BulletManager, {
                 this.shootWave(position, cfg);
                 break;
             case 'burst':
+            case 'spike_burst':
                 this.shootBurst(position, cfg);
                 break;
             case 'pierce':
+            case 'railgun':
                 this.shootPierce(position, cfg);
                 break;
             case 'nova':

@@ -103,6 +103,85 @@ const physicalItem = (() => {
         return cv.toDataURL('image/png');
     }
 
+    /** A resource storage silo: metal frame, pipe + lamp trim, and a glass viewport with resource
+     *  chunks piled up to the fill level — same seeded-pixel technique as render(), own layout. */
+    function renderChamber(id, w, h, color, pct) {
+        const cw = Math.max(10, Math.round(w / PX)), ch = Math.max(16, Math.round(h / PX));
+        const cv = document.createElement('canvas');
+        cv.width = cw; cv.height = ch;
+        const g = cv.getContext('2d');
+        const rnd = rngOf(hash('chamber:' + id));
+        const kc = rgbOf(color);
+        const OUT = [5, 6, 10];
+        const frame = [52, 56, 66];
+        const dot = (x, y, c, a) => { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= cw || y >= ch) return; g.fillStyle = css(c, a); g.fillRect(x, y, 1, 1); };
+        const rect = (x, y, rw, rh, c, a) => { g.fillStyle = css(c, a); g.fillRect(Math.round(x), Math.round(y), Math.round(rw), Math.round(rh)); };
+        const shade = (m, v) => (v >= 0.5 ? mix(m, [255, 255, 255], (v - 0.5) * 0.9) : mix(m, [8, 9, 16], (0.5 - v) * 1.1));
+
+        const mx = 1, my = 1, bw = cw - mx * 2, bh = ch - my * 2;
+        // Outer bezel.
+        rect(mx, my, bw, bh, shade(frame, 0.42));
+        rect(mx + 1, my + 1, bw - 2, bh - 2, [6, 7, 11]);
+        // Corner rivets.
+        [[mx, my], [mx + bw - 1, my], [mx, my + bh - 1], [mx + bw - 1, my + bh - 1]].forEach(([x, y]) => dot(x, y, shade(frame, 0.85)));
+        // Top pipe stub (bent elbow) feeding into the silo.
+        const pipeX = mx + bw - 4;
+        rect(pipeX, my - 1, 2, 3, shade(frame, 0.6));
+        rect(pipeX - 3, my - 1, 3, 2, shade(frame, 0.6));
+        // Side lamps, glowing in the resource color.
+        [my + 3, my + Math.round(bh * 0.35)].forEach((y) => {
+            dot(mx - 1, y, kc, 0.9); dot(mx + bw, y, kc, 0.9);
+        });
+        // Glass viewport.
+        const vx = mx + 3, vy = my + 3, vw = bw - 6, vh = bh - 9;
+        rect(vx, vy, vw, vh, [10, 12, 18]);
+        rect(vx, vy, 1, vh, shade(frame, 0.55)); rect(vx + vw - 1, vy, 1, vh, shade(frame, 0.2));
+        // Resource pile, bottom-up: a solid jagged-top heap (not scattered specks), textured per pixel
+        // so it reads as a mass of material, with a few brighter facet chunks standing proud of it.
+        const fillBase = Math.round(vh * Math.max(0, Math.min(1, pct / 100)));
+        if (fillBase > 0) {
+            const cols = Math.max(1, vw - 2);
+            const jagAmp = Math.min(3, Math.max(1, Math.round(fillBase * 0.18)));
+            const tops = [];
+            let prevJag = 0;
+            for (let i = 0; i < cols; i++) {
+                // Smoothed noise: each column's jag follows the last so the silhouette is chunky, not static.
+                prevJag = Math.max(-jagAmp, Math.min(jagAmp, prevJag + Math.round((rnd() - 0.5) * 3)));
+                tops.push(Math.max(0, fillBase - jagAmp + prevJag));
+            }
+            const bottomY = vy + vh - 1;
+            for (let i = 0; i < cols; i++) {
+                const x = vx + 1 + i;
+                const topY = bottomY - tops[i];
+                for (let y = topY; y <= bottomY; y++) {
+                    const depth = (y - topY) / Math.max(1, tops[i]);
+                    const grain = 0.5 + (rnd() - 0.5) * 0.5;
+                    const v = Math.max(0, Math.min(1, 0.55 - depth * 0.3 + (grain - 0.5) * 0.35));
+                    dot(x, y, shade(kc, v));
+                }
+                // Lit rim along the pile's top contour.
+                dot(x, topY, mix(kc, [255, 255, 255], 0.45 + rnd() * 0.25), 0.9);
+            }
+            // A few proud facet chunks breaking the surface, for visible chunkiness.
+            const facets = 3 + Math.round((pct / 100) * 6);
+            for (let i = 0; i < facets; i++) {
+                const ci = Math.floor(rnd() * cols);
+                const x = vx + 1 + ci;
+                const y = bottomY - tops[ci] - 1;
+                if (y < vy) continue;
+                dot(x, y, mix(kc, [255, 255, 255], 0.55 + rnd() * 0.3), 0.95);
+                if (rnd() < 0.6) dot(x + (rnd() < 0.5 ? 1 : -1), y, shade(kc, 0.25), 0.8);
+            }
+        }
+        // Glass highlight streak + rim light.
+        rect(vx + 1, vy + 1, 1, Math.round(vh * 0.4), [255, 255, 255], 0.18);
+        rect(vx, vy, vw, 1, shade(frame, 0.7));
+        // Baseplate with a lit status slot, colored by fill state.
+        rect(mx + 2, my + bh - 4, bw - 4, 3, shade(frame, 0.5));
+        rect(mx + 4, my + bh - 3, bw - 8, 1, pct >= 100 ? mix(kc, [255, 255, 255], 0.4) : kc, 0.9);
+        return cv.toDataURL('image/png');
+    }
+
     return {
         /** Wrap `innerHtml` (the part icon) in its generated casing; w/h = footprint in screen px. */
         wrap(kind, id, w, h, color, innerHtml) {
@@ -110,6 +189,14 @@ const physicalItem = (() => {
             let url = cache.get(key);
             if (!url) { try { url = render(kind, id, w, h, color); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
+        },
+        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100). */
+        wrapChamber(id, w, h, color, pct) {
+            const bucketedPct = Math.round(pct / 4) * 4;
+            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct;
+            let url = cache.get(key);
+            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct); } catch (e) { url = ''; } cache.set(key, url); }
+            return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>` : '';
         }
     };
 })();
@@ -188,6 +275,7 @@ physicalItem.bayInventoryHtml = function (ui) {
     const inv = slm.getInventory(ui.hangarShipId) || {}, L = slm.getLoadout(ui.hangarShipId) || {};
     const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
     const cells = [];
+    let occupied = 0;
     const pos = physicalItem.invPositions(ui.hangarShipId);
     // Cells whose installed state changed since the last draw play an equip / unequip animation.
     const prev = ui._bayInvPrev && ui._bayInvPrev.ship === ui.hangarShipId ? ui._bayInvPrev.set : null;
@@ -205,6 +293,7 @@ physicalItem.bayInventoryHtml = function (ui) {
             const tipLines = String(ui.hangarModuleTip(kind, id)).split('\n').filter((l, n) => !(n === 0 && l.trim().toUpperCase() === String(label).trim().toUpperCase()));
             const tip = (tipLines.join('\n') + '\nSIZE: ' + slm.partSizeLabel(kind, id) + '\nSTATUS: ' + (eq[id] ? 'INSTALLED' : 'IN INVENTORY') + '\nDRAG OR RIGHT-CLICK TO TOGGLE').replace(/"/g, '&quot;');
             const body = physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, colors[kind], '');
+            occupied += span[0] * span[1];
             cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: ${pos[kind + ':' + id] ? pos[kind + ':' + id][0] + ' / ' : ''}span ${span[0]}; grid-row: ${pos[kind + ':' + id] ? pos[kind + ':' + id][1] + ' / ' : ''}span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
         });
     });
@@ -212,6 +301,9 @@ physicalItem.bayInventoryHtml = function (ui) {
     const filter = ui._bayInvFilter || 'all', cs = 48;
     // Grid size: the ship's inventory (start profile + frame level).
     const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(ui.hangarShipId) : { cols: 4, rows: 2 };
+    // Fill the rest of the grid with empty placeholder cells so unused slots still read as a grid.
+    const freeCells = Math.max(0, invGrid.cols * invGrid.rows - occupied);
+    for (let i = 0; i < freeCells; i++) cells.push('<span class="hs-pick-cell hs-pick-cell-empty"></span>');
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
     const ico = (key, col) => (ir ? String(ir.imgHtml(key, 24, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]

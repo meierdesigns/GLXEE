@@ -218,12 +218,15 @@ extendClass(RenderManager, {
                         runCol = null;
                         runW = 0;
                     };
+                    // One style per 36-row structure slot: each bunker/pod/fang stays
+                    // visually coherent while different slots mix the planet's styles.
+                    const blockStyle = this.resolveMixedStyle(env, side, Math.floor(wr / 36));
                     const hatch = walls[k + 'Hatch'];
                     if (hatch === 'gap' && walls[k + 'Tunnel'] > 0) {
                         // Open hangar slot: dark recess on the floor layer so craft fly out over it.
                         batch = overlayBatch;
                         this.drawHatchRecess(pushRun, env, pal, mp, side, cols, walls[k + 'Tunnel'], wr, y, cell,
-                            obstacleManager.terrainOpeningInfo(wr, side));
+                            obstacleManager.terrainOpeningInfo(wr, side), blockStyle);
                         batch = wallBatch;
                     }
                     const lip = hatch === 'frame' ? walls[k + 'Lip'] : 0;
@@ -239,7 +242,7 @@ extendClass(RenderManager, {
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                         else if (doorRim) col = edge === width - 1 ? '#05060a' : pal.accent;
-                        else if (edge <= lip) col = this.hatchLipCell(env.style, pal, mp, cx, wr, edge);
+                        else if (edge <= lip) col = this.hatchLipCell(blockStyle, pal, mp, cx, wr, edge);
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
                             /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
@@ -247,7 +250,7 @@ extendClass(RenderManager, {
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            col = this.structureCell(env.style || 'asteroid', pal, mp, edge, width - base, stT, wr);
+                            col = this.structureCell(blockStyle, pal, mp, edge, width - base, stT, wr);
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
                         const px = cx * cell;
@@ -313,6 +316,21 @@ extendClass(RenderManager, {
         this._terrainWallDims = { w: cols * cell, h: rowsN * cell };
     },
     /** '#rgb' / '#rrggbb' / opaque rgb(a) → packed little-endian RGBA, or null when not exactly representable. */
+    /**
+     * Resolved visual style for one coarse block of the side wall/floor, so a
+     * planet's terrain reads as a MIX of its holding faction's style plus a
+     * rival/plain-rock accent (organic AND mechanical bits side by side)
+     * instead of one style painted end-to-end. `bx`/`by` are block (not
+     * cell) coordinates — pick a block size that keeps each structure/patch
+     * visually coherent (one bunker, one pod, not a flickering pixel mix).
+     */
+    resolveMixedStyle(env, bx, by) {
+        const styles = env && env.styles;
+        if (!styles || styles.length < 2) return (env && env.style) || 'asteroid';
+        const h = this.envHash(bx | 0, (by | 0) * 7919 + 11);
+        return this.pickWeighted(styles, () => h);
+    },
+
     /** Faction look of a hangar frame cell (the lip around the opening). */
     hatchLipCell(style, pal, mp, cx, wr, edge) {
         const h = this.envHash(cx * 5 + edge, wr * 3 + 17);
@@ -356,8 +374,8 @@ extendClass(RenderManager, {
      * Recess behind an open hangar slot, drawn on the floor layer: dark bay
      * with accent chevrons pointing into the corridor, so it reads as a launch door.
      */
-    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info) {
-        const style = env.style || 'asteroid';
+    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info, styleOverride) {
+        const style = styleOverride || env.style || 'asteroid';
         const inner = { tech: '#07090d', organic: '#14060b', spike: '#0b0507', scrap: '#0b0a08' }[style] || '#06070a';
         const mid = info ? info.frame + (info.len - 2 * info.frame - 1) / 2 : 0;
         const dy = info ? Math.abs(info.t - mid) : 99;

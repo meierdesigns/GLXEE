@@ -32,7 +32,9 @@ class GameLoop {
             if (!document.documentElement.classList.contains('vf-game-shown')) return false;
             if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible
                 && startScreenManager.isVisible()) return false;
-            const gc = document.querySelector('.game-container');
+            const gc = this._gameContainerEl && this._gameContainerEl.isConnected
+                ? this._gameContainerEl
+                : (this._gameContainerEl = document.querySelector('.game-container'));
             if (gc && gc.style && gc.style.display === 'none') return false;
             return true;
         } catch (e) {
@@ -177,6 +179,14 @@ class GameLoop {
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof soundManager !== 'undefined' && soundManager.setActiveEnemyTypes && typeof enemyManager !== 'undefined') {
+            const activeTypes = [];
+            if (enemyManager.enemy && !enemyManager.exploding) {
+                activeTypes.push(enemyManager.enemy.isBoss ? 'boss' : enemyManager.enemy.type);
+            }
+            (enemyManager.sideEnemies || []).forEach((e) => { if (e && e.type) activeTypes.push(e.type); });
+            soundManager.setActiveEnemyTypes(activeTypes);
+        }
         if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);
         if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
             missionStartManager.updateEnemyEntry(deltaTime);

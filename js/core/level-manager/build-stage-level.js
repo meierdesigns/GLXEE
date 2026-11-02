@@ -8,15 +8,16 @@ extendClass(CoreLevelManager, {
 
         const isAmbush = String(parsed.planetId || '').indexOf('ambush_') === 0;
         const stageCount = isAmbush ? 1 : getPlanetStageCount(parsed.planetId);
+        // stageScale: pressure/drop factor (first 0.75 → last 1.15; boss 2.05).
+        // Wired into kill-drop yield and ambient side pressure.
         const stageMult = parsed.isBoss
             ? 1.0 + 3 * 0.35
             : 0.75 + (stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0) * 0.2;
 
-        // Ramp over the planet's own stage count (2..5 stages) so the last
-        // stage is as tough as before, however many stages lead up to it.
+        // TTK curve (balance-config): first ~5.5s / mid ~5s / last ~4.2s champion.
         const ramp = stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0;
-        const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.25);
-        const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.12);
+        const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.2);
+        const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.1);
         const spawnMult = parsed.isBoss ? 0.7 : (1.15 - ramp * 0.12);
 
         // Planet tier: early planets easier, later ones harder.
@@ -109,7 +110,7 @@ extendClass(CoreLevelManager, {
         const transitScale = Math.max(0.5, Math.min(1, 0.5 + 0.09 * tier + 0.05 * (stageIndex - 1)));
         const gap = Math.max(2.2, 3.6 - stageIndex * 0.25) * (1 + (1 - transitScale) * 0.8);
         const out = [];
-        for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
+        for (let t = 1.5, i = 0; t < seconds - 6; t += gap, i++) {
             const src = types[i % types.length];
             out.push(Object.assign({}, src, {
                 id: 'transit_' + i,
@@ -212,7 +213,11 @@ extendClass(CoreLevelManager, {
         }
 
         if (typeof soundManager !== 'undefined' && soundManager.startPlanetAmbient) {
-            soundManager.startPlanetAmbient(planetId || 'mars');
+            if (soundManager.setStageContext) {
+                soundManager.setStageContext(planetId || 'mars', level.stageKey);
+            } else {
+                soundManager.startPlanetAmbient(planetId || 'mars');
+            }
         }
     },
 

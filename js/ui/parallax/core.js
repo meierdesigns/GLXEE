@@ -50,9 +50,9 @@ class ParallaxManager {
         }));
         if (this.horizontalOffset == null) this.horizontalOffset = 0;
         if (this.horizontalSpeed == null) this.horizontalSpeed = 0.05;
-        if (!this.flyingStars) this.flyingStars = [];
         if (this.starSpawnTimer == null) this.starSpawnTimer = 0;
-        if (this.starSpawnInterval == null) this.starSpawnInterval = 2000;
+        if (this.starSpawnInterval == null) this.starSpawnInterval = 120;
+        if (!this.flyingStars || !this.flyingStars.length) this.seedFlyingStars();
     }
 
     setLayerOpacity(index, opacity) {
@@ -80,9 +80,9 @@ class ParallaxManager {
         this.layers = this.getPlanetLayers(this.currentPlanet);
         this.horizontalOffset = 0;
         this.horizontalSpeed = 0.05;
-        this.flyingStars = [];
         this.starSpawnTimer = 0;
-        this.starSpawnInterval = 2000;
+        this.starSpawnInterval = 120;
+        this.seedFlyingStars();
     }
 
     /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
@@ -180,6 +180,12 @@ class ParallaxManager {
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;
+        // Flying stars are spawned/culled against this, not the 400x600 the
+        // tiled layer patterns assume — the actual canvas is usually smaller
+        // (backing-store scale), so sampling across 400x600 scattered most
+        // stars outside the visible area.
+        this._starFieldW = cw;
+        this._starFieldH = ch;
         ctx.fillRect(0, 0, cw, ch);
 
         // Render parallax background layers (respect visibility + opacity)

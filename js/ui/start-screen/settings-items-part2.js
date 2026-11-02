@@ -160,6 +160,12 @@ extendClass(StartScreenManager, {
                 type: 'action',
                 action: 'startupSound'
             },
+            ...(this.devMode ? [{
+                name: 'Soundtrack Editor',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'soundtrackEditor'
+            }] : []),
             {
                 name: 'Faction Command',
                 value: 'OPEN ›',

@@ -282,16 +282,27 @@ extendClass(GalaxyMapManager, {
                 const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
                 return Math.hypot(pt.x - at.x, pt.y - at.y) <= this.planetNodeSize(pid) / 2;
             };
+            // Hovering a dim (locked) lane shows the same lock-icon route preview its
+            // locked endpoint would, so the gate reads from the line too, not just the planet.
+            const lockedEdgeTarget = (e) => {
+                const edge = e.target && e.target.closest && e.target.closest('.gm-edge-hit');
+                if (!edge) return null;
+                return Array.from(edge.classList)
+                    .map((c) => (c.indexOf('gm-e-') === 0 ? c.slice(5) : null))
+                    .find((id) => id && !this.isUnlocked(id)) || null;
+            };
             svg.addEventListener('pointermove', (e) => {
                 const pid = this.hoveredPlanetId;
                 if (pid) {
-                    if (!inDisc(pid, e)) clear();
-                    return;
+                    if (inDisc(pid, e) || lockedEdgeTarget(e) === pid) return;
+                    clear();
                 }
                 // Back onto the disc from the frame area (no new pointerenter).
                 const node = e.target && e.target.closest && e.target.closest('.gm-node[data-planet]');
                 const over = node && node.getAttribute('data-planet');
-                if (over && inDisc(over, e)) this.setHoveredPlanet(over);
+                if (over && inDisc(over, e)) { this.setHoveredPlanet(over); return; }
+                const lockedId = lockedEdgeTarget(e);
+                if (lockedId) this.setHoveredPlanet(lockedId);
             });
         }
         this.overlay.querySelectorAll('.gm-node').forEach(node => {

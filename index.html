@@ -8,6 +8,9 @@
     html:not(.vf-game-shown) .game-container { display: none !important; }</style>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="preload" href="assets/fonts/Silkscreen-400.ttf" as="font" type="font/ttf" crossorigin>
+    <!-- Only set via CSS background-image on the station tab (no JS loader), so without this
+         the first-ever visit to that tab can paint black until the fetch finishes (css/styles/part-07.css). -->
+    <link rel="preload" href="assets/ui/hs-bg-station.png" as="image">
     <link rel="stylesheet" href="css/fonts.css">
     <!-- Critical boot loader paint: visible before the large styles.css arrives (css/styles/part-*.css) -->
     <style id="vf-boot-critical">
@@ -71,10 +74,10 @@
     <link rel="stylesheet" href="css/styles/part-04.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-05.css?v=split-2">
     <link rel="stylesheet" href="css/styles/part-06.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-07.css?v=split-3">
+    <link rel="stylesheet" href="css/styles/part-07.css?v=split-5">
     <link rel="stylesheet" href="css/styles/part-08.css?v=split-3">
     <link rel="stylesheet" href="css/styles/part-09.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-10.css?v=split-2">
+    <link rel="stylesheet" href="css/styles/part-10.css?v=hud-clip-pad-4">
     <link rel="stylesheet" href="css/styles/part-11.css?v=victory-flat-67r">
     <link rel="stylesheet" href="css/styles/part-12.css?v=split-8">
     <link rel="stylesheet" href="css/styles/part-13.css?v=split-2">
@@ -84,7 +87,7 @@
     <link rel="stylesheet" href="css/styles/part-17.css?v=go-fit-67c">
     <link rel="stylesheet" href="css/styles/part-18.css?v=outcome-line-zoom-1">
     <link rel="stylesheet" href="css/styles/part-19.css?v=hud-inset-1">
-    <link rel="stylesheet" href="css/styles/part-20.css?v=bezel-layers-1">
+    <link rel="stylesheet" href="css/styles/part-20.css?v=station-pad-28">
     <link rel="stylesheet" href="css/styles/part-21.css?v=frame-perf-1">
     <link rel="stylesheet" href="css/styles/part-22.css?v=planet-atmo-1">
     <link rel="stylesheet" href="css/styles/part-23.css?v=outcome-contrast-1">

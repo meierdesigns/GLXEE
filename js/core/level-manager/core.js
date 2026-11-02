@@ -66,7 +66,7 @@ class CoreLevelManager {
                 description: 'Red planet with basic enemies',
                 enemyType: 'enemyBasic',
                 enemySpeed: 0.8,
-                enemyHealth: 100,
+                enemyHealth: 145,
                 enemyCount: 5,
                 obstacles: [
                     { name: 'Asteroid', count: 3 },
@@ -83,7 +83,7 @@ class CoreLevelManager {
                 description: 'Gas giant with medium enemies',
                 enemyType: 'enemyFast',
                 enemySpeed: 1.0,
-                enemyHealth: 150,
+                enemyHealth: 190,
                 enemyCount: 4,
                 obstacles: [
                     { name: 'Asteroid', count: 4 },
@@ -100,7 +100,7 @@ class CoreLevelManager {
                 description: 'Ringed planet with tough enemies',
                 enemyType: 'enemyHeavy',
                 enemySpeed: 1.2,
-                enemyHealth: 200,
+                enemyHealth: 240,
                 enemyCount: 3,
                 obstacles: [
                     { name: 'Asteroid', count: 5 },
@@ -117,7 +117,7 @@ class CoreLevelManager {
                 description: 'Ice giant with elite enemies',
                 enemyType: 'enemyHeavy',
                 enemySpeed: 1.5,
-                enemyHealth: 250,
+                enemyHealth: 290,
                 enemyCount: 2,
                 obstacles: [
                     { name: 'Asteroid', count: 6 },
@@ -134,7 +134,7 @@ class CoreLevelManager {
                 description: 'Distant ice world',
                 enemyType: 'enemyBoss',
                 enemySpeed: 1.6,
-                enemyHealth: 300,
+                enemyHealth: 340,
                 enemyCount: 2,
                 obstacles: [
                     { name: 'Asteroid', count: 7 },

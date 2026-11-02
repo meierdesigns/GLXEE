@@ -8,18 +8,19 @@
 //   model.armor      + armor
 //   model.abilityDamageMul / abilityFireRateMul → shootWithShipWeapon
 // Abilities not listed here (charge, shield, drive …) keep their own systems.
+// Offense stack soft-cap ~1.35 damageMul (or fire-rate equivalent).
 const ABILITY_STAT_EFFECTS = {
     player_control:     { speedMul: 1.10 },                        // Flight Assist
     high_speed:         { speedMul: 1.20 },
     agile_maneuver:     { speedMul: 1.10 },
     evasion_boost:      { speedMul: 1.05 },
-    rapid_fire:         { fireRateMul: 1.15 },
-    powerful_cannon:    { damageMul: 1.15 },
-    devastating_cannon: { damageMul: 1.30, fireRateMul: 0.90 },
+    rapid_fire:         { fireRateMul: 1.12 },
+    powerful_cannon:    { damageMul: 1.12 },
+    devastating_cannon: { damageMul: 1.28, fireRateMul: 0.90 },
     heavy_armor:        { armor: 2, speedMul: 0.95 },
     massive_armor:      { armor: 4, speedMul: 0.90 },
-    weapon_systems:     { damageMul: 1.05 },
-    balanced_combat:    { damageMul: 1.05, armor: 1 }
+    weapon_systems:     { damageMul: 1.04 },
+    balanced_combat:    { damageMul: 1.04, armor: 1 }
 };
 
 extendClass(ShipLoadoutManager, {

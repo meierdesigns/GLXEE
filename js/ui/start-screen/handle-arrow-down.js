@@ -257,6 +257,10 @@ extendClass(StartScreenManager, {
             }
             return;
         }
+        if (item.action === 'soundtrackEditor') {
+            if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            return;
+        }
     },
 
     openAssetGenerator(opts) {

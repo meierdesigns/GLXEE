@@ -172,7 +172,7 @@ class CollisionManager {
 
     checkBomberPlayerCollisions(gameState) {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.godMode) return;
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
         const player = playerManager.getPosition();
         if (!player) return;
         const sides = enemyManager.getSideEnemies();
@@ -330,7 +330,7 @@ class CollisionManager {
                 if (bullets[i] && bullets[i].damage !== undefined) {
                     damage = bullets[i].damage;
                 }
-                if (game.cheats && game.cheats.instantKill) {
+                if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.instantKill) {
                     damage = 999; // Instant kill
                 }
 
@@ -381,7 +381,7 @@ class CollisionManager {
                 if (enemyBullets[i] && enemyBullets[i].damage !== undefined) {
                     damage = enemyBullets[i].damage;
                 }
-                if (game.cheats && game.cheats.godMode) {
+                if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
                     damage = 0; // No damage in god mode
                 }
 

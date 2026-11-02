@@ -153,10 +153,20 @@ class LaunchCutsceneManager {
         this.H = h;
     }
 
-    _loadShipImage(shipId, faction) {
+    _loadShipImage(shipId, faction, attempt) {
         if (typeof shipRenderer === 'undefined' || !shipRenderer.renderShipPreview || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return;
         if (typeof spriteLoader !== 'undefined' && spriteLoader.isLoaded && !spriteLoader.isLoaded()) {
-            window.addEventListener('vf-sprites-loaded', () => { this._shipImgKey = null; this._loadShipImage(shipId, faction); }, { once: true });
+            const retry = () => { this._shipImgKey = null; this._loadShipImage(shipId, faction); };
+            window.addEventListener('vf-sprites-loaded', retry, { once: true });
+            // Safety net: if 'vf-sprites-loaded' already fired before this listener attached
+            // (sprites finished loading between the isLoaded() check above and here), the
+            // listener would wait forever — poll once as a backstop so the ship isn't lost.
+            setTimeout(() => {
+                if (typeof spriteLoader !== 'undefined' && spriteLoader.isLoaded && spriteLoader.isLoaded()) {
+                    window.removeEventListener('vf-sprites-loaded', retry);
+                    retry();
+                }
+            }, 300);
             return;
         }
         const id = shipId || 'player_scrap';
@@ -170,11 +180,31 @@ class LaunchCutsceneManager {
             const inner = document.createElement('canvas');
             inner.width = 60; inner.height = 80;
             shipRenderer.renderShipPreview(inner, model, 1);
+            // spriteLoader.isLoaded() can be true while this specific ship's data/sprite frame
+            // isn't actually settled yet (this cutscene fires ~40ms after profile creation) —
+            // renderShipPreview then silently draws nothing. Retry a few times instead of
+            // caching that blank frame forever (cacheKey below would stop any further attempt).
+            const n = attempt || 0;
+            if (n < 5 && this._canvasIsBlank(inner)) {
+                setTimeout(() => this._loadShipImage(shipId, faction, n + 1), 120);
+                return;
+            }
             const img = new Image();
             img.onload = () => { if (this._shipImgKey === cacheKey) this._shipImg = img; };
             img.src = inner.toDataURL();
             this._shipImgKey = cacheKey;
         } catch (err) { this._shipImgKey = null; }
+    }
+
+    /** True when every pixel is fully transparent (a failed/blank ship render). */
+    _canvasIsBlank(canvas) {
+        try {
+            const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] > 0) return false;
+            }
+            return true;
+        } catch (err) { return false; }
     }
 
     _tick(t) {

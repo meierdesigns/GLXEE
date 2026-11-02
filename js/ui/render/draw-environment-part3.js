@@ -7,7 +7,9 @@ extendClass(RenderManager, {
      * rivets, claw scores or scrap welds — never a full replacement pattern.
      */
     terrainFactionTint(env, pal, cx, wr, col, n) {
-        const style = (env && env.style) || 'asteroid';
+        // 16-cell patches so doctrine marks read as distinct organic/mechanical
+        // zones on the floor instead of flickering style per pixel.
+        const style = this.resolveMixedStyle(env, Math.floor(cx / 16), Math.floor(wr / 16));
         const g = pal.ground;
         switch (style) {
             case 'organic': { // Voidborn: glowing pores and soft tissue blotches

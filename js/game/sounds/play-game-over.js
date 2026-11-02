@@ -146,27 +146,58 @@ extendClass(SoundManager, {
     },
 
     startMenuMusic() {
-        if (typeof youtubeSoundtrackManager === 'undefined') return;
-        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
-        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
-        if (!this.musicEnabled || !youtubeSoundtrackManager.hasMenuTrack()) {
-            youtubeSoundtrackManager.stop();
+        if (!this.musicEnabled) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
             return;
         }
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
+
+        const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
+            ? soundtrackConfigManager.getMenuTrack() : null;
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.play('menu', menuTrack.localAudioData);
+            }
+            return;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
+        }
+
+        if (typeof youtubeSoundtrackManager === 'undefined') return;
+        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
+            youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
+            return;
+        }
+        if (!youtubeSoundtrackManager.hasMenuTrack()) {
+            youtubeSoundtrackManager.stop();
+            return;
+        }
         youtubeSoundtrackManager.playMenu();
     },
 
     stopMenuMusic() {
-        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.mode === 'menu') {
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && (youtubeSoundtrackManager.mode === 'menu' || youtubeSoundtrackManager.currentKey === 'menu-override')) {
             youtubeSoundtrackManager.stop();
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
         }
     },
 
     updateAmbientVolume() {
         if (typeof youtubeSoundtrackManager !== 'undefined') {
             youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        }
+        if (typeof localAudioManager !== 'undefined') {
+            localAudioManager.setVolume(this.masterVolume * this.musicVolume);
         }
         if (!this.ambientGain || !this.audioContext) return;
         const now = this.audioContext.currentTime;
@@ -221,6 +252,12 @@ extendClass(SoundManager, {
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.pause();
             }
+            if (typeof localAudioManager !== 'undefined') {
+                localAudioManager.stop();
+            }
+        } else if (this._musicContextActive) {
+            this._activeOverrideKey = null;
+            this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
         } else if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasMenuTrack()) {

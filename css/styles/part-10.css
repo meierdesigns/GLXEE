@@ -1447,6 +1447,15 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
     border-width: var(--faction-border-width);
     border-color: color-mix(in srgb, var(--faction-accent) 60%, var(--color-primary));
 }
+/* Faction HUD --faction-clip (per-faction gui.css): voidborn top-left stair is 28px,
+   kronax 24px. part-16's 5-6px padding left titles shaved. */
+html[data-faction] .game-info-panel,
+html[data-faction] .player-vitals-side,
+html[data-faction] .game-left-cluster .weapon-selection,
+html[data-faction] .game-right-cluster .enemy-vitals-side {
+    padding-left: 32px !important;
+    padding-right: 32px !important;
+}
 
 .game-info-panel::after,
 .player-vitals-side::after,

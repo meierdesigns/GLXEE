@@ -850,6 +850,9 @@ button.hs-logout-btn.nav-focused {
 .hs-panel-label {
     flex: 1 1 auto;
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .hs-panel-scan {
     display: block;
@@ -930,6 +933,218 @@ button.hs-logout-btn.nav-focused {
     gap: 1px;
     min-width: 0;
 }
+.hs-chip-storage { margin: 2px; }
+/* Size container so --cs (render-parts-list.js) can use cqw: unlike %, cqw always resolves against
+   the container's width, no matter whether it ends up in a width- or height-axis property. */
+.hs-panel-storage .hs-row {
+    container-type: inline-size;
+}
+.hs-storage-grid {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.hs-storage-cell {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--pk-c, var(--color-primary));
+    background: #05060a;
+    cursor: pointer;
+}
+.hs-storage-cell:hover:not(.hs-storage-cell-empty),
+.hs-storage-cell:focus-visible:not(.hs-storage-cell-empty) {
+    box-shadow: inset 0 0 10px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent);
+}
+.hs-storage-cell-icon {
+    width: 66%;
+    height: 66%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-storage-cell-icon .hs-pixel { width: 100%; height: 100%; }
+.hs-storage-cell-qty {
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    font-size: var(--font-text);
+    line-height: 1;
+    color: var(--color-primary);
+    text-shadow: 1px 1px 0 #05060a;
+}
+.hs-storage-cell-empty {
+    cursor: default;
+    background: transparent;
+    border: 2px dashed color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+/* Real item casing (physical-item.js): fills the filled cell; no icon badge on top of it. */
+.hs-storage-cell .hs-item-body { position: absolute; inset: 2px; }
+/* Blueprint tiles: a recipe, not the owned part — dashed border, faded casing, "BP" corner tag. */
+.hs-storage-cell.is-blueprint {
+    border-style: dashed;
+}
+.hs-storage-cell.is-blueprint .hs-item-body {
+    opacity: .55;
+    filter: saturate(.5);
+}
+/* Resource chambers: vertical fill-level silos (replaces the flat chip row), one per subcard. */
+.hs-panel-chambers {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.hs-panel-chambers .hs-row {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+}
+.hs-res-chambers {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 10px;
+    padding: 6px 0;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+}
+.hs-res-subcard {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 18px 6px 10px;
+    min-height: 0;
+    border: 2px solid color-mix(in srgb, var(--chamber-c, var(--color-primary)) 55%, var(--color-border));
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 10%, transparent), transparent 40%),
+        repeating-linear-gradient(135deg, #0a0b10 0 10px, #0c0d14 10px 20px);
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chamber-c, var(--color-primary)) 20%, transparent);
+}
+/* Hazard-striped header strip + corner rivets, like the station's own panel chrome. */
+.hs-res-subcard::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 8px;
+    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 55%, transparent) 0 6px, transparent 6px 12px);
+    border-bottom: 1px solid color-mix(in srgb, var(--chamber-c, var(--color-primary)) 60%, transparent);
+}
+.hs-res-subcard::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    pointer-events: none;
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 70%, #05060a) 0 1.5px, transparent 1.6px) 3px 3px / 100% 100% no-repeat,
+        radial-gradient(circle, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 70%, #05060a) 0 1.5px, transparent 1.6px) calc(100% - 3px) 3px / 100% 100% no-repeat,
+        radial-gradient(circle, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 70%, #05060a) 0 1.5px, transparent 1.6px) 3px calc(100% - 3px) / 100% 100% no-repeat,
+        radial-gradient(circle, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 70%, #05060a) 0 1.5px, transparent 1.6px) calc(100% - 3px) calc(100% - 3px) / 100% 100% no-repeat;
+}
+.hs-res-subcard.is-empty { opacity: .75; }
+/* Icon + resource name as one badge, pinned top-left of the silo. */
+.hs-res-chamber-tag {
+    position: absolute;
+    left: 6px;
+    top: 10px;
+    z-index: 2;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    padding: 2px 6px 2px 2px;
+    background: color-mix(in srgb, #05060a 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--chamber-c, var(--color-primary)) 60%, transparent);
+    border-radius: 10px;
+}
+.hs-res-chamber-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 1px 0 #05060a);
+}
+.hs-res-chamber-icon .hs-pixel { width: 100%; height: 100%; }
+.hs-res-chamber-tube {
+    position: relative;
+    z-index: 1;
+    width: var(--tube-w, 60%);
+    flex: 1 1 auto;
+    align-self: center;
+    min-height: 40px;
+    border-radius: 10px 10px 6px 6px;
+    background: #05060a;
+    overflow: hidden;
+    image-rendering: pixelated;
+}
+/* The physical-item casing (physicalItem.wrapChamber) fills the tube as its actual canister body,
+   with the resource chunks and fill level already baked into the generated image. */
+.hs-res-chamber-tube .hs-item-body {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+}
+.hs-res-chamber-fill::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent 0 4px, rgba(0, 0, 0, 0.25) 4px 5px);
+}
+.hs-res-subcard.is-full .hs-res-chamber-fill { background: var(--chamber-c, var(--color-primary)); }
+.hs-res-subcard.is-empty .hs-res-chamber-tube { opacity: .5; }
+.hs-res-chamber-label {
+    font-size: calc(var(--font-text) * 0.85);
+    letter-spacing: 0.06em;
+    color: var(--chamber-c, var(--color-primary));
+    white-space: nowrap;
+}
+.hs-res-chamber-value {
+    font-size: var(--font-text);
+    color: var(--color-text);
+}
+.hs-res-chamber-cap { opacity: .6; }
+.hs-storage-cell-bp-badge {
+    position: absolute;
+    left: 2px;
+    top: 1px;
+    font-size: var(--font-text);
+    line-height: 1;
+    color: var(--color-primary);
+    text-shadow: 1px 1px 0 #05060a;
+    z-index: 2;
+}
+/* A category with nothing owned in this view: its physical-item casing silhouette, darkened as a background hint. */
+.hs-storage-cell.is-empty {
+    cursor: default;
+}
+.hs-storage-cell.is-empty .hs-item-body {
+    filter: grayscale(1) contrast(1.4) brightness(.2);
+}
+.hs-chip-move {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-border) 80%, var(--color-primary));
+    background: color-mix(in srgb, var(--color-background) 60%, transparent);
+    color: var(--color-primary);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+.hs-chip-move:hover { background: color-mix(in srgb, var(--color-primary) 25%, transparent); }
 .hs-chip-label {
     font-size: var(--font-text);
     letter-spacing: 1.5px;
@@ -1055,10 +1270,13 @@ button.hs-line-action.action-button {
 }
 .hs-cost-grid {
     display: grid;
-    grid-template-columns: repeat(4, 68px);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(38px, 68px);
     gap: 6px;
     justify-content: end;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
 }
 .hs-cost-cell {
     display: inline-flex;

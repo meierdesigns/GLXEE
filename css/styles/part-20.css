@@ -460,6 +460,16 @@ html body .home-station-overlay .home-station-content .hs-body { padding-left: 0
 html body .home-station-overlay .home-station-content .hs-body:not(.hs-body-play) { margin-left: -4px !important; }
 /* Sections: inner containers sit flush on the same left line (16px from the bezel opening) */
 html body .home-station-overlay .home-station-content .hs-body :is(.hs-section, .hs-panel) { padding-left: 0 !important; }
+/* Station storage grid: clear clip-path stairs (~6–10px) AND the inset frame rings
+   on .hs-panel (box-shadow inset up to 24px). 14px still sat under the frame. */
+html body .home-station-overlay .home-station-content .hs-body .hs-station-grid .hs-panel {
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+}
+/* Title's own 14px left pad was for flush panels; panel pad now owns the inset. */
+html body .home-station-overlay .home-station-content .hs-body .hs-station-grid .hs-panel .hs-panel-title {
+    padding-left: 0 !important;
+}
 html body .home-station-overlay .home-station-content .hs-body :is(.hs-factions, .hs-faction-tabpanel) { padding-left: 0 !important; }
 html body .home-station-overlay .home-station-content .hs-menu-host > .start-screen-content { padding-left: 0 !important; border-left-width: 0 !important; }
 

@@ -22,7 +22,7 @@ extendClass(EnemyManager, {
 
         // Apply slow motion cheat
         let effectiveDeltaTime = deltaTime;
-        if (gameState && gameState.cheats && gameState.cheats.slowMotion) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.slowMotion) {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
         }
 

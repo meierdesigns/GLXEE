@@ -280,7 +280,7 @@ extendClass(EnemyManager, {
         return {
             width: (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 200,
             height: (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300,
-            cheats: (typeof game !== 'undefined' && game.cheats) || {}
+            cheats: (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats) || {}
         };
     },
 

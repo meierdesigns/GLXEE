@@ -546,15 +546,15 @@ html body .home-station-overlay .home-station-content .hs-play-launch:is(:hover,
     }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { order: 0; }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-header-main { order: 0; }
-    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-pilot-card) { min-height: 0; }
+    html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card { min-height: 0; }
 }
 @media (max-width: 640px) {
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card { flex-basis: auto; }
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-wallet-card { flex: 0 1 auto; }
 }
 @media (max-width: 1100px) {
-    /* Second row tall enough for PLAY's disc + label (no scaling). */
-    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-header-main) { min-height: 92px; }
+    /* Second row tall enough for LAUNCH's icon + label (same as desktop nav cards). */
+    html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs-play-launch, .hs-header-main) { min-height: 120px; }
 }
 
 /* Between the full desktop layout and the two-row tablet layout, scale every

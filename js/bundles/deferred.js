@@ -1295,8 +1295,8 @@ var EconomyConfig = class EconomyConfig {
         if (lv > max) return null;
         const base = this.moduleUpgradeCatBase[category] || { scrap: 45, ore: 15 };
         const trackMul = Number(meta.costMul) || 1;
-        // Progressive curve: L1 cheap & distinct, later levels climb steeply.
-        const prog = Math.pow(lv, 1.55);
+        // Progressive curve: L1–3 affordable so shop weapons stay relevant; L4+ steep.
+        const prog = Math.pow(lv, 1.65);
         const cost = {
             scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
             ore: Math.max(0, Math.round(base.ore * trackMul * prog))
@@ -1522,12 +1522,24 @@ extendClass(EconomyConfig, {
      */
     getPartMaterialCost(kind, item) {
         if (kind === 'weapon') {
-            const dmg = Math.max(1, Number((item && item.damage) || 10));
-            const cd = Math.max(50, Number((item && item.cooldown) || 300));
-            const score = Math.round(dmg * 2 + (400 / cd) * 8);
-            if (score <= 20) return { scrap: 85, ore: 35 };
-            if (score <= 35) return { scrap: 140, ore: 55, crystal: 25 };
-            return { scrap: 200, ore: 80, crystal: 45, voltex: 20 };
+            let power = 1;
+            if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
+                power = balanceConfigManager.computeWeaponPower(item, item && item.id);
+            } else {
+                const dmg = Math.max(1, Number((item && item.damage) || 10));
+                const count = Math.max(1, Math.round(Number((item && item.bulletCount) || 1)));
+                const cd = Math.max(50, Number((item && item.cooldown) || 300));
+                power = (dmg * count * (1000 / cd)) / 40;
+            }
+            if (item && (item.slotSize >= 3 || item.slotMode === 'expand')) power += 0.12;
+            if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.shopBucketForPower) {
+                return balanceConfigManager.shopBucketForPower(power).cost;
+            }
+            if (power <= 0.85) return { scrap: 70, ore: 28 };
+            if (power <= 1) return { scrap: 110, ore: 42, crystal: 12 };
+            if (power <= 1.15) return { scrap: 160, ore: 60, crystal: 28 };
+            if (power <= 1.35) return { scrap: 210, ore: 85, crystal: 40, voltex: 12 };
+            return { scrap: 260, ore: 100, crystal: 55, voltex: 22 };
         }
         const tier = Math.max(0, Math.round(Number((item && item.tier) || 1)));
         if (kind === 'energy') {
@@ -1701,20 +1713,21 @@ window.economyConfig = economyConfig;
 /**
  * Runtime difficulty tuning. All values are multipliers unless noted.
  * Global preset + separate Champion / Side / Boss role scales.
+ * Presets track balance-config TTK bands (Easy ~−25% TTK, Hard ~+25%).
  */
 var DifficultyConfigManager = class DifficultyConfigManager {
     constructor() {
         this.storageKey = 'vf_difficulty_config_v2';
         this.profiles = {
             easy: {
-                enemyDamageMul: 0.7, playerDamageMul: 1.15, enemyHealthMul: 0.85,
-                enemySpeedMul: 0.9, enemyCountMul: 0.7, enemyMaxActive: 1,
+                enemyDamageMul: 0.7, playerDamageMul: 1.15, enemyHealthMul: 0.8,
+                enemySpeedMul: 0.9, enemyCountMul: 0.75, enemyMaxActive: 2,
                 evasionMul: 0.55, predictionMul: 0.35, obstacleSpawnMul: 1.5,
                 championDamageMul: 0.75, championHealthMul: 0.85, championSpeedMul: 0.9,
                 championEvasionMul: 0.7,
-                sideDamageMul: 0.55, sideHealthMul: 0.7, sideSpeedMul: 0.85,
-                sideCountMul: 0.65,
-                bossDamageMul: 0.8, bossHealthMul: 0.75, bossSpeedMul: 0.9,
+                sideDamageMul: 0.55, sideHealthMul: 0.75, sideSpeedMul: 0.85,
+                sideCountMul: 0.7,
+                bossDamageMul: 0.8, bossHealthMul: 0.8, bossSpeedMul: 0.9,
                 bossAttackRateMul: 0.85
             },
             normal: {
@@ -1729,15 +1742,15 @@ var DifficultyConfigManager = class DifficultyConfigManager {
                 bossAttackRateMul: 1
             },
             hard: {
-                enemyDamageMul: 1.3, playerDamageMul: 0.9, enemyHealthMul: 1.2,
-                enemySpeedMul: 1.12, enemyCountMul: 1.35, enemyMaxActive: 5,
+                enemyDamageMul: 1.3, playerDamageMul: 0.9, enemyHealthMul: 1.25,
+                enemySpeedMul: 1.12, enemyCountMul: 1.3, enemyMaxActive: 5,
                 evasionMul: 1.35, predictionMul: 1.3, obstacleSpawnMul: 0.65,
-                championDamageMul: 1.25, championHealthMul: 1.2, championSpeedMul: 1.15,
+                championDamageMul: 1.2, championHealthMul: 1.2, championSpeedMul: 1.12,
                 championEvasionMul: 1.25,
-                sideDamageMul: 1.2, sideHealthMul: 1.15, sideSpeedMul: 1.2,
-                sideCountMul: 1.4,
-                bossDamageMul: 1.45, bossHealthMul: 1.35, bossSpeedMul: 1.2,
-                bossAttackRateMul: 1.35
+                sideDamageMul: 1.2, sideHealthMul: 1.15, sideSpeedMul: 1.15,
+                sideCountMul: 1.35,
+                bossDamageMul: 1.35, bossHealthMul: 1.3, bossSpeedMul: 1.15,
+                bossAttackRateMul: 1.3
             }
         };
         this.factionProfiles = {
@@ -1878,6 +1891,159 @@ var DifficultyConfigManager = class DifficultyConfigManager {
 
 var difficultyConfigManager = new DifficultyConfigManager();
 window.difficultyConfigManager = difficultyConfigManager;
+
+
+/* --- js/core/balance-config.js?v=bal-1 --- */
+"use strict";
+
+/**
+ * Role-budget + TTK balance helpers.
+ * Laser nose (no affinity/upgrades) = 1.0 Power. Combat configs stay authoritative;
+ * this module validates and prices against the same formula.
+ */
+var BalanceConfigManager = class BalanceConfigManager {
+    constructor() {
+        this.REF_DAMAGE = 10;
+        this.REF_COOLDOWN = 250;
+        this.REF_BULLETS = 1;
+        this.REF_EDPS = this.REF_DAMAGE * this.REF_BULLETS * (1000 / this.REF_COOLDOWN); // 40
+
+        this.ROLE_HIT_RATE = {
+            sustained: 1,
+            rapid: 1,
+            coverage: 0.65,
+            heavy: 0.8,
+            pierce: 1
+        };
+
+        /** Target power (expected DPS / REF) before hull/faction affinity. */
+        this.ROLE_POWER = {
+            sustained: 1,
+            rapid: 1.05,
+            coverage: 0.7,
+            heavy: 0.85,
+            pierce: 0.9
+        };
+
+        this.WEAPON_ROLE = {
+            laser: 'sustained',
+            laser_twin: 'sustained',
+            wave: 'sustained',
+            rapid: 'rapid',
+            claw_beam: 'rapid',
+            spread: 'coverage',
+            burst: 'coverage',
+            ion: 'coverage',
+            spike_burst: 'coverage',
+            nova: 'coverage',
+            plasma: 'heavy',
+            missile: 'heavy',
+            pierce: 'pierce',
+            railgun: 'pierce'
+        };
+
+        /** Mid-game laser nose, no modules — seconds. */
+        this.TTK = {
+            side: { min: 1.5, max: 2.5, target: 2 },
+            champion: { min: 4, max: 6, target: 5 },
+            boss: { min: 18, max: 25, target: 22 }
+        };
+
+        this.DIFFICULTY_MUL = {
+            easy: { enemyHealth: 0.8, enemyDamage: 0.7, playerDamage: 1.15 },
+            normal: { enemyHealth: 1, enemyDamage: 1, playerDamage: 1 },
+            hard: { enemyHealth: 1.25, enemyDamage: 1.3, playerDamage: 0.9 }
+        };
+
+        /** Regular-stage healthMult targets along ramp 0→2 (first / mid / last). */
+        this.STAGE_HEALTH = { first: 0.85, mid: 1.05, last: 1.25 };
+        this.STAGE_SPEED = { first: 0.9, mid: 1, last: 1.1 };
+        this.BOSS_HEALTH_MULT = 2.2;
+
+        /** Shop material buckets by weapon power. */
+        this.SHOP_POWER_BUCKETS = [
+            { max: 0.85, cost: { scrap: 70, ore: 28 } },
+            { max: 1, cost: { scrap: 110, ore: 42, crystal: 12 } },
+            { max: 1.15, cost: { scrap: 160, ore: 60, crystal: 28 } },
+            { max: 1.35, cost: { scrap: 210, ore: 85, crystal: 40, voltex: 12 } },
+            { max: Infinity, cost: { scrap: 260, ore: 100, crystal: 55, voltex: 22 } }
+        ];
+    }
+
+    getWeaponRole(weaponId) {
+        return this.WEAPON_ROLE[String(weaponId || '').toLowerCase()] || 'sustained';
+    }
+
+    getHitRate(weaponId, cfg) {
+        const role = this.getWeaponRole(weaponId || (cfg && cfg.id));
+        return this.ROLE_HIT_RATE[role] != null ? this.ROLE_HIT_RATE[role] : 1;
+    }
+
+    volleyDps(cfg) {
+        const dmg = Math.max(0, Number((cfg && cfg.damage) || 0));
+        const count = Math.max(1, Math.round(Number((cfg && cfg.bulletCount) || 1)));
+        const cd = Math.max(50, Number((cfg && cfg.cooldown) || 300));
+        return dmg * count * (1000 / cd);
+    }
+
+    computeWeaponPower(cfg, weaponId) {
+        const id = String(weaponId || (cfg && cfg.id) || 'laser').toLowerCase();
+        const hit = this.getHitRate(id, cfg);
+        const eDps = this.volleyDps(cfg) * hit;
+        let power = eDps / this.REF_EDPS;
+        // Pierce: listed power is single-target; multi-hit credit is design-only.
+        if (cfg && cfg.pierce && this.getWeaponRole(id) === 'pierce') {
+            power = Math.min(power * 1.15, 1.25);
+        }
+        return Math.round(power * 1000) / 1000;
+    }
+
+    suggestedEnergyCost(power, role) {
+        const p = Math.max(0.5, Number(power) || 1);
+        const mul = role === 'rapid' ? 1.8 : (role === 'heavy' || role === 'pierce' ? 1.25 : 1);
+        return Math.max(3, Math.round(4 * p * mul));
+    }
+
+    shopBucketForPower(power) {
+        const p = Number(power) || 1;
+        for (let i = 0; i < this.SHOP_POWER_BUCKETS.length; i++) {
+            if (p <= this.SHOP_POWER_BUCKETS[i].max) {
+                return { tier: i + 1, cost: Object.assign({}, this.SHOP_POWER_BUCKETS[i].cost) };
+            }
+        }
+        const last = this.SHOP_POWER_BUCKETS[this.SHOP_POWER_BUCKETS.length - 1];
+        return { tier: this.SHOP_POWER_BUCKETS.length, cost: Object.assign({}, last.cost) };
+    }
+
+    targetHp(role, refEdps) {
+        const band = this.TTK[role] || this.TTK.champion;
+        const dps = Math.max(1, Number(refEdps) || this.REF_EDPS);
+        return Math.round(dps * band.target);
+    }
+
+    assertWeaponBudgets(getWeaponFn) {
+        const get = getWeaponFn || (typeof weaponConfigManager !== 'undefined'
+            ? (id) => weaponConfigManager.getWeapon(id)
+            : null);
+        if (!get) return [];
+        const warnings = [];
+        Object.keys(this.WEAPON_ROLE).forEach((id) => {
+            const w = get(id);
+            if (!w) return;
+            const role = this.WEAPON_ROLE[id];
+            const power = this.computeWeaponPower(w, id);
+            const target = this.ROLE_POWER[role];
+            const slack = role === 'coverage' ? 0.2 : 0.12;
+            if (Math.abs(power - target) > slack) {
+                warnings.push({ id, role, power, target });
+            }
+        });
+        return warnings;
+    }
+}
+
+var balanceConfigManager = new BalanceConfigManager();
+window.balanceConfigManager = balanceConfigManager;
 
 
 /* --- js/core/planet-config/core.js --- */
@@ -3199,7 +3365,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'fire',
                 enemyType: 'fighter',
                 enemySpeed: 0.8,
-                enemyHealth: 100,
+                enemyHealth: 145,
                 obstacleSpawnRate: 3000,
                 obstacleTypes: ['small_asteroid', 'medium_asteroid'],
                 sideEnemies: [
@@ -3234,7 +3400,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'sunset',
                 enemyType: 'cruiser',
                 enemySpeed: 1.0,
-                enemyHealth: 150,
+                enemyHealth: 190,
                 obstacleSpawnRate: 2000,
                 obstacleTypes: ['small_asteroid', 'medium_asteroid', 'small_shield'],
                 sideEnemies: [
@@ -3270,7 +3436,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'retro',
                 enemyType: 'battleship',
                 enemySpeed: 1.2,
-                enemyHealth: 200,
+                enemyHealth: 240,
                 obstacleSpawnRate: 1500,
                 obstacleTypes: ['medium_asteroid', 'large_asteroid', 'small_shield', 'medium_shield'],
                 sideEnemies: [
@@ -3305,7 +3471,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'ocean',
                 enemyType: 'battleship',
                 enemySpeed: 1.5,
-                enemyHealth: 250,
+                enemyHealth: 290,
                 obstacleSpawnRate: 1000,
                 obstacleTypes: ['large_asteroid', 'small_shield', 'medium_shield', 'large_shield'],
                 enemies: [
@@ -5329,6 +5495,9 @@ var ProfileManager = class ProfileManager {
         if ((profile.parts.energy.energy_core || 0) < 1) {
             profile.parts.energy.energy_core = 1;
         }
+        if (!profile.shipStorage || typeof profile.shipStorage !== 'object') {
+            profile.shipStorage = {};
+        }
         if (!profile.resources || typeof profile.resources !== 'object') {
             profile.resources = {};
         }
@@ -6311,6 +6480,7 @@ extendClass(ProfileManager, {
             unlockedShopIds: [],
             blueprints: {},
             parts: { weapons: {}, defenses: {}, abilities: {}, energy: { energy_core: 1 } },
+            shipStorage: {},
             resources: {},
             credits: (typeof economyConfig !== 'undefined' && economyConfig.starterCredits != null)
                 ? economyConfig.starterCredits
@@ -7151,6 +7321,110 @@ extendClass(ProfileManager, {
         }
         return st ? Object.assign({}, st) : { highestStage: 0, bossCleared: false };
     },
+});
+
+
+/* --- js/core/profile-manager/ship-storage.js --- */
+"use strict";
+
+// ProfileManager methods, split from profile-manager.js.
+// Per-ship "ship storage" is a purely organisational overlay on top of the
+// existing owned-count ledgers (profile.parts / profile.blueprints) — it
+// never changes what's owned or what can be equipped, it only tracks how
+// many of each owned item the player has mentally filed as "on this ship"
+// vs "still at the station". Equip checks (compute-power-budget.js) keep
+// reading profile.parts directly and are unaffected.
+extendClass(ProfileManager, {
+    SHIP_STORAGE_BUCKETS: ['weapons', 'defenses', 'abilities', 'energy', 'blueprints'],
+
+    _emptyShipStorageEntry() {
+        return { weapons: {}, defenses: {}, abilities: {}, energy: {}, blueprints: {} };
+    },
+
+    /** The given ship's storage bucket map, created on first use. */
+    getShipStorageEntry(profile, shipId) {
+        if (!profile.shipStorage || typeof profile.shipStorage !== 'object') profile.shipStorage = {};
+        if (!profile.shipStorage[shipId] || typeof profile.shipStorage[shipId] !== 'object') {
+            profile.shipStorage[shipId] = this._emptyShipStorageEntry();
+        }
+        const entry = profile.shipStorage[shipId];
+        this.SHIP_STORAGE_BUCKETS.forEach((b) => {
+            if (!entry[b] || typeof entry[b] !== 'object') entry[b] = {};
+        });
+        return entry;
+    },
+
+    /** Total owned count for a bucket/id (bucket is one of SHIP_STORAGE_BUCKETS). */
+    _ownedStorageCount(profile, bucket, id) {
+        if (bucket === 'blueprints') return (profile.blueprints && profile.blueprints[id]) || 0;
+        return (profile.parts && profile.parts[bucket] && profile.parts[bucket][id]) || 0;
+    },
+
+    /** How many of a bucket/id are already filed into ANY ship's storage. */
+    _allocatedStorageCount(profile, bucket, id) {
+        const map = profile.shipStorage || {};
+        let n = 0;
+        Object.keys(map).forEach((shipId) => {
+            const entry = map[shipId] && map[shipId][bucket];
+            if (entry) n += entry[id] || 0;
+        });
+        return n;
+    },
+
+    /** How many of a bucket/id are currently equipped on the given ship (blueprints can't be equipped). */
+    _equippedStorageCount(profile, shipId, bucket, id) {
+        if (bucket === 'blueprints' || typeof shipLoadoutManager === 'undefined') return 0;
+        const L = shipLoadoutManager.getLoadout(shipId);
+        if (!L) return 0;
+        if (bucket === 'weapons') return (L.weaponSlots || []).filter((wid) => wid === id).length;
+        return (L[bucket] || []).indexOf(id) !== -1 ? 1 : 0;
+    },
+
+    /** How many of a bucket/id are equipped across every ship the player owns. */
+    _equippedStorageCountAll(profile, bucket, id) {
+        if (bucket === 'blueprints') return 0;
+        const ships = profile.ownedShipIds || [];
+        let n = 0;
+        ships.forEach((shipId) => { n += this._equippedStorageCount(profile, shipId, bucket, id); });
+        return n;
+    },
+
+    /** How many of a bucket/id are sitting unfiled at the station (owned, not filed to a ship, not equipped anywhere). */
+    getStationStorageQty(profile, bucket, id) {
+        return Math.max(0, this._ownedStorageCount(profile, bucket, id)
+            - this._allocatedStorageCount(profile, bucket, id)
+            - this._equippedStorageCountAll(profile, bucket, id));
+    },
+
+    /** How many of a bucket/id are filed into the given ship's storage, plus any equipped on that ship. */
+    getShipStorageQty(profile, shipId, bucket, id) {
+        const entry = (profile.shipStorage || {})[shipId];
+        const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+        return filed + this._equippedStorageCount(profile, shipId, bucket, id);
+    },
+
+    moveToShipStorage(profile, shipId, bucket, id, qty) {
+        qty = Math.max(1, Math.floor(qty) || 1);
+        const atStation = this.getStationStorageQty(profile, bucket, id);
+        const move = Math.min(qty, atStation);
+        if (move <= 0) return { ok: false, reason: 'NONE AT STATION' };
+        const entry = this.getShipStorageEntry(profile, shipId);
+        entry[bucket][id] = (entry[bucket][id] || 0) + move;
+        this.save();
+        return { ok: true, moved: move };
+    },
+
+    moveToStationStorage(profile, shipId, bucket, id, qty) {
+        qty = Math.max(1, Math.floor(qty) || 1);
+        const entry = this.getShipStorageEntry(profile, shipId);
+        const onShip = entry[bucket][id] || 0;
+        const move = Math.min(qty, onShip);
+        if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
+        entry[bucket][id] = onShip - move;
+        if (entry[bucket][id] <= 0) delete entry[bucket][id];
+        this.save();
+        return { ok: true, moved: move };
+    }
 });
 
 
@@ -10015,6 +10289,7 @@ window.flightProfiles = flightProfiles;
 
 /**
  * Shared shot-type / weapon registry.
+ * Stats follow js/core/balance-config.js role budgets (laser = 1.0 Power).
  */
 var WeaponConfigManager = class WeaponConfigManager {
     constructor() {
@@ -10031,6 +10306,7 @@ var WeaponConfigManager = class WeaponConfigManager {
                 damage: 10,
                 speed: 12,
                 cooldown: 250,
+                energyCost: 4,
                 width: 1,
                 height: 14,
                 lightRadius: 18,
@@ -10043,9 +10319,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Spread',
                 description: 'Fan of projectiles',
                 iconKey: 'shotSpread',
-                damage: 8,
+                damage: 6,
                 speed: 10,
                 cooldown: 400,
+                energyCost: 4,
                 width: 2,
                 height: 7,
                 bulletCount: 3,
@@ -10060,10 +10337,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Rapid',
                 description: 'Twin rapid bolts',
                 iconKey: 'shotRapid',
-                damage: 6,
+                damage: 5,
                 speed: 14,
-                cooldown: 120,
-                energyCost: 10,
+                cooldown: 240,
+                energyCost: 9,
                 width: 2,
                 height: 6,
                 bulletCount: 2,
@@ -10077,9 +10354,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Plasma',
                 description: 'Heavy energy orb',
                 iconKey: 'shotPlasma',
-                damage: 16,
+                damage: 22,
                 speed: 5,
-                cooldown: 700,
+                cooldown: 520,
+                energyCost: 6,
                 width: 4,
                 height: 8,
                 lightRadius: 22,
@@ -10092,9 +10370,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Missile',
                 description: 'Slow high-damage rocket',
                 iconKey: 'shotMissile',
-                damage: 20,
+                damage: 26,
                 speed: 4,
-                cooldown: 900,
+                cooldown: 610,
+                energyCost: 6,
                 width: 3,
                 height: 8,
                 lightRadius: 16,
@@ -10107,9 +10386,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Ion',
                 description: 'Triple ion stream',
                 iconKey: 'shotIon',
-                damage: 7,
+                damage: 5,
                 speed: 11,
-                cooldown: 320,
+                cooldown: 340,
+                energyCost: 4,
                 width: 3,
                 height: 10,
                 bulletCount: 3,
@@ -10124,9 +10404,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Wave',
                 description: 'Wavering energy arc',
                 iconKey: 'shotWave',
-                damage: 9,
+                damage: 12,
                 speed: 8,
-                cooldown: 350,
+                cooldown: 300,
+                energyCost: 4,
                 width: 4,
                 height: 10,
                 waveAmp: 1.2,
@@ -10142,7 +10423,8 @@ var WeaponConfigManager = class WeaponConfigManager {
                 iconKey: 'shotBurst',
                 damage: 5,
                 speed: 9,
-                cooldown: 500,
+                cooldown: 520,
+                energyCost: 5,
                 width: 3,
                 height: 8,
                 bulletCount: 5,
@@ -10157,9 +10439,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Pierce',
                 description: 'Thin piercing lance',
                 iconKey: 'shotPierce',
-                damage: 14,
+                damage: 12,
                 speed: 16,
                 cooldown: 380,
+                energyCost: 5,
                 width: 2,
                 height: 14,
                 pierce: true,
@@ -10173,9 +10456,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Nova',
                 description: 'Radial nova volley',
                 iconKey: 'shotNova',
-                damage: 6,
+                damage: 7,
                 speed: 7,
-                cooldown: 1100,
+                cooldown: 800,
+                energyCost: 6,
                 width: 4,
                 height: 8,
                 bulletCount: 5,
@@ -10190,9 +10474,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Claw Beam',
                 description: 'Kronax twin claw lances',
                 iconKey: 'shotClawBeam',
-                damage: 11,
+                damage: 7,
                 speed: 13,
-                cooldown: 220,
+                cooldown: 330,
+                energyCost: 6,
                 width: 3,
                 height: 14,
                 bulletCount: 2,
@@ -10207,9 +10492,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Spike Burst',
                 description: 'Kronax spike shotgun cluster',
                 iconKey: 'shotBurst',
-                damage: 6,
+                damage: 4,
                 speed: 10,
-                cooldown: 480,
+                cooldown: 550,
+                energyCost: 5,
                 width: 3,
                 height: 9,
                 bulletCount: 6,
@@ -10224,9 +10510,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Twin Laser',
                 description: 'Compact twin-linked hardpoint. Lower damage per bolt, faster fire rate.',
                 iconKey: 'shotLaser',
-                damage: 6,
+                damage: 5,
                 speed: 13,
-                cooldown: 170,
+                cooldown: 250,
+                energyCost: 4,
                 width: 1,
                 height: 11,
                 bulletCount: 2,
@@ -10242,9 +10529,10 @@ var WeaponConfigManager = class WeaponConfigManager {
                 name: 'Railgun',
                 description: 'Heavy single-shot rail cannon. Slow but devastating, needs a reinforced mount.',
                 iconKey: 'shotPierce',
-                damage: 32,
+                damage: 28,
                 speed: 18,
-                cooldown: 1200,
+                cooldown: 900,
+                energyCost: 8,
                 width: 2,
                 height: 16,
                 pierce: true,
@@ -11484,7 +11772,7 @@ var EnemyConfigManager = class EnemyConfigManager {
                 factions: ['pirate'],
                 speed: 1.5,
                 verticalSpeed: 0.4,
-                maxHealth: 60,
+                maxHealth: 100,
                 armor: 6,
                 shieldMax: 0,
                 shieldRegen: 0,
@@ -11513,7 +11801,7 @@ var EnemyConfigManager = class EnemyConfigManager {
                 factions: ['kronax'],
                 speed: 2.75,
                 verticalSpeed: 0.75,
-                maxHealth: 50,
+                maxHealth: 85,
                 armor: 4,
                 shieldMax: 0,
                 shieldRegen: 0,
@@ -11541,7 +11829,7 @@ var EnemyConfigManager = class EnemyConfigManager {
                 factions: ['machine'],
                 speed: 1.0,
                 verticalSpeed: 0.2,
-                maxHealth: 110,
+                maxHealth: 160,
                 armor: 16,
                 shieldMax: 20,
                 shieldRegen: 1,
@@ -11570,7 +11858,7 @@ var EnemyConfigManager = class EnemyConfigManager {
                 factions: ['voidborn'],
                 speed: 0.4,
                 verticalSpeed: 0.05,
-                maxHealth: 220,
+                maxHealth: 480,
                 armor: 28,
                 shieldMax: 45,
                 shieldRegen: 1,
@@ -11634,7 +11922,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['terran'],
                 speed: 1.5,
                 verticalSpeed: 0.4,
-                maxHealth: 60,
+                maxHealth: 100,
                 armor: 6,
                 shieldMax: 0,
                 shieldRegen: 0,
@@ -11663,7 +11951,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['kronax'],
                 speed: 2.75,
                 verticalSpeed: 0.75,
-                maxHealth: 50,
+                maxHealth: 85,
                 armor: 4,
                 shieldMax: 0,
                 shieldRegen: 0,
@@ -11691,7 +11979,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['machine'],
                 speed: 1.0,
                 verticalSpeed: 0.2,
-                maxHealth: 110,
+                maxHealth: 160,
                 armor: 16,
                 shieldMax: 20,
                 shieldRegen: 1,
@@ -11720,7 +12008,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['voidborn'],
                 speed: 0.4,
                 verticalSpeed: 0.05,
-                maxHealth: 220,
+                maxHealth: 480,
                 armor: 28,
                 shieldMax: 45,
                 shieldRegen: 1,
@@ -11769,7 +12057,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['terran'],
                 speed: 1.8,
                 verticalSpeed: 0.45,
-                maxHealth: 90,
+                maxHealth: 130,
                 armor: 15,
                 damage: 22,
                 experienceValue: 100,
@@ -11784,7 +12072,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['terran', 'kronax'],
                 speed: 2.9,
                 verticalSpeed: 0.8,
-                maxHealth: 70,
+                maxHealth: 100,
                 armor: 8,
                 damage: 18,
                 experienceValue: 140,
@@ -11799,7 +12087,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['terran', 'machine'],
                 speed: 1.0,
                 verticalSpeed: 0.2,
-                maxHealth: 160,
+                maxHealth: 200,
                 armor: 40,
                 damage: 40,
                 experienceValue: 280,
@@ -11814,7 +12102,7 @@ extendClass(EnemyConfigManager, {
                 factions: ['terran', 'pirate'],
                 speed: 1.4,
                 verticalSpeed: 0.35,
-                maxHealth: 120,
+                maxHealth: 155,
                 armor: 25,
                 damage: 30,
                 experienceValue: 180,
@@ -12283,7 +12571,7 @@ var ShipConfigManager = class ShipConfigManager {
                 weaponCooldown: 250,
                 abilities: ['player_control', 'weapon_systems', 'evasion_boost'],
                 tier: 1,
-                cost: 40,
+                cost: 45,
                 faction: 'terran'
             }),
             player_interceptor: this.makeShip({
@@ -12301,10 +12589,10 @@ var ShipConfigManager = class ShipConfigManager {
                 availableWeapons: ['rapid', 'laser', 'ion'],
                 weaponDamage: 5,
                 weaponSpeed: 15,
-                weaponCooldown: 80,
+                weaponCooldown: 240,
                 abilities: ['high_speed', 'rapid_fire', 'agile_maneuver'],
                 tier: 1,
-                cost: 75,
+                cost: 70,
                 faction: 'terran'
             }),
             player_heavy: this.makeShip({
@@ -12325,7 +12613,7 @@ var ShipConfigManager = class ShipConfigManager {
                 weaponCooldown: 500,
                 abilities: ['heavy_armor', 'powerful_cannon', 'shield_generator'],
                 tier: 2,
-                cost: 100,
+                cost: 120,
                 faction: 'terran'
             }),
             player_assault: this.makeShip({
@@ -12346,7 +12634,7 @@ var ShipConfigManager = class ShipConfigManager {
                 weaponCooldown: 300,
                 abilities: ['balanced_combat', 'versatile_weapons', 'adaptive_shield'],
                 tier: 1,
-                cost: 50,
+                cost: 55,
                 faction: 'terran'
             }),
             player_kronax_raider: this.makeShip({
@@ -12364,10 +12652,10 @@ var ShipConfigManager = class ShipConfigManager {
                 availableWeapons: ['claw_beam', 'ion', 'spike_burst', 'laser'],
                 weaponDamage: 7,
                 weaponSpeed: 14,
-                weaponCooldown: 100,
+                weaponCooldown: 330,
                 abilities: ['high_speed', 'spike_drive', 'reflex_shell'],
                 tier: 1,
-                cost: 85,
+                cost: 90,
                 faction: 'kronax'
             }),
             player_kronax_claw: this.makeShip({
@@ -12388,7 +12676,7 @@ var ShipConfigManager = class ShipConfigManager {
                 weaponCooldown: 280,
                 abilities: ['carapace_armor', 'reflex_shell', 'spike_drive'],
                 tier: 2,
-                cost: 95,
+                cost: 110,
                 faction: 'kronax'
             })
         };
@@ -16568,6 +16856,10 @@ extendClass(ShipLoadoutManager, {
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // Default wing spot: about a third out from the hull root.
     const WING_FX = 1 - 0.36;
+    // How tightly two slots may be pulled together before they count as
+    // overlapping (1 = touching box edges, <1 lets their boxes overlap a
+    // little so dragging them close together doesn't bounce/refuse early).
+    const SLOT_PACK = 0.65;
 
     proto.normalizeWeaponMounts = function (raw) {
         const out = {};
@@ -16736,7 +17028,7 @@ extendClass(ShipLoadoutManager, {
             }
         }
         const hits = (m) => this.weaponMountBoxes(layout, m).some((a) => taken.some((b) =>
-            Math.abs(a.x - b.x) < (a.s + b.s) / 2 && Math.abs(a.y - b.y) < (a.s + b.s) / 2));
+            Math.abs(a.x - b.x) < (a.s + b.s) / 2 * SLOT_PACK && Math.abs(a.y - b.y) < (a.s + b.s) / 2 * SLOT_PACK));
         if (!hits(mount)) return mount;
         const step = 1 / Math.max(1, seg.height);
         // Nearest free height first; on nose/core then a split pair further
@@ -17116,18 +17408,19 @@ extendClass(ShipLoadoutManager, {
 //   model.armor      + armor
 //   model.abilityDamageMul / abilityFireRateMul → shootWithShipWeapon
 // Abilities not listed here (charge, shield, drive …) keep their own systems.
+// Offense stack soft-cap ~1.35 damageMul (or fire-rate equivalent).
 var ABILITY_STAT_EFFECTS = {
     player_control:     { speedMul: 1.10 },                        // Flight Assist
     high_speed:         { speedMul: 1.20 },
     agile_maneuver:     { speedMul: 1.10 },
     evasion_boost:      { speedMul: 1.05 },
-    rapid_fire:         { fireRateMul: 1.15 },
-    powerful_cannon:    { damageMul: 1.15 },
-    devastating_cannon: { damageMul: 1.30, fireRateMul: 0.90 },
+    rapid_fire:         { fireRateMul: 1.12 },
+    powerful_cannon:    { damageMul: 1.12 },
+    devastating_cannon: { damageMul: 1.28, fireRateMul: 0.90 },
     heavy_armor:        { armor: 2, speedMul: 0.95 },
     massive_armor:      { armor: 4, speedMul: 0.90 },
-    weapon_systems:     { damageMul: 1.05 },
-    balanced_combat:    { damageMul: 1.05, armor: 1 }
+    weapon_systems:     { damageMul: 1.04 },
+    balanced_combat:    { damageMul: 1.04, armor: 1 }
 };
 
 extendClass(ShipLoadoutManager, {
@@ -17359,6 +17652,8 @@ var ObjectiveManager = class ObjectiveManager {
         const lm = host && (host.coreLevelManager || host.levelManager);
         const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
         if (!level || !level.planetId) return null;
+        // Ambushes are a surprise jump-out, not a planet stage launch — no hatch/sluice, the enemies fly in instead.
+        if (String(level.planetId).indexOf('ambush_') === 0) return null;
         const id = level.id || (level.planetId + '-' + level.stageIndex);
         if (prev && prev.levelId === id && !prev.done && prev.t < prev.dur) return prev;
         // Arriving on a planet (stage 1, or any stage entered from elsewhere) launches from the home station;
@@ -17580,7 +17875,7 @@ var ObjectiveManager = class ObjectiveManager {
             this.updateGoal(deltaTime);
         }
 
-        if (!this.completed) {
+        if (!this.completed && !this.isArrivalSpawnHold()) {
             // Transit run: backing off at the bottom edge rewinds the way to the gate at a third of the pace.
             const back = this.objective.type === 'reachGoal' && !this.goal && this.isPlayerBacktracking();
             this.elapsedMs = back ? Math.max(0, this.elapsedMs - deltaTime / 3) : this.elapsedMs + deltaTime;
@@ -18413,12 +18708,13 @@ var ObjectiveManager = class ObjectiveManager {
         this.triggerWin();
     }
 
-    /** Planet stages (not boss levels) end at a sluice instead of on the kill itself. */
+    /** Planet stages (not boss levels, not ambushes) end at a sluice instead of on the kill itself. */
     usesExitGate() {
         const host = typeof game !== 'undefined' ? game : (typeof gameCore !== 'undefined' ? gameCore : null);
         const lm = host && (host.coreLevelManager || host.levelManager);
         const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
-        return !!(level && level.planetId && !level.isBoss);
+        const isAmbush = !!(level && String(level.planetId || '').indexOf('ambush_') === 0);
+        return !!(level && level.planetId && !level.isBoss && !isAmbush);
     }
 
     triggerWin() {
@@ -18691,7 +18987,7 @@ var CoreLevelManager = class CoreLevelManager {
                 description: 'Red planet with basic enemies',
                 enemyType: 'enemyBasic',
                 enemySpeed: 0.8,
-                enemyHealth: 100,
+                enemyHealth: 145,
                 enemyCount: 5,
                 obstacles: [
                     { name: 'Asteroid', count: 3 },
@@ -18708,7 +19004,7 @@ var CoreLevelManager = class CoreLevelManager {
                 description: 'Gas giant with medium enemies',
                 enemyType: 'enemyFast',
                 enemySpeed: 1.0,
-                enemyHealth: 150,
+                enemyHealth: 190,
                 enemyCount: 4,
                 obstacles: [
                     { name: 'Asteroid', count: 4 },
@@ -18725,7 +19021,7 @@ var CoreLevelManager = class CoreLevelManager {
                 description: 'Ringed planet with tough enemies',
                 enemyType: 'enemyHeavy',
                 enemySpeed: 1.2,
-                enemyHealth: 200,
+                enemyHealth: 240,
                 enemyCount: 3,
                 obstacles: [
                     { name: 'Asteroid', count: 5 },
@@ -18742,7 +19038,7 @@ var CoreLevelManager = class CoreLevelManager {
                 description: 'Ice giant with elite enemies',
                 enemyType: 'enemyHeavy',
                 enemySpeed: 1.5,
-                enemyHealth: 250,
+                enemyHealth: 290,
                 enemyCount: 2,
                 obstacles: [
                     { name: 'Asteroid', count: 6 },
@@ -18759,7 +19055,7 @@ var CoreLevelManager = class CoreLevelManager {
                 description: 'Distant ice world',
                 enemyType: 'enemyBoss',
                 enemySpeed: 1.6,
-                enemyHealth: 300,
+                enemyHealth: 340,
                 enemyCount: 2,
                 obstacles: [
                     { name: 'Asteroid', count: 7 },
@@ -18913,15 +19209,16 @@ extendClass(CoreLevelManager, {
 
         const isAmbush = String(parsed.planetId || '').indexOf('ambush_') === 0;
         const stageCount = isAmbush ? 1 : getPlanetStageCount(parsed.planetId);
+        // stageScale: pressure/drop factor (first 0.75 → last 1.15; boss 2.05).
+        // Wired into kill-drop yield and ambient side pressure.
         const stageMult = parsed.isBoss
             ? 1.0 + 3 * 0.35
             : 0.75 + (stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0) * 0.2;
 
-        // Ramp over the planet's own stage count (2..5 stages) so the last
-        // stage is as tough as before, however many stages lead up to it.
+        // TTK curve (balance-config): first ~5.5s / mid ~5s / last ~4.2s champion.
         const ramp = stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0;
-        const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.25);
-        const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.12);
+        const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.2);
+        const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.1);
         const spawnMult = parsed.isBoss ? 0.7 : (1.15 - ramp * 0.12);
 
         // Planet tier: early planets easier, later ones harder.
@@ -19014,7 +19311,7 @@ extendClass(CoreLevelManager, {
         const transitScale = Math.max(0.5, Math.min(1, 0.5 + 0.09 * tier + 0.05 * (stageIndex - 1)));
         const gap = Math.max(2.2, 3.6 - stageIndex * 0.25) * (1 + (1 - transitScale) * 0.8);
         const out = [];
-        for (let t = 3, i = 0; t < seconds - 6; t += gap, i++) {
+        for (let t = 1.5, i = 0; t < seconds - 6; t += gap, i++) {
             const src = types[i % types.length];
             out.push(Object.assign({}, src, {
                 id: 'transit_' + i,
@@ -19117,7 +19414,11 @@ extendClass(CoreLevelManager, {
         }
 
         if (typeof soundManager !== 'undefined' && soundManager.startPlanetAmbient) {
-            soundManager.startPlanetAmbient(planetId || 'mars');
+            if (soundManager.setStageContext) {
+                soundManager.setStageContext(planetId || 'mars', level.stageKey);
+            } else {
+                soundManager.startPlanetAmbient(planetId || 'mars');
+            }
         }
     },
 
@@ -20366,16 +20667,19 @@ extendClass(GameControlSystem, {
         }
 
         // Ambush is mid-flight combat — no planet to leave; only continue travel.
+        // Boss victory already routes "MAP SELECT" to leave the planet, so hide
+        // the separate "Leave Planet" button to avoid two buttons doing the same thing.
+        const hideLeaveBtn = ambushVictory || bossVictory;
         const leaveBtn = document.querySelector('#victoryOverlay .victory-button[data-action="levelSelection"]');
         if (leaveBtn) {
-            leaveBtn.hidden = !!ambushVictory;
-            leaveBtn.setAttribute('aria-hidden', ambushVictory ? 'true' : 'false');
+            leaveBtn.hidden = hideLeaveBtn;
+            leaveBtn.setAttribute('aria-hidden', hideLeaveBtn ? 'true' : 'false');
         }
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = ambushVictory
+            uiManager.victoryMenuItems = hideLeaveBtn
                 ? ['nextLevel']
                 : ['nextLevel', 'levelSelection'];
-            if (ambushVictory && uiManager.victoryMenuIndex > 0) {
+            if (hideLeaveBtn && uiManager.victoryMenuIndex > 0) {
                 uiManager.victoryMenuIndex = 0;
             }
         }
@@ -20658,6 +20962,7 @@ extendClass(GameControlSystem, {
         if (typeof soundManager !== 'undefined') {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
+            if (soundManager.clearMusicContext) soundManager.clearMusicContext();
         }
 
         if (typeof planetEditorUI !== 'undefined' && planetEditorUI.visible) {
@@ -20969,7 +21274,9 @@ var GameLoop = class GameLoop {
             if (!document.documentElement.classList.contains('vf-game-shown')) return false;
             if (typeof startScreenManager !== 'undefined' && startScreenManager.isVisible
                 && startScreenManager.isVisible()) return false;
-            const gc = document.querySelector('.game-container');
+            const gc = this._gameContainerEl && this._gameContainerEl.isConnected
+                ? this._gameContainerEl
+                : (this._gameContainerEl = document.querySelector('.game-container'));
             if (gc && gc.style && gc.style.display === 'none') return false;
             return true;
         } catch (e) {
@@ -21114,6 +21421,14 @@ var GameLoop = class GameLoop {
             bulletManager.update(deltaTime, keys);
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
+        if (typeof soundManager !== 'undefined' && soundManager.setActiveEnemyTypes && typeof enemyManager !== 'undefined') {
+            const activeTypes = [];
+            if (enemyManager.enemy && !enemyManager.exploding) {
+                activeTypes.push(enemyManager.enemy.isBoss ? 'boss' : enemyManager.enemy.type);
+            }
+            (enemyManager.sideEnemies || []).forEach((e) => { if (e && e.type) activeTypes.push(e.type); });
+            soundManager.setActiveEnemyTypes(activeTypes);
+        }
         if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);
         if (typeof missionStartManager !== 'undefined' && missionStartManager.updateEnemyEntry) {
             missionStartManager.updateEnemyEntry(deltaTime);
@@ -24018,13 +24333,14 @@ var CoreRenderManager = class CoreRenderManager {
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
         } else {
-            // First boot: light path — heavy FX off; freeze decorative anim on
-            // typical laptops / HiDPI so menus stay interactive.
+            // First boot: light path — heavy FX off; freeze decorative anim only
+            // on genuinely low-end machines. dpr>=1.5 used to trigger this too,
+            // but that matched almost every HiDPI laptop and silently froze
+            // things like galaxy-map station orbits and planet spin.
             const cores = (navigator && navigator.hardwareConcurrency) || 4;
             const mem = (navigator && navigator.deviceMemory) || 4;
-            const dpr = window.devicePixelRatio || 1;
             perf.heavy = 'OFF';
-            perf.anim = (cores <= 8 || mem <= 8 || dpr >= 1.5) ? 'OFF' : 'ON';
+            perf.anim = (cores <= 4 || mem <= 4) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {
@@ -25210,7 +25526,10 @@ var CoreRenderManager = class CoreRenderManager {
                 else document.documentElement.removeAttribute('data-vf-logged');
             }
         }
-        setOff(q('logout'), !logged);
+        const logoutBtn = q('logout');
+        setOff(logoutBtn, !logged);
+        // Hide outright during a fight — a visible power/logout button over combat invites mis-taps.
+        logoutBtn.hidden = document.documentElement.classList.contains('vf-game-shown');
         const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
         const nowEditing = devOn && typeof hudLayoutEditor !== 'undefined' && hudLayoutEditor.isEditing();
         const layoutBtn = q('layout');
@@ -26344,8 +26663,16 @@ var CoreRenderManager = class CoreRenderManager {
             const out = document.getElementById('vfResValue');
             if (out) out.textContent = resLabel(real);
         }
-        // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size
-        ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
+        // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size.
+        // Guarded like applyCanvasSize's writes below: a transient scrollbar/font-reflow blip (e.g. the
+        // extra 'load' event recompute) can nudge window.innerWidth by a px or two without a real resize —
+        // rewriting --stage-scale for that repaints the whole bezel/stage one frame later as a visible snap.
+        if (!force && vfs.lastStageScale != null && sizesClose(real.scale, vfs.lastStageScale, 0.002)) {
+            // skip: not a meaningful change
+        } else {
+            vfs.lastStageScale = real.scale;
+            ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
+        }
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
         const zoom = userZoom * (inFight ? 0.85 : 1);
         ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
@@ -26531,7 +26858,10 @@ var CoreRenderManager = class CoreRenderManager {
         update(true);
     }
 
-    window.addEventListener('load', function () { update(true); });
+    // Not forced: the defer-time update() already ran before first paint: only repaint if
+    // fonts/images finishing actually changed the window size, not the near-identical value
+    // (a resized scrollbar, etc.) that caused the reported load-time bezel snap.
+    window.addEventListener('load', function () { update(false); });
 
     window.viewportFit = {
         update: function () { update(true); },
@@ -26558,6 +26888,35 @@ var factionGui = (() => {
 
     const bezel = () => document.getElementById('vf-bezel');
     const reduce = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    // The rim animation swaps border-image-source between several SVGs (screen-frame.css
+    // @keyframes vf-bezel-art-creep-*). If a variant hasn't been fetched/decoded yet when the
+    // swap hits, the border-image briefly has nothing to paint and falls back to the flat
+    // border colour — the rim art visibly "glitches away" for that frame. Warming the browser's
+    // image cache for the active faction avoids that first-cycle blank.
+    // Exact file list per faction, mirrored from the @keyframes vf-bezel-art-creep-*
+    // / vf-void-vine-creep rules in screen-frame.css — including each faction's own
+    // cache-busting query (terran/kronax/machine use ?v=15, pirate ?v=16, voidborn
+    // none) and voidborn's unrelated "-vine" naming.
+    const BEZEL_ART_FILES = {
+        terran: ['terran-bezel-art.svg?v=15', 'terran-bezel-art-1.svg?v=15', 'terran-bezel-art-3.svg?v=15', 'terran-bezel-art-6.svg?v=15'],
+        kronax: ['kronax-bezel-art.svg?v=15', 'kronax-bezel-art-2.svg?v=15', 'kronax-bezel-art-4.svg?v=15', 'kronax-bezel-art-5.svg?v=15', 'kronax-bezel-art-7.svg?v=15', 'kronax-bezel-art-8.svg?v=15'],
+        machine: ['machine-bezel-art.svg?v=15', 'machine-bezel-art-1.svg?v=15', 'machine-bezel-art-2.svg?v=15', 'machine-bezel-art-3.svg?v=15', 'machine-bezel-art-5.svg?v=15', 'machine-bezel-art-6.svg?v=15', 'machine-bezel-art-7.svg?v=15', 'machine-bezel-art-8.svg?v=15'],
+        pirate: ['pirate-bezel-art.svg?v=16', 'pirate-bezel-art-2.svg?v=16', 'pirate-bezel-art-4.svg?v=16', 'pirate-bezel-art-5.svg?v=16', 'pirate-bezel-art-8.svg?v=16'],
+        voidborn: ['voidborn-bezel-vine.svg', 'voidborn-bezel-vine-2.svg', 'voidborn-bezel-vine-4.svg', 'voidborn-bezel-vine-5.svg', 'voidborn-bezel-vine-7.svg', 'voidborn-bezel-vine-9.svg', 'voidborn-bezel-vine-10.svg']
+    };
+    const preloaded = new Set();
+    function preloadBezelArt(id) {
+        if (preloaded.has(id)) return;
+        const files = BEZEL_ART_FILES[id];
+        if (!files) return;
+        preloaded.add(id);
+        files.forEach((file) => {
+            const img = new Image();
+            img.src = 'assets/ui/' + file;
+        });
+    }
+    if (shown) preloadBezelArt(shown);
     // Animate only for changes the player causes: boot, refresh and restore (all before any input) switch instantly,
     // so a reload never replays the cable swap.
     const arm = () => { ready = true; };
@@ -26567,6 +26926,7 @@ var factionGui = (() => {
     function commit(id, stamp) {
         log('commit ' + shown + ' -> ' + id);
         shown = id;
+        preloadBezelArt(id);
         stamp();
         const bz = bezel();
         const wizard = bz && bz.dataset.pendingFaction;          // the pilot wizard drives the bezel itself while picking
@@ -27331,7 +27691,11 @@ var SoundManager = class SoundManager {
     }
 
     schedule(fn, delayMs) {
-        const id = setTimeout(fn, delayMs);
+        const id = setTimeout(() => {
+            const idx = this.activeTimeouts.indexOf(id);
+            if (idx !== -1) this.activeTimeouts.splice(idx, 1);
+            fn();
+        }, delayMs);
         this.activeTimeouts.push(id);
         return id;
     }
@@ -27677,27 +28041,58 @@ extendClass(SoundManager, {
     },
 
     startMenuMusic() {
-        if (typeof youtubeSoundtrackManager === 'undefined') return;
-        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
-        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
-        if (!this.musicEnabled || !youtubeSoundtrackManager.hasMenuTrack()) {
-            youtubeSoundtrackManager.stop();
+        if (!this.musicEnabled) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
             return;
         }
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
+
+        const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
+            ? soundtrackConfigManager.getMenuTrack() : null;
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.play('menu', menuTrack.localAudioData);
+            }
+            return;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
+        }
+
+        if (typeof youtubeSoundtrackManager === 'undefined') return;
+        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
+            youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
+            return;
+        }
+        if (!youtubeSoundtrackManager.hasMenuTrack()) {
+            youtubeSoundtrackManager.stop();
+            return;
+        }
         youtubeSoundtrackManager.playMenu();
     },
 
     stopMenuMusic() {
-        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.mode === 'menu') {
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && (youtubeSoundtrackManager.mode === 'menu' || youtubeSoundtrackManager.currentKey === 'menu-override')) {
             youtubeSoundtrackManager.stop();
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
         }
     },
 
     updateAmbientVolume() {
         if (typeof youtubeSoundtrackManager !== 'undefined') {
             youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        }
+        if (typeof localAudioManager !== 'undefined') {
+            localAudioManager.setVolume(this.masterVolume * this.musicVolume);
         }
         if (!this.ambientGain || !this.audioContext) return;
         const now = this.audioContext.currentTime;
@@ -27752,6 +28147,12 @@ extendClass(SoundManager, {
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.pause();
             }
+            if (typeof localAudioManager !== 'undefined') {
+                localAudioManager.stop();
+            }
+        } else if (this._musicContextActive) {
+            this._activeOverrideKey = null;
+            this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
         } else if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasMenuTrack()) {
@@ -27797,6 +28198,261 @@ document.addEventListener('click', (e) => {
     if (!btn || btn.disabled || btn.classList.contains('locked') || btn.getAttribute('aria-disabled') === 'true') return;
     if (typeof soundManager !== 'undefined' && soundManager.playUIClick) soundManager.playUIClick();
 }, true);
+
+
+/* --- js/game/soundtrack-config-manager.js --- */
+"use strict";
+
+/**
+ * Per-stage / per-enemy-type soundtrack overrides, layered on top of the
+ * per-planet YouTube soundtrack (planetConfigManager) and the procedural
+ * ambient drone fallback. Resolution priority (see soundtrack-override.js):
+ * active enemy type > current stage > planet > procedural drone.
+ */
+var SoundtrackConfigManager = class SoundtrackConfigManager {
+    constructor() {
+        this.storageKey = 'vf_soundtrack_overrides_v1';
+        this.stageTracks = {};
+        this.enemyTracks = {};
+        this.menuTrack = null;
+        this.load();
+    }
+
+    load() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            this.stageTracks = (data && data.stageTracks) || {};
+            this.enemyTracks = (data && data.enemyTracks) || {};
+            this.menuTrack = (data && data.menuTrack) || null;
+        } catch (e) {
+            this.stageTracks = {};
+            this.enemyTracks = {};
+            this.menuTrack = null;
+        }
+    }
+
+    save() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify({
+                stageTracks: this.stageTracks,
+                enemyTracks: this.enemyTracks,
+                menuTrack: this.menuTrack
+            }));
+        } catch (e) {
+            // Quota exceeded (large local audio as base64) — silently skip persisting.
+        }
+    }
+
+    hasTrack(entry) {
+        return !!(entry && (entry.youtubeUrl || entry.localAudioData));
+    }
+
+    getStageTrack(stageId) {
+        return this.stageTracks[stageId] || null;
+    }
+
+    setStageTrack(stageId, data) {
+        if (!stageId) return;
+        if (!this.hasTrack(data)) {
+            delete this.stageTracks[stageId];
+        } else {
+            this.stageTracks[stageId] = {
+                youtubeUrl: data.youtubeUrl || '',
+                localAudioData: data.localAudioData || '',
+                localAudioName: data.localAudioName || ''
+            };
+        }
+        this.save();
+    }
+
+    getMenuTrack() {
+        return this.menuTrack;
+    }
+
+    setMenuTrack(data) {
+        if (!this.hasTrack(data)) {
+            this.menuTrack = null;
+        } else {
+            this.menuTrack = {
+                youtubeUrl: data.youtubeUrl || '',
+                localAudioData: data.localAudioData || '',
+                localAudioName: data.localAudioName || ''
+            };
+        }
+        this.save();
+    }
+
+    getEnemyTrack(enemyTypeId) {
+        return this.enemyTracks[enemyTypeId] || null;
+    }
+
+    setEnemyTrack(enemyTypeId, data) {
+        if (!enemyTypeId) return;
+        if (!this.hasTrack(data)) {
+            delete this.enemyTracks[enemyTypeId];
+        } else {
+            this.enemyTracks[enemyTypeId] = {
+                youtubeUrl: data.youtubeUrl || '',
+                localAudioData: data.localAudioData || '',
+                localAudioName: data.localAudioName || ''
+            };
+        }
+        this.save();
+    }
+}
+
+var soundtrackConfigManager = new SoundtrackConfigManager();
+
+
+/* --- js/game/local-audio-manager.js --- */
+"use strict";
+
+/**
+ * Plays a local (base64 data-URL) audio file on loop, as the counterpart to
+ * youtubeSoundtrackManager for soundtrack overrides that aren't a YouTube link.
+ */
+var LocalAudioManager = class LocalAudioManager {
+    constructor() {
+        this.el = null;
+        this.currentKey = null;
+        this.volume = 0.2;
+    }
+
+    ensureEl() {
+        if (this.el) return this.el;
+        const el = document.createElement('audio');
+        el.loop = true;
+        el.id = 'vfLocalAudioTrack';
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        this.el = el;
+        return el;
+    }
+
+    play(key, dataUrl) {
+        if (!dataUrl) return false;
+        const el = this.ensureEl();
+        if (this.currentKey === key && !el.paused) return true;
+        this.currentKey = key;
+        el.src = dataUrl;
+        el.volume = Math.max(0, Math.min(1, this.volume));
+        el.play().catch(() => { /* needs a user gesture first — fine, next interaction retries */ });
+        return true;
+    }
+
+    stop() {
+        if (!this.el) return;
+        this.el.pause();
+        this.el.removeAttribute('src');
+        this.el.load();
+        this.currentKey = null;
+    }
+
+    setVolume(volume) {
+        this.volume = Math.max(0, Math.min(1, Number(volume) || 0));
+        if (this.el) this.el.volume = this.volume;
+    }
+
+    isPlaying(key) {
+        return this.currentKey === key && !!this.el && !this.el.paused;
+    }
+}
+
+var localAudioManager = new LocalAudioManager();
+
+
+/* --- js/game/sounds/soundtrack-override.js --- */
+"use strict";
+
+// Resolves soundtrack overrides on top of startPlanetAmbient()'s planet
+// track / procedural drone: active enemy type > current stage > planet.
+// Set by levelManager.buildStageLevel (stage context) and by game-loop.js
+// (active enemy types), both best-effort / optional at the call sites.
+extendClass(SoundManager, {
+    setStageContext(planetId, stageId) {
+        this._musicContextActive = true;
+        this._currentPlanetId = planetId;
+        this._currentStageId = stageId || null;
+        this._reevaluateMusic();
+    },
+
+    setActiveEnemyTypes(types) {
+        const list = (types || []).filter(Boolean);
+        const key = list.slice().sort().join(',');
+        if (key === this._activeEnemyTypesKey) return;
+        this._activeEnemyTypesKey = key;
+        this._activeEnemyTypes = list;
+        this._reevaluateMusic();
+    },
+
+    _resolveSoundtrackOverride() {
+        if (typeof soundtrackConfigManager === 'undefined') return null;
+        const enemyTypes = this._activeEnemyTypes || [];
+        for (let i = 0; i < enemyTypes.length; i++) {
+            const track = soundtrackConfigManager.getEnemyTrack(enemyTypes[i]);
+            if (soundtrackConfigManager.hasTrack(track)) {
+                return { track, key: 'enemy:' + enemyTypes[i] };
+            }
+        }
+        if (this._currentStageId) {
+            const track = soundtrackConfigManager.getStageTrack(this._currentStageId);
+            if (soundtrackConfigManager.hasTrack(track)) {
+                return { track, key: 'stage:' + this._currentStageId };
+            }
+        }
+        return null;
+    },
+
+    _reevaluateMusic() {
+        if (!this._musicContextActive) return;
+        const resolved = this._resolveSoundtrackOverride();
+        const overrideKey = resolved ? resolved.key : null;
+        if (overrideKey && overrideKey === this._activeOverrideKey) return;
+        this._activeOverrideKey = overrideKey;
+
+        if (!resolved) {
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            this.startPlanetAmbient(this._currentPlanetId || 'mars');
+            return;
+        }
+
+        const track = resolved.track;
+        if (!this.musicEnabled) {
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            this.stopPlanetAmbientNodesOnly();
+            return;
+        }
+
+        this.stopPlanetAmbientNodesOnly();
+        if (track.localAudioData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.play(overrideKey, track.localAudioData);
+            }
+        } else if (track.youtubeUrl) {
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof youtubeSoundtrackManager !== 'undefined') {
+                youtubeSoundtrackManager.setEnabled(true);
+                youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+                youtubeSoundtrackManager.playUrl(overrideKey, track.youtubeUrl);
+            }
+        }
+    },
+
+    clearMusicContext() {
+        this._musicContextActive = false;
+        this._currentPlanetId = null;
+        this._currentStageId = null;
+        this._activeEnemyTypes = [];
+        this._activeEnemyTypesKey = null;
+        this._activeOverrideKey = null;
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+    }
+});
 
 
 /* --- js/game/youtube-soundtrack/core.js --- */
@@ -28159,6 +28815,23 @@ extendClass(YouTubeSoundtrackManager, {
             this.player.stopVideo();
         } catch (e) { /* ignore */ }
     },
+});
+
+
+/* --- js/game/youtube-soundtrack/play-url.js --- */
+"use strict";
+
+// Generic "play this arbitrary URL under this key" entry point, used by
+// soundtrack overrides (stage/enemy) that aren't tied to a planet config.
+extendClass(YouTubeSoundtrackManager, {
+    playUrl(key, url) {
+        const videoId = this.extractVideoId(url);
+        if (!videoId) {
+            if (this.currentKey === key) this.stop();
+            return false;
+        }
+        return this._playVideo(key, videoId, 'custom');
+    }
 });
 
 
@@ -28763,7 +29436,7 @@ var PlayerManager = class PlayerManager {
     }
 
     takeDamage(damage) {
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.godMode) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
             return false;
         }
 
@@ -29300,7 +29973,7 @@ var BulletManager = class BulletManager {
             // Remove bullets that are off screen
             // Get canvas width from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            if (bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
+            if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
                 this.bullets.splice(i, 1);
             }
         }
@@ -30027,7 +30700,7 @@ extendClass(BulletManager, {
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
         let maxBullets = 18; // Shared cap across all weapon mounts on the ship
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
 
@@ -30145,13 +30818,15 @@ extendClass(BulletManager, {
                 case 'spread':
                 case 'burst':
                 case 'nova':
+                case 'spike_burst':
                     this.enemyShootSpread(position, Object.assign({
-                        bulletCount: id === 'nova' ? 5 : (id === 'burst' ? 2 : 2),
-                        spreadAngle: id === 'nova' ? 0.5 : (id === 'burst' ? 0.4 : 0.3)
+                        bulletCount: id === 'nova' ? 5 : (id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2)),
+                        spreadAngle: id === 'nova' ? 0.5 : (id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3))
                     }, cfg));
                     break;
                 case 'rapid':
                 case 'ion':
+                case 'laser_twin':
                     this.enemyShootRapid(position, Object.assign({ bulletCount: 2 }, cfg));
                     break;
                 case 'plasma':
@@ -30162,6 +30837,8 @@ extendClass(BulletManager, {
                     this.enemyShootLaser(position, Object.assign({}, cfg, { typeHint: 'enemy_wave' }));
                     break;
                 case 'pierce':
+                case 'railgun':
+                case 'claw_beam':
                     this.enemyShootLaser(position, Object.assign({ width: 2, height: 10 }, cfg));
                     break;
                 default:
@@ -30177,6 +30854,7 @@ extendClass(BulletManager, {
                 this.shootSpreadWeapon(position, cfg);
                 break;
             case 'rapid':
+            case 'laser_twin':
                 this.shootRapidWeapon(position, cfg);
                 break;
             case 'plasma':
@@ -30192,9 +30870,11 @@ extendClass(BulletManager, {
                 this.shootWave(position, cfg);
                 break;
             case 'burst':
+            case 'spike_burst':
                 this.shootBurst(position, cfg);
                 break;
             case 'pierce':
+            case 'railgun':
                 this.shootPierce(position, cfg);
                 break;
             case 'nova':
@@ -30220,7 +30900,7 @@ extendClass(BulletManager, {
         let maxBullets = 4;
 
         // Check for infinite ammo cheat
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.infiniteAmmo) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
 
@@ -31230,9 +31910,10 @@ var EnemyManager = class EnemyManager {
         if (typeof difficultyConfigManager !== 'undefined') {
             const profile = difficultyConfigManager.getProfile();
             const sideMul = profile.sideCountMul != null ? profile.sideCountMul : 1;
-            // Floor at 3 so combat events / director waves can actually land —
-            // enemyMaxActive:1 × sideCountMul left room < 2 forever and froze events.
-            this.sideEnemyCap = Math.max(3, Math.min(6,
+            // Soft floor: Easy (maxActive≤2) can sit at 2; Normal+ keeps ≥3 so
+            // combat events / director waves still have room to land.
+            const capFloor = (profile.enemyMaxActive <= 2) ? 2 : 3;
+            this.sideEnemyCap = Math.max(capFloor, Math.min(6,
                 Math.round(profile.enemyMaxActive * profile.enemyCountMul * sideMul)));
             if (this.levelMods && this.levelMods.transit) {
                 this.sideEnemyCap = Math.max(this.sideEnemyCap, 5);
@@ -31286,15 +31967,17 @@ var EnemyManager = class EnemyManager {
         return pool[0].type;
     }
 
+    // Escorts go immobile (formation lerp only) — capping how many of a
+    // cluster's side craft escort at once keeps most of a wave actually
+    // flying and attacking instead of parking around the champion.
     shouldEscortChampion(entry) {
         const cluster = (entry && entry.cluster) || 'alpha';
-        if (this.enemy && !this.exploding && (this.enemy.cluster || 'alpha') === cluster) {
-            return true;
-        }
-        if (this.pendingChampionEntry && (this.pendingChampionEntry.cluster || 'alpha') === cluster) {
-            return true;
-        }
-        return this.schedule.some((e) => e.champion && (e.cluster || 'alpha') === cluster);
+        const inChampionCluster = (this.enemy && !this.exploding && (this.enemy.cluster || 'alpha') === cluster)
+            || (this.pendingChampionEntry && (this.pendingChampionEntry.cluster || 'alpha') === cluster)
+            || this.schedule.some((e) => e.champion && (e.cluster || 'alpha') === cluster);
+        if (!inChampionCluster) return false;
+        const activeEscorts = (this.sideEnemies || []).filter((e) => e.isEscort).length;
+        return activeEscorts < 3;
     }
 
     nextEscortSlot() {
@@ -31611,7 +32294,7 @@ extendClass(EnemyManager, {
         return {
             width: (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 200,
             height: (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300,
-            cheats: (typeof game !== 'undefined' && game.cheats) || {}
+            cheats: (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats) || {}
         };
     },
 
@@ -31870,7 +32553,8 @@ extendClass(EnemyManager, {
         let baseHp = 40;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.4));
+            // ~2s side TTK vs REF laser (balance-config); was 0.4.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.55));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {
@@ -32203,7 +32887,16 @@ extendClass(EnemyManager, {
             this.sideEnemySpawnTimer += deltaTime;
             if (this.sideEnemySpawnTimer >= this.sideEnemySpawnInterval) {
                 this.sideEnemySpawnTimer = 0;
-                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < 0.25) {
+                // stageScale raises ambient pressure on later stages (balance-config).
+                let ambientChance = 0.25;
+                try {
+                    const host = (typeof game !== 'undefined' && game) ? game : null;
+                    const lm = host && (host.coreLevelManager || host.levelManager);
+                    const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+                    const ss = level && Number(level.stageScale);
+                    if (ss > 0) ambientChance = Math.min(0.45, 0.18 + ss * 0.12);
+                } catch (e) { /* ignore */ }
+                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < ambientChance) {
                     this.spawnSideEnemy(gameState);
                 }
             }
@@ -32793,7 +33486,7 @@ extendClass(EnemyManager, {
 
         // Apply slow motion cheat
         let effectiveDeltaTime = deltaTime;
-        if (gameState && gameState.cheats && gameState.cheats.slowMotion) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.slowMotion) {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
         }
 
@@ -33098,7 +33791,9 @@ extendClass(EnemyManager, {
         if (this.levelMods && this.levelMods.enemyHealth) {
             enemyMaxHealth = this.levelMods.enemyHealth;
         }
-        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * 0.55);
+        // TTK target ~5s champion vs REF laser eDPS (balance-config). Was 0.55.
+        const champHpFudge = 1;
+        enemyMaxHealth = Math.round(enemyMaxHealth * levelScale * champHpFudge);
         enemySpeed = enemySpeed * (1 + 0.1 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
         enemyVerticalSpeed = enemyVerticalSpeed * (1 + 0.08 * ((scheduleEntry && scheduleEntry.level ? scheduleEntry.level : 1) - 1));
 
@@ -33367,12 +34062,12 @@ extendClass(EnemyManager, {
 
 /** Per planet tier (EASY .. NIGHTMARE): early planets forgiving, late ones brutal. */
 var PLANET_TIER_MODS = [
-    // evasion: dodge chance / speed multiplier (early planets barely dodge).
-    { health: 0.65, speed: 0.85, damage: 0.65, spawn: 1.35, boss: 0.85, evasion: 0.25 },
-    { health: 0.9,  speed: 0.95, damage: 0.85, spawn: 1.1,  boss: 0.95, evasion: 0.45 },
-    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.05, evasion: 0.7 },
-    { health: 1.45, speed: 1.15, damage: 1.25, spawn: 0.82, boss: 1.15, evasion: 0.9 },
-    { health: 1.8,  speed: 1.25, damage: 1.45, spawn: 0.7,  boss: 1.25, evasion: 1 }
+    // ~±20–30% TTK steps Easy→Nightmare (balance-config). Evasion still ramps soft→hard.
+    { health: 0.75, speed: 0.88, damage: 0.75, spawn: 1.3,  boss: 0.9,  evasion: 0.3 },
+    { health: 0.95, speed: 0.96, damage: 0.9,  spawn: 1.1,  boss: 0.98, evasion: 0.5 },
+    { health: 1.15, speed: 1.05, damage: 1.05, spawn: 0.95, boss: 1.08, evasion: 0.7 },
+    { health: 1.35, speed: 1.12, damage: 1.2,  spawn: 0.85, boss: 1.18, evasion: 0.88 },
+    { health: 1.55, speed: 1.2,  damage: 1.35, spawn: 0.75, boss: 1.28, evasion: 1 }
 ];
 var PLANET_TIERS = ['EASY', 'NORMAL', 'HARD', 'EXPERT', 'NIGHTMARE'];
 var BOSS_SIZE_MUL = 1.6;
@@ -33447,7 +34142,8 @@ extendClass(EnemyManager, {
         e.x = cx - e.width / 2;
         if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
         const mods = this.currentTierMods();
-        this.maxHealth = Math.round(this.maxHealth * mods.boss * 0.6);
+        // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
+        this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);
         this.health = this.maxHealth;
         e.bossTierMul = mods.boss;
         // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).
@@ -33849,43 +34545,7 @@ extendClass(EnemyManager, {
         }
         if (!obstacles.length) return null;
 
-        // Danger at an offset: 0 = safe, up to ~1 per obstacle (sooner = worse).
-        const danger = (dx, dy) => {
-            const px = ex + dx;
-            const py = ey + dy;
-            let d = 0;
-            for (let i = 0; i < obstacles.length; i++) {
-                const o = obstacles[i];
-                const rx = px - o.ox;
-                const ry = py - o.oy;
-                const v2 = o.vx * o.vx + o.vy * o.vy;
-                // Time window where the swept box overlaps on each axis.
-                let t0 = 0;
-                let t1 = lookahead;
-                const axis = (r, v, reach) => {
-                    if (Math.abs(v) < 0.0001) {
-                        if (Math.abs(r) > reach) t1 = -1;
-                        return;
-                    }
-                    let a = (r - reach) / v;
-                    let b = (r + reach) / v;
-                    if (a > b) { const tmp = a; a = b; b = tmp; }
-                    t0 = Math.max(t0, a);
-                    t1 = Math.min(t1, b);
-                };
-                if (v2 < 0.0001) {
-                    if (Math.abs(rx) > o.rw || Math.abs(ry) > o.rh) continue;
-                } else {
-                    axis(rx, o.vx, o.rw);
-                    axis(ry, o.vy, o.rh);
-                    if (t0 > t1) continue;
-                }
-                d += 1.2 - t0 / lookahead;
-            }
-            return d;
-        };
-
-        const here = danger(0, 0);
+        const here = this._obstacleDangerAt(obstacles, ex, ey, lookahead, 0, 0);
         if (here <= 0) return null;
         const minY = entity.minY != null ? entity.minY : -Infinity;
         const maxY = entity.maxY != null ? entity.maxY : Infinity;
@@ -33896,7 +34556,7 @@ extendClass(EnemyManager, {
                 if (!dx && !dy) continue;
                 if (entity.y + dy < minY || entity.y + dy > maxY) continue;
                 // Distance costs a little: prefer the closest escape.
-                const score = danger(dx, dy) + Math.hypot(dx, dy) / 400;
+                const score = this._obstacleDangerAt(obstacles, ex, ey, lookahead, dx, dy) + Math.hypot(dx, dy) / 400;
                 if (score < bestScore) {
                     bestScore = score;
                     best = { x: dx, y: dy };
@@ -33907,6 +34567,49 @@ extendClass(EnemyManager, {
         const threat = Math.min(1.4, 0.5 + here * 0.5);
         const m = Math.hypot(best.x, best.y) || 1;
         return { x: (best.x / m) * threat, y: (best.y / m) * threat };
+    },
+
+    /** Danger at an offset: 0 = safe, up to ~1 per obstacle (sooner = worse). */
+    _obstacleDangerAt(obstacles, ex, ey, lookahead, dx, dy) {
+        const px = ex + dx;
+        const py = ey + dy;
+        let d = 0;
+        for (let i = 0; i < obstacles.length; i++) {
+            const o = obstacles[i];
+            const rx = px - o.ox;
+            const ry = py - o.oy;
+            const v2 = o.vx * o.vx + o.vy * o.vy;
+            // Time window where the swept box overlaps on each axis.
+            let t0 = 0;
+            let t1 = lookahead;
+            if (v2 < 0.0001) {
+                if (Math.abs(rx) > o.rw || Math.abs(ry) > o.rh) continue;
+            } else {
+                t0 = Math.max(t0, this._obstacleAxisT0(rx, o.vx, o.rw));
+                t1 = Math.min(t1, this._obstacleAxisT1(rx, o.vx, o.rw, t1));
+                t0 = Math.max(t0, this._obstacleAxisT0(ry, o.vy, o.rh));
+                t1 = Math.min(t1, this._obstacleAxisT1(ry, o.vy, o.rh, t1));
+                if (t0 > t1) continue;
+            }
+            d += 1.2 - t0 / lookahead;
+        }
+        return d;
+    },
+
+    /** Lower bound of the time window where |r + v*t| <= reach (see _obstacleDangerAt). */
+    _obstacleAxisT0(r, v, reach) {
+        if (Math.abs(v) < 0.0001) return 0;
+        const a = (r - reach) / v;
+        const b = (r + reach) / v;
+        return Math.min(a, b);
+    },
+
+    /** Upper bound of that same time window, or -1 if the axis never overlaps. */
+    _obstacleAxisT1(r, v, reach, fallback) {
+        if (Math.abs(v) < 0.0001) return Math.abs(r) > reach ? -1 : fallback;
+        const a = (r - reach) / v;
+        const b = (r + reach) / v;
+        return Math.max(a, b);
     },
 
     avoidObstacles(game) {
@@ -37065,7 +37768,16 @@ var PickupManager = class PickupManager {
             : null;
         this.maybeDropFakeCrate(info);
         const stats = this.getCollectStats();
-        const drops = economyConfig.rollEnemyKillDrops(info, planetId, stats.yieldMul);
+        let yieldMul = stats.yieldMul;
+        // stageScale from build-stage-level: later stages / bosses pay slightly more.
+        try {
+            const host = (typeof game !== 'undefined' && game) ? game : null;
+            const lm = host && (host.coreLevelManager || host.levelManager);
+            const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+            const ss = level && Number(level.stageScale);
+            if (ss > 0) yieldMul *= Math.max(0.75, Math.min(1.6, 0.85 + ss * 0.2));
+        } catch (e) { /* ignore */ }
+        const drops = economyConfig.rollEnemyKillDrops(info, planetId, yieldMul);
         if (!drops || !drops.length) return;
 
         const cx = Number(info.x);
@@ -37086,7 +37798,7 @@ var PickupManager = class PickupManager {
                 vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
                 age: 0,
                 life: life,
-                size: 7 + Math.min(4, drop.amount)
+                size: 9 + Math.min(5, drop.amount)
             });
         });
     }
@@ -37141,7 +37853,7 @@ var PickupManager = class PickupManager {
             vy: (obstacle.verticalSpeed || 0) * 0.4 + (Math.random() - 0.5) * 0.6,
             age: 0,
             life: 14000,
-            size: 7 + Math.min(4, amount)
+            size: 9 + Math.min(5, amount)
         });
     }
 
@@ -37396,6 +38108,17 @@ var PickupManager = class PickupManager {
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;
             ctx.save();
             ctx.imageSmoothingEnabled = false;
+            // Dark outline then coloured glow halo so drops read against busy backgrounds.
+            const pulse = 0.4 + 0.15 * Math.sin((t + p.age) * 0.006);
+            ctx.globalAlpha = fade * pulse;
+            ctx.fillStyle = '#05060a';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = tint;
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.65, 0, Math.PI * 2);
+            ctx.fill();
             ctx.globalAlpha = fade;
             if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
                 iconRenderer.drawKey(ctx, key, x - size / 2, y - size / 2, size, tint);
@@ -37441,10 +38164,10 @@ var POWER_UPS = {
     power_shot:  { label: 'POWER SHOT',  ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
     rapid_fire:  { label: 'RAPID FIRE',  ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
     barrier:     { label: 'BARRIER',     ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' },
-    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'diamond', glyph: 'chevrons' },
+    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'triangle', glyph: 'chevrons' },
     magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
     double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
-    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'cross' }
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' }
 };
 var POWER_UP_IDS = Object.keys(POWER_UPS);
 
@@ -37766,6 +38489,7 @@ extendClass(PickupManager, {
             if (def.shape === 'diamond') return rr - a;
             if (def.shape === 'hex') return Math.min(rr - step, (rr - a) * 2);
             if (def.shape === 'square') return rr - step;
+            if (def.shape === 'triangle') return Math.round((rr - step) * ((dy + rr) / (2 * rr || 1)));
             return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
         };
         const shape = (rr, color, alpha) => {
@@ -38033,7 +38757,7 @@ var CollisionManager = class CollisionManager {
 
     checkBomberPlayerCollisions(gameState) {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.godMode) return;
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
         const player = playerManager.getPosition();
         if (!player) return;
         const sides = enemyManager.getSideEnemies();
@@ -38191,7 +38915,7 @@ var CollisionManager = class CollisionManager {
                 if (bullets[i] && bullets[i].damage !== undefined) {
                     damage = bullets[i].damage;
                 }
-                if (game.cheats && game.cheats.instantKill) {
+                if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.instantKill) {
                     damage = 999; // Instant kill
                 }
 
@@ -38242,7 +38966,7 @@ var CollisionManager = class CollisionManager {
                 if (enemyBullets[i] && enemyBullets[i].damage !== undefined) {
                     damage = enemyBullets[i].damage;
                 }
-                if (game.cheats && game.cheats.godMode) {
+                if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
                     damage = 0; // No damage in god mode
                 }
 
@@ -38338,6 +39062,11 @@ var CollisionManager = class CollisionManager {
 
 /* --- js/game/collisions/redirect-laser-clash.js --- */
 "use strict";
+
+// Reused across isColliding() calls to avoid an object allocation per collision test
+// (this runs inside every nested bullet/obstacle/enemy collision loop, every frame).
+var _collisionBoundsScratch1 = { x: 0, y: 0, width: 0, height: 0 };
+var _collisionBoundsScratch2 = { x: 0, y: 0, width: 0, height: 0 };
 
 // CollisionManager methods, split from collisions.js.
 extendClass(CollisionManager, {
@@ -38541,8 +39270,8 @@ extendClass(CollisionManager, {
     },
 
     isColliding(obj1, obj2) {
-        const b1 = this.getCollisionBounds(obj1);
-        const b2 = this.getCollisionBounds(obj2);
+        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1);
+        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2);
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
@@ -38585,27 +39314,29 @@ extendClass(CollisionManager, {
         return true;
     },
 
-    getCollisionBounds(obj) {
-        if (!obj) return { x: 0, y: 0, width: 0, height: 0 };
+    getCollisionBounds(obj, out) {
+        const o = out || { x: 0, y: 0, width: 0, height: 0 };
+        if (!obj) {
+            o.x = 0; o.y = 0; o.width = 0; o.height = 0;
+            return o;
+        }
         const c = obj.collision;
         if (c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
             const insetL = c.insetL || 0;
             const insetT = c.insetT || 0;
             const insetR = c.insetR || 0;
             const insetB = c.insetB || 0;
-            return {
-                x: obj.x + insetL,
-                y: obj.y + insetT,
-                width: Math.max(1, obj.width - insetL - insetR),
-                height: Math.max(1, obj.height - insetT - insetB)
-            };
+            o.x = obj.x + insetL;
+            o.y = obj.y + insetT;
+            o.width = Math.max(1, obj.width - insetL - insetR);
+            o.height = Math.max(1, obj.height - insetT - insetB);
+            return o;
         }
-        return {
-            x: obj.x,
-            y: obj.y,
-            width: obj.width,
-            height: obj.height
-        };
+        o.x = obj.x;
+        o.y = obj.y;
+        o.width = obj.width;
+        o.height = obj.height;
+        return o;
     },
 
     getCollisionSprite(obj) {
@@ -44058,13 +44789,31 @@ var UiTooltipManager = class UiTooltipManager {
                     v.textContent = m[2];
                     row.append(k, v);
                 } else {
-                    // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" -> the same stat icons as the hangar rows.
-                    const sm = line.match(/^DMG (\S+) · SPD (\S+) · (\S+)$/);
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
-                    if (sm && ir) {
+                    const chips = (() => {
+                        // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
+                        const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
+                        if (sm) {
+                            return [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], sm[3] ? ['shotRapid', sm[3], '#ffa04a'] : null].filter(Boolean);
+                        }
+                        // Weapon fire mode "MODE AUTO" / "MODE CHARGE".
+                        const mm = line.match(/^MODE (AUTO|CHARGE)$/);
+                        if (mm) {
+                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
+                        }
+                        // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
+                        const tm = line.match(/^([A-Z][A-Z /]*?)(?: · TIER (\d+))?$/);
+                        if (tm) {
+                            const out = [['statAbilities', tm[1], '#c08cff']];
+                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
+                            return out;
+                        }
+                        return null;
+                    })();
+                    if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
                         row.style.cssText = 'display:flex;gap:14px;align-items:center';
-                        [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], ['shotRapid', sm[3], '#ffa04a']].forEach(([key, val, col]) => {
+                        chips.forEach(([key, val, col]) => {
                             const s = document.createElement('span');
                             s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
                             s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
@@ -58367,20 +59116,36 @@ var RenderManager = class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
-            && uiAppearanceManager.getGlobalPixelPx() > 0) return 1 / this.getRenderScale();
-        const style = (typeof uiAppearanceManager !== 'undefined'
-            && uiAppearanceManager.shipRenderStyle)
-            ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
-            : 'FLAT';
-        if (style !== 'VOXEL') return null;
-        // Prefer the settings value so every draw path shares one lattice.
-        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getVoxelSize) {
-            const fromUi = Number(uiAppearanceManager.getVoxelSize());
-            if (Number.isFinite(fromUi) && fromUi > 0) return fromUi;
+        // Sticky within ~one frame, same pattern as getRenderScale() — this is called
+        // many times per frame (once per bullet/particle/debris cell fill).
+        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+        if (this._voxelCellStickyAt && (now - this._voxelCellStickyAt) < 12) {
+            return this._voxelCellFrameValue;
         }
-        const c = Number(window.PLAYFIELD_VOXEL_CELL);
-        return Number.isFinite(c) && c > 0 ? c : 1;
+        let result;
+        if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx
+            && uiAppearanceManager.getGlobalPixelPx() > 0) {
+            result = 1 / this.getRenderScale();
+        } else {
+            const style = (typeof uiAppearanceManager !== 'undefined'
+                && uiAppearanceManager.shipRenderStyle)
+                ? String(uiAppearanceManager.shipRenderStyle).toUpperCase()
+                : 'FLAT';
+            if (style !== 'VOXEL') {
+                result = null;
+            } else if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getVoxelSize
+                && Number.isFinite(Number(uiAppearanceManager.getVoxelSize()))
+                && Number(uiAppearanceManager.getVoxelSize()) > 0) {
+                // Prefer the settings value so every draw path shares one lattice.
+                result = Number(uiAppearanceManager.getVoxelSize());
+            } else {
+                const c = Number(window.PLAYFIELD_VOXEL_CELL);
+                result = Number.isFinite(c) && c > 0 ? c : 1;
+            }
+        }
+        this._voxelCellStickyAt = now;
+        this._voxelCellFrameValue = result;
+        return result;
     }
     isVoxelCombat() {
         return this.getCombatVoxelCell() != null;
@@ -59777,12 +60542,15 @@ extendClass(RenderManager, {
                         runCol = null;
                         runW = 0;
                     };
+                    // One style per 36-row structure slot: each bunker/pod/fang stays
+                    // visually coherent while different slots mix the planet's styles.
+                    const blockStyle = this.resolveMixedStyle(env, side, Math.floor(wr / 36));
                     const hatch = walls[k + 'Hatch'];
                     if (hatch === 'gap' && walls[k + 'Tunnel'] > 0) {
                         // Open hangar slot: dark recess on the floor layer so craft fly out over it.
                         batch = overlayBatch;
                         this.drawHatchRecess(pushRun, env, pal, mp, side, cols, walls[k + 'Tunnel'], wr, y, cell,
-                            obstacleManager.terrainOpeningInfo(wr, side));
+                            obstacleManager.terrainOpeningInfo(wr, side), blockStyle);
                         batch = wallBatch;
                     }
                     const lip = hatch === 'frame' ? walls[k + 'Lip'] : 0;
@@ -59798,7 +60566,7 @@ extendClass(RenderManager, {
                         let col;
                         if (edge === 0) col = walls[k + 'Cracked'] ? mp.crack : '#05060a';
                         else if (doorRim) col = edge === width - 1 ? '#05060a' : pal.accent;
-                        else if (edge <= lip) col = this.hatchLipCell(env.style, pal, mp, cx, wr, edge);
+                        else if (edge <= lip) col = this.hatchLipCell(blockStyle, pal, mp, cx, wr, edge);
                         else if (walls[k + 'Sill'] && edge < walls[k + 'Sill']) {
                             /* Soft sill — hash speckles, not a checker stripe. */
                             col = edge === 1 ? mp.lit[0]
@@ -59806,7 +60574,7 @@ extendClass(RenderManager, {
                         }
                         else if (edge === 1) col = side ? mp.lit[1] : mp.lit[0];
                         else if (edge < width - base) {
-                            col = this.structureCell(env.style || 'asteroid', pal, mp, edge, width - base, stT, wr);
+                            col = this.structureCell(blockStyle, pal, mp, edge, width - base, stT, wr);
                         }
                         else col = this.terrainMaterialCell(mat.id, mp, cx, wr, edge);
                         const px = cx * cell;
@@ -59872,6 +60640,21 @@ extendClass(RenderManager, {
         this._terrainWallDims = { w: cols * cell, h: rowsN * cell };
     },
     /** '#rgb' / '#rrggbb' / opaque rgb(a) → packed little-endian RGBA, or null when not exactly representable. */
+    /**
+     * Resolved visual style for one coarse block of the side wall/floor, so a
+     * planet's terrain reads as a MIX of its holding faction's style plus a
+     * rival/plain-rock accent (organic AND mechanical bits side by side)
+     * instead of one style painted end-to-end. `bx`/`by` are block (not
+     * cell) coordinates — pick a block size that keeps each structure/patch
+     * visually coherent (one bunker, one pod, not a flickering pixel mix).
+     */
+    resolveMixedStyle(env, bx, by) {
+        const styles = env && env.styles;
+        if (!styles || styles.length < 2) return (env && env.style) || 'asteroid';
+        const h = this.envHash(bx | 0, (by | 0) * 7919 + 11);
+        return this.pickWeighted(styles, () => h);
+    },
+
     /** Faction look of a hangar frame cell (the lip around the opening). */
     hatchLipCell(style, pal, mp, cx, wr, edge) {
         const h = this.envHash(cx * 5 + edge, wr * 3 + 17);
@@ -59915,8 +60698,8 @@ extendClass(RenderManager, {
      * Recess behind an open hangar slot, drawn on the floor layer: dark bay
      * with accent chevrons pointing into the corridor, so it reads as a launch door.
      */
-    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info) {
-        const style = env.style || 'asteroid';
+    drawHatchRecess(push, env, pal, mp, side, cols, depth, wr, y, cell, info, styleOverride) {
+        const style = styleOverride || env.style || 'asteroid';
         const inner = { tech: '#07090d', organic: '#14060b', spike: '#0b0507', scrap: '#0b0a08' }[style] || '#06070a';
         const mid = info ? info.frame + (info.len - 2 * info.frame - 1) / 2 : 0;
         const dy = info ? Math.abs(info.t - mid) : 99;
@@ -60205,7 +60988,9 @@ extendClass(RenderManager, {
      * rivets, claw scores or scrap welds — never a full replacement pattern.
      */
     terrainFactionTint(env, pal, cx, wr, col, n) {
-        const style = (env && env.style) || 'asteroid';
+        // 16-cell patches so doctrine marks read as distinct organic/mechanical
+        // zones on the floor instead of flickering style per pixel.
+        const style = this.resolveMixedStyle(env, Math.floor(cx / 16), Math.floor(wr / 16));
         const g = pal.ground;
         switch (style) {
             case 'organic': { // Voidborn: glowing pores and soft tissue blotches
@@ -60745,12 +61530,27 @@ window.combatVoxels = {
         if (!entity) return;
         const unit = c != null ? c : this.cell();
         if (unit == null || !(unit > 0)) return;
-        const x = entity.x || 0;
-        const y = entity.y || 0;
-        const sx = Math.round(x / unit) * unit;
-        const sy = Math.round(y / unit) * unit;
-        if (sx !== x) entity.x = sx;
-        if (sy !== y) entity.y = sy;
+        // Re-rounding entity.x cold every frame discards any movement smaller
+        // than one cell, permanently freezing slow movers (a side craft easing
+        // in at ~1px/frame never clears a wider cell — same failure mode the
+        // terrainOffset note above already calls out). Fold this frame's nudge
+        // (entity.x minus what we last snapped it to) into a running true
+        // position instead, so slow, steady movement still crosses cell
+        // boundaries over time rather than being rounded back to the same spot.
+        const lastX = entity._snapLastX;
+        const lastY = entity._snapLastY;
+        const deltaX = lastX != null ? (entity.x || 0) - lastX : 0;
+        const deltaY = lastY != null ? (entity.y || 0) - lastY : 0;
+        const trueX = (entity._snapTrueX != null ? entity._snapTrueX : (entity.x || 0)) + deltaX;
+        const trueY = (entity._snapTrueY != null ? entity._snapTrueY : (entity.y || 0)) + deltaY;
+        const sx = Math.round(trueX / unit) * unit;
+        const sy = Math.round(trueY / unit) * unit;
+        entity._snapTrueX = trueX;
+        entity._snapTrueY = trueY;
+        entity._snapLastX = sx;
+        entity._snapLastY = sy;
+        if (sx !== entity.x) entity.x = sx;
+        if (sy !== entity.y) entity.y = sy;
     },
     snapWorld() {
         const c = this.cell();
@@ -60852,9 +61652,9 @@ var ParallaxManager = class ParallaxManager {
         }));
         if (this.horizontalOffset == null) this.horizontalOffset = 0;
         if (this.horizontalSpeed == null) this.horizontalSpeed = 0.05;
-        if (!this.flyingStars) this.flyingStars = [];
         if (this.starSpawnTimer == null) this.starSpawnTimer = 0;
-        if (this.starSpawnInterval == null) this.starSpawnInterval = 2000;
+        if (this.starSpawnInterval == null) this.starSpawnInterval = 120;
+        if (!this.flyingStars || !this.flyingStars.length) this.seedFlyingStars();
     }
 
     setLayerOpacity(index, opacity) {
@@ -60882,9 +61682,9 @@ var ParallaxManager = class ParallaxManager {
         this.layers = this.getPlanetLayers(this.currentPlanet);
         this.horizontalOffset = 0;
         this.horizontalSpeed = 0.05;
-        this.flyingStars = [];
         this.starSpawnTimer = 0;
-        this.starSpawnInterval = 2000;
+        this.starSpawnInterval = 120;
+        this.seedFlyingStars();
     }
 
     /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
@@ -60982,6 +61782,12 @@ var ParallaxManager = class ParallaxManager {
         ctx.fillStyle = backgroundColor || '#0a0a0a';
         const cw = (ctx.canvas && ctx.canvas.width) || 240;
         const ch = (ctx.canvas && ctx.canvas.height) || 300;
+        // Flying stars are spawned/culled against this, not the 400x600 the
+        // tiled layer patterns assume — the actual canvas is usually smaller
+        // (backing-store scale), so sampling across 400x600 scattered most
+        // stars outside the visible area.
+        this._starFieldW = cw;
+        this._starFieldH = ch;
         ctx.fillRect(0, 0, cw, ch);
 
         // Render parallax background layers (respect visibility + opacity)
@@ -61204,13 +62010,32 @@ extendClass(ParallaxManager, {
         return `rgb(${r}, ${g}, ${b})`;
     },
 
+    /** Fills the field immediately so a fresh stage never opens on empty space. */
+    seedFlyingStars(count) {
+        this.flyingStars = [];
+        if (!this._starFieldW || !this._starFieldH) {
+            // No render() yet this session (fresh load) — read the real canvas once
+            // so the very first seed isn't scattered across the old 400x600 default.
+            const cv = (typeof document !== 'undefined') && document.getElementById('gameCanvas');
+            if (cv && cv.width && cv.height) {
+                this._starFieldW = cv.width;
+                this._starFieldH = cv.height;
+            }
+        }
+        const n = count != null ? count : 70;
+        for (let i = 0; i < n; i++) this.spawnFlyingStar(true);
+    },
+
     updateFlyingStars(deltaTime) {
         this.starSpawnTimer += deltaTime;
 
-        // Spawn new stars
-        if (this.starSpawnTimer >= this.starSpawnInterval) {
-            this.spawnFlyingStar();
-            this.starSpawnTimer = 0;
+        // Spawn new stars, several at a time — a trickle of one every couple
+        // seconds reads as empty space instead of a starfield. Capped so a
+        // star that happens to drift at ~0 speed can't make this unbounded.
+        const maxStars = 140;
+        while (this.starSpawnTimer >= this.starSpawnInterval) {
+            if (this.flyingStars.length < maxStars) this.spawnFlyingStar();
+            this.starSpawnTimer -= this.starSpawnInterval;
         }
 
         // Update existing stars
@@ -61220,29 +62045,39 @@ extendClass(ParallaxManager, {
             star.y += star.speedY;
 
             // Remove stars that are off screen
-            if (star.x < -10 || star.x > 410 || star.y < -10 || star.y > 610) {
+            const fw = this._starFieldW || 400;
+            const fh = this._starFieldH || 600;
+            if (star.x < -10 || star.x > fw + 10 || star.y < -10 || star.y > fh + 10) {
                 this.flyingStars.splice(i, 1);
             }
         }
     },
 
-    spawnFlyingStar() {
+    /** `fromEdge` false (initial seed) scatters across the whole field instead of spawning at the rim. */
+    spawnFlyingStar(seeding) {
+        // Depth: smaller/dimmer stars drift slower (far background), bigger/brighter ones faster (near).
+        const depth = Math.random();
+        const size = depth < 0.6 ? 1 : (depth < 0.9 ? 2 : 3);
+        const speedScale = 0.3 + depth * 1.4;
         const star = {
-            x: Math.floor(Math.random() * 400),
-            y: Math.floor(Math.random() * 600),
-            speedX: (Math.random() - 0.5) * 2,
-            speedY: (Math.random() - 0.5) * 2,
-            size: Math.floor(Math.random() * 2 + 1)
+            x: Math.floor(Math.random() * (this._starFieldW || 400)),
+            y: Math.floor(Math.random() * (this._starFieldH || 600)),
+            speedX: (Math.random() - 0.5) * 2 * speedScale,
+            speedY: (Math.random() - 0.5) * 2 * speedScale,
+            size: size,
+            alpha: 0.5 + depth * 0.5
         };
         this.flyingStars.push(star);
+        return star;
     },
 
     drawFlyingStars(ctx) {
         ctx.save();
-        ctx.globalAlpha = this.starsOpacity != null ? this.starsOpacity : 0.35;
+        const baseOpacity = this.starsOpacity != null ? this.starsOpacity : 0.35;
         const starColor = this.envVar('--env-primary') || '#808080';
         ctx.fillStyle = starColor;
         this.flyingStars.forEach(star => {
+            ctx.globalAlpha = Math.max(0, Math.min(1, baseOpacity * (star.alpha != null ? star.alpha : 1)));
             ctx.fillRect(Math.floor(star.x), Math.floor(star.y), Math.floor(star.size), Math.floor(star.size));
         });
         ctx.restore();
@@ -61356,8 +62191,8 @@ extendClass(ParallaxManager, {
             layer.y = 0;
         });
         this.horizontalOffset = 0;
-        this.flyingStars = [];
         this.starSpawnTimer = 0;
+        this.seedFlyingStars();
     },
 });
 
@@ -62971,9 +63806,50 @@ var PlanetViewerUI = class PlanetViewerUI {
         });
     }
 
+    /** Static icon (list rows): many can be on screen at once, so no spin cost. */
+    planetIconHtmlStatic(planetId, size) {
+        const sid = String(planetId || 'mars').toLowerCase();
+        const px = size || 32;
+        if (typeof planetSVGManager !== 'undefined') {
+            if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
+                planetSVGManager.init();
+            }
+            let svg = planetSVGManager.getPlanetSVG(sid);
+            if (svg) {
+                const uid = 'pv_' + sid + '_' + Math.random().toString(36).slice(2, 7);
+                svg = svg
+                    .replace(/id="([^"]+)"/g, (m, id) => `id="${uid}_${id}"`)
+                    .replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${uid}_${id})`)
+                    .replace(/width="\d+"/, `width="${px}"`)
+                    .replace(/height="\d+"/, `height="${px}"`);
+                return `<span class="cv-icon cv-planet-icon">${svg}</span>`;
+            }
+        }
+        return `<span class="cv-icon cv-planet-fallback" data-planet="${sid}" style="width:${px}px;height:${px}px"></span>`;
+    }
+
+    /** Animated hero icon (one at a time, the selected-planet detail view). */
     planetIconHtml(planetId, size) {
         const sid = String(planetId || 'mars').toLowerCase();
         const px = size || 32;
+        // Shared spin pipeline (js/graphics/planet-svgs/spin-frames.js) so the
+        // preview's lava/clouds/bands turn like everywhere else, instead of a
+        // once-baked static SVG. Reserved for the single big detail icon —
+        // the "featured" bucket in startPlanetSpin's round-robin repaints
+        // every tick, so it must stay a handful of icons, not a whole list.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+            const html = galaxyMapManager.planetIconHtml(sid, px, true);
+            if (html) {
+                // The wrapper span needs an explicit pixel box: outside the galaxy
+                // map's SVG/flex frame it sits in a plain flex row with no height,
+                // so its 100%-height CSS collapses to 0px. That makes the spin
+                // timer's getBoundingClientRect visibility check treat it as
+                // off-screen forever after the first paint, freezing the planet.
+                return html
+                    .replace('gm-planet-icon', 'gm-planet-icon cv-icon cv-planet-icon')
+                    .replace('class="gm-planet-icon', `style="width:${px}px;height:${px}px" class="gm-planet-icon`);
+            }
+        }
         if (typeof planetSVGManager !== 'undefined') {
             if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
                 planetSVGManager.init();
@@ -63536,7 +64412,7 @@ extendClass(PlanetViewerUI, {
                     btn.type = 'button';
                     btn.className = 'content-viewer-item' + (flatIndex === this.selectedIndex ? ' selected' : '');
                     btn.innerHTML =
-                        this.planetIconHtml(planet.id, 32) +
+                        this.planetIconHtmlStatic(planet.id, 32) +
                         `<span class="cv-item-label">${planet.name}` +
                         (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
                             ? devProfileToggles.badgesHtml(this.planetProgressFlags(planet))
@@ -79679,10 +80555,18 @@ extendClass(GalaxyMapManager, {
             const okB = devLit || this.isUnlocked(edge[1]);
             // A lane is lit only when travel along it is possible (both ends
             // reachable). A lane to a still-locked planet stays dim: no gate on it.
-            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB
+            const locked = !(okA && okB);
+            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (!locked
                 ? (hereIds.indexOf(edge[0]) !== -1 || hereIds.indexOf(edge[1]) !== -1 ? 'lit next' : 'lit')
                 : 'dim') + ' gm-e-' + edge[0] + ' gm-e-' + edge[1]
                 + (routeIds && routeIds.indexOf(edge[0]) !== -1 && routeIds.indexOf(edge[1]) !== -1 ? ' on-route' : ''));
+            // .gm-pxline is pointer-events:none (dense lines must not fight each other for hover);
+            // a locked lane still needs to be hoverable so its lock icon can show, so lay an
+            // invisible wider hit-stroke over just the dim ones.
+            if (locked) {
+                edgesHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" ` +
+                    `stroke-width="14" pointer-events="stroke" class="gm-edge-hit gm-e-${edge[0]} gm-e-${edge[1]}"></line>`;
+            }
         });
         // Border stations always sit on top of the beams (a beam never runs across one).
         return edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + backBlocks + frontBlocks;
@@ -80038,8 +80922,16 @@ extendClass(GalaxyMapManager, {
             const showShipLabel = (this.mapZoom || 1) < 1.1 &&
                 !centered &&
                 this._shipLabelReady;
-            // Under GP skip sub-pixel bob — it fights the shared screen lattice.
-            const bob = gpOn ? '' : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
+            // Under GP a plain sub-pixel tween fights the shared screen lattice (shimmers
+            // between lattice cells instead of looking like clean pixel steps), so snap the
+            // bob's amplitude to whole lattice cells and step between them (calcMode=discrete)
+            // instead of smoothly interpolating sub-cell positions.
+            const uLat = gpOn && this.mapPxLatticeUnit ? this.mapPxLatticeUnit() : 0;
+            const bob = gpOn
+                ? (uLat > 0
+                    ? `<animateTransform attributeName="transform" type="translate" values="0 0; 0 -${uLat}; 0 0; 0 ${uLat}; 0 0" keyTimes="0;0.25;0.5;0.75;1" calcMode="discrete" dur="2.4s" repeatCount="indefinite"/>`
+                    : '')
+                : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
             shipHtml = `
                 <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
                     <title>YOUR SHIP</title>
@@ -81707,16 +82599,27 @@ extendClass(GalaxyMapManager, {
                 const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
                 return Math.hypot(pt.x - at.x, pt.y - at.y) <= this.planetNodeSize(pid) / 2;
             };
+            // Hovering a dim (locked) lane shows the same lock-icon route preview its
+            // locked endpoint would, so the gate reads from the line too, not just the planet.
+            const lockedEdgeTarget = (e) => {
+                const edge = e.target && e.target.closest && e.target.closest('.gm-edge-hit');
+                if (!edge) return null;
+                return Array.from(edge.classList)
+                    .map((c) => (c.indexOf('gm-e-') === 0 ? c.slice(5) : null))
+                    .find((id) => id && !this.isUnlocked(id)) || null;
+            };
             svg.addEventListener('pointermove', (e) => {
                 const pid = this.hoveredPlanetId;
                 if (pid) {
-                    if (!inDisc(pid, e)) clear();
-                    return;
+                    if (inDisc(pid, e) || lockedEdgeTarget(e) === pid) return;
+                    clear();
                 }
                 // Back onto the disc from the frame area (no new pointerenter).
                 const node = e.target && e.target.closest && e.target.closest('.gm-node[data-planet]');
                 const over = node && node.getAttribute('data-planet');
-                if (over && inDisc(over, e)) this.setHoveredPlanet(over);
+                if (over && inDisc(over, e)) { this.setHoveredPlanet(over); return; }
+                const lockedId = lockedEdgeTarget(e);
+                if (lockedId) this.setHoveredPlanet(lockedId);
             });
         }
         this.overlay.querySelectorAll('.gm-node').forEach(node => {
@@ -84007,17 +84910,16 @@ extendClass(GalaxyMapManager, {
         this._orbitTick = (this._orbitTick || 0) + 1;
         const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
         if (routeOnPost && this._orbitTick % 3 === 0 && this.syncRoutePreview) this.syncRoutePreview();
+        if (this._orbitTick % 3 === 0 && this.hoveredPlanetId && this.syncHoverRoute) this.syncHoverRoute();
     },
     startOrbitLoop() {
         if (this._orbitTimer) return;
         // 4 Hz is enough for slow station orbits; 10 Hz was mostly SVG attribute thrash.
+        // Station position is gameplay, not decoration — it keeps moving even with
+        // FX animation / performance mode off (those only mute purely cosmetic motion).
         this._orbitTimer = setInterval(() => {
             if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
             if (document.hidden) return;
-            try {
-                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off'
-                    || document.documentElement.getAttribute('data-vf-performance') != null) return;
-            } catch (e) { /* tick */ }
             this.tickOrbits();
         }, 250);
     },
@@ -92038,7 +92940,7 @@ var HomeStationUI = class HomeStationUI {
             hangar: { label: 'HANGAR', icon: 'hsHangar' },
             components: { label: 'COMPONENTS', icon: 'hsComponents' },
             shop: { label: 'SHOP', icon: 'hsShop' },
-            missions: { label: 'LOG', icon: 'hsExplore' },
+            missions: { label: 'MISSIONS', icon: 'hsExplore' },
             craft: { label: 'CRAFT', icon: 'hsCraft' },
             travel: { label: 'TRAVEL', icon: 'hsTeleport' },
             explorations: { label: 'EXPLORATIONS', icon: 'hsExplore' },
@@ -92552,6 +93454,7 @@ extendClass(HomeStationUI, {
      * so they can still return.
      */
     isPlayLaunchUnlocked() {
+        if (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()) return true;
         if (typeof profileManager === 'undefined' || !profileManager.hasClearedAnyStage) return true;
         return !!profileManager.hasClearedAnyStage();
     },
@@ -93831,6 +94734,92 @@ extendClass(HomeStationUI, {
         this._syncTabsUnlockReveal(this.overlay.querySelector('.hs-tabs'), hideTabsForTutorial);
     },
 
+    /**
+     * Tutorial hides the area nav until the first planet is cleared.
+     * Dev mode (Shift+C) always shows every nav button.
+     */
+    shouldHideTabsForTutorial(profile) {
+        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return false;
+        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
+            return !profileManager.hasClearedFirstPlanet(profile);
+        }
+        return false;
+    },
+
+    /**
+     * Shift+C: refresh only nav chrome (area tabs + subnav). Keeps the shell
+     * and active body so toggling dev mode stays cheap (~DOM patch, no rebuild).
+     */
+    /** Insert/remove the header's LAUNCH button to match current tab + unlock state —
+     *  the soft-render paths below only patch chrome in place, so this must run after
+     *  anything that could change `isPlayLaunchUnlocked()` (tab switch, dev mode toggle). */
+    _syncPlayLaunchButton(content) {
+        let playBtn = content.querySelector('[data-play-launch]');
+        const shouldShowLaunch = !(this.tab === 'play' && !this.isPlayLaunchUnlocked());
+        if (!playBtn && shouldShowLaunch) {
+            const header = content.querySelector('.hs-header');
+            const headerMain = header && header.querySelector('.hs-header-main');
+            if (header && headerMain) {
+                const wrap = document.createElement('div');
+                wrap.innerHTML = this.renderPlayLaunch();
+                const el = wrap.firstElementChild;
+                if (el) {
+                    header.insertBefore(el, headerMain);
+                    playBtn = el;
+                }
+            }
+        } else if (playBtn && !shouldShowLaunch) {
+            // Dev mode (or a prior clear) made it show; if that got toggled off again
+            // while still unprogressed and on the play tab, it must hide once more.
+            playBtn.remove();
+            playBtn = null;
+        }
+        if (playBtn) {
+            playBtn.classList.toggle('active', this.tab === 'play');
+            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
+        }
+    },
+
+    syncDevModeChrome() {
+        if (!this.isVisible || !this.overlay) return;
+        const content = this.overlay.querySelector('.vf-browser-shell .home-station-content')
+            || this.overlay.querySelector('.home-station-content');
+        if (!content) return;
+        this._syncPlayLaunchButton(content);
+        const profile = this.getProfile();
+        const hide = this.shouldHideTabsForTutorial(profile);
+        const tabsWrap = content.querySelector('.hs-tabs');
+        if (tabsWrap) {
+            const needFill = !hide && !tabsWrap.firstElementChild;
+            tabsWrap.classList.toggle('hs-tabs-hidden', !!hide);
+            if (needFill) {
+                tabsWrap.innerHTML = this.renderTabs();
+                this._bindSoftTabButtons(tabsWrap);
+                tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+                    if (menuBtn.dataset.vfSoftBound === '1') return;
+                    menuBtn.dataset.vfSoftBound = '1';
+                    menuBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+                    });
+                });
+            }
+            this._syncTabsUnlockReveal(tabsWrap, hide);
+        }
+        const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
+        // Force subnav rebuild so COMPONENTS / LAYOUT appear or vanish.
+        this._softAreaId = null;
+        if (this._syncSoftNavChrome(content, bodyEl, hide)) {
+            const sub = content.querySelector(':scope > .hs-subnav');
+            if (sub) this._bindSoftTabButtons(sub);
+        }
+        if (this.statusMsg && this.showStatusToast) {
+            this.showStatusToast(this.statusMsg);
+            this.statusMsg = '';
+        }
+    },
+
     /** First-planet unlock: when the nav tabs flip from hidden to shown, play a reveal animation. */
     _syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial) {
         if (!tabsWrap) return;
@@ -93849,21 +94838,27 @@ extendClass(HomeStationUI, {
 
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
-        const walletHtml = this.renderResourceList(profile.resources, 'station');
-        const stationBpHtml = this.renderBlueprintList(profile);
         const stats = (typeof profileManager !== 'undefined')
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
+        // Each owned ship gets its own card (own tbody): the ship row and its Ship Storage grid
+        // combined as one visual unit, action buttons top-right of the row.
         const ownedHtml = owned.length
-            ? this.shipTableHtml(owned.map((id) => this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                (id === profile.activeShipId
-                    ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
-                    : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
-                      `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
-                `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
-                `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`
-            )).join(''), true)
+            ? `<table class="hs-ship-table">${owned.map((id) => {
+                const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
+                    (id === profile.activeShipId
+                        ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
+                        : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
+                          `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
+                    `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                    `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
+                const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
+                    `<div class="hs-ship-storage-caption">SHIP STORAGE</div>` +
+                    `<div class="hs-row">${this.renderShipStorage(profile, id)}</div>` +
+                    `</td></tr>`;
+                return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
+            }).join('')}</table>`
             : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
         const slotsLabel = `${owned.length}/${stats.shipSlots}`;
 
@@ -93909,31 +94904,24 @@ extendClass(HomeStationUI, {
                             <strong>STATION STORAGE</strong>
                         </div>
                     </div>
-                    <div class="hs-panel hs-panel-stores">
-                        ${this.panelTitle('hsStores', 'STATION STORES')}
-                        <div class="hs-row hs-res-grid">${walletHtml}</div>
-                    </div>
-                    <div class="hs-panel hs-panel-bp">
-                        ${this.panelTitle('hsBlueprint', 'BLUEPRINTS')}
-                        <div class="hs-row hs-bp">${stationBpHtml}</div>
-                    </div>
                     <div class="hs-panel-stack">
                         <div class="hs-panel hs-panel-ships">
                             ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </div>
-                        <div class="hs-panel hs-panel-parts">
-                            ${this.panelTitle('hsCraft', 'PARTS')}
-                            <div class="hs-row">${this.renderPartsList(profile)}</div>
+                        <div class="hs-panel hs-panel-parts hs-panel-storage">
+                            ${this.panelTitle('hsCraft', 'STATION STORAGE')}
+                            <div class="hs-row">${this.renderStationStorage(profile)}</div>
                         </div>
+                    </div>
+                    <div class="hs-panel hs-panel-chambers">
+                        ${this.panelTitle('hsStores', 'STATION STORES')}
+                        <div class="hs-row">${this.renderResourceChambers(profile)}</div>
                     </div>
                 </div>`;
         }
 
-        let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
-        }
+        const hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const bodyClass = isPlay
@@ -94023,10 +95011,7 @@ extendClass(HomeStationUI, {
         }
 
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
-        let hideTabsForTutorial = false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            hideTabsForTutorial = !profileManager.hasClearedFirstPlanet(profile);
-        }
+        let hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
         const isMenu = this.tab === 'menu';
         const isComp = this.tab === 'components';
@@ -94053,11 +95038,7 @@ extendClass(HomeStationUI, {
         // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
         const subRebound = this._syncSoftNavChrome(content, bodyEl, hideTabsForTutorial);
 
-        const playBtn = content.querySelector('[data-play-launch]');
-        if (playBtn) {
-            playBtn.classList.toggle('active', this.tab === 'play');
-            playBtn.classList.toggle('holo-on', this.holoJustOn('play', this.tab === 'play'));
-        }
+        this._syncPlayLaunchButton(content);
 
         // Fresh body needs binds; cache hit already has listeners on parked nodes.
         if (!cacheHit) this._bindSoftBodyChrome(bodyEl);
@@ -94648,6 +95629,14 @@ extendClass(HomeStationUI, {
         }
 
         // Remember which planets were reachable, so the map can reveal newly unlocked ones after the run.
+        // The map may not have been opened yet this session — load it so the snapshot isn't skipped.
+        if (typeof galaxyMapManager !== 'undefined' && !galaxyMapManager.map && galaxyMapManager.loadMap) {
+            galaxyMapManager.galaxyId = galaxyMapManager.galaxyId
+                || (typeof profileManager !== 'undefined' && profileManager.getCurrentGalaxyId
+                    ? profileManager.getCurrentGalaxyId(profileManager.getActiveProfile())
+                    : 'milky_way');
+            galaxyMapManager.loadMap();
+        }
         if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.map) {
             galaxyMapManager._preRunUnlocked = {
                 galaxyId: galaxyMapManager.galaxyId,
@@ -97822,51 +98811,243 @@ extendClass(HomeStationUI, {
             `<span class="hs-empty-txt">${text}</span></div>`;
     },
 
-    renderPartsList(profile) {
-        const weapons = Object.keys((profile.parts && profile.parts.weapons) || {})
-            .filter((id) => (profile.parts.weapons[id] || 0) > 0);
-        const defenses = Object.keys((profile.parts && profile.parts.defenses) || {})
-            .filter((id) => (profile.parts.defenses[id] || 0) > 0);
-        const abilities = Object.keys((profile.parts && profile.parts.abilities) || {})
-            .filter((id) => (profile.parts.abilities[id] || 0) > 0);
-        if (!weapons.length && !defenses.length && !abilities.length) {
-            return this.emptyHtml('statAbilities', 'NO PARTS YET');
+    /** Border/accent color per bucket, same mapping the hangar bay-inventory grid uses. */
+    _storageBucketColor(bucket) {
+        const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d;
+        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
+        const fallback = { weapon: '#ff6a4a', defense: '#4ac8ff', energy: '#ffd24a', ability: '#c08cff' }[kind];
+        return g(kind, fallback);
+    },
+
+    /** Display name + icon + label prefix for one storage-bucket item (weapons/defenses/abilities/energy/blueprints).
+     *  kind/physId identify the underlying part for the physical-item casing (physical-item.js). */
+    _storageItemMeta(bucket, id) {
+        if (bucket === 'blueprints') {
+            const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(id) : id;
+            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
+            const kind = (bp && bp.kind) || 'weapon';
+            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: 'BP ' + name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
         }
-        const chips = [];
-        weapons.forEach((id) => {
+        if (bucket === 'weapons') {
             const name = (typeof weaponConfigManager !== 'undefined')
-                ? String(weaponConfigManager.getWeapon(id).name || id).toUpperCase()
-                : id.toUpperCase();
-            chips.push(
-                `<span class="hs-chip hs-chip-part">` +
-                `<span class="hs-chip-icon">${this.iconHtml('statWeapon', 32, 'hs-pixel')}</span>` +
-                `<span class="hs-chip-text">WPN ${name} ×${profile.parts.weapons[id]}</span>` +
-                `</span>`
-            );
-        });
-        defenses.forEach((id) => {
+                ? String(weaponConfigManager.getWeapon(id).name || id).toUpperCase() : id.toUpperCase();
+            return { icon: this.iconHtml('statWeapon', 32, 'hs-pixel'), label: 'WPN ' + name, color: this._storageBucketColor(bucket), kind: 'weapon', physId: id };
+        }
+        if (bucket === 'defenses') {
             const name = (typeof abilityConfigManager !== 'undefined')
-                ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase()
-                : id.toUpperCase();
-            chips.push(
-                `<span class="hs-chip hs-chip-part">` +
-                `<span class="hs-chip-icon">${this.iconHtml('statArmor', 32, 'hs-pixel')}</span>` +
-                `<span class="hs-chip-text">DEF ${name} ×${profile.parts.defenses[id]}</span>` +
-                `</span>`
-            );
+                ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase() : id.toUpperCase();
+            return { icon: this.iconHtml('statArmor', 32, 'hs-pixel'), label: 'DEF ' + name, color: this._storageBucketColor(bucket), kind: 'defense', physId: id };
+        }
+        // abilities / energy
+        const name = (typeof abilityConfigManager !== 'undefined')
+            ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase() : id.toUpperCase();
+        return { icon: this.iconHtml('statAbilities', 32, 'hs-pixel'), label: (bucket === 'energy' ? 'PWR ' : 'ABL ') + name, color: this._storageBucketColor(bucket), kind: bucket === 'energy' ? 'energy' : 'ability', physId: id };
+    },
+
+    /** Cost + affordability lines for a blueprint, for its storage-tile tooltip. */
+    _blueprintCostLines(profile, key) {
+        if (typeof profileManager === 'undefined' || !profileManager.getBlueprintCraftCost) return [];
+        const cost = profileManager.getBlueprintCraftCost(key, profile);
+        if (!cost) return [];
+        const afford = this.canAffordCost(profile.resources, cost, profile);
+        const costText = Object.keys(cost).map((k) => cost[k] + ' ' + k.toUpperCase()).join(' · ');
+        return costText ? ['COST ' + costText, afford ? 'READY TO CRAFT' : 'NOT ENOUGH RESOURCES'] : [];
+    },
+
+    /** Dimmed placeholder cell for a bucket with no owned items in this view — shows the category icon, greyed out. */
+    _storageCategoryPlaceholder(bucket) {
+        const color = this._storageBucketColor(bucket);
+        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
+        // Reuse the physical-item generative casing (physical-item.js) for a detailed silhouette, darkened heavily via CSS.
+        const body = (typeof physicalItem !== 'undefined') ? physicalItem.wrap(kind, 'placeholder', 40, 40, color, '') : '';
+        const html = `<span class="hs-storage-cell is-empty" style="__SPAN__--pk-c:${color}" aria-hidden="true">${body}</span>`;
+        return { html, span: [1, 1] };
+    },
+
+    /** Station resources as vertical fill-level chambers (replaces the flat chip row).
+     *  The chamber grows with the station's resource-cap upgrade level, not just the fill amount. */
+    renderResourceChambers(profile) {
+        const ids = (typeof economyConfig !== 'undefined') ? economyConfig.resourceIds : Object.keys((profile && profile.resources) || {});
+        const stats = (typeof profileManager !== 'undefined' && profile) ? profileManager.getStationStats(profile) : { resourceCap: 80 };
+        const cap = Math.max(1, stats.resourceCap || 80);
+        const baseCap = (typeof economyConfig !== 'undefined' && economyConfig.stationBaseStats && economyConfig.stationBaseStats.resourceCap) || 80;
+        const upgradeScale = Math.max(1, cap / baseCap);
+        const width = Math.round(Math.min(88, 55 * Math.min(1.5, Math.sqrt(upgradeScale))));
+        const map = (profile && profile.resources) || {};
+        const cells = ids.map((id) => {
+            const n = map[id] || 0;
+            const pct = Math.max(0, Math.min(100, Math.round(n / cap * 100)));
+            const label = (typeof economyConfig !== 'undefined') ? economyConfig.getResourceLabel(id) : id.toUpperCase();
+            const color = (typeof economyConfig !== 'undefined' && economyConfig.resourceColors && economyConfig.resourceColors[id]) || 'var(--color-primary)';
+            const full = n >= cap ? ' is-full' : '';
+            const empty = n <= 0 ? ' is-empty' : '';
+            // Generative silo casing with the resource chunks piled up to the fill level baked in.
+            const casing = (typeof physicalItem !== 'undefined') ? physicalItem.wrapChamber(id, 48, 140, color, pct) : '';
+            return `<div class="hs-res-subcard${full}${empty}" style="--chamber-c:${color}" title="${label} ${n}/${cap}">` +
+                `<span class="hs-res-chamber-tag">` +
+                `<span class="hs-res-chamber-icon">${this.iconHtml(this.resourceIconKey(id), 24, 'hs-pixel')}</span>` +
+                `<span class="hs-res-chamber-label">${label}</span>` +
+                `</span>` +
+                `<span class="hs-res-chamber-tube" style="--tube-w:${width}%">${casing}</span>` +
+                `<span class="hs-res-chamber-value">${n}<span class="hs-res-chamber-cap">/${cap}</span></span>` +
+                `</div>`;
         });
-        abilities.forEach((id) => {
-            const name = (typeof abilityConfigManager !== 'undefined')
-                ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase()
-                : id.toUpperCase();
-            chips.push(
-                `<span class="hs-chip hs-chip-part">` +
-                `<span class="hs-chip-icon">${this.iconHtml('statAbilities', 32, 'hs-pixel')}</span>` +
-                `<span class="hs-chip-text">ABL ${name} ×${profile.parts.abilities[id]}</span>` +
-                `</span>`
-            );
+        return `<div class="hs-res-chambers">${cells.join('')}</div>`;
+    },
+
+    /** Every owned bucket/id pair with a positive count (profile.parts + profile.blueprints). */
+    _allStorageEntries(profile) {
+        const entries = [];
+        ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
+            const map = (profile.parts && profile.parts[bucket]) || {};
+            Object.keys(map).forEach((id) => { if ((map[id] || 0) > 0) entries.push({ bucket, id }); });
         });
-        return chips.join('');
+        const bpMap = profile.blueprints || {};
+        Object.keys(bpMap).forEach((key) => {
+            if ((bpMap[key] || 0) > 0 && profileManager.parseBlueprintKey(key)) entries.push({ bucket: 'blueprints', id: key });
+        });
+        return entries;
+    },
+
+    /** N dashed placeholder cells, same look as the hangar bay-inventory grid's empty slots. */
+    _emptyStorageCells(count) {
+        const cells = [];
+        for (let i = 0; i < count; i++) cells.push(`<span class="hs-storage-cell hs-storage-cell-empty"></span>`);
+        return cells.join('');
+    },
+
+    /** Grid footprint [w, h] in slots for a bucket/id item, same sizing the hangar bay-inventory grid uses. */
+    _storageItemSpan(bucket, id) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        if (!slm || !slm.getPartSizeLevel || bucket === 'blueprints') return [1, 1];
+        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
+        const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, id) | 0));
+        return [[1, 1], [1, 2], [2, 2]][lv];
+    },
+
+    /** Grid shape (cols x rows) for a ship's storage — the same shape the hangar bay-inventory grid uses for that hull. */
+    _storageGrid(shipId) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        return (slm && slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : null) || { cols: 4, rows: 2 };
+    },
+
+    /** Station storage's own grid shape — always at least 10x4, independent of any ship, growing rows if it holds more than that. */
+    STATION_STORAGE_COLS: 10,
+    STATION_STORAGE_ROWS: 4,
+    _stationStorageGrid(entryCount) {
+        const cols = this.STATION_STORAGE_COLS;
+        const rows = Math.max(this.STATION_STORAGE_ROWS, Math.ceil(entryCount / cols));
+        return { cols, rows };
+    },
+
+    /** Item cells padded out to fill cols x rows with empty cells. Cell size (--cs) is pinned to the station storage grid's 10-column
+     *  width so ship storage — a smaller grid in the same panel — uses the exact same slot size instead of stretching to fill its row. */
+    _storageGridHtml(cellSpecs, grid) {
+        const capacity = grid.cols * grid.rows;
+        const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const pad = Math.max(0, capacity - used);
+        const baseCols = this.STATION_STORAGE_COLS;
+        // cqw (not %) — the host row is a size container (part-07.css), so this stays the same
+        // physical cell size whether it ends up sizing a column (width) or a row (height).
+        const csExpr = `min(56px, calc((${100 / baseCols}cqw) - ${(baseCols - 1) * 4 / baseCols}px))`;
+        const cells = cellSpecs.map((c) => c.html.replace('__SPAN__', `grid-column: span ${c.span[0]}; grid-row: span ${c.span[1]};`));
+        return `<div class="hs-storage-grid" style="--cs: ${csExpr}; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, var(--cs)); grid-template-rows: repeat(${grid.rows}, var(--cs)); width: calc(${grid.cols} * var(--cs) + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * var(--cs) + ${grid.rows - 1} * 4px)">` +
+            cells.join('') + this._emptyStorageCells(pad) + `</div>`;
+    },
+
+    /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles. */
+    renderStationStorage(profile) {
+        const entries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
+        const activeShipId = profile.activeShipId;
+        const cells = entries.map((e) => {
+            const qty = profileManager.getStationStorageQty(profile, e.bucket, e.id);
+            const meta = this._storageItemMeta(e.bucket, e.id);
+            const span = this._storageItemSpan(e.bucket, e.id);
+            const body = (typeof physicalItem !== 'undefined')
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * 48 - 8, span[1] * 48 - 8, meta.color, '') : '';
+            const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
+            if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined' && activeShipId) {
+                const L2 = shipLoadoutManager.getLoadout(activeShipId);
+                stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
+            }
+            const isBp = e.bucket === 'blueprints';
+            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-ship="${e.bucket}:${e.id}" data-ship="${activeShipId}"`;
+            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
+                : stats.concat(['×' + qty, 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to ship storage`;
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `${body}` +
+                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
+                `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
+                `</button>`;
+            return { html, span };
+        });
+        return this._storageGridHtml(cells, this._stationStorageGrid(cells.reduce((n, c) => n + c.span[0] * c.span[1], 0)));
+    },
+
+    /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles. */
+    renderShipStorage(profile, shipId) {
+        const grid = this._storageGrid(shipId);
+        if (!shipId) return this._storageGridHtml([], grid);
+        const entry = profileManager.getShipStorageEntry(profile, shipId);
+        const entries = [];
+        const seen = {};
+        const addEntry = (bucket, id) => {
+            const key = bucket + ':' + id;
+            if (seen[key]) return;
+            seen[key] = true;
+            entries.push({ bucket, id });
+        };
+        this.profileManagerShipStorageBuckets().forEach((bucket) => {
+            Object.keys(entry[bucket] || {}).forEach((id) => {
+                if ((entry[bucket][id] || 0) > 0) addEntry(bucket, id);
+            });
+        });
+        const L = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager.getLoadout(shipId) : null;
+        if (L) {
+            (L.weaponSlots || []).forEach((id) => { if (id) addEntry('weapons', id); });
+            ['defenses', 'abilities', 'energy'].forEach((bucket) => {
+                (L[bucket] || []).forEach((id) => addEntry(bucket, id));
+            });
+        }
+        const present = new Set(entries.map((e) => e.bucket));
+        const cells = entries.map((e) => {
+            const qty = profileManager.getShipStorageQty(profile, shipId, e.bucket, e.id);
+            const meta = this._storageItemMeta(e.bucket, e.id);
+            const span = this._storageItemSpan(e.bucket, e.id);
+            const body = (typeof physicalItem !== 'undefined')
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * 48 - 8, span[1] * 48 - 8, meta.color, '') : '';
+            const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
+            if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined') {
+                const L2 = shipLoadoutManager.getLoadout(shipId);
+                stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
+            }
+            const isBp = e.bucket === 'blueprints';
+            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-station="${e.bucket}:${e.id}" data-ship="${shipId}"`;
+            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
+                : stats.concat(['×' + qty, 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to station storage`;
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `${body}` +
+                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
+                `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
+                `</button>`;
+            return { html, span };
+        });
+        ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
+            if (!present.has(bucket)) cells.push(this._storageCategoryPlaceholder(bucket));
+        });
+        return this._storageGridHtml(cells, grid);
+    },
+
+    profileManagerShipStorageBuckets() {
+        return (typeof profileManager !== 'undefined' && profileManager.SHIP_STORAGE_BUCKETS)
+            ? profileManager.SHIP_STORAGE_BUCKETS
+            : ['weapons', 'defenses', 'abilities', 'energy', 'blueprints'];
     },
 
     renderShopCategoryTabs() {
@@ -98080,9 +99261,15 @@ extendClass(HomeStationUI, {
             const count = (typeof profileManager !== 'undefined')
                 ? profileManager.getPartCount(entry.kind, entry.id, profile)
                 : 0;
-            const tier = entry.kind === 'weapon'
-                ? Math.max(1, Math.round(Number((entry.item && entry.item.damage) || 10) / 12))
-                : Math.max(1, Math.round(Number((entry.item && entry.item.tier) || 1)));
+            let tier = Math.max(1, Math.round(Number((entry.item && entry.item.tier) || 1)));
+            if (entry.kind === 'weapon') {
+                if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.shopBucketForPower) {
+                    const power = balanceConfigManager.computeWeaponPower(entry.item, entry.id);
+                    tier = balanceConfigManager.shopBucketForPower(power).tier;
+                } else {
+                    tier = Math.max(1, Math.round(Number((entry.item && entry.item.damage) || 10) / 12));
+                }
+            }
             return {
                 kind: entry.kind,
                 id: entry.id,
@@ -98944,7 +100131,7 @@ extendClass(HomeStationUI, {
             `</section>`;
 
         return `<div class="hs-section hs-panel hs-missions-root hs-mission-log">` +
-            `${this.panelTitle('hsExplore', 'MISSION LOG')}` +
+            `${this.panelTitle('hsExplore', 'MISSIONS')}` +
             `<p class="hs-muted hs-hint">Main quest from your start profile · sidequests at stations &amp; planets · ${done} completed.</p>` +
             `<div class="hs-tab-fill hs-log-body">${mainHtml}${sideHtml}${offersHtml}</div>` +
             `</div>`;
@@ -104613,7 +105800,7 @@ extendClass(HomeStationUI, {
     },
     /** Stat type colour (matches the .hs-hangar-weapon-stat[data-stat] CSS). */
     hangarStatColor(type) {
-        return { damage: '#ff6a4a', shotspeed: '#4ad8ff', firerate: '#ffa04a', speed: '#6dff8a', armor: '#7aa8ff', energy: '#ffd24a' }[type] || null;
+        return { damage: '#ff6a4a', shotspeed: '#4ad8ff', firerate: '#ffa04a', speed: '#6dff8a', armor: '#7aa8ff', energy: '#ffd24a', power: '#c9a0ff' }[type] || null;
     },
     /** Ability row stat line: its stat effects as icon + change (ability-stats.js). */
     hangarAbilityStatsHtml(id) {
@@ -104700,10 +105887,17 @@ extendClass(HomeStationUI, {
         if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
         const dmg = Math.round((w.damage || 0) * classMul * factionMul);
         const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
+        let powerHtml = '';
+        if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
+            const power = balanceConfigManager.computeWeaponPower(w, id);
+            const eDps = Math.round(balanceConfigManager.volleyDps(w) * balanceConfigManager.getHitRate(id, w));
+            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false);
+        }
         return `<span class="hs-hangar-weapon-stats">` +
             stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0) +
             stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed') +
             stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate') +
+            powerHtml +
             `</span>`;
     },
     /** The weapon's on-ship hardware sprite, shown on the row when it is slotted. */
@@ -107707,12 +108901,12 @@ extendClass(HomeStationUI, {
             if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
-                    startScreenManager.toggleDevMode();
                     this.statusMsg = startScreenManager.devMode
-                        ? 'DEV MODE ON — COMPONENTS + LAYOUT UNLOCKED' : 'DEV MODE OFF';
-                    // Leaving dev mode keeps an open dev tab open; it vanishes
-                    // from the rows once you navigate away.
-                    this.createUI();
+                        ? 'DEV MODE OFF'
+                        : 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED';
+                    // toggleDevMode patches station chrome via syncDevModeChrome —
+                    // do not call createUI() again (was a full double rebuild).
+                    startScreenManager.toggleDevMode();
                 }
                 return;
             }
@@ -108325,6 +109519,8 @@ extendClass(HomeStationUI, {
 // (owned ships | blueprints | parts). Widths are kept as fr weights.
 var STATION_COLS_KEY = 'vf_station_cols_v1';
 var STATION_COLS_MIN = 0.25;
+// Floor below which a column's content (title + icon + grid) can no longer fit and gets clipped.
+var STATION_COL_MIN_PX = 220;
 
 extendClass(HomeStationUI, {
     getStationCols() {
@@ -108341,6 +109537,23 @@ extendClass(HomeStationUI, {
         const cols = this.getStationCols();
         const apply = () => { grid.style.gridTemplateColumns = cols.map((c) => `minmax(0, ${c}fr)`).join(' '); };
         apply();
+        // A layout saved before STATION_COL_MIN_PX existed (or saved at a wider window) can still be
+        // narrower than the current floor — renormalize it against the grid's actual rendered width.
+        const normalize = () => {
+            const total = cols.reduce((s, c) => s + c, 0);
+            const px = grid.offsetWidth || 1;
+            const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
+            if (cols.every((c) => c >= minFr - 0.001)) return;
+            let deficit = 0;
+            for (let k = 0; k < cols.length; k++) {
+                if (cols[k] < minFr) { deficit += minFr - cols[k]; cols[k] = minFr; }
+            }
+            const donors = cols.map((c, k) => k).filter((k) => cols[k] > minFr);
+            const donorTotal = donors.reduce((s, k) => s + (cols[k] - minFr), 0) || 1;
+            donors.forEach((k) => { cols[k] -= deficit * (cols[k] - minFr) / donorTotal; });
+            apply(); place();
+            try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (e) { /* ignore */ }
+        };
         const panels = ['.hs-panel-ships', '.hs-panel-bp', '.hs-panel-parts']
             .map((s) => grid.querySelector(s));
         if (panels.some((p) => !p)) return;
@@ -108353,16 +109566,26 @@ extendClass(HomeStationUI, {
             return h;
         });
         const place = () => {
+            // Viewport rects ÷ ancestor scale → local coords. GUI zoom
+            // makes getBoundingClientRect scaled while style.left/top stay unscaled.
+            const gRect = grid.getBoundingClientRect();
+            const scaleX = (gRect.width / (grid.clientWidth || grid.offsetWidth || 1)) || 1;
+            const scaleY = (gRect.height / (grid.clientHeight || grid.offsetHeight || 1)) || 1;
             handles.forEach((h, i) => {
-                const a = panels[i];
-                const b = panels[i + 1];
-                const gap = b.offsetLeft - (a.offsetLeft + a.offsetWidth);
-                h.style.left = (a.offsetLeft + a.offsetWidth + gap / 2 - 6) + 'px';
-                h.style.top = a.offsetTop + 'px';
-                h.style.height = a.offsetHeight + 'px';
+                const aRect = panels[i].getBoundingClientRect();
+                const bRect = panels[i + 1].getBoundingClientRect();
+                const aRight = (aRect.right - gRect.left) / scaleX;
+                const bLeft = (bRect.left - gRect.left) / scaleX;
+                const gap = Math.max(0, bLeft - aRight);
+                const hw = Math.min(12, Math.max(8, gap - 2));
+                h.style.width = hw + 'px';
+                h.style.left = (aRight + gap / 2 - hw / 2) + 'px';
+                h.style.top = ((aRect.top - gRect.top) / scaleY) + 'px';
+                h.style.height = (aRect.height / scaleY) + 'px';
             });
         };
         place();
+        normalize();
         handles.forEach((h, i) => {
             h.addEventListener('dblclick', () => {
                 cols[0] = cols[1] = cols[2] = 1;
@@ -108374,14 +109597,18 @@ extendClass(HomeStationUI, {
                 e.stopPropagation();
                 h.setPointerCapture(e.pointerId);
                 const total = cols.reduce((s, c) => s + c, 0);
-                const px = panels.reduce((s, p) => s + p.offsetWidth, 0) || 1;
+                // Match clientX units (viewport/zoomed) — offsetWidth is unscaled under CSS zoom.
+                const px = panels.reduce((s, p) => s + p.getBoundingClientRect().width, 0) || 1;
                 const startX = e.clientX;
                 const pair = cols[i] + cols[i + 1];
                 const startA = cols[i];
+                // Pixel floor converted to this drag's fr units, so a column can never be dragged
+                // narrower than its content needs regardless of how wide the overall row is.
+                const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
                 h.classList.add('is-dragging');
                 const move = (ev) => {
                     const d = (ev.clientX - startX) / px * total;
-                    cols[i] = Math.max(STATION_COLS_MIN, Math.min(pair - STATION_COLS_MIN, startA + d));
+                    cols[i] = Math.max(minFr, Math.min(pair - minFr, startA + d));
                     cols[i + 1] = pair - cols[i];
                     apply(); place();
                 };
@@ -108397,7 +109624,7 @@ extendClass(HomeStationUI, {
                 h.addEventListener('pointercancel', up);
             });
         });
-        if (window.ResizeObserver) new ResizeObserver(place).observe(grid);
+        if (window.ResizeObserver) new ResizeObserver(() => { place(); normalize(); }).observe(grid);
     },
 
     /** Hangar: RESET ANATOMY / SET AS DEFAULT sit on the right of the ship's title row, so the stats row keeps its room. */
@@ -108554,6 +109781,36 @@ extendClass(HomeStationUI, {
                 const id = btn.getAttribute('data-craft');
                 const res = profileManager.craftBlueprint(id);
                 this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-move-to-ship]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const raw = btn.getAttribute('data-move-to-ship') || '';
+                const sep = raw.indexOf(':');
+                const bucket = sep === -1 ? '' : raw.slice(0, sep);
+                const id = sep === -1 ? raw : raw.slice(sep + 1);
+                const shipId = btn.getAttribute('data-ship');
+                if (!shipId) {
+                    this.playButtonResult(btn, false, 'NO ACTIVE SHIP');
+                    return;
+                }
+                const profile = this.getProfile();
+                const res = profileManager.moveToShipStorage(profile, shipId, bucket, id, 1);
+                this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO SHIP STORAGE' : (res.reason || 'FAILED'));
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-move-to-station]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const raw = btn.getAttribute('data-move-to-station') || '';
+                const sep = raw.indexOf(':');
+                const bucket = sep === -1 ? '' : raw.slice(0, sep);
+                const id = sep === -1 ? raw : raw.slice(sep + 1);
+                const shipId = btn.getAttribute('data-ship');
+                const profile = this.getProfile();
+                const res = profileManager.moveToStationStorage(profile, shipId, bucket, id, 1);
+                this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO STATION STORAGE' : (res.reason || 'FAILED'));
             });
         });
     },
@@ -110953,6 +112210,12 @@ extendClass(StartScreenManager, {
                 type: 'action',
                 action: 'startupSound'
             },
+            ...(this.devMode ? [{
+                name: 'Soundtrack Editor',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'soundtrackEditor'
+            }] : []),
             {
                 name: 'Faction Command',
                 value: 'OPEN ›',
@@ -111092,14 +112355,16 @@ extendClass(StartScreenManager, {
         // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
         // when it's actually on screen to look at.
         if (this.visible) this.createStartScreenUI();
-        // Dev-only tabs (COMPONENTS, LAYOUT) appear / vanish in the station rows.
-        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
-            // A soft rebuild keeps the tab rows unless the area changes, so the dev tabs
-            // would only show after a reload: drop the soft shell and cached bodies first.
-            homeStationUI._hsShellReady = false;
-            homeStationUI._softBodyCache = null;
-            homeStationUI._softAreaId = null;
-            homeStationUI.createUI();
+        // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+            if (homeStationUI.syncDevModeChrome) {
+                homeStationUI.syncDevModeChrome();
+            } else if (homeStationUI.createUI) {
+                homeStationUI._hsShellReady = false;
+                homeStationUI._softBodyCache = null;
+                homeStationUI._softAreaId = null;
+                homeStationUI.createUI();
+            }
         }
         // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
         // refresh so later steps pick up / drop the DevMode faction swatches without
@@ -115122,6 +116387,10 @@ extendClass(StartScreenManager, {
             }
             return;
         }
+        if (item.action === 'soundtrackEditor') {
+            if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            return;
+        }
     },
 
     openAssetGenerator(opts) {
@@ -116023,6 +117292,262 @@ var StartupSoundEditorUI = class StartupSoundEditorUI {
 }
 
 var startupSoundEditorUI = new StartupSoundEditorUI();
+
+
+/* --- js/ui/soundtrack-editor.js --- */
+"use strict";
+
+// Soundtrack Editor (dev mode → Settings → Soundtrack Editor): assigns a
+// YouTube URL or a local audio file to a stage or an enemy type, overriding
+// the planet track / procedural drone. Priority at playback time (see
+// js/game/sounds/soundtrack-override.js): active enemy type > stage > planet.
+var SoundtrackEditorUI = class SoundtrackEditorUI {
+    constructor() {
+        this.selectedKind = 'stage';
+        this.selectedId = null;
+        this.ensureOverlay();
+    }
+
+    getStageIds() {
+        if (typeof levelManager !== 'undefined' && levelManager.getAllStageIds) {
+            try {
+                const ids = levelManager.getAllStageIds();
+                if (Array.isArray(ids) && ids.length) return ids;
+            } catch (e) { /* fall through */ }
+        }
+        return [];
+    }
+
+    getEnemyTypeIds() {
+        const ids = [];
+        if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getTypeIds) {
+            try { ids.push(...enemyConfigManager.getTypeIds()); } catch (e) { /* ignore */ }
+        }
+        if (!ids.length && typeof planetConfigManager !== 'undefined' && planetConfigManager.availableEnemyTypes) {
+            ids.push(...planetConfigManager.availableEnemyTypes);
+        }
+        ids.push('boss');
+        return [...new Set(ids)];
+    }
+
+    ensureOverlay() {
+        if (document.getElementById('soundtrackEditorOverlay')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'soundtrackEditorOverlay';
+        overlay.className = 'difficulty-editor-overlay hidden';
+        overlay.innerHTML = `
+            <div class="difficulty-editor-panel">
+                <header class="difficulty-editor-header">
+                    <h2>SOUNDTRACK EDITOR</h2>
+                    <button type="button" class="de-close" id="steClose">×</button>
+                </header>
+                <div class="difficulty-editor-body">
+                    <aside class="difficulty-editor-nav">
+                        <div class="de-section-title">MENU</div>
+                        <div id="steMenuList"></div>
+                        <div class="de-section-title">STAGES</div>
+                        <div id="steStageList"></div>
+                        <div class="de-section-title">ENEMY TYPES</div>
+                        <div id="steEnemyList"></div>
+                    </aside>
+                    <main class="difficulty-editor-controls" id="steControls"></main>
+                </div>
+                <footer class="difficulty-editor-footer">
+                    <button type="button" class="pe-btn" id="steBack">BACK</button>
+                </footer>
+            </div>`;
+        document.body.appendChild(overlay);
+        const q = (s) => overlay.querySelector(s);
+        q('#steClose').addEventListener('click', () => this.hide());
+        q('#steBack').addEventListener('click', () => this.hide());
+        overlay.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
+                if (e.key === 'Escape') this.hide();
+                return;
+            }
+            e.stopPropagation();
+            if (e.key === 'Escape') this.hide();
+        });
+    }
+
+    renderNavButton(container, label, kind, id, trackGetter) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'de-profile-btn';
+        const hasTrack = typeof soundtrackConfigManager !== 'undefined' && soundtrackConfigManager.hasTrack(trackGetter());
+        b.textContent = (hasTrack ? '♪ ' : '') + label;
+        if (kind === this.selectedKind && id === this.selectedId) b.classList.add('pe-primary');
+        b.addEventListener('click', () => {
+            this.selectedKind = kind;
+            this.selectedId = id;
+            this.render();
+        });
+        container.appendChild(b);
+    }
+
+    show() {
+        this.ensureOverlay();
+        this._returnToSettings = !!(typeof startScreenManager !== 'undefined' && startScreenManager
+            && (startScreenManager.showSettings || startScreenManager.overlayMode || startScreenManager.embeddedMode));
+        if (typeof startScreenManager !== 'undefined' && startScreenManager) {
+            if (startScreenManager.overlayMode) startScreenManager.hideOverlay();
+            if (startScreenManager.embeddedMode) startScreenManager.hideEmbedded();
+        }
+        if (typeof settingsManager !== 'undefined' && settingsManager.hideSettings) settingsManager.hideSettings();
+        const overlay = document.getElementById('soundtrackEditorOverlay');
+        if (overlay.parentNode !== document.body) document.body.appendChild(overlay);
+        overlay.classList.remove('hidden');
+        this.render();
+    }
+
+    hide() {
+        const overlay = document.getElementById('soundtrackEditorOverlay');
+        if (overlay) overlay.classList.add('hidden');
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (this._returnToSettings && typeof startScreenManager !== 'undefined' && startScreenManager) {
+            this._returnToSettings = false;
+            startScreenManager.showSettings = true;
+            startScreenManager.showCredits = false;
+            if (startScreenManager.hasActiveProfile && startScreenManager.hasActiveProfile()
+                && typeof homeStationUI !== 'undefined') {
+                if (!homeStationUI.isVisible) homeStationUI.show({ skipPersist: true });
+                startScreenManager.show({ asOverlay: true, showSettings: true });
+            } else {
+                startScreenManager.show({ forceMenu: true });
+            }
+        }
+    }
+
+    render() {
+        const menuList = document.getElementById('steMenuList');
+        const stageList = document.getElementById('steStageList');
+        const enemyList = document.getElementById('steEnemyList');
+        menuList.innerHTML = '';
+        stageList.innerHTML = '';
+        enemyList.innerHTML = '';
+
+        this.renderNavButton(menuList, 'Main Menu', 'menu', 'menu',
+            () => soundtrackConfigManager.getMenuTrack());
+        this.getStageIds().forEach((id) => {
+            this.renderNavButton(stageList, id, 'stage', id,
+                () => soundtrackConfigManager.getStageTrack(id));
+        });
+        this.getEnemyTypeIds().forEach((id) => {
+            this.renderNavButton(enemyList, id, 'enemy', id,
+                () => soundtrackConfigManager.getEnemyTrack(id));
+        });
+
+        const host = document.getElementById('steControls');
+        host.innerHTML = '';
+        if (!this.selectedId) {
+            const hint = document.createElement('p');
+            hint.className = 'ss-code-hint';
+            hint.textContent = 'Pick a stage or enemy type on the left. Enemy-type overrides win over stage overrides, which win over the planet track.';
+            host.appendChild(hint);
+            return;
+        }
+        this.renderEditorFor(host, this.selectedKind, this.selectedId);
+    }
+
+    renderEditorFor(host, kind, id) {
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = (kind === 'menu' ? 'MAIN MENU' : kind === 'stage' ? 'STAGE: ' + id : 'ENEMY TYPE: ' + id);
+        host.appendChild(title);
+
+        const getTrack = () => {
+            const t = kind === 'menu' ? soundtrackConfigManager.getMenuTrack()
+                : kind === 'stage' ? soundtrackConfigManager.getStageTrack(id)
+                : soundtrackConfigManager.getEnemyTrack(id);
+            return t || { youtubeUrl: '', localAudioData: '', localAudioName: '' };
+        };
+        const setTrack = (data) => {
+            if (kind === 'menu') soundtrackConfigManager.setMenuTrack(data);
+            else if (kind === 'stage') soundtrackConfigManager.setStageTrack(id, data);
+            else soundtrackConfigManager.setEnemyTrack(id, data);
+            if (kind === 'menu' && typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
+                // Re-apply immediately so a change is audible while the editor is open.
+                soundManager.startMenuMusic();
+            }
+            this.render();
+        };
+
+        const track = getTrack();
+
+        const urlRow = document.createElement('div');
+        urlRow.className = 'de-slider-row';
+        const urlLabel = document.createElement('label');
+        urlLabel.textContent = 'YOUTUBE URL';
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.placeholder = 'https://youtu.be/...';
+        urlInput.value = track.youtubeUrl || '';
+        urlInput.spellcheck = false;
+        urlInput.addEventListener('keydown', (e) => e.stopPropagation());
+        urlInput.addEventListener('change', () => {
+            setTrack({ youtubeUrl: urlInput.value.trim(), localAudioData: '', localAudioName: '' });
+        });
+        urlRow.append(urlLabel, urlInput);
+        host.appendChild(urlRow);
+
+        const fileRow = document.createElement('div');
+        fileRow.className = 'de-slider-row';
+        const fileLabel = document.createElement('label');
+        fileLabel.textContent = 'LOCAL AUDIO';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'audio/*';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                setTrack({ youtubeUrl: '', localAudioData: reader.result, localAudioName: file.name });
+            };
+            reader.readAsDataURL(file);
+        });
+        fileRow.append(fileLabel, fileInput);
+        host.appendChild(fileRow);
+
+        if (track.localAudioName) {
+            const fileNote = document.createElement('p');
+            fileNote.className = 'ss-code-hint';
+            fileNote.textContent = 'Current file: ' + track.localAudioName;
+            host.appendChild(fileNote);
+        }
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'de-slider-row';
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'pe-btn';
+        previewBtn.textContent = 'PREVIEW';
+        previewBtn.addEventListener('click', () => {
+            const t = getTrack();
+            if (t.localAudioData && typeof localAudioManager !== 'undefined') {
+                localAudioManager.setVolume(0.3);
+                localAudioManager.play('preview:' + kind + ':' + id, t.localAudioData);
+            } else if (t.youtubeUrl && typeof youtubeSoundtrackManager !== 'undefined') {
+                youtubeSoundtrackManager.setEnabled(true);
+                youtubeSoundtrackManager.setVolume(0.3);
+                youtubeSoundtrackManager.playUrl('preview:' + kind + ':' + id, t.youtubeUrl);
+            }
+        });
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'pe-btn';
+        clearBtn.textContent = 'CLEAR';
+        clearBtn.addEventListener('click', () => {
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            setTrack(null);
+        });
+        btnRow.append(previewBtn, clearBtn);
+        host.appendChild(btnRow);
+    }
+}
+
+var soundtrackEditorUI = new SoundtrackEditorUI();
 
 
 /* --- js/ui/start-intro.js --- */
@@ -119812,10 +121337,20 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         this.H = h;
     }
 
-    _loadShipImage(shipId, faction) {
+    _loadShipImage(shipId, faction, attempt) {
         if (typeof shipRenderer === 'undefined' || !shipRenderer.renderShipPreview || typeof shipConfigManager === 'undefined' || !shipConfigManager.getMergedModel) return;
         if (typeof spriteLoader !== 'undefined' && spriteLoader.isLoaded && !spriteLoader.isLoaded()) {
-            window.addEventListener('vf-sprites-loaded', () => { this._shipImgKey = null; this._loadShipImage(shipId, faction); }, { once: true });
+            const retry = () => { this._shipImgKey = null; this._loadShipImage(shipId, faction); };
+            window.addEventListener('vf-sprites-loaded', retry, { once: true });
+            // Safety net: if 'vf-sprites-loaded' already fired before this listener attached
+            // (sprites finished loading between the isLoaded() check above and here), the
+            // listener would wait forever — poll once as a backstop so the ship isn't lost.
+            setTimeout(() => {
+                if (typeof spriteLoader !== 'undefined' && spriteLoader.isLoaded && spriteLoader.isLoaded()) {
+                    window.removeEventListener('vf-sprites-loaded', retry);
+                    retry();
+                }
+            }, 300);
             return;
         }
         const id = shipId || 'player_scrap';
@@ -119829,11 +121364,31 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
             const inner = document.createElement('canvas');
             inner.width = 60; inner.height = 80;
             shipRenderer.renderShipPreview(inner, model, 1);
+            // spriteLoader.isLoaded() can be true while this specific ship's data/sprite frame
+            // isn't actually settled yet (this cutscene fires ~40ms after profile creation) —
+            // renderShipPreview then silently draws nothing. Retry a few times instead of
+            // caching that blank frame forever (cacheKey below would stop any further attempt).
+            const n = attempt || 0;
+            if (n < 5 && this._canvasIsBlank(inner)) {
+                setTimeout(() => this._loadShipImage(shipId, faction, n + 1), 120);
+                return;
+            }
             const img = new Image();
             img.onload = () => { if (this._shipImgKey === cacheKey) this._shipImg = img; };
             img.src = inner.toDataURL();
             this._shipImgKey = cacheKey;
         } catch (err) { this._shipImgKey = null; }
+    }
+
+    /** True when every pixel is fully transparent (a failed/blank ship render). */
+    _canvasIsBlank(canvas) {
+        try {
+            const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] > 0) return false;
+            }
+            return true;
+        } catch (err) { return false; }
     }
 
     _tick(t) {
@@ -120348,6 +121903,85 @@ var physicalItem = (() => {
         return cv.toDataURL('image/png');
     }
 
+    /** A resource storage silo: metal frame, pipe + lamp trim, and a glass viewport with resource
+     *  chunks piled up to the fill level — same seeded-pixel technique as render(), own layout. */
+    function renderChamber(id, w, h, color, pct) {
+        const cw = Math.max(10, Math.round(w / PX)), ch = Math.max(16, Math.round(h / PX));
+        const cv = document.createElement('canvas');
+        cv.width = cw; cv.height = ch;
+        const g = cv.getContext('2d');
+        const rnd = rngOf(hash('chamber:' + id));
+        const kc = rgbOf(color);
+        const OUT = [5, 6, 10];
+        const frame = [52, 56, 66];
+        const dot = (x, y, c, a) => { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= cw || y >= ch) return; g.fillStyle = css(c, a); g.fillRect(x, y, 1, 1); };
+        const rect = (x, y, rw, rh, c, a) => { g.fillStyle = css(c, a); g.fillRect(Math.round(x), Math.round(y), Math.round(rw), Math.round(rh)); };
+        const shade = (m, v) => (v >= 0.5 ? mix(m, [255, 255, 255], (v - 0.5) * 0.9) : mix(m, [8, 9, 16], (0.5 - v) * 1.1));
+
+        const mx = 1, my = 1, bw = cw - mx * 2, bh = ch - my * 2;
+        // Outer bezel.
+        rect(mx, my, bw, bh, shade(frame, 0.42));
+        rect(mx + 1, my + 1, bw - 2, bh - 2, [6, 7, 11]);
+        // Corner rivets.
+        [[mx, my], [mx + bw - 1, my], [mx, my + bh - 1], [mx + bw - 1, my + bh - 1]].forEach(([x, y]) => dot(x, y, shade(frame, 0.85)));
+        // Top pipe stub (bent elbow) feeding into the silo.
+        const pipeX = mx + bw - 4;
+        rect(pipeX, my - 1, 2, 3, shade(frame, 0.6));
+        rect(pipeX - 3, my - 1, 3, 2, shade(frame, 0.6));
+        // Side lamps, glowing in the resource color.
+        [my + 3, my + Math.round(bh * 0.35)].forEach((y) => {
+            dot(mx - 1, y, kc, 0.9); dot(mx + bw, y, kc, 0.9);
+        });
+        // Glass viewport.
+        const vx = mx + 3, vy = my + 3, vw = bw - 6, vh = bh - 9;
+        rect(vx, vy, vw, vh, [10, 12, 18]);
+        rect(vx, vy, 1, vh, shade(frame, 0.55)); rect(vx + vw - 1, vy, 1, vh, shade(frame, 0.2));
+        // Resource pile, bottom-up: a solid jagged-top heap (not scattered specks), textured per pixel
+        // so it reads as a mass of material, with a few brighter facet chunks standing proud of it.
+        const fillBase = Math.round(vh * Math.max(0, Math.min(1, pct / 100)));
+        if (fillBase > 0) {
+            const cols = Math.max(1, vw - 2);
+            const jagAmp = Math.min(3, Math.max(1, Math.round(fillBase * 0.18)));
+            const tops = [];
+            let prevJag = 0;
+            for (let i = 0; i < cols; i++) {
+                // Smoothed noise: each column's jag follows the last so the silhouette is chunky, not static.
+                prevJag = Math.max(-jagAmp, Math.min(jagAmp, prevJag + Math.round((rnd() - 0.5) * 3)));
+                tops.push(Math.max(0, fillBase - jagAmp + prevJag));
+            }
+            const bottomY = vy + vh - 1;
+            for (let i = 0; i < cols; i++) {
+                const x = vx + 1 + i;
+                const topY = bottomY - tops[i];
+                for (let y = topY; y <= bottomY; y++) {
+                    const depth = (y - topY) / Math.max(1, tops[i]);
+                    const grain = 0.5 + (rnd() - 0.5) * 0.5;
+                    const v = Math.max(0, Math.min(1, 0.55 - depth * 0.3 + (grain - 0.5) * 0.35));
+                    dot(x, y, shade(kc, v));
+                }
+                // Lit rim along the pile's top contour.
+                dot(x, topY, mix(kc, [255, 255, 255], 0.45 + rnd() * 0.25), 0.9);
+            }
+            // A few proud facet chunks breaking the surface, for visible chunkiness.
+            const facets = 3 + Math.round((pct / 100) * 6);
+            for (let i = 0; i < facets; i++) {
+                const ci = Math.floor(rnd() * cols);
+                const x = vx + 1 + ci;
+                const y = bottomY - tops[ci] - 1;
+                if (y < vy) continue;
+                dot(x, y, mix(kc, [255, 255, 255], 0.55 + rnd() * 0.3), 0.95);
+                if (rnd() < 0.6) dot(x + (rnd() < 0.5 ? 1 : -1), y, shade(kc, 0.25), 0.8);
+            }
+        }
+        // Glass highlight streak + rim light.
+        rect(vx + 1, vy + 1, 1, Math.round(vh * 0.4), [255, 255, 255], 0.18);
+        rect(vx, vy, vw, 1, shade(frame, 0.7));
+        // Baseplate with a lit status slot, colored by fill state.
+        rect(mx + 2, my + bh - 4, bw - 4, 3, shade(frame, 0.5));
+        rect(mx + 4, my + bh - 3, bw - 8, 1, pct >= 100 ? mix(kc, [255, 255, 255], 0.4) : kc, 0.9);
+        return cv.toDataURL('image/png');
+    }
+
     return {
         /** Wrap `innerHtml` (the part icon) in its generated casing; w/h = footprint in screen px. */
         wrap(kind, id, w, h, color, innerHtml) {
@@ -120355,6 +121989,14 @@ var physicalItem = (() => {
             let url = cache.get(key);
             if (!url) { try { url = render(kind, id, w, h, color); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
+        },
+        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100). */
+        wrapChamber(id, w, h, color, pct) {
+            const bucketedPct = Math.round(pct / 4) * 4;
+            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct;
+            let url = cache.get(key);
+            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct); } catch (e) { url = ''; } cache.set(key, url); }
+            return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>` : '';
         }
     };
 })();
@@ -120433,6 +122075,7 @@ physicalItem.bayInventoryHtml = function (ui) {
     const inv = slm.getInventory(ui.hangarShipId) || {}, L = slm.getLoadout(ui.hangarShipId) || {};
     const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
     const cells = [];
+    let occupied = 0;
     const pos = physicalItem.invPositions(ui.hangarShipId);
     // Cells whose installed state changed since the last draw play an equip / unequip animation.
     const prev = ui._bayInvPrev && ui._bayInvPrev.ship === ui.hangarShipId ? ui._bayInvPrev.set : null;
@@ -120450,6 +122093,7 @@ physicalItem.bayInventoryHtml = function (ui) {
             const tipLines = String(ui.hangarModuleTip(kind, id)).split('\n').filter((l, n) => !(n === 0 && l.trim().toUpperCase() === String(label).trim().toUpperCase()));
             const tip = (tipLines.join('\n') + '\nSIZE: ' + slm.partSizeLabel(kind, id) + '\nSTATUS: ' + (eq[id] ? 'INSTALLED' : 'IN INVENTORY') + '\nDRAG OR RIGHT-CLICK TO TOGGLE').replace(/"/g, '&quot;');
             const body = physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, colors[kind], '');
+            occupied += span[0] * span[1];
             cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: ${pos[kind + ':' + id] ? pos[kind + ':' + id][0] + ' / ' : ''}span ${span[0]}; grid-row: ${pos[kind + ':' + id] ? pos[kind + ':' + id][1] + ' / ' : ''}span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
         });
     });
@@ -120457,6 +122101,9 @@ physicalItem.bayInventoryHtml = function (ui) {
     const filter = ui._bayInvFilter || 'all', cs = 48;
     // Grid size: the ship's inventory (start profile + frame level).
     const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(ui.hangarShipId) : { cols: 4, rows: 2 };
+    // Fill the rest of the grid with empty placeholder cells so unused slots still read as a grid.
+    const freeCells = Math.max(0, invGrid.cols * invGrid.rows - occupied);
+    for (let i = 0; i < freeCells; i++) cells.push('<span class="hs-pick-cell hs-pick-cell-empty"></span>');
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
     const ico = (key, col) => (ir ? String(ir.imgHtml(key, 24, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]

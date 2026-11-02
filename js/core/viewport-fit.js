@@ -657,13 +657,14 @@
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
         } else {
-            // First boot: light path — heavy FX off; freeze decorative anim on
-            // typical laptops / HiDPI so menus stay interactive.
+            // First boot: light path — heavy FX off; freeze decorative anim only
+            // on genuinely low-end machines. dpr>=1.5 used to trigger this too,
+            // but that matched almost every HiDPI laptop and silently froze
+            // things like galaxy-map station orbits and planet spin.
             const cores = (navigator && navigator.hardwareConcurrency) || 4;
             const mem = (navigator && navigator.deviceMemory) || 4;
-            const dpr = window.devicePixelRatio || 1;
             perf.heavy = 'OFF';
-            perf.anim = (cores <= 8 || mem <= 8 || dpr >= 1.5) ? 'OFF' : 'ON';
+            perf.anim = (cores <= 4 || mem <= 4) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
     function applyPerf() {

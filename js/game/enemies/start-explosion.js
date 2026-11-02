@@ -213,43 +213,7 @@ extendClass(EnemyManager, {
         }
         if (!obstacles.length) return null;
 
-        // Danger at an offset: 0 = safe, up to ~1 per obstacle (sooner = worse).
-        const danger = (dx, dy) => {
-            const px = ex + dx;
-            const py = ey + dy;
-            let d = 0;
-            for (let i = 0; i < obstacles.length; i++) {
-                const o = obstacles[i];
-                const rx = px - o.ox;
-                const ry = py - o.oy;
-                const v2 = o.vx * o.vx + o.vy * o.vy;
-                // Time window where the swept box overlaps on each axis.
-                let t0 = 0;
-                let t1 = lookahead;
-                const axis = (r, v, reach) => {
-                    if (Math.abs(v) < 0.0001) {
-                        if (Math.abs(r) > reach) t1 = -1;
-                        return;
-                    }
-                    let a = (r - reach) / v;
-                    let b = (r + reach) / v;
-                    if (a > b) { const tmp = a; a = b; b = tmp; }
-                    t0 = Math.max(t0, a);
-                    t1 = Math.min(t1, b);
-                };
-                if (v2 < 0.0001) {
-                    if (Math.abs(rx) > o.rw || Math.abs(ry) > o.rh) continue;
-                } else {
-                    axis(rx, o.vx, o.rw);
-                    axis(ry, o.vy, o.rh);
-                    if (t0 > t1) continue;
-                }
-                d += 1.2 - t0 / lookahead;
-            }
-            return d;
-        };
-
-        const here = danger(0, 0);
+        const here = this._obstacleDangerAt(obstacles, ex, ey, lookahead, 0, 0);
         if (here <= 0) return null;
         const minY = entity.minY != null ? entity.minY : -Infinity;
         const maxY = entity.maxY != null ? entity.maxY : Infinity;
@@ -260,7 +224,7 @@ extendClass(EnemyManager, {
                 if (!dx && !dy) continue;
                 if (entity.y + dy < minY || entity.y + dy > maxY) continue;
                 // Distance costs a little: prefer the closest escape.
-                const score = danger(dx, dy) + Math.hypot(dx, dy) / 400;
+                const score = this._obstacleDangerAt(obstacles, ex, ey, lookahead, dx, dy) + Math.hypot(dx, dy) / 400;
                 if (score < bestScore) {
                     bestScore = score;
                     best = { x: dx, y: dy };
@@ -271,6 +235,49 @@ extendClass(EnemyManager, {
         const threat = Math.min(1.4, 0.5 + here * 0.5);
         const m = Math.hypot(best.x, best.y) || 1;
         return { x: (best.x / m) * threat, y: (best.y / m) * threat };
+    },
+
+    /** Danger at an offset: 0 = safe, up to ~1 per obstacle (sooner = worse). */
+    _obstacleDangerAt(obstacles, ex, ey, lookahead, dx, dy) {
+        const px = ex + dx;
+        const py = ey + dy;
+        let d = 0;
+        for (let i = 0; i < obstacles.length; i++) {
+            const o = obstacles[i];
+            const rx = px - o.ox;
+            const ry = py - o.oy;
+            const v2 = o.vx * o.vx + o.vy * o.vy;
+            // Time window where the swept box overlaps on each axis.
+            let t0 = 0;
+            let t1 = lookahead;
+            if (v2 < 0.0001) {
+                if (Math.abs(rx) > o.rw || Math.abs(ry) > o.rh) continue;
+            } else {
+                t0 = Math.max(t0, this._obstacleAxisT0(rx, o.vx, o.rw));
+                t1 = Math.min(t1, this._obstacleAxisT1(rx, o.vx, o.rw, t1));
+                t0 = Math.max(t0, this._obstacleAxisT0(ry, o.vy, o.rh));
+                t1 = Math.min(t1, this._obstacleAxisT1(ry, o.vy, o.rh, t1));
+                if (t0 > t1) continue;
+            }
+            d += 1.2 - t0 / lookahead;
+        }
+        return d;
+    },
+
+    /** Lower bound of the time window where |r + v*t| <= reach (see _obstacleDangerAt). */
+    _obstacleAxisT0(r, v, reach) {
+        if (Math.abs(v) < 0.0001) return 0;
+        const a = (r - reach) / v;
+        const b = (r + reach) / v;
+        return Math.min(a, b);
+    },
+
+    /** Upper bound of that same time window, or -1 if the axis never overlaps. */
+    _obstacleAxisT1(r, v, reach, fallback) {
+        if (Math.abs(v) < 0.0001) return Math.abs(r) > reach ? -1 : fallback;
+        const a = (r - reach) / v;
+        const b = (r + reach) / v;
+        return Math.max(a, b);
     },
 
     avoidObstacles(game) {

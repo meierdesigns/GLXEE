@@ -104,13 +104,32 @@ extendClass(ParallaxManager, {
         return `rgb(${r}, ${g}, ${b})`;
     },
 
+    /** Fills the field immediately so a fresh stage never opens on empty space. */
+    seedFlyingStars(count) {
+        this.flyingStars = [];
+        if (!this._starFieldW || !this._starFieldH) {
+            // No render() yet this session (fresh load) — read the real canvas once
+            // so the very first seed isn't scattered across the old 400x600 default.
+            const cv = (typeof document !== 'undefined') && document.getElementById('gameCanvas');
+            if (cv && cv.width && cv.height) {
+                this._starFieldW = cv.width;
+                this._starFieldH = cv.height;
+            }
+        }
+        const n = count != null ? count : 70;
+        for (let i = 0; i < n; i++) this.spawnFlyingStar(true);
+    },
+
     updateFlyingStars(deltaTime) {
         this.starSpawnTimer += deltaTime;
 
-        // Spawn new stars
-        if (this.starSpawnTimer >= this.starSpawnInterval) {
-            this.spawnFlyingStar();
-            this.starSpawnTimer = 0;
+        // Spawn new stars, several at a time — a trickle of one every couple
+        // seconds reads as empty space instead of a starfield. Capped so a
+        // star that happens to drift at ~0 speed can't make this unbounded.
+        const maxStars = 140;
+        while (this.starSpawnTimer >= this.starSpawnInterval) {
+            if (this.flyingStars.length < maxStars) this.spawnFlyingStar();
+            this.starSpawnTimer -= this.starSpawnInterval;
         }
 
         // Update existing stars
@@ -120,29 +139,39 @@ extendClass(ParallaxManager, {
             star.y += star.speedY;
 
             // Remove stars that are off screen
-            if (star.x < -10 || star.x > 410 || star.y < -10 || star.y > 610) {
+            const fw = this._starFieldW || 400;
+            const fh = this._starFieldH || 600;
+            if (star.x < -10 || star.x > fw + 10 || star.y < -10 || star.y > fh + 10) {
                 this.flyingStars.splice(i, 1);
             }
         }
     },
 
-    spawnFlyingStar() {
+    /** `fromEdge` false (initial seed) scatters across the whole field instead of spawning at the rim. */
+    spawnFlyingStar(seeding) {
+        // Depth: smaller/dimmer stars drift slower (far background), bigger/brighter ones faster (near).
+        const depth = Math.random();
+        const size = depth < 0.6 ? 1 : (depth < 0.9 ? 2 : 3);
+        const speedScale = 0.3 + depth * 1.4;
         const star = {
-            x: Math.floor(Math.random() * 400),
-            y: Math.floor(Math.random() * 600),
-            speedX: (Math.random() - 0.5) * 2,
-            speedY: (Math.random() - 0.5) * 2,
-            size: Math.floor(Math.random() * 2 + 1)
+            x: Math.floor(Math.random() * (this._starFieldW || 400)),
+            y: Math.floor(Math.random() * (this._starFieldH || 600)),
+            speedX: (Math.random() - 0.5) * 2 * speedScale,
+            speedY: (Math.random() - 0.5) * 2 * speedScale,
+            size: size,
+            alpha: 0.5 + depth * 0.5
         };
         this.flyingStars.push(star);
+        return star;
     },
 
     drawFlyingStars(ctx) {
         ctx.save();
-        ctx.globalAlpha = this.starsOpacity != null ? this.starsOpacity : 0.35;
+        const baseOpacity = this.starsOpacity != null ? this.starsOpacity : 0.35;
         const starColor = this.envVar('--env-primary') || '#808080';
         ctx.fillStyle = starColor;
         this.flyingStars.forEach(star => {
+            ctx.globalAlpha = Math.max(0, Math.min(1, baseOpacity * (star.alpha != null ? star.alpha : 1)));
             ctx.fillRect(Math.floor(star.x), Math.floor(star.y), Math.floor(star.size), Math.floor(star.size));
         });
         ctx.restore();
@@ -256,7 +285,7 @@ extendClass(ParallaxManager, {
             layer.y = 0;
         });
         this.horizontalOffset = 0;
-        this.flyingStars = [];
         this.starSpawnTimer = 0;
+        this.seedFlyingStars();
     },
 });

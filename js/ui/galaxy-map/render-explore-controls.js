@@ -132,10 +132,18 @@ extendClass(GalaxyMapManager, {
             const okB = devLit || this.isUnlocked(edge[1]);
             // A lane is lit only when travel along it is possible (both ends
             // reachable). A lane to a still-locked planet stays dim: no gate on it.
-            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (okA && okB
+            const locked = !(okA && okB);
+            edgesHtml += this.pixelLineSvg([{ x: x1, y: y1 }, { x: x2, y: y2 }], 'gm-edge ' + (!locked
                 ? (hereIds.indexOf(edge[0]) !== -1 || hereIds.indexOf(edge[1]) !== -1 ? 'lit next' : 'lit')
                 : 'dim') + ' gm-e-' + edge[0] + ' gm-e-' + edge[1]
                 + (routeIds && routeIds.indexOf(edge[0]) !== -1 && routeIds.indexOf(edge[1]) !== -1 ? ' on-route' : ''));
+            // .gm-pxline is pointer-events:none (dense lines must not fight each other for hover);
+            // a locked lane still needs to be hoverable so its lock icon can show, so lay an
+            // invisible wider hit-stroke over just the dim ones.
+            if (locked) {
+                edgesHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" ` +
+                    `stroke-width="14" pointer-events="stroke" class="gm-edge-hit gm-e-${edge[0]} gm-e-${edge[1]}"></line>`;
+            }
         });
         // Border stations always sit on top of the beams (a beam never runs across one).
         return edgesHtml + (this.postLanesSvg ? this.postLanesSvg() : '') + backBlocks + frontBlocks;

@@ -485,7 +485,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-l
 /* Labels sit INSIDE the outline (the frame stays visible around the strip),
    and the nav buttons get more height. */
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn { min-height: 120px !important; }
-html body .home-station-overlay .home-station-content .hs-play-launch { min-height: 120px; }
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { min-height: 120px !important; }
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label { margin: 0 5px 5px; }
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label { margin: 0 2px; }
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
@@ -1444,14 +1444,21 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 .gm-mm-goal { font-size: var(--font-h2); }
 .gm-mm-actions .action-button { font-size: var(--font-h2); padding: 10px 22px; min-width: 150px; }
 
-/* Station storage: three full-height columns — owned ships | blueprints | parts. */
+/* Station storage: left column stacks Station Storage above Owned Ships, right column is the
+   resource chambers spanning both rows. Column gap is a dedicated resize lane so handles never
+   cover panel content. */
 .hs-station-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --hs-col-gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
     grid-template-areas:
-        "cover cover cover"
-        "stores stores stores"
-        "ships blueprints parts";
-    grid-template-rows: minmax(110px, auto) auto minmax(0, 1fr);
+        "cover cover"
+        "parts chambers"
+        "ships chambers";
+    grid-template-rows: minmax(110px, auto) minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--hs-col-gap);
+    row-gap: 8px;
     height: 100%;
     min-height: 0;
 }
@@ -1459,19 +1466,28 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 .hs-body > .hs-section .hs-station-grid { flex: 1 1 auto; }
 .hs-station-grid > .hs-panel-stack { display: contents; }
 .hs-station-grid .hs-panel-ships { grid-area: ships; }
-.hs-station-grid .hs-panel-bp { grid-area: blueprints; }
 .hs-station-grid .hs-panel-parts { grid-area: parts; }
-.hs-station-grid :is(.hs-panel-ships, .hs-panel-bp, .hs-panel-parts) {
+.hs-station-grid .hs-panel-chambers { grid-area: chambers; }
+.hs-station-grid :is(.hs-panel-ships, .hs-panel-parts, .hs-panel-chambers) {
+    min-width: 0;
     min-height: 0;
     height: 100%;
     overflow-y: auto;
+    overflow-x: auto;
     scrollbar-width: thin;
 }
+/* part-20 zeroes padding-left on all .hs-body .hs-panel for flush chrome;
+   every station-grid panel (stores + 3 columns) needs side padding so titles
+   clear the faction clip-path staircase. */
 
-/* Station storage: draggable column borders. */
+/* Station storage: draggable column borders — narrower than the gap, centered in it. */
 .hs-col-resize {
     position: absolute;
     width: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: col-resize;
     z-index: 5;
     touch-action: none;

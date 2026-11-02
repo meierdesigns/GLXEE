@@ -93,7 +93,7 @@ class ShipConfigManager {
                 weaponCooldown: 250,
                 abilities: ['player_control', 'weapon_systems', 'evasion_boost'],
                 tier: 1,
-                cost: 40,
+                cost: 45,
                 faction: 'terran'
             }),
             player_interceptor: this.makeShip({
@@ -111,10 +111,10 @@ class ShipConfigManager {
                 availableWeapons: ['rapid', 'laser', 'ion'],
                 weaponDamage: 5,
                 weaponSpeed: 15,
-                weaponCooldown: 80,
+                weaponCooldown: 240,
                 abilities: ['high_speed', 'rapid_fire', 'agile_maneuver'],
                 tier: 1,
-                cost: 75,
+                cost: 70,
                 faction: 'terran'
             }),
             player_heavy: this.makeShip({
@@ -135,7 +135,7 @@ class ShipConfigManager {
                 weaponCooldown: 500,
                 abilities: ['heavy_armor', 'powerful_cannon', 'shield_generator'],
                 tier: 2,
-                cost: 100,
+                cost: 120,
                 faction: 'terran'
             }),
             player_assault: this.makeShip({
@@ -156,7 +156,7 @@ class ShipConfigManager {
                 weaponCooldown: 300,
                 abilities: ['balanced_combat', 'versatile_weapons', 'adaptive_shield'],
                 tier: 1,
-                cost: 50,
+                cost: 55,
                 faction: 'terran'
             }),
             player_kronax_raider: this.makeShip({
@@ -174,10 +174,10 @@ class ShipConfigManager {
                 availableWeapons: ['claw_beam', 'ion', 'spike_burst', 'laser'],
                 weaponDamage: 7,
                 weaponSpeed: 14,
-                weaponCooldown: 100,
+                weaponCooldown: 330,
                 abilities: ['high_speed', 'spike_drive', 'reflex_shell'],
                 tier: 1,
-                cost: 85,
+                cost: 90,
                 faction: 'kronax'
             }),
             player_kronax_claw: this.makeShip({
@@ -198,7 +198,7 @@ class ShipConfigManager {
                 weaponCooldown: 280,
                 abilities: ['carapace_armor', 'reflex_shell', 'spike_drive'],
                 tier: 2,
-                cost: 95,
+                cost: 110,
                 faction: 'kronax'
             })
         };

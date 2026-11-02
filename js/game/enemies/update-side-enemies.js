@@ -11,7 +11,16 @@ extendClass(EnemyManager, {
             this.sideEnemySpawnTimer += deltaTime;
             if (this.sideEnemySpawnTimer >= this.sideEnemySpawnInterval) {
                 this.sideEnemySpawnTimer = 0;
-                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < 0.25) {
+                // stageScale raises ambient pressure on later stages (balance-config).
+                let ambientChance = 0.25;
+                try {
+                    const host = (typeof game !== 'undefined' && game) ? game : null;
+                    const lm = host && (host.coreLevelManager || host.levelManager);
+                    const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
+                    const ss = level && Number(level.stageScale);
+                    if (ss > 0) ambientChance = Math.min(0.45, 0.18 + ss * 0.12);
+                } catch (e) { /* ignore */ }
+                if (this.sideEnemies.length < this.sideEnemyCap && Math.random() < ambientChance) {
                     this.spawnSideEnemy(gameState);
                 }
             }

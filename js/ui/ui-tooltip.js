@@ -212,13 +212,31 @@ class UiTooltipManager {
                     v.textContent = m[2];
                     row.append(k, v);
                 } else {
-                    // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" -> the same stat icons as the hangar rows.
-                    const sm = line.match(/^DMG (\S+) · SPD (\S+) · (\S+)$/);
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
-                    if (sm && ir) {
+                    const chips = (() => {
+                        // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
+                        const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
+                        if (sm) {
+                            return [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], sm[3] ? ['shotRapid', sm[3], '#ffa04a'] : null].filter(Boolean);
+                        }
+                        // Weapon fire mode "MODE AUTO" / "MODE CHARGE".
+                        const mm = line.match(/^MODE (AUTO|CHARGE)$/);
+                        if (mm) {
+                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
+                        }
+                        // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
+                        const tm = line.match(/^([A-Z][A-Z /]*?)(?: · TIER (\d+))?$/);
+                        if (tm) {
+                            const out = [['statAbilities', tm[1], '#c08cff']];
+                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
+                            return out;
+                        }
+                        return null;
+                    })();
+                    if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
                         row.style.cssText = 'display:flex;gap:14px;align-items:center';
-                        [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], ['shotRapid', sm[3], '#ffa04a']].forEach(([key, val, col]) => {
+                        chips.forEach(([key, val, col]) => {
                             const s = document.createElement('span');
                             s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
                             s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';

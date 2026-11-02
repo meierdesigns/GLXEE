@@ -112,7 +112,7 @@ extendClass(HomeStationUI, {
             `</section>`;
 
         return `<div class="hs-section hs-panel hs-missions-root hs-mission-log">` +
-            `${this.panelTitle('hsExplore', 'MISSION LOG')}` +
+            `${this.panelTitle('hsExplore', 'MISSIONS')}` +
             `<p class="hs-muted hs-hint">Main quest from your start profile · sidequests at stations &amp; planets · ${done} completed.</p>` +
             `<div class="hs-tab-fill hs-log-body">${mainHtml}${sideHtml}${offersHtml}</div>` +
             `</div>`;

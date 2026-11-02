@@ -24,10 +24,10 @@ const POWER_UPS = {
     power_shot:  { label: 'POWER SHOT',  ms: POWER_SHOT_MS, color: '#ffcf3a', light: '#fff2a8', shape: 'diamond', glyph: 'arrow' },
     rapid_fire:  { label: 'RAPID FIRE',  ms: 10000, color: '#3ad8ff', light: '#c8f6ff', shape: 'hex', glyph: 'chevrons' },
     barrier:     { label: 'BARRIER',     ms: 10000, color: '#5cff7a', light: '#d4ffdc', shape: 'circle', glyph: 'cross' },
-    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'diamond', glyph: 'chevrons' },
+    speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'triangle', glyph: 'chevrons' },
     magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
     double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
-    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'cross' }
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' }
 };
 const POWER_UP_IDS = Object.keys(POWER_UPS);
 
@@ -349,6 +349,7 @@ extendClass(PickupManager, {
             if (def.shape === 'diamond') return rr - a;
             if (def.shape === 'hex') return Math.min(rr - step, (rr - a) * 2);
             if (def.shape === 'square') return rr - step;
+            if (def.shape === 'triangle') return Math.round((rr - step) * ((dy + rr) / (2 * rr || 1)));
             return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
         };
         const shape = (rr, color, alpha) => {

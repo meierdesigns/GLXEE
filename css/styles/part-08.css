@@ -666,9 +666,6 @@
 .hs-panel-cargo {
     grid-area: cargo;
 }
-.hs-panel-bp {
-    grid-area: blueprints;
-}
 .hs-panel-stack {
     grid-area: ships;
 }

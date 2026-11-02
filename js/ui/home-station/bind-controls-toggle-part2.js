@@ -86,12 +86,12 @@ extendClass(HomeStationUI, {
             if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
-                    startScreenManager.toggleDevMode();
                     this.statusMsg = startScreenManager.devMode
-                        ? 'DEV MODE ON — COMPONENTS + LAYOUT UNLOCKED' : 'DEV MODE OFF';
-                    // Leaving dev mode keeps an open dev tab open; it vanishes
-                    // from the rows once you navigate away.
-                    this.createUI();
+                        ? 'DEV MODE OFF'
+                        : 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED';
+                    // toggleDevMode patches station chrome via syncDevModeChrome —
+                    // do not call createUI() again (was a full double rebuild).
+                    startScreenManager.toggleDevMode();
                 }
                 return;
             }

@@ -171,7 +171,7 @@ class PlayerManager {
     }
 
     takeDamage(damage) {
-        if (typeof game !== 'undefined' && game.cheats && game.cheats.godMode) {
+        if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
             return false;
         }
 

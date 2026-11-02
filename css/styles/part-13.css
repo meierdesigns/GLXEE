@@ -965,6 +965,25 @@ button.hs-faction-card.nav-focused {
     border-color: var(--weapon-color, var(--color-primary));
     box-shadow: 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 48%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 30%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 16%, transparent);
 }
+/* Each owned ship is its own card (own tbody): the ship row and its Ship Storage grid as one
+   combined block, bordered as a unit instead of relying on row dividers. */
+.hs-ship-card {
+    display: block;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border-radius: 4px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+.hs-ship-card tr { border-bottom: none !important; }
+.hs-ship-storage-row td {
+    padding: 2px 4px 14px;
+}
+.hs-ship-storage-caption {
+    font-size: var(--font-text);
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    padding: 2px 0 6px;
+}
 .hs-ship-table-action {
     text-align: right;
     white-space: nowrap;

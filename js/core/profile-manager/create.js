@@ -18,6 +18,7 @@ extendClass(ProfileManager, {
             unlockedShopIds: [],
             blueprints: {},
             parts: { weapons: {}, defenses: {}, abilities: {}, energy: { energy_core: 1 } },
+            shipStorage: {},
             resources: {},
             credits: (typeof economyConfig !== 'undefined' && economyConfig.starterCredits != null)
                 ? economyConfig.starterCredits

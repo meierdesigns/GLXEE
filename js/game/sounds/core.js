@@ -149,7 +149,11 @@ class SoundManager {
     }
 
     schedule(fn, delayMs) {
-        const id = setTimeout(fn, delayMs);
+        const id = setTimeout(() => {
+            const idx = this.activeTimeouts.indexOf(id);
+            if (idx !== -1) this.activeTimeouts.splice(idx, 1);
+            fn();
+        }, delayMs);
         this.activeTimeouts.push(id);
         return id;
     }

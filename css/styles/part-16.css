@@ -332,7 +332,14 @@ html body .home-station-overlay .home-station-content .hs-header-split > :is(.hs
     align-self: stretch;
     box-sizing: border-box;
     margin: 8px 0 6px;
+}
+/* Pilot may shrink with the row; LAUNCH keeps full nav-card height even when
+   only the label/icon remain (pilot + wallet live in the bezel). */
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-pilot-card {
     min-height: 0;
+}
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
+    min-height: 120px;
 }
 
 /* PLAY launch: strong outline drawn inside the box (inset shadows), so the

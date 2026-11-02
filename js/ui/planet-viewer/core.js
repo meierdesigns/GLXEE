@@ -112,9 +112,50 @@ class PlanetViewerUI {
         });
     }
 
+    /** Static icon (list rows): many can be on screen at once, so no spin cost. */
+    planetIconHtmlStatic(planetId, size) {
+        const sid = String(planetId || 'mars').toLowerCase();
+        const px = size || 32;
+        if (typeof planetSVGManager !== 'undefined') {
+            if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
+                planetSVGManager.init();
+            }
+            let svg = planetSVGManager.getPlanetSVG(sid);
+            if (svg) {
+                const uid = 'pv_' + sid + '_' + Math.random().toString(36).slice(2, 7);
+                svg = svg
+                    .replace(/id="([^"]+)"/g, (m, id) => `id="${uid}_${id}"`)
+                    .replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${uid}_${id})`)
+                    .replace(/width="\d+"/, `width="${px}"`)
+                    .replace(/height="\d+"/, `height="${px}"`);
+                return `<span class="cv-icon cv-planet-icon">${svg}</span>`;
+            }
+        }
+        return `<span class="cv-icon cv-planet-fallback" data-planet="${sid}" style="width:${px}px;height:${px}px"></span>`;
+    }
+
+    /** Animated hero icon (one at a time, the selected-planet detail view). */
     planetIconHtml(planetId, size) {
         const sid = String(planetId || 'mars').toLowerCase();
         const px = size || 32;
+        // Shared spin pipeline (js/graphics/planet-svgs/spin-frames.js) so the
+        // preview's lava/clouds/bands turn like everywhere else, instead of a
+        // once-baked static SVG. Reserved for the single big detail icon —
+        // the "featured" bucket in startPlanetSpin's round-robin repaints
+        // every tick, so it must stay a handful of icons, not a whole list.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+            const html = galaxyMapManager.planetIconHtml(sid, px, true);
+            if (html) {
+                // The wrapper span needs an explicit pixel box: outside the galaxy
+                // map's SVG/flex frame it sits in a plain flex row with no height,
+                // so its 100%-height CSS collapses to 0px. That makes the spin
+                // timer's getBoundingClientRect visibility check treat it as
+                // off-screen forever after the first paint, freezing the planet.
+                return html
+                    .replace('gm-planet-icon', 'gm-planet-icon cv-icon cv-planet-icon')
+                    .replace('class="gm-planet-icon', `style="width:${px}px;height:${px}px" class="gm-planet-icon`);
+            }
+        }
         if (typeof planetSVGManager !== 'undefined') {
             if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
                 planetSVGManager.init();

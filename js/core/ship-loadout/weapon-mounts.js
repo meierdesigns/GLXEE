@@ -19,6 +19,10 @@
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // Default wing spot: about a third out from the hull root.
     const WING_FX = 1 - 0.36;
+    // How tightly two slots may be pulled together before they count as
+    // overlapping (1 = touching box edges, <1 lets their boxes overlap a
+    // little so dragging them close together doesn't bounce/refuse early).
+    const SLOT_PACK = 0.65;
 
     proto.normalizeWeaponMounts = function (raw) {
         const out = {};
@@ -187,7 +191,7 @@
             }
         }
         const hits = (m) => this.weaponMountBoxes(layout, m).some((a) => taken.some((b) =>
-            Math.abs(a.x - b.x) < (a.s + b.s) / 2 && Math.abs(a.y - b.y) < (a.s + b.s) / 2));
+            Math.abs(a.x - b.x) < (a.s + b.s) / 2 * SLOT_PACK && Math.abs(a.y - b.y) < (a.s + b.s) / 2 * SLOT_PACK));
         if (!hits(mount)) return mount;
         const step = 1 / Math.max(1, seg.height);
         // Nearest free height first; on nose/core then a split pair further

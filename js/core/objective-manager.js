@@ -72,6 +72,8 @@ class ObjectiveManager {
         const lm = host && (host.coreLevelManager || host.levelManager);
         const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
         if (!level || !level.planetId) return null;
+        // Ambushes are a surprise jump-out, not a planet stage launch — no hatch/sluice, the enemies fly in instead.
+        if (String(level.planetId).indexOf('ambush_') === 0) return null;
         const id = level.id || (level.planetId + '-' + level.stageIndex);
         if (prev && prev.levelId === id && !prev.done && prev.t < prev.dur) return prev;
         // Arriving on a planet (stage 1, or any stage entered from elsewhere) launches from the home station;
@@ -293,7 +295,7 @@ class ObjectiveManager {
             this.updateGoal(deltaTime);
         }
 
-        if (!this.completed) {
+        if (!this.completed && !this.isArrivalSpawnHold()) {
             // Transit run: backing off at the bottom edge rewinds the way to the gate at a third of the pace.
             const back = this.objective.type === 'reachGoal' && !this.goal && this.isPlayerBacktracking();
             this.elapsedMs = back ? Math.max(0, this.elapsedMs - deltaTime / 3) : this.elapsedMs + deltaTime;
@@ -1126,12 +1128,13 @@ class ObjectiveManager {
         this.triggerWin();
     }
 
-    /** Planet stages (not boss levels) end at a sluice instead of on the kill itself. */
+    /** Planet stages (not boss levels, not ambushes) end at a sluice instead of on the kill itself. */
     usesExitGate() {
         const host = typeof game !== 'undefined' ? game : (typeof gameCore !== 'undefined' ? gameCore : null);
         const lm = host && (host.coreLevelManager || host.levelManager);
         const level = lm && lm.getCurrentLevel ? lm.getCurrentLevel() : null;
-        return !!(level && level.planetId && !level.isBoss);
+        const isAmbush = !!(level && String(level.planetId || '').indexOf('ambush_') === 0);
+        return !!(level && level.planetId && !level.isBoss && !isAmbush);
     }
 
     triggerWin() {

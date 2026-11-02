@@ -142,6 +142,36 @@ extendClass(HomeStationUI, {
                 this.playButtonResult(btn, !!res.ok, res.ok ? ('CRAFTED: ' + profileManager.getBlueprintName(id)) : (res.reason || 'FAILED'));
             });
         });
+
+        this.overlay.querySelectorAll('[data-move-to-ship]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const raw = btn.getAttribute('data-move-to-ship') || '';
+                const sep = raw.indexOf(':');
+                const bucket = sep === -1 ? '' : raw.slice(0, sep);
+                const id = sep === -1 ? raw : raw.slice(sep + 1);
+                const shipId = btn.getAttribute('data-ship');
+                if (!shipId) {
+                    this.playButtonResult(btn, false, 'NO ACTIVE SHIP');
+                    return;
+                }
+                const profile = this.getProfile();
+                const res = profileManager.moveToShipStorage(profile, shipId, bucket, id, 1);
+                this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO SHIP STORAGE' : (res.reason || 'FAILED'));
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-move-to-station]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const raw = btn.getAttribute('data-move-to-station') || '';
+                const sep = raw.indexOf(':');
+                const bucket = sep === -1 ? '' : raw.slice(0, sep);
+                const id = sep === -1 ? raw : raw.slice(sep + 1);
+                const shipId = btn.getAttribute('data-ship');
+                const profile = this.getProfile();
+                const res = profileManager.moveToStationStorage(profile, shipId, bucket, id, 1);
+                this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO STATION STORAGE' : (res.reason || 'FAILED'));
+            });
+        });
     },
 
     /** Hangar ship list, anatomy reset, module toggles, fire modes and test area. */

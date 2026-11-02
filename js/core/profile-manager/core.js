@@ -101,6 +101,9 @@ class ProfileManager {
         if ((profile.parts.energy.energy_core || 0) < 1) {
             profile.parts.energy.energy_core = 1;
         }
+        if (!profile.shipStorage || typeof profile.shipStorage !== 'object') {
+            profile.shipStorage = {};
+        }
         if (!profile.resources || typeof profile.resources !== 'object') {
             profile.resources = {};
         }

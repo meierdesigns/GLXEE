@@ -1,5 +1,10 @@
 "use strict";
 
+// Reused across isColliding() calls to avoid an object allocation per collision test
+// (this runs inside every nested bullet/obstacle/enemy collision loop, every frame).
+const _collisionBoundsScratch1 = { x: 0, y: 0, width: 0, height: 0 };
+const _collisionBoundsScratch2 = { x: 0, y: 0, width: 0, height: 0 };
+
 // CollisionManager methods, split from collisions.js.
 extendClass(CollisionManager, {
     /**
@@ -202,8 +207,8 @@ extendClass(CollisionManager, {
     },
 
     isColliding(obj1, obj2) {
-        const b1 = this.getCollisionBounds(obj1);
-        const b2 = this.getCollisionBounds(obj2);
+        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1);
+        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2);
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
@@ -246,27 +251,29 @@ extendClass(CollisionManager, {
         return true;
     },
 
-    getCollisionBounds(obj) {
-        if (!obj) return { x: 0, y: 0, width: 0, height: 0 };
+    getCollisionBounds(obj, out) {
+        const o = out || { x: 0, y: 0, width: 0, height: 0 };
+        if (!obj) {
+            o.x = 0; o.y = 0; o.width = 0; o.height = 0;
+            return o;
+        }
         const c = obj.collision;
         if (c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
             const insetL = c.insetL || 0;
             const insetT = c.insetT || 0;
             const insetR = c.insetR || 0;
             const insetB = c.insetB || 0;
-            return {
-                x: obj.x + insetL,
-                y: obj.y + insetT,
-                width: Math.max(1, obj.width - insetL - insetR),
-                height: Math.max(1, obj.height - insetT - insetB)
-            };
+            o.x = obj.x + insetL;
+            o.y = obj.y + insetT;
+            o.width = Math.max(1, obj.width - insetL - insetR);
+            o.height = Math.max(1, obj.height - insetT - insetB);
+            return o;
         }
-        return {
-            x: obj.x,
-            y: obj.y,
-            width: obj.width,
-            height: obj.height
-        };
+        o.x = obj.x;
+        o.y = obj.y;
+        o.width = obj.width;
+        o.height = obj.height;
+        return o;
     },
 
     getCollisionSprite(obj) {

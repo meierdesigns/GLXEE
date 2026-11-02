@@ -141,8 +141,16 @@
             const out = document.getElementById('vfResValue');
             if (out) out.textContent = resLabel(real);
         }
-        // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size
-        ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
+        // Everything scales with the 4:3 stage: effective zoom = user zoom * stage size / design size.
+        // Guarded like applyCanvasSize's writes below: a transient scrollbar/font-reflow blip (e.g. the
+        // extra 'load' event recompute) can nudge window.innerWidth by a px or two without a real resize —
+        // rewriting --stage-scale for that repaints the whole bezel/stage one frame later as a visible snap.
+        if (!force && vfs.lastStageScale != null && sizesClose(real.scale, vfs.lastStageScale, 0.002)) {
+            // skip: not a meaningful change
+        } else {
+            vfs.lastStageScale = real.scale;
+            ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
+        }
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
         const zoom = userZoom * (inFight ? 0.85 : 1);
         ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
@@ -328,7 +336,10 @@
         update(true);
     }
 
-    window.addEventListener('load', function () { update(true); });
+    // Not forced: the defer-time update() already ran before first paint: only repaint if
+    // fonts/images finishing actually changed the window size, not the near-identical value
+    // (a resized scrollbar, etc.) that caused the reported load-time bezel snap.
+    window.addEventListener('load', function () { update(false); });
 
     window.viewportFit = {
         update: function () { update(true); },

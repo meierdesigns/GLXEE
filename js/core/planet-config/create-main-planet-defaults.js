@@ -15,7 +15,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'fire',
                 enemyType: 'fighter',
                 enemySpeed: 0.8,
-                enemyHealth: 100,
+                enemyHealth: 145,
                 obstacleSpawnRate: 3000,
                 obstacleTypes: ['small_asteroid', 'medium_asteroid'],
                 sideEnemies: [
@@ -50,7 +50,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'sunset',
                 enemyType: 'cruiser',
                 enemySpeed: 1.0,
-                enemyHealth: 150,
+                enemyHealth: 190,
                 obstacleSpawnRate: 2000,
                 obstacleTypes: ['small_asteroid', 'medium_asteroid', 'small_shield'],
                 sideEnemies: [
@@ -86,7 +86,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'retro',
                 enemyType: 'battleship',
                 enemySpeed: 1.2,
-                enemyHealth: 200,
+                enemyHealth: 240,
                 obstacleSpawnRate: 1500,
                 obstacleTypes: ['medium_asteroid', 'large_asteroid', 'small_shield', 'medium_shield'],
                 sideEnemies: [
@@ -121,7 +121,7 @@ extendClass(PlanetConfigManager, {
                 theme: 'ocean',
                 enemyType: 'battleship',
                 enemySpeed: 1.5,
-                enemyHealth: 250,
+                enemyHealth: 290,
                 obstacleSpawnRate: 1000,
                 obstacleTypes: ['large_asteroid', 'small_shield', 'medium_shield', 'large_shield'],
                 enemies: [

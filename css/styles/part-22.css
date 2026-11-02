@@ -712,6 +712,7 @@ html body .hs-slot-picker .hs-pick-cell.is-current { border-color: var(--pk-c, v
 html body .hs-slot-picker .hs-pick-cell.is-used { opacity: 1; }
 html body .hs-slot-picker .hs-pick-assigned { position: absolute; left: 2px; top: 2px; z-index: 3; width: 16px; height: 16px; display: grid; place-items: center; background: #05060a; border: 1px solid var(--pk-c, var(--color-primary)); color: var(--pk-c, var(--color-primary)); }
 html body .hs-slot-picker .hs-pick-assigned svg { width: 10px; height: 10px; }
+html body .hs-slot-picker .hs-pick-cell.hs-pick-cell-empty { background: transparent; border-style: dashed; border-color: color-mix(in srgb, var(--color-primary) 30%, transparent); cursor: default; pointer-events: none; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked { opacity: .5; cursor: not-allowed; }
 html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-pick-ico { opacity: .45; }
 html body .hs-slot-picker .hs-pick-ico { display: grid; place-items: center; width: 48px; height: 48px; font-size: 28px; }

@@ -178,17 +178,16 @@ extendClass(GalaxyMapManager, {
         this._orbitTick = (this._orbitTick || 0) + 1;
         const routeOnPost = this.selectedPostId || (loc && loc.kind === 'post');
         if (routeOnPost && this._orbitTick % 3 === 0 && this.syncRoutePreview) this.syncRoutePreview();
+        if (this._orbitTick % 3 === 0 && this.hoveredPlanetId && this.syncHoverRoute) this.syncHoverRoute();
     },
     startOrbitLoop() {
         if (this._orbitTimer) return;
         // 4 Hz is enough for slow station orbits; 10 Hz was mostly SVG attribute thrash.
+        // Station position is gameplay, not decoration — it keeps moving even with
+        // FX animation / performance mode off (those only mute purely cosmetic motion).
         this._orbitTimer = setInterval(() => {
             if (!this.isVisible || !this.overlay) { clearInterval(this._orbitTimer); this._orbitTimer = null; return; }
             if (document.hidden) return;
-            try {
-                if (document.documentElement.getAttribute('data-vf-perf-anim') === 'off'
-                    || document.documentElement.getAttribute('data-vf-performance') != null) return;
-            } catch (e) { /* tick */ }
             this.tickOrbits();
         }, 250);
     },

@@ -38,11 +38,11 @@ extendClass(StartScreenManager, {
             {
                 name: 'Pixel Size',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('pixelSize') : 'OFF',
-                options: ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'],
+                    ? uiAppearanceManager.getFxValue('pixelSize') : '1',
+                options: ['1', '2', '4'],
                 type: 'uiFx',
                 fxKey: 'pixelSize',
-                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors — 1 is sharpest'
+                tip: 'One shared pixel grid (screen px per art pixel) for ships, planets, combat, maps, previews and editors — 1 is sharpest'
             },
             {
                 name: 'Frame Pixel',

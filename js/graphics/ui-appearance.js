@@ -166,8 +166,8 @@ class UIAppearanceManager {
         this.guiVoxelCell = 'AUTO';
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
-        // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
-        this.pixelSize = '3';
+        // Global pixel size (CSS px per art pixel) across combat, maps, planets, ships, previews and editors.
+        this.pixelSize = '2';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -314,7 +314,7 @@ class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
-        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'];
+        if (fxKey === 'pixelSize') return ['1', '2', '4'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -482,8 +482,10 @@ class UIAppearanceManager {
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
             }
-            if (data.pixelSize === 'OFF' || /^[1-8]$/.test(String(data.pixelSize))) {
-                this.pixelSize = String(data.pixelSize);
+            if (/^[1-8]$/.test(String(data.pixelSize))) {
+                // Migrate legacy 3/5-8 (and the old OFF) onto the nearest of the 1/2/4 grid.
+                const n = Number(data.pixelSize);
+                this.pixelSize = n <= 1 ? '1' : (n <= 3 ? '2' : '4');
             }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
             if (data.guiVoxel === 'ON' || data.guiVoxel === 'OFF') {

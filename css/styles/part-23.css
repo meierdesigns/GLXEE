@@ -112,25 +112,25 @@ html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-sectio
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
     border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-terran var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
+    animation: none;
 }
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
     border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-kronax var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
+    animation: none;
 }
 html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
     border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-pirate var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
+    animation: none;
 }
 html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
     border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-machine var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
+    animation: none;
 }
 html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before,

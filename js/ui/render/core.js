@@ -499,13 +499,21 @@ class RenderManager {
                 ctx.rect(occ.l, occ.top, occ.r - occ.l, occ.bottom - occ.top);
                 ctx.clip();
             }
+            // Spawn invincibility: fast blink so it reads as temporary immunity.
+            const invulnBlink = (typeof playerManager !== 'undefined' && playerManager.invuln > 0
+                && Math.floor(playerManager.invuln / 90) % 2 === 0) ? 0.35 : 1;
             if (enterFx) {
                 const pcx = player.x + player.width / 2, pcy = player.y + player.height / 2;
                 ctx.save();
-                ctx.globalAlpha = enterFx.alpha;
+                ctx.globalAlpha = enterFx.alpha * invulnBlink;
                 ctx.translate(pcx, pcy);
                 ctx.scale(enterFx.scale, enterFx.scale);
                 ctx.translate(-pcx, -pcy);
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+                ctx.restore();
+            } else if (invulnBlink !== 1) {
+                ctx.save();
+                ctx.globalAlpha = invulnBlink;
                 graphicsManager.renderPlayerShip(ctx, player, 1);
                 ctx.restore();
             } else {

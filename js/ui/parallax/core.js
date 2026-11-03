@@ -203,6 +203,32 @@ class ParallaxManager {
         if (this.starsEnabled !== false) {
             this.drawFlyingStars(ctx);
         }
+
+        this.renderBossIntensity(ctx, cw, ch);
+    }
+
+    /**
+     * Boss arenas hold still (see update()), so they need their own visual
+     * drama: a phase-tinted vignette + slow pulse layered over the frozen
+     * background, ramping up as the boss loses health (phase 1→3).
+     */
+    renderBossIntensity(ctx, cw, ch) {
+        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
+        const e = em && em.enemy;
+        if (!e || !e.isBoss || em.exploding) return;
+        const phase = e.bossPhase || 1;
+        const col = ['#5a1018', '#7a2a10', '#7a0a3a'][Math.max(0, phase - 1)];
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / (600 - phase * 120));
+        const baseAlpha = 0.08 + phase * 0.06;
+        const alpha = baseAlpha + pulse * 0.04;
+        ctx.save();
+        const grad = ctx.createRadialGradient(cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2, cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, col);
+        ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
     }
 
     drawLayerPattern(ctx, layer, index) {

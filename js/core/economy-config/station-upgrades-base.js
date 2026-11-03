@@ -13,7 +13,7 @@ function createBaseStationUpgradeNodes() {
             treeX: 50,
             treeY: 6,
             desc: 'Central hub. Unlocks branch upgrades.',
-            effect: (lv) => ({ resourceCap: lv * 10, cargoCap: lv * 5 }),
+            effect: (lv) => ({ resourceCap: lv * 10, cargoCap: lv * 5, storageSlots: lv }),
             costs: [
                 { scrap: 40 },
                 { scrap: 80, ore: 20 },
@@ -36,8 +36,8 @@ function createBaseStationUpgradeNodes() {
             requireLevel: 1,
             treeX: 8,
             treeY: 24,
-            desc: 'Raise max station resources per type.',
-            effect: (lv) => ({ resourceCap: lv * 40 }),
+            desc: 'Raise vault bay slots and max station resources per type.',
+            effect: (lv) => ({ resourceCap: lv * 40, storageSlots: lv * 4 }),
             costs: [
                 { scrap: 50, ore: 15 },
                 { scrap: 90, ore: 35 },
@@ -143,8 +143,8 @@ function createBaseStationUpgradeNodes() {
             requireLevel: 2,
             treeX: 5,
             treeY: 44,
-            desc: 'Compress vault loads for higher store caps.',
-            effect: (lv) => ({ resourceCap: lv * 50 }),
+            desc: 'Compress vault loads for higher store caps and bay density.',
+            effect: (lv) => ({ resourceCap: lv * 50, storageSlots: lv * 2 }),
             costs: [
                 { scrap: 80, ore: 30 },
                 { scrap: 140, ore: 55, crystal: 20 },

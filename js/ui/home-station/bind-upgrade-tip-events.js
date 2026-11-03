@@ -103,12 +103,12 @@ extendClass(HomeStationUI, {
             maxX = Math.max(maxX, tx);
             maxY = Math.max(maxY, ty);
         });
-        const nodeSize = 92;
+        const nodeSize = 76;
         const half = nodeSize / 2;
-        const padX = 56;
-        const padY = 56;
-        const scaleX = 12.4;
-        const scaleY = 10.2;
+        const padX = 48;
+        const padY = 40;
+        const scaleX = 11.2;
+        const scaleY = 8.4;
         const treeW = Math.ceil(padX * 2 + maxX * scaleX + nodeSize);
         const treeH = Math.ceil(padY * 2 + maxY * scaleY + nodeSize);
 

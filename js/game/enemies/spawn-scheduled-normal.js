@@ -80,6 +80,12 @@ extendClass(EnemyManager, {
             : laneRight - side.width - 4 - Math.random() * Math.max(8, (laneRight - laneLeft - side.width) * 0.35);
         side.entryFromSide = gap.side;
         side.entryTargetX = Math.max(laneLeft, Math.min(laneRight - side.width, targetX));
+        // How far into the lane the target sits, measured from the entry edge —
+        // kept so the target can be re-anchored to the live wall each frame
+        // while the level scrolls out from under the (fixed-screen-row) gap.
+        side.entryOffset = gap.side === 0
+            ? side.entryTargetX - laneLeft
+            : laneRight - side.width - side.entryTargetX;
         side.entryTargetY = Math.max(12, Math.min(H - side.height - 12, gap.y));
         side.y = side.entryTargetY;
         if (gap.side === 0) {

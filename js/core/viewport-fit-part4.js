@@ -152,8 +152,14 @@
             ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
         }
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
+        // Guard like --stage-scale: rewriting --gui-zoom-eff every RO/resize tick reflows the
+        // station glass host's transform:scale(--hs-z) and looks like the containers jump/flicker.
         const zoom = userZoom * (inFight ? 0.85 : 1);
-        ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
+        const zoomRounded = Number(zoom.toFixed(4));
+        if (force || vfs.lastGuiZoomEff == null || !sizesClose(zoomRounded, vfs.lastGuiZoomEff, 0.0005)) {
+            vfs.lastGuiZoomEff = zoomRounded;
+            ROOT.style.setProperty('--gui-zoom-eff', String(zoomRounded));
+        }
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);

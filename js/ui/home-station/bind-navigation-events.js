@@ -129,6 +129,137 @@ extendClass(HomeStationUI, {
             });
         });
 
+        this.overlay.querySelectorAll('[data-equip-select]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-equip-select') || '';
+                this.expandedEquipItem = this.expandedEquipItem === key ? null : key;
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-track-up]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id, track] = (btn.getAttribute('data-item-track-up') || '').split(':');
+                const act = { type: 'item-track-upgrade', bucket: bucket, id: id, track: track };
+                const meta = this._storageItemMeta(bucket, id);
+                const trackMeta = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs[bucket])
+                    ? economyConfig.itemUpgradeTrackDefs[bucket][track]
+                    : null;
+                const title = meta.label + ' · ' + ((trackMeta && trackMeta.label) || track.toUpperCase());
+                let res = profileManager.purchaseItemTrackUpgrade(bucket, id, track);
+                if (!res.ok && res.reason === 'RESOURCES' && btn.hasAttribute('data-short')) {
+                    const cost = res.cost;
+                    res = this.buyMissingThenAct(cost, act);
+                    if (res.ok) {
+                        this.playButtonResult(btn, true, 'BOUGHT · UPGRADED: ' + track.toUpperCase() + ' L' + res.level);
+                        this.createUI();
+                        return;
+                    }
+                    this.playButtonResult(btn, false, res.reason === 'CREDITS'
+                        ? ('NEED ' + (res.need || 0) + ' CR')
+                        : (res.reason || 'BUY FAILED'));
+                    this.openResourceBuyModal({ title: title, cost: cost, action: act });
+                    return;
+                }
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'UPGRADED: ' + track.toUpperCase() + ' L' + res.level);
+                    this.createUI();
+                } else if (res.reason === 'RESOURCES') {
+                    this.openResourceBuyModal({
+                        title: title + (res.nextLevel ? (' · L' + res.nextLevel) : ''),
+                        cost: res.cost,
+                        action: act
+                    });
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-mode]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id, mode] = (btn.getAttribute('data-item-mode') || '').split(':');
+                const res = profileManager.setItemMode(bucket, id, mode);
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'MODE: ' + mode.toUpperCase());
+                    this.createUI();
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-tune-unlock]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id] = (btn.getAttribute('data-item-tune-unlock') || '').split(':');
+                const act = { type: 'item-tune-unlock', bucket: bucket, id: id };
+                const title = this._storageItemMeta(bucket, id).label + ' · FINE TUNE';
+                let res = profileManager.purchaseItemTuneUnlock(bucket, id);
+                if (!res.ok && res.reason === 'RESOURCES' && btn.hasAttribute('data-short')) {
+                    const cost = res.cost;
+                    res = this.buyMissingThenAct(cost, act);
+                    if (res.ok) {
+                        this.playButtonResult(btn, true, 'BOUGHT · FINE TUNE UNLOCKED');
+                        this.createUI();
+                        return;
+                    }
+                    this.playButtonResult(btn, false, res.reason === 'CREDITS'
+                        ? ('NEED ' + (res.need || 0) + ' CR')
+                        : (res.reason || 'BUY FAILED'));
+                    this.openResourceBuyModal({ title: title, cost: cost, action: act });
+                    return;
+                }
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'FINE TUNE UNLOCKED');
+                    this.createUI();
+                } else if (res.reason === 'RESOURCES') {
+                    this.openResourceBuyModal({ title: title, cost: res.cost, action: act });
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-tune]').forEach((input) => {
+            input.addEventListener('change', () => {
+                const [bucket, id] = (input.getAttribute('data-item-tune') || '').split(':');
+                const res = profileManager.setItemTune(bucket, id, Number(input.value) / 100);
+                if (!res.ok) {
+                    this.playButtonResult(input, false, res.reason || 'LOCKED');
+                    return;
+                }
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-equip]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [shipId, kind, id] = (btn.getAttribute('data-item-equip') || '').split('|');
+                const check = shipLoadoutManager.canInstallModule(shipId, kind, id);
+                if (check.ok || check.removing) {
+                    shipLoadoutManager.toggleModule(shipId, kind, id);
+                } else if (check.reason === 'FULL') {
+                    // Every slot of this kind is occupied: replace the first one
+                    // (same behaviour as dragging a part onto an occupied hangar slot).
+                    shipLoadoutManager.setSlotModule(shipId, kind, 0, id);
+                } else {
+                    this.playButtonResult(btn, false, check.reason || 'FAILED');
+                    return;
+                }
+                this.playButtonResult(btn, true, 'EQUIPPED');
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-unequip]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [shipId, kind, id] = (btn.getAttribute('data-item-unequip') || '').split('|');
+                shipLoadoutManager.toggleModule(shipId, kind, id);
+                this.playButtonResult(btn, true, 'UNEQUIPPED');
+                this.createUI();
+            });
+        });
+
         this.overlay.querySelectorAll('[data-travel]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const gid = btn.getAttribute('data-travel');

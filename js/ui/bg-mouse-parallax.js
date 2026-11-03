@@ -236,33 +236,12 @@
 
         var sinceMove = (now - parallax.lastMoveTs) / 1000;
         if (sinceMove > 0.08) parallax.speedSmooth *= 0.9;
+        // No idle sine drift: under body stage-scale it read as the station
+        // panels jumping/flickering while the pointer was still.
+        parallax.idleGain = 0;
 
-        var idleActive = sinceMove > 0.35;
-        if (idleActive) {
-            parallax.idleGain = Math.min(1, parallax.idleGain + 0.018);
-        } else {
-            parallax.idleGain *= 0.92;
-        }
-
-        var hx = 0;
-        var hy = 0;
-        if (parallax.idleGain > 0.02) {
-            var t = (now - parallax.startMs) / 1000;
-            var TAU = Math.PI * 2;
-            hx =
-                (Math.sin(t * TAU * 0.023) * 0.65 +
-                    Math.sin(t * TAU * 0.041 + 1.7) * 0.35) *
-                parallax.ampX *
-                parallax.idleGain;
-            hy =
-                (Math.sin(t * TAU * 0.019 + 0.9) * 0.7 +
-                    Math.sin(t * TAU * 0.034 + 2.3) * 0.3) *
-                parallax.ampY *
-                parallax.idleGain;
-        }
-
-        var outX = parallax.curX + hx;
-        var outY = parallax.curY + hy;
+        var outX = parallax.curX;
+        var outY = parallax.curY;
         var gx = (parallax.ptrX - 0.5) * w;
         var gy = (parallax.ptrY - 0.5) * h;
         applyTransforms(outX, outY, gx, gy);
@@ -274,7 +253,7 @@
             Math.abs(parallax.targetPtrY - parallax.ptrY);
         var settling = dx > 0.05 || dy > 0.05 || dPtr > 0.002;
 
-        if (settling || parallax.idleGain > 0.02) schedule();
+        if (settling) schedule();
         else parallax.lastFrameTs = 0;
     }
 

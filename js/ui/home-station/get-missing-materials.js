@@ -29,6 +29,56 @@ extendClass(HomeStationUI, {
         return rows;
     },
 
+    /** Rich BUY tip body: resource icons + gap + credit cost + can/short per row. */
+    resourceBuyTipBody(wallet, costMap, profile) {
+        const missing = this.getMissingMaterials(wallet, costMap);
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        if (!missing.length) {
+            return '<div class="ui-tooltip-note">MATERIALS READY</div>';
+        }
+        const label = (id) => (typeof economyConfig !== 'undefined')
+            ? economyConfig.getResourceLabel(id)
+            : String(id).toUpperCase();
+        const chip = (id, text) =>
+            `<span class="ui-tip-chip">${this.iconHtml(this.resourceIconKey(id), 16, 'hs-pixel', false)}` +
+            `<span>${text}</span></span>`;
+        const rows = missing.map((r) => {
+            const can = credits >= (r.credits || 0);
+            return `<div class="ui-tooltip-stats ${can ? 'is-ok' : 'is-short'}">` +
+                chip(r.id, r.gap + ' ' + label(r.id)) +
+                chip('credits', r.credits + ' CR') +
+                `<span class="ui-tooltip-affordance">${can ? 'CAN BUY' : 'SHORT'}</span>` +
+                `</div>`;
+        }).join('');
+        const total = missing.reduce((sum, r) => sum + (r.credits || 0), 0);
+        const canAll = credits >= total;
+        return rows +
+            `<div class="ui-tooltip-stats ${canAll ? 'is-ok' : 'is-short'}">` +
+            chip('credits', 'TOTAL ' + total + ' CR') +
+            `<span class="ui-tooltip-affordance">${canAll ? 'CAN BUY' : 'NOT ENOUGH CREDITS'}</span>` +
+            `</div>`;
+    },
+
+    /** UPGRADE when affordable; BUY (+ tip) when short on resources; else disabled. */
+    renderUpgradeOrBuyButton(attrs, check, cost, profile) {
+        const iconKey = (check && check.ok) ? 'hsUpgrade' : 'hsShop';
+        const icon = this.iconHtml(iconKey, 18, 'hs-pixel', false);
+        const base = 'action-button hs-line-action hs-equip-up-btn';
+        if (check && check.ok) {
+            return `<button class="${base}" ${attrs}>${icon}<span>UPGRADE</span></button>`;
+        }
+        if (check && check.reason === 'RESOURCES') {
+            const body = this.resourceBuyTipBody((profile && profile.resources) || {}, cost || check.cost, profile);
+            return `<button class="${base}" ${attrs} data-short="1" data-ui-tip-head="NEED RESOURCES" data-ui-tip="NEED RESOURCES" data-ui-tip-html>` +
+                `${icon}<span>BUY</span>` +
+                `<template data-ui-tip-body>${body}</template>` +
+                `</button>`;
+        }
+        return `<button class="${base}" ${attrs} disabled>${icon}<span>UPGRADE</span></button>`;
+    },
+
     openResourceBuyModal(opts) {
         const o = opts || {};
         this._resBuyModal = {
@@ -98,14 +148,22 @@ extendClass(HomeStationUI, {
             `</div></div></div>`;
     },
 
-    buyMissingResources(all) {
-        const modal = this._resBuyModal;
-        if (!modal || typeof profileManager === 'undefined') {
-            return { ok: false, reason: 'NO MODAL' };
+    buyMissingResources(all, costMap) {
+        if (typeof profileManager === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
         }
+        const cost = costMap || (this._resBuyModal && this._resBuyModal.cost);
+        if (!cost) return { ok: false, reason: 'NO MODAL' };
         const profile = this.getProfile();
-        const missing = this.getMissingMaterials((profile && profile.resources) || {}, modal.cost);
+        const missing = this.getMissingMaterials((profile && profile.resources) || {}, cost);
         if (!missing.length) return { ok: true, bought: 0 };
+        const credits = profileManager.getCredits
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        const total = missing.reduce((sum, r) => sum + (r.credits || 0), 0);
+        if (all && credits < total) {
+            return { ok: false, reason: 'CREDITS', need: total, have: credits };
+        }
         const targets = all ? missing : missing.slice(0, 1);
         let bought = 0;
         let lastFail = null;
@@ -122,6 +180,16 @@ extendClass(HomeStationUI, {
             return { ok: false, reason: (lastFail && lastFail.reason) || 'FAILED' };
         }
         return { ok: true, bought: bought, partial: !!lastFail, reason: lastFail && lastFail.reason };
+    },
+
+    /** BUY button: purchase missing mats with credits, then run the upgrade action. */
+    buyMissingThenAct(cost, action) {
+        const buy = this.buyMissingResources(true, cost);
+        if (!buy.ok) return buy;
+        this._resBuyModal = { title: '', cost: Object.assign({}, cost || {}), action: action || null };
+        const done = this.finishResourceBuyAction();
+        this._resBuyModal = null;
+        return done.ok ? done : Object.assign({ bought: buy.bought }, done);
     },
 
     finishResourceBuyAction() {
@@ -141,6 +209,12 @@ extendClass(HomeStationUI, {
         }
         if (act.type === 'module-upgrade') {
             return profileManager.purchaseModuleUpgrade(act.cat, act.track);
+        }
+        if (act.type === 'item-track-upgrade') {
+            return profileManager.purchaseItemTrackUpgrade(act.bucket, act.id, act.track);
+        }
+        if (act.type === 'item-tune-unlock') {
+            return profileManager.purchaseItemTuneUnlock(act.bucket, act.id);
         }
         if (act.type === 'craft') {
             return profileManager.craftBlueprint(act.id);
@@ -216,6 +290,10 @@ extendClass(HomeStationUI, {
                         msg = 'FRAME UPGRADED: ' + this.shipName(act.id) + ' L' + res.level;
                     } else if (act && act.type === 'module-upgrade') {
                         msg = 'MODULE UPGRADE L' + res.level;
+                    } else if (act && act.type === 'item-track-upgrade') {
+                        msg = 'ITEM UPGRADED: ' + String(act.track).toUpperCase() + ' L' + res.level;
+                    } else if (act && act.type === 'item-tune-unlock') {
+                        msg = 'FINE TUNE UNLOCKED';
                     }
                     this.statusMsg = msg;
                     this.focusIndex = 0;

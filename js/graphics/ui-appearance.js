@@ -107,7 +107,7 @@ class UIAppearanceManager {
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
         // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
-        this.sizePx = { player: 18, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
+        this.sizePx = { player: 17, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
             // Boss / side craft are derived from the class footprint (boss x1.6, side x0.68-0.78); these scale that in % (SIZES tab).
             'boss:pct': 80, 'side:pct': 80 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).

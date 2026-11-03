@@ -95,7 +95,8 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     border-left-width: var(--gm-stroke) !important;
 }
 
-/* Station bezel + content: keep the 4:3 stage (--vw/--vh) centered in the window */
+/* Station bezel + glass host: stage offsets (part-15 already adds these to
+   the scale host top/left). ::after frames the full stage, not the glass. */
 .home-station-overlay {
     --stage-x: 0px;
     --stage-y: 0px;
@@ -106,14 +107,6 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     top: calc(var(--stage-y) + var(--hs-frame-gap)) !important;
     width: calc(var(--vw, calc(100 * var(--sv-w))) - 2 * var(--hs-frame-gap)) !important;
     height: calc(var(--vh, calc(100 * var(--sv-h))) - 2 * var(--hs-frame-gap)) !important;
-}
-.home-station-overlay .home-station-content {
-    /* Position is the unscaled anchor point for transform-origin: 0 0, so it
-       must NOT be divided by --hs-z (only width/height are, in part-15.css) -
-       dividing here pushed the panel past the bezel's safe opening at any
-       zoom below 1, growing worse the more the GUI was scaled down. */
-    top: calc(var(--stage-y) + var(--fr-open-top)) !important;
-    left: calc(var(--stage-x) + var(--fr-open-side)) !important;
 }
 
 /* vw/vh replacements: 1% of the 4:3 stage. Not zoomed contexts: real stage px.
@@ -1506,3 +1499,50 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelate
     box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit), 0 1px 0 var(--rc-dark);
     color: #fff;
 }
+
+/* ---- Gamepad menu cursor (js/core/gamepad/cursor.js) -------------------- */
+.vf-gp-cursor {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 100050;
+    box-sizing: border-box;
+    pointer-events: none;
+    opacity: 0;
+    will-change: transform, width, height, opacity;
+    transition: opacity 0.18s ease;
+}
+.vf-gp-cursor.is-on { opacity: 1; }
+.vf-gp-cursor.is-out { opacity: 0; }
+.vf-gp-cursor > i {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--color-primary, #3dff6a);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary, #3dff6a) 55%, transparent);
+    pointer-events: none;
+}
+.vf-gp-cursor > i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+.vf-gp-cursor > i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+.vf-gp-cursor > i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+.vf-gp-cursor > i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.vf-gp-cursor.is-jump > i {
+    animation: vf-gp-cursor-pulse 0.22s steps(2) 1;
+}
+.vf-gp-cursor::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid color-mix(in srgb, var(--color-primary, #3dff6a) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 8%, transparent);
+    pointer-events: none;
+}
+@keyframes vf-gp-cursor-pulse {
+    0% { transform: scale(1.15); opacity: 0.55; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .vf-gp-cursor.is-jump > i { animation: none; }
+    .vf-gp-cursor { transition: none; }
+}
+

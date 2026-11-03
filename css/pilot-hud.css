@@ -215,3 +215,89 @@ html[data-vf-gui-voxel="on"] .vf-pilot-crest {
 .vf-pilot-res { display: inline-flex; align-items: center; gap: calc(6 * var(--bz-u)); flex: none; }
 .vf-pilot-res img { width: calc(var(--ph-res-icon) * var(--bz-u)) !important; height: calc(var(--ph-res-icon) * var(--bz-u)) !important; image-rendering: pixelated; }
 .vf-pilot-res b { font-weight: normal; }
+
+/* ---- Dev Mode hover readout (bottom strip) — js/ui/dev-hover-screen.js ---- */
+.vf-bezel {
+    --ph-hover-bottom: 30;
+    --ph-hover-left: 130;
+    --ph-hover-w: 760;
+    --ph-hover-h: 36;
+    --ph-hover-font: 14;
+}
+.vf-hover-screen {
+    top: auto;
+    bottom: calc(var(--ph-hover-bottom) * var(--bz-u));
+    left: calc(var(--ph-hover-left) * var(--bz-u));
+    width: calc(var(--ph-hover-w) * var(--bz-u));
+    height: calc(var(--ph-hover-h) * var(--bz-u));
+    padding: 0 calc(14 * var(--bz-u));
+    gap: calc(12 * var(--bz-u));
+    font-size: calc(var(--ph-hover-font) * var(--bz-u));
+    letter-spacing: 0.06em;
+    pointer-events: none;
+    z-index: 9996;
+}
+/* Flip the shared tab so it hangs off the bottom lip instead of the top. */
+.vf-hover-screen::after {
+    inset: calc(-1 * var(--ph-tab-down) * var(--bz-u)) calc(-1 * var(--ph-tab-side) * var(--bz-u)) calc(-1 * var(--ph-tab-up) * var(--bz-u));
+    border-color: var(--ph-accent);
+    border-top-color: transparent;
+}
+.vf-hover-screen[hidden] { display: none !important; }
+.vf-hover-k {
+    flex: none;
+    color: color-mix(in srgb, var(--ph-accent) 70%, #fff);
+    opacity: 0.75;
+    letter-spacing: 0.14em;
+}
+.vf-hover-hi {
+    flex: none;
+    margin: 0;
+    padding: 0 calc(6 * var(--bz-u));
+    height: calc(22 * var(--bz-u));
+    border: calc(2 * var(--bz-u)) solid color-mix(in srgb, var(--ph-accent) 45%, transparent);
+    background: #03040a;
+    color: color-mix(in srgb, var(--ph-accent) 70%, #fff);
+    font: inherit;
+    font-size: calc(12 * var(--bz-u));
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    pointer-events: auto;
+}
+.vf-hover-hi:hover,
+.vf-hover-hi:focus-visible {
+    border-color: var(--ph-accent);
+    color: #fff;
+}
+.vf-hover-hi.is-on {
+    border-color: #ff6ad5;
+    color: #ffd6f3;
+    background: color-mix(in srgb, #ff6ad5 22%, #03040a);
+    box-shadow: 0 0 calc(8 * var(--bz-u)) color-mix(in srgb, #ff6ad5 55%, transparent);
+}
+.vf-hover-v {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--ph-accent);
+    text-shadow: 0 0 calc(6 * var(--bz-u)) color-mix(in srgb, var(--ph-accent) 70%, transparent);
+}
+/* Fixed tint over the hovered element. Child of <html> so body stage-scale
+   does not remount client rects into a second coordinate space. */
+.vf-hover-hl {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 100001;
+    box-sizing: border-box;
+    pointer-events: none;
+    border: 2px solid #ff6ad5;
+    background: color-mix(in srgb, #3dff6a 28%, transparent);
+    box-shadow:
+        0 0 0 1px #03040a,
+        0 0 12px color-mix(in srgb, #ff6ad5 70%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, #3dff6a 55%, transparent);
+    mix-blend-mode: screen;
+}
+.vf-hover-hl[hidden] { display: none !important; }

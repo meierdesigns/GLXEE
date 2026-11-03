@@ -1,114 +1,199 @@
 "use strict";
 
-// HomeStationUI: draggable column borders in the station storage grid
-// (owned ships | blueprints | parts). Widths are kept as fr weights.
-const STATION_COLS_KEY = 'vf_station_cols_v1';
-const STATION_COLS_MIN = 0.25;
-// Floor below which a column's content (title + icon + grid) can no longer fit and gets clipped.
-const STATION_COL_MIN_PX = 220;
+// HomeStationUI: draggable border between the storage/ships column and the
+// STATION STORES chambers. Matches .hs-station-grid's 2-column template
+// (left content | chambers). Legacy 3-column fr weights are ignored.
+const STATION_COLS_KEY = 'vf_station_cols_v2';
+const STATION_COLS_MIN = 0.35;
+const STATION_COLS_MAX = 12;
+const STATION_LEFT_MIN_PX = 320;
+const STATION_RIGHT_MIN_PX = 300;
+const STATION_COLS_DEFAULT = [3, 1];
 
 extendClass(HomeStationUI, {
+    /** Sanitize persisted [leftFr, rightFr] — reject NaN/Infinity/exploded values from bad drags. */
+    _sanitizeStationCols(v) {
+        if (!Array.isArray(v) || v.length !== 2) return null;
+        const a = Number(v[0]);
+        const b = Number(v[1]);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+        if (a < STATION_COLS_MIN || b < STATION_COLS_MIN) return null;
+        if (a > STATION_COLS_MAX || b > STATION_COLS_MAX) return null;
+        // Re-normalize to a stable sum so fr math stays bounded across reloads.
+        const total = a + b;
+        if (!(total > 0) || !Number.isFinite(total)) return null;
+        const scale = (STATION_COLS_DEFAULT[0] + STATION_COLS_DEFAULT[1]) / total;
+        return [
+            Math.max(STATION_COLS_MIN, Math.min(STATION_COLS_MAX, a * scale)),
+            Math.max(STATION_COLS_MIN, Math.min(STATION_COLS_MAX, b * scale))
+        ];
+    },
+
     getStationCols() {
         try {
             const v = JSON.parse(localStorage.getItem(STATION_COLS_KEY) || 'null');
-            if (Array.isArray(v) && v.length === 3 && v.every((n) => n >= STATION_COLS_MIN)) return v;
+            const clean = this._sanitizeStationCols(v);
+            if (clean) {
+                // Rewrite corrupted / pre-clamp saves so the next load stays clean.
+                if (!v || v[0] !== clean[0] || v[1] !== clean[1]) {
+                    try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(clean)); } catch (e) { /* ignore */ }
+                }
+                return clean;
+            }
+            if (v != null) {
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+            }
         } catch (e) { /* ignore */ }
-        return [1, 1, 1];
+        return null; // null → leave CSS defaults alone
     },
 
     bindStationColumnResize() {
         const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
         if (!grid) return;
-        const cols = this.getStationCols();
-        const apply = () => { grid.style.gridTemplateColumns = cols.map((c) => `minmax(0, ${c}fr)`).join(' '); };
-        apply();
-        // A layout saved before STATION_COL_MIN_PX existed (or saved at a wider window) can still be
-        // narrower than the current floor — renormalize it against the grid's actual rendered width.
-        const normalize = () => {
-            const total = cols.reduce((s, c) => s + c, 0);
-            const px = grid.offsetWidth || 1;
-            const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
-            if (cols.every((c) => c >= minFr - 0.001)) return;
-            let deficit = 0;
-            for (let k = 0; k < cols.length; k++) {
-                if (cols[k] < minFr) { deficit += minFr - cols[k]; cols[k] = minFr; }
+        // Avoid stacking handles across soft remounts.
+        grid.querySelectorAll('.hs-col-resize').forEach((h) => h.remove());
+        grid.style.removeProperty('grid-template-columns');
+
+        const left = grid.querySelector('.hs-panel-stack') ||
+            grid.querySelector('.hs-panel-parts') ||
+            grid.querySelector('.hs-panel-ships');
+        const right = grid.querySelector('.hs-panel-chambers');
+        if (!left || !right) return;
+
+        let cols = this.getStationCols();
+        const apply = () => {
+            if (!cols) {
+                grid.style.removeProperty('grid-template-columns');
+                return;
             }
-            const donors = cols.map((c, k) => k).filter((k) => cols[k] > minFr);
-            const donorTotal = donors.reduce((s, k) => s + (cols[k] - minFr), 0) || 1;
-            donors.forEach((k) => { cols[k] -= deficit * (cols[k] - minFr) / donorTotal; });
-            apply(); place();
+            const clean = this._sanitizeStationCols(cols);
+            if (!clean) {
+                cols = null;
+                grid.style.removeProperty('grid-template-columns');
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+                return;
+            }
+            cols = clean;
+            // Keep the chambers column from collapsing; left takes the rest.
+            grid.style.gridTemplateColumns =
+                `minmax(0, ${cols[0]}fr) minmax(${STATION_RIGHT_MIN_PX}px, ${cols[1]}fr)`;
+        };
+        apply();
+
+        const normalize = () => {
+            if (!cols) return;
+            const clean = this._sanitizeStationCols(cols);
+            if (!clean) {
+                cols = null;
+                apply();
+                place();
+                return;
+            }
+            cols = clean;
+            const total = cols[0] + cols[1];
+            const px = grid.offsetWidth || 1;
+            const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
+            const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
+            // If mins can't both fit, fall back to CSS defaults instead of exploding ratios.
+            if (minLeft + minRight > total + 1e-6) {
+                cols = null;
+                apply();
+                place();
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+                return;
+            }
+            let changed = false;
+            if (cols[0] < minLeft) { cols[1] -= (minLeft - cols[0]); cols[0] = minLeft; changed = true; }
+            if (cols[1] < minRight) { cols[0] -= (minRight - cols[1]); cols[1] = minRight; changed = true; }
+            if (cols[0] < minLeft) cols[0] = minLeft;
+            if (cols[1] < minRight) cols[1] = minRight;
+            cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+            if (!changed) {
+                apply();
+                return;
+            }
+            apply();
+            place();
             try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (e) { /* ignore */ }
         };
-        const panels = ['.hs-panel-ships', '.hs-panel-bp', '.hs-panel-parts']
-            .map((s) => grid.querySelector(s));
-        if (panels.some((p) => !p)) return;
+
         grid.style.position = 'relative';
-        const handles = [0, 1].map((i) => {
-            const h = document.createElement('div');
-            h.className = 'hs-col-resize';
-            h.title = 'Drag to resize (double-click to reset)';
-            grid.appendChild(h);
-            return h;
-        });
+        const handle = document.createElement('div');
+        handle.className = 'hs-col-resize';
+        handle.title = 'Drag to resize (double-click to reset)';
+        grid.appendChild(handle);
+
         const place = () => {
-            // Viewport rects ÷ ancestor scale → local coords. GUI zoom
-            // makes getBoundingClientRect scaled while style.left/top stay unscaled.
             const gRect = grid.getBoundingClientRect();
             const scaleX = (gRect.width / (grid.clientWidth || grid.offsetWidth || 1)) || 1;
             const scaleY = (gRect.height / (grid.clientHeight || grid.offsetHeight || 1)) || 1;
-            handles.forEach((h, i) => {
-                const aRect = panels[i].getBoundingClientRect();
-                const bRect = panels[i + 1].getBoundingClientRect();
-                const aRight = (aRect.right - gRect.left) / scaleX;
-                const bLeft = (bRect.left - gRect.left) / scaleX;
-                const gap = Math.max(0, bLeft - aRight);
-                const hw = Math.min(12, Math.max(8, gap - 2));
-                h.style.width = hw + 'px';
-                h.style.left = (aRight + gap / 2 - hw / 2) + 'px';
-                h.style.top = ((aRect.top - gRect.top) / scaleY) + 'px';
-                h.style.height = (aRect.height / scaleY) + 'px';
-            });
+            const aRect = left.getBoundingClientRect();
+            const bRect = right.getBoundingClientRect();
+            const aRight = (aRect.right - gRect.left) / scaleX;
+            const bLeft = (bRect.left - gRect.left) / scaleX;
+            const gap = Math.max(0, bLeft - aRight);
+            const hw = Math.min(12, Math.max(8, gap - 2 || 10));
+            // Chambers span both content rows — use its full height for the grip.
+            handle.style.width = hw + 'px';
+            handle.style.left = (aRight + gap / 2 - hw / 2) + 'px';
+            handle.style.top = ((bRect.top - gRect.top) / scaleY) + 'px';
+            handle.style.height = (bRect.height / scaleY) + 'px';
         };
         place();
         normalize();
-        handles.forEach((h, i) => {
-            h.addEventListener('dblclick', () => {
-                cols[0] = cols[1] = cols[2] = 1;
-                apply(); place();
-                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
-            });
-            h.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                h.setPointerCapture(e.pointerId);
-                const total = cols.reduce((s, c) => s + c, 0);
-                // Match clientX units (viewport/zoomed) — offsetWidth is unscaled under CSS zoom.
-                const px = panels.reduce((s, p) => s + p.getBoundingClientRect().width, 0) || 1;
-                const startX = e.clientX;
-                const pair = cols[i] + cols[i + 1];
-                const startA = cols[i];
-                // Pixel floor converted to this drag's fr units, so a column can never be dragged
-                // narrower than its content needs regardless of how wide the overall row is.
-                const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
-                h.classList.add('is-dragging');
-                const move = (ev) => {
-                    const d = (ev.clientX - startX) / px * total;
-                    cols[i] = Math.max(minFr, Math.min(pair - minFr, startA + d));
-                    cols[i + 1] = pair - cols[i];
-                    apply(); place();
-                };
-                const up = () => {
-                    h.classList.remove('is-dragging');
-                    h.removeEventListener('pointermove', move);
-                    h.removeEventListener('pointerup', up);
-                    h.removeEventListener('pointercancel', up);
-                    try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (err) { /* ignore */ }
-                };
-                h.addEventListener('pointermove', move);
-                h.addEventListener('pointerup', up);
-                h.addEventListener('pointercancel', up);
-            });
+
+        handle.addEventListener('dblclick', () => {
+            cols = null;
+            apply();
+            place();
+            try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
         });
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            if (!cols) cols = STATION_COLS_DEFAULT.slice();
+            cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+            const total = cols[0] + cols[1];
+            // Use the full grid content width so a collapsed column can't divide-by-near-zero
+            // and explode the fr weights (that was collapsing the station layout to 0px + 240px).
+            const px = Math.max(1, grid.getBoundingClientRect().width - 16);
+            const startX = e.clientX;
+            const pair = total;
+            const startA = cols[0];
+            const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
+            const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
+            handle.classList.add('is-dragging');
+            const move = (ev) => {
+                const d = (ev.clientX - startX) / px * total;
+                let next = Math.max(minLeft, Math.min(pair - minRight, startA + d));
+                if (!Number.isFinite(next)) next = startA;
+                cols[0] = next;
+                cols[1] = pair - cols[0];
+                cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+                apply();
+                place();
+            };
+            const up = () => {
+                handle.classList.remove('is-dragging');
+                handle.removeEventListener('pointermove', move);
+                handle.removeEventListener('pointerup', up);
+                handle.removeEventListener('pointercancel', up);
+                cols = this._sanitizeStationCols(cols);
+                if (!cols) {
+                    apply();
+                    place();
+                    try { localStorage.removeItem(STATION_COLS_KEY); } catch (err) { /* ignore */ }
+                    return;
+                }
+                try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (err) { /* ignore */ }
+            };
+            handle.addEventListener('pointermove', move);
+            handle.addEventListener('pointerup', up);
+            handle.addEventListener('pointercancel', up);
+        });
+
         if (window.ResizeObserver) new ResizeObserver(() => { place(); normalize(); }).observe(grid);
     },
 

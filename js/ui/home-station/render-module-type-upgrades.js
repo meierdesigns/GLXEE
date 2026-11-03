@@ -62,6 +62,7 @@ extendClass(HomeStationUI, {
         let inner = '';
         let title = 'STATION UPGRADE TREE';
         let hint = 'Spend station resources to expand capacity, hangar slots, drives and station systems.';
+        let showHead = true;
         if (this.upgradeSubTab === 'ships') {
             title = 'HULL AREAS';
             hint = 'Upgrade a hull area to grow its slots S → M → L (bigger parts fit) and open extra slots. Every level adds hull HP and armor.';
@@ -70,14 +71,19 @@ extendClass(HomeStationUI, {
             title = 'MODULE TYPE UPGRADES';
             hint = 'Global bonuses for weapons, defenses, abilities — and charge systems (after buying charge parts).';
             inner = this.renderModuleTypeUpgrades(profile);
+        } else if (this.upgradeSubTab === 'equipment') {
+            showHead = false;
+            inner = this.renderEquipmentUpgrades(profile);
         } else {
             inner = this.renderStationUpgradeTree(profile);
         }
 
         return `<div class="hs-section hs-panel hs-upgrade-root">` +
             `<div class="hs-shop-cats">${this.renderUpgradeSubTabs()}</div>` +
-            `${this.panelTitle('hsUpgrade', title)}` +
-            `<p class="hs-muted hs-hint">${hint}</p>` +
+            (showHead
+                ? `${this.panelTitle('hsUpgrade', title)}` +
+                  `<p class="hs-muted hs-hint">${hint}</p>`
+                : '') +
             `<div class="hs-tab-fill">${inner}</div>` +
             `</div>`;
     },
@@ -443,11 +449,18 @@ extendClass(HomeStationUI, {
         const val = (v) => (v != null ? v : '—');
         const stat = (icon, label, v, col) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
-            const img = ir && ir.imgHtml ? ir.imgHtml(icon, 32, 'hs-pixel', col, false) : this.iconHtml(icon, 24, 'hs-pixel', false);
+            const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
             return `<span class="hs-ship-stat" style="--stat:${col}" title="${label}"><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
         const tipText = [['TIER', cfg.tier], ['HP', cfg.maxHealth], ['ARMOR', cfg.armor], ['DAMAGE', cfg.damage], ['SPEED', cfg.speed]]
             .map((x) => x[0] + ' ' + val(x[1])).join(' · ');
+        const statsHtml = `<div class="hs-ship-stats">` +
+            stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
+            stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
+            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') +
+            stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
+            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
+            `</div>`;
         return `<tr>` +
             `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
             (thumbClass === 'hs-ship-thumb-bp'
@@ -455,12 +468,10 @@ extendClass(HomeStationUI, {
                 : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
                   `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
             `</span></td>` +
-            `<td class="hs-ship-table-name" data-ui-tip="${tipText}"><strong>${this.shipName(id)}</strong>` +
+            `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
+            statsHtml +
+            `<strong>${this.shipName(id)}</strong>` +
             `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
-            `<td><div class="hs-ship-stats">` +             stat('navStar', 'Tier', cfg.tier, '#ffe14a') + stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') + stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
-            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
-            `</div></td>` +
             (actionHtml != null
                 ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +

@@ -890,14 +890,10 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
    instead of squashing the bottom row (ships / parts) into the leftover. */
 
 .hs-station-grid {
-    grid-template-rows: minmax(110px, auto) auto auto minmax(min-content, 1fr);
+    grid-template-rows: minmax(110px, auto) minmax(min-content, 1fr);
 }
 .hs-panel-stack {
     height: auto;
-}
-.hs-panel-stack > .hs-panel {
-    flex: 0 0 auto;
-    min-height: auto;
 }
 
 /* Shop: the item list is the scroller, so its column header (and style
@@ -964,7 +960,7 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 
 /* Mission cargo panel removed: cargo auto-transfers to the station. */
 .hs-station-grid {
-    grid-template-rows: minmax(110px, auto) auto minmax(min-content, 1fr);
+    grid-template-rows: minmax(110px, auto) minmax(min-content, 1fr);
 }
 
 /* Galaxy map: standalone trading post node. */

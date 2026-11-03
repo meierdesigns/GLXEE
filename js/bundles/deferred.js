@@ -613,7 +613,7 @@ function createBaseStationUpgradeNodes() {
             treeX: 50,
             treeY: 6,
             desc: 'Central hub. Unlocks branch upgrades.',
-            effect: (lv) => ({ resourceCap: lv * 10, cargoCap: lv * 5 }),
+            effect: (lv) => ({ resourceCap: lv * 10, cargoCap: lv * 5, storageSlots: lv }),
             costs: [
                 { scrap: 40 },
                 { scrap: 80, ore: 20 },
@@ -636,8 +636,8 @@ function createBaseStationUpgradeNodes() {
             requireLevel: 1,
             treeX: 8,
             treeY: 24,
-            desc: 'Raise max station resources per type.',
-            effect: (lv) => ({ resourceCap: lv * 40 }),
+            desc: 'Raise vault bay slots and max station resources per type.',
+            effect: (lv) => ({ resourceCap: lv * 40, storageSlots: lv * 4 }),
             costs: [
                 { scrap: 50, ore: 15 },
                 { scrap: 90, ore: 35 },
@@ -743,8 +743,8 @@ function createBaseStationUpgradeNodes() {
             requireLevel: 2,
             treeX: 5,
             treeY: 44,
-            desc: 'Compress vault loads for higher store caps.',
-            effect: (lv) => ({ resourceCap: lv * 50 }),
+            desc: 'Compress vault loads for higher store caps and bay density.',
+            effect: (lv) => ({ resourceCap: lv * 50, storageSlots: lv * 2 }),
             costs: [
                 { scrap: 80, ore: 30 },
                 { scrap: 140, ore: 55, crystal: 20 },
@@ -991,7 +991,7 @@ function createAdvancedStationUpgradeNodes() {
             treeX: 2,
             treeY: 84,
             desc: 'Ultimate station vault expansion.',
-            effect: (lv) => ({ resourceCap: lv * 80, cargoCap: lv * 20 }),
+            effect: (lv) => ({ resourceCap: lv * 80, cargoCap: lv * 20, storageSlots: lv * 8 }),
             costs: [
                 { scrap: 300, ore: 150, crystal: 80, voltex: 40 },
                 { scrap: 450, ore: 230, crystal: 130, voltex: 70 },
@@ -1104,6 +1104,8 @@ var EconomyConfig = class EconomyConfig {
             resourceCap: 80,
             cargoCap: 40,
             shipSlots: 2,
+            // Part/blueprint bay slots on the STATION STORAGE grid (grows with vault upgrades).
+            storageSlots: 12,
             craftDiscount: 0,
             dropBonus: 0
         };
@@ -1174,6 +1176,50 @@ var EconomyConfig = class EconomyConfig {
             charge: { scrap: 60, ore: 16 },
             energy: { scrap: 50, ore: 18 },
             collector: { scrap: 36, ore: 14 }
+        };
+        /** Per-item upgrade (EQUIPMENT tab): levels a single equipped/owned item id, stacks on top of the category-wide MODULES bonus — smaller base cost since it only benefits one item. */
+        this.itemUpgradeMaxLevel = 5;
+        this.itemUpgradeCatBase = {
+            weapons: { scrap: 30, ore: 9 },
+            defenses: { scrap: 26, ore: 13 },
+            abilities: { scrap: 33, ore: 7 },
+            energy: { scrap: 30, ore: 11 }
+        };
+        /** Per-item upgrade tracks (EQUIPMENT tab detail panel) — one item, several independently leveled stats instead of a single combined level. */
+        this.itemUpgradeTrackDefs = {
+            weapons: {
+                dmg: { label: 'DAMAGE', desc: '+Damage', maxLevel: 5, costMul: 1.15 },
+                rof: { label: 'ROF', desc: '−Cooldown (rate of fire)', maxLevel: 5, costMul: 1.0 },
+                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 }
+            },
+            defenses: {
+                capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.1 },
+                harden: { label: 'HARDEN', desc: 'Damage reduction', maxLevel: 5, costMul: 1.3 },
+                regen: { label: 'REGEN', desc: '+Regen', maxLevel: 5, costMul: 0.95 }
+            },
+            abilities: {
+                cooldown: { label: 'COOLDOWN', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.25 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
+            },
+            energy: {
+                cooldown: { label: 'COOLDOWN', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.25 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
+            }
+        };
+        /** Weapon fire modes (EQUIPMENT tab, weapons only) — free to switch once unlocked by the named track level. */
+        this.itemFireModes = {
+            single: { label: 'SINGLE', desc: 'Balanced default', damageMul: 1, cooldownMul: 1, spreadMul: 1 },
+            burst: { label: 'BURST', desc: 'Harder hits, tighter spread, slower', damageMul: 1.35, cooldownMul: 1.3, spreadMul: 0.6, unlockTrack: 'dmg', unlockLevel: 2 },
+            auto: { label: 'AUTO', desc: 'Faster, weaker per hit', damageMul: 0.7, cooldownMul: 0.65, spreadMul: 1.15, unlockTrack: 'rof', unlockLevel: 2 }
+        };
+        /** Fine-tune slider unlock (every part bucket) — one-time purchase per item. */
+        this.itemTuneUnlock = {
+            weapons: { costMul: 1.35, labels: ['RATE OF FIRE', 'DAMAGE'] },
+            defenses: { costMul: 1.25, labels: ['REGEN', 'CAPACITY'] },
+            abilities: { costMul: 1.3, labels: ['COOLDOWN', 'POTENCY'] },
+            energy: { costMul: 1.3, labels: ['COOLDOWN', 'POTENCY'] }
         };
         /** Base pixel radius for collecting mission resource pickups. */
         this.collectBaseRadius = 32;
@@ -1326,6 +1372,36 @@ var EconomyConfig = class EconomyConfig {
         return cost;
     }
 
+    /** Cost to raise one specific item's track (weapons/defenses/abilities/energy) to nextLevel. */
+    getItemTrackUpgradeCost(bucket, itemId, track, nextLevel) {
+        const def = this.itemUpgradeTrackDefs[bucket] && this.itemUpgradeTrackDefs[bucket][track];
+        const base = this.itemUpgradeCatBase[bucket];
+        if (!def || !base) return null;
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > def.maxLevel) return null;
+        const trackMul = Number(def.costMul) || 1;
+        const prog = Math.pow(lv, 1.65);
+        const cost = {
+            scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
+            ore: Math.max(0, Math.round(base.ore * trackMul * prog))
+        };
+        if (lv >= 3) cost.crystal = Math.round((6 + lv * 5) * trackMul);
+        if (lv >= 5) cost.voltex = Math.round((5 + lv * 4) * trackMul);
+        return cost;
+    }
+
+    /** One-time cost to unlock the fine-tune slider on a specific item. */
+    getItemTuneUnlockCost(bucket) {
+        const base = this.itemUpgradeCatBase[bucket];
+        const unlock = this.itemTuneUnlock && this.itemTuneUnlock[bucket];
+        if (!base || !unlock) return null;
+        const mul = Number(unlock.costMul) || 1.25;
+        return {
+            scrap: Math.max(1, Math.round(base.scrap * mul * 2.2)),
+            ore: Math.max(0, Math.round(base.ore * mul * 2.0))
+        };
+    }
+
     emptyModuleUpgrades() {
         const out = { weapons: {}, defenses: {}, abilities: {} };
         Object.keys(this.moduleUpgradeDefs).forEach((cat) => {
@@ -1376,6 +1452,7 @@ extendClass(EconomyConfig, {
         stats.resourceCap = Math.max(1, Math.round(stats.resourceCap));
         stats.cargoCap = Math.max(1, Math.round(stats.cargoCap));
         stats.shipSlots = Math.max(1, Math.round(stats.shipSlots));
+        stats.storageSlots = Math.max(8, Math.round(stats.storageSlots || 12));
         stats.craftDiscount = Math.max(0, Math.min(0.7, Number(stats.craftDiscount) || 0));
         stats.dropBonus = Math.max(0, Math.min(0.4, Number(stats.dropBonus) || 0));
         stats.impulseDrive = Math.max(0, Math.round(stats.impulseDrive || 0));
@@ -5590,6 +5667,40 @@ var ProfileManager = class ProfileManager {
                 });
             });
         }
+        if (!profile.itemUpgrades || typeof profile.itemUpgrades !== 'object') {
+            profile.itemUpgrades = { weapons: {}, defenses: {}, abilities: {}, energy: {} };
+        }
+        ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
+            if (!profile.itemUpgrades[bucket] || typeof profile.itemUpgrades[bucket] !== 'object') {
+                profile.itemUpgrades[bucket] = {};
+            }
+            const bag = profile.itemUpgrades[bucket];
+            const trackDefs = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs)
+                ? economyConfig.itemUpgradeTrackDefs[bucket]
+                : null;
+            const mainTrack = trackDefs ? Object.keys(trackDefs)[0] : null;
+            Object.keys(bag).forEach((itemId) => {
+                const entry = bag[itemId];
+                // Legacy save: a single flat level number → migrate onto the bucket's first track.
+                if (typeof entry === 'number') {
+                    bag[itemId] = {
+                        tracks: mainTrack ? { [mainTrack]: entry } : {},
+                        mode: 'single',
+                        tune: 0.5,
+                        tuneUnlocked: false
+                    };
+                    return;
+                }
+                if (!entry || typeof entry !== 'object') {
+                    bag[itemId] = { tracks: {}, mode: 'single', tune: 0.5, tuneUnlocked: false };
+                    return;
+                }
+                if (!entry.tracks || typeof entry.tracks !== 'object') entry.tracks = {};
+                if (typeof entry.mode !== 'string') entry.mode = 'single';
+                if (typeof entry.tune !== 'number' || !isFinite(entry.tune)) entry.tune = 0.5;
+                if (typeof entry.tuneUnlocked !== 'boolean') entry.tuneUnlocked = false;
+            });
+        });
         if (!profile.progress) {
             profile.progress = this.emptyProgress();
         }
@@ -5622,6 +5733,7 @@ var ProfileManager = class ProfileManager {
             resourceCap: 80,
             cargoCap: 40,
             shipSlots: 2,
+            storageSlots: 12,
             craftDiscount: 0,
             dropBonus: 0
         };
@@ -7420,6 +7532,30 @@ extendClass(ProfileManager, {
         const onShip = entry[bucket][id] || 0;
         const move = Math.min(qty, onShip);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
+        // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
+        // push occupied cells past the budget is refused — the item stays filed on the ship.
+        const stats = this.getStationStats(profile);
+        const cap = Math.max(8, Math.round((stats && stats.storageSlots) || 12));
+        let used = 0;
+        const spanOf = (b, itemId) => {
+            // Match HomeStationUI._storageItemSpan sizing when the UI is available.
+            if (typeof homeStationUI !== 'undefined' && homeStationUI._storageItemSpan) {
+                const s = homeStationUI._storageItemSpan(b, itemId);
+                return (s[0] || 1) * (s[1] || 1);
+            }
+            return 1;
+        };
+        this.SHIP_STORAGE_BUCKETS.forEach((b) => {
+            // Count every distinct item currently sitting at the station.
+            const owned = b === 'blueprints'
+                ? Object.keys(profile.blueprints || {})
+                : Object.keys((profile.parts && profile.parts[b]) || {});
+            owned.forEach((itemId) => {
+                if (this.getStationStorageQty(profile, b, itemId) > 0) used += spanOf(b, itemId);
+            });
+        });
+        const add = spanOf(bucket, id) * move;
+        if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
         entry[bucket][id] = onShip - move;
         if (entry[bucket][id] <= 0) delete entry[bucket][id];
         this.save();
@@ -12976,12 +13112,34 @@ extendClass(ShipConfigManager, {
                         height: fromRegistry.height != null ? fromRegistry.height : 8
                     }
                 );
+                const itemBonus = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeBonuses)
+                    ? profileManager.getItemUpgradeBonuses('weapons', w)
+                    : null;
+                // Fire mode (SINGLE/BURST/AUTO, free to switch once unlocked) and the
+                // fine-tune slider (0..1, biases damage against cooldown) both layer on
+                // top of the track-level bonuses above, same multiplier pipeline.
+                const modeDef = (typeof profileManager !== 'undefined' && typeof economyConfig !== 'undefined' && economyConfig.itemFireModes)
+                    ? economyConfig.itemFireModes[profileManager.getItemMode('weapons', w)]
+                    : null;
+                const tune = (typeof profileManager !== 'undefined') ? profileManager.getItemTune('weapons', w) : 0.5;
+                const tuneDmgMul = 0.85 + tune * 0.3;
+                const tuneCdMul = 1.15 - tune * 0.3;
                 if (bonuses) {
+                    const dmgMul = bonuses.weaponDamageMul * ((itemBonus && itemBonus.damageMul) || 1)
+                        * ((modeDef && modeDef.damageMul) || 1) * tuneDmgMul;
+                    const cdMul = bonuses.weaponCooldownMul * ((itemBonus && itemBonus.cooldownMul) || 1)
+                        * ((modeDef && modeDef.cooldownMul) || 1) * tuneCdMul;
                     if (entry.damage != null) {
-                        entry.damage = Math.max(1, Math.round(Number(entry.damage) * bonuses.weaponDamageMul));
+                        entry.damage = Math.max(1, Math.round(Number(entry.damage) * dmgMul));
                     }
                     if (entry.cooldown != null) {
-                        entry.cooldown = Math.max(50, Math.round(Number(entry.cooldown) * bonuses.weaponCooldownMul));
+                        entry.cooldown = Math.max(50, Math.round(Number(entry.cooldown) * cdMul));
+                    }
+                    if (entry.speed != null && itemBonus && itemBonus.rangeMul) {
+                        entry.speed = Math.max(1, Math.round(Number(entry.speed) * itemBonus.rangeMul));
+                    }
+                    if (entry.spreadAngle != null && modeDef && modeDef.spreadMul) {
+                        entry.spreadAngle = Number(entry.spreadAngle) * modeDef.spreadMul;
                     }
                     if (bonuses.weaponProjectileBonus > 0) {
                         entry.projectileCount = Math.max(
@@ -12995,6 +13153,28 @@ extendClass(ShipConfigManager, {
                 }
                 merged.weaponConfig[w] = entry;
             });
+            if (bonuses && typeof profileManager !== 'undefined' && profileManager.getItemUpgradeBonuses) {
+                // Fold in EQUIPMENT-tab per-item levels of whatever is equipped on this
+                // ship: defenses/abilities/energy have no per-id loop like weapons do
+                // above, so their bonuses are combined onto the aggregate ship-wide
+                // multipliers instead (each equipped item contributes independently).
+                (L.defenses || []).forEach((id) => {
+                    const b = profileManager.getItemUpgradeBonuses('defenses', id);
+                    bonuses.defenseCapacityMul *= b.capacityMul;
+                    bonuses.defenseHarden = Math.min(0.6, bonuses.defenseHarden + b.harden);
+                    bonuses.defenseRegenMul *= b.regenMul;
+                });
+                (L.abilities || []).forEach((id) => {
+                    const b = profileManager.getItemUpgradeBonuses('abilities', id);
+                    bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
+                    bonuses.abilityPotencyMul *= b.potencyMul;
+                    bonuses.abilityDurationMul *= b.durationMul;
+                });
+                (L.energy || []).forEach((id) => {
+                    const b = profileManager.getItemUpgradeBonuses('energy', id);
+                    bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
+                });
+            }
             if (bonuses) {
                 merged.moduleUpgradeBonuses = bonuses;
             }
@@ -21566,6 +21746,7 @@ var MenuNavHelper = class MenuNavHelper {
                 if (typeof el.scrollIntoView === 'function') {
                     try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ }
                 }
+                if (typeof gamepadCursor !== 'undefined') gamepadCursor.follow(el);
             }
         });
         return i;
@@ -22180,6 +22361,7 @@ extendClass(InputHandler, {
         this.keys[event.key] = false;
 
         if (event.key === ' ') {
+            this.keys['Space'] = false;
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';
                 if (mode === 'charge' && bulletManager.isCharging && this.isCombatEnded()) {
@@ -24080,7 +24262,9 @@ var CoreRenderManager = class CoreRenderManager {
         // bezel itself — so nothing that sits in the bezel (pilot thumbnail, screens, tools) is ever sheared off.
         const W = frame.offsetWidth, H = frame.offsetHeight;
         const shape = getComputedStyle(frame).getPropertyValue('--fr-shape').trim();
-        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(); silKey = ''; return; }
+        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) {
+            clearSilhouette(); silKey = ''; return;
+        }
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
@@ -24304,19 +24488,21 @@ var CoreRenderManager = class CoreRenderManager {
     }
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
-    // tabs FX / VOXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    // tabs FX / VOXEL / VOXELPIXEL / FRAME / SIZES. In combat it pauses the game while open.
+    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['voxelpixel', 'VOXELPIXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG'], ['audio', 'AUDIO']];
     // Remote key clusters: [caption, tab ids]; the plate lays them out two clusters per row.
-    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug']]];
+    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'voxelpixel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug', 'audio']]];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
+        voxelpixel: svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/>'),
         frame: svg16('<rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/>'),
         sizes: svg16('<path d="M2 14V9M2 14h5M14 2v5M14 2H9M3 13l10-10"/>'),
         text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>'),
         perf: svg16('<path d="M2 12a6 6 0 0112 0M8 12l3-5"/>'),
         difficulty: svg16('<path d="M3 13V8a5 5 0 0110 0v5zM6 9h1M9 9h1M6 13v-2M8 13v-2M10 13v-2"/>'),
-        debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>')
+        debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>'),
+        audio: svg16('<path d="M2 6h3l4-3v10L5 10H2zM11 6c1 1 1 3 0 4M13 4c2 2 2 6 0 8"/>')
     };
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
@@ -24679,6 +24865,19 @@ var CoreRenderManager = class CoreRenderManager {
             setPerf('anim', lo ? 'OFF' : 'ON');
             if (lo) ui.setFx('framePx', 'OFF');
         }
+        else if (d.auSound || d.auMusic || d.auReset) {
+            const smSettings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager
+                : (typeof settingsManager !== 'undefined' ? settingsManager : null);
+            if (d.auReset && typeof volumeControlsManager !== 'undefined') volumeControlsManager.resetToDefaults();
+            if (d.auSound && smSettings) {
+                if ((d.auSound === 'ON') !== !!smSettings.settings.soundEnabled) smSettings.toggleSound();
+                else if (typeof soundManager !== 'undefined') soundManager.setSoundEnabled(d.auSound === 'ON');
+            } else if (d.auSound && typeof soundManager !== 'undefined') soundManager.setSoundEnabled(d.auSound === 'ON');
+            if (d.auMusic && smSettings) {
+                if ((d.auMusic === 'ON') !== !!smSettings.settings.musicEnabled) smSettings.toggleMusic();
+                else if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+            } else if (d.auMusic && typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+        }
         else if (d.debugAction === 'reload') window.location.reload();
         else if (d.debugAction === 'clear') {
             try { localStorage.clear(); sessionStorage.clear(); } catch (err) { /* optional */ }
@@ -24856,6 +25055,12 @@ var CoreRenderManager = class CoreRenderManager {
             if (!frame.hasAttribute('data-fx-preview')) frame.setAttribute('data-fx-preview', '1');
             applyFrameStyle();
         }
+        else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
+            const pct = Math.max(0, Math.min(100, v)) / 100;
+            if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
+            else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
+            else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+        }
     }
     const FXOPEN_KEY = 'vf-fx-open';
     function setFxOpen(open, instant) {
@@ -24909,6 +25114,21 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.swayT = 0;
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     Object.assign(NS, { FXOPEN_KEY, reduceMotion });
+    // Keep the remote open across navigation/reloads if it was open before.
+    (function restoreFxOpen() {
+        let wasOpen = false;
+        try { wasOpen = localStorage.getItem(FXOPEN_KEY) === '1'; } catch (e) { /* ignore */ }
+        if (!wasOpen) return;
+        const open = function (triesLeft) {
+            try { setFxOpen(true, true); } catch (e) {
+                // Other game scripts (e.g. `game`) may still be mid-init (TDZ) at window 'load'; retry briefly.
+                if (triesLeft > 0) setTimeout(function () { open(triesLeft - 1); }, 200);
+            }
+        };
+        const start = function () { open(10); };
+        if (document.readyState === 'complete') start();
+        else window.addEventListener('load', start, { once: true });
+    })();
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -25043,22 +25263,25 @@ var CoreRenderManager = class CoreRenderManager {
                 }
             })();
         } else if (vfs.fxTab === 'voxel') {
-            h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +
+            h += '<div class="vf-fx-title">SHIPS</div>' +
                 '<div class="vf-fx-row"><span>SHIP RENDER</span>' + fxSeg(ui.getShipRenderStyleOptions().map(function (v) { return [v, v]; }), ui.shipRenderStyle, 'vx-ship') + '</div>' +
-                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
-                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
-                '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
-                fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
-                fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
                 '<div class="vf-fx-title">GUI</div>' +
-                '<div class="vf-fx-row"><span>GUI VOXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.guiVoxel, 'vx-gui') + '</div>' +
-                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
+                '<div class="vf-fx-row"><span>GUI VOXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.guiVoxel, 'vx-gui') + '</div>';
             h += '<div class="vf-fx-title">GUI PARTS</div><div class="vf-fx-grid">';
             [['gvLines', 'LINES'], ['gvCorners', 'CORNERS'], ['gvText', 'TEXT'], ['gvImages', 'IMAGES'], ['gvSvg', 'SVG']].forEach(function (p) {
                 const on = ui.getFxValue(p[0]) === 'ON';
                 h += '<button type="button" class="vf-fx-key' + (on ? ' on' : '') + '" data-vx-gv="' + p[0] + ':' + (on ? 'OFF' : 'ON') + '">' + p[1] + '</button>';
             });
             h += '</div>';
+        } else if (vfs.fxTab === 'voxelpixel') {
+            h += '<div class="vf-fx-title">VOXEL &amp; PIXEL SIZE</div>' +
+                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
+                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
+                '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
+                fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
+                fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
+                '<div class="vf-fx-title">GUI CELL SIZE</div>' +
+                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
         } else if (vfs.fxTab === 'perf') {
             const mq = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
             const backdropOk = !!(window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px)'));
@@ -25211,9 +25434,6 @@ var CoreRenderManager = class CoreRenderManager {
                 h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-df-reset="1">RESET ' + dm.current.toUpperCase() + '</button></div>';
             }
         } else if (vfs.fxTab === 'sizes') {
-            h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
-                fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
-                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
             h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px');
             ['scout', 'assault', 'heavy', 'elite', 'capital'].forEach(function (c) {
                 h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px');
@@ -25226,6 +25446,24 @@ var CoreRenderManager = class CoreRenderManager {
                 h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px');
             });
             h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-sz-copy="1">COPY SIZES (JSON)</button></div>';
+        } else if (vfs.fxTab === 'audio') {
+            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+            const sm = (typeof soundManager !== 'undefined') ? soundManager : null;
+            const settings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager.settings
+                : (typeof settingsManager !== 'undefined' && settingsManager ? settingsManager.settings : null);
+            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
+            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
+            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
+            const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
+            h += '<div class="vf-fx-title">VOLUME</div>' +
+                fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
+                fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
+                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
+                '<div class="vf-fx-title">TOGGLES</div>' +
+                '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
+                '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>';
         }
         h += '</div>';
         plate.innerHTML = h;
@@ -26674,8 +26912,14 @@ var CoreRenderManager = class CoreRenderManager {
             ROOT.style.setProperty('--stage-scale', String(Number(real.scale.toFixed(5))));
         }
         // The fight HUD is taller than the menus: zoom out a little while it is on screen.
+        // Guard like --stage-scale: rewriting --gui-zoom-eff every RO/resize tick reflows the
+        // station glass host's transform:scale(--hs-z) and looks like the containers jump/flicker.
         const zoom = userZoom * (inFight ? 0.85 : 1);
-        ROOT.style.setProperty('--gui-zoom-eff', String(Number(zoom.toFixed(4))));
+        const zoomRounded = Number(zoom.toFixed(4));
+        if (force || vfs.lastGuiZoomEff == null || !sizesClose(zoomRounded, vfs.lastGuiZoomEff, 0.0005)) {
+            vfs.lastGuiZoomEff = zoomRounded;
+            ROOT.style.setProperty('--gui-zoom-eff', String(zoomRounded));
+        }
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
@@ -26889,23 +27133,18 @@ var factionGui = (() => {
     const bezel = () => document.getElementById('vf-bezel');
     const reduce = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-    // The rim animation swaps border-image-source between several SVGs (screen-frame.css
-    // @keyframes vf-bezel-art-creep-*). If a variant hasn't been fetched/decoded yet when the
-    // swap hits, the border-image briefly has nothing to paint and falls back to the flat
-    // border colour — the rim art visibly "glitches away" for that frame. Warming the browser's
-    // image cache for the active faction avoids that first-cycle blank.
-    // Exact file list per faction, mirrored from the @keyframes vf-bezel-art-creep-*
-    // / vf-void-vine-creep rules in screen-frame.css — including each faction's own
-    // cache-busting query (terran/kronax/machine use ?v=15, pirate ?v=16, voidborn
-    // none) and voidborn's unrelated "-vine" naming.
+    // Bezel rim uses one static border-image per faction (screen-frame.css).
+    // Warm the base asset so the first paint never flashes the solid hull fallback.
     const BEZEL_ART_FILES = {
-        terran: ['terran-bezel-art.svg?v=15', 'terran-bezel-art-1.svg?v=15', 'terran-bezel-art-3.svg?v=15', 'terran-bezel-art-6.svg?v=15'],
-        kronax: ['kronax-bezel-art.svg?v=15', 'kronax-bezel-art-2.svg?v=15', 'kronax-bezel-art-4.svg?v=15', 'kronax-bezel-art-5.svg?v=15', 'kronax-bezel-art-7.svg?v=15', 'kronax-bezel-art-8.svg?v=15'],
-        machine: ['machine-bezel-art.svg?v=15', 'machine-bezel-art-1.svg?v=15', 'machine-bezel-art-2.svg?v=15', 'machine-bezel-art-3.svg?v=15', 'machine-bezel-art-5.svg?v=15', 'machine-bezel-art-6.svg?v=15', 'machine-bezel-art-7.svg?v=15', 'machine-bezel-art-8.svg?v=15'],
-        pirate: ['pirate-bezel-art.svg?v=16', 'pirate-bezel-art-2.svg?v=16', 'pirate-bezel-art-4.svg?v=16', 'pirate-bezel-art-5.svg?v=16', 'pirate-bezel-art-8.svg?v=16'],
-        voidborn: ['voidborn-bezel-vine.svg', 'voidborn-bezel-vine-2.svg', 'voidborn-bezel-vine-4.svg', 'voidborn-bezel-vine-5.svg', 'voidborn-bezel-vine-7.svg', 'voidborn-bezel-vine-9.svg', 'voidborn-bezel-vine-10.svg']
+        terran: ['terran-bezel-art.svg?v=15'],
+        kronax: ['kronax-bezel-art.svg?v=15'],
+        machine: ['machine-bezel-art.svg?v=15'],
+        pirate: ['pirate-bezel-art.svg?v=16'],
+        voidborn: ['voidborn-bezel-vine.svg']
     };
     const preloaded = new Set();
+    // Keep decoded bitmaps alive so opacity-layer rim swaps never re-fetch/re-decode.
+    const bezelArtKeep = (window.__vfBezelArtKeep = window.__vfBezelArtKeep || []);
     function preloadBezelArt(id) {
         if (preloaded.has(id)) return;
         const files = BEZEL_ART_FILES[id];
@@ -26914,9 +27153,12 @@ var factionGui = (() => {
         files.forEach((file) => {
             const img = new Image();
             img.src = 'assets/ui/' + file;
+            bezelArtKeep.push(img);
+            if (img.decode) img.decode().catch(function () { /* decode optional */ });
         });
     }
     if (shown) preloadBezelArt(shown);
+
     // Animate only for changes the player causes: boot, refresh and restore (all before any input) switch instantly,
     // so a reload never replays the cable swap.
     const arm = () => { ready = true; };
@@ -29301,6 +29543,9 @@ var PlayerManager = class PlayerManager {
         this.reflectChance = 0;
         this.defenseMechanisms = [];
         this.currentShipModel = null;
+        // Brief hit-immunity right after entering a stage (ms left), so the
+        // ship can't be shredded mid fly-in before the player has control.
+        this.invuln = 0;
     }
 
     isSystemsOnline() {
@@ -29309,6 +29554,7 @@ var PlayerManager = class PlayerManager {
 
     update(keys, deltaTime = 16.67) {
         const dt = deltaTime / 1000;
+        if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - deltaTime);
         // Pixel hit mask (set-ship-model.js): built once the art is loaded,
         // rebuilt when ship / size change; a cheap key check otherwise.
         if (this.refreshPlayerHitMask) this.refreshPlayerHitMask();
@@ -29439,6 +29685,7 @@ var PlayerManager = class PlayerManager {
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
             return false;
         }
+        if (this.invuln > 0) return false;
 
         let hpDamage = Number(damage) || 0;
         // BARRIER power-up (power-crates.js).
@@ -29552,6 +29799,8 @@ var PlayerManager = class PlayerManager {
         this.health = this.maxHealth;
         this.shield = this.shieldMax;
         this.energy = this.maxEnergy;
+        // Covers the fly-in animation plus a short grace period after it.
+        this.invuln = 2000;
     }
 }
 
@@ -32518,6 +32767,12 @@ extendClass(EnemyManager, {
             : laneRight - side.width - 4 - Math.random() * Math.max(8, (laneRight - laneLeft - side.width) * 0.35);
         side.entryFromSide = gap.side;
         side.entryTargetX = Math.max(laneLeft, Math.min(laneRight - side.width, targetX));
+        // How far into the lane the target sits, measured from the entry edge —
+        // kept so the target can be re-anchored to the live wall each frame
+        // while the level scrolls out from under the (fixed-screen-row) gap.
+        side.entryOffset = gap.side === 0
+            ? side.entryTargetX - laneLeft
+            : laneRight - side.width - side.entryTargetX;
         side.entryTargetY = Math.max(12, Math.min(H - side.height - 12, gap.y));
         side.y = side.entryTargetY;
         if (gap.side === 0) {
@@ -33000,15 +33255,22 @@ extendClass(EnemyManager, {
             }
 
             if (e.entering && !e.fleeing) {
-                // Rim transit through an empty edge opening — not combat-ready yet.
-                const tx = e.entryTargetX != null ? e.entryTargetX : clampX(e.x);
-                const ty = e.entryTargetY != null ? e.entryTargetY : e.y;
                 if (e.isEscort && (teamWithMain || teamPending) && mainAlive) {
                     e.entryTargetX = clampX(this.enemy.x + this.enemy.width * 0.5
                         + (e.formOffsetX || 0) - e.width * 0.5);
                     e.entryTargetY = clampY(this.enemy.y + this.enemy.height * 0.5
                         + (e.formOffsetY || 0) - e.height * 0.5);
+                } else if (e.entryOffset != null && e.entryFromSide != null) {
+                    // Re-anchor to the current wall: the level keeps scrolling
+                    // while the ship glides in, so the gap it launched from has
+                    // since moved — chase the live lane edge, not a stale spot.
+                    e.entryTargetX = e.entryFromSide === 0
+                        ? laneLeft + e.entryOffset
+                        : laneRight - w - e.entryOffset;
                 }
+                // Rim transit through an empty edge opening — not combat-ready yet.
+                const tx = e.entryTargetX != null ? e.entryTargetX : clampX(e.x);
+                const ty = e.entryTargetY != null ? e.entryTargetY : e.y;
                 const dir = e.entryFromSide === 1 ? -1 : 1;
                 let spd = Math.max(0.75, Math.abs(e.speed) || 1);
                 if (e.launchV > spd) {
@@ -33027,6 +33289,10 @@ extendClass(EnemyManager, {
                     e.arrived = true;
                     e.entryFromSide = null;
                     e.launchV = 0;
+                    // Short terrain-scrape grace right after entry: the scroll
+                    // may have shifted the gap out from under it while it slid
+                    // in, so the wall it now reads against shouldn't bite at once.
+                    e._terrainHitAt = Date.now();
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;
@@ -34145,6 +34411,10 @@ extendClass(EnemyManager, {
         // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);
         this.health = this.maxHealth;
+        if (this.shieldMax > 0) {
+            this.shieldMax = Math.round(this.shieldMax * mods.boss * 1.45);
+            this.shield = this.shieldMax;
+        }
         e.bossTierMul = mods.boss;
         // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).
         this.evasionSpeed = (this.evasionSpeed || 2) * 0.3;
@@ -34324,6 +34594,18 @@ extendClass(EnemyManager, {
         ctx.fillStyle = '#05060a';
         ctx.fillRect(x + Math.round(bw * 0.33), y, 1, 4);
         ctx.fillRect(x + Math.round(bw * 0.66), y, 1, 4);
+
+        // Shield energy: thin cyan strip above the health bar while the boss has one.
+        if (this.shieldMax > 0) {
+            const shRatio = Math.max(0, Math.min(1, this.shield / this.shieldMax));
+            const sy = y - 4;
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 1, sy - 1, bw + 2, 4);
+            ctx.fillStyle = '#0a2630';
+            ctx.fillRect(x, sy, bw, 2);
+            ctx.fillStyle = shRatio > 0 ? '#4ad8ff' : '#1a3a44';
+            ctx.fillRect(x, sy, Math.round(bw * shRatio), 2);
+        }
         ctx.restore();
     },
 });
@@ -35976,7 +36258,17 @@ extendClass(ObstacleManager, {
         if (out.length > cap) {
             out = out.sort(() => Math.random() - 0.5).slice(0, cap);
         }
-        return out;
+        // Keep the rocks apart regardless of pattern, scaled by how big each
+        // one is, so a wave never renders two obstacles sitting on top of
+        // each other (crystal clusters included).
+        const spaced = [];
+        out.forEach((pt) => {
+            const r = 7 * (pt.scale || 1);
+            if (spaced.every((q) => Math.hypot(q.u - pt.u, q.w - pt.w) > r + 7 * (q.scale || 1))) {
+                spaced.push(pt);
+            }
+        });
+        return spaced;
     },
     /** Local-frame points for a pattern; `across` is the field width across travel. */
     buildPatternPoints(pattern, across, intensity) {
@@ -38763,7 +39055,7 @@ var CollisionManager = class CollisionManager {
         const sides = enemyManager.getSideEnemies();
         for (let j = sides.length - 1; j >= 0; j--) {
             const side = sides[j];
-            if (!side || side.role !== 'bomber') continue;
+            if (!side || side.role !== 'bomber' || side.entering) continue;
             if (!this.isColliding(side, player)) continue;
             const sx = side.x + side.width / 2;
             const sy = side.y + side.height / 2;
@@ -38799,6 +39091,8 @@ var CollisionManager = class CollisionManager {
         const sides = enemyManager.getSideEnemies();
         for (let i = bullets.length - 1; i >= 0; i--) {
             for (let j = sides.length - 1; j >= 0; j--) {
+                // Still sliding in through the hangar gap: not a fair target yet.
+                if (sides[j].entering) continue;
                 if (this.isColliding(bullets[i], sides[j])) {
                     const sx = sides[j].x + sides[j].width / 2;
                     const sy = sides[j].y + sides[j].height / 2;
@@ -44651,10 +44945,13 @@ var UiTooltipManager = class UiTooltipManager {
         }
         tip = String(tip).trim();
         // Only icon-only controls and ones needing a longer explanation get a
-        // tip; a button that already shows its own text label stays quiet.
+        // tip; a control whose visible text already is the tip stays quiet.
+        // Icon+amount chips (pilot resources, victory loot, …) keep a short
+        // name tip even though they show a number — the amount is not a label.
         const rich = el.hasAttribute('data-ui-tip-head') || tip.length > 40 || tip.indexOf('\n') >= 0;
-        const hasLabel = (el.textContent || '').replace(/\s+/g, '').length > 0;
-        if (hasLabel && !rich) return null;
+        const labelText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        const tipNorm = tip.replace(/\s+/g, ' ').trim();
+        if (!rich && labelText && tipNorm.toLowerCase() === labelText.toLowerCase()) return null;
         return { el: el, tip: tip };
     }
 
@@ -44771,11 +45068,27 @@ var UiTooltipManager = class UiTooltipManager {
                     h.appendChild(im);
                 }
             }
+            if (anchor.classList && anchor.classList.contains('is-blueprint')) {
+                const bpBadge = document.createElement('span');
+                bpBadge.className = 'ui-tooltip-bp-badge';
+                bpBadge.setAttribute('aria-hidden', 'true');
+                bpBadge.title = 'Blueprint';
+                h.appendChild(bpBadge);
+                h.classList.add('has-bp');
+            }
             const title = document.createElement('span');
             title.className = 'ui-tooltip-title';
             title.textContent = head;
             h.appendChild(title);
             tip.appendChild(h);
+            // Pre-rendered rich body (e.g. BUY tip with resource icons + affordance).
+            const tipBody = anchor.querySelector && anchor.querySelector('template[data-ui-tip-body]');
+            if (tipBody && (anchor.hasAttribute('data-ui-tip-html') || tipBody.content)) {
+                const wrap = document.createElement('div');
+                wrap.className = 'ui-tooltip-html';
+                wrap.appendChild(tipBody.content.cloneNode(true));
+                tip.appendChild(wrap);
+            } else
             String(text).split('\n').forEach((line) => {
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
                 const row = document.createElement('div');
@@ -44790,6 +45103,48 @@ var UiTooltipManager = class UiTooltipManager {
                     row.append(k, v);
                 } else {
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+                    const resIcon = {
+                        credits: 'menuCredits',
+                        scrap: 'resScrap',
+                        ore: 'resOre',
+                        crystal: 'resCrystal',
+                        voltex: 'resVoltex'
+                    };
+                    const resColor = (id) => (typeof economyConfig !== 'undefined' && economyConfig.resourceColors && economyConfig.resourceColors[id])
+                        || (id === 'credits' ? '#ffd24a' : '#b8b0a0');
+                    const buyLine = line.match(/^BUY (\w+) x(\d+) · (\d+) CR · (CAN|SHORT)$/);
+                    const totalLine = line.match(/^TOTAL · (\d+) CR · (CAN BUY|NOT ENOUGH CREDITS)$/);
+                    if ((buyLine || totalLine) && ir) {
+                        row.className = 'ui-tooltip-stats' + ((buyLine && buyLine[4] === 'SHORT') || (totalLine && totalLine[2] !== 'CAN BUY') ? ' is-short' : ' is-ok');
+                        row.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+                        const chip = (key, val, col) => {
+                            const s = document.createElement('span');
+                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                                + '<span>' + val + '</span>';
+                            row.appendChild(s);
+                        };
+                        if (buyLine) {
+                            const id = buyLine[1];
+                            const label = (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
+                                ? economyConfig.getResourceLabel(id)
+                                : id.toUpperCase();
+                            chip(resIcon[id] || 'resScrap', buyLine[2] + ' ' + label, resColor(id));
+                            chip(resIcon.credits, buyLine[3] + ' CR', resColor('credits'));
+                            const st = document.createElement('span');
+                            st.className = 'ui-tooltip-affordance';
+                            st.textContent = buyLine[4] === 'CAN' ? 'CAN BUY' : 'SHORT';
+                            st.style.cssText = 'margin-left:auto;letter-spacing:1px;opacity:' + (buyLine[4] === 'CAN' ? '1' : '0.7');
+                            row.appendChild(st);
+                        } else {
+                            chip(resIcon.credits, totalLine[1] + ' CR', resColor('credits'));
+                            const st = document.createElement('span');
+                            st.className = 'ui-tooltip-affordance';
+                            st.textContent = totalLine[2];
+                            st.style.cssText = 'margin-left:auto;letter-spacing:1px;font-weight:bold;opacity:' + (totalLine[2] === 'CAN BUY' ? '1' : '0.7');
+                            row.appendChild(st);
+                        }
+                    } else {
                     const chips = (() => {
                         // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
                         const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
@@ -44821,6 +45176,7 @@ var UiTooltipManager = class UiTooltipManager {
                         });
                     } else {
                         row.textContent = line;
+                    }
                     }
                 }
                 tip.appendChild(row);
@@ -51450,7 +51806,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         // Exact pixel sizes set from the SIZES overlay (override the S–XXL steps).
         // Keys: 'player', 'enemy:<class>', 'shot:<kind>'. Value = width in px.
         // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
-        this.sizePx = { player: 18, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
+        this.sizePx = { player: 17, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
             // Boss / side craft are derived from the class footprint (boss x1.6, side x0.68-0.78); these scale that in % (SIZES tab).
             'boss:pct': 80, 'side:pct': 80 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
@@ -51509,8 +51865,8 @@ var UIAppearanceManager = class UIAppearanceManager {
         this.guiVoxelCell = 'AUTO';
         // Pixel grid (px) for the frame outside the screen; OFF = smooth.
         this.framePx = 'OFF';
-        // Global pixel size (CSS px per art pixel) across combat, maps, previews and editors; OFF = per-view scaling.
-        this.pixelSize = '3';
+        // Global pixel size (CSS px per art pixel) across combat, maps, planets, ships, previews and editors.
+        this.pixelSize = '2';
         // Corner radius of the pixel frame's screen opening, in grid cells.
         this.frameRound = '3';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
@@ -51657,7 +52013,7 @@ var UIAppearanceManager = class UIAppearanceManager {
         if (fxKey === 'arcade' || fxKey === 'guiVoxel') return ['OFF', 'ON'];
         if (fxKey === 'frameRound') return ['0', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (fxKey === 'framePx') return ['OFF', '3', '5', '7', '9', '13', '17'];
-        if (fxKey === 'pixelSize') return ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'];
+        if (fxKey === 'pixelSize') return ['1', '2', '4'];
         if (fxKey === 'gvCell') return ['AUTO', '1', '2', '3', '4', '5', '6', '7', '8'];
         if (this.gvPartKey(fxKey)) return ['OFF', 'ON'];
         if (fxKey === 'fxArea') return ['SCREEN', 'FRAME', 'ALL'];
@@ -51825,8 +52181,10 @@ var UIAppearanceManager = class UIAppearanceManager {
             if (data.framePx === 'OFF' || /^(3|5|7|9|13|17)$/.test(String(data.framePx))) {
                 this.framePx = String(data.framePx);
             }
-            if (data.pixelSize === 'OFF' || /^[1-8]$/.test(String(data.pixelSize))) {
-                this.pixelSize = String(data.pixelSize);
+            if (/^[1-8]$/.test(String(data.pixelSize))) {
+                // Migrate legacy 3/5-8 (and the old OFF) onto the nearest of the 1/2/4 grid.
+                const n = Number(data.pixelSize);
+                this.pixelSize = n <= 1 ? '1' : (n <= 3 ? '2' : '4');
             }
             if (/^[0-8]$/.test(String(data.frameRound))) this.frameRound = String(data.frameRound);
             if (data.guiVoxel === 'ON' || data.guiVoxel === 'OFF') {
@@ -59484,13 +59842,21 @@ var RenderManager = class RenderManager {
                 ctx.rect(occ.l, occ.top, occ.r - occ.l, occ.bottom - occ.top);
                 ctx.clip();
             }
+            // Spawn invincibility: fast blink so it reads as temporary immunity.
+            const invulnBlink = (typeof playerManager !== 'undefined' && playerManager.invuln > 0
+                && Math.floor(playerManager.invuln / 90) % 2 === 0) ? 0.35 : 1;
             if (enterFx) {
                 const pcx = player.x + player.width / 2, pcy = player.y + player.height / 2;
                 ctx.save();
-                ctx.globalAlpha = enterFx.alpha;
+                ctx.globalAlpha = enterFx.alpha * invulnBlink;
                 ctx.translate(pcx, pcy);
                 ctx.scale(enterFx.scale, enterFx.scale);
                 ctx.translate(-pcx, -pcy);
+                graphicsManager.renderPlayerShip(ctx, player, 1);
+                ctx.restore();
+            } else if (invulnBlink !== 1) {
+                ctx.save();
+                ctx.globalAlpha = invulnBlink;
                 graphicsManager.renderPlayerShip(ctx, player, 1);
                 ctx.restore();
             } else {
@@ -61805,6 +62171,32 @@ var ParallaxManager = class ParallaxManager {
         if (this.starsEnabled !== false) {
             this.drawFlyingStars(ctx);
         }
+
+        this.renderBossIntensity(ctx, cw, ch);
+    }
+
+    /**
+     * Boss arenas hold still (see update()), so they need their own visual
+     * drama: a phase-tinted vignette + slow pulse layered over the frozen
+     * background, ramping up as the boss loses health (phase 1→3).
+     */
+    renderBossIntensity(ctx, cw, ch) {
+        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
+        const e = em && em.enemy;
+        if (!e || !e.isBoss || em.exploding) return;
+        const phase = e.bossPhase || 1;
+        const col = ['#5a1018', '#7a2a10', '#7a0a3a'][Math.max(0, phase - 1)];
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / (600 - phase * 120));
+        const baseAlpha = 0.08 + phase * 0.06;
+        const alpha = baseAlpha + pulse * 0.04;
+        ctx.save();
+        const grad = ctx.createRadialGradient(cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2, cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, col);
+        ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
     }
 
     drawLayerPattern(ctx, layer, index) {
@@ -63112,33 +63504,12 @@ var parallaxManager = new ParallaxManager();
 
         var sinceMove = (now - parallax.lastMoveTs) / 1000;
         if (sinceMove > 0.08) parallax.speedSmooth *= 0.9;
+        // No idle sine drift: under body stage-scale it read as the station
+        // panels jumping/flickering while the pointer was still.
+        parallax.idleGain = 0;
 
-        var idleActive = sinceMove > 0.35;
-        if (idleActive) {
-            parallax.idleGain = Math.min(1, parallax.idleGain + 0.018);
-        } else {
-            parallax.idleGain *= 0.92;
-        }
-
-        var hx = 0;
-        var hy = 0;
-        if (parallax.idleGain > 0.02) {
-            var t = (now - parallax.startMs) / 1000;
-            var TAU = Math.PI * 2;
-            hx =
-                (Math.sin(t * TAU * 0.023) * 0.65 +
-                    Math.sin(t * TAU * 0.041 + 1.7) * 0.35) *
-                parallax.ampX *
-                parallax.idleGain;
-            hy =
-                (Math.sin(t * TAU * 0.019 + 0.9) * 0.7 +
-                    Math.sin(t * TAU * 0.034 + 2.3) * 0.3) *
-                parallax.ampY *
-                parallax.idleGain;
-        }
-
-        var outX = parallax.curX + hx;
-        var outY = parallax.curY + hy;
+        var outX = parallax.curX;
+        var outY = parallax.curY;
         var gx = (parallax.ptrX - 0.5) * w;
         var gy = (parallax.ptrY - 0.5) * h;
         applyTransforms(outX, outY, gx, gy);
@@ -63150,7 +63521,7 @@ var parallaxManager = new ParallaxManager();
             Math.abs(parallax.targetPtrY - parallax.ptrY);
         var settling = dx > 0.05 || dy > 0.05 || dPtr > 0.002;
 
-        if (settling || parallax.idleGain > 0.02) schedule();
+        if (settling) schedule();
         else parallax.lastFrameTs = 0;
     }
 
@@ -85675,7 +86046,11 @@ extendClass(GalaxyMapManager, {
         const box = document.createElement('div');
         box.className = 'gm-ambush';
         const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
-        const art = psm && psm.getFactionEmblemHtml ? psm.getFactionEmblemHtml('pirate', 112, 4) : '';
+        // Rendered oversampled + smooth-downscaled (see renderEmblemAtSize), not at a
+        // true 1:1 pixel size: at 1:1 the sprite's own pixel grid beats against the
+        // global scanline overlay and shows up as a grid baked into the icon.
+        const oversample = (typeof ProfileSelectionManager !== 'undefined' && ProfileSelectionManager.EMBLEM_OVERSAMPLE) || 1.35;
+        const art = psm && psm.getFactionEmblemHtml ? psm.getFactionEmblemHtml('pirate', Math.round(112 * oversample), 4) : '';
         box.innerHTML = `<div class="gm-ambush-card">` +
             `<div class="gm-ambush-art" aria-hidden="true">${art}</div>` +
             `<div class="gm-ambush-title">PIRATE AMBUSH</div>` +
@@ -85685,7 +86060,13 @@ extendClass(GalaxyMapManager, {
             `<span class="gm-ambush-lbl">EVADE</span><span class="gm-ambush-info">LOSE ~15% MATERIALS</span></button>` +
             `<button type="button" class="action-button gm-ambush-btn" data-ambush="fight" data-nav-item>FIGHT</button>` +
             `</div></div>`;
-        area.appendChild(box);
+        // Global Pixel Size (PERF heavy) paints #gmMapArea through an SVG pixelate filter — fine
+        // for the map art, but it smears crisp dialog text into mush. Appending the box OUTSIDE
+        // that filtered subtree (as a sibling on the overlay, not a child of #gmMapArea) keeps it
+        // immune for good, instead of suspending/restoring the filter — every one of the several
+        // call sites that can re-apply the filter mid-dialog (resize, pan/zoom, pixel-size change)
+        // used to undo that suspension and repixelate the still-open prompt.
+        this.overlay.appendChild(box);
         box.querySelectorAll('[data-ambush]').forEach((btn) => {
             btn.addEventListener('click', () => this.resolveAmbush(btn.getAttribute('data-ambush')));
         });
@@ -92889,8 +93270,9 @@ var HomeStationUI = class HomeStationUI {
             }
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();
-        this._upgradeSubTabs = ['station', 'ships', 'modules'];
+        this._upgradeSubTabs = ['station', 'ships', 'modules', 'equipment'];
         this.selectedUpgradeNode = null;
+        this.expandedEquipItem = null;
         this._upgTipHost = null;
         this._upgTipBtn = null;
         this._upgTipRaf = 0;
@@ -92899,7 +93281,8 @@ var HomeStationUI = class HomeStationUI {
         this._upgradeSubMeta = {
             station: { label: 'STATION', icon: 'hsStation' },
             ships: { label: 'SHIPS', icon: 'hsShip' },
-            modules: { label: 'MODULES', icon: 'hsCraft' }
+            modules: { label: 'MODULES', icon: 'hsCraft' },
+            equipment: { label: 'EQUIPMENT', icon: 'hsHangar' }
         };
         this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];
         this._shopCatMeta = {
@@ -93299,6 +93682,77 @@ extendClass(HomeStationUI, {
             `<span class="hs-panel-label">${label}</span>` +
             `<span class="hs-panel-scan" aria-hidden="true"></span>` +
             `</h3>`;
+    },
+
+    /** Collapsed state { ships: bool, storage: bool } for the station stack sections, persisted. */
+    stationCollapsedSections() {
+        if (!this._stationCollapsedSections) {
+            let map = {};
+            try {
+                const raw = JSON.parse(localStorage.getItem('vf_hs_station_collapsed_sections') || '{}');
+                if (raw && typeof raw === 'object') map = raw;
+            } catch (err) { /* ignore */ }
+            this._stationCollapsedSections = map;
+        }
+        return this._stationCollapsedSections;
+    },
+
+    /** Whether OWNED SHIPS / STATION STORAGE sit side-by-side instead of stacked, persisted. */
+    stationLayoutSideBySide() {
+        if (this._stationLayoutSideBySide === undefined) {
+            let v = false;
+            try { v = localStorage.getItem('vf_hs_station_layout') === 'side'; } catch (err) { /* ignore */ }
+            this._stationLayoutSideBySide = v;
+        }
+        return this._stationLayoutSideBySide;
+    },
+
+    /** Panel header for a collapsible station stack section (OWNED SHIPS / STATION STORAGE). */
+    stationSectionHeaderHtml(iconKey, label, sectionKey, collapsed) {
+        return `<h3 class="hs-panel-title" data-station-section-toggle="${sectionKey}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
+            `<span class="hs-panel-icon">${this.iconHtml(iconKey, 32, 'hs-pixel')}</span>` +
+            `<span class="hs-panel-label">${label}</span>` +
+            `<span class="hs-panel-scan" aria-hidden="true"></span>` +
+            `<span class="hs-panel-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span>` +
+            `</h3>`;
+    },
+
+    /** Binds collapse toggles + the stacked/side-by-side layout switch on the station stack panel. */
+    bindStationPanelToggles() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('[data-station-section-toggle]').forEach((head) => {
+            const toggle = () => {
+                const key = head.getAttribute('data-station-section-toggle');
+                const map = this.stationCollapsedSections();
+                map[key] = !map[key];
+                try {
+                    localStorage.setItem('vf_hs_station_collapsed_sections', JSON.stringify(map));
+                } catch (err) { /* ignore */ }
+                const sec = head.closest('.hs-station-section');
+                const c = !!map[key];
+                if (sec) sec.classList.toggle('is-collapsed', c);
+                head.setAttribute('aria-expanded', String(!c));
+                const caret = head.querySelector('.hs-panel-caret');
+                if (caret) caret.textContent = c ? '▼' : '▲';
+            };
+            head.addEventListener('click', toggle);
+            head.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                toggle();
+            });
+        });
+        const layoutBtn = this.overlay.querySelector('[data-station-layout-toggle]');
+        if (layoutBtn) {
+            layoutBtn.addEventListener('click', () => {
+                const stack = layoutBtn.closest('.hs-panel-stack');
+                const side = !this.stationLayoutSideBySide();
+                this._stationLayoutSideBySide = side;
+                try { localStorage.setItem('vf_hs_station_layout', side ? 'side' : 'stacked'); } catch (err) { /* ignore */ }
+                if (stack) stack.classList.toggle('is-side-by-side', side);
+                layoutBtn.setAttribute('aria-pressed', String(side));
+            });
+        }
     },
 
     /** The MENU_AREAS entry that holds a tab, or null. */
@@ -94031,6 +94485,7 @@ extendClass(HomeStationUI, {
         return Object.keys(materials).every((id) => (w[id] || 0) >= (materials[id] || 0));
     },
 
+    /** Cost chips for only the resources actually required (no empty placeholder cells). */
     renderCostGrid(costMap, wallet, profile) {
         const cells = [];
         const creditNeed = Math.max(0, Math.round(Number((costMap && costMap.credits) || 0)));
@@ -94050,33 +94505,26 @@ extendClass(HomeStationUI, {
         const ids = (typeof economyConfig !== 'undefined')
             ? economyConfig.resourceIds
             : ['scrap', 'ore', 'crystal', 'voltex'];
-        const hasMaterials = ids.some((id) => ((costMap && costMap[id]) || 0) > 0);
-        if (hasMaterials || creditNeed <= 0) {
-            ids.forEach((id) => {
-                const n = (costMap && costMap[id]) || 0;
-                const have = (wallet && wallet[id]) || 0;
-                const empty = n <= 0;
-                const short = !empty && have < n;
-                const missing = short ? (n - have) : 0;
-                const classes = [
-                    'hs-cost-cell',
-                    'hs-res-' + id,
-                    empty ? 'hs-cost-empty' : '',
-                    short ? 'hs-cost-short' : ''
-                ].filter(Boolean).join(' ');
-                const amt = empty ? '—' : String(n);
-                const title = empty
-                    ? String(id).toUpperCase()
-                    : (short ? `NEED ${missing}` : String(id).toUpperCase());
-                const needAttr = short ? ` data-need="−${missing}"` : '';
-                cells.push(
-                    `<span class="${classes}" title="${title}">` +
-                    `<span class="hs-cost-icon">${this.iconHtml(this.resourceIconKey(id), 20, 'hs-pixel hs-pixel-20')}</span>` +
-                    `<span class="hs-cost-amt"${needAttr}>${amt}</span>` +
-                    `</span>`
-                );
-            });
-        }
+        ids.forEach((id) => {
+            const n = Math.max(0, Math.round(Number((costMap && costMap[id]) || 0)));
+            if (n <= 0) return;
+            const have = (wallet && wallet[id]) || 0;
+            const short = have < n;
+            const missing = short ? (n - have) : 0;
+            const classes = [
+                'hs-cost-cell',
+                'hs-res-' + id,
+                short ? 'hs-cost-short' : ''
+            ].filter(Boolean).join(' ');
+            const needAttr = short ? ` data-need="−${missing}"` : '';
+            cells.push(
+                `<span class="${classes}" title="${short ? ('NEED ' + missing) : String(id).toUpperCase()}">` +
+                `<span class="hs-cost-icon">${this.iconHtml(this.resourceIconKey(id), 20, 'hs-pixel hs-pixel-20')}</span>` +
+                `<span class="hs-cost-amt"${needAttr}>${n}</span>` +
+                `</span>`
+            );
+        });
+        if (!cells.length) return '';
         return `<span class="hs-cost-grid">${cells.join('')}</span>`;
     },
 });
@@ -94112,6 +94560,56 @@ extendClass(HomeStationUI, {
             });
         });
         return rows;
+    },
+
+    /** Rich BUY tip body: resource icons + gap + credit cost + can/short per row. */
+    resourceBuyTipBody(wallet, costMap, profile) {
+        const missing = this.getMissingMaterials(wallet, costMap);
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        if (!missing.length) {
+            return '<div class="ui-tooltip-note">MATERIALS READY</div>';
+        }
+        const label = (id) => (typeof economyConfig !== 'undefined')
+            ? economyConfig.getResourceLabel(id)
+            : String(id).toUpperCase();
+        const chip = (id, text) =>
+            `<span class="ui-tip-chip">${this.iconHtml(this.resourceIconKey(id), 16, 'hs-pixel', false)}` +
+            `<span>${text}</span></span>`;
+        const rows = missing.map((r) => {
+            const can = credits >= (r.credits || 0);
+            return `<div class="ui-tooltip-stats ${can ? 'is-ok' : 'is-short'}">` +
+                chip(r.id, r.gap + ' ' + label(r.id)) +
+                chip('credits', r.credits + ' CR') +
+                `<span class="ui-tooltip-affordance">${can ? 'CAN BUY' : 'SHORT'}</span>` +
+                `</div>`;
+        }).join('');
+        const total = missing.reduce((sum, r) => sum + (r.credits || 0), 0);
+        const canAll = credits >= total;
+        return rows +
+            `<div class="ui-tooltip-stats ${canAll ? 'is-ok' : 'is-short'}">` +
+            chip('credits', 'TOTAL ' + total + ' CR') +
+            `<span class="ui-tooltip-affordance">${canAll ? 'CAN BUY' : 'NOT ENOUGH CREDITS'}</span>` +
+            `</div>`;
+    },
+
+    /** UPGRADE when affordable; BUY (+ tip) when short on resources; else disabled. */
+    renderUpgradeOrBuyButton(attrs, check, cost, profile) {
+        const iconKey = (check && check.ok) ? 'hsUpgrade' : 'hsShop';
+        const icon = this.iconHtml(iconKey, 18, 'hs-pixel', false);
+        const base = 'action-button hs-line-action hs-equip-up-btn';
+        if (check && check.ok) {
+            return `<button class="${base}" ${attrs}>${icon}<span>UPGRADE</span></button>`;
+        }
+        if (check && check.reason === 'RESOURCES') {
+            const body = this.resourceBuyTipBody((profile && profile.resources) || {}, cost || check.cost, profile);
+            return `<button class="${base}" ${attrs} data-short="1" data-ui-tip-head="NEED RESOURCES" data-ui-tip="NEED RESOURCES" data-ui-tip-html>` +
+                `${icon}<span>BUY</span>` +
+                `<template data-ui-tip-body>${body}</template>` +
+                `</button>`;
+        }
+        return `<button class="${base}" ${attrs} disabled>${icon}<span>UPGRADE</span></button>`;
     },
 
     openResourceBuyModal(opts) {
@@ -94183,14 +94681,22 @@ extendClass(HomeStationUI, {
             `</div></div></div>`;
     },
 
-    buyMissingResources(all) {
-        const modal = this._resBuyModal;
-        if (!modal || typeof profileManager === 'undefined') {
-            return { ok: false, reason: 'NO MODAL' };
+    buyMissingResources(all, costMap) {
+        if (typeof profileManager === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
         }
+        const cost = costMap || (this._resBuyModal && this._resBuyModal.cost);
+        if (!cost) return { ok: false, reason: 'NO MODAL' };
         const profile = this.getProfile();
-        const missing = this.getMissingMaterials((profile && profile.resources) || {}, modal.cost);
+        const missing = this.getMissingMaterials((profile && profile.resources) || {}, cost);
         if (!missing.length) return { ok: true, bought: 0 };
+        const credits = profileManager.getCredits
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        const total = missing.reduce((sum, r) => sum + (r.credits || 0), 0);
+        if (all && credits < total) {
+            return { ok: false, reason: 'CREDITS', need: total, have: credits };
+        }
         const targets = all ? missing : missing.slice(0, 1);
         let bought = 0;
         let lastFail = null;
@@ -94207,6 +94713,16 @@ extendClass(HomeStationUI, {
             return { ok: false, reason: (lastFail && lastFail.reason) || 'FAILED' };
         }
         return { ok: true, bought: bought, partial: !!lastFail, reason: lastFail && lastFail.reason };
+    },
+
+    /** BUY button: purchase missing mats with credits, then run the upgrade action. */
+    buyMissingThenAct(cost, action) {
+        const buy = this.buyMissingResources(true, cost);
+        if (!buy.ok) return buy;
+        this._resBuyModal = { title: '', cost: Object.assign({}, cost || {}), action: action || null };
+        const done = this.finishResourceBuyAction();
+        this._resBuyModal = null;
+        return done.ok ? done : Object.assign({ bought: buy.bought }, done);
     },
 
     finishResourceBuyAction() {
@@ -94226,6 +94742,12 @@ extendClass(HomeStationUI, {
         }
         if (act.type === 'module-upgrade') {
             return profileManager.purchaseModuleUpgrade(act.cat, act.track);
+        }
+        if (act.type === 'item-track-upgrade') {
+            return profileManager.purchaseItemTrackUpgrade(act.bucket, act.id, act.track);
+        }
+        if (act.type === 'item-tune-unlock') {
+            return profileManager.purchaseItemTuneUnlock(act.bucket, act.id);
         }
         if (act.type === 'craft') {
             return profileManager.craftBlueprint(act.id);
@@ -94301,6 +94823,10 @@ extendClass(HomeStationUI, {
                         msg = 'FRAME UPGRADED: ' + this.shipName(act.id) + ' L' + res.level;
                     } else if (act && act.type === 'module-upgrade') {
                         msg = 'MODULE UPGRADE L' + res.level;
+                    } else if (act && act.type === 'item-track-upgrade') {
+                        msg = 'ITEM UPGRADED: ' + String(act.track).toUpperCase() + ' L' + res.level;
+                    } else if (act && act.type === 'item-tune-unlock') {
+                        msg = 'FINE TUNE UNLOCKED';
                     }
                     this.statusMsg = msg;
                     this.focusIndex = 0;
@@ -94735,14 +95261,9 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * Tutorial hides the area nav until the first planet is cleared.
-     * Dev mode (Shift+C) always shows every nav button.
+     * Navbar stays visible at all times, including before the first planet is cleared.
      */
     shouldHideTabsForTutorial(profile) {
-        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            return !profileManager.hasClearedFirstPlanet(profile);
-        }
         return false;
     },
 
@@ -94842,15 +95363,10 @@ extendClass(HomeStationUI, {
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
-        // Each owned ship gets its own card (own tbody): the ship row and its Ship Storage grid
-        // combined as one visual unit, action buttons top-right of the row.
+        // Each owned ship is one card: ship info left, Ship Storage grid right (stacks when narrow).
         const ownedHtml = owned.length
             ? `<table class="hs-ship-table">${owned.map((id) => {
                 const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                    (id === profile.activeShipId
-                        ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
-                        : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
-                          `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
                     `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
                     `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
                 const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
@@ -94904,15 +95420,16 @@ extendClass(HomeStationUI, {
                             <strong>STATION STORAGE</strong>
                         </div>
                     </div>
-                    <div class="hs-panel-stack">
-                        <div class="hs-panel hs-panel-ships">
-                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
+                    <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
+                        <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
+                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
+                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
-                        </div>
-                        <div class="hs-panel hs-panel-parts hs-panel-storage">
-                            ${this.panelTitle('hsCraft', 'STATION STORAGE')}
-                            <div class="hs-row">${this.renderStationStorage(profile)}</div>
-                        </div>
+                        </section>
+                        <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
+                            ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
+                            <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
+                        </section>
                     </div>
                     <div class="hs-panel hs-panel-chambers">
                         ${this.panelTitle('hsStores', 'STATION STORES')}
@@ -95158,6 +95675,7 @@ extendClass(HomeStationUI, {
             this.bindMissionButton();
             this.bindControlsToggle();
             this.bindStationColumnResize();
+            this.bindStationPanelToggles();
             this.syncTopbarResLayout();
             this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
                 menuBtn.addEventListener('click', (e) => {
@@ -95175,6 +95693,11 @@ extendClass(HomeStationUI, {
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
                 if (t === 'hangar') this.bindHangarTabEvents();
+                // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
+                if (t === 'station') {
+                    this.bindStationColumnResize();
+                    this.bindStationPanelToggles();
+                }
             }
             this.bindKeyNav();
         }
@@ -95987,6 +96510,7 @@ extendClass(HomeStationUI, {
         const bonus = node.effect(level) || {};
         const parts = [];
         if (bonus.resourceCap) parts.push('+' + bonus.resourceCap + ' STORE');
+        if (bonus.storageSlots) parts.push('+' + bonus.storageSlots + ' BAY');
         if (bonus.cargoCap) parts.push('+' + bonus.cargoCap + ' CARGO');
         if (bonus.shipSlots) parts.push('+' + bonus.shipSlots + ' SHIP SLOT' + (bonus.shipSlots > 1 ? 'S' : ''));
         if (bonus.craftDiscount) parts.push('-' + Math.round(bonus.craftDiscount * 100) + '% CRAFT');
@@ -96231,12 +96755,12 @@ extendClass(HomeStationUI, {
             maxX = Math.max(maxX, tx);
             maxY = Math.max(maxY, ty);
         });
-        const nodeSize = 92;
+        const nodeSize = 76;
         const half = nodeSize / 2;
-        const padX = 56;
-        const padY = 56;
-        const scaleX = 12.4;
-        const scaleY = 10.2;
+        const padX = 48;
+        const padY = 40;
+        const scaleX = 11.2;
+        const scaleY = 8.4;
         const treeW = Math.ceil(padX * 2 + maxX * scaleX + nodeSize);
         const treeH = Math.ceil(padY * 2 + maxY * scaleY + nodeSize);
 
@@ -98393,6 +98917,7 @@ extendClass(HomeStationUI, {
         let inner = '';
         let title = 'STATION UPGRADE TREE';
         let hint = 'Spend station resources to expand capacity, hangar slots, drives and station systems.';
+        let showHead = true;
         if (this.upgradeSubTab === 'ships') {
             title = 'HULL AREAS';
             hint = 'Upgrade a hull area to grow its slots S → M → L (bigger parts fit) and open extra slots. Every level adds hull HP and armor.';
@@ -98401,14 +98926,19 @@ extendClass(HomeStationUI, {
             title = 'MODULE TYPE UPGRADES';
             hint = 'Global bonuses for weapons, defenses, abilities — and charge systems (after buying charge parts).';
             inner = this.renderModuleTypeUpgrades(profile);
+        } else if (this.upgradeSubTab === 'equipment') {
+            showHead = false;
+            inner = this.renderEquipmentUpgrades(profile);
         } else {
             inner = this.renderStationUpgradeTree(profile);
         }
 
         return `<div class="hs-section hs-panel hs-upgrade-root">` +
             `<div class="hs-shop-cats">${this.renderUpgradeSubTabs()}</div>` +
-            `${this.panelTitle('hsUpgrade', title)}` +
-            `<p class="hs-muted hs-hint">${hint}</p>` +
+            (showHead
+                ? `${this.panelTitle('hsUpgrade', title)}` +
+                  `<p class="hs-muted hs-hint">${hint}</p>`
+                : '') +
             `<div class="hs-tab-fill">${inner}</div>` +
             `</div>`;
     },
@@ -98774,11 +99304,18 @@ extendClass(HomeStationUI, {
         const val = (v) => (v != null ? v : '—');
         const stat = (icon, label, v, col) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
-            const img = ir && ir.imgHtml ? ir.imgHtml(icon, 32, 'hs-pixel', col, false) : this.iconHtml(icon, 24, 'hs-pixel', false);
+            const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
             return `<span class="hs-ship-stat" style="--stat:${col}" title="${label}"><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
         const tipText = [['TIER', cfg.tier], ['HP', cfg.maxHealth], ['ARMOR', cfg.armor], ['DAMAGE', cfg.damage], ['SPEED', cfg.speed]]
             .map((x) => x[0] + ' ' + val(x[1])).join(' · ');
+        const statsHtml = `<div class="hs-ship-stats">` +
+            stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
+            stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
+            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') +
+            stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
+            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
+            `</div>`;
         return `<tr>` +
             `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
             (thumbClass === 'hs-ship-thumb-bp'
@@ -98786,12 +99323,10 @@ extendClass(HomeStationUI, {
                 : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
                   `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
             `</span></td>` +
-            `<td class="hs-ship-table-name" data-ui-tip="${tipText}"><strong>${this.shipName(id)}</strong>` +
+            `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
+            statsHtml +
+            `<strong>${this.shipName(id)}</strong>` +
             `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
-            `<td><div class="hs-ship-stats">` +             stat('navStar', 'Tier', cfg.tier, '#ffe14a') + stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') + stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
-            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
-            `</div></td>` +
             (actionHtml != null
                 ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +
@@ -98826,7 +99361,7 @@ extendClass(HomeStationUI, {
             const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(id) : id;
             const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
             const kind = (bp && bp.kind) || 'weapon';
-            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: 'BP ' + name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
+            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
         }
         if (bucket === 'weapons') {
             const name = (typeof weaponConfigManager !== 'undefined')
@@ -98872,7 +99407,7 @@ extendClass(HomeStationUI, {
         const cap = Math.max(1, stats.resourceCap || 80);
         const baseCap = (typeof economyConfig !== 'undefined' && economyConfig.stationBaseStats && economyConfig.stationBaseStats.resourceCap) || 80;
         const upgradeScale = Math.max(1, cap / baseCap);
-        const width = Math.round(Math.min(88, 55 * Math.min(1.5, Math.sqrt(upgradeScale))));
+        const width = Math.round(Math.min(95, 80 * Math.min(1.5, Math.sqrt(upgradeScale))));
         const map = (profile && profile.resources) || {};
         const cells = ids.map((id) => {
             const n = map[id] || 0;
@@ -98881,11 +99416,15 @@ extendClass(HomeStationUI, {
             const color = (typeof economyConfig !== 'undefined' && economyConfig.resourceColors && economyConfig.resourceColors[id]) || 'var(--color-primary)';
             const full = n >= cap ? ' is-full' : '';
             const empty = n <= 0 ? ' is-empty' : '';
+            // Default capacity Grenze at the top of the glass; lower only after store upgrades.
+            const capMarkPct = Math.max(1, Math.min(100, Math.round((baseCap / cap) * 100)));
             // Generative silo casing with the resource chunks piled up to the fill level baked in.
-            const casing = (typeof physicalItem !== 'undefined') ? physicalItem.wrapChamber(id, 48, 140, color, pct) : '';
+            const casing = (typeof physicalItem !== 'undefined')
+                ? physicalItem.wrapChamber(id, 48, 140, color, pct, capMarkPct)
+                : '';
             return `<div class="hs-res-subcard${full}${empty}" style="--chamber-c:${color}" title="${label} ${n}/${cap}">` +
                 `<span class="hs-res-chamber-tag">` +
-                `<span class="hs-res-chamber-icon">${this.iconHtml(this.resourceIconKey(id), 24, 'hs-pixel')}</span>` +
+                `<span class="hs-res-chamber-icon" aria-hidden="true">${this.iconHtml(this.resourceIconKey(id), 12, 'hs-pixel hs-pixel-12', false)}</span>` +
                 `<span class="hs-res-chamber-label">${label}</span>` +
                 `</span>` +
                 `<span class="hs-res-chamber-tube" style="--tube-w:${width}%">${casing}</span>` +
@@ -98919,9 +99458,18 @@ extendClass(HomeStationUI, {
     /** Grid footprint [w, h] in slots for a bucket/id item, same sizing the hangar bay-inventory grid uses. */
     _storageItemSpan(bucket, id) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
-        if (!slm || !slm.getPartSizeLevel || bucket === 'blueprints') return [1, 1];
-        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
-        const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, id) | 0));
+        if (!slm || !slm.getPartSizeLevel) return [1, 1];
+        let kind, partId;
+        if (bucket === 'blueprints') {
+            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
+            if (!bp) return [1, 1];
+            kind = bp.kind;
+            partId = bp.id;
+        } else {
+            kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
+            partId = id;
+        }
+        const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, partId) | 0));
         return [[1, 1], [1, 2], [2, 2]][lv];
     },
 
@@ -98931,32 +99479,75 @@ extendClass(HomeStationUI, {
         return (slm && slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : null) || { cols: 4, rows: 2 };
     },
 
-    /** Station storage's own grid shape — always at least 10x4, independent of any ship, growing rows if it holds more than that. */
-    STATION_STORAGE_COLS: 10,
-    STATION_STORAGE_ROWS: 4,
-    _stationStorageGrid(entryCount) {
-        const cols = this.STATION_STORAGE_COLS;
-        const rows = Math.max(this.STATION_STORAGE_ROWS, Math.ceil(entryCount / cols));
-        return { cols, rows };
+    /** Max columns the station bay ever reaches — also the cell-size reference so ship storage matches. */
+    STATION_STORAGE_COLS: 14,
+
+    /** Profile-backed bay capacity (empty slots + filled). Fresh stations start small. */
+    _stationStorageSlots(profile) {
+        const stats = (typeof profileManager !== 'undefined' && profile)
+            ? profileManager.getStationStats(profile)
+            : null;
+        const n = stats && stats.storageSlots != null ? stats.storageSlots : 12;
+        return Math.max(8, Math.round(n) || 12);
     },
 
-    /** Item cells padded out to fill cols x rows with empty cells. Cell size (--cs) is pinned to the station storage grid's 10-column
-     *  width so ship storage — a smaller grid in the same panel — uses the exact same slot size instead of stretching to fill its row. */
+    /** How many bay cells station-filed items currently occupy. */
+    _stationStorageUsed(profile) {
+        if (!profile || typeof profileManager === 'undefined') return 0;
+        return this._allStorageEntries(profile).reduce((n, e) => {
+            if (profileManager.getStationStorageQty(profile, e.bucket, e.id) <= 0) return n;
+            const span = this._storageItemSpan(e.bucket, e.id);
+            return n + span[0] * span[1];
+        }, 0);
+    },
+
+    /** Title suffix like "3/12" for the station bay panel. */
+    stationStorageLabel(profile) {
+        const used = this._stationStorageUsed(profile);
+        const cap = this._stationStorageSlots(profile);
+        return used + '/' + cap;
+    },
+
+    /** Turn a slot budget into a compact cols×rows bay (grows wider first, then taller). */
+    _stationStorageGrid(profile, usedCells) {
+        const budget = Math.max(this._stationStorageSlots(profile), usedCells | 0);
+        let cols;
+        let rows;
+        if (budget <= 12) { cols = 6; rows = 2; }
+        else if (budget <= 16) { cols = 8; rows = 2; }
+        else if (budget <= 20) { cols = 10; rows = 2; }
+        else if (budget <= 28) { cols = 14; rows = 2; }
+        else if (budget <= 42) { cols = 14; rows = 3; }
+        else {
+            cols = this.STATION_STORAGE_COLS;
+            rows = Math.max(4, Math.ceil(budget / cols));
+        }
+        // If items overfill the budget, grow rows so nothing is clipped.
+        if (usedCells > cols * rows) rows = Math.ceil(usedCells / cols);
+        return { cols, rows, slots: budget };
+    },
+
+    /** Shared square slot size for every station/ship storage bay (px). */
+    STORAGE_CELL_PX: 48,
+
+    /** Item cells padded out to fill cols x rows. Slot size is a fixed shared px value so
+     *  ship storage and station storage always match (no per-column container shrink). */
     _storageGridHtml(cellSpecs, grid) {
         const capacity = grid.cols * grid.rows;
         const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
         const pad = Math.max(0, capacity - used);
-        const baseCols = this.STATION_STORAGE_COLS;
-        // cqw (not %) — the host row is a size container (part-07.css), so this stays the same
-        // physical cell size whether it ends up sizing a column (width) or a row (height).
-        const csExpr = `min(56px, calc((${100 / baseCols}cqw) - ${(baseCols - 1) * 4 / baseCols}px))`;
         const cells = cellSpecs.map((c) => c.html.replace('__SPAN__', `grid-column: span ${c.span[0]}; grid-row: span ${c.span[1]};`));
-        return `<div class="hs-storage-grid" style="--cs: ${csExpr}; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, var(--cs)); grid-template-rows: repeat(${grid.rows}, var(--cs)); width: calc(${grid.cols} * var(--cs) + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * var(--cs) + ${grid.rows - 1} * 4px)">` +
+        const cs = this.STORAGE_CELL_PX;
+        return `<div class="hs-storage-grid" style="--cs:${cs}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * 4px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
-    /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles. */
-    renderStationStorage(profile) {
+    /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles.
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+    renderStationStorage(profile, opts) {
+        opts = opts || {};
+        const selectMode = opts.selectKey !== undefined;
+        const selectKey = opts.selectKey || null;
         const entries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
         const activeShipId = profile.activeShipId;
         const cells = entries.map((e) => {
@@ -98971,24 +99562,34 @@ extendClass(HomeStationUI, {
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
             const isBp = e.bucket === 'blueprints';
-            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-ship="${e.bucket}:${e.id}" data-ship="${activeShipId}"`;
+            const key = e.bucket + ':' + e.id;
+            const selected = selectMode && selectKey === key;
+            const action = isBp ? `data-craft="${e.id}"`
+                : (selectMode
+                    ? `data-equip-select="${key}"`
+                    : `data-move-to-ship="${key}" data-ship="${activeShipId}"`);
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
-            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to ship storage`;
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}`
+                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to ship storage`);
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
-                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
                 `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
             return { html, span };
         });
-        return this._storageGridHtml(cells, this._stationStorageGrid(cells.reduce((n, c) => n + c.span[0] * c.span[1], 0)));
+        const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        return this._storageGridHtml(cells, this._stationStorageGrid(profile, used));
     },
 
-    /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles. */
-    renderShipStorage(profile, shipId) {
+    /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles.
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+    renderShipStorage(profile, shipId, opts) {
+        opts = opts || {};
+        const selectMode = opts.selectKey !== undefined;
+        const selectKey = opts.selectKey || null;
         const grid = this._storageGrid(shipId);
         if (!shipId) return this._storageGridHtml([], grid);
         const entry = profileManager.getShipStorageEntry(profile, shipId);
@@ -99025,15 +99626,20 @@ extendClass(HomeStationUI, {
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
             const isBp = e.bucket === 'blueprints';
-            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-station="${e.bucket}:${e.id}" data-ship="${shipId}"`;
+            const key = e.bucket + ':' + e.id;
+            const selected = selectMode && selectKey === key;
+            const action = isBp ? `data-craft="${e.id}"`
+                : (selectMode
+                    ? `data-equip-select="${key}"`
+                    : `data-move-to-station="${key}" data-ship="${shipId}"`);
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
-            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to station storage`;
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}`
+                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
-                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
                 `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
             return { html, span };
@@ -109241,6 +109847,137 @@ extendClass(HomeStationUI, {
             });
         });
 
+        this.overlay.querySelectorAll('[data-equip-select]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-equip-select') || '';
+                this.expandedEquipItem = this.expandedEquipItem === key ? null : key;
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-track-up]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id, track] = (btn.getAttribute('data-item-track-up') || '').split(':');
+                const act = { type: 'item-track-upgrade', bucket: bucket, id: id, track: track };
+                const meta = this._storageItemMeta(bucket, id);
+                const trackMeta = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs[bucket])
+                    ? economyConfig.itemUpgradeTrackDefs[bucket][track]
+                    : null;
+                const title = meta.label + ' · ' + ((trackMeta && trackMeta.label) || track.toUpperCase());
+                let res = profileManager.purchaseItemTrackUpgrade(bucket, id, track);
+                if (!res.ok && res.reason === 'RESOURCES' && btn.hasAttribute('data-short')) {
+                    const cost = res.cost;
+                    res = this.buyMissingThenAct(cost, act);
+                    if (res.ok) {
+                        this.playButtonResult(btn, true, 'BOUGHT · UPGRADED: ' + track.toUpperCase() + ' L' + res.level);
+                        this.createUI();
+                        return;
+                    }
+                    this.playButtonResult(btn, false, res.reason === 'CREDITS'
+                        ? ('NEED ' + (res.need || 0) + ' CR')
+                        : (res.reason || 'BUY FAILED'));
+                    this.openResourceBuyModal({ title: title, cost: cost, action: act });
+                    return;
+                }
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'UPGRADED: ' + track.toUpperCase() + ' L' + res.level);
+                    this.createUI();
+                } else if (res.reason === 'RESOURCES') {
+                    this.openResourceBuyModal({
+                        title: title + (res.nextLevel ? (' · L' + res.nextLevel) : ''),
+                        cost: res.cost,
+                        action: act
+                    });
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-mode]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id, mode] = (btn.getAttribute('data-item-mode') || '').split(':');
+                const res = profileManager.setItemMode(bucket, id, mode);
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'MODE: ' + mode.toUpperCase());
+                    this.createUI();
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-tune-unlock]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [bucket, id] = (btn.getAttribute('data-item-tune-unlock') || '').split(':');
+                const act = { type: 'item-tune-unlock', bucket: bucket, id: id };
+                const title = this._storageItemMeta(bucket, id).label + ' · FINE TUNE';
+                let res = profileManager.purchaseItemTuneUnlock(bucket, id);
+                if (!res.ok && res.reason === 'RESOURCES' && btn.hasAttribute('data-short')) {
+                    const cost = res.cost;
+                    res = this.buyMissingThenAct(cost, act);
+                    if (res.ok) {
+                        this.playButtonResult(btn, true, 'BOUGHT · FINE TUNE UNLOCKED');
+                        this.createUI();
+                        return;
+                    }
+                    this.playButtonResult(btn, false, res.reason === 'CREDITS'
+                        ? ('NEED ' + (res.need || 0) + ' CR')
+                        : (res.reason || 'BUY FAILED'));
+                    this.openResourceBuyModal({ title: title, cost: cost, action: act });
+                    return;
+                }
+                if (res.ok) {
+                    this.playButtonResult(btn, true, 'FINE TUNE UNLOCKED');
+                    this.createUI();
+                } else if (res.reason === 'RESOURCES') {
+                    this.openResourceBuyModal({ title: title, cost: res.cost, action: act });
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-tune]').forEach((input) => {
+            input.addEventListener('change', () => {
+                const [bucket, id] = (input.getAttribute('data-item-tune') || '').split(':');
+                const res = profileManager.setItemTune(bucket, id, Number(input.value) / 100);
+                if (!res.ok) {
+                    this.playButtonResult(input, false, res.reason || 'LOCKED');
+                    return;
+                }
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-equip]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [shipId, kind, id] = (btn.getAttribute('data-item-equip') || '').split('|');
+                const check = shipLoadoutManager.canInstallModule(shipId, kind, id);
+                if (check.ok || check.removing) {
+                    shipLoadoutManager.toggleModule(shipId, kind, id);
+                } else if (check.reason === 'FULL') {
+                    // Every slot of this kind is occupied: replace the first one
+                    // (same behaviour as dragging a part onto an occupied hangar slot).
+                    shipLoadoutManager.setSlotModule(shipId, kind, 0, id);
+                } else {
+                    this.playButtonResult(btn, false, check.reason || 'FAILED');
+                    return;
+                }
+                this.playButtonResult(btn, true, 'EQUIPPED');
+                this.createUI();
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-item-unequip]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const [shipId, kind, id] = (btn.getAttribute('data-item-unequip') || '').split('|');
+                shipLoadoutManager.toggleModule(shipId, kind, id);
+                this.playButtonResult(btn, true, 'UNEQUIPPED');
+                this.createUI();
+            });
+        });
+
         this.overlay.querySelectorAll('[data-travel]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const gid = btn.getAttribute('data-travel');
@@ -109515,115 +110252,200 @@ extendClass(HomeStationUI, {
 /* --- js/ui/home-station/station-col-resize.js?v=1 --- */
 "use strict";
 
-// HomeStationUI: draggable column borders in the station storage grid
-// (owned ships | blueprints | parts). Widths are kept as fr weights.
-var STATION_COLS_KEY = 'vf_station_cols_v1';
-var STATION_COLS_MIN = 0.25;
-// Floor below which a column's content (title + icon + grid) can no longer fit and gets clipped.
-var STATION_COL_MIN_PX = 220;
+// HomeStationUI: draggable border between the storage/ships column and the
+// STATION STORES chambers. Matches .hs-station-grid's 2-column template
+// (left content | chambers). Legacy 3-column fr weights are ignored.
+var STATION_COLS_KEY = 'vf_station_cols_v2';
+var STATION_COLS_MIN = 0.35;
+var STATION_COLS_MAX = 12;
+var STATION_LEFT_MIN_PX = 320;
+var STATION_RIGHT_MIN_PX = 300;
+var STATION_COLS_DEFAULT = [3, 1];
 
 extendClass(HomeStationUI, {
+    /** Sanitize persisted [leftFr, rightFr] — reject NaN/Infinity/exploded values from bad drags. */
+    _sanitizeStationCols(v) {
+        if (!Array.isArray(v) || v.length !== 2) return null;
+        const a = Number(v[0]);
+        const b = Number(v[1]);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+        if (a < STATION_COLS_MIN || b < STATION_COLS_MIN) return null;
+        if (a > STATION_COLS_MAX || b > STATION_COLS_MAX) return null;
+        // Re-normalize to a stable sum so fr math stays bounded across reloads.
+        const total = a + b;
+        if (!(total > 0) || !Number.isFinite(total)) return null;
+        const scale = (STATION_COLS_DEFAULT[0] + STATION_COLS_DEFAULT[1]) / total;
+        return [
+            Math.max(STATION_COLS_MIN, Math.min(STATION_COLS_MAX, a * scale)),
+            Math.max(STATION_COLS_MIN, Math.min(STATION_COLS_MAX, b * scale))
+        ];
+    },
+
     getStationCols() {
         try {
             const v = JSON.parse(localStorage.getItem(STATION_COLS_KEY) || 'null');
-            if (Array.isArray(v) && v.length === 3 && v.every((n) => n >= STATION_COLS_MIN)) return v;
+            const clean = this._sanitizeStationCols(v);
+            if (clean) {
+                // Rewrite corrupted / pre-clamp saves so the next load stays clean.
+                if (!v || v[0] !== clean[0] || v[1] !== clean[1]) {
+                    try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(clean)); } catch (e) { /* ignore */ }
+                }
+                return clean;
+            }
+            if (v != null) {
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+            }
         } catch (e) { /* ignore */ }
-        return [1, 1, 1];
+        return null; // null → leave CSS defaults alone
     },
 
     bindStationColumnResize() {
         const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
         if (!grid) return;
-        const cols = this.getStationCols();
-        const apply = () => { grid.style.gridTemplateColumns = cols.map((c) => `minmax(0, ${c}fr)`).join(' '); };
-        apply();
-        // A layout saved before STATION_COL_MIN_PX existed (or saved at a wider window) can still be
-        // narrower than the current floor — renormalize it against the grid's actual rendered width.
-        const normalize = () => {
-            const total = cols.reduce((s, c) => s + c, 0);
-            const px = grid.offsetWidth || 1;
-            const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
-            if (cols.every((c) => c >= minFr - 0.001)) return;
-            let deficit = 0;
-            for (let k = 0; k < cols.length; k++) {
-                if (cols[k] < minFr) { deficit += minFr - cols[k]; cols[k] = minFr; }
+        // Avoid stacking handles across soft remounts.
+        grid.querySelectorAll('.hs-col-resize').forEach((h) => h.remove());
+        grid.style.removeProperty('grid-template-columns');
+
+        const left = grid.querySelector('.hs-panel-stack') ||
+            grid.querySelector('.hs-panel-parts') ||
+            grid.querySelector('.hs-panel-ships');
+        const right = grid.querySelector('.hs-panel-chambers');
+        if (!left || !right) return;
+
+        let cols = this.getStationCols();
+        const apply = () => {
+            if (!cols) {
+                grid.style.removeProperty('grid-template-columns');
+                return;
             }
-            const donors = cols.map((c, k) => k).filter((k) => cols[k] > minFr);
-            const donorTotal = donors.reduce((s, k) => s + (cols[k] - minFr), 0) || 1;
-            donors.forEach((k) => { cols[k] -= deficit * (cols[k] - minFr) / donorTotal; });
-            apply(); place();
+            const clean = this._sanitizeStationCols(cols);
+            if (!clean) {
+                cols = null;
+                grid.style.removeProperty('grid-template-columns');
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+                return;
+            }
+            cols = clean;
+            // Keep the chambers column from collapsing; left takes the rest.
+            grid.style.gridTemplateColumns =
+                `minmax(0, ${cols[0]}fr) minmax(${STATION_RIGHT_MIN_PX}px, ${cols[1]}fr)`;
+        };
+        apply();
+
+        const normalize = () => {
+            if (!cols) return;
+            const clean = this._sanitizeStationCols(cols);
+            if (!clean) {
+                cols = null;
+                apply();
+                place();
+                return;
+            }
+            cols = clean;
+            const total = cols[0] + cols[1];
+            const px = grid.offsetWidth || 1;
+            const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
+            const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
+            // If mins can't both fit, fall back to CSS defaults instead of exploding ratios.
+            if (minLeft + minRight > total + 1e-6) {
+                cols = null;
+                apply();
+                place();
+                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
+                return;
+            }
+            let changed = false;
+            if (cols[0] < minLeft) { cols[1] -= (minLeft - cols[0]); cols[0] = minLeft; changed = true; }
+            if (cols[1] < minRight) { cols[0] -= (minRight - cols[1]); cols[1] = minRight; changed = true; }
+            if (cols[0] < minLeft) cols[0] = minLeft;
+            if (cols[1] < minRight) cols[1] = minRight;
+            cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+            if (!changed) {
+                apply();
+                return;
+            }
+            apply();
+            place();
             try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (e) { /* ignore */ }
         };
-        const panels = ['.hs-panel-ships', '.hs-panel-bp', '.hs-panel-parts']
-            .map((s) => grid.querySelector(s));
-        if (panels.some((p) => !p)) return;
+
         grid.style.position = 'relative';
-        const handles = [0, 1].map((i) => {
-            const h = document.createElement('div');
-            h.className = 'hs-col-resize';
-            h.title = 'Drag to resize (double-click to reset)';
-            grid.appendChild(h);
-            return h;
-        });
+        const handle = document.createElement('div');
+        handle.className = 'hs-col-resize';
+        handle.title = 'Drag to resize (double-click to reset)';
+        grid.appendChild(handle);
+
         const place = () => {
-            // Viewport rects ÷ ancestor scale → local coords. GUI zoom
-            // makes getBoundingClientRect scaled while style.left/top stay unscaled.
             const gRect = grid.getBoundingClientRect();
             const scaleX = (gRect.width / (grid.clientWidth || grid.offsetWidth || 1)) || 1;
             const scaleY = (gRect.height / (grid.clientHeight || grid.offsetHeight || 1)) || 1;
-            handles.forEach((h, i) => {
-                const aRect = panels[i].getBoundingClientRect();
-                const bRect = panels[i + 1].getBoundingClientRect();
-                const aRight = (aRect.right - gRect.left) / scaleX;
-                const bLeft = (bRect.left - gRect.left) / scaleX;
-                const gap = Math.max(0, bLeft - aRight);
-                const hw = Math.min(12, Math.max(8, gap - 2));
-                h.style.width = hw + 'px';
-                h.style.left = (aRight + gap / 2 - hw / 2) + 'px';
-                h.style.top = ((aRect.top - gRect.top) / scaleY) + 'px';
-                h.style.height = (aRect.height / scaleY) + 'px';
-            });
+            const aRect = left.getBoundingClientRect();
+            const bRect = right.getBoundingClientRect();
+            const aRight = (aRect.right - gRect.left) / scaleX;
+            const bLeft = (bRect.left - gRect.left) / scaleX;
+            const gap = Math.max(0, bLeft - aRight);
+            const hw = Math.min(12, Math.max(8, gap - 2 || 10));
+            // Chambers span both content rows — use its full height for the grip.
+            handle.style.width = hw + 'px';
+            handle.style.left = (aRight + gap / 2 - hw / 2) + 'px';
+            handle.style.top = ((bRect.top - gRect.top) / scaleY) + 'px';
+            handle.style.height = (bRect.height / scaleY) + 'px';
         };
         place();
         normalize();
-        handles.forEach((h, i) => {
-            h.addEventListener('dblclick', () => {
-                cols[0] = cols[1] = cols[2] = 1;
-                apply(); place();
-                try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
-            });
-            h.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                h.setPointerCapture(e.pointerId);
-                const total = cols.reduce((s, c) => s + c, 0);
-                // Match clientX units (viewport/zoomed) — offsetWidth is unscaled under CSS zoom.
-                const px = panels.reduce((s, p) => s + p.getBoundingClientRect().width, 0) || 1;
-                const startX = e.clientX;
-                const pair = cols[i] + cols[i + 1];
-                const startA = cols[i];
-                // Pixel floor converted to this drag's fr units, so a column can never be dragged
-                // narrower than its content needs regardless of how wide the overall row is.
-                const minFr = Math.max(STATION_COLS_MIN, (STATION_COL_MIN_PX / px) * total);
-                h.classList.add('is-dragging');
-                const move = (ev) => {
-                    const d = (ev.clientX - startX) / px * total;
-                    cols[i] = Math.max(minFr, Math.min(pair - minFr, startA + d));
-                    cols[i + 1] = pair - cols[i];
-                    apply(); place();
-                };
-                const up = () => {
-                    h.classList.remove('is-dragging');
-                    h.removeEventListener('pointermove', move);
-                    h.removeEventListener('pointerup', up);
-                    h.removeEventListener('pointercancel', up);
-                    try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (err) { /* ignore */ }
-                };
-                h.addEventListener('pointermove', move);
-                h.addEventListener('pointerup', up);
-                h.addEventListener('pointercancel', up);
-            });
+
+        handle.addEventListener('dblclick', () => {
+            cols = null;
+            apply();
+            place();
+            try { localStorage.removeItem(STATION_COLS_KEY); } catch (e) { /* ignore */ }
         });
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            if (!cols) cols = STATION_COLS_DEFAULT.slice();
+            cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+            const total = cols[0] + cols[1];
+            // Use the full grid content width so a collapsed column can't divide-by-near-zero
+            // and explode the fr weights (that was collapsing the station layout to 0px + 240px).
+            const px = Math.max(1, grid.getBoundingClientRect().width - 16);
+            const startX = e.clientX;
+            const pair = total;
+            const startA = cols[0];
+            const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
+            const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
+            handle.classList.add('is-dragging');
+            const move = (ev) => {
+                const d = (ev.clientX - startX) / px * total;
+                let next = Math.max(minLeft, Math.min(pair - minRight, startA + d));
+                if (!Number.isFinite(next)) next = startA;
+                cols[0] = next;
+                cols[1] = pair - cols[0];
+                cols = this._sanitizeStationCols(cols) || STATION_COLS_DEFAULT.slice();
+                apply();
+                place();
+            };
+            const up = () => {
+                handle.classList.remove('is-dragging');
+                handle.removeEventListener('pointermove', move);
+                handle.removeEventListener('pointerup', up);
+                handle.removeEventListener('pointercancel', up);
+                cols = this._sanitizeStationCols(cols);
+                if (!cols) {
+                    apply();
+                    place();
+                    try { localStorage.removeItem(STATION_COLS_KEY); } catch (err) { /* ignore */ }
+                    return;
+                }
+                try { localStorage.setItem(STATION_COLS_KEY, JSON.stringify(cols)); } catch (err) { /* ignore */ }
+            };
+            handle.addEventListener('pointermove', move);
+            handle.addEventListener('pointerup', up);
+            handle.addEventListener('pointercancel', up);
+        });
+
         if (window.ResizeObserver) new ResizeObserver(() => { place(); normalize(); }).observe(grid);
     },
 
@@ -112088,11 +112910,11 @@ extendClass(StartScreenManager, {
             {
                 name: 'Pixel Size',
                 value: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getFxValue('pixelSize') : 'OFF',
-                options: ['OFF', '1', '2', '3', '4', '5', '6', '7', '8'],
+                    ? uiAppearanceManager.getFxValue('pixelSize') : '1',
+                options: ['1', '2', '4'],
                 type: 'uiFx',
                 fxKey: 'pixelSize',
-                tip: 'One global pixel size (screen px) for every art pixel: combat, maps, previews, editors — 1 is sharpest'
+                tip: 'One shared pixel grid (screen px per art pixel) for ships, planets, combat, maps, previews and editors — 1 is sharpest'
             },
             {
                 name: 'Frame Pixel',
@@ -119555,9 +120377,20 @@ extendClass(PlanetSVGManager, {
         return model.frames[f];
     },
 
-    /** Frame index a planet shows right now (shared clock, per-planet offset). */
+    /**
+     * Frame index a planet shows right now (shared clock, per-planet offset).
+     * A fixed wall-clock period for every model made small/low-detail map
+     * icons (few dozen frames) crawl — a new frame only every couple of
+     * seconds — while the big detail card (hundreds of frames) read smooth
+     * at the same period. Pacing by a constant per-frame duration instead
+     * keeps that same frame-to-frame cadence everywhere; only the full-turn
+     * time differs, capped at the baseline period so large models don't spin
+     * faster than before.
+     */
     getPlanetSpinIndex(id, model) {
-        const period = this.spinPeriod || 60000;
+        const basePeriod = this.spinPeriod || 60000;
+        const frameMs = 160;
+        const period = Math.min(basePeriod, Math.max(3000, model.count * frameMs));
         const offset = (this.hashId(id) % 1000) / 1000;
         return Math.floor((performance.now() / period + offset) * model.count) % model.count;
     },
@@ -119739,7 +120572,10 @@ extendClass(PlanetSVGManager, {
                 if (mapEls[i] && mapEls[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
             const budgetMs = pendingUpgrade ? 10 : 4;
-            const maxUpdates = pendingUpgrade ? 2 : 1;
+            // One update per tick made each planet's turn catch up only once
+            // every n ticks, in one big jump instead of an even drift — let the
+            // time budget (not a fixed count) decide how many land this tick.
+            const maxUpdates = pendingUpgrade ? Math.max(2, n) : Math.max(1, n);
             let t0 = performance.now();
             let updated = 0;
             const nf = featured.length;
@@ -120749,7 +121585,9 @@ var StartStationBackdrop = class StartStationBackdrop {
 // found. RESET in dev mode returns to these, not to a bare identity transform.
 StartStationBackdrop.DEFAULT_ADJUST = {
     station: { dx: 0, dy: 0, scale: 1 },
-    ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 2.7447264773653126 },
+    // Keep the docked ship a small accent next to the station — 2.7× made it
+    // fill most of the voidborn core / station hit box on a normal window.
+    ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 1.25 },
     planet: { dx: 0, dy: 0, scale: 1 }
 };
 
@@ -121798,6 +122636,8 @@ var launchCutsceneManager = new LaunchCutsceneManager();
 
 
 /* --- js/ui/home-station/physical-item.js?v=pi-19 --- */
+"use strict";
+
 // Generative "physical object" look for inventory items: every part gets a seeded, pixel-shaded metal
 // casing (bevel, rivets, vents / label plate / hazard stripe / pipes, scratches, cast shadow) with a
 // recessed socket the part icon sits in. Same id -> same item, always.
@@ -121905,7 +122745,8 @@ var physicalItem = (() => {
 
     /** A resource storage silo: metal frame, pipe + lamp trim, and a glass viewport with resource
      *  chunks piled up to the fill level — same seeded-pixel technique as render(), own layout. */
-    function renderChamber(id, w, h, color, pct) {
+    /** `capMarkPct` = where the default capacity Grenze sits (100 = top of glass). */
+    function renderChamber(id, w, h, color, pct, capMarkPct) {
         const cw = Math.max(10, Math.round(w / PX)), ch = Math.max(16, Math.round(h / PX));
         const cv = document.createElement('canvas');
         cv.width = cw; cv.height = ch;
@@ -121936,46 +122777,36 @@ var physicalItem = (() => {
         const vx = mx + 3, vy = my + 3, vw = bw - 6, vh = bh - 9;
         rect(vx, vy, vw, vh, [10, 12, 18]);
         rect(vx, vy, 1, vh, shade(frame, 0.55)); rect(vx + vw - 1, vy, 1, vh, shade(frame, 0.2));
-        // Resource pile, bottom-up: a solid jagged-top heap (not scattered specks), textured per pixel
-        // so it reads as a mass of material, with a few brighter facet chunks standing proud of it.
+        // Resource column, bottom-up: level fill surface (grain in colour only — no jagged silhouette
+        // that reads as a broken container when the silo is stretched on screen).
         const fillBase = Math.round(vh * Math.max(0, Math.min(1, pct / 100)));
         if (fillBase > 0) {
             const cols = Math.max(1, vw - 2);
-            const jagAmp = Math.min(3, Math.max(1, Math.round(fillBase * 0.18)));
-            const tops = [];
-            let prevJag = 0;
-            for (let i = 0; i < cols; i++) {
-                // Smoothed noise: each column's jag follows the last so the silhouette is chunky, not static.
-                prevJag = Math.max(-jagAmp, Math.min(jagAmp, prevJag + Math.round((rnd() - 0.5) * 3)));
-                tops.push(Math.max(0, fillBase - jagAmp + prevJag));
-            }
             const bottomY = vy + vh - 1;
+            const topY = bottomY - fillBase;
             for (let i = 0; i < cols; i++) {
                 const x = vx + 1 + i;
-                const topY = bottomY - tops[i];
                 for (let y = topY; y <= bottomY; y++) {
-                    const depth = (y - topY) / Math.max(1, tops[i]);
-                    const grain = 0.5 + (rnd() - 0.5) * 0.5;
-                    const v = Math.max(0, Math.min(1, 0.55 - depth * 0.3 + (grain - 0.5) * 0.35));
+                    const depth = (y - topY) / Math.max(1, fillBase);
+                    const grain = 0.5 + (rnd() - 0.5) * 0.3;
+                    const v = Math.max(0, Math.min(1, 0.58 - depth * 0.28 + (grain - 0.5) * 0.22));
                     dot(x, y, shade(kc, v));
                 }
-                // Lit rim along the pile's top contour.
-                dot(x, topY, mix(kc, [255, 255, 255], 0.45 + rnd() * 0.25), 0.9);
-            }
-            // A few proud facet chunks breaking the surface, for visible chunkiness.
-            const facets = 3 + Math.round((pct / 100) * 6);
-            for (let i = 0; i < facets; i++) {
-                const ci = Math.floor(rnd() * cols);
-                const x = vx + 1 + ci;
-                const y = bottomY - tops[ci] - 1;
-                if (y < vy) continue;
-                dot(x, y, mix(kc, [255, 255, 255], 0.55 + rnd() * 0.3), 0.95);
-                if (rnd() < 0.6) dot(x + (rnd() < 0.5 ? 1 : -1), y, shade(kc, 0.25), 0.8);
+                // Even lit rim — flat level line across the glass.
+                dot(x, topY, mix(kc, [255, 255, 255], 0.4), 0.88);
             }
         }
         // Glass highlight streak + rim light.
         rect(vx + 1, vy + 1, 1, Math.round(vh * 0.4), [255, 255, 255], 0.18);
         rect(vx, vy, vw, 1, shade(frame, 0.7));
+        // Capacity Grenze: default (base) cap mark — at the top when unupgraded.
+        const markPct = Math.max(0, Math.min(100, Number(capMarkPct) || 100));
+        const markY = vy + vh - Math.round(vh * (markPct / 100));
+        const markClamped = Math.max(vy, Math.min(vy + vh - 1, markY));
+        rect(vx + 1, markClamped, vw - 2, 1, [140, 148, 160], 0.95);
+        for (let x = vx + 1; x < vx + vw - 1; x += 2) {
+            dot(x, markClamped, [210, 216, 224], 0.85);
+        }
         // Baseplate with a lit status slot, colored by fill state.
         rect(mx + 2, my + bh - 4, bw - 4, 3, shade(frame, 0.5));
         rect(mx + 4, my + bh - 3, bw - 8, 1, pct >= 100 ? mix(kc, [255, 255, 255], 0.4) : kc, 0.9);
@@ -121990,12 +122821,14 @@ var physicalItem = (() => {
             if (!url) { try { url = render(kind, id, w, h, color); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
         },
-        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100). */
-        wrapChamber(id, w, h, color, pct) {
+        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100).
+         *  `capMarkPct` places the default capacity Grenze (100 = top of glass). */
+        wrapChamber(id, w, h, color, pct, capMarkPct) {
             const bucketedPct = Math.round(pct / 4) * 4;
-            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct;
+            const mark = Math.round((Number(capMarkPct) || 100) / 4) * 4;
+            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct + ':' + mark;
             let url = cache.get(key);
-            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct); } catch (e) { url = ''; } cache.set(key, url); }
+            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct, mark); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>` : '';
         }
     };
@@ -123600,7 +124433,7 @@ var GamepadManager = class GamepadManager {
         const g = (typeof window !== 'undefined') ? window.game : null;
         const inputHandler = g && g.inputHandler;
         if (!inputHandler || !this._combatState.any) return;
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ',
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
             'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd'].forEach((k) => {
             inputHandler.keys[k] = false;
         });
@@ -123718,6 +124551,7 @@ extendClass(GamepadManager, {
         const st = this._menuState[name];
         if (pressed && !st.active) {
             st.active = true;
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
             this.dispatchKey('keydown', key);
         } else if (!pressed && st.active) {
             st.active = false;
@@ -123733,16 +124567,23 @@ extendClass(GamepadManager, {
         this.updateMenuDirection('right', 'ArrowRight', dir.right);
 
         const aHeld = this.isButtonPressed(gamepad, 0); // A -> Enter
-        if (aHeld && !this._menuState.a) this.dispatchKey('keydown', 'Enter');
+        if (aHeld && !this._menuState.a) {
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            this.dispatchKey('keydown', 'Enter');
+        }
         if (!aHeld && this._menuState.a) this.dispatchKey('keyup', 'Enter');
         this._menuState.a = aHeld;
 
         const bHeld = this.isButtonPressed(gamepad, 1) || this.isButtonPressed(gamepad, 8); // B / Back -> Escape
-        if (bHeld && !this._menuState.b) this.dispatchKey('keydown', 'Escape');
+        if (bHeld && !this._menuState.b) {
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            this.dispatchKey('keydown', 'Escape');
+        }
         if (!bHeld && this._menuState.b) this.dispatchKey('keyup', 'Escape');
         this._menuState.b = bHeld;
     }
 });
+
 
 
 /* --- js/graphics/shopkeeper-face.js --- */
@@ -123973,4 +124814,897 @@ var InStageShop = class InStageShop {
 
 var inStageShop = new InStageShop();
 window.inStageShop = inStageShop;
+
+
+/* --- js/ui/dev-hover-screen.js --- */
+"use strict";
+
+/**
+ * Dev Mode hover readout: a bezel-bottom screen that names the element under the pointer.
+ * Optional highlight mode: with the mode on, hold Shift to tint/outline the target.
+ */
+(function () {
+    const SKIP = /^(vf-hover-screen|vf-hover-k|vf-hover-v|vf-hover-hi|vf-bezel-devmode|vf-hover-hl)$/;
+    const HI_KEY = 'vf_dev_hover_hi';
+    let screen = null;
+    let label = null;
+    let hiBtn = null;
+    let hl = null;
+    let lastKey = '';
+    let lastTarget = null;
+    let lastX = 0;
+    let lastY = 0;
+    let raf = 0;
+    let shiftDown = false;
+    let hiMode = false;
+    try { hiMode = localStorage.getItem(HI_KEY) === '1'; } catch (e) { /* ignore */ }
+
+    function ensure() {
+        const frame = document.getElementById('vf-bezel');
+        if (!frame) return null;
+        screen = frame.querySelector('.vf-hover-screen');
+        if (!screen) {
+            screen = document.createElement('div');
+            screen.className = 'vf-hover-screen vf-pilot-screen';
+            screen.setAttribute('aria-live', 'polite');
+            screen.hidden = true;
+            screen.innerHTML = ''
+                + '<span class="vf-hover-k">HOVER</span>'
+                + '<button type="button" class="vf-hover-hi" title="Highlight mode: hold Shift to tint the element under the pointer" aria-label="Toggle hover highlight mode">HI</button>'
+                + '<span class="vf-hover-v">—</span>';
+            frame.appendChild(screen);
+            screen.querySelector('.vf-hover-hi').addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                setHiMode(!hiMode);
+            });
+        }
+        label = screen.querySelector('.vf-hover-v');
+        hiBtn = screen.querySelector('.vf-hover-hi');
+        syncHiBtn();
+        if (!hl) {
+            hl = document.createElement('div');
+            hl.className = 'vf-hover-hl';
+            hl.hidden = true;
+        }
+        // Must live on <html>, not <body>: body carries transform: scale(--stage-scale),
+        // which makes position:fixed resolve in stage space. Client rects are viewport
+        // px — mounting under body made the tint sit offset and look like a ghosted
+        // second copy of the station UI (double borders / jumping highlight).
+        if (hl.parentElement !== document.documentElement) {
+            document.documentElement.appendChild(hl);
+        }
+        return screen;
+    }
+
+    function setHiMode(on) {
+        hiMode = !!on;
+        try { localStorage.setItem(HI_KEY, hiMode ? '1' : '0'); } catch (e) { /* ignore */ }
+        syncHiBtn();
+        paint();
+    }
+
+    function syncHiBtn() {
+        if (!hiBtn) return;
+        hiBtn.classList.toggle('is-on', hiMode);
+        hiBtn.setAttribute('aria-pressed', hiMode ? 'true' : 'false');
+        hiBtn.title = hiMode
+            ? 'Highlight ON — hold Shift to tint the hovered element (click to turn off)'
+            : 'Highlight OFF — click to enable; then hold Shift to tint';
+    }
+
+    function devOn() {
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+
+    function attrToken(el, name) {
+        const v = el.getAttribute(name);
+        return v != null && v !== '' ? '[' + name + '="' + v + '"]' : '';
+    }
+
+    function nodeToken(el) {
+        let s = (el.tagName || '?').toLowerCase();
+        if (el.id) s += '#' + el.id;
+        if (el.classList && el.classList.length) {
+            const cls = [];
+            for (let i = 0; i < el.classList.length && cls.length < 3; i++) {
+                const c = el.classList[i];
+                if (SKIP.test(c) || c.indexOf('is-') === 0 || c === 'on') continue;
+                cls.push(c);
+            }
+            if (cls.length) s += '.' + cls.join('.');
+        }
+        s += attrToken(el, 'data-tool')
+            || attrToken(el, 'data-tab')
+            || attrToken(el, 'data-area')
+            || attrToken(el, 'data-slot')
+            || attrToken(el, 'data-slot-kind')
+            || attrToken(el, 'role');
+        return s;
+    }
+
+    function pickTarget(raw) {
+        let el = raw;
+        while (el && el.nodeType === 1) {
+            if (el === screen || el === hl || (el.classList && (
+                el.classList.contains('vf-hover-screen')
+                || el.classList.contains('vf-hover-hl')
+                || el.classList.contains('vf-bezel-devmode')
+            ))) {
+                el = el.parentElement;
+                continue;
+            }
+            break;
+        }
+        if (!el || el === document.documentElement || el === document.body) return null;
+        let best = el;
+        let n = el;
+        for (let d = 0; n && n.nodeType === 1 && d < 6; d++) {
+            if (n.id
+                || n.getAttribute('data-tool')
+                || n.getAttribute('data-tab')
+                || n.getAttribute('data-area')
+                || n.getAttribute('data-slot')
+                || n.getAttribute('data-ui-tip')
+                || n.getAttribute('aria-label')
+                || n.getAttribute('title')
+                || n.tagName === 'BUTTON'
+                || n.tagName === 'A'
+                || n.tagName === 'CANVAS'
+                || (n.classList && (
+                    n.classList.contains('vf-pilot-screen')
+                    || n.classList.contains('vf-bezel-tools')
+                    || n.classList.contains('hs-nav-card')
+                ))) {
+                best = n;
+                break;
+            }
+            if (n.id || (n.classList && n.classList.length > 0)) best = n;
+            n = n.parentElement;
+        }
+        return best;
+    }
+
+    function describe(el) {
+        const parts = [];
+        let n = el;
+        for (let d = 0; n && n.nodeType === 1 && d < 4 && n !== document.body; d++) {
+            parts.unshift(nodeToken(n));
+            if (n.id) break;
+            n = n.parentElement;
+        }
+        let text = parts.join(' › ');
+        const tip = el.getAttribute('aria-label')
+            || el.getAttribute('title')
+            || el.getAttribute('data-ui-tip')
+            || '';
+        if (tip) text += ' · ' + tip;
+        const w = Math.round(el.getBoundingClientRect().width);
+        const h = Math.round(el.getBoundingClientRect().height);
+        if (w || h) text += ' · ' + w + '×' + h;
+        return text;
+    }
+
+    function placeHighlight(el) {
+        if (!hl) return;
+        const show = !!(devOn() && hiMode && shiftDown && el && el.isConnected);
+        if (!show) {
+            hl.hidden = true;
+            lastTarget = null;
+            return;
+        }
+        // hl is on <html> (viewport fixed). Rects are already visual/client px.
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 && r.height <= 0) {
+            hl.hidden = true;
+            lastTarget = null;
+            return;
+        }
+        hl.hidden = false;
+        hl.style.left = Math.round(r.left) + 'px';
+        hl.style.top = Math.round(r.top) + 'px';
+        hl.style.width = Math.max(0, Math.round(r.width)) + 'px';
+        hl.style.height = Math.max(0, Math.round(r.height)) + 'px';
+        lastTarget = el;
+    }
+
+    function paint() {
+        raf = 0;
+        if (!ensure()) return;
+        const on = devOn();
+        screen.hidden = !on;
+        if (!on) {
+            if (lastKey !== '') {
+                lastKey = '';
+                if (label) label.textContent = '—';
+            }
+            placeHighlight(null);
+            return;
+        }
+        const prev = screen.style.visibility;
+        const hlPrev = hl ? hl.style.visibility : '';
+        screen.style.visibility = 'hidden';
+        if (hl) hl.style.visibility = 'hidden';
+        const raw = document.elementFromPoint(lastX, lastY);
+        screen.style.visibility = prev;
+        if (hl) hl.style.visibility = hlPrev;
+        const el = pickTarget(raw);
+        const key = el ? describe(el) : '—';
+        if (key !== lastKey) {
+            lastKey = key;
+            if (label) label.textContent = key;
+        }
+        placeHighlight(el);
+    }
+
+    function schedule(x, y) {
+        lastX = x;
+        lastY = y;
+        if (raf) return;
+        raf = requestAnimationFrame(paint);
+    }
+
+    document.addEventListener('pointermove', function (e) {
+        shiftDown = !!e.shiftKey;
+        schedule(e.clientX, e.clientY);
+    }, { passive: true, capture: true });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Shift') return;
+        shiftDown = true;
+        if (hiMode && devOn()) paint();
+    }, true);
+
+    document.addEventListener('keyup', function (e) {
+        if (e.key !== 'Shift') return;
+        shiftDown = false;
+        placeHighlight(null);
+    }, true);
+
+    window.addEventListener('blur', function () {
+        shiftDown = false;
+        placeHighlight(null);
+    });
+
+    // DevMode can flip without a pointer move (Shift+C); keep visibility in sync.
+    setInterval(function () {
+        if (!ensure()) return;
+        const on = devOn();
+        if (screen.hidden === on) {
+            screen.hidden = !on;
+            if (on) paint();
+            else {
+                if (label) { lastKey = ''; label.textContent = '—'; }
+                placeHighlight(null);
+            }
+        }
+        // Keep overlay glued if the target moves/resizes while Shift is held.
+        if (on && hiMode && shiftDown && lastTarget) placeHighlight(lastTarget);
+    }, 400);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensure);
+    } else {
+        ensure();
+    }
+})();
+
+
+/* --- js/core/profile-manager/item-upgrades.js --- */
+"use strict";
+
+// ProfileManager methods, split from profile-manager.js.
+// Per-item upgrades (EQUIPMENT tab): one specific weapon/defense/ability/
+// energy item id, independent of the category-wide MODULES levels
+// (moduleUpgrades). Each item holds several independently leveled stat
+// tracks (economyConfig.itemUpgradeTrackDefs), a free-to-switch fire mode
+// (weapons only, economyConfig.itemFireModes, unlocked by a track level),
+// and a free numeric fine-tune slider (0..1) biasing two of its stats.
+extendClass(ProfileManager, {
+    ITEM_UPGRADE_BUCKETS: ['weapons', 'defenses', 'abilities', 'energy'],
+
+    /** Raw per-item entry ({ tracks, mode, tune }), ensuring buckets exist first. */
+    _itemUpgradeEntry(bucket, itemId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return null;
+        this.ensureEconomyDefaults(p);
+        const b = String(bucket || '');
+        const id = String(itemId || '');
+        const bag = p.itemUpgrades && p.itemUpgrades[b];
+        if (!bag) return null;
+        if (!bag[id] || typeof bag[id] !== 'object') {
+            bag[id] = { tracks: {}, mode: 'single', tune: 0.5, tuneUnlocked: false };
+        }
+        return bag[id];
+    },
+
+    getItemTrackLevel(bucket, itemId, track, profile) {
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        if (!entry) return 0;
+        return Math.max(0, Math.round(Number(entry.tracks[track]) || 0));
+    },
+
+    /** Combined level across all tracks — used where a single display number is wanted. */
+    getItemUpgradeLevel(bucket, itemId, profile) {
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        if (!entry) return 0;
+        return Object.keys(entry.tracks).reduce((sum, t) => sum + Math.max(0, Math.round(Number(entry.tracks[t]) || 0)), 0);
+    },
+
+    /** Owned anywhere (station/ship storage) or currently equipped on any owned ship. */
+    _itemIsOwnedOrEquipped(profile, bucket, itemId) {
+        if (this._ownedStorageCount(profile, bucket, itemId) > 0) return true;
+        return this._equippedStorageCountAll(profile, bucket, itemId) > 0;
+    },
+
+    canPurchaseItemTrackUpgrade(bucket, itemId, track, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof economyConfig === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
+        }
+        this.ensureEconomyDefaults(p);
+        const b = String(bucket || '');
+        const id = String(itemId || '');
+        const trackDefs = economyConfig.itemUpgradeTrackDefs[b];
+        if (this.ITEM_UPGRADE_BUCKETS.indexOf(b) === -1 || !id || !trackDefs || !trackDefs[track]) {
+            return { ok: false, reason: 'INVALID' };
+        }
+        if (!this._itemIsOwnedOrEquipped(p, b, id)) {
+            return { ok: false, reason: 'NOT_OWNED' };
+        }
+        const level = this.getItemTrackLevel(b, id, track, p);
+        const max = trackDefs[track].maxLevel || 5;
+        if (level >= max) return { ok: false, reason: 'MAX LEVEL' };
+        const cost = economyConfig.getItemTrackUpgradeCost(b, id, track, level + 1);
+        if (!cost) return { ok: false, reason: 'INVALID' };
+        if (!economyConfig.canAfford(p.resources, cost)) {
+            return { ok: false, reason: 'RESOURCES', cost: cost, nextLevel: level + 1 };
+        }
+        return { ok: true, cost: cost, nextLevel: level + 1 };
+    },
+
+    purchaseItemTrackUpgrade(bucket, itemId, track) {
+        const profile = this.getActiveProfile();
+        if (!profile || typeof economyConfig === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
+        }
+        this.ensureEconomyDefaults(profile);
+        const check = this.canPurchaseItemTrackUpgrade(bucket, itemId, track, profile);
+        if (!check.ok) return check;
+        if (!this.spendResources(check.cost)) {
+            return { ok: false, reason: 'RESOURCES' };
+        }
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        entry.tracks[track] = check.nextLevel;
+        this.save();
+        return { ok: true, level: check.nextLevel };
+    },
+
+    /** Fire modes unlocked so far for this item (weapons only; other buckets have none yet). */
+    getAvailableItemModes(bucket, itemId, profile) {
+        if (bucket !== 'weapons' || typeof economyConfig === 'undefined' || !economyConfig.itemFireModes) return [];
+        return Object.keys(economyConfig.itemFireModes).filter((modeId) => {
+            const def = economyConfig.itemFireModes[modeId];
+            if (!def.unlockTrack) return true;
+            return this.getItemTrackLevel(bucket, itemId, def.unlockTrack, profile) >= (def.unlockLevel || 1);
+        });
+    },
+
+    getItemMode(bucket, itemId, profile) {
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        return (entry && entry.mode) || 'single';
+    },
+
+    /** Free to switch once unlocked — no resource cost. */
+    setItemMode(bucket, itemId, mode) {
+        const profile = this.getActiveProfile();
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        if (!entry) return { ok: false, reason: 'NO PROFILE' };
+        if (this.getAvailableItemModes(bucket, itemId, profile).indexOf(mode) === -1) {
+            return { ok: false, reason: 'LOCKED' };
+        }
+        entry.mode = mode;
+        this.save();
+        return { ok: true, mode: mode };
+    },
+
+    /** Fine-tune unlocked via one-time purchase on that item. */
+    isItemTuneUnlocked(bucket, itemId, profile) {
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        return !!(entry && entry.tuneUnlocked);
+    },
+
+    canPurchaseItemTuneUnlock(bucket, itemId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p || typeof economyConfig === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
+        }
+        this.ensureEconomyDefaults(p);
+        const b = String(bucket || '');
+        const id = String(itemId || '');
+        if (this.ITEM_UPGRADE_BUCKETS.indexOf(b) === -1 || !id || !economyConfig.itemTuneUnlock[b]) {
+            return { ok: false, reason: 'INVALID' };
+        }
+        if (!this._itemIsOwnedOrEquipped(p, b, id)) {
+            return { ok: false, reason: 'NOT_OWNED' };
+        }
+        if (this.isItemTuneUnlocked(b, id, p)) {
+            return { ok: false, reason: 'OWNED' };
+        }
+        const cost = economyConfig.getItemTuneUnlockCost(b);
+        if (!cost) return { ok: false, reason: 'INVALID' };
+        if (!economyConfig.canAfford(p.resources, cost)) {
+            return { ok: false, reason: 'RESOURCES', cost: cost };
+        }
+        return { ok: true, cost: cost };
+    },
+
+    purchaseItemTuneUnlock(bucket, itemId) {
+        const profile = this.getActiveProfile();
+        if (!profile || typeof economyConfig === 'undefined') {
+            return { ok: false, reason: 'NO PROFILE' };
+        }
+        this.ensureEconomyDefaults(profile);
+        const check = this.canPurchaseItemTuneUnlock(bucket, itemId, profile);
+        if (!check.ok) return check;
+        if (!this.spendResources(check.cost)) {
+            return { ok: false, reason: 'RESOURCES' };
+        }
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        entry.tuneUnlocked = true;
+        this.save();
+        return { ok: true };
+    },
+
+    getItemTune(bucket, itemId, profile) {
+        if (!this.isItemTuneUnlocked(bucket, itemId, profile)) return 0.5;
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        return entry ? Math.max(0, Math.min(1, Number(entry.tune))) : 0.5;
+    },
+
+    /** Free fine-tune slider (0..1) once unlocked — biases two of the item's stats against each other. */
+    setItemTune(bucket, itemId, value) {
+        const profile = this.getActiveProfile();
+        const entry = this._itemUpgradeEntry(bucket, itemId, profile);
+        if (!entry) return { ok: false, reason: 'NO PROFILE' };
+        if (!this.isItemTuneUnlocked(bucket, itemId, profile)) {
+            return { ok: false, reason: 'LOCKED' };
+        }
+        entry.tune = Math.max(0, Math.min(1, Number(value)));
+        this.save();
+        return { ok: true, tune: entry.tune };
+    },
+
+    /** Same progressive ramp as getModuleUpgradeBonuses, scoped to one item's own track levels. */
+    getItemUpgradeBonuses(bucket, itemId, profile) {
+        const p = profile || this.getActiveProfile();
+        const ramp = (lv, base, accel) => {
+            const n = Math.max(0, Math.round(Number(lv) || 0));
+            if (n <= 0) return 0;
+            let total = 0;
+            for (let i = 1; i <= n; i++) total += base + (i - 1) * accel;
+            return total;
+        };
+        const trackLevel = (track) => p ? this.getItemTrackLevel(bucket, itemId, track, p) : 0;
+        if (bucket === 'weapons') {
+            return {
+                damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
+                cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
+                rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015)
+            };
+        }
+        if (bucket === 'defenses') {
+            return {
+                capacityMul: 1 + ramp(trackLevel('capacity'), 0.055, 0.025),
+                harden: Math.min(0.25, ramp(trackLevel('harden'), 0.025, 0.01)),
+                regenMul: 1 + ramp(trackLevel('regen'), 0.07, 0.03)
+            };
+        }
+        // abilities / energy
+        return {
+            cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('cooldown'), 0.04, 0.015)),
+            potencyMul: 1 + ramp(trackLevel('potency'), 0.06, 0.025),
+            durationMul: 1 + ramp(trackLevel('duration'), 0.055, 0.02)
+        };
+    },
+});
+
+
+/* --- js/ui/home-station/render-equipment-item-detail.js --- */
+"use strict";
+
+// HomeStationUI methods, split from home-station.js.
+// EQUIPMENT row detail panel (opened via DETAILS toggle in
+// render-equipment-upgrades.js): independent stat tracks, weapon fire mode
+// (SINGLE/BURST/AUTO), and a free fine-tune slider.
+extendClass(HomeStationUI, {
+    /** One upgradable stat track line inside the detail panel. */
+    _renderItemTrackLine(bucket, id, track, meta, profile) {
+        const level = profileManager.getItemTrackLevel(bucket, id, track, profile);
+        const maxed = level >= meta.maxLevel;
+        const check = profileManager.canPurchaseItemTrackUpgrade(bucket, id, track, profile);
+        const cost = check.cost || (typeof economyConfig !== 'undefined' ? economyConfig.getItemTrackUpgradeCost(bucket, id, track, level + 1) : null);
+        let action;
+        if (maxed) {
+            action = '<span class="hs-muted hs-line-action">MAX</span>';
+        } else {
+            action = this.renderUpgradeOrBuyButton(
+                `data-item-track-up="${bucket}:${id}:${track}"`,
+                check,
+                cost,
+                profile
+            );
+        }
+        return `<div class="hs-line hs-shop-line hs-equip-track-line">` +
+            `<span class="hs-line-name"><span class="hs-line-text">` +
+            `<strong>${meta.label}</strong>` +
+            `<span class="hs-line-meta">${meta.desc} · L${level}/${meta.maxLevel}</span>` +
+            `</span></span>` +
+            (cost && !maxed ? this.renderCostGrid(cost, profile.resources || {}) : '<span class="hs-equip-cost-empty"></span>') +
+            action +
+            `</div>`;
+    },
+
+    /** Weapon-only fire-mode row: toggle buttons, locked until the mode's unlock track hits its level. */
+    _renderItemModeRow(bucket, id, profile) {
+        if (bucket !== 'weapons' || typeof economyConfig === 'undefined' || !economyConfig.itemFireModes) return '';
+        const current = profileManager.getItemMode(bucket, id, profile);
+        const available = profileManager.getAvailableItemModes(bucket, id, profile);
+        const trackDefs = economyConfig.itemUpgradeTrackDefs[bucket];
+        const buttons = Object.keys(economyConfig.itemFireModes).map((modeId) => {
+            const def = economyConfig.itemFireModes[modeId];
+            const unlocked = available.indexOf(modeId) !== -1;
+            const active = modeId === current;
+            const trackLabel = def.unlockTrack && trackDefs[def.unlockTrack] ? trackDefs[def.unlockTrack].label : '';
+            const lockNote = !unlocked && def.unlockTrack ? ` title="Needs ${trackLabel} L${def.unlockLevel}"` : ` title="${def.desc}"`;
+            return `<button class="action-button hs-equip-mode-btn${active ? ' is-active' : ''}${unlocked ? '' : ' is-locked'}" ` +
+                `data-item-mode="${bucket}:${id}:${modeId}" ${unlocked ? '' : 'disabled'}${lockNote}>${def.label}</button>`;
+        }).join('');
+        return `<div class="hs-equip-mode-row">` +
+            `<span class="hs-equip-mode-label">FIRE MODE</span>` +
+            `<span class="hs-equip-mode-btns">${buttons}</span>` +
+            `</div>`;
+    },
+
+    /** 0..1 fine-tune slider — purchasable unlock per part, then free to adjust. */
+    _renderItemTuneRow(bucket, id, profile) {
+        const unlock = (typeof economyConfig !== 'undefined' && economyConfig.itemTuneUnlock)
+            ? economyConfig.itemTuneUnlock[bucket]
+            : null;
+        const labels = (unlock && unlock.labels) || {
+            weapons: ['RATE OF FIRE', 'DAMAGE'],
+            defenses: ['REGEN', 'CAPACITY'],
+            abilities: ['COOLDOWN', 'POTENCY'],
+            energy: ['COOLDOWN', 'POTENCY']
+        }[bucket] || ['', ''];
+        const unlocked = profileManager.isItemTuneUnlocked(bucket, id, profile);
+        if (!unlocked) {
+            const check = profileManager.canPurchaseItemTuneUnlock(bucket, id, profile);
+            const cost = check.cost || (typeof economyConfig !== 'undefined' ? economyConfig.getItemTuneUnlockCost(bucket) : null);
+            return `<div class="hs-line hs-shop-line hs-equip-track-line hs-equip-tune-unlock">` +
+                `<span class="hs-line-name"><span class="hs-line-text">` +
+                `<strong>FINE TUNE</strong>` +
+                `<span class="hs-line-meta">${labels[0]} ↔ ${labels[1]} · LOCKED</span>` +
+                `</span></span>` +
+                (cost ? this.renderCostGrid(cost, profile.resources || {}) : '<span class="hs-equip-cost-empty"></span>') +
+                this.renderUpgradeOrBuyButton(
+                    `data-item-tune-unlock="${bucket}:${id}"`,
+                    check,
+                    cost,
+                    profile
+                ) +
+                `</div>`;
+        }
+        const tune = Math.round(profileManager.getItemTune(bucket, id, profile) * 100);
+        return `<div class="hs-equip-tune">` +
+            `<span class="hs-equip-tune-label">${labels[0]}</span>` +
+            `<input type="range" min="0" max="100" step="1" value="${tune}" data-item-tune="${bucket}:${id}">` +
+            `<span class="hs-equip-tune-label">${labels[1]}</span>` +
+            `</div>`;
+    },
+
+    /** Expanded EQUIPMENT row: independent stat tracks + (weapons) fire mode + fine-tune slider. */
+    renderEquipmentItemDetail(bucket, id, profile) {
+        if (typeof economyConfig === 'undefined' || typeof profileManager === 'undefined') return '';
+        const trackDefs = economyConfig.itemUpgradeTrackDefs[bucket];
+        if (!trackDefs) return '';
+        const tracks = Object.keys(trackDefs).map((track) => this._renderItemTrackLine(bucket, id, track, trackDefs[track], profile)).join('');
+        return `<div class="hs-equip-detail">` +
+            tracks +
+            this._renderItemModeRow(bucket, id, profile) +
+            this._renderItemTuneRow(bucket, id, profile) +
+            `</div>`;
+    },
+});
+
+
+/* --- js/ui/home-station/render-equipment-upgrades.js --- */
+"use strict";
+
+// HomeStationUI methods, split from home-station.js.
+// UPGRADE → EQUIPMENT: station/ship inventory grids for the active ship.
+// Equipped parts appear in SHIP STORAGE; select a cell for upgrades/unequip.
+extendClass(HomeStationUI, {
+    /** bucket (weapons/defenses/abilities/energy) -> kind arg expected by shipLoadoutManager. */
+    _itemBucketKind(bucket) {
+        return bucket === 'weapons' ? 'weapon'
+            : bucket === 'defenses' ? 'defense'
+                : bucket === 'energy' ? 'energy' : 'ability';
+    },
+
+    /** Whether the active ship currently has this item mounted. */
+    _itemIsEquippedOnShip(shipId, bucket, id) {
+        if (typeof shipLoadoutManager === 'undefined' || !shipId || !id) return false;
+        const L = shipLoadoutManager.getLoadout(shipId);
+        if (!L) return false;
+        if (bucket === 'weapons') {
+            return (L.weaponSlots || L.weapons || []).indexOf(id) !== -1;
+        }
+        return (L[bucket] || []).indexOf(id) !== -1;
+    },
+
+    /** Selected storage item: header + DETAILS upgrades + move/unequip actions.
+     *  Empty state when no part is selected in STATION/SHIP STORAGE. */
+    renderSelectedEquipItem(profile, shipId) {
+        const key = this.expandedEquipItem;
+        const wrap = (body) => `<div class="hs-panel hs-equip-col hs-equip-selected">` +
+            this.panelTitle('hsHangar', 'SELECTED') + body + `</div>`;
+        if (!key || key.indexOf(':') === -1) {
+            return wrap(this.emptyHtml('hsHangar', 'SELECT A PART'));
+        }
+        const sep = key.indexOf(':');
+        const bucket = key.slice(0, sep);
+        const id = key.slice(sep + 1);
+        if (!bucket || !id || bucket === 'blueprints') {
+            return wrap(this.emptyHtml('hsHangar', 'SELECT A PART'));
+        }
+        const meta = this._storageItemMeta(bucket, id);
+        const level = (typeof profileManager !== 'undefined') ? profileManager.getItemUpgradeLevel(bucket, id, profile) : 0;
+        const trackDefs = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs)
+            ? economyConfig.itemUpgradeTrackDefs[bucket]
+            : null;
+        const maxLevel = trackDefs
+            ? Object.keys(trackDefs).reduce((sum, t) => sum + (trackDefs[t].maxLevel || 5), 0)
+            : ((typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeMaxLevel) || 5);
+        const equipped = this._itemIsEquippedOnShip(shipId, bucket, id);
+        const kind = this._itemBucketKind(bucket);
+        const stationQty = profileManager.getStationStorageQty(profile, bucket, id);
+        const shipQty = profileManager.getShipStorageQty(profile, shipId, bucket, id);
+        let actionHtml = '';
+        if (equipped) {
+            actionHtml += `<button class="action-button hs-line-action hs-equip-unequip" data-item-unequip="${shipId}|${kind}|${id}" title="Unequip">UNEQUIP</button>`;
+        }
+        if (stationQty > 0 && shipId) {
+            actionHtml += `<button class="action-button hs-line-action" data-move-to-ship="${bucket}:${id}" data-ship="${shipId}">TO SHIP</button>`;
+        }
+        if (shipQty > 0) {
+            actionHtml += `<button class="action-button hs-line-action" data-move-to-station="${bucket}:${id}" data-ship="${shipId}">TO STATION</button>`;
+        }
+        const where = equipped ? 'EQUIPPED' : (stationQty > 0 && shipQty <= 0 ? 'STATION' : 'SHIP');
+        return wrap(
+            `<div class="hs-line hs-shop-line hs-equip-line is-expanded">` +
+            `<span class="hs-line-name">` +
+            `<span class="hs-chip-icon">${meta.icon}</span>` +
+            `<span class="hs-line-text">` +
+            `<strong>${meta.label}</strong>` +
+            `<span class="hs-line-meta">L${level}/${maxLevel} · ${where}</span>` +
+            `</span></span>` +
+            `<span class="hs-line-actions">${actionHtml}</span>` +
+            `</div>` +
+            this.renderEquipmentItemDetail(bucket, id, profile)
+        );
+    },
+
+    /** UPGRADE tab → EQUIPMENT: active ship + station/ship inventory (+ selected part detail). */
+    renderEquipmentUpgrades(profile) {
+        if (typeof shipLoadoutManager === 'undefined' || typeof profileManager === 'undefined') {
+            return '<p class="hs-muted">Equipment management unavailable.</p>';
+        }
+        const owned = profile.ownedShipIds || [];
+        if (!owned.length) return this.emptyHtml('hsShip', 'NO SHIPS OWNED');
+
+        const shipId = (profile.activeShipId && owned.indexOf(profile.activeShipId) !== -1)
+            ? profile.activeShipId
+            : owned[0];
+        const shipPicker = owned.length > 1
+            ? `<div class="hs-equip-ship-pick">` + owned.map((id) => {
+                const on = id === shipId;
+                return `<button type="button" class="action-button hs-equip-ship-btn${on ? ' is-active' : ''}" ` +
+                    `data-select-ship="${id}" data-nav-item${on ? ' aria-current="true"' : ''}>` +
+                    `${this.shipName(id)}</button>`;
+            }).join('') + `</div>`
+            : '';
+
+        const selected = this.renderSelectedEquipItem(profile, shipId);
+
+        return `<div class="hs-equip-ship">` +
+            shipPicker +
+            `<div class="hs-equip-cols">` +
+            `<div class="hs-equip-inv">` +
+            `<div class="hs-panel hs-equip-col hs-panel-storage">` +
+            this.panelTitle('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile)) +
+            `<div class="hs-row">${this.renderStationStorage(profile, { selectKey: this.expandedEquipItem })}</div>` +
+            `</div>` +
+            `<div class="hs-panel hs-equip-col hs-panel-storage">` +
+            this.panelTitle('hsShip', 'SHIP STORAGE') +
+            `<div class="hs-row">${this.renderShipStorage(profile, shipId, { selectKey: this.expandedEquipItem })}</div>` +
+            `</div>` +
+            `</div>` +
+            selected +
+            `</div>` +
+            `</div>`;
+    },
+});
+
+
+/* --- js/core/gamepad/cursor.js --- */
+"use strict";
+
+/**
+ * Animated gamepad menu cursor: a HUD frame that jumps between focused buttons
+ * when the controller drives navigation. Mouse/pen input hides it again.
+ */
+(function () {
+    const PAD = 6;
+    const HIDE_MS = 280;
+    const LERP = 0.28;
+    const SNAP = 0.6;
+
+    function GamepadCursor() {
+        this.el = null;
+        this.active = false;
+        this.target = null;
+        this.raf = 0;
+        this.hideTimer = 0;
+        this.x = 0;
+        this.y = 0;
+        this.w = 0;
+        this.h = 0;
+        this.hasPos = false;
+        this.reduceMotion = false;
+        try {
+            this.reduceMotion = !!(window.matchMedia
+                && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) { /* ignore */ }
+        this._bindInput();
+    }
+
+    GamepadCursor.prototype._bindInput = function () {
+        const self = this;
+        document.addEventListener('pointerdown', function (e) {
+            if (e.pointerType === 'mouse' || e.pointerType === 'pen') self.markPointer();
+        }, true);
+        document.addEventListener('mousemove', function (e) {
+            // Only real mouse deltas dismiss the cursor (ignore synthetic 0,0).
+            if (e.movementX || e.movementY) self.markPointer();
+        }, { passive: true, capture: true });
+    };
+
+    GamepadCursor.prototype.ensure = function () {
+        if (this.el && document.body.contains(this.el)) return this.el;
+        const el = document.createElement('div');
+        el.className = 'vf-gp-cursor';
+        el.setAttribute('aria-hidden', 'true');
+        el.innerHTML = '<i></i><i></i><i></i><i></i>';
+        document.body.appendChild(el);
+        this.el = el;
+        return el;
+    };
+
+    GamepadCursor.prototype.markGamepad = function () {
+        this.active = true;
+        if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = 0; }
+        const focused = document.querySelector('.nav-focused')
+            || (document.activeElement && document.activeElement !== document.body
+                ? document.activeElement : null);
+        if (focused) this.follow(focused);
+        else this._showIdle();
+        this._kick();
+    };
+
+    GamepadCursor.prototype.markPointer = function () {
+        if (!this.active) return;
+        this.active = false;
+        this.target = null;
+        this._fadeOut();
+    };
+
+    GamepadCursor.prototype.follow = function (el) {
+        if (!el || !el.getBoundingClientRect) return;
+        if (!this.active) return;
+        this.target = el;
+        this.ensure().classList.add('is-on', 'is-jump');
+        this._kick();
+    };
+
+    GamepadCursor.prototype._showIdle = function () {
+        const el = this.ensure();
+        el.classList.add('is-on');
+        el.classList.remove('is-jump');
+    };
+
+    GamepadCursor.prototype._fadeOut = function () {
+        const el = this.el;
+        if (!el) return;
+        el.classList.remove('is-jump');
+        el.classList.add('is-out');
+        const self = this;
+        if (this.hideTimer) clearTimeout(this.hideTimer);
+        this.hideTimer = setTimeout(function () {
+            self.hideTimer = 0;
+            if (self.active) return;
+            el.classList.remove('is-on', 'is-out');
+            self.hasPos = false;
+        }, HIDE_MS);
+    };
+
+    GamepadCursor.prototype._kick = function () {
+        if (this.raf) return;
+        const self = this;
+        this.raf = requestAnimationFrame(function tick() {
+            self.raf = 0;
+            if (!self.active) return;
+            self._paint();
+            self.raf = requestAnimationFrame(tick);
+        });
+    };
+
+    GamepadCursor.prototype._resolveTarget = function () {
+        if (this.target && document.body.contains(this.target)
+            && this.target.classList.contains('nav-focused')) {
+            return this.target;
+        }
+        const focused = document.querySelector('.nav-focused');
+        if (focused) {
+            this.target = focused;
+            return focused;
+        }
+        const ae = document.activeElement;
+        if (ae && ae !== document.body && ae.getBoundingClientRect) {
+            this.target = ae;
+            return ae;
+        }
+        return null;
+    };
+
+    GamepadCursor.prototype._paint = function () {
+        const el = this.ensure();
+        if (this.el.classList.contains('is-out') && !this.active) return;
+        const target = this._resolveTarget();
+        if (!target) return;
+        const r = target.getBoundingClientRect();
+        if (r.width <= 0 && r.height <= 0) return;
+        const tx = r.left - PAD;
+        const ty = r.top - PAD;
+        const tw = r.width + PAD * 2;
+        const th = r.height + PAD * 2;
+        if (!this.hasPos || this.reduceMotion) {
+            this.x = tx; this.y = ty; this.w = tw; this.h = th;
+            this.hasPos = true;
+        } else {
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dw = tw - this.w;
+            const dh = th - this.h;
+            const dist = Math.abs(dx) + Math.abs(dy) + Math.abs(dw) + Math.abs(dh);
+            const k = dist > 180 ? Math.min(1, LERP * 1.8) : LERP;
+            this.x += dx * k;
+            this.y += dy * k;
+            this.w += dw * k;
+            this.h += dh * k;
+            if (dist < SNAP) {
+                this.x = tx; this.y = ty; this.w = tw; this.h = th;
+                el.classList.remove('is-jump');
+            } else {
+                el.classList.add('is-jump');
+            }
+        }
+        el.style.transform = 'translate(' + this.x.toFixed(1) + 'px,' + this.y.toFixed(1) + 'px)';
+        el.style.width = this.w.toFixed(1) + 'px';
+        el.style.height = this.h.toFixed(1) + 'px';
+    };
+
+    const gamepadCursor = new GamepadCursor();
+    window.gamepadCursor = gamepadCursor;
+})();
 

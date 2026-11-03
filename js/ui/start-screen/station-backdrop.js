@@ -883,7 +883,9 @@ class StartStationBackdrop {
 // found. RESET in dev mode returns to these, not to a bare identity transform.
 StartStationBackdrop.DEFAULT_ADJUST = {
     station: { dx: 0, dy: 0, scale: 1 },
-    ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 2.7447264773653126 },
+    // Keep the docked ship a small accent next to the station — 2.7× made it
+    // fill most of the voidborn core / station hit box on a normal window.
+    ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 1.25 },
     planet: { dx: 0, dy: 0, scale: 1 }
 };
 

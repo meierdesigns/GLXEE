@@ -6,6 +6,7 @@ extendClass(InputHandler, {
         this.keys[event.key] = false;
 
         if (event.key === ' ') {
+            this.keys['Space'] = false;
             if (typeof bulletManager !== 'undefined' && typeof playerManager !== 'undefined') {
                 const mode = bulletManager.getFireMode ? bulletManager.getFireMode() : 'auto';
                 if (mode === 'charge' && bulletManager.isCharging && this.isCombatEnded()) {

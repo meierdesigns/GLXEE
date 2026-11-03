@@ -22,6 +22,7 @@ extendClass(EconomyConfig, {
         stats.resourceCap = Math.max(1, Math.round(stats.resourceCap));
         stats.cargoCap = Math.max(1, Math.round(stats.cargoCap));
         stats.shipSlots = Math.max(1, Math.round(stats.shipSlots));
+        stats.storageSlots = Math.max(8, Math.round(stats.storageSlots || 12));
         stats.craftDiscount = Math.max(0, Math.min(0.7, Number(stats.craftDiscount) || 0));
         stats.dropBonus = Math.max(0, Math.min(0.4, Number(stats.dropBonus) || 0));
         stats.impulseDrive = Math.max(0, Math.round(stats.impulseDrive || 0));

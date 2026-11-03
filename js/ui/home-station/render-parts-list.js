@@ -23,7 +23,7 @@ extendClass(HomeStationUI, {
             const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(id) : id;
             const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
             const kind = (bp && bp.kind) || 'weapon';
-            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: 'BP ' + name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
+            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
         }
         if (bucket === 'weapons') {
             const name = (typeof weaponConfigManager !== 'undefined')
@@ -69,7 +69,7 @@ extendClass(HomeStationUI, {
         const cap = Math.max(1, stats.resourceCap || 80);
         const baseCap = (typeof economyConfig !== 'undefined' && economyConfig.stationBaseStats && economyConfig.stationBaseStats.resourceCap) || 80;
         const upgradeScale = Math.max(1, cap / baseCap);
-        const width = Math.round(Math.min(88, 55 * Math.min(1.5, Math.sqrt(upgradeScale))));
+        const width = Math.round(Math.min(95, 80 * Math.min(1.5, Math.sqrt(upgradeScale))));
         const map = (profile && profile.resources) || {};
         const cells = ids.map((id) => {
             const n = map[id] || 0;
@@ -78,11 +78,15 @@ extendClass(HomeStationUI, {
             const color = (typeof economyConfig !== 'undefined' && economyConfig.resourceColors && economyConfig.resourceColors[id]) || 'var(--color-primary)';
             const full = n >= cap ? ' is-full' : '';
             const empty = n <= 0 ? ' is-empty' : '';
+            // Default capacity Grenze at the top of the glass; lower only after store upgrades.
+            const capMarkPct = Math.max(1, Math.min(100, Math.round((baseCap / cap) * 100)));
             // Generative silo casing with the resource chunks piled up to the fill level baked in.
-            const casing = (typeof physicalItem !== 'undefined') ? physicalItem.wrapChamber(id, 48, 140, color, pct) : '';
+            const casing = (typeof physicalItem !== 'undefined')
+                ? physicalItem.wrapChamber(id, 48, 140, color, pct, capMarkPct)
+                : '';
             return `<div class="hs-res-subcard${full}${empty}" style="--chamber-c:${color}" title="${label} ${n}/${cap}">` +
                 `<span class="hs-res-chamber-tag">` +
-                `<span class="hs-res-chamber-icon">${this.iconHtml(this.resourceIconKey(id), 24, 'hs-pixel')}</span>` +
+                `<span class="hs-res-chamber-icon" aria-hidden="true">${this.iconHtml(this.resourceIconKey(id), 12, 'hs-pixel hs-pixel-12', false)}</span>` +
                 `<span class="hs-res-chamber-label">${label}</span>` +
                 `</span>` +
                 `<span class="hs-res-chamber-tube" style="--tube-w:${width}%">${casing}</span>` +
@@ -116,9 +120,18 @@ extendClass(HomeStationUI, {
     /** Grid footprint [w, h] in slots for a bucket/id item, same sizing the hangar bay-inventory grid uses. */
     _storageItemSpan(bucket, id) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
-        if (!slm || !slm.getPartSizeLevel || bucket === 'blueprints') return [1, 1];
-        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
-        const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, id) | 0));
+        if (!slm || !slm.getPartSizeLevel) return [1, 1];
+        let kind, partId;
+        if (bucket === 'blueprints') {
+            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
+            if (!bp) return [1, 1];
+            kind = bp.kind;
+            partId = bp.id;
+        } else {
+            kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
+            partId = id;
+        }
+        const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, partId) | 0));
         return [[1, 1], [1, 2], [2, 2]][lv];
     },
 
@@ -128,32 +141,75 @@ extendClass(HomeStationUI, {
         return (slm && slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : null) || { cols: 4, rows: 2 };
     },
 
-    /** Station storage's own grid shape — always at least 10x4, independent of any ship, growing rows if it holds more than that. */
-    STATION_STORAGE_COLS: 10,
-    STATION_STORAGE_ROWS: 4,
-    _stationStorageGrid(entryCount) {
-        const cols = this.STATION_STORAGE_COLS;
-        const rows = Math.max(this.STATION_STORAGE_ROWS, Math.ceil(entryCount / cols));
-        return { cols, rows };
+    /** Max columns the station bay ever reaches — also the cell-size reference so ship storage matches. */
+    STATION_STORAGE_COLS: 14,
+
+    /** Profile-backed bay capacity (empty slots + filled). Fresh stations start small. */
+    _stationStorageSlots(profile) {
+        const stats = (typeof profileManager !== 'undefined' && profile)
+            ? profileManager.getStationStats(profile)
+            : null;
+        const n = stats && stats.storageSlots != null ? stats.storageSlots : 12;
+        return Math.max(8, Math.round(n) || 12);
     },
 
-    /** Item cells padded out to fill cols x rows with empty cells. Cell size (--cs) is pinned to the station storage grid's 10-column
-     *  width so ship storage — a smaller grid in the same panel — uses the exact same slot size instead of stretching to fill its row. */
+    /** How many bay cells station-filed items currently occupy. */
+    _stationStorageUsed(profile) {
+        if (!profile || typeof profileManager === 'undefined') return 0;
+        return this._allStorageEntries(profile).reduce((n, e) => {
+            if (profileManager.getStationStorageQty(profile, e.bucket, e.id) <= 0) return n;
+            const span = this._storageItemSpan(e.bucket, e.id);
+            return n + span[0] * span[1];
+        }, 0);
+    },
+
+    /** Title suffix like "3/12" for the station bay panel. */
+    stationStorageLabel(profile) {
+        const used = this._stationStorageUsed(profile);
+        const cap = this._stationStorageSlots(profile);
+        return used + '/' + cap;
+    },
+
+    /** Turn a slot budget into a compact cols×rows bay (grows wider first, then taller). */
+    _stationStorageGrid(profile, usedCells) {
+        const budget = Math.max(this._stationStorageSlots(profile), usedCells | 0);
+        let cols;
+        let rows;
+        if (budget <= 12) { cols = 6; rows = 2; }
+        else if (budget <= 16) { cols = 8; rows = 2; }
+        else if (budget <= 20) { cols = 10; rows = 2; }
+        else if (budget <= 28) { cols = 14; rows = 2; }
+        else if (budget <= 42) { cols = 14; rows = 3; }
+        else {
+            cols = this.STATION_STORAGE_COLS;
+            rows = Math.max(4, Math.ceil(budget / cols));
+        }
+        // If items overfill the budget, grow rows so nothing is clipped.
+        if (usedCells > cols * rows) rows = Math.ceil(usedCells / cols);
+        return { cols, rows, slots: budget };
+    },
+
+    /** Shared square slot size for every station/ship storage bay (px). */
+    STORAGE_CELL_PX: 48,
+
+    /** Item cells padded out to fill cols x rows. Slot size is a fixed shared px value so
+     *  ship storage and station storage always match (no per-column container shrink). */
     _storageGridHtml(cellSpecs, grid) {
         const capacity = grid.cols * grid.rows;
         const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
         const pad = Math.max(0, capacity - used);
-        const baseCols = this.STATION_STORAGE_COLS;
-        // cqw (not %) — the host row is a size container (part-07.css), so this stays the same
-        // physical cell size whether it ends up sizing a column (width) or a row (height).
-        const csExpr = `min(56px, calc((${100 / baseCols}cqw) - ${(baseCols - 1) * 4 / baseCols}px))`;
         const cells = cellSpecs.map((c) => c.html.replace('__SPAN__', `grid-column: span ${c.span[0]}; grid-row: span ${c.span[1]};`));
-        return `<div class="hs-storage-grid" style="--cs: ${csExpr}; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, var(--cs)); grid-template-rows: repeat(${grid.rows}, var(--cs)); width: calc(${grid.cols} * var(--cs) + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * var(--cs) + ${grid.rows - 1} * 4px)">` +
+        const cs = this.STORAGE_CELL_PX;
+        return `<div class="hs-storage-grid" style="--cs:${cs}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * 4px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
-    /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles. */
-    renderStationStorage(profile) {
+    /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles.
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+    renderStationStorage(profile, opts) {
+        opts = opts || {};
+        const selectMode = opts.selectKey !== undefined;
+        const selectKey = opts.selectKey || null;
         const entries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
         const activeShipId = profile.activeShipId;
         const cells = entries.map((e) => {
@@ -168,24 +224,34 @@ extendClass(HomeStationUI, {
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
             const isBp = e.bucket === 'blueprints';
-            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-ship="${e.bucket}:${e.id}" data-ship="${activeShipId}"`;
+            const key = e.bucket + ':' + e.id;
+            const selected = selectMode && selectKey === key;
+            const action = isBp ? `data-craft="${e.id}"`
+                : (selectMode
+                    ? `data-equip-select="${key}"`
+                    : `data-move-to-ship="${key}" data-ship="${activeShipId}"`);
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
-            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to ship storage`;
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}`
+                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to ship storage`);
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
-                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
                 `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
             return { html, span };
         });
-        return this._storageGridHtml(cells, this._stationStorageGrid(cells.reduce((n, c) => n + c.span[0] * c.span[1], 0)));
+        const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        return this._storageGridHtml(cells, this._stationStorageGrid(profile, used));
     },
 
-    /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles. */
-    renderShipStorage(profile, shipId) {
+    /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles.
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+    renderShipStorage(profile, shipId, opts) {
+        opts = opts || {};
+        const selectMode = opts.selectKey !== undefined;
+        const selectKey = opts.selectKey || null;
         const grid = this._storageGrid(shipId);
         if (!shipId) return this._storageGridHtml([], grid);
         const entry = profileManager.getShipStorageEntry(profile, shipId);
@@ -222,15 +288,20 @@ extendClass(HomeStationUI, {
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
             const isBp = e.bucket === 'blueprints';
-            const action = isBp ? `data-craft="${e.id}"` : `data-move-to-station="${e.bucket}:${e.id}" data-ship="${shipId}"`;
+            const key = e.bucket + ':' + e.id;
+            const selected = selectMode && selectKey === key;
+            const action = isBp ? `data-craft="${e.id}"`
+                : (selectMode
+                    ? `data-equip-select="${key}"`
+                    : `data-move-to-station="${key}" data-ship="${shipId}"`);
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
-            const ariaLabel = isBp ? `Craft ${meta.label}` : `Move ${meta.label} to station storage`;
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            const ariaLabel = isBp ? `Craft ${meta.label}`
+                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
-                `data-ui-tip="${tip}" aria-label="${ariaLabel}">` +
+                `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${isBp ? '<span class="hs-storage-cell-bp-badge">BP</span>' : ''}` +
                 `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
             return { html, span };

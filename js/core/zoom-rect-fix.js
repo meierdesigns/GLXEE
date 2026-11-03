@@ -26,13 +26,19 @@
         }
         return z;
     }
-    // Visual px per CSS px inside `el`: CSS zoom plus the station's transform scale (.home-station-content, --hs-z).
+    // Visual px per CSS px inside `el`: CSS zoom plus the station glass-scale host
+    // (.vf-browser-shell, or a direct .home-station-content) via --hs-z.
     function effectiveZoom(el) {
         let z = cssZoom(el);
         for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
-            if (n.classList && n.classList.contains('home-station-content')) {
+            if (!n.classList) continue;
+            if (n.classList.contains('vf-browser-shell')
+                || n.classList.contains('home-station-content')) {
                 const v = parseFloat(getComputedStyle(n).getPropertyValue('--hs-z'));
-                if (Number.isFinite(v) && v > 0) z *= v;
+                if (Number.isFinite(v) && v > 0) {
+                    z *= v;
+                    break; // one host only — content inherits --hs-z from the shell
+                }
             }
         }
         return z;

@@ -297,22 +297,66 @@ html body .hs-craft-line .hs-craft-go { width: 120px !important; min-width: 120p
 .hs-craft-ship { display: grid; place-items: center; width: 96px; height: 96px; flex: 0 0 96px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent); background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, #05060a), #05060a 75%); }
 .hs-craft-ship img { max-width: 84px; max-height: 84px; image-rendering: pixelated; }
 
-/* Ship table stats: larger values, smaller icons. */
-html body .hs-ship-table .hs-ship-stat-ico { height: 22px; }
-html body .hs-ship-table .hs-ship-stat-ico img { width: 20px !important; height: 20px !important; }
-html body .hs-ship-table .hs-ship-stat b { font-size: 24px !important; margin-top: 4px; line-height: 1.1; }
+/* Ship table: stats sit in one horizontal row above the ship name label. */
+html body .hs-ship-table .hs-ship-table-name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+html body .hs-ship-table .hs-ship-stats {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px 14px;
+    width: max-content;
+    max-width: 100%;
+    order: -1;
+}
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    text-align: left;
+}
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+    flex: 0 0 auto;
+}
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico img {
+    width: 1em !important;
+    height: 1em !important;
+    image-rendering: pixelated;
+}
+html body .hs-ship-table .hs-ship-stats .hs-ship-stat b {
+    display: inline;
+    margin: 0;
+    font-size: var(--font-text);
+    line-height: 1;
+    color: var(--stat, var(--color-text, #fff));
+    text-shadow: 0 0 6px color-mix(in srgb, var(--stat, #fff) 45%, transparent);
+}
+html body .hs-ship-table .hs-ship-table-name strong {
+    display: block;
+    line-height: 1.15;
+}
+html body .hs-ship-table .hs-ship-table-name > span {
+    display: block;
+    line-height: 1.15;
+}
 
-/* Ship table stats: icon left of a small value, two rows (3 + 2). */
-html body .hs-ship-table .hs-ship-stats { display: grid; grid-template-columns: repeat(3, auto); gap: 10px 22px; justify-content: start; align-items: center; width: auto; text-align: left; }
-html body .hs-ship-table .hs-ship-stats .hs-ship-stat { display: inline-flex; align-items: center; gap: 8px; width: auto; text-align: left; }
-html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico { height: auto; }
-html body .hs-ship-table .hs-ship-stats .hs-ship-stat-ico img { width: 24px; height: 24px; }
-html body .hs-ship-table .hs-ship-stats .hs-ship-stat b { display: inline; margin: 0; font-size: var(--font-text); }
-
-/* Responsive ship tables: the stat grid narrows, then hides (values stay in the row tooltip). */
+/* Responsive ship tables: stats stay one row, then hide (values stay in the row tooltip). */
 *:has(> .hs-ship-table) { container-type: inline-size; container-name: shiptbl; }
 @container shiptbl (max-width: 640px) {
-    .hs-ship-table .hs-ship-stats { grid-template-columns: repeat(2, auto) !important; gap: 8px 16px !important; }
+    .hs-ship-table .hs-ship-stats { gap: 6px 10px !important; }
     .hs-ship-table .hs-ship-table-name strong { font-size: 20px !important; }
 }
 @container shiptbl (max-width: 460px) {
@@ -372,15 +416,61 @@ html body .hs-menu-profile-row.is-active {
 html body .hs-explore-cluster-title { font-size: 28px !important; letter-spacing: 5px; padding-left: 24px !important; padding-bottom: 10px; }
 
 /* Ship table rows flow instead of switching layouts: thumb | name | stats | buttons wrap one after another as the panel narrows. */
-.hs-ship-table, .hs-ship-table tbody { display: block; width: 100%; }
+.hs-ship-table { display: block; width: 100%; }
+.hs-ship-table tbody:not(.hs-ship-card) { display: block; width: 100%; }
 .hs-ship-table thead { display: none; }
 .hs-ship-table tr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 8px; border-bottom: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 18%, transparent); }
 .hs-ship-table td { display: block; padding: 0 !important; height: auto !important; border: 0 !important; min-width: 0; }
 .hs-ship-table td.hs-ship-table-thumb { flex: 0 0 auto; width: auto !important; }
 .hs-ship-table td.hs-ship-table-name { flex: 1 1 150px; }
-.hs-ship-table td:has(.hs-ship-stats) { flex: 0 1 auto; }
 .hs-ship-table td.hs-ship-table-action { flex: 0 0 auto; margin-left: auto; display: flex; gap: 8px; }
 .hs-ship-table .hs-ship-icon-btn { width: 48px !important; height: 48px !important; margin-left: 0 !important; }
+
+/* Owned-ship card: info | storage side-by-side; stack when the ships panel is tight. */
+.hs-ship-table tbody.hs-ship-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: stretch;
+    gap: 0 18px;
+    width: 100%;
+    padding: 6px 10px;
+    box-sizing: border-box;
+}
+.hs-ship-table tbody.hs-ship-card > tr:not(.hs-ship-storage-row) {
+    padding: 8px 4px;
+    border-bottom: 0 !important;
+    min-width: 0;
+}
+.hs-ship-table tbody.hs-ship-card > .hs-ship-storage-row {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-self: start;
+    gap: 0;
+    padding: 8px 2px 8px 16px;
+    margin: 4px 0;
+    border-bottom: 0 !important;
+    border-left: 0;
+}
+.hs-ship-table tbody.hs-ship-card .hs-ship-storage-row td { width: 100%; }
+.hs-ship-table tbody.hs-ship-card .hs-ship-storage-caption {
+    font-size: var(--font-text);
+    letter-spacing: 0.12em;
+    opacity: 0.75;
+    padding: 0 0 8px;
+}
+@container shiptbl (max-width: 580px) {
+    .hs-ship-table tbody.hs-ship-card {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+    .hs-ship-table tbody.hs-ship-card > .hs-ship-storage-row {
+        border-left: 0;
+        border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+        padding: 10px 4px 6px;
+        margin: 0;
+    }
+}
 
 /* Locked planet hint: boxed, larger, with a JUMP TO button. */
 html body .galaxy-map-panel-select .gm-detail .gm-unlock-hint:not(:empty) { display: flex; flex-direction: column; gap: 12px; align-items: stretch; margin-top: 10px; padding: 14px 16px; border: var(--ui-border-width, 2px) solid color-mix(in srgb, #ff9b54 55%, transparent); background: rgba(255, 155, 84, 0.08); font: bold var(--font-h2, 16px) var(--ui-font-family, monospace); letter-spacing: 2px; }
@@ -492,7 +582,10 @@ html body .profile-selection-name-mode .profile-name-gen {
 /* Pirate ambush: bigger card with event art; EVADE left / FIGHT right, same size. */
 .gm-ambush-card { width: min(560px, 92%); max-width: none; padding: 22px 28px; }
 .gm-ambush-art { display: flex; justify-content: center; margin-bottom: 10px; filter: drop-shadow(0 0 12px rgba(255, 90, 60, 0.7)); }
-.gm-ambush-art img { width: 112px !important; height: 112px !important; image-rendering: pixelated; }
+/* Rendered oversampled (see flight-travel.js showAmbush, EMBLEM_OVERSAMPLE) and smooth-downscaled
+   here: a true 1:1 pixelated render beats against the global scanline overlay (moiré), showing up
+   as a grid baked into the icon — same fix as .pfc-crest img above. */
+.gm-ambush-art img { width: 112px !important; height: 112px !important; max-width: 112px !important; max-height: 112px !important; object-fit: contain; image-rendering: auto !important; }
 .gm-ambush-title { font-size: 22px; margin-bottom: 10px; }
 .gm-ambush-card p { font-size: 16px; line-height: 1.5; margin-bottom: 18px; }
 .gm-ambush-actions { flex-wrap: nowrap; }
@@ -1486,10 +1579,10 @@ html body .vf-debug-script output {
 /* Settings: use the screen as a clear two-pane control room instead of
    letting the navigation and controls collapse into one dense column. */
 html body .start-screen-content:has(> .settings-panel-master) {
-    width: min(94%, 980px);
+    width: min(calc(94 * var(--cw)), 980px);
     max-width: 980px;
-    height: min(86%, 620px);
-    max-height: 86%;
+    height: min(calc(86 * var(--ch)), 620px);
+    max-height: calc(86 * var(--ch));
     padding: clamp(14px, 2.2vw, 26px);
     box-sizing: border-box;
 }
@@ -1509,6 +1602,17 @@ html body .settings-panel-master .settings-nav-item {
     padding: 10px 12px;
     font-size: clamp(18px, 1.55vw, 24px);
     line-height: 1.15;
+}
+/* Embedded (in-station MENU > SETTINGS) gets less vertical room than the standalone
+   modal — same nav markup, but the full-size items overflow .hs-menu-panel-body and
+   get clipped/scrolled off at the bottom (reported: Debug tab cut off, list "abgeschnitten"). */
+html body .hs-menu-panel-body .settings-panel-master .settings-nav {
+    gap: 4px;
+}
+html body .hs-menu-panel-body .settings-panel-master .settings-nav-item {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: clamp(14px, 1.1vw, 18px);
 }
 html body .settings-panel-master .settings-detail {
     min-height: 0;

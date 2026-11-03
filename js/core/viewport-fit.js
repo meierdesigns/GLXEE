@@ -404,7 +404,9 @@
         // bezel itself — so nothing that sits in the bezel (pilot thumbnail, screens, tools) is ever sheared off.
         const W = frame.offsetWidth, H = frame.offsetHeight;
         const shape = getComputedStyle(frame).getPropertyValue('--fr-shape').trim();
-        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) { clearSilhouette(); silKey = ''; return; }
+        if (off || !cell || !shape || shape === 'none' || W < 4 || H < 4) {
+            clearSilhouette(); silKey = ''; return;
+        }
         // Same shape, size and cell as the mask already in place: rebuilding it would only re-invalidate (repaint) the whole
         // clipped screen. Every root style tick during a faction switch used to do that 3-4 times (flicker inside the bezel).
         const outRNow = getComputedStyle(document.documentElement).getPropertyValue('--fr-out');
@@ -628,19 +630,21 @@
     }
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
-    // tabs FX / VOXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG']];
+    // tabs FX / VOXEL / VOXELPIXEL / FRAME / SIZES. In combat it pauses the game while open.
+    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['voxelpixel', 'VOXELPIXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG'], ['audio', 'AUDIO']];
     // Remote key clusters: [caption, tab ids]; the plate lays them out two clusters per row.
-    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug']]];
+    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'voxelpixel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug', 'audio']]];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
+        voxelpixel: svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/>'),
         frame: svg16('<rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/>'),
         sizes: svg16('<path d="M2 14V9M2 14h5M14 2v5M14 2H9M3 13l10-10"/>'),
         text: svg16('<path d="M3 13L8 3l5 10M5 10h6"/>'),
         perf: svg16('<path d="M2 12a6 6 0 0112 0M8 12l3-5"/>'),
         difficulty: svg16('<path d="M3 13V8a5 5 0 0110 0v5zM6 9h1M9 9h1M6 13v-2M8 13v-2M10 13v-2"/>'),
-        debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>')
+        debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>'),
+        audio: svg16('<path d="M2 6h3l4-3v10L5 10H2zM11 6c1 1 1 3 0 4M13 4c2 2 2 6 0 8"/>')
     };
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never

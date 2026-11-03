@@ -965,24 +965,45 @@ button.hs-faction-card.nav-focused {
     border-color: var(--weapon-color, var(--color-primary));
     box-shadow: 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 48%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 30%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--weapon-color, var(--color-primary)) 60%, transparent) 16%, transparent);
 }
-/* Each owned ship is its own card (own tbody): the ship row and its Ship Storage grid as one
-   combined block, bordered as a unit instead of relying on row dividers. */
+/* Each owned ship is its own card (own tbody): ship info left, Ship Storage grid right.
+   Stacks to a single column when the host panel is narrow (see part-21 @container).
+   No card border — the parent station panel already frames the column. */
 .hs-ship-card {
-    display: block;
-    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-    border-radius: 4px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: stretch;
+    gap: 0 16px;
+    border: 0;
     margin-bottom: 10px;
-    overflow: hidden;
+    overflow: visible;
+    padding: 4px 0;
+    box-sizing: border-box;
 }
 .hs-ship-card tr { border-bottom: none !important; }
+.hs-ship-card > tr:not(.hs-ship-storage-row) {
+    min-width: 0;
+    align-content: center;
+}
+.hs-ship-storage-row {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+    /* start — do not stretch the bay to the ship-info column height (skews slot aspect). */
+    align-self: start;
+    margin: 6px 0;
+    padding: 4px 4px 4px 16px;
+    border-left: 0;
+    box-sizing: border-box;
+}
 .hs-ship-storage-row td {
-    padding: 2px 4px 14px;
+    padding: 0;
+    width: 100%;
 }
 .hs-ship-storage-caption {
     font-size: var(--font-text);
     letter-spacing: 0.1em;
     opacity: 0.7;
-    padding: 2px 0 6px;
+    padding: 0 0 6px;
 }
 .hs-ship-table-action {
     text-align: right;
@@ -1356,6 +1377,261 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
 /* Upgrade tree fits horizontally; only vertical scrolling. */
 .hs-upgrade-root .hs-upg-tree-scroll {
     overflow-x: hidden;
+}
+
+/* EQUIPMENT: outer .hs-upgrade-root keeps the faction frame. Inner cards must
+   NOT stack another ::before/::after clip frame on top — that double ring
+   looked like overlapping borders and ate the content padding. */
+html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip-ship .hs-panel {
+    /* Match station-grid storage pads (part-20): clear clip stairs + frame ring. */
+    padding: 16px 28px 18px !important;
+    clip-path: none !important;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent) !important;
+    border-radius: 0 !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent) !important;
+    background-color: rgba(4, 3, 10, 0.55) !important;
+    isolation: auto;
+}
+html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip-ship .hs-panel::before,
+html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip-ship .hs-panel::after {
+    content: none !important;
+    display: none !important;
+}
+html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip-ship .hs-panel .hs-panel-title {
+    padding-left: 0 !important;
+    margin-bottom: 12px;
+}
+
+.hs-equip-ship {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    margin-bottom: 12px;
+}
+.hs-equip-ship-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 4px 4px 8px;
+}
+.hs-equip-ship-head .hs-area-thumb {
+    flex: 0 0 auto;
+    image-rendering: pixelated;
+}
+.hs-equip-ship-name {
+    font-size: var(--font-h2);
+    letter-spacing: 2px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hs-equip-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    min-height: 0;
+    align-items: stretch;
+}
+.hs-equip-cols:not(:has(.hs-equip-selected)) {
+    grid-template-columns: 1fr;
+}
+.hs-equip-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 !important;
+}
+.hs-equip-inv {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    min-height: 0;
+}
+.hs-equip-inv .hs-panel-storage .hs-row {
+    overflow: auto;
+    max-height: min(38vh, 320px);
+    padding: 4px 2px 8px;
+    box-sizing: border-box;
+}
+.hs-equip-inv .hs-storage-grid {
+    flex-shrink: 0;
+}
+.hs-equip-ship-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-left: auto;
+}
+.hs-equip-ship-btn {
+    min-width: 0 !important;
+    padding: 6px 10px !important;
+    font-size: var(--font-text) !important;
+}
+.hs-equip-ship-btn.is-active {
+    outline: 2px solid var(--color-primary);
+}
+.hs-equip-selected {
+    min-height: 0;
+    height: 100%;
+    align-self: stretch;
+}
+.hs-equip-selected > .hs-empty-slot.hs-empty-state {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    width: 100%;
+    margin: 0;
+    align-self: stretch;
+}
+.hs-equip-selected .hs-equip-detail {
+    margin: 8px 0 0;
+}
+.hs-equip-line {
+    grid-template-columns: minmax(120px, 1.2fr) minmax(160px, auto) !important;
+    padding: 8px 10px !important;
+}
+.hs-equip-line .hs-line-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    align-items: center;
+}
+.hs-equip-line .hs-line-actions .hs-line-action {
+    min-width: 72px;
+}
+.hs-equip-cost-empty { min-width: 0; }
+.hs-equip-ship .hs-storage-cell.is-selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+@media (max-width: 980px) {
+    .hs-equip-cols,
+    .hs-equip-cols:not(:has(.hs-equip-selected)) {
+        grid-template-columns: 1fr;
+    }
+    .hs-equip-line {
+        grid-template-columns: minmax(120px, 1fr) auto !important;
+    }
+}
+
+/* Expanded EQUIPMENT row detail: per-track upgrades + (weapons) fire mode + fine-tune slider. */
+.hs-equip-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: -4px 0 8px;
+    padding: 10px;
+    border: 1px solid var(--color-primary-dim, rgba(92, 255, 122, 0.35));
+    background: rgba(0, 0, 0, 0.25);
+}
+.hs-equip-track-line {
+    grid-template-columns: minmax(120px, 1fr) minmax(120px, auto) 88px !important;
+    padding: 6px 8px !important;
+}
+.hs-equip-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 2px;
+    flex-wrap: wrap;
+}
+.hs-equip-mode-label,
+.hs-equip-tune-label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+.hs-equip-mode-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.hs-equip-mode-btn.is-active {
+    outline: 2px solid var(--color-primary);
+}
+.hs-equip-mode-btn.is-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.hs-equip-tune {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 4px 2px 2px;
+}
+.hs-equip-up-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 108px !important;
+    padding: 8px 12px !important;
+    overflow: visible !important;
+    box-sizing: border-box;
+}
+.hs-equip-up-btn img {
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
+    flex: 0 0 18px;
+    display: block;
+}
+.hs-equip-tune input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    min-width: 0;
+    height: 14px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    accent-color: var(--faction-accent, var(--color-primary, #00ffcc));
+}
+.hs-equip-tune input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary, #00ffcc)) 30%, #09090d);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary, #00ffcc)) 45%, transparent);
+    box-sizing: border-box;
+}
+.hs-equip-tune input[type="range"]::-moz-range-track {
+    height: 4px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary, #00ffcc)) 30%, #09090d);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-accent, var(--color-primary, #00ffcc)) 45%, transparent);
+}
+.hs-equip-tune input[type="range"]::-moz-range-progress {
+    height: 4px;
+    background: var(--faction-accent, var(--color-primary, #00ffcc));
+}
+.hs-equip-tune input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 14px;
+    margin-top: -6px;
+    border: var(--ui-border-width, 2px) solid #ffffff;
+    border-radius: 0;
+    background: var(--faction-accent, var(--color-primary, #00ffcc));
+}
+.hs-equip-tune input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 14px;
+    border: var(--ui-border-width, 2px) solid #ffffff;
+    border-radius: 0;
+    background: var(--faction-accent, var(--color-primary, #00ffcc));
+}
+.hs-equip-tune input[type="range"]:focus-visible {
+    outline: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary, #00ffcc));
+    outline-offset: 2px;
 }
 
 /* Tab row: still scrollable when narrow, but no scrollbar flashing in while

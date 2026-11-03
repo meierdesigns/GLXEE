@@ -104,6 +104,7 @@ class MenuNavHelper {
                 if (typeof el.scrollIntoView === 'function') {
                     try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ }
                 }
+                if (typeof gamepadCursor !== 'undefined') gamepadCursor.follow(el);
             }
         });
         return i;

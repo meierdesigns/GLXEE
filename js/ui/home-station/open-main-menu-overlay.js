@@ -238,6 +238,7 @@ extendClass(HomeStationUI, {
         return Object.keys(materials).every((id) => (w[id] || 0) >= (materials[id] || 0));
     },
 
+    /** Cost chips for only the resources actually required (no empty placeholder cells). */
     renderCostGrid(costMap, wallet, profile) {
         const cells = [];
         const creditNeed = Math.max(0, Math.round(Number((costMap && costMap.credits) || 0)));
@@ -257,33 +258,26 @@ extendClass(HomeStationUI, {
         const ids = (typeof economyConfig !== 'undefined')
             ? economyConfig.resourceIds
             : ['scrap', 'ore', 'crystal', 'voltex'];
-        const hasMaterials = ids.some((id) => ((costMap && costMap[id]) || 0) > 0);
-        if (hasMaterials || creditNeed <= 0) {
-            ids.forEach((id) => {
-                const n = (costMap && costMap[id]) || 0;
-                const have = (wallet && wallet[id]) || 0;
-                const empty = n <= 0;
-                const short = !empty && have < n;
-                const missing = short ? (n - have) : 0;
-                const classes = [
-                    'hs-cost-cell',
-                    'hs-res-' + id,
-                    empty ? 'hs-cost-empty' : '',
-                    short ? 'hs-cost-short' : ''
-                ].filter(Boolean).join(' ');
-                const amt = empty ? '—' : String(n);
-                const title = empty
-                    ? String(id).toUpperCase()
-                    : (short ? `NEED ${missing}` : String(id).toUpperCase());
-                const needAttr = short ? ` data-need="−${missing}"` : '';
-                cells.push(
-                    `<span class="${classes}" title="${title}">` +
-                    `<span class="hs-cost-icon">${this.iconHtml(this.resourceIconKey(id), 20, 'hs-pixel hs-pixel-20')}</span>` +
-                    `<span class="hs-cost-amt"${needAttr}>${amt}</span>` +
-                    `</span>`
-                );
-            });
-        }
+        ids.forEach((id) => {
+            const n = Math.max(0, Math.round(Number((costMap && costMap[id]) || 0)));
+            if (n <= 0) return;
+            const have = (wallet && wallet[id]) || 0;
+            const short = have < n;
+            const missing = short ? (n - have) : 0;
+            const classes = [
+                'hs-cost-cell',
+                'hs-res-' + id,
+                short ? 'hs-cost-short' : ''
+            ].filter(Boolean).join(' ');
+            const needAttr = short ? ` data-need="−${missing}"` : '';
+            cells.push(
+                `<span class="${classes}" title="${short ? ('NEED ' + missing) : String(id).toUpperCase()}">` +
+                `<span class="hs-cost-icon">${this.iconHtml(this.resourceIconKey(id), 20, 'hs-pixel hs-pixel-20')}</span>` +
+                `<span class="hs-cost-amt"${needAttr}>${n}</span>` +
+                `</span>`
+            );
+        });
+        if (!cells.length) return '';
         return `<span class="hs-cost-grid">${cells.join('')}</span>`;
     },
 });

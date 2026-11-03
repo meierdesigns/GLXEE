@@ -207,7 +207,7 @@ html[data-pf="terran"] .profile-selection-overlay:not(.home-station-overlay) {
     border: 32px solid transparent;
     border-image: url('../../ui/terran-bezel-art.svg?v=13') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-terran var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
+    animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
     .profile-selection-content[data-faction="terran"] :is(.profile-faction-preview, .profile-faction-lore, .profile-faction-fact)::before { animation: none; }

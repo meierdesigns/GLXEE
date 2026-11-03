@@ -170,7 +170,7 @@ function createAdvancedStationUpgradeNodes() {
             treeX: 2,
             treeY: 84,
             desc: 'Ultimate station vault expansion.',
-            effect: (lv) => ({ resourceCap: lv * 80, cargoCap: lv * 20 }),
+            effect: (lv) => ({ resourceCap: lv * 80, cargoCap: lv * 20, storageSlots: lv * 8 }),
             costs: [
                 { scrap: 300, ore: 150, crystal: 80, voltex: 40 },
                 { scrap: 450, ore: 230, crystal: 130, voltex: 70 },

@@ -178,7 +178,7 @@ class CollisionManager {
         const sides = enemyManager.getSideEnemies();
         for (let j = sides.length - 1; j >= 0; j--) {
             const side = sides[j];
-            if (!side || side.role !== 'bomber') continue;
+            if (!side || side.role !== 'bomber' || side.entering) continue;
             if (!this.isColliding(side, player)) continue;
             const sx = side.x + side.width / 2;
             const sy = side.y + side.height / 2;
@@ -214,6 +214,8 @@ class CollisionManager {
         const sides = enemyManager.getSideEnemies();
         for (let i = bullets.length - 1; i >= 0; i--) {
             for (let j = sides.length - 1; j >= 0; j--) {
+                // Still sliding in through the hangar gap: not a fair target yet.
+                if (sides[j].entering) continue;
                 if (this.isColliding(bullets[i], sides[j])) {
                     const sx = sides[j].x + sides[j].width / 2;
                     const sy = sides[j].y + sides[j].height / 2;

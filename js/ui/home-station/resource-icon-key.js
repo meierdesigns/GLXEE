@@ -21,6 +21,77 @@ extendClass(HomeStationUI, {
             `</h3>`;
     },
 
+    /** Collapsed state { ships: bool, storage: bool } for the station stack sections, persisted. */
+    stationCollapsedSections() {
+        if (!this._stationCollapsedSections) {
+            let map = {};
+            try {
+                const raw = JSON.parse(localStorage.getItem('vf_hs_station_collapsed_sections') || '{}');
+                if (raw && typeof raw === 'object') map = raw;
+            } catch (err) { /* ignore */ }
+            this._stationCollapsedSections = map;
+        }
+        return this._stationCollapsedSections;
+    },
+
+    /** Whether OWNED SHIPS / STATION STORAGE sit side-by-side instead of stacked, persisted. */
+    stationLayoutSideBySide() {
+        if (this._stationLayoutSideBySide === undefined) {
+            let v = false;
+            try { v = localStorage.getItem('vf_hs_station_layout') === 'side'; } catch (err) { /* ignore */ }
+            this._stationLayoutSideBySide = v;
+        }
+        return this._stationLayoutSideBySide;
+    },
+
+    /** Panel header for a collapsible station stack section (OWNED SHIPS / STATION STORAGE). */
+    stationSectionHeaderHtml(iconKey, label, sectionKey, collapsed) {
+        return `<h3 class="hs-panel-title" data-station-section-toggle="${sectionKey}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
+            `<span class="hs-panel-icon">${this.iconHtml(iconKey, 32, 'hs-pixel')}</span>` +
+            `<span class="hs-panel-label">${label}</span>` +
+            `<span class="hs-panel-scan" aria-hidden="true"></span>` +
+            `<span class="hs-panel-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span>` +
+            `</h3>`;
+    },
+
+    /** Binds collapse toggles + the stacked/side-by-side layout switch on the station stack panel. */
+    bindStationPanelToggles() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('[data-station-section-toggle]').forEach((head) => {
+            const toggle = () => {
+                const key = head.getAttribute('data-station-section-toggle');
+                const map = this.stationCollapsedSections();
+                map[key] = !map[key];
+                try {
+                    localStorage.setItem('vf_hs_station_collapsed_sections', JSON.stringify(map));
+                } catch (err) { /* ignore */ }
+                const sec = head.closest('.hs-station-section');
+                const c = !!map[key];
+                if (sec) sec.classList.toggle('is-collapsed', c);
+                head.setAttribute('aria-expanded', String(!c));
+                const caret = head.querySelector('.hs-panel-caret');
+                if (caret) caret.textContent = c ? '▼' : '▲';
+            };
+            head.addEventListener('click', toggle);
+            head.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                toggle();
+            });
+        });
+        const layoutBtn = this.overlay.querySelector('[data-station-layout-toggle]');
+        if (layoutBtn) {
+            layoutBtn.addEventListener('click', () => {
+                const stack = layoutBtn.closest('.hs-panel-stack');
+                const side = !this.stationLayoutSideBySide();
+                this._stationLayoutSideBySide = side;
+                try { localStorage.setItem('vf_hs_station_layout', side ? 'side' : 'stacked'); } catch (err) { /* ignore */ }
+                if (stack) stack.classList.toggle('is-side-by-side', side);
+                layoutBtn.setAttribute('aria-pressed', String(side));
+            });
+        }
+    },
+
     /** The MENU_AREAS entry that holds a tab, or null. */
     getTabArea(tabId) {
         if (typeof MENU_AREAS === 'undefined') return null;

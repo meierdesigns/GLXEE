@@ -300,6 +300,19 @@
             setPerf('anim', lo ? 'OFF' : 'ON');
             if (lo) ui.setFx('framePx', 'OFF');
         }
+        else if (d.auSound || d.auMusic || d.auReset) {
+            const smSettings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager
+                : (typeof settingsManager !== 'undefined' ? settingsManager : null);
+            if (d.auReset && typeof volumeControlsManager !== 'undefined') volumeControlsManager.resetToDefaults();
+            if (d.auSound && smSettings) {
+                if ((d.auSound === 'ON') !== !!smSettings.settings.soundEnabled) smSettings.toggleSound();
+                else if (typeof soundManager !== 'undefined') soundManager.setSoundEnabled(d.auSound === 'ON');
+            } else if (d.auSound && typeof soundManager !== 'undefined') soundManager.setSoundEnabled(d.auSound === 'ON');
+            if (d.auMusic && smSettings) {
+                if ((d.auMusic === 'ON') !== !!smSettings.settings.musicEnabled) smSettings.toggleMusic();
+                else if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+            } else if (d.auMusic && typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+        }
         else if (d.debugAction === 'reload') window.location.reload();
         else if (d.debugAction === 'clear') {
             try { localStorage.clear(); sessionStorage.clear(); } catch (err) { /* optional */ }
@@ -477,6 +490,12 @@
             if (!frame.hasAttribute('data-fx-preview')) frame.setAttribute('data-fx-preview', '1');
             applyFrameStyle();
         }
+        else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
+            const pct = Math.max(0, Math.min(100, v)) / 100;
+            if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
+            else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
+            else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+        }
     }
     const FXOPEN_KEY = 'vf-fx-open';
     function setFxOpen(open, instant) {
@@ -530,4 +549,19 @@
     vfs.swayT = 0;
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     Object.assign(NS, { FXOPEN_KEY, reduceMotion });
+    // Keep the remote open across navigation/reloads if it was open before.
+    (function restoreFxOpen() {
+        let wasOpen = false;
+        try { wasOpen = localStorage.getItem(FXOPEN_KEY) === '1'; } catch (e) { /* ignore */ }
+        if (!wasOpen) return;
+        const open = function (triesLeft) {
+            try { setFxOpen(true, true); } catch (e) {
+                // Other game scripts (e.g. `game`) may still be mid-init (TDZ) at window 'load'; retry briefly.
+                if (triesLeft > 0) setTimeout(function () { open(triesLeft - 1); }, 200);
+            }
+        };
+        const start = function () { open(10); };
+        if (document.readyState === 'complete') start();
+        else window.addEventListener('load', start, { once: true });
+    })();
 })(window.vfFitScope || (window.vfFitScope = {}));

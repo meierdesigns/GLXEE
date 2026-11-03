@@ -36,6 +36,9 @@ class PlayerManager {
         this.reflectChance = 0;
         this.defenseMechanisms = [];
         this.currentShipModel = null;
+        // Brief hit-immunity right after entering a stage (ms left), so the
+        // ship can't be shredded mid fly-in before the player has control.
+        this.invuln = 0;
     }
 
     isSystemsOnline() {
@@ -44,6 +47,7 @@ class PlayerManager {
 
     update(keys, deltaTime = 16.67) {
         const dt = deltaTime / 1000;
+        if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - deltaTime);
         // Pixel hit mask (set-ship-model.js): built once the art is loaded,
         // rebuilt when ship / size change; a cheap key check otherwise.
         if (this.refreshPlayerHitMask) this.refreshPlayerHitMask();
@@ -174,6 +178,7 @@ class PlayerManager {
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) {
             return false;
         }
+        if (this.invuln > 0) return false;
 
         let hpDamage = Number(damage) || 0;
         // BARRIER power-up (power-crates.js).
@@ -287,5 +292,7 @@ class PlayerManager {
         this.health = this.maxHealth;
         this.shield = this.shieldMax;
         this.energy = this.maxEnergy;
+        // Covers the fly-in animation plus a short grace period after it.
+        this.invuln = 2000;
     }
 }

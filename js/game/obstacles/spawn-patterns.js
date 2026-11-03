@@ -167,7 +167,17 @@ extendClass(ObstacleManager, {
         if (out.length > cap) {
             out = out.sort(() => Math.random() - 0.5).slice(0, cap);
         }
-        return out;
+        // Keep the rocks apart regardless of pattern, scaled by how big each
+        // one is, so a wave never renders two obstacles sitting on top of
+        // each other (crystal clusters included).
+        const spaced = [];
+        out.forEach((pt) => {
+            const r = 7 * (pt.scale || 1);
+            if (spaced.every((q) => Math.hypot(q.u - pt.u, q.w - pt.w) > r + 7 * (q.scale || 1))) {
+                spaced.push(pt);
+            }
+        });
+        return spaced;
     },
     /** Local-frame points for a pattern; `across` is the field width across travel. */
     buildPatternPoints(pattern, across, intensity) {

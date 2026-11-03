@@ -58,8 +58,9 @@ class HomeStationUI {
             }
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();
-        this._upgradeSubTabs = ['station', 'ships', 'modules'];
+        this._upgradeSubTabs = ['station', 'ships', 'modules', 'equipment'];
         this.selectedUpgradeNode = null;
+        this.expandedEquipItem = null;
         this._upgTipHost = null;
         this._upgTipBtn = null;
         this._upgTipRaf = 0;
@@ -68,7 +69,8 @@ class HomeStationUI {
         this._upgradeSubMeta = {
             station: { label: 'STATION', icon: 'hsStation' },
             ships: { label: 'SHIPS', icon: 'hsShip' },
-            modules: { label: 'MODULES', icon: 'hsCraft' }
+            modules: { label: 'MODULES', icon: 'hsCraft' },
+            equipment: { label: 'EQUIPMENT', icon: 'hsHangar' }
         };
         this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];
         this._shopCatMeta = {

@@ -128,22 +128,25 @@
                 }
             })();
         } else if (vfs.fxTab === 'voxel') {
-            h += '<div class="vf-fx-title">SHIPS &amp; PLAYFIELD</div>' +
+            h += '<div class="vf-fx-title">SHIPS</div>' +
                 '<div class="vf-fx-row"><span>SHIP RENDER</span>' + fxSeg(ui.getShipRenderStyleOptions().map(function (v) { return [v, v]; }), ui.shipRenderStyle, 'vx-ship') + '</div>' +
-                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
-                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
-                '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
-                fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
-                fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
                 '<div class="vf-fx-title">GUI</div>' +
-                '<div class="vf-fx-row"><span>GUI VOXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.guiVoxel, 'vx-gui') + '</div>' +
-                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
+                '<div class="vf-fx-row"><span>GUI VOXEL</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], ui.guiVoxel, 'vx-gui') + '</div>';
             h += '<div class="vf-fx-title">GUI PARTS</div><div class="vf-fx-grid">';
             [['gvLines', 'LINES'], ['gvCorners', 'CORNERS'], ['gvText', 'TEXT'], ['gvImages', 'IMAGES'], ['gvSvg', 'SVG']].forEach(function (p) {
                 const on = ui.getFxValue(p[0]) === 'ON';
                 h += '<button type="button" class="vf-fx-key' + (on ? ' on' : '') + '" data-vx-gv="' + p[0] + ':' + (on ? 'OFF' : 'ON') + '">' + p[1] + '</button>';
             });
             h += '</div>';
+        } else if (vfs.fxTab === 'voxelpixel') {
+            h += '<div class="vf-fx-title">VOXEL &amp; PIXEL SIZE</div>' +
+                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
+                fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
+                '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
+                fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
+                fxOptSlider('FRAME ROUND', 'framerad', ui.getFxOptions('frameRound'), ui.getFxValue('frameRound')) +
+                '<div class="vf-fx-title">GUI CELL SIZE</div>' +
+                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
         } else if (vfs.fxTab === 'perf') {
             const mq = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
             const backdropOk = !!(window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px)'));
@@ -296,9 +299,6 @@
                 h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-df-reset="1">RESET ' + dm.current.toUpperCase() + '</button></div>';
             }
         } else if (vfs.fxTab === 'sizes') {
-            h += '<div class="vf-fx-title">VOXEL SIZES</div>' +
-                fxOptSlider('PLAYFIELD', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
-                fxOptSlider('GUI CELL', 'gvcell', ui.getFxOptions('gvCell'), ui.getFxValue('gvCell'));
             h += '<div class="vf-fx-title">SHIPS (PX)</div>' + fxSlider('PLAYER', 'sz:player:player', 6, 60, 1, Math.round(ui.getSizePx('player')), 'px');
             ['scout', 'assault', 'heavy', 'elite', 'capital'].forEach(function (c) {
                 h += fxSlider(c.toUpperCase(), 'sz:enemy:' + c, 12, 200, 1, Math.round(ui.getSizePx('enemy', c)), 'px');
@@ -311,6 +311,24 @@
                 h += fxSlider(c.toUpperCase(), 'sz:shot:' + c, 1, 40, 1, Math.round(ui.getSizePx('shot', c)), 'px');
             });
             h += '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-sz-copy="1">COPY SIZES (JSON)</button></div>';
+        } else if (vfs.fxTab === 'audio') {
+            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+            const sm = (typeof soundManager !== 'undefined') ? soundManager : null;
+            const settings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager.settings
+                : (typeof settingsManager !== 'undefined' && settingsManager ? settingsManager.settings : null);
+            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
+            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
+            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
+            const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
+            h += '<div class="vf-fx-title">VOLUME</div>' +
+                fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
+                fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
+                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
+                '<div class="vf-fx-title">TOGGLES</div>' +
+                '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
+                '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>';
         }
         h += '</div>';
         plate.innerHTML = h;

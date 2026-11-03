@@ -74,10 +74,13 @@ class UiTooltipManager {
         }
         tip = String(tip).trim();
         // Only icon-only controls and ones needing a longer explanation get a
-        // tip; a button that already shows its own text label stays quiet.
+        // tip; a control whose visible text already is the tip stays quiet.
+        // Icon+amount chips (pilot resources, victory loot, …) keep a short
+        // name tip even though they show a number — the amount is not a label.
         const rich = el.hasAttribute('data-ui-tip-head') || tip.length > 40 || tip.indexOf('\n') >= 0;
-        const hasLabel = (el.textContent || '').replace(/\s+/g, '').length > 0;
-        if (hasLabel && !rich) return null;
+        const labelText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        const tipNorm = tip.replace(/\s+/g, ' ').trim();
+        if (!rich && labelText && tipNorm.toLowerCase() === labelText.toLowerCase()) return null;
         return { el: el, tip: tip };
     }
 
@@ -194,11 +197,27 @@ class UiTooltipManager {
                     h.appendChild(im);
                 }
             }
+            if (anchor.classList && anchor.classList.contains('is-blueprint')) {
+                const bpBadge = document.createElement('span');
+                bpBadge.className = 'ui-tooltip-bp-badge';
+                bpBadge.setAttribute('aria-hidden', 'true');
+                bpBadge.title = 'Blueprint';
+                h.appendChild(bpBadge);
+                h.classList.add('has-bp');
+            }
             const title = document.createElement('span');
             title.className = 'ui-tooltip-title';
             title.textContent = head;
             h.appendChild(title);
             tip.appendChild(h);
+            // Pre-rendered rich body (e.g. BUY tip with resource icons + affordance).
+            const tipBody = anchor.querySelector && anchor.querySelector('template[data-ui-tip-body]');
+            if (tipBody && (anchor.hasAttribute('data-ui-tip-html') || tipBody.content)) {
+                const wrap = document.createElement('div');
+                wrap.className = 'ui-tooltip-html';
+                wrap.appendChild(tipBody.content.cloneNode(true));
+                tip.appendChild(wrap);
+            } else
             String(text).split('\n').forEach((line) => {
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
                 const row = document.createElement('div');
@@ -213,6 +232,48 @@ class UiTooltipManager {
                     row.append(k, v);
                 } else {
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+                    const resIcon = {
+                        credits: 'menuCredits',
+                        scrap: 'resScrap',
+                        ore: 'resOre',
+                        crystal: 'resCrystal',
+                        voltex: 'resVoltex'
+                    };
+                    const resColor = (id) => (typeof economyConfig !== 'undefined' && economyConfig.resourceColors && economyConfig.resourceColors[id])
+                        || (id === 'credits' ? '#ffd24a' : '#b8b0a0');
+                    const buyLine = line.match(/^BUY (\w+) x(\d+) · (\d+) CR · (CAN|SHORT)$/);
+                    const totalLine = line.match(/^TOTAL · (\d+) CR · (CAN BUY|NOT ENOUGH CREDITS)$/);
+                    if ((buyLine || totalLine) && ir) {
+                        row.className = 'ui-tooltip-stats' + ((buyLine && buyLine[4] === 'SHORT') || (totalLine && totalLine[2] !== 'CAN BUY') ? ' is-short' : ' is-ok');
+                        row.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+                        const chip = (key, val, col) => {
+                            const s = document.createElement('span');
+                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                                + '<span>' + val + '</span>';
+                            row.appendChild(s);
+                        };
+                        if (buyLine) {
+                            const id = buyLine[1];
+                            const label = (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
+                                ? economyConfig.getResourceLabel(id)
+                                : id.toUpperCase();
+                            chip(resIcon[id] || 'resScrap', buyLine[2] + ' ' + label, resColor(id));
+                            chip(resIcon.credits, buyLine[3] + ' CR', resColor('credits'));
+                            const st = document.createElement('span');
+                            st.className = 'ui-tooltip-affordance';
+                            st.textContent = buyLine[4] === 'CAN' ? 'CAN BUY' : 'SHORT';
+                            st.style.cssText = 'margin-left:auto;letter-spacing:1px;opacity:' + (buyLine[4] === 'CAN' ? '1' : '0.7');
+                            row.appendChild(st);
+                        } else {
+                            chip(resIcon.credits, totalLine[1] + ' CR', resColor('credits'));
+                            const st = document.createElement('span');
+                            st.className = 'ui-tooltip-affordance';
+                            st.textContent = totalLine[2];
+                            st.style.cssText = 'margin-left:auto;letter-spacing:1px;font-weight:bold;opacity:' + (totalLine[2] === 'CAN BUY' ? '1' : '0.7');
+                            row.appendChild(st);
+                        }
+                    } else {
                     const chips = (() => {
                         // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
                         const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
@@ -244,6 +305,7 @@ class UiTooltipManager {
                         });
                     } else {
                         row.textContent = line;
+                    }
                     }
                 }
                 tip.appendChild(row);

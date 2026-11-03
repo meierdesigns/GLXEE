@@ -79,6 +79,8 @@ class EconomyConfig {
             resourceCap: 80,
             cargoCap: 40,
             shipSlots: 2,
+            // Part/blueprint bay slots on the STATION STORAGE grid (grows with vault upgrades).
+            storageSlots: 12,
             craftDiscount: 0,
             dropBonus: 0
         };
@@ -149,6 +151,50 @@ class EconomyConfig {
             charge: { scrap: 60, ore: 16 },
             energy: { scrap: 50, ore: 18 },
             collector: { scrap: 36, ore: 14 }
+        };
+        /** Per-item upgrade (EQUIPMENT tab): levels a single equipped/owned item id, stacks on top of the category-wide MODULES bonus — smaller base cost since it only benefits one item. */
+        this.itemUpgradeMaxLevel = 5;
+        this.itemUpgradeCatBase = {
+            weapons: { scrap: 30, ore: 9 },
+            defenses: { scrap: 26, ore: 13 },
+            abilities: { scrap: 33, ore: 7 },
+            energy: { scrap: 30, ore: 11 }
+        };
+        /** Per-item upgrade tracks (EQUIPMENT tab detail panel) — one item, several independently leveled stats instead of a single combined level. */
+        this.itemUpgradeTrackDefs = {
+            weapons: {
+                dmg: { label: 'DAMAGE', desc: '+Damage', maxLevel: 5, costMul: 1.15 },
+                rof: { label: 'ROF', desc: '−Cooldown (rate of fire)', maxLevel: 5, costMul: 1.0 },
+                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 }
+            },
+            defenses: {
+                capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.1 },
+                harden: { label: 'HARDEN', desc: 'Damage reduction', maxLevel: 5, costMul: 1.3 },
+                regen: { label: 'REGEN', desc: '+Regen', maxLevel: 5, costMul: 0.95 }
+            },
+            abilities: {
+                cooldown: { label: 'COOLDOWN', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.25 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
+            },
+            energy: {
+                cooldown: { label: 'COOLDOWN', desc: '−Cooldown', maxLevel: 5, costMul: 1.05 },
+                potency: { label: 'POTENCY', desc: '+Effect strength', maxLevel: 5, costMul: 1.25 },
+                duration: { label: 'DURATION', desc: '+Duration', maxLevel: 5, costMul: 1.1 }
+            }
+        };
+        /** Weapon fire modes (EQUIPMENT tab, weapons only) — free to switch once unlocked by the named track level. */
+        this.itemFireModes = {
+            single: { label: 'SINGLE', desc: 'Balanced default', damageMul: 1, cooldownMul: 1, spreadMul: 1 },
+            burst: { label: 'BURST', desc: 'Harder hits, tighter spread, slower', damageMul: 1.35, cooldownMul: 1.3, spreadMul: 0.6, unlockTrack: 'dmg', unlockLevel: 2 },
+            auto: { label: 'AUTO', desc: 'Faster, weaker per hit', damageMul: 0.7, cooldownMul: 0.65, spreadMul: 1.15, unlockTrack: 'rof', unlockLevel: 2 }
+        };
+        /** Fine-tune slider unlock (every part bucket) — one-time purchase per item. */
+        this.itemTuneUnlock = {
+            weapons: { costMul: 1.35, labels: ['RATE OF FIRE', 'DAMAGE'] },
+            defenses: { costMul: 1.25, labels: ['REGEN', 'CAPACITY'] },
+            abilities: { costMul: 1.3, labels: ['COOLDOWN', 'POTENCY'] },
+            energy: { costMul: 1.3, labels: ['COOLDOWN', 'POTENCY'] }
         };
         /** Base pixel radius for collecting mission resource pickups. */
         this.collectBaseRadius = 32;
@@ -299,6 +345,36 @@ class EconomyConfig {
             if (lv >= 3) cost.voltex = Math.round((10 + lv * 8) * trackMul);
         }
         return cost;
+    }
+
+    /** Cost to raise one specific item's track (weapons/defenses/abilities/energy) to nextLevel. */
+    getItemTrackUpgradeCost(bucket, itemId, track, nextLevel) {
+        const def = this.itemUpgradeTrackDefs[bucket] && this.itemUpgradeTrackDefs[bucket][track];
+        const base = this.itemUpgradeCatBase[bucket];
+        if (!def || !base) return null;
+        const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
+        if (lv > def.maxLevel) return null;
+        const trackMul = Number(def.costMul) || 1;
+        const prog = Math.pow(lv, 1.65);
+        const cost = {
+            scrap: Math.max(1, Math.round(base.scrap * trackMul * prog)),
+            ore: Math.max(0, Math.round(base.ore * trackMul * prog))
+        };
+        if (lv >= 3) cost.crystal = Math.round((6 + lv * 5) * trackMul);
+        if (lv >= 5) cost.voltex = Math.round((5 + lv * 4) * trackMul);
+        return cost;
+    }
+
+    /** One-time cost to unlock the fine-tune slider on a specific item. */
+    getItemTuneUnlockCost(bucket) {
+        const base = this.itemUpgradeCatBase[bucket];
+        const unlock = this.itemTuneUnlock && this.itemTuneUnlock[bucket];
+        if (!base || !unlock) return null;
+        const mul = Number(unlock.costMul) || 1.25;
+        return {
+            scrap: Math.max(1, Math.round(base.scrap * mul * 2.2)),
+            ore: Math.max(0, Math.round(base.ore * mul * 2.0))
+        };
     }
 
     emptyModuleUpgrades() {

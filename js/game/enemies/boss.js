@@ -88,6 +88,10 @@ extendClass(EnemyManager, {
         // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);
         this.health = this.maxHealth;
+        if (this.shieldMax > 0) {
+            this.shieldMax = Math.round(this.shieldMax * mods.boss * 1.45);
+            this.shield = this.shieldMax;
+        }
         e.bossTierMul = mods.boss;
         // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).
         this.evasionSpeed = (this.evasionSpeed || 2) * 0.3;
@@ -267,6 +271,18 @@ extendClass(EnemyManager, {
         ctx.fillStyle = '#05060a';
         ctx.fillRect(x + Math.round(bw * 0.33), y, 1, 4);
         ctx.fillRect(x + Math.round(bw * 0.66), y, 1, 4);
+
+        // Shield energy: thin cyan strip above the health bar while the boss has one.
+        if (this.shieldMax > 0) {
+            const shRatio = Math.max(0, Math.min(1, this.shield / this.shieldMax));
+            const sy = y - 4;
+            ctx.fillStyle = '#05060a';
+            ctx.fillRect(x - 1, sy - 1, bw + 2, 4);
+            ctx.fillStyle = '#0a2630';
+            ctx.fillRect(x, sy, bw, 2);
+            ctx.fillStyle = shRatio > 0 ? '#4ad8ff' : '#1a3a44';
+            ctx.fillRect(x, sy, Math.round(bw * shRatio), 2);
+        }
         ctx.restore();
     },
 });

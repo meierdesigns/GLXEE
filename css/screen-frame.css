@@ -150,7 +150,8 @@
     border: var(--_vine-th) solid #14041c;
     border-image: url('../assets/ui/voidborn-bezel-vine.svg') 16 round;
     image-rendering: pixelated;
-    animation: vf-void-vine-creep var(--vf-vine-dur, 48s) steps(1, end) infinite;
+    /* Single static rim — life via brightness pulse, never image swaps. */
+    animation: vf-bezel-live var(--vf-vine-dur, 48s) steps(1, end) infinite;
     left: calc(var(--_vi) * var(--u));
     right: calc(var(--_vi) * var(--u));
     bottom: calc(var(--_vi) * var(--u));
@@ -159,10 +160,7 @@
     transform: none;
     backface-visibility: visible;
 }
-/* Occasional twitch, not a steady flow: frames are visited out of order (no consistent
-   "direction" to read) and held for long, uneven spans, so the vine mostly sits still and
-   only occasionally shifts somewhere — never a continuous wave around the whole band.
-   Speed from VINE MOTION (urls resolve against this sheet). */
+/* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-void-vine-creep {
     0%      { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg'); }
     4%      { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg'); }
@@ -179,9 +177,11 @@
     97%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg'); }
     100%    { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg'); }
 }
-html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after { animation: none; }
+html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after,
+html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="voidborn"] .vf-fr::after { animation: none; }
+    .vf-bezel[data-faction="voidborn"] .vf-fr::after,
+    .vf-bezel[data-faction="voidborn"]::before { animation: none; }
 }
 
 /* ── Machine: parted graphic (circuit-plate border-image), same mechanism as
@@ -247,11 +247,12 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after { anim
     border: var(--_art-th) solid #020706;
     border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-machine var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
+    animation: vf-bezel-live var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
     will-change: auto;
     transform: none;
     backface-visibility: visible;
 }
+/* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-machine {
     0%   { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=15'); }
     6%   { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=15'); }
@@ -271,7 +272,8 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after { anim
     100% { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=15'); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="machine"] .vf-fr::after { animation: none; }
+    .vf-bezel[data-faction="machine"] .vf-fr::after,
+    .vf-bezel[data-faction="machine"]::before { animation: none; }
 }
 /* No inward bite: the art sits flush with --fr-shape, so --fr-hud-inset
    stays at its root default (0px, part-19.css) — the fight HUD never needs
@@ -336,11 +338,12 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
     border: var(--_art-th) solid #05080e;
     border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-terran var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
+    animation: vf-bezel-live var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
     will-change: auto;
     transform: none;
     backface-visibility: visible;
 }
+/* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-terran {
     0%   { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
     15%  { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
@@ -353,7 +356,8 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
     100% { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="terran"] .vf-fr::after { animation: none; }
+    .vf-bezel[data-faction="terran"] .vf-fr::after,
+    .vf-bezel[data-faction="terran"]::before { animation: none; }
 }
 html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
@@ -414,11 +418,12 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
     border: var(--_art-th) solid #060202;
     border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-kronax var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
+    animation: vf-bezel-live var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
     will-change: auto;
     transform: none;
     backface-visibility: visible;
 }
+/* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-kronax {
     0%   { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=15'); }
     7%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=15'); }
@@ -435,7 +440,8 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
     100% { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=15'); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="kronax"] .vf-fr::after { animation: none; }
+    .vf-bezel[data-faction="kronax"] .vf-fr::after,
+    .vf-bezel[data-faction="kronax"]::before { animation: none; }
 }
 html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
@@ -496,11 +502,12 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
     border: var(--_art-th) solid #040503;
     border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 16 round;
     image-rendering: pixelated;
-    animation: vf-bezel-art-creep-pirate var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
+    animation: vf-bezel-live var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
     will-change: auto;
     transform: none;
     backface-visibility: visible;
 }
+/* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-pirate {
     0%   { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
     12%  { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
@@ -515,13 +522,49 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
     100% { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="pirate"] .vf-fr::after { animation: none; }
+    .vf-bezel[data-faction="pirate"] .vf-fr::after,
+    .vf-bezel[data-faction="pirate"]::before { animation: none; }
 }
 html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
     border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 16 round;
     image-rendering: pixelated;
     padding: 0;
+}
+
+/* Rim life without image swaps: occasional stepped brightness on the single
+   border-image, plus a slow crawl on the top-strip fill (::before). */
+@keyframes vf-bezel-live {
+    0%, 100% { filter: brightness(1); }
+    18%      { filter: brightness(1); }
+    19%      { filter: brightness(1.1); }
+    21%      { filter: brightness(1); }
+    52%      { filter: brightness(1); }
+    53%      { filter: brightness(0.94); }
+    54%      { filter: brightness(1.08); }
+    56%      { filter: brightness(1); }
+    81%      { filter: brightness(1); }
+    82%      { filter: brightness(1.06); }
+    84%      { filter: brightness(1); }
+}
+@keyframes vf-bezel-strip-crawl {
+    0%   { background-position: 0 0; }
+    100% { background-position: calc(32 * 5 * var(--u)) 0; }
+}
+.vf-bezel[data-faction="voidborn"]::before,
+.vf-bezel[data-faction="machine"]::before,
+.vf-bezel[data-faction="terran"]::before,
+.vf-bezel[data-faction="kronax"]::before,
+.vf-bezel[data-faction="pirate"]::before {
+    animation: vf-bezel-strip-crawl 28s linear infinite;
+}
+html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    .vf-bezel[data-faction="voidborn"]::before,
+    .vf-bezel[data-faction="machine"]::before,
+    .vf-bezel[data-faction="terran"]::before,
+    .vf-bezel[data-faction="kronax"]::before,
+    .vf-bezel[data-faction="pirate"]::before { animation: none; }
 }
 
 /* ── Plates ───────────────────────────────────────────────────────────── */

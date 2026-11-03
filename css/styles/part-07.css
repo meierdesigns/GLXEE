@@ -134,8 +134,9 @@
         url('../../assets/ui/hs-bg-travel.png');
 }
 .vf-browser-shell {
+    /* Under .home-station-overlay, part-15 turns this into the glass-scale host.
+       Base styles keep a simple flex stage for any non-station use. */
     position: relative;
-    /* Fixed 4:3 stage (size from viewport-fit.js), centered in the window */
     flex: 0 0 auto;
     align-self: center;
     box-sizing: border-box;
@@ -144,14 +145,14 @@
     width: var(--vw, 100%);
     height: var(--vh, 100%);
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
     overflow: hidden;
 }
 .home-station-content {
     position: relative;
     text-align: left;
-    /* Fill the shell exactly; no zoom so GUI elements keep their proportions. */
+    /* Fill the shell; GUI scale is on .vf-browser-shell (part-15), not here. */
     flex: 1 1 auto;
     width: 100%;
     max-width: 100%;
@@ -934,15 +935,22 @@ button.hs-logout-btn.nav-focused {
     min-width: 0;
 }
 .hs-chip-storage { margin: 2px; }
-/* Size container so --cs (render-parts-list.js) can use cqw: unlike %, cqw always resolves against
-   the container's width, no matter whether it ends up in a width- or height-axis property. */
-.hs-panel-storage .hs-row {
-    container-type: inline-size;
-}
+/* Storage bays: slot size is baked in HTML (--cs / track px) so ship + station
+   always match. Container queries must not rescale one bay differently. */
 .hs-storage-grid {
     display: grid;
     gap: 4px;
     min-width: 0;
+    flex: 0 0 auto;
+    align-self: start;
+    justify-self: start;
+    box-sizing: content-box;
+    padding: 6px;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 62%, transparent);
+    background: color-mix(in srgb, #05060a 90%, var(--faction-accent, var(--color-primary)));
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent),
+        0 0 0 1px color-mix(in srgb, #000 55%, transparent);
 }
 .hs-storage-cell {
     position: relative;
@@ -982,18 +990,38 @@ button.hs-logout-btn.nav-focused {
 }
 .hs-storage-cell-empty {
     cursor: default;
-    background: transparent;
-    border: 2px dashed color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    border: 2px dashed color-mix(in srgb, var(--color-primary) 48%, transparent);
 }
 /* Real item casing (physical-item.js): fills the filled cell; no icon badge on top of it. */
 .hs-storage-cell .hs-item-body { position: absolute; inset: 2px; }
-/* Blueprint tiles: a recipe, not the owned part — dashed border, faded casing, "BP" corner tag. */
+/* Blueprint tiles: a recipe, not the owned part — dashed border, right half of the icon
+   rendered as an unfinished schematic (desaturated + grid lines) instead of a "BP" tag. */
 .hs-storage-cell.is-blueprint {
     border-style: dashed;
 }
-.hs-storage-cell.is-blueprint .hs-item-body {
-    opacity: .55;
-    filter: saturate(.5);
+.hs-storage-cell.is-blueprint .hs-item-body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: inherit;
+    background-size: inherit;
+    background-position: inherit;
+    background-repeat: inherit;
+    clip-path: inset(0 0 0 50%);
+    filter: grayscale(1) brightness(1.6) contrast(1.15);
+    mix-blend-mode: luminosity;
+}
+.hs-storage-cell.is-blueprint .hs-item-body::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 0 0 50%);
+    background:
+        repeating-linear-gradient(0deg, transparent 0 4px, color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent) 4px 5px),
+        repeating-linear-gradient(90deg, transparent 0 4px, color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent) 4px 5px);
+    mix-blend-mode: screen;
+    pointer-events: none;
 }
 /* Resource chambers: vertical fill-level silos (replaces the flat chip row), one per subcard. */
 .hs-panel-chambers {
@@ -1022,8 +1050,8 @@ button.hs-logout-btn.nav-focused {
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
-    padding: 18px 6px 10px;
+    gap: 6px;
+    padding: 14px 6px 10px;
     min-height: 0;
     border: 2px solid color-mix(in srgb, var(--chamber-c, var(--color-primary)) 55%, var(--color-border));
     background:
@@ -1053,37 +1081,62 @@ button.hs-logout-btn.nav-focused {
         radial-gradient(circle, color-mix(in srgb, var(--chamber-c, var(--color-primary)) 70%, #05060a) 0 1.5px, transparent 1.6px) calc(100% - 3px) calc(100% - 3px) / 100% 100% no-repeat;
 }
 .hs-res-subcard.is-empty { opacity: .75; }
-/* Icon + resource name as one badge, pinned top-left of the silo. */
+/* Icon + resource name as one badge above the silo (in-flow so names never clip to "S...").
+   Icon is 1em so it tracks the label font; !important beats imgHtml inline px. */
 .hs-res-chamber-tag {
-    position: absolute;
-    left: 6px;
-    top: 10px;
+    position: relative;
+    left: auto;
+    top: auto;
     z-index: 2;
-    display: flex !important;
+    display: inline-flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center;
-    gap: 4px;
-    width: max-content;
-    padding: 2px 6px 2px 2px;
+    justify-content: center;
+    gap: 0.3em;
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0.2em 0.4em 0.2em 0.25em;
     background: color-mix(in srgb, #05060a 80%, transparent);
     border: 1px solid color-mix(in srgb, var(--chamber-c, var(--color-primary)) 60%, transparent);
     border-radius: 10px;
+    font-size: calc(var(--font-text) * 0.8);
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: var(--chamber-c, var(--color-primary));
+    box-sizing: border-box;
 }
 .hs-res-chamber-icon {
-    width: 16px;
-    height: 16px;
+    width: 1em;
+    height: 1em;
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     filter: drop-shadow(0 1px 0 #05060a);
 }
-.hs-res-chamber-icon .hs-pixel { width: 100%; height: 100%; }
+.hs-res-chamber-icon :is(.hs-pixel, img, .ui-icon-tip) {
+    width: 1em !important;
+    height: 1em !important;
+    max-width: 1em !important;
+    max-height: 1em !important;
+    display: block;
+    margin: 0;
+    padding: 0;
+}
 .hs-res-chamber-tube {
     position: relative;
     z-index: 1;
     width: var(--tube-w, 60%);
+    /* Keep the generative silo (48×140) from stretching into a broken-looking column. */
+    aspect-ratio: 48 / 140;
     flex: 1 1 auto;
     align-self: center;
     min-height: 40px;
+    max-height: 100%;
     border-radius: 10px 10px 6px 6px;
     background: #05060a;
     overflow: hidden;
@@ -1095,6 +1148,8 @@ button.hs-logout-btn.nav-focused {
     position: absolute;
     inset: 0;
     border-radius: inherit;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
 }
 .hs-res-chamber-fill::before {
     content: '';
@@ -1105,26 +1160,27 @@ button.hs-logout-btn.nav-focused {
 .hs-res-subcard.is-full .hs-res-chamber-fill { background: var(--chamber-c, var(--color-primary)); }
 .hs-res-subcard.is-empty .hs-res-chamber-tube { opacity: .5; }
 .hs-res-chamber-label {
-    font-size: calc(var(--font-text) * 0.85);
-    letter-spacing: 0.06em;
-    color: var(--chamber-c, var(--color-primary));
+    flex: 0 0 auto;
+    min-width: auto;
+    font-size: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    line-height: inherit;
     white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+}
+/* Chambers title: drop the decorative scan bar so "STATION STORES" fits the column. */
+.hs-panel-chambers > .hs-panel-title .hs-panel-scan { display: none; }
+.hs-panel-chambers > .hs-panel-title .hs-panel-icon {
+    width: 20px;
+    height: 20px;
 }
 .hs-res-chamber-value {
     font-size: var(--font-text);
     color: var(--color-text);
 }
 .hs-res-chamber-cap { opacity: .6; }
-.hs-storage-cell-bp-badge {
-    position: absolute;
-    left: 2px;
-    top: 1px;
-    font-size: var(--font-text);
-    line-height: 1;
-    color: var(--color-primary);
-    text-shadow: 1px 1px 0 #05060a;
-    z-index: 2;
-}
 /* A category with nothing owned in this view: its physical-item casing silhouette, darkened as a background hint. */
 .hs-storage-cell.is-empty {
     cursor: default;
@@ -1269,10 +1325,10 @@ button.hs-line-action.action-button {
     margin: 0;
 }
 .hs-cost-grid {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(38px, 68px);
-    gap: 6px;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
     justify-content: end;
     flex: 0 1 auto;
     min-width: 0;
@@ -1283,13 +1339,13 @@ button.hs-line-action.action-button {
     align-items: center;
     gap: 4px;
     min-height: 24px;
-    padding: 2px 4px;
-    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-border) 55%, transparent);
-    background: color-mix(in srgb, var(--color-background) 55%, transparent);
+    padding: 0;
+    border: 0;
+    background: transparent;
     box-sizing: border-box;
 }
 .hs-cost-cell.hs-cost-empty {
-    opacity: 0.55;
+    display: none;
 }
 .hs-cost-cell.hs-cost-head {
     justify-content: center;

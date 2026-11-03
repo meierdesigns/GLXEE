@@ -667,12 +667,10 @@
     grid-area: cargo;
 }
 .hs-panel-stack {
-    grid-area: ships;
-}
-.hs-panel-stack {
+    grid-area: stack;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     min-height: 0;
 }
 

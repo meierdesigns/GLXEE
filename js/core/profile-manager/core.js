@@ -196,6 +196,40 @@ class ProfileManager {
                 });
             });
         }
+        if (!profile.itemUpgrades || typeof profile.itemUpgrades !== 'object') {
+            profile.itemUpgrades = { weapons: {}, defenses: {}, abilities: {}, energy: {} };
+        }
+        ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
+            if (!profile.itemUpgrades[bucket] || typeof profile.itemUpgrades[bucket] !== 'object') {
+                profile.itemUpgrades[bucket] = {};
+            }
+            const bag = profile.itemUpgrades[bucket];
+            const trackDefs = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs)
+                ? economyConfig.itemUpgradeTrackDefs[bucket]
+                : null;
+            const mainTrack = trackDefs ? Object.keys(trackDefs)[0] : null;
+            Object.keys(bag).forEach((itemId) => {
+                const entry = bag[itemId];
+                // Legacy save: a single flat level number → migrate onto the bucket's first track.
+                if (typeof entry === 'number') {
+                    bag[itemId] = {
+                        tracks: mainTrack ? { [mainTrack]: entry } : {},
+                        mode: 'single',
+                        tune: 0.5,
+                        tuneUnlocked: false
+                    };
+                    return;
+                }
+                if (!entry || typeof entry !== 'object') {
+                    bag[itemId] = { tracks: {}, mode: 'single', tune: 0.5, tuneUnlocked: false };
+                    return;
+                }
+                if (!entry.tracks || typeof entry.tracks !== 'object') entry.tracks = {};
+                if (typeof entry.mode !== 'string') entry.mode = 'single';
+                if (typeof entry.tune !== 'number' || !isFinite(entry.tune)) entry.tune = 0.5;
+                if (typeof entry.tuneUnlocked !== 'boolean') entry.tuneUnlocked = false;
+            });
+        });
         if (!profile.progress) {
             profile.progress = this.emptyProgress();
         }
@@ -228,6 +262,7 @@ class ProfileManager {
             resourceCap: 80,
             cargoCap: 40,
             shipSlots: 2,
+            storageSlots: 12,
             craftDiscount: 0,
             dropBonus: 0
         };

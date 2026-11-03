@@ -4,7 +4,11 @@
 
 # GLXEE
 
-**A browser-based Game Boy–shell space shooter about factions, loadouts, and the next jump.**
+**Open the hatch. Own the lane. Make the next jump count.**
+
+A no-build, browser-native Game Boy–shell space shooter — five doctrines at war
+across living galaxies, modular hulls forged in the hangar, and a Home Station
+that remembers every scrap you haul back through the dark.
 
 [![Runtime: browser](https://img.shields.io/badge/runtime-browser-111111?style=flat-square&labelColor=000000&color=b0b0b0)](#boot)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=000000&color=888888)](#credits)
@@ -16,19 +20,21 @@
 
 **Play free in the browser:** [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 
-GLXEE is a no-build browser shooter. Choose a faction, assemble a ship from
-area-sized modules, clear planets, earn contracts, trade with allies, and travel
-through five faction-themed galaxies. Its identity is carried by pixel shapes,
-not just color: every faction has its own silhouette, doctrine, and visual
-language.
+GLXEE is not a palette swap of the same ship. Identity rides on **pixel shape**:
+Terran plates, Kronax claws, Voidborn rings, Pirate scrap, Machine grids — each
+faction writes its own silhouette, enemy pool, planet crust, and bezel chrome.
+You assemble area-sized modules, clear stages under fire, sign contracts that
+move galaxies, and jump again before the lane goes quiet.
 
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
-│  PILOT STATUS   READY                                                       │
-│  THEATER         MILKY WAY · MARS                                           │
+│  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
+│  PILOT STATUS    CLEARED FOR LAUNCH                                         │
+│  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
-│  OBJECTIVE       CLEAR THE STAGE · CLAIM THE LOOT                           │
+│  OBJECTIVE       CLEAR THE STAGE · CLAIM THE LOOT · HOLD THE LANE           │
 │  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
+│  WARNING         EVERY SILHOUETTE ON SCAN IS A DOCTRINE                     │
 │  PLAY            https://meierdesigns.itch.io/glxee                         │
 ╰─────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -168,15 +174,15 @@ Escape closes the active overlay. Text fields keep their normal caret controls.
 ## The game loop
 
 ```text
-Choose profile
+Choose your doctrine
     ↓
-Home Station: upgrade · shop · craft · hangar · missions · factions
+Forge the hull at Home Station — upgrade · shop · craft · hangar · factions
     ↓
-Accept a planet, faction, or bounty contract
+Accept a planet strike, faction contract, or bounty hunt
     ↓
-Travel / launch → clear stages → collect loot and mission rewards
+Travel / launch → clear the stage → haul loot through the hatch
     ↓
-Upgrade hull areas and slots · trade · change the loadout · jump again
+Refit areas and slots · trade with allies · rewrite the loadout · jump again
 ```
 
 A mission is either a **LIBERATE** run on an uncleared planet or a lower-paying
@@ -598,15 +604,16 @@ station shell, factions, travel).
 
 ## Features
 
-Short index — details live in the sections above.
+Short index — the full systems live in the sections above.
 
-- Five factions / galaxies with relations, contracts, trade, fleet preview, universe save.
-- Home Station loop: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
+- Five factions / galaxies: relations, contracts, trade, fleet preview, universe save.
+- Home Station war-room: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
+- Station stores as vertical resource silos; ship/station bays with physical item casings.
 - Modular loadouts, area pager, hangar bay zoom, VOXEL combat with field presence.
-- Hangar inventory panel with physical pixel items, kind filters, and equip animations.
-- Full-screen start menu with the pilot's station as backdrop.
-- Galaxy explore: one-pixel-size map, stored nebulae, checkpoints, traffic, ship locator.
-- 4:3 stage, pixel-frame bezel, pilot HUD, expanded look FX, boot loading screen.
+- Hangar inventory with generative metal casings, kind filters, and equip animations.
+- Full-screen start menu with the pilot's station as living backdrop.
+- Galaxy explore: shared pixel grid, stored nebulae, checkpoints, traffic, ship locator.
+- 4:3 stage, faction-styled bezel, pilot HUD, PERF/DEBUG remote, boot loading screen.
 - Launch hatch and sluice exit per stage; chain waves, prism / bulwark obstacles.
 - Enemy hero cards with reacting pilot portraits; side-view weapon cards.
 - Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
@@ -865,6 +872,22 @@ be reviewed or reverted independently.
 | 68O | Ship storage | Per-ship "on this ship vs at the station" filing overlay on owned parts/blueprints, independent of equip/ownership ledgers |
 | 68P | Physical item art | Seeded generative metal-casing render (bevel, rivets, vents, hazard stripes, scratches) for every inventory part icon |
 | 68Q | Station column resize fix | Hangar/blueprint/parts columns keep a readable minimum width and resize handles track correctly under GUI zoom |
+| 68R | DevMode hover screen | Bottom bezel screen names the element under the pointer (selector, label, size) while DevMode is on |
+| 68S | DevMode hover highlight | HI toggle on the hover screen; with mode on, hold Shift to tint/outline the hovered element |
+| 68T | Station storage columns | Fix post-refresh layout: resize matches the 2-column storage|stores grid instead of legacy 3-fr weights |
+| 68U | Profile vault bay size | Station Storage grid starts at 6×2 and grows with vault upgrades (`storageSlots`) |
+| 68V | Station stores label fix | Chamber tag icon sized to the label font (1em) and aligned inline beside the text |
+| 68W | Station side-by-side rule | Light vertical accent line between OWNED SHIPS and STATION STORAGE in side layout |
+| 68X | Owned-ship active button | Drop the ACTIVE/SET ACTIVE star control from the OWNED SHIPS row (hangar keeps it) |
+| 68Y | Gamepad focus cursor | Animated HUD cursor jumps between focused buttons while the controller drives menus |
+| 68Z | Ship stats over name | OWNED SHIPS stats sit in one horizontal row above the ship name label |
+| 69A | FX audio remote | AUDIO tab on the bezel FX remote: master/sounds/music sliders plus sound and music toggles |
+| 69B | Ship card layout | Owned-ship cards put Ship Storage beside the ship row; station grid prioritizes ships then bay |
+| 69C | Storage slot frame | Ship/station bay cells share one square `--cs`; outer bay border + pad so storage edges read clearly |
+| 69D | Station chamber silos | Level fill surfaces, full resource labels in-flow, aspect-locked silo tubes, capacity Grenze mark |
+| 69E | Equipment bay upgrades | Per-item upgrade detail in Home Station EQUIPMENT with station/ship storage select mode |
+| 69F | Gamepad HUD cursor | Animated focus cursor for controller menu navigation (`gamepad/cursor.js`) |
+| 69G | Epic README pass | Sharper VOLTEX identity copy, lore stakes, and wave ledger cleanup for GitHub |
 
 The wave commit convention is:
 
@@ -888,18 +911,25 @@ docs: document <feature> wave <id>
 
 ## Lore
 
-In 2187, the discovery of Voltex Crystals turned every jump lane into
-contested ground. The Terran Concord protects the Milky Way, Kronax packs raid
-Andromeda, Voidborn fleets fold through cold rings, Pirate freebooters weld
-ships in the Scrap Belt, and the Machine Collective expands through the Synth
-Grid.
+In 2187 the first Voltex Crystal sang across a jump lane — and the quiet age
+ended. What had been empty black became **contested ground**: every corridor a
+prize, every station a claim, every silhouette on the scanner a doctrine with
+teeth.
 
-Every faction wants the same glowing dust. Pilots claim planets, sign pacts,
-run contracts, and learn that every silhouette on the scanner is a doctrine —
-not merely a hull.
+The **Terran Concord** hardens the Milky Way with escorts and engineered lanes.
+**Kronax** packs carve Andromeda open with speed and ambush. **Voidborn** fleets
+fold through cold rings and leave silence where maps used to be. **Pirate**
+freebooters weld asymmetric scrap in the Belt and sell whatever still fires.
+The **Machine Collective** expands the Synth Grid one forge node at a time —
+logic without mercy, replication without rest.
 
-For the full contact archive, see the faction entries in the original update
-notes and the [GLXEE devlogs](docs/).
+Every faction hunts the same glowing dust. Pilots claim planets, sign pacts that
+can flip a galaxy overnight, run contracts into rival space, and learn the only
+rule that survives contact: **shape is doctrine** — not paint, not badge, not
+promise.
+
+For the full contact archive, see the faction entries in the update notes and
+the [GLXEE devlogs](docs/).
 
 ## Credits
 
@@ -907,5 +937,5 @@ notes and the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser
+- Runtime: browser · no build step · Game Boy shell, intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

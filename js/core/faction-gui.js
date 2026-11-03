@@ -16,23 +16,18 @@ const factionGui = (() => {
     const bezel = () => document.getElementById('vf-bezel');
     const reduce = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-    // The rim animation swaps border-image-source between several SVGs (screen-frame.css
-    // @keyframes vf-bezel-art-creep-*). If a variant hasn't been fetched/decoded yet when the
-    // swap hits, the border-image briefly has nothing to paint and falls back to the flat
-    // border colour — the rim art visibly "glitches away" for that frame. Warming the browser's
-    // image cache for the active faction avoids that first-cycle blank.
-    // Exact file list per faction, mirrored from the @keyframes vf-bezel-art-creep-*
-    // / vf-void-vine-creep rules in screen-frame.css — including each faction's own
-    // cache-busting query (terran/kronax/machine use ?v=15, pirate ?v=16, voidborn
-    // none) and voidborn's unrelated "-vine" naming.
+    // Bezel rim uses one static border-image per faction (screen-frame.css).
+    // Warm the base asset so the first paint never flashes the solid hull fallback.
     const BEZEL_ART_FILES = {
-        terran: ['terran-bezel-art.svg?v=15', 'terran-bezel-art-1.svg?v=15', 'terran-bezel-art-3.svg?v=15', 'terran-bezel-art-6.svg?v=15'],
-        kronax: ['kronax-bezel-art.svg?v=15', 'kronax-bezel-art-2.svg?v=15', 'kronax-bezel-art-4.svg?v=15', 'kronax-bezel-art-5.svg?v=15', 'kronax-bezel-art-7.svg?v=15', 'kronax-bezel-art-8.svg?v=15'],
-        machine: ['machine-bezel-art.svg?v=15', 'machine-bezel-art-1.svg?v=15', 'machine-bezel-art-2.svg?v=15', 'machine-bezel-art-3.svg?v=15', 'machine-bezel-art-5.svg?v=15', 'machine-bezel-art-6.svg?v=15', 'machine-bezel-art-7.svg?v=15', 'machine-bezel-art-8.svg?v=15'],
-        pirate: ['pirate-bezel-art.svg?v=16', 'pirate-bezel-art-2.svg?v=16', 'pirate-bezel-art-4.svg?v=16', 'pirate-bezel-art-5.svg?v=16', 'pirate-bezel-art-8.svg?v=16'],
-        voidborn: ['voidborn-bezel-vine.svg', 'voidborn-bezel-vine-2.svg', 'voidborn-bezel-vine-4.svg', 'voidborn-bezel-vine-5.svg', 'voidborn-bezel-vine-7.svg', 'voidborn-bezel-vine-9.svg', 'voidborn-bezel-vine-10.svg']
+        terran: ['terran-bezel-art.svg?v=15'],
+        kronax: ['kronax-bezel-art.svg?v=15'],
+        machine: ['machine-bezel-art.svg?v=15'],
+        pirate: ['pirate-bezel-art.svg?v=16'],
+        voidborn: ['voidborn-bezel-vine.svg']
     };
     const preloaded = new Set();
+    // Keep decoded bitmaps alive so opacity-layer rim swaps never re-fetch/re-decode.
+    const bezelArtKeep = (window.__vfBezelArtKeep = window.__vfBezelArtKeep || []);
     function preloadBezelArt(id) {
         if (preloaded.has(id)) return;
         const files = BEZEL_ART_FILES[id];
@@ -41,9 +36,12 @@ const factionGui = (() => {
         files.forEach((file) => {
             const img = new Image();
             img.src = 'assets/ui/' + file;
+            bezelArtKeep.push(img);
+            if (img.decode) img.decode().catch(function () { /* decode optional */ });
         });
     }
     if (shown) preloadBezelArt(shown);
+
     // Animate only for changes the player causes: boot, refresh and restore (all before any input) switch instantly,
     // so a reload never replays the cable swap.
     const arm = () => { ready = true; };

@@ -370,7 +370,11 @@ extendClass(GalaxyMapManager, {
         const box = document.createElement('div');
         box.className = 'gm-ambush';
         const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
-        const art = psm && psm.getFactionEmblemHtml ? psm.getFactionEmblemHtml('pirate', 112, 4) : '';
+        // Rendered oversampled + smooth-downscaled (see renderEmblemAtSize), not at a
+        // true 1:1 pixel size: at 1:1 the sprite's own pixel grid beats against the
+        // global scanline overlay and shows up as a grid baked into the icon.
+        const oversample = (typeof ProfileSelectionManager !== 'undefined' && ProfileSelectionManager.EMBLEM_OVERSAMPLE) || 1.35;
+        const art = psm && psm.getFactionEmblemHtml ? psm.getFactionEmblemHtml('pirate', Math.round(112 * oversample), 4) : '';
         box.innerHTML = `<div class="gm-ambush-card">` +
             `<div class="gm-ambush-art" aria-hidden="true">${art}</div>` +
             `<div class="gm-ambush-title">PIRATE AMBUSH</div>` +
@@ -380,7 +384,13 @@ extendClass(GalaxyMapManager, {
             `<span class="gm-ambush-lbl">EVADE</span><span class="gm-ambush-info">LOSE ~15% MATERIALS</span></button>` +
             `<button type="button" class="action-button gm-ambush-btn" data-ambush="fight" data-nav-item>FIGHT</button>` +
             `</div></div>`;
-        area.appendChild(box);
+        // Global Pixel Size (PERF heavy) paints #gmMapArea through an SVG pixelate filter — fine
+        // for the map art, but it smears crisp dialog text into mush. Appending the box OUTSIDE
+        // that filtered subtree (as a sibling on the overlay, not a child of #gmMapArea) keeps it
+        // immune for good, instead of suspending/restoring the filter — every one of the several
+        // call sites that can re-apply the filter mid-dialog (resize, pan/zoom, pixel-size change)
+        // used to undo that suspension and repixelate the still-open prompt.
+        this.overlay.appendChild(box);
         box.querySelectorAll('[data-ambush]').forEach((btn) => {
             btn.addEventListener('click', () => this.resolveAmbush(btn.getAttribute('data-ambush')));
         });

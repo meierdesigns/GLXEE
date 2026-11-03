@@ -111,7 +111,7 @@ class GamepadManager {
         const g = (typeof window !== 'undefined') ? window.game : null;
         const inputHandler = g && g.inputHandler;
         if (!inputHandler || !this._combatState.any) return;
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ',
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
             'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd'].forEach((k) => {
             inputHandler.keys[k] = false;
         });

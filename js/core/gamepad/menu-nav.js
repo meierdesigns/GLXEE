@@ -30,6 +30,7 @@ extendClass(GamepadManager, {
         const st = this._menuState[name];
         if (pressed && !st.active) {
             st.active = true;
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
             this.dispatchKey('keydown', key);
         } else if (!pressed && st.active) {
             st.active = false;
@@ -45,13 +46,20 @@ extendClass(GamepadManager, {
         this.updateMenuDirection('right', 'ArrowRight', dir.right);
 
         const aHeld = this.isButtonPressed(gamepad, 0); // A -> Enter
-        if (aHeld && !this._menuState.a) this.dispatchKey('keydown', 'Enter');
+        if (aHeld && !this._menuState.a) {
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            this.dispatchKey('keydown', 'Enter');
+        }
         if (!aHeld && this._menuState.a) this.dispatchKey('keyup', 'Enter');
         this._menuState.a = aHeld;
 
         const bHeld = this.isButtonPressed(gamepad, 1) || this.isButtonPressed(gamepad, 8); // B / Back -> Escape
-        if (bHeld && !this._menuState.b) this.dispatchKey('keydown', 'Escape');
+        if (bHeld && !this._menuState.b) {
+            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            this.dispatchKey('keydown', 'Escape');
+        }
         if (!bHeld && this._menuState.b) this.dispatchKey('keyup', 'Escape');
         this._menuState.b = bHeld;
     }
 });
+

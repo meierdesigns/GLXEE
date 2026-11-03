@@ -138,6 +138,7 @@ extendClass(HomeStationUI, {
         const bonus = node.effect(level) || {};
         const parts = [];
         if (bonus.resourceCap) parts.push('+' + bonus.resourceCap + ' STORE');
+        if (bonus.storageSlots) parts.push('+' + bonus.storageSlots + ' BAY');
         if (bonus.cargoCap) parts.push('+' + bonus.cargoCap + ' CARGO');
         if (bonus.shipSlots) parts.push('+' + bonus.shipSlots + ' SHIP SLOT' + (bonus.shipSlots > 1 ? 'S' : ''));
         if (bonus.craftDiscount) parts.push('-' + Math.round(bonus.craftDiscount * 100) + '% CRAFT');

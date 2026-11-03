@@ -138,9 +138,20 @@ extendClass(PlanetSVGManager, {
         return model.frames[f];
     },
 
-    /** Frame index a planet shows right now (shared clock, per-planet offset). */
+    /**
+     * Frame index a planet shows right now (shared clock, per-planet offset).
+     * A fixed wall-clock period for every model made small/low-detail map
+     * icons (few dozen frames) crawl — a new frame only every couple of
+     * seconds — while the big detail card (hundreds of frames) read smooth
+     * at the same period. Pacing by a constant per-frame duration instead
+     * keeps that same frame-to-frame cadence everywhere; only the full-turn
+     * time differs, capped at the baseline period so large models don't spin
+     * faster than before.
+     */
     getPlanetSpinIndex(id, model) {
-        const period = this.spinPeriod || 60000;
+        const basePeriod = this.spinPeriod || 60000;
+        const frameMs = 160;
+        const period = Math.min(basePeriod, Math.max(3000, model.count * frameMs));
         const offset = (this.hashId(id) % 1000) / 1000;
         return Math.floor((performance.now() / period + offset) * model.count) % model.count;
     },
@@ -322,7 +333,10 @@ extendClass(PlanetSVGManager, {
                 if (mapEls[i] && mapEls[i].getAttribute('data-spin-frame') === '-1') pendingUpgrade++;
             }
             const budgetMs = pendingUpgrade ? 10 : 4;
-            const maxUpdates = pendingUpgrade ? 2 : 1;
+            // One update per tick made each planet's turn catch up only once
+            // every n ticks, in one big jump instead of an even drift — let the
+            // time budget (not a fixed count) decide how many land this tick.
+            const maxUpdates = pendingUpgrade ? Math.max(2, n) : Math.max(1, n);
             let t0 = performance.now();
             let updated = 0;
             const nf = featured.length;

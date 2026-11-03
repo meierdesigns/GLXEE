@@ -93,6 +93,30 @@ extendClass(ProfileManager, {
         const onShip = entry[bucket][id] || 0;
         const move = Math.min(qty, onShip);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
+        // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
+        // push occupied cells past the budget is refused — the item stays filed on the ship.
+        const stats = this.getStationStats(profile);
+        const cap = Math.max(8, Math.round((stats && stats.storageSlots) || 12));
+        let used = 0;
+        const spanOf = (b, itemId) => {
+            // Match HomeStationUI._storageItemSpan sizing when the UI is available.
+            if (typeof homeStationUI !== 'undefined' && homeStationUI._storageItemSpan) {
+                const s = homeStationUI._storageItemSpan(b, itemId);
+                return (s[0] || 1) * (s[1] || 1);
+            }
+            return 1;
+        };
+        this.SHIP_STORAGE_BUCKETS.forEach((b) => {
+            // Count every distinct item currently sitting at the station.
+            const owned = b === 'blueprints'
+                ? Object.keys(profile.blueprints || {})
+                : Object.keys((profile.parts && profile.parts[b]) || {});
+            owned.forEach((itemId) => {
+                if (this.getStationStorageQty(profile, b, itemId) > 0) used += spanOf(b, itemId);
+            });
+        });
+        const add = spanOf(bucket, id) * move;
+        if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
         entry[bucket][id] = onShip - move;
         if (entry[bucket][id] <= 0) delete entry[bucket][id];
         this.save();

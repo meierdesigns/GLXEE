@@ -124,15 +124,22 @@ extendClass(EnemyManager, {
             }
 
             if (e.entering && !e.fleeing) {
-                // Rim transit through an empty edge opening — not combat-ready yet.
-                const tx = e.entryTargetX != null ? e.entryTargetX : clampX(e.x);
-                const ty = e.entryTargetY != null ? e.entryTargetY : e.y;
                 if (e.isEscort && (teamWithMain || teamPending) && mainAlive) {
                     e.entryTargetX = clampX(this.enemy.x + this.enemy.width * 0.5
                         + (e.formOffsetX || 0) - e.width * 0.5);
                     e.entryTargetY = clampY(this.enemy.y + this.enemy.height * 0.5
                         + (e.formOffsetY || 0) - e.height * 0.5);
+                } else if (e.entryOffset != null && e.entryFromSide != null) {
+                    // Re-anchor to the current wall: the level keeps scrolling
+                    // while the ship glides in, so the gap it launched from has
+                    // since moved — chase the live lane edge, not a stale spot.
+                    e.entryTargetX = e.entryFromSide === 0
+                        ? laneLeft + e.entryOffset
+                        : laneRight - w - e.entryOffset;
                 }
+                // Rim transit through an empty edge opening — not combat-ready yet.
+                const tx = e.entryTargetX != null ? e.entryTargetX : clampX(e.x);
+                const ty = e.entryTargetY != null ? e.entryTargetY : e.y;
                 const dir = e.entryFromSide === 1 ? -1 : 1;
                 let spd = Math.max(0.75, Math.abs(e.speed) || 1);
                 if (e.launchV > spd) {
@@ -151,6 +158,10 @@ extendClass(EnemyManager, {
                     e.arrived = true;
                     e.entryFromSide = null;
                     e.launchV = 0;
+                    // Short terrain-scrape grace right after entry: the scroll
+                    // may have shifted the gap out from under it while it slid
+                    // in, so the wall it now reads against shouldn't bite at once.
+                    e._terrainHitAt = Date.now();
                     if (e.isEscort && (teamWithMain || teamPending)) {
                         e.speed = 0;
                         e.verticalSpeed = 0;

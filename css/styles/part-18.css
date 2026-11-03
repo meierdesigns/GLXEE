@@ -907,8 +907,8 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
     min-height: 0;
 }
 
-/* Station bezel: proportional to the real viewport (not a separate stage).
-   GUI scale stays on .home-station-content via zoom: var(--gui-zoom). */
+/* Station overlay: full stage for BG/parallax/::after. GUI scale lives on
+   .vf-browser-shell (part-15), not here — keeps one transform host. */
 .home-station-overlay {
     --u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bezel: calc(38 * var(--u));
@@ -919,6 +919,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
     width: auto !important;
     height: auto !important;
     transform: none !important;
+    transition: none !important;
     box-shadow: none;
     overflow: hidden !important;
 }
@@ -1444,19 +1445,17 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 .gm-mm-goal { font-size: var(--font-h2); }
 .gm-mm-actions .action-button { font-size: var(--font-h2); padding: 10px 22px; min-width: 150px; }
 
-/* Station storage: left column stacks Station Storage above Owned Ships, right column is the
-   resource chambers spanning both rows. Column gap is a dedicated resize lane so handles never
-   cover panel content. */
+/* Station storage: one left panel (Station Storage + Owned Ships), right column is the
+   resource chambers. Column gap is a dedicated resize lane so handles never cover content. */
 .hs-station-grid {
     --hs-col-gap: 16px;
     width: 100%;
     box-sizing: border-box;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
     grid-template-areas:
         "cover cover"
-        "parts chambers"
-        "ships chambers";
-    grid-template-rows: minmax(110px, auto) minmax(0, 1fr) minmax(0, 1fr);
+        "stack chambers";
+    grid-template-rows: minmax(110px, auto) minmax(0, 1fr);
     column-gap: var(--hs-col-gap);
     row-gap: 8px;
     height: 100%;
@@ -1464,17 +1463,135 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 }
 .hs-body > .hs-station-grid,
 .hs-body > .hs-section .hs-station-grid { flex: 1 1 auto; }
-.hs-station-grid > .hs-panel-stack { display: contents; }
-.hs-station-grid .hs-panel-ships { grid-area: ships; }
-.hs-station-grid .hs-panel-parts { grid-area: parts; }
-.hs-station-grid .hs-panel-chambers { grid-area: chambers; }
-.hs-station-grid :is(.hs-panel-ships, .hs-panel-parts, .hs-panel-chambers) {
+.hs-station-grid > .hs-panel-stack {
+    grid-area: stack;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     min-width: 0;
     min-height: 0;
     height: 100%;
     overflow-y: auto;
     overflow-x: auto;
     scrollbar-width: thin;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-row {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-row .hs-storage-grid {
+    flex-shrink: 0;
+    align-self: start;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-ship-row {
+    width: 100%;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-ship-row .hs-ship-storage-row .hs-row {
+    width: max-content;
+    max-width: none;
+    overflow-x: auto;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row {
+    overflow-x: auto;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row .hs-storage-grid,
+.hs-station-grid > .hs-panel-stack > .hs-station-section .hs-ship-storage-row .hs-storage-grid {
+    flex-shrink: 0;
+}
+.hs-station-grid .hs-panel-chambers {
+    grid-area: chambers;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section + .hs-station-section {
+    margin-top: 4px;
+}
+
+/* OWNED SHIPS / STATION STORAGE: collapsible sections + stacked/side-by-side layout switch. */
+.hs-panel-ships.hs-panel-storage {
+    position: relative;
+    padding-top: 44px;
+    overflow: visible;
+}
+.hs-panel-layout-toggle {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 5;
+    box-sizing: border-box;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0;
+    font-size: 26px;
+    letter-spacing: 0;
+    background: color-mix(in srgb, #05060a 78%, var(--faction-accent, var(--color-primary)));
+    border: 2px solid var(--faction-accent, var(--color-primary));
+    color: var(--faction-accent, var(--color-primary));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.92);
+    transition: opacity 0.12s ease-out, transform 0.12s ease-out, background 0.12s ease-out;
+}
+.hs-panel-ships.hs-panel-storage:hover .hs-panel-layout-toggle,
+.hs-panel-ships.hs-panel-storage:focus-within .hs-panel-layout-toggle {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+.hs-panel-layout-toggle:hover,
+.hs-panel-layout-toggle:focus-visible {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, #05060a);
+    color: #fff;
+    outline: none;
+}
+.hs-panel-layout-toggle[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 34%, #05060a);
+}
+.hs-station-section.is-collapsed > .hs-row {
+    display: none;
+}
+.hs-panel-title[data-station-section-toggle] {
+    cursor: pointer;
+    user-select: none;
+}
+.hs-panel-caret {
+    margin-left: auto;
+    padding-left: 8px;
+    opacity: 0.7;
+    font-size: 11px;
+}
+.hs-panel-stack.is-side-by-side {
+    flex-direction: row;
+    align-items: flex-start;
+}
+.hs-panel-stack.is-side-by-side > .hs-station-section {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: auto;
+}
+.hs-panel-stack.is-side-by-side > .hs-station-section + .hs-station-section {
+    /* Light vertical rule between OWNED SHIPS and STATION STORAGE. */
+    border-left: 0;
+    padding-left: 14px;
+    margin-left: 4px;
+    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary, #3ddc97)) 42%, transparent);
 }
 /* part-20 zeroes padding-left on all .hs-body .hs-panel for flush chrome;
    every station-grid panel (stores + 3 columns) needs side padding so titles

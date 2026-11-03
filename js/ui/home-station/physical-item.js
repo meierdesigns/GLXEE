@@ -1,3 +1,5 @@
+"use strict";
+
 // Generative "physical object" look for inventory items: every part gets a seeded, pixel-shaded metal
 // casing (bevel, rivets, vents / label plate / hazard stripe / pipes, scratches, cast shadow) with a
 // recessed socket the part icon sits in. Same id -> same item, always.
@@ -105,7 +107,8 @@ const physicalItem = (() => {
 
     /** A resource storage silo: metal frame, pipe + lamp trim, and a glass viewport with resource
      *  chunks piled up to the fill level — same seeded-pixel technique as render(), own layout. */
-    function renderChamber(id, w, h, color, pct) {
+    /** `capMarkPct` = where the default capacity Grenze sits (100 = top of glass). */
+    function renderChamber(id, w, h, color, pct, capMarkPct) {
         const cw = Math.max(10, Math.round(w / PX)), ch = Math.max(16, Math.round(h / PX));
         const cv = document.createElement('canvas');
         cv.width = cw; cv.height = ch;
@@ -136,46 +139,36 @@ const physicalItem = (() => {
         const vx = mx + 3, vy = my + 3, vw = bw - 6, vh = bh - 9;
         rect(vx, vy, vw, vh, [10, 12, 18]);
         rect(vx, vy, 1, vh, shade(frame, 0.55)); rect(vx + vw - 1, vy, 1, vh, shade(frame, 0.2));
-        // Resource pile, bottom-up: a solid jagged-top heap (not scattered specks), textured per pixel
-        // so it reads as a mass of material, with a few brighter facet chunks standing proud of it.
+        // Resource column, bottom-up: level fill surface (grain in colour only — no jagged silhouette
+        // that reads as a broken container when the silo is stretched on screen).
         const fillBase = Math.round(vh * Math.max(0, Math.min(1, pct / 100)));
         if (fillBase > 0) {
             const cols = Math.max(1, vw - 2);
-            const jagAmp = Math.min(3, Math.max(1, Math.round(fillBase * 0.18)));
-            const tops = [];
-            let prevJag = 0;
-            for (let i = 0; i < cols; i++) {
-                // Smoothed noise: each column's jag follows the last so the silhouette is chunky, not static.
-                prevJag = Math.max(-jagAmp, Math.min(jagAmp, prevJag + Math.round((rnd() - 0.5) * 3)));
-                tops.push(Math.max(0, fillBase - jagAmp + prevJag));
-            }
             const bottomY = vy + vh - 1;
+            const topY = bottomY - fillBase;
             for (let i = 0; i < cols; i++) {
                 const x = vx + 1 + i;
-                const topY = bottomY - tops[i];
                 for (let y = topY; y <= bottomY; y++) {
-                    const depth = (y - topY) / Math.max(1, tops[i]);
-                    const grain = 0.5 + (rnd() - 0.5) * 0.5;
-                    const v = Math.max(0, Math.min(1, 0.55 - depth * 0.3 + (grain - 0.5) * 0.35));
+                    const depth = (y - topY) / Math.max(1, fillBase);
+                    const grain = 0.5 + (rnd() - 0.5) * 0.3;
+                    const v = Math.max(0, Math.min(1, 0.58 - depth * 0.28 + (grain - 0.5) * 0.22));
                     dot(x, y, shade(kc, v));
                 }
-                // Lit rim along the pile's top contour.
-                dot(x, topY, mix(kc, [255, 255, 255], 0.45 + rnd() * 0.25), 0.9);
-            }
-            // A few proud facet chunks breaking the surface, for visible chunkiness.
-            const facets = 3 + Math.round((pct / 100) * 6);
-            for (let i = 0; i < facets; i++) {
-                const ci = Math.floor(rnd() * cols);
-                const x = vx + 1 + ci;
-                const y = bottomY - tops[ci] - 1;
-                if (y < vy) continue;
-                dot(x, y, mix(kc, [255, 255, 255], 0.55 + rnd() * 0.3), 0.95);
-                if (rnd() < 0.6) dot(x + (rnd() < 0.5 ? 1 : -1), y, shade(kc, 0.25), 0.8);
+                // Even lit rim — flat level line across the glass.
+                dot(x, topY, mix(kc, [255, 255, 255], 0.4), 0.88);
             }
         }
         // Glass highlight streak + rim light.
         rect(vx + 1, vy + 1, 1, Math.round(vh * 0.4), [255, 255, 255], 0.18);
         rect(vx, vy, vw, 1, shade(frame, 0.7));
+        // Capacity Grenze: default (base) cap mark — at the top when unupgraded.
+        const markPct = Math.max(0, Math.min(100, Number(capMarkPct) || 100));
+        const markY = vy + vh - Math.round(vh * (markPct / 100));
+        const markClamped = Math.max(vy, Math.min(vy + vh - 1, markY));
+        rect(vx + 1, markClamped, vw - 2, 1, [140, 148, 160], 0.95);
+        for (let x = vx + 1; x < vx + vw - 1; x += 2) {
+            dot(x, markClamped, [210, 216, 224], 0.85);
+        }
         // Baseplate with a lit status slot, colored by fill state.
         rect(mx + 2, my + bh - 4, bw - 4, 3, shade(frame, 0.5));
         rect(mx + 4, my + bh - 3, bw - 8, 1, pct >= 100 ? mix(kc, [255, 255, 255], 0.4) : kc, 0.9);
@@ -190,12 +183,14 @@ const physicalItem = (() => {
             if (!url) { try { url = render(kind, id, w, h, color); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
         },
-        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100). */
-        wrapChamber(id, w, h, color, pct) {
+        /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100).
+         *  `capMarkPct` places the default capacity Grenze (100 = top of glass). */
+        wrapChamber(id, w, h, color, pct, capMarkPct) {
             const bucketedPct = Math.round(pct / 4) * 4;
-            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct;
+            const mark = Math.round((Number(capMarkPct) || 100) / 4) * 4;
+            const key = 'chamber:' + id + ':' + w + 'x' + h + ':' + color + ':' + bucketedPct + ':' + mark;
             let url = cache.get(key);
-            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct); } catch (e) { url = ''; } cache.set(key, url); }
+            if (!url) { try { url = renderChamber(id, w, h, color, bucketedPct, mark); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>` : '';
         }
     };

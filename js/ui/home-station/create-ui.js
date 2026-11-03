@@ -145,14 +145,9 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * Tutorial hides the area nav until the first planet is cleared.
-     * Dev mode (Shift+C) always shows every nav button.
+     * Navbar stays visible at all times, including before the first planet is cleared.
      */
     shouldHideTabsForTutorial(profile) {
-        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return false;
-        if (typeof profileManager !== 'undefined' && profileManager.hasClearedFirstPlanet) {
-            return !profileManager.hasClearedFirstPlanet(profile);
-        }
         return false;
     },
 
@@ -252,15 +247,10 @@ extendClass(HomeStationUI, {
             ? profileManager.getStationStats(profile)
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
-        // Each owned ship gets its own card (own tbody): the ship row and its Ship Storage grid
-        // combined as one visual unit, action buttons top-right of the row.
+        // Each owned ship is one card: ship info left, Ship Storage grid right (stacks when narrow).
         const ownedHtml = owned.length
             ? `<table class="hs-ship-table">${owned.map((id) => {
                 const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                    (id === profile.activeShipId
-                        ? `<span class="hs-ship-icon-btn is-active" data-ui-tip="ACTIVE SHIP">${this.iconHtml('hsStar', 20, 'hs-pixel hs-pixel-20', false)}</span>`
-                        : `<button type="button" class="action-button hs-ship-icon-btn" data-select-ship="${id}" data-nav-item data-ui-tip="SET ACTIVE" aria-label="Set active">` +
-                          `${this.iconHtml('menuStart', 20, 'hs-pixel hs-pixel-20', false)}</button>`) +
                     `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
                     `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
                 const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
@@ -314,15 +304,16 @@ extendClass(HomeStationUI, {
                             <strong>STATION STORAGE</strong>
                         </div>
                     </div>
-                    <div class="hs-panel-stack">
-                        <div class="hs-panel hs-panel-ships">
-                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
+                    <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
+                        <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
+                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
+                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
-                        </div>
-                        <div class="hs-panel hs-panel-parts hs-panel-storage">
-                            ${this.panelTitle('hsCraft', 'STATION STORAGE')}
-                            <div class="hs-row">${this.renderStationStorage(profile)}</div>
-                        </div>
+                        </section>
+                        <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
+                            ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
+                            <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
+                        </section>
                     </div>
                     <div class="hs-panel hs-panel-chambers">
                         ${this.panelTitle('hsStores', 'STATION STORES')}
@@ -568,6 +559,7 @@ extendClass(HomeStationUI, {
             this.bindMissionButton();
             this.bindControlsToggle();
             this.bindStationColumnResize();
+            this.bindStationPanelToggles();
             this.syncTopbarResLayout();
             this.overlay.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
                 menuBtn.addEventListener('click', (e) => {
@@ -585,6 +577,11 @@ extendClass(HomeStationUI, {
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
                 if (t === 'hangar') this.bindHangarTabEvents();
+                // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
+                if (t === 'station') {
+                    this.bindStationColumnResize();
+                    this.bindStationPanelToggles();
+                }
             }
             this.bindKeyNav();
         }

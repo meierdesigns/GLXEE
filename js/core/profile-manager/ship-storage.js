@@ -87,11 +87,69 @@ extendClass(ProfileManager, {
         return { ok: true, moved: move };
     },
 
+    /** Clear up to `count` instances of bucket/id out of the ship's equipped loadout
+     *  (not its filed storage) so they free up as station storage. Returns how many it cleared. */
+    _unequipFromLoadout(shipId, bucket, id, count) {
+        if (typeof shipLoadoutManager === 'undefined') return 0;
+        const kindOf = { weapons: 'weapon', defenses: 'defense', abilities: 'ability', energy: 'energy' };
+        const kind = kindOf[bucket];
+        if (!kind) return 0;
+        let removed = 0;
+        while (removed < count) {
+            const L = shipLoadoutManager.getLoadout(shipId);
+            if (!L) break;
+            const list = bucket === 'weapons' ? (L.weaponSlots || []) : (L[bucket] || []);
+            const idx = list.indexOf(id);
+            if (idx === -1) break;
+            const res = shipLoadoutManager.setSlotModule(shipId, kind, idx, null);
+            if (!res || !res.ok) break;
+            removed++;
+        }
+        return removed;
+    },
+
+    /** Key into profile.storageOrder for a storage grid: 'station' or 'ship:<shipId>'. */
+    _storageOrderKey(scope, shipId) {
+        return scope === 'ship' ? ('ship:' + shipId) : 'station';
+    },
+
+    /** The manually-arranged order for a storage grid's current item keys ("bucket:id").
+     *  Items no longer present are dropped; new items are appended at the end. Never auto-sorts
+     *  — the order persists as the player arranges it, across renders and sessions. */
+    getStorageOrderList(profile, scope, shipId, currentKeys) {
+        if (!profile.storageOrder || typeof profile.storageOrder !== 'object') profile.storageOrder = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        let order = Array.isArray(profile.storageOrder[ok]) ? profile.storageOrder[ok].slice() : [];
+        const curSet = new Set(currentKeys);
+        order = order.filter((k) => curSet.has(k));
+        currentKeys.forEach((k) => { if (order.indexOf(k) === -1) order.push(k); });
+        profile.storageOrder[ok] = order;
+        return order;
+    },
+
+    /** Move `key` to just before `beforeKey` within one storage grid's manual order
+     *  (beforeKey falsy = move to the end). Pure reordering, no quantity change. */
+    reorderStorage(profile, scope, shipId, key, beforeKey) {
+        const ok = this._storageOrderKey(scope, shipId);
+        if (!profile.storageOrder || typeof profile.storageOrder !== 'object') profile.storageOrder = {};
+        const order = Array.isArray(profile.storageOrder[ok]) ? profile.storageOrder[ok].slice() : [];
+        const idx = order.indexOf(key);
+        if (idx !== -1) order.splice(idx, 1);
+        let insertAt = beforeKey ? order.indexOf(beforeKey) : -1;
+        if (insertAt === -1) insertAt = order.length;
+        order.splice(insertAt, 0, key);
+        profile.storageOrder[ok] = order;
+        this.save();
+    },
+
     moveToStationStorage(profile, shipId, bucket, id, qty) {
         qty = Math.max(1, Math.floor(qty) || 1);
         const entry = this.getShipStorageEntry(profile, shipId);
         const onShip = entry[bucket][id] || 0;
-        const move = Math.min(qty, onShip);
+        // The ship storage grid also shows currently-equipped items (so you can drag gear
+        // straight off the ship); those aren't "filed" yet, so fall back to unequipping them.
+        const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, id) : 0;
+        const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
         // push occupied cells past the budget is refused — the item stays filed on the ship.
@@ -117,7 +175,10 @@ extendClass(ProfileManager, {
         });
         const add = spanOf(bucket, id) * move;
         if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
-        entry[bucket][id] = onShip - move;
+        const fromFiled = Math.min(move, onShip);
+        const fromEquipped = move - fromFiled;
+        if (fromEquipped > 0) this._unequipFromLoadout(shipId, bucket, id, fromEquipped);
+        entry[bucket][id] = onShip - fromFiled;
         if (entry[bucket][id] <= 0) delete entry[bucket][id];
         this.save();
         return { ok: true, moved: move };

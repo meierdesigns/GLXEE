@@ -96,6 +96,17 @@ extendClass(HomeStationUI, {
         return `<div class="hs-res-chambers">${cells.join('')}</div>`;
     },
 
+    /** Apply the player's manually-arranged drag order (ProfileManager.getStorageOrderList) to a
+     *  bucket/id entry list for one storage grid — never auto-sorts, just replays past drags. */
+    _orderStorageEntries(profile, scope, shipId, rawEntries) {
+        if (typeof profileManager === 'undefined' || !profileManager.getStorageOrderList) return rawEntries;
+        const byKey = {};
+        rawEntries.forEach((e) => { byKey[e.bucket + ':' + e.id] = e; });
+        const keys = rawEntries.map((e) => e.bucket + ':' + e.id);
+        const order = profileManager.getStorageOrderList(profile, scope, shipId, keys);
+        return order.map((k) => byKey[k]).filter(Boolean);
+    },
+
     /** Every owned bucket/id pair with a positive count (profile.parts + profile.blueprints). */
     _allStorageEntries(profile) {
         const entries = [];
@@ -194,13 +205,13 @@ extendClass(HomeStationUI, {
 
     /** Item cells padded out to fill cols x rows. Slot size is a fixed shared px value so
      *  ship storage and station storage always match (no per-column container shrink). */
-    _storageGridHtml(cellSpecs, grid) {
+    _storageGridHtml(cellSpecs, grid, targetAttrs) {
         const capacity = grid.cols * grid.rows;
         const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
         const pad = Math.max(0, capacity - used);
         const cells = cellSpecs.map((c) => c.html.replace('__SPAN__', `grid-column: span ${c.span[0]}; grid-row: span ${c.span[1]};`));
         const cs = this.STORAGE_CELL_PX;
-        return `<div class="hs-storage-grid" style="--cs:${cs}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * 4px)">` +
+        return `<div class="hs-storage-grid" ${targetAttrs || ''} style="--cs:${cs}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * 4px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
@@ -210,7 +221,8 @@ extendClass(HomeStationUI, {
         opts = opts || {};
         const selectMode = opts.selectKey !== undefined;
         const selectKey = opts.selectKey || null;
-        const entries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
+        const rawEntries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
+        const entries = this._orderStorageEntries(profile, 'station', null, rawEntries);
         const activeShipId = profile.activeShipId;
         const cells = entries.map((e) => {
             const qty = profileManager.getStationStorageQty(profile, e.bucket, e.id);
@@ -234,7 +246,8 @@ extendClass(HomeStationUI, {
                 : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
             const ariaLabel = isBp ? `Craft ${meta.label}`
                 : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to ship storage`);
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+            const dragAttrs = isBp ? '' : `draggable="true" data-drag-key="${key}" data-drag-source="station"`;
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} ${dragAttrs} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
@@ -243,7 +256,7 @@ extendClass(HomeStationUI, {
             return { html, span };
         });
         const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
-        return this._storageGridHtml(cells, this._stationStorageGrid(profile, used));
+        return this._storageGridHtml(cells, this._stationStorageGrid(profile, used), 'data-storage-target="station"');
     },
 
     /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles.
@@ -276,7 +289,8 @@ extendClass(HomeStationUI, {
             });
         }
         const present = new Set(entries.map((e) => e.bucket));
-        const cells = entries.map((e) => {
+        const orderedEntries = this._orderStorageEntries(profile, 'ship', shipId, entries);
+        const cells = orderedEntries.map((e) => {
             const qty = profileManager.getShipStorageQty(profile, shipId, e.bucket, e.id);
             const meta = this._storageItemMeta(e.bucket, e.id);
             const span = this._storageItemSpan(e.bucket, e.id);
@@ -298,7 +312,8 @@ extendClass(HomeStationUI, {
                 : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
             const ariaLabel = isBp ? `Craft ${meta.label}`
                 : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
+            const dragAttrs = isBp ? '' : `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} ${dragAttrs} style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
@@ -309,7 +324,7 @@ extendClass(HomeStationUI, {
         ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
             if (!present.has(bucket)) cells.push(this._storageCategoryPlaceholder(bucket));
         });
-        return this._storageGridHtml(cells, grid);
+        return this._storageGridHtml(cells, grid, `data-storage-target="ship" data-ship="${shipId}"`);
     },
 
     profileManagerShipStorageBuckets() {
